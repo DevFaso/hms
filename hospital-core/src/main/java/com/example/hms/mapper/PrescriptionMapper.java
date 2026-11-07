@@ -213,6 +213,7 @@ public class PrescriptionMapper {
             // QA D1096: the paediatric dose review, required and recorded.
             .pediatricDoseReviewRequired(p.isPediatricDoseReviewRequired())
             .pediatricDoseReviewedAt(p.getPediatricDoseReviewedAt())
+            .pediatricDoseUrgentExceptionAt(p.getPediatricDoseUrgentExceptionAt())
             .pediatricDoseReviewedByName(displayName(p.getPediatricDoseReviewedBy()))
             .pediatricDoseReviewReason(p.getPediatricDoseReviewReason())
 

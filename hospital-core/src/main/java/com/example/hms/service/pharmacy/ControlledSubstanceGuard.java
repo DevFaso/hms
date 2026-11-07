@@ -134,8 +134,10 @@ public class ControlledSubstanceGuard {
         // QA D1096 (round 19): an order the paediatric dose check held for a
         // review is signed only once it is recorded; an order whose dose was
         // changed after its signature (a clarification edit) needs it again
-        // before anything leaves the counter.
-        if (prescription.isPediatricDoseReviewRequired() && prescription.getPediatricDoseReviewedAt() == null) {
+        // before anything leaves the counter. CR-01: an order signed as an urgent
+        // exception is not stopped here: its review follows, after the fact.
+        if (prescription.isPediatricDoseReviewRequired() && prescription.getPediatricDoseReviewedAt() == null
+                && prescription.getPediatricDoseUrgentExceptionAt() == null) {
             throw new BusinessException("prescription.safeguard.PEDIATRIC_DOSE_REVIEW.dispense");
         }
     }

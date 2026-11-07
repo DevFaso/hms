@@ -1342,7 +1342,27 @@ export class PrescriptionsComponent implements OnInit {
   readonly signAlertIsCritical = computed(() =>
     this.signAllergyCards().some((c) => !!c.reasonAtSignature),
   );
+  /** CR-02: the dialog is for an explicit prescribing exception, which a reason answers with its token. */
+  readonly signAlertIsException = computed(() =>
+    this.signAllergyCards().some((c) => !!c.exceptionKey),
+  );
+  /** A child's dose above the limit: the prescriber decides alone, and may mark it urgent so the review follows. */
+  readonly signAlertIsAboveLimit = computed(() =>
+    this.signAllergyCards().some((c) => c.indicator === 'critical' && !!c.exceptionKey),
+  );
   signAllergyReason = '';
+  /** CR-01: this attempt is the prescriber's urgent exception to the second-person dose review. */
+  readonly signUrgent = signal(false);
+
+  /** CR-01: offered where the review is what holds the signature; the server says whether it may be used. */
+  canSignUrgently(p: PrescriptionResponse): boolean {
+    return this.canSign(p) && !!p.pediatricDoseReviewRequired && !p.pediatricDoseReviewedAt;
+  }
+
+  signUrgently(p: PrescriptionResponse): void {
+    this.signUrgent.set(true);
+    this.doSign(p, { urgentDoseException: true });
+  }
 
   signPrescription(p: PrescriptionResponse): void {
     if (p.controlledSubstance) {
@@ -1386,6 +1406,7 @@ export class PrescriptionsComponent implements OnInit {
     this.signAllergyCards.set([]);
     this.signNeedsSecret.set(false);
     this.signReauthTarget.set(null);
+    this.signUrgent.set(false);
   }
 
   /** What the sign dialog still lacks before it can send. */
@@ -1400,6 +1421,7 @@ export class PrescriptionsComponent implements OnInit {
     const target = this.signReauthTarget();
     if (!target || this.signDialogIncomplete() || this.signingId()) return;
     const body: SignPrescriptionBody = {};
+    if (this.signUrgent()) body.urgentDoseException = true;
     if (this.signNeedsSecret()) {
       const secret = this.signReauthSecret;
       if (this.signReauthUsesCode()) body.mfaCode = secret.trim();
@@ -1407,6 +1429,8 @@ export class PrescriptionsComponent implements OnInit {
     }
     if (this.signAllergyCards().length > 0) {
       body.allergyOverrideReason = this.signAllergyReason.trim();
+      const token = this.signAllergyCards().find((c) => !!c.exceptionKey)?.exceptionKey;
+      if (token) body.doseExceptionToken = token;
     }
     this.doSign(target, body);
   }
@@ -1443,6 +1467,13 @@ export class PrescriptionsComponent implements OnInit {
         const cards = this.extractCdsCards(err);
         if (cards.length > 0 && !body?.allergyOverrideReason) {
           this.openSignAllergy(p, cards);
+          return;
+        }
+        // CR-02: the order or its findings changed under the exception: the current cards, the
+        // reason asked again, and the server's sentence saying why.
+        if (cards.some((c) => !!c.exceptionKey)) {
+          this.openSignAllergy(p, cards);
+          this.signReauthError.set(msg);
           return;
         }
         // Round 18: a refused re-authentication (missing, wrong, locked) is

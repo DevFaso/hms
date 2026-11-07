@@ -48,6 +48,15 @@ import java.util.UUID;
  *
  * <p>Each card names the limit's source and whether it is a default pending
  * local approval, so a prescriber knows what the check rests on.
+ *
+ * <p>CR-01: a catalogue limit is the hospital's own, and none is seeded here. It applies to the route
+ * its item records, and is compared with the route this order states, never replaced by it: a limit
+ * for another route, or an order with no readable route, gives no mg/kg verdict and asks for the
+ * review. A limit whose route is not recorded, or that is not {@code APPROVED} (the status used to
+ * reach only the card's text), is not a cleared dose: its findings stand and the review is asked for
+ * too. The manual review by age stays, and the absolute daily maximum still runs first, unless the
+ * item records it for another route than the one ordered. The catalogue records no version or age
+ * band for a limit beyond the manual-review age. Provisional, awaiting the named clinical approver.
  */
 @Component
 public class PediatricDoseRule implements CdsRule {
@@ -75,6 +84,10 @@ public class PediatricDoseRule implements CdsRule {
 
     @Override
     public List<CdsCard> evaluate(CdsRuleContext context) {
+        if (context.paracetamolFacts() == ParacetamolFacts.READ_FAILED && context.patient() != null
+                && !isAdult(context.patient())) {
+            return List.of(CdsRuleEngine.doseCheckFailed(text, context.proposedMedicationName(), id()));
+        }
         if (context.patient() == null) return List.of();
         LocalDate dob = context.patient().getDateOfBirth();
         if (dob == null) return List.of();
@@ -87,8 +100,8 @@ public class PediatricDoseRule implements CdsRule {
         Optional<CdsCard> hardStop = check.hardStop();
         hardStop.ifPresent(cards::add);
         cards.addAll(limitCards(context, check, age));
-        // QA D1455: the hard stop says it itself.
-        if (hardStop.isEmpty()) {
+        // QA D1455: the hard stop says it itself. CR-01: with no verdict on this route, no daily limit is in play.
+        if (hardStop.isEmpty() && check.noVerdictOnThisRoute().isEmpty()) {
             check.dailyTotalUnknown().ifPresent(cards::add);
         }
         return cards;
@@ -101,11 +114,23 @@ public class PediatricDoseRule implements CdsRule {
                 "{0}: child under {1} months - no automatic mg/kg check; a pharmacist or physician must review the dose",
                 check.medication(), String.valueOf(check.manualReviewUnderMonths())), check.limitBasis()));
         }
-        Double weight = context.patientWeightKg();
-        if (weight == null || weight <= 0d) {
-            return List.of(softAdvisory(context, age.getYears()));
+        // CR-01: paracetamol with no limit on file for this order: nothing clears it. Another drug keeps its advice.
+        if (context.paracetamolFacts().applies() && !check.hasLimits()) {
+            return List.of(cannotAssess(text.get("cds.pediatric.limit.none.summary",
+                "{0}: cannot assess, review required: no paracetamol limit on file applies to this order",
+                check.medication()), check.limitBasis(), "paedNoLimit:" + context.proposedRoute().code()));
+        }
+        Optional<String> noVerdict = check.noVerdictOnThisRoute();
+        if (noVerdict.isPresent()) {
+            return List.of(cannotAssess(noVerdict.get(), check.limitBasis(), check.routeKey()));
         }
         List<CdsCard> cards = new ArrayList<>();
+        check.limitNotEstablished().ifPresent(card -> cards.add(cannotAssess(card, check.limitBasis(), check.routeKey())));
+        Double weight = context.patientWeightKg();
+        if (weight == null || weight <= 0d) {
+            cards.add(softAdvisory(context, age.getYears()));
+            return cards;
+        }
         check.staleWeightCard().ifPresent(cards::add);
         if (check.hasBands()) {
             cards.addAll(check.bandCards());
@@ -193,11 +218,77 @@ public class PediatricDoseRule implements CdsRule {
                 || item.getPediatricMaxDailyMg() != null);
         }
 
+        /** CR-01: what a cannot-assess card answers, for the urgent exception: the two routes and the status. */
+        String routeKey() {
+            return "paedLimit:" + context.proposedRoute().code() + ":" + limitRoute() + ":"
+                + (item == null ? null : item.getPediatricDoseStatus());
+        }
+
+        /** The route the item records for its limits; {@code null} when it records none it can be read as. */
+        private String limitRoute() {
+            return item == null ? null : com.example.hms.service.emar.MedicationRoutes.canonical(item.getRoute());
+        }
+
+        boolean hasLimits() {
+            return hasBands() || hasMgLimit();
+        }
+
+        /** Both routes are known, and they differ: the limit is not this order's. */
+        private boolean limitIsForAnotherRoute() {
+            String ordered = context.proposedRoute().code();
+            return ordered != null && limitRoute() != null && !ordered.equals(limitRoute());
+        }
+
+        /** CR-01: why no mg/kg limit may judge this order: no readable route, or a limit for another one. */
+        Optional<String> noVerdictOnThisRoute() {
+            if (!hasLimits()) {
+                return Optional.empty();
+            }
+            OrderedRoute route = context.proposedRoute();
+            if (!route.stated()) {
+                return Optional.of(text.get("cds.pediatric.route.notStated.summary",
+                    "{0}: cannot assess, review required: this order states no route, and the limits on file apply to one",
+                    medication()));
+            }
+            if (route.code() == null) {
+                return Optional.of(text.get("cds.pediatric.route.unknown.summary",
+                    "{0}: cannot assess, review required: the route \"{1}\" is not one this check can read",
+                    medication(), route.written()));
+            }
+            if (limitIsForAnotherRoute()) {
+                return Optional.of(text.get("cds.pediatric.route.other.summary",
+                    "{0}: cannot assess, review required: the limits on file are for the route {1}, and this order is for the route {2}",
+                    medication(), com.example.hms.service.emar.MedicationRoutes.label(limitRoute()),
+                    com.example.hms.service.emar.MedicationRoutes.label(route.code())));
+            }
+            return route.contradictsFormulation()
+                ? Optional.of(text.get("cds.pediatric.route.product.summary",
+                    "{0}: cannot assess, review required: the route {1} does not agree with the product form {2}",
+                    medication(), com.example.hms.service.emar.MedicationRoutes.label(route.code()), item.getForm()))
+                : Optional.empty();
+        }
+
+        /** CR-01: a limit on file that is not an approved one for a recorded route clears nothing. */
+        Optional<String> limitNotEstablished() {
+            if (!hasLimits()) {
+                return Optional.empty();
+            }
+            if (limitRoute() == null) {
+                return Optional.of(text.get("cds.pediatric.limit.noRoute.summary",
+                    "{0}: cannot assess, review required: the limit on file does not record its route, so a dose under it is not cleared",
+                    medication()));
+            }
+            return item.getPediatricDoseStatus() == PediatricDoseLimitStatus.APPROVED ? Optional.empty()
+                : Optional.of(text.get("cds.pediatric.limit.notApproved.summary",
+                    "{0}: cannot assess, review required: the limit on file is not approved here, so a dose under it is not cleared",
+                    medication()));
+        }
+
         /** The absolute daily maximum in mg: the one limit no override passes. */
         Optional<CdsCard> hardStop() {
             BigDecimal cap = item == null ? null : item.getPediatricMaxDailyMg();
             Double doseMg = context.proposedDoseMg();
-            if (cap == null || doseMg == null) {
+            if (cap == null || doseMg == null || limitIsForAnotherRoute()) {
                 return Optional.empty();
             }
             // Review of round 18: an unreadable frequency (PRN, STAT, free text)
@@ -277,7 +368,8 @@ public class PediatricDoseRule implements CdsRule {
             if (units > bandDose) {
                 cards.add(softStop(text.get("cds.pediatric.band.perDose.summary",
                     "{0}: {1} {2} per dose is above the {3} {2} of the weight band for {4} kg",
-                    medication(), number(units), unitOf(band), number(bandDose), number(weight))));
+                    medication(), number(units), unitOf(band), number(bandDose), number(weight)),
+                    "bandDose:" + units + ":" + bandDose));
             }
             if (dosesPerDay != null && band.getMaxDosesPerDay() != null) {
                 double daily = units * dosesPerDay;
@@ -285,7 +377,8 @@ public class PediatricDoseRule implements CdsRule {
                 if (daily > bandDaily) {
                     cards.add(softStop(text.get("cds.pediatric.band.daily.summary",
                         "{0}: {1} {2} per day is above the {3} {2} per day of the weight band for {4} kg",
-                        medication(), number(daily), unitOf(band), number(bandDaily), number(weight))));
+                        medication(), number(daily), unitOf(band), number(bandDaily), number(weight)),
+                        "bandDaily:" + daily + ":" + bandDaily));
                 }
             }
             return cards;
@@ -306,13 +399,13 @@ public class PediatricDoseRule implements CdsRule {
             if (perDose != null && mgPerKg > perDose.doubleValue()) {
                 cards.add(softStop(text.get("cds.pediatric.ceiling.summary",
                     "Pediatric dose exceeds ceiling: {0} mg/kg > {1} mg/kg max for {2}",
-                    number(mgPerKg), number(perDose), medication())));
+                    number(mgPerKg), number(perDose), medication()), "mgPerKg:" + mgPerKg + ":" + perDose));
             }
             BigDecimal single = item.getPediatricMaxSingleDoseMg();
             if (single != null && doseMg > single.doubleValue()) {
                 cards.add(softStop(text.get("cds.pediatric.singleDose.summary",
                     "{0}: {1} mg per dose is above the maximum of {2} mg per dose",
-                    medication(), number(doseMg), number(single))));
+                    medication(), number(doseMg), number(single)), "singleDose:" + doseMg + ":" + single));
             }
             BigDecimal perDay = item.getPediatricMaxDailyMgPerKg();
             if (dosesPerDay != null) {
@@ -320,7 +413,7 @@ public class PediatricDoseRule implements CdsRule {
                 if (perDay != null && dailyMgPerKg > perDay.doubleValue()) {
                     cards.add(softStop(text.get("cds.pediatric.dailyMgPerKg.summary",
                         "{0}: {1} mg/kg per day is above the usual maximum of {2} mg/kg per day",
-                        medication(), number(dailyMgPerKg), number(perDay))));
+                        medication(), number(dailyMgPerKg), number(perDay)), "dailyMgPerKg:" + dailyMgPerKg + ":" + perDay));
                 }
             } else if (!totalUnknown && (perDay != null || item.getPediatricMaxDailyMg() != null)) {
                 cards.add(frequencyUnreadCard());
@@ -328,11 +421,25 @@ public class PediatricDoseRule implements CdsRule {
             return cards;
         }
 
-        private CdsCard softStop(String summary) {
+        /**
+         * Above the usual maximum: critical at creation, as it has always been. Under an approved limit
+         * of a recorded route (CR-02, provisional, for the neonatal/paediatric lead and the pharmacist)
+         * it also asks the prescriber's fresh decision at the signature, tied by {@code key} to this
+         * finding and this version of the order. A limit that is not established raises no such
+         * decision by itself: it has its cannot-assess card.
+         */
+        private CdsCard softStop(String summary, String key) {
             String detail = text.get("cds.pediatric.softStop.detail",
                 "Child aged {0}, weight {1} kg. Reduce the dose, or override with a reason: the reason is recorded on the order and audited. Limit: {2}.",
                 ageText(), number(context.patientWeightKg()), limitBasis());
-            return card(summary, detail, CdsCard.Indicator.CRITICAL, null);
+            if (limitNotEstablished().isPresent()) {
+                return card(summary, detail, CdsCard.Indicator.CRITICAL, null);
+            }
+            return new CdsCard(summary, detail + " " + text.get("cds.pediatric.softStop.signature",
+                    "The signature asks for the prescriber's decision again, for this finding and this version of the order."),
+                CdsCard.Indicator.CRITICAL,
+                new Source(text.get("cds.source.pediatricDose", SOURCE_LABEL), null, null),
+                null, null, null, UUID.randomUUID().toString(), null, null, Boolean.TRUE, "paedAbove:" + key);
         }
 
         private String unitOf(PediatricWeightBand band) {
@@ -401,6 +508,22 @@ public class PediatricDoseRule implements CdsRule {
             new Source(text.get("cds.source.pediatricDose", SOURCE_LABEL), null, null),
             null, null, null, UUID.randomUUID().toString(), null, Boolean.TRUE
         );
+    }
+
+    /**
+     * CR-01: a limit that cannot judge this order. The routine path is the recorded second-person
+     * review, as {@link #reviewRequired}. Its key also admits the prescriber's explicit urgent
+     * exception at the signature, so a lone doctor at night is not left with no way to treat
+     * (PROVISIONAL, for the neonatal/paediatric lead and the pharmacist). The review by age and the
+     * weight band card carry no key: they have no such exception.
+     */
+    private CdsCard cannotAssess(String summary, String limitBasis, String key) {
+        String detail = text.get("cds.pediatric.cannotAssess.detail",
+            "The order can be saved. It is signed once a pharmacist or another physician has recorded the dose review, with a reason. If it cannot wait, the prescriber may sign it as an urgent exception, with a reason; the review is then asked for urgently after the fact. Limit: {0}.",
+            limitBasis);
+        return new CdsCard(summary, detail, CdsCard.Indicator.WARNING,
+            new Source(text.get("cds.source.pediatricDose", SOURCE_LABEL), null, null),
+            null, null, null, UUID.randomUUID().toString(), null, Boolean.TRUE, null, key);
     }
 
     private CdsCard softAdvisory(CdsRuleContext context, int ageYears) {

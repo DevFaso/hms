@@ -84,6 +84,25 @@ public interface MedicationAdministrationRecordRepository extends JpaRepository<
         @Param("from") LocalDateTime from,
         @Param("to") LocalDateTime to);
 
+    /**
+     * CR-03: every dose recorded as given to this patient at this hospital since the given moment,
+     * newest first, from any order, whatever the order's status is now and whatever its route. A
+     * row holding another status was not given, and is not read.
+     */
+    @Query("""
+        SELECT m FROM MedicationAdministrationRecord m
+        JOIN FETCH m.prescription
+        WHERE m.patient.id = :patientId
+          AND m.hospital.id = :hospitalId
+          AND m.status = com.example.hms.enums.MedicationAdministrationStatus.GIVEN
+          AND m.administeredAt >= :since
+        ORDER BY m.administeredAt DESC, m.id DESC
+    """)
+    List<MedicationAdministrationRecord> findGivenSince(
+        @Param("patientId") UUID patientId,
+        @Param("hospitalId") UUID hospitalId,
+        @Param("since") LocalDateTime since);
+
     /** Current status straight from the database (bypasses a stale managed entity). */
     @Query("SELECT m.status FROM MedicationAdministrationRecord m WHERE m.id = :id")
     java.util.Optional<MedicationAdministrationStatus> findStatusById(@Param("id") UUID id);

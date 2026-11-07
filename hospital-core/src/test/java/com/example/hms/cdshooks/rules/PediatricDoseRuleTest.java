@@ -34,6 +34,8 @@ class PediatricDoseRuleTest {
         MedicationCatalogItem item = MedicationCatalogItem.builder()
             .nameFr("amoxicilline")
             .genericName("amoxicillin")
+            .route("PO")
+            .pediatricDoseStatus(com.example.hms.enums.PediatricDoseLimitStatus.APPROVED)
             .pediatricMaxDoseMgPerKg(BigDecimal.valueOf(mgPerKg))
             .build();
         item.setId(UUID.randomUUID());
@@ -47,7 +49,7 @@ class PediatricDoseRuleTest {
             "amoxicillin", null, null, doseMg,
             item, weightKg,
             List.of(), List.of()
-        );
+        ).withRoute("PO", null);
     }
 
     @Test

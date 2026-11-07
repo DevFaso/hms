@@ -39,4 +39,20 @@ public class SignPrescriptionRequestDTO {
      */
     @Size(max = 1024)
     private String allergyOverrideReason;
+
+    /**
+     * CR-02: the token a refused signature put on the cards it answered with. A reason alone passes
+     * no exception: this ties it to those findings of that version of the order, and a token that no
+     * longer matches them is refused with the current cards. Not stored.
+     */
+    @Size(max = 128)
+    private String doseExceptionToken;
+
+    /**
+     * CR-01 (provisional): the prescriber states this order cannot wait for the second-person dose
+     * review of a child's order the check could not assess. It passes nothing alone: it needs the
+     * reason and the token, and a review by age or by weight band has no such exception. Not stored:
+     * the signature records the time.
+     */
+    private Boolean urgentDoseException;
 }

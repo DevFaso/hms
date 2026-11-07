@@ -333,6 +333,13 @@ public class Prescription extends BaseEntity {
     @Column(name = "pediatric_dose_reviewed_at")
     private LocalDateTime pediatricDoseReviewedAt;
 
+    /**
+     * CR-01 (provisional): when the prescriber signed this order as an urgent exception to the review
+     * (V279). The review stays due, after the fact; any edit of the order clears this.
+     */
+    @Column(name = "pediatric_dose_urgent_exception_at")
+    private LocalDateTime pediatricDoseUrgentExceptionAt;
+
     /** The reviewing pharmacist or physician. Never the prescriber, nor later the signer. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "pediatric_dose_reviewed_by",

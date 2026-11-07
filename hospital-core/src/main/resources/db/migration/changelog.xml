@@ -3421,4 +3421,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V279-cr-urgent-paediatric-dose-exception" author="hms-team" runOnChange="false">
+        <sqlFile path="V279__cr_urgent_paediatric_dose_exception.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

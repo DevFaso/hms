@@ -6350,3 +6350,17 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Guard reach:** `OrderReviewHoldGuardTest` checks the helper named in its table contains the call, not that the endpoint reaches that helper.
 - **`DeathDispute.reason`** is stored in the clear, as the decision reason on a hold no longer is.
 - **"Expired":** the prescription model has no expired status. Lot and blood-unit expiry checks stay in place at use.
+
+## Standing debt: clinical rules wave (fix/cr-paracetamol)
+
+- **CR-02 class, reported and not changed:** other dose-limit findings still pass the signature. Paediatric warnings with no hold: stale weight, frequency unread, dose unread in mg, weight band unread, no limit on file. Adult warnings with no hold: a frequency that could not be read, another order counted at one dose or at its stated count. Awaiting a clinical decision.
+- **CR-02, paths that reach SIGNED with no signature:** `RefillApprovalServiceImpl` (a refill of a signed order) and `StockOutRoutingServiceImpl` (partner no-show) return an order to SIGNED, and the rules are not run again. Neither starts from a draft, so neither skips the exception, but a refill does not see the doses given since.
+- **CR-03, before the dose on the nurse-station table:** the eMAR shows the documented exposure at the bedside verification, before the dose. The Give prompt of the nurse-station table reads the ward list, which does not carry it (one read per paracetamol row of a ward): that nurse reads it in the answer, after the dose.
+- **Paediatric limits:** the catalogue records no version and no age band for a limit, only the manual-review age, the source text and the status. A limit's route is its item's `route`. A separate limit per route would need a schema change and a pharmacy screen.
+- **CR-02, the contraindication past its signature:** an edit of an order past its signature is refused only for a keyed dose finding. A contraindication on such an edit still passes with the create-time override and a reason, with no fresh signature. Not changed: the contraindication mechanism was to stay as it is.
+- **Oral orders the check cannot read:** a dose or a frequency that cannot be read on an oral adult order is said on a card and does not hold the signature; CR-02 names only findings outside the limits. Awaiting a clinical decision.
+- **Paediatric, other drugs with no limit on file:** keep the "verify weight-based dosing" warning and no review; only paracetamol goes to review. Awaiting a clinical decision.
+- **Lone doctor, paediatric reviews with no urgent exception:** the review by age (under three months, or the item's own age, 12 months for morphine) and a child outside every weight band still need a pharmacist or a second physician, with no path for a doctor alone at night. Kept as they were; awaiting the neonatal/paediatric lead and the pharmacist. An order edited past its signature needs its review again before it is dispensed, even if it was signed as urgent.
+- **A dose above a limit not approved or with no route:** keeps the critical stop at creation, as it was, and its cannot-assess review; it raises no decision at signing by itself. Whether the creation stop should stay under an unapproved limit is a clinical decision.
+- **`GuardDriftRatchetTest`, `MortalityController.disputeDeath`:** fails on this base; the controller is not in this diff. Belongs to the death-dispute branch.
+- **CDS hooks:** a hook still sends no frequency (standing since round 34), so its daily total counts one dose.

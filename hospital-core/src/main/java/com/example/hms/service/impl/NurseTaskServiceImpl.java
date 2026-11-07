@@ -204,6 +204,14 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     /* ── Dependencies ─────────────────────────────────────────────────── */
 
+    /** CR-03: the documented paracetamol exposure at a dose; absent in unit tests built by hand. */
+    private com.example.hms.service.emar.ParacetamolExposureCheck exposureCheck;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setExposureCheck(com.example.hms.service.emar.ParacetamolExposureCheck exposureCheck) {
+        this.exposureCheck = exposureCheck;
+    }
+
     private final NurseDashboardService nurseDashboardService;
     private final PrescriptionRepository prescriptionRepository;
     private final MedicationAdministrationRecordRepository marRepository;
@@ -611,7 +619,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 .dueTime(marRecord.getScheduledTime())
                 .status(normalizedStatus)
                 .witnessName(witnessName(marRecord.getWitnessUser()))
-                .build(), marRecord.getPrescription());
+                .build(), marRecord.getPrescription(), marStatus);
         }
 
         // Last resort: work with synthetic task list (backward-compatible)
@@ -680,7 +688,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         List<String> failed = result.failedChecks().stream().map(Enum::name).toList();
 
-        return MarVerificationResponseDTO.builder()
+        List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> advisories =
+            allergyAdvisoriesFor(medicationNameOf(mar), mar.getPatient());
+        MarVerificationResponseDTO verification = MarVerificationResponseDTO.builder()
             .marId(mar.getId())
             .outcomes(outcomes)
             .failedChecks(failed)
@@ -689,8 +699,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .verifiedAt(verifiedAt)
             // QA D799: the five rights can all pass and the dose still need a
             // second look; the advisory never turns allPassed false.
-            .cdsAdvisories(allergyAdvisoriesFor(medicationNameOf(mar), mar.getPatient()))
+            .cdsAdvisories(advisories)
             .build();
+        withParacetamolExposureAfterCommit(mar.getPrescription(), hospitalId, false, advisories,
+            verification::setCdsAdvisories);
+        return verification;
     }
 
     /**
@@ -1389,16 +1402,54 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * PRN fields, the early flag, the allergy advisories) instead of a partial
      * copy.
      */
-    private NurseMedicationTaskResponseDTO answerAfterDose(NurseMedicationTaskResponseDTO task, Prescription rx) {
+    private NurseMedicationTaskResponseDTO answerAfterDose(NurseMedicationTaskResponseDTO task, Prescription rx,
+                                                           MedicationAdministrationStatus recorded) {
         List<MedicationAdministrationRecord> rows = doseRows(rx);
         if (rx != null) {
             // The same server clock the list reads (Sonar: the zone made explicit).
             LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
             withOrderReading(task, rx, MarNextDose.of(rx, now, rows, EARLY_ADMINISTRATION_WINDOW), now,
                 pharmacistVerificationService.isControlledSubstance(rx));
-            task.setCdsAdvisories(allergyAdvisoriesFor(rx.getMedicationName(), rx.getPatient()));
+            List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> allergy =
+                allergyAdvisoriesFor(rx.getMedicationName(), rx.getPatient());
+            task.setCdsAdvisories(allergy);
+            // CR-03: only a dose given moves the exposure; one held or refused is no warning to give.
+            if (recorded == MedicationAdministrationStatus.GIVEN) {
+                withParacetamolExposureAfterCommit(rx, rx.getHospital() != null ? rx.getHospital().getId() : null,
+                    true, allergy, task::setCdsAdvisories);
+            }
         }
         return withDoseHistory(task, closedDoses(rows));
+    }
+
+    /**
+     * CR-03: the documented paracetamol exposure at the dose, a warning that refuses nothing (D1210
+     * stays the only refusal here). Read after this transaction commits and in one of its own
+     * ({@link com.example.hms.service.emar.ParacetamolExposureCheck}), so a failed read leaves the dose
+     * recorded and says the exposure is unknown. The answer is the object the caller returns: it is
+     * filled in before it leaves the service proxy.
+     */
+    private void withParacetamolExposureAfterCommit(
+        Prescription rx, UUID hospitalId, boolean doseJustRecorded,
+        List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cards,
+        java.util.function.Consumer<List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard>> answer
+    ) {
+        if (exposureCheck == null || rx == null || rx.getId() == null) {
+            return;
+        }
+        UUID prescriptionId = rx.getId();
+        String medication = rx.getMedicationName();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> all = new ArrayList<>(cards);
+            try {
+                all.addAll(exposureCheck.cards(prescriptionId, hospitalId, doseJustRecorded));
+            } catch (RuntimeException ex) {
+                log.error("Paracetamol exposure not read for prescription {}: {}", prescriptionId,
+                    ex.getClass().getSimpleName(), ex);
+                all.add(exposureCheck.unknownCard(medication));
+            }
+            answer.accept(all);
+        });
     }
 
     private MarDoseHistoryDTO toDoseHistory(MedicationAdministrationRecord dose) {
@@ -1662,7 +1713,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .dueTime(saved.getScheduledTime())
             .status(status.name())
             .witnessName(witnessName(saved.getWitnessUser()))
-            .build(), rx);
+            .build(), rx, status);
     }
 
     /**
@@ -1709,7 +1760,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .dueTime(saved.getScheduledTime())
             .status(status.name())
             .witnessName(witnessName(saved.getWitnessUser()))
-            .build(), rx);
+            .build(), rx, status);
     }
 
     /**

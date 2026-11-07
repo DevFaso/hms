@@ -231,6 +231,18 @@
                       <span class="material-symbols-outlined">draw</span>
                     </button>
                   }
+                  @if (canSignUrgently(p)) {
+                    <button
+                      class="action-link sign-link"
+                      (click)="signUrgently(p)"
+                      [disabled]="signingId() === p.id"
+                      [title]="'PRESCRIPTIONS.SIGN_EXCEPTION.URGENT' | translate"
+                      [attr.aria-label]="'PRESCRIPTIONS.SIGN_EXCEPTION.URGENT' | translate"
+                      [attr.data-testid]="'rx-sign-urgent-' + p.id"
+                    >
+                      <span class="material-symbols-outlined">emergency</span>
+                    </button>
+                  }
                   @if (canCosign(p)) {
                     <button
                       class="action-link sign-link"
@@ -503,6 +515,17 @@
                     ) | translate
                   }}</span
                   >{{ ' ' }}<span class="field-value">{{ rx.overrideReason }}</span>
+                </div>
+              }
+              <!-- CR-01: signed as an urgent exception; its review follows. -->
+              @if (rx.pediatricDoseUrgentExceptionAt) {
+                <div class="detail-field" data-testid="rx-urgent-exception">
+                  <span class="field-label">{{
+                    'PRESCRIPTIONS.SIGN_EXCEPTION.URGENT_AT' | translate
+                  }}</span
+                  ><span class="field-value">{{
+                    rx.pediatricDoseUrgentExceptionAt | serverTime | dateTime
+                  }}</span>
                 </div>
               }
               <!-- QA D1096: the paediatric dose review, due or recorded. -->
@@ -1679,11 +1702,13 @@
       <div class="modal-header">
         <h2 id="rx-sign-reauth-title">
           {{
-            (signAlertIsCritical()
-              ? 'PRESCRIPTIONS.SIGN_CRITICAL.TITLE'
-              : signAllergyCards().length
-                ? 'PRESCRIPTIONS.SIGN_ALLERGY.TITLE'
-                : 'PRESCRIPTIONS.SIGN_REAUTH.TITLE'
+            (signAlertIsException()
+              ? 'PRESCRIPTIONS.SIGN_EXCEPTION.TITLE'
+              : signAlertIsCritical()
+                ? 'PRESCRIPTIONS.SIGN_CRITICAL.TITLE'
+                : signAllergyCards().length
+                  ? 'PRESCRIPTIONS.SIGN_ALLERGY.TITLE'
+                  : 'PRESCRIPTIONS.SIGN_REAUTH.TITLE'
             ) | translate
           }}
         </h2>
@@ -1707,9 +1732,11 @@
             <div class="field">
               <label for="rx-sign-allergy-reason"
                 >{{
-                  (signAlertIsCritical()
-                    ? 'PRESCRIPTIONS.SIGN_CRITICAL.REASON'
-                    : 'PRESCRIPTIONS.SIGN_ALLERGY.REASON'
+                  (signAlertIsException()
+                    ? 'PRESCRIPTIONS.SIGN_EXCEPTION.REASON'
+                    : signAlertIsCritical()
+                      ? 'PRESCRIPTIONS.SIGN_CRITICAL.REASON'
+                      : 'PRESCRIPTIONS.SIGN_ALLERGY.REASON'
                   ) | translate
                 }}
                 *</label
@@ -1725,6 +1752,18 @@
                 [(ngModel)]="signAllergyReason"
               ></textarea>
             </div>
+            @if (signAlertIsAboveLimit()) {
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  name="signUrgent"
+                  data-testid="rx-sign-urgent"
+                  [ngModel]="signUrgent()"
+                  (ngModelChange)="signUrgent.set($event)"
+                />
+                {{ 'PRESCRIPTIONS.SIGN_EXCEPTION.URGENT_CHECK' | translate }}
+              </label>
+            }
           }
           @if (signNeedsSecret()) {
             <p>

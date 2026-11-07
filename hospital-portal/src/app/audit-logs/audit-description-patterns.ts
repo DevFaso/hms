@@ -1379,6 +1379,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: [],
   },
   {
+    key: 'AUDIT.DESC.URGENT_DOSE_EXCEPTION_AT_SIGNATURE',
+    re: /^Urgent paediatric dose exception recorded at signature$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.DOSE_EXCEPTION_AT_SIGNATURE',
+    re: /^Dose exception recorded at signature$/,
+    params: [],
+  },
+  {
     key: 'AUDIT.DESC.STATUS_WAS',
     re: /^(.+) \(was ([A-Z_]+)\)$/,
     params: ['what', 'previous'],

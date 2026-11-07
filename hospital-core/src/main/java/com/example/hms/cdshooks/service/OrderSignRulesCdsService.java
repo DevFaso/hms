@@ -75,7 +75,8 @@ public class OrderSignRulesCdsService implements CdsHookService {
                 hospitalId,
                 proposed.name(),
                 proposed.code(),
-                proposed.dose()
+                proposed.dose(),
+                proposed.route()
             ).stream())
             .toList();
         return CdsHookResponse.of(cards);
@@ -85,14 +86,14 @@ public class OrderSignRulesCdsService implements CdsHookService {
        Draft-payload extraction helpers
        ===================================================================== */
 
-    private record ProposedMedication(String name, String code, String dose) {
+    private record ProposedMedication(String name, String code, String dose, String route) {
 
         static ProposedMedication fromDraft(Map<String, Object> draft) {
             String name = textFromCodeableConcept(draft.get("medicationCodeableConcept"));
             if (name == null) name = textFromReference(draft.get("medicationReference"));
             String code = codeFromCodeableConcept(draft.get("medicationCodeableConcept"));
             String dose = doseFromDosageInstruction(draft.get("dosageInstruction"));
-            return new ProposedMedication(name, code, dose);
+            return new ProposedMedication(name, code, dose, MedicationDraftExtractor.routeOf(draft));
         }
 
         private static String textFromCodeableConcept(Object value) {

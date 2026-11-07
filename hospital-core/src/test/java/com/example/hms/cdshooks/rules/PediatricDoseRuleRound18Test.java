@@ -39,13 +39,13 @@ class PediatricDoseRuleRound18Test {
     /** Paracétamol 500 mg: 15 mg/kg (1 g) per dose, 60 mg/kg (4 g) per day. */
     private static MedicationCatalogItem paracetamol() {
         MedicationCatalogItem item = MedicationCatalogItem.builder()
-            .nameFr("Paracétamol").genericName("Paracetamol").strength("500").strengthUnit("mg")
+            .nameFr("Paracétamol").genericName("Paracetamol").strength("500").strengthUnit("mg").route("PO")
             .pediatricMaxDoseMgPerKg(new BigDecimal("15"))
             .pediatricMaxDailyMgPerKg(new BigDecimal("60"))
             .pediatricMaxSingleDoseMg(new BigDecimal("1000"))
             .pediatricMaxDailyMg(new BigDecimal("4000"))
             .pediatricDoseSource("WHO Pocket Book of Hospital Care for Children 2013; BNFc")
-            .pediatricDoseStatus(PediatricDoseLimitStatus.DEFAULT_PENDING_APPROVAL)
+            .pediatricDoseStatus(PediatricDoseLimitStatus.APPROVED)
             .build();
         item.setId(UUID.randomUUID());
         return item;
@@ -57,7 +57,7 @@ class PediatricDoseRuleRound18Test {
             band("5", "15", "1"), band("15", "25", "2"), band("25", "35", "3"), band("35", null, "4")));
         MedicationCatalogItem item = MedicationCatalogItem.builder()
             .nameFr("Artéméther-luméfantrine").genericName("Artemether/Lumefantrine").strength("20/120")
-            .strengthUnit("mg").pediatricWeightBands(bands)
+            .strengthUnit("mg").route("PO").pediatricWeightBands(bands)
             .pediatricDoseSource("WHO Guidelines for malaria 2023")
             .pediatricDoseStatus(PediatricDoseLimitStatus.APPROVED)
             .build();
@@ -79,7 +79,7 @@ class PediatricDoseRuleRound18Test {
                                       Double weightKg, LocalDateTime weighedAt) {
         return new CdsRuleContext(patient, UUID.randomUUID(), item == null ? "x" : item.getNameFr(), null, null,
             CdsRuleEngine.parseDoseMg(dosage, weightKg, item), item, weightKg, List.of(), List.of(),
-            frequency, CdsRuleEngine.parseDoseUnits(dosage), weighedAt);
+            frequency, CdsRuleEngine.parseDoseUnits(dosage), weighedAt).withRoute("PO", null);
     }
 
     private static long critical(List<CdsCard> cards) {
@@ -93,7 +93,9 @@ class PediatricDoseRuleRound18Test {
     /** The QA D935 order: 1 g four times a day for a 6-year-old of 19 kg (about 210 mg/kg/day). */
     @Test
     void d935_oneGramFourTimesADayForA19KgChildIsASoftStop() {
-        List<CdsCard> cards = rule.evaluate(ctx(childAged(6, 0, 0), paracetamol(), "1 g", "4 fois par jour",
+        MedicationCatalogItem pending = paracetamol();
+        pending.setPediatricDoseStatus(PediatricDoseLimitStatus.DEFAULT_PENDING_APPROVAL);
+        List<CdsCard> cards = rule.evaluate(ctx(childAged(6, 0, 0), pending, "1 g", "4 fois par jour",
             19.0, LocalDateTime.now().minusDays(2)));
 
         assertThat(critical(cards)).isEqualTo(2); // per dose mg/kg, per day mg/kg
@@ -153,7 +155,7 @@ class PediatricDoseRuleRound18Test {
         return new CdsRuleContext(childAged(6, 0, 0), UUID.randomUUID(), item.getNameFr(), null, null,
             CdsRuleEngine.parseDoseMg(dosage, weightKg, item), item, weightKg, List.of(), List.of(),
             frequency, CdsRuleEngine.parseDoseUnits(dosage), LocalDateTime.now(),
-            com.example.hms.service.impl.PrnMinInterval.highestDosesPerDay(intervalHours != null, intervalHours));
+            com.example.hms.service.impl.PrnMinInterval.highestDosesPerDay(intervalHours != null, intervalHours)).withRoute("PO", null);
     }
 
     /**
@@ -261,7 +263,7 @@ class PediatricDoseRuleRound18Test {
     @Test
     void fiveTimesADayAndEveryTwoDaysAreCountedAgainstTheDailyCap() {
         MedicationCatalogItem capped = MedicationCatalogItem.builder()
-            .nameFr("Aciclovir").genericName("Aciclovir").strength("200").strengthUnit("mg")
+            .nameFr("Aciclovir").genericName("Aciclovir").strength("200").strengthUnit("mg").route("PO").pediatricDoseStatus(PediatricDoseLimitStatus.APPROVED)
             .pediatricMaxDailyMg(new BigDecimal("1000"))
             .build();
 
@@ -319,7 +321,7 @@ class PediatricDoseRuleRound18Test {
     @Test
     void morphineUnderOneYearNeedsAManualReview() {
         MedicationCatalogItem morphine = MedicationCatalogItem.builder()
-            .nameFr("Morphine").genericName("Morphine").strength("10").strengthUnit("mg")
+            .nameFr("Morphine").genericName("Morphine").strength("10").strengthUnit("mg").route("PO").pediatricDoseStatus(PediatricDoseLimitStatus.APPROVED)
             .pediatricMaxDoseMgPerKg(new BigDecimal("0.1"))
             .pediatricManualReviewUnderMonths(12)
             .pediatricDoseSource("WHO persisting pain in children 2012")
@@ -413,7 +415,7 @@ class PediatricDoseRuleRound18Test {
         PediatricDoseRule localized = new PediatricDoseRule();
         localized.setCardText(new com.example.hms.cdshooks.CdsCardText(source));
         MedicationCatalogItem morphine = MedicationCatalogItem.builder()
-            .nameFr("Morphine").genericName("Morphine").strength("10").strengthUnit("mg")
+            .nameFr("Morphine").genericName("Morphine").strength("10").strengthUnit("mg").route("PO").pediatricDoseStatus(PediatricDoseLimitStatus.APPROVED)
             .pediatricMaxDoseMgPerKg(new BigDecimal("0.1"))
             .pediatricDoseSource("WHO persisting pain in children 2012")
             .build();
@@ -442,19 +444,19 @@ class PediatricDoseRuleRound18Test {
     /** QA D1462: a free-text brand reads the limits the reader found for the drug; a count stays unread. */
     @Test
     void aFreeTextBrandIsStoppedLikeAPickedItem() {
-        MedicationCatalogItem limits = MedicationCatalogItem.builder().genericName("Paracétamol")
+        MedicationCatalogItem limits = MedicationCatalogItem.builder().genericName("Paracétamol").route("PO").pediatricDoseStatus(PediatricDoseLimitStatus.APPROVED)
             .pediatricMaxDailyMg(java.math.BigDecimal.valueOf(1000)).build();
         ParacetamolFacts facts = new ParacetamolFacts(true, List.of(), java.util.Set.of(), List.of(), List.of(), false, false, false,
             limits, List.of(), false);
         Patient child = Patient.builder().dateOfBirth(java.time.LocalDate.now().minusYears(6)).build();
         CdsRuleContext context = new CdsRuleContext(child, java.util.UUID.randomUUID(), "Efferalgan 1 g", null, null, 1000d,
-            null, 19d, List.of(), List.of(), "4 fois par jour", null, java.time.LocalDateTime.now(), null, facts);
+            null, 19d, List.of(), List.of(), "4 fois par jour", null, java.time.LocalDateTime.now(), null, facts).withRoute("PO", null);
         List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cards = new PediatricDoseRule().evaluate(context);
         org.assertj.core.api.Assertions.assertThat(cards)
             .anySatisfy(card -> org.assertj.core.api.Assertions.assertThat(card.hardStop()).isTrue());
 
         CdsRuleContext noFacts = new CdsRuleContext(child, java.util.UUID.randomUUID(), "Efferalgan 1 g", null, null, 1000d,
-            null, 19d, List.of(), List.of(), "4 fois par jour", null, java.time.LocalDateTime.now(), null, ParacetamolFacts.NONE);
+            null, 19d, List.of(), List.of(), "4 fois par jour", null, java.time.LocalDateTime.now(), null, ParacetamolFacts.NONE).withRoute("PO", null);
         org.assertj.core.api.Assertions.assertThat(new PediatricDoseRule().evaluate(noFacts))
             .noneSatisfy(card -> org.assertj.core.api.Assertions.assertThat(card.hardStop()).isTrue());
     }

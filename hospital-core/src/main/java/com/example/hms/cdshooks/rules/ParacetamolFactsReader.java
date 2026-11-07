@@ -51,6 +51,8 @@ import java.util.regex.Pattern;
  * it is filed on a stay that is still open. Past that window it is not counted, and it is not
  * dropped either: nothing shows it was stopped, so the card names it as possibly still in use.
  * A combination product is named too, never counted.
+ *
+ * <p>CR-03: the doses recorded as given are read apart from all that ({@link ParacetamolDosesGiven}).
  */
 @Service
 public class ParacetamolFactsReader {
@@ -65,13 +67,23 @@ public class ParacetamolFactsReader {
     private final MedicationCatalogItemRepository catalogue;
     private final PatientProblemRepository problems;
     private final AdmissionRepository admissions;
+    private final ParacetamolDosesGiven dosesGiven;
 
+    /** No record of the doses given: a card then says that exposure is unknown. */
     public ParacetamolFactsReader(PrescriptionRepository prescriptions, MedicationCatalogItemRepository catalogue,
                                   PatientProblemRepository problems, AdmissionRepository admissions) {
+        this(prescriptions, catalogue, problems, admissions, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ParacetamolFactsReader(PrescriptionRepository prescriptions, MedicationCatalogItemRepository catalogue,
+                                  PatientProblemRepository problems, AdmissionRepository admissions,
+                                  ParacetamolDosesGiven dosesGiven) {
         this.prescriptions = prescriptions;
         this.catalogue = catalogue;
         this.problems = problems;
         this.admissions = admissions;
+        this.dosesGiven = dosesGiven;
     }
 
     /**
@@ -111,13 +123,16 @@ public class ParacetamolFactsReader {
         List<PatientProblem> surfaced = live.stream()
             .filter(p -> CrossHospitalRows.maySurface(scope, acting, p.getSensitivityCategory()))
             .toList();
+        ParacetamolFacts.Documented documented = child || scope == null || dosesGiven == null
+            ? ParacetamolFacts.Documented.NOT_READ
+            : dosesGiven.read(patient.getId(), scope, paracetamol, combinations, active);
         return new ParacetamolFacts(true, orders.counted, ParacetamolRisk.of(surfaced), orders.mayStillBeInUse,
             orders.combinations, combination, acting == null, scope == null,
-            item == null && named ? freeTextLimits(paracetamol) : null, orders.notRecognised, false);
+            item == null && named ? freeTextLimits(paracetamol) : null, orders.notRecognised, false, documented);
     }
 
     /** A catalogue item or a cited brand names it, or it carries a class member's INN stem. */
-    private static boolean recognised(String name, List<MedicationCatalogItem> active) {
+    static boolean recognised(String name, List<MedicationCatalogItem> active) {
         return AllergyDrugIdentity.of(name, List.of()).resolved()
             || active.stream().anyMatch(i -> OrderedDrugIdentity.agrees(name, i));
     }
@@ -137,6 +152,8 @@ public class ParacetamolFactsReader {
                 || i.getPediatricMaxDailyMgPerKg() != null || i.getPediatricMaxSingleDoseMg() != null)
             .findFirst()
             .map(i -> MedicationCatalogItem.builder()
+                // CR-01: the route these limits are for, only when every item with limits says the same one.
+                .route(oneRoute(items))
                 .pediatricMaxDailyMg(oneCap ? caps.get(0) : null)
                 .pediatricMaxDoseMgPerKg(i.getPediatricMaxDoseMgPerKg())
                 .pediatricMaxDailyMgPerKg(i.getPediatricMaxDailyMgPerKg())
@@ -145,6 +162,15 @@ public class ParacetamolFactsReader {
                 .pediatricDoseStatus(i.getPediatricDoseStatus())
                 .build())
             .orElse(null);
+    }
+
+    private static String oneRoute(List<MedicationCatalogItem> items) {
+        List<String> routes = items.stream()
+            .filter(i -> i.getPediatricMaxDailyMg() != null || i.getPediatricMaxDoseMgPerKg() != null
+                || i.getPediatricMaxDailyMgPerKg() != null || i.getPediatricMaxSingleDoseMg() != null)
+            .map(i -> com.example.hms.service.emar.MedicationRoutes.canonical(i.getRoute()))
+            .distinct().toList();
+        return routes.size() == 1 ? routes.get(0) : null;
     }
 
     private static boolean namesACombination(String name, List<MedicationCatalogItem> paracetamol,
@@ -221,7 +247,7 @@ public class ParacetamolFactsReader {
         return new Orders(counted, List.copyOf(mayStillBeInUse), combinedNames, notRecognised);
     }
 
-    private static boolean isCombination(Prescription rx, List<MedicationCatalogItem> paracetamol,
+    static boolean isCombination(Prescription rx, List<MedicationCatalogItem> paracetamol,
                                          List<MedicationCatalogItem> combinations) {
         // A link to paracetamol alone wins over reading the name.
         if (paracetamol.stream().anyMatch(i -> carries(rx, i))) {
@@ -233,7 +259,7 @@ public class ParacetamolFactsReader {
     }
 
     /** The order as a paracetamol order, or {@code null} when it is another drug. */
-    private static ParacetamolFacts.OtherOrder otherOrder(Prescription rx, List<MedicationCatalogItem> paracetamol) {
+    static ParacetamolFacts.OtherOrder otherOrder(Prescription rx, List<MedicationCatalogItem> paracetamol) {
         List<MedicationCatalogItem> linked = paracetamol.stream().filter(i -> carries(rx, i)).toList();
         if (!linked.isEmpty()) {
             // QA D1223: an older order whose name contradicts its item still counts, on what its dose

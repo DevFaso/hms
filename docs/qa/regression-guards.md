@@ -1099,3 +1099,15 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `service/OrderReviewHoldServiceImplTest` (new) | Who may decide, the binding to a dispute and a version, what a finished order counts as, what may replace an order, and that the audit row holds a digest of the reason. | none |
 | `architecture/HospitalAdminOffChartTest` (narrowed) | A hospital administrator with no clinical role reaching the in-basket for anything but the dispute reviews addressed to them. | That one exception, with its reason. |
 | `service/support/ClinicalGuardBridgeResetListener` (new, test-only) | A plain unit test asking a stopped test context, and a class on a cached context running with a guard failing open. | none |
+
+## Clinical rules wave: route, exception and exposure (CR-01, CR-02, CR-03)
+
+| Guard | Class it fails on | Allowlist |
+|---|---|---|
+| `architecture/OrderRouteEntryPointGuardTest` (new) | CR-01: a dose rule entry point without the ordered route, so an oral limit judges an IV order: an engine overload, a second way to build the order, a caller passing null or the catalogue item's route, a dose rule that stops reading it. | none |
+| `architecture/AdultParacetamolGuardTest#theRuleOnlyEverAlerts` (changed) | CR-02: the adult card shapes: an alert, the contraindication, or a held finding with its key; never a hard stop, never a review. | none |
+| `cdshooks/rules/AdultParacetamolRouteExposureTest`, `cdshooks/rules/PediatricDoseRouteLimitTest` (new) | The route, held-finding and exposure matrices of the two rules. | none |
+| `service/PrescriptionServiceImplTest#cr02_*`, `#cr01_*` (new) | The exception at the signature: token, version, findings, signer, audit; a reason alone, a stored reason and a pharmacist's review pass nothing. | none |
+| `repository/MarAndOpenStayQueriesPostgresIT#cr03_*` (new) | The documented doses on PostgreSQL across midnight. | none |
+| `service/emar/ParacetamolExposureAfterCommitIT`, `architecture/AdultParacetamolGuardTest#theExposureIsReadOutsideTheDoseAndTheMarTakesNoPatientLock` (new) | CR-03: a failed exposure read undoing a dose, a read inside the dose, a patient lock in the MAR; two concurrent doses, the last to commit counting both. | none |
+| `service/PrescriptionServiceImplTest#cr01_*` (new) | The urgent exception of a child's cannot-assess order: a routine order and the review by age cannot use it. `#paed_*`: a child's dose above an approved limit asks for a fresh decision at signing, and an urgent one asks for the review afterwards. | none |

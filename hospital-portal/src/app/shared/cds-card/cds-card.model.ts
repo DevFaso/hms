@@ -27,4 +27,10 @@ export interface CdsCard {
   hardStop?: boolean | null;
   /** True on a critical card that the signature also asks a reason for; absent on every other card. */
   reasonAtSignature?: boolean | null;
+  /**
+   * CR-02: on a card signed only with the prescriber's explicit exception. A refused signature
+   * sets it to the token the next attempt sends back, which ties the reason to these findings of
+   * this version of the order.
+   */
+  exceptionKey?: string | null;
 }

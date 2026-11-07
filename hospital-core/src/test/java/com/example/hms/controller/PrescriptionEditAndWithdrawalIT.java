@@ -96,6 +96,7 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
     @Autowired private EncounterRepository encounterRepository;
     @Autowired private PrescriptionRepository prescriptionRepository;
     @Autowired private AuditEventLogRepository auditEventLogRepository;
+    @Autowired private com.example.hms.repository.InBasketItemRepository inBasketItemRepository;
     @Autowired private com.example.hms.repository.PatientProblemRepository patientProblemRepository;
     @Autowired private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
     private List<String> lastSummaries = List.of();
@@ -472,7 +473,7 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
             java.util.Map<String, Object> draft = java.util.Map.of(
                 "resourceType", "MedicationRequest",
                 "medicationCodeableConcept", java.util.Map.of("text", "Paracétamol"),
-                "dosageInstruction", List.of(java.util.Map.of("text", "1 g")));
+                "dosageInstruction", List.of(java.util.Map.of("text", "1 g", "route", java.util.Map.of("text", "PO"))));
             java.util.Map<String, Object> context = java.util.Map.of(
                 "patientId", patient.getId().toString(),
                 "medications", java.util.Map.of("entry", List.of(java.util.Map.of("resource", draft))));
@@ -482,6 +483,88 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
                 .anyMatch(summary -> summary.contains("5000 mg") && summary.contains("4000 mg"));
         } finally {
             prescriptionRepository.deleteById(other.getId());
+        }
+    }
+
+    /** CR-02 on the real stack: the version in the token is the row's, and only the token passes a reason. */
+    @Test
+    void anAdultDoseOutsideTheLimitsIsSignedOnlyWithItsExceptionOnTheVersionItAnswered() throws Exception {
+        Prescription draft = prescriptionRepository.save(Prescription.builder()
+            .patient(patient).staff(authorStaff).encounter(encounter).hospital(hospital)
+            .assignment(authorStaff.getAssignment())
+            .medicationName("Paracétamol").medicationDisplayName("Paracétamol").route("PO")
+            .dosage("1500 mg").frequency("3 fois par jour").quantity(BigDecimal.TEN).quantityUnit("cp")
+            .status(PrescriptionStatus.DRAFT).build());
+        try {
+            String refused = mockMvc.perform(post(API_CONTEXT + "/prescriptions/{id}/sign", draft.getId()).contextPath(API_CONTEXT).with(as(authorUser)))
+                .andExpect(status().isBadRequest())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+            String token = com.jayway.jsonpath.JsonPath.read(refused, "$.cdsAdvisories[0].exceptionKey");
+            assertThat(token).isNotBlank().doesNotContain("single");
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions/{id}/sign", draft.getId()).contextPath(API_CONTEXT).with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"allergyOverrideReason\":\"Dose de charge\"}"))
+                .andExpect(status().isBadRequest());
+            assertThat(prescriptionRepository.findById(draft.getId()).orElseThrow().getStatus()).isEqualTo(PrescriptionStatus.DRAFT);
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions/{id}/sign", draft.getId()).contextPath(API_CONTEXT).with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"allergyOverrideReason\":\"Dose de charge\",\"doseExceptionToken\":\"" + token + "\"}"))
+                .andExpect(status().is2xxSuccessful());
+            Prescription signed = prescriptionRepository.findById(draft.getId()).orElseThrow();
+            assertThat(signed.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+            assertThat(signed.getOverrideReason()).isEqualTo("Dose de charge");
+        } finally {
+            auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
+                .filter(row -> draft.getId().toString().equals(row.getResourceId())).toList());
+            prescriptionRepository.deleteById(draft.getId());
+        }
+    }
+
+    /**
+     * CR-01 on the real stack (provisional): a child's paracetamol with no limit on file. The routine
+     * signature waits for the review, and stays refused with a reason; the urgent one signs with its
+     * token, the order can leave the counter, and the colleague is asked for the review after the fact.
+     */
+    @Test
+    void aChildsOrderTheCheckCannotAssessIsSignedOnlyAsAnUrgentException() throws Exception {
+        patient.setDateOfBirth(LocalDate.now().minusYears(6));
+        patient = patientRepository.save(patient);
+        Prescription draft = prescriptionRepository.save(Prescription.builder()
+            .patient(patient).staff(authorStaff).encounter(encounter).hospital(hospital)
+            .assignment(authorStaff.getAssignment())
+            .medicationName("Paracétamol").medicationDisplayName("Paracétamol").route("IV")
+            .dosage("250 mg").frequency("3 fois par jour").quantity(BigDecimal.TEN).quantityUnit("amp")
+            .status(PrescriptionStatus.DRAFT).build());
+        try {
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions/{id}/sign", draft.getId()).contextPath(API_CONTEXT).with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"allergyOverrideReason\":\"Urgence\"}"))
+                .andExpect(status().isBadRequest());
+            assertThat(prescriptionRepository.findById(draft.getId()).orElseThrow().getStatus()).isEqualTo(PrescriptionStatus.DRAFT);
+
+            String asked = mockMvc.perform(post(API_CONTEXT + "/prescriptions/{id}/sign", draft.getId()).contextPath(API_CONTEXT).with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"urgentDoseException\":true}"))
+                .andExpect(status().isBadRequest())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+            String token = com.jayway.jsonpath.JsonPath.read(asked, "$.cdsAdvisories[0].exceptionKey");
+
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions/{id}/sign", draft.getId()).contextPath(API_CONTEXT).with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"urgentDoseException\":true,\"allergyOverrideReason\":\"Sepsis, personne sur place\",\"doseExceptionToken\":\"" + token + "\"}"))
+                .andExpect(status().is2xxSuccessful());
+            Prescription signed = prescriptionRepository.findById(draft.getId()).orElseThrow();
+            assertThat(signed.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+            assertThat(signed.getPediatricDoseUrgentExceptionAt()).isNotNull();
+            assertThat(signed.getPediatricDoseReviewedAt()).isNull();
+            assertThat(inBasketItemRepository.findAll()).anySatisfy(item -> {
+                assertThat(item.getReferenceId()).isEqualTo(draft.getId());
+                assertThat(item.getRecipientUser().getId()).isEqualTo(colleagueUser.getId());
+                assertThat(item.getPriority()).isEqualTo(com.example.hms.enums.InBasketPriority.URGENT);
+            });
+        } finally {
+            inBasketItemRepository.deleteAllInBatch(inBasketItemRepository.findAll().stream()
+                .filter(item -> draft.getId().equals(item.getReferenceId())).toList());
+            auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
+                .filter(row -> draft.getId().toString().equals(row.getResourceId())).toList());
+            prescriptionRepository.deleteById(draft.getId());
         }
     }
 
@@ -529,7 +612,7 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
             .assignment(authorStaff.getAssignment())
             .medicationName("Paracétamol").medicationDisplayName("Paracétamol")
             .dosage("500 mg").frequency("3 fois par jour").quantity(BigDecimal.TEN).quantityUnit("cp")
-            .status(PrescriptionStatus.DRAFT).build());
+            .route("PO").status(PrescriptionStatus.DRAFT).build());
         PatientProblem severe = patientProblemRepository.save(PatientProblem.builder()
             .patient(patient).hospital(hospital).recordedBy(authorStaff)
             .problemCode("K72.9").problemDisplay("Hepatic failure")
@@ -561,7 +644,7 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
             .assignment(authorStaff.getAssignment())
             .medicationName("Paracétamol").medicationDisplayName("Paracétamol")
             .dosage("500 mg").frequency("3 fois par jour").quantity(BigDecimal.TEN).quantityUnit("cp")
-            .overrideReason("Interaction acceptée").status(PrescriptionStatus.DRAFT).build());
+            .overrideReason("Interaction acceptée").route("PO").status(PrescriptionStatus.DRAFT).build());
         PatientProblem severe = patientProblemRepository.save(PatientProblem.builder()
             .patient(patient).hospital(hospital).recordedBy(authorStaff)
             .problemCode("K72.9").problemDisplay("Hepatic failure")
@@ -590,7 +673,7 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
             .assignment(authorStaff.getAssignment())
             .medicationName("Paracétamol").medicationDisplayName("Paracétamol")
             .dosage("500 mg").frequency("3 fois par jour").quantity(BigDecimal.TEN).quantityUnit("cp")
-            .status(PrescriptionStatus.DRAFT).build());
+            .route("PO").status(PrescriptionStatus.DRAFT).build());
         PatientProblem severe = patientProblemRepository.save(PatientProblem.builder()
             .patient(patient).hospital(hospital).recordedBy(authorStaff)
             .problemCode("K72.9").problemDisplay("Hepatic failure")

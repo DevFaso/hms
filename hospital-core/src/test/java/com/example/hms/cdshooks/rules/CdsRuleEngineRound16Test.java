@@ -60,6 +60,8 @@ class CdsRuleEngineRound16Test {
         item.setNameFr("Paracétamol");
         item.setGenericName("paracetamol");
         item.setPediatricMaxDoseMgPerKg(new BigDecimal(mgPerKg));
+        item.setRoute("PO");
+        item.setPediatricDoseStatus(com.example.hms.enums.PediatricDoseLimitStatus.APPROVED);
         return item;
     }
 
@@ -110,9 +112,9 @@ class CdsRuleEngineRound16Test {
         CdsRuleEngine engine = new CdsRuleEngine(rules, prescriptionRepository, catalogRepository, vitalSignRepository);
 
         List<CdsCard> onEdit = engine.evaluateProposedPrescription(adult, hospitalId,
-            "Sulfadoxine-pyriméthamine", null, "3 comprimés", null, edited.getId());
+            "Sulfadoxine-pyriméthamine", null, "3 comprimés", null, edited.getId(), "PO");
         List<CdsCard> onCreate = engine.evaluateProposedPrescription(adult, hospitalId,
-            "Sulfadoxine-pyriméthamine", null, "3 comprimés", null, null);
+            "Sulfadoxine-pyriméthamine", null, "3 comprimés", null, null, "PO");
 
         assertThat(onEdit).isEmpty();
         // The same order written again IS a duplicate: the exclusion is only the edited row.
@@ -133,7 +135,7 @@ class CdsRuleEngineRound16Test {
             prescriptionRepository, catalogRepository, vitalSignRepository);
 
         List<CdsCard> cards = engine.evaluateProposedPrescription(child, hospitalId, "Paracétamol", null,
-            "1 g", paracetamolWithCeiling("15"), null);
+            "1 g", paracetamolWithCeiling("15"), null, "PO");
 
         assertThat(cards).extracting(CdsCard::indicator).containsExactly(CdsCard.Indicator.CRITICAL);
     }
@@ -148,9 +150,9 @@ class CdsRuleEngineRound16Test {
             prescriptionRepository, catalogRepository, vitalSignRepository);
 
         assertThat(engine.evaluateProposedPrescription(child, hospitalId, "Paracétamol", null,
-            "15 mg/kg", paracetamolWithCeiling("15"), null)).isEmpty();
+            "15 mg/kg", paracetamolWithCeiling("15"), null, "PO")).isEmpty();
         assertThat(engine.evaluateProposedPrescription(child, hospitalId, "Paracétamol", null,
-            "20 mg/kg", paracetamolWithCeiling("15"), null))
+            "20 mg/kg", paracetamolWithCeiling("15"), null, "PO"))
             .extracting(CdsCard::indicator).containsExactly(CdsCard.Indicator.CRITICAL);
     }
 

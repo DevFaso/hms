@@ -72,6 +72,10 @@ class InBasketRecipientGuardTest {
         "OrderReviewHoldServiceImpl.java", union(
             rolesOf(constant(TransfusionController.class, "PRESCRIBER")),
             rolesOf(constant(TransfusionController.class, "BEDSIDE"))),
+        // The review after an urgent dose exception (CR-01): the pharmacy, else a physician.
+        "PrescriptionServiceImpl.java", union(
+            codes(setConstant(com.example.hms.service.PrescriptionServiceImpl.class, "URGENT_REVIEW_PHARMACY_ROLES")),
+            codes(setConstant(com.example.hms.service.PrescriptionServiceImpl.class, "URGENT_REVIEW_PHYSICIAN_ROLES"))),
         // The store itself: every sender above reaches it through createItem.
         "InBasketServiceImpl.java", Set.of());
 

@@ -413,7 +413,7 @@ export class EmarComponent implements OnInit, OnDestroy {
       .administerMedication(taskId, payload)
       .pipe(takeUntil(this.destroyed$))
       .subscribe({
-        next: () => {
+        next: (recorded) => {
           this.administerInFlight.set(false);
           this.earlyDose.set(null);
           this.toast.success(
@@ -421,6 +421,10 @@ export class EmarComponent implements OnInit, OnDestroy {
               status: this.translate.instant(`EMAR.ADMIN_STATUS.${status}`),
             }),
           );
+          // CR-03: the documented exposure counts this dose: a warning, the dose stands.
+          for (const card of recorded?.cdsAdvisories ?? []) {
+            if (card.indicator === 'warning') this.toast.warning(card.summary);
+          }
           this.closeTask();
           this.loadTasks();
         },

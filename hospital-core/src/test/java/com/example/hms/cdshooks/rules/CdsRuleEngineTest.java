@@ -99,7 +99,7 @@ class CdsRuleEngineTest {
 
         CdsRuleEngine engine = engineWith(List.of());
         CdsRuleContext ctx = engine.buildContext(p, hospitalId,
-            "Amoxicillin 500", "AMOX-500", "500 mg");
+            "Amoxicillin 500", "AMOX-500", "500 mg", null);
 
         assertThat(ctx.proposedRxnormCode()).isEqualTo("723");
         assertThat(ctx.proposedDoseMg()).isEqualTo(500.0);
@@ -120,7 +120,7 @@ class CdsRuleEngineTest {
             .thenReturn(List.of());
 
         CdsRuleContext ctx = engineWith(List.of()).buildContext(p, hospitalId,
-            "Amoxicillin", null, "500 mg");
+            "Amoxicillin", null, "500 mg", null);
 
         assertThat(ctx.patientWeightKg()).isEqualTo(20.0);
     }
@@ -184,5 +184,21 @@ class CdsRuleEngineTest {
 
     private static CdsRuleContext emptyContext() {
         return new CdsRuleContext(null, null, null, null, null, null, null, null, List.of(), List.of());
+    }
+
+    /** CR-02: a dose rule that throws is no clean check: its card holds the signature. Fail-fast stays off here. */
+    @Test
+    void aDoseRuleThatThrowsLeavesAHeldCardNotSilence() {
+        CdsRule explosive = new CdsRule() {
+            @Override public String id() { return "adult-paracetamol"; }
+            @Override public List<CdsCard> evaluate(CdsRuleContext c) {
+                throw new IllegalStateException("boom");
+            }
+        };
+
+        assertThat(engineWith(List.of(explosive)).evaluate(emptyContext())).singleElement().satisfies(held -> {
+            assertThat(held.needsReasonAtSignature()).isTrue();
+            assertThat(held.exceptionKey()).isEqualTo("checkFailed:adult-paracetamol");
+        });
     }
 }
