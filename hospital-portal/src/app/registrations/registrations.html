@@ -176,7 +176,14 @@
     @if (!loading() && !loadError() && filtered().length === 0) {
       <div class="empty-state">
         <span class="material-symbols-outlined empty-icon">how_to_reg</span>
-        <h3>{{ 'REGISTRATIONS.NONE' | translate }}</h3>
+        @if (registrations().length === 0) {
+          <h3>{{ 'REGISTRATIONS.NONE' | translate }}</h3>
+        } @else {
+          <h3>{{ 'REGISTRATIONS.NO_MATCHES' | translate }}</h3>
+          <button type="button" class="btn-secondary" (click)="clearFilters()">
+            {{ 'REGISTRATIONS.CLEAR_FILTERS' | translate }}
+          </button>
+        }
       </div>
     }
     @if (!loading() && !loadError() && filtered().length > 0) {

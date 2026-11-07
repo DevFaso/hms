@@ -81,6 +81,8 @@
     }
   },
   "BEDS": {
+    "NO_MATCHES": "No results match these filters",
+    "CLEAR_FILTERS": "Clear filters",
     "WORKSPACE": "Capacity administration",
     "CAPACITY_OVERVIEW": "Ward capacity overview",
     "CAPACITY_HELP": "Active wards only. Counts stay independent of the unit search and include active beds in those wards.",
@@ -9592,6 +9594,8 @@
     "PAST_DATE": "The planned date and time cannot be in the past."
   },
   "REGISTRATIONS": {
+    "NO_MATCHES": "No results match these filters",
+    "CLEAR_FILTERS": "Clear filters",
     "WORKSPACE": "Hospital registration",
     "OVERVIEW": "Registration and stay overview",
     "LOADED": "Loaded registrations",

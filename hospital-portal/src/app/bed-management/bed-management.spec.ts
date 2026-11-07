@@ -95,6 +95,44 @@ describe('BedManagementComponent', () => {
     expect(bedServiceSpy.getWards).toHaveBeenCalledWith(false);
   });
 
+  it('shows recoverable no-match states for ward and bed filters, preserving genuine empty states', () => {
+    bedServiceSpy.getWards.and.returnValue(of([ward('w1', 'MED')]));
+    bedServiceSpy.getBeds.and.returnValue(of([bed('b1', 'CDX-1')]));
+    const fixture = TestBed.createComponent(BedManagementComponent);
+    fixture.detectChanges();
+    const c = fixture.componentInstance;
+    c.wardSearch.set('missing');
+    fixture.detectChanges();
+    let empty = fixture.nativeElement.querySelector('.empty-state');
+    expect(empty.textContent).toContain('BEDS.NO_MATCHES');
+    expect(empty.textContent).not.toContain('BEDS.NO_WARDS');
+    empty.querySelector('button').click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('tbody tr').length).toBe(1);
+    c.selectWard(c.wards()[0]);
+    c.bedSearch.set('missing');
+    c.bedFilter.set('OCCUPIED');
+    fixture.detectChanges();
+    empty = fixture.nativeElement.querySelector('.empty-state');
+    expect(empty.textContent).toContain('BEDS.NO_MATCHES');
+    empty.querySelector('button').click();
+    fixture.detectChanges();
+    expect(c.bedSearch()).toBe('');
+    expect(c.bedFilter()).toBe('');
+    expect(c.filteredBeds().length).toBe(1);
+    c.beds.set([]);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.empty-state').textContent).toContain(
+      'BEDS.NO_BEDS',
+    );
+    c.closeWard();
+    c.wards.set([]);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.empty-state').textContent).toContain(
+      'BEDS.NO_WARDS_HINT',
+    );
+  });
+
   it('keeps active-ward capacity totals independent of search and inactive units', () => {
     component.wards.set([ward('w1', 'MED', 10), { ...ward('w2', 'OLD', 100), active: false }]);
     component.wardSearch.set('OLD');

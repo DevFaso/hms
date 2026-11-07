@@ -58,6 +58,26 @@ describe('RegistrationsComponent dashboard', () => {
     expect(fixture.nativeElement.querySelectorAll('.summary-card').length).toBe(4);
   });
 
+  it('distinguishes no matches from an empty register and restores rows when filters clear', () => {
+    const fixture = make();
+    fixture.detectChanges();
+    const c = fixture.componentInstance;
+    c.searchTerm.set('missing');
+    fixture.detectChanges();
+    const empty = fixture.nativeElement.querySelector('.empty-state');
+    expect(empty.textContent).toContain('REGISTRATIONS.NO_MATCHES');
+    expect(empty.textContent).not.toContain('REGISTRATIONS.NONE');
+    empty.querySelector('button').click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('tbody tr').length).toBe(1);
+    service.list.and.returnValue(of([]));
+    c.load();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.empty-state').textContent).toContain(
+      'REGISTRATIONS.NONE',
+    );
+  });
+
   it('filters loaded stays and MRNs while metrics keep their loaded-set denominator', () => {
     const c = make().componentInstance;
     c.registrations.set([

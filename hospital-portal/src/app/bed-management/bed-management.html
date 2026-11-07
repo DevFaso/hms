@@ -108,8 +108,15 @@
     @if (!loading() && !loadError() && filteredWards().length === 0) {
       <div class="empty-state">
         <span class="material-symbols-outlined empty-icon">domain</span>
-        <h3>{{ 'BEDS.NO_WARDS' | translate }}</h3>
-        <p>{{ 'BEDS.NO_WARDS_HINT' | translate }}</p>
+        @if (wards().length === 0) {
+          <h3>{{ 'BEDS.NO_WARDS' | translate }}</h3>
+          <p>{{ 'BEDS.NO_WARDS_HINT' | translate }}</p>
+        } @else {
+          <h3>{{ 'BEDS.NO_MATCHES' | translate }}</h3>
+          <button type="button" class="btn-secondary" (click)="resetWardFilters()">
+            {{ 'BEDS.CLEAR_FILTERS' | translate }}
+          </button>
+        }
       </div>
     }
     @if (!loading() && filteredWards().length > 0) {
@@ -234,7 +241,18 @@
       @if (!bedsLoading() && !bedsError() && filteredBeds().length === 0) {
         <div class="empty-state">
           <span class="material-symbols-outlined empty-icon">bed</span>
-          <h3>{{ 'BEDS.NO_BEDS' | translate }}</h3>
+          @if (beds().length === 0) {
+            <h3>{{ 'BEDS.NO_BEDS' | translate }}</h3>
+          } @else {
+            <h3>{{ 'BEDS.NO_MATCHES' | translate }}</h3>
+            <button
+              type="button"
+              class="btn-secondary"
+              (click)="bedSearch.set(''); bedFilter.set('')"
+            >
+              {{ 'BEDS.CLEAR_FILTERS' | translate }}
+            </button>
+          }
         </div>
       }
       @if (!bedsLoading() && filteredBeds().length > 0) {

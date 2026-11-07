@@ -81,6 +81,8 @@
     }
   },
   "BEDS": {
+    "NO_MATCHES": "Aucun r?sultat ne correspond ? ces filtres",
+    "CLEAR_FILTERS": "Effacer les filtres",
     "WORKSPACE": "Gestion des capacités",
     "CAPACITY_OVERVIEW": "Vue d’ensemble des capacités",
     "CAPACITY_HELP": "Unités actives uniquement. Les compteurs restent indépendants de la recherche et comptent les lits actifs de ces unités.",
@@ -9592,6 +9594,8 @@
     "PAST_DATE": "La date et l'heure prévues ne peuvent pas être dans le passé."
   },
   "REGISTRATIONS": {
+    "NO_MATCHES": "Aucun r?sultat ne correspond ? ces filtres",
+    "CLEAR_FILTERS": "Effacer les filtres",
     "WORKSPACE": "Inscription hospitalière",
     "OVERVIEW": "Vue des inscriptions et séjours",
     "LOADED": "Inscriptions chargées",
