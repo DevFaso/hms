@@ -95,6 +95,9 @@ class PrenatalRecordedRiskCadenceTest {
         HISTORY_HIGH_BEFORE_THIS_PREGNANCY(false),
         /** Scored in an earlier pregnancy and only reviewed since: a review is not a new assessment. */
         HISTORY_HIGH_BEFORE_THIS_PREGNANCY_REVIEWED_IN_IT(false),
+        /** Written by an instance on the old code during a deploy: the date falls back to the last write. */
+        HISTORY_HIGH_WITH_NO_DATE(true),
+        HISTORY_HIGH_WITH_NO_DATE_BEFORE_THIS_PREGNANCY(false),
         /** A later edit wrote a version with no score: the HIGH is still the assessment in force. */
         HISTORY_HIGH_THEN_AN_UNSCORED_EDIT(true),
         /** A later score replaces it. */
@@ -165,6 +168,12 @@ class PrenatalRecordedRiskCadenceTest {
         return history;
     }
 
+    private static MaternalHistory undated(LocalDateTime lastWrite) {
+        MaternalHistory history = history(1, "HIGH", lastWrite);
+        history.setRiskAssessedAt(null);
+        return history;
+    }
+
     private static HighRiskPregnancyCarePlan plan(String level, LocalDateTime createdAt) {
         HighRiskPregnancyCarePlan plan = HighRiskPregnancyCarePlan.builder().riskLevel(level).build();
         plan.setCreatedAt(createdAt);
@@ -190,6 +199,8 @@ class PrenatalRecordedRiskCadenceTest {
                 reviewed.setUpdatedAt(IN_THIS_PREGNANCY);
                 here.add(reviewed);
             }
+            case HISTORY_HIGH_WITH_NO_DATE -> here.add(undated(IN_THIS_PREGNANCY));
+            case HISTORY_HIGH_WITH_NO_DATE_BEFORE_THIS_PREGNANCY -> here.add(undated(BEFORE_THIS_PREGNANCY));
             case HISTORY_HIGH_THEN_AN_UNSCORED_EDIT -> here.addAll(List.of(
                 history(2, null, IN_THIS_PREGNANCY.plusWeeks(1)), history(1, "HIGH", IN_THIS_PREGNANCY)));
             case HISTORY_HIGH_THEN_SCORED_LOW -> here.addAll(List.of(
@@ -335,7 +346,10 @@ class PrenatalRecordedRiskCadenceTest {
         "Haute,true", "modérée à élevée,true", "Alta,true", "Crítica,true",
         "LOW,false", "MODERATE,false", "moderate,false", "Risque modéré,false", "Faible,false", "bas,false",
         "Riesgo moderado,false", "Medium,false",
-        "Modérée,false", "Basse,false", "Moyenne,false", "Moderada,false", "Baja,false", "Media,false"})
+        "Modérée,false", "Basse,false", "Moyenne,false", "Moderada,false", "Baja,false", "Media,false",
+        "Intermediate,false", "Mild,false", "Minor,false", "Risque intermédiaire,false", "Léger,false", "Légère,false",
+        "Mineur,false", "Mineure,false", "Intermedio,false", "Intermedia,false", "Leve,false", "Menor,false",
+        "Intermédiaire à élevé,true"})
     @DisplayName("a care plan counts unless its free-text level names something below high and nothing high")
     void aPlansFreeTextLevel(String level, boolean high) {
         assertThat(PrenatalSchedulingServiceImpl.planLevelReadsHigh(level)).isEqualTo(high);

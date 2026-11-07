@@ -36,7 +36,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Liquibase, for what the planner relies on: a read names one hospital and returns no other's rows; the
  * versions come newest first; only an active plan comes back, newest first; a patient with nothing comes
  * back empty; and the date that says which pregnancy a score belongs to is the column V267 added, which
- * a write that does not score leaves alone, and which a score equal to the old one still moves.
+ * a write that does not score leaves alone, and which keeps what a score writes. That
+ * {@code calculate-risk} writes it, even with an unchanged category, is held by
+ * {@code MaternalHistoryServiceImplTest#theAssessmentDateMovesWithAScoreAndNotWithAReview}.
  */
 @Testcontainers
 @DataJpaTest
@@ -170,7 +172,7 @@ class PrenatalRecordedRiskPostgresIT {
     }
 
     @Test
-    @DisplayName("a review moves updated_at and not the assessment date; a score equal to the old one moves it")
+    @DisplayName("a review moves updated_at and not the assessment date; the column persists a date set with an unchanged category")
     void onlyAScoreMovesTheDateThePlannerReads() {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             MaternalHistory version = histories.findById(newestAtA).orElseThrow();

@@ -89,7 +89,9 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
     /** These words name a level below high (EN/FR/ES): such a plan does not make the pregnancy high risk. */
     private static final Set<String> PLAN_LEVEL_BELOW_HIGH = Set.of("LOW", "MODERATE", "MEDIUM",
         "FAIBLE", "BAS", "BASSE", "MODERE", "MODEREE", "MOYEN", "MOYENNE",
-        "BAJO", "BAJA", "MODERADO", "MODERADA", "MEDIO", "MEDIA");
+        "BAJO", "BAJA", "MODERADO", "MODERADA", "MEDIO", "MEDIA",
+        "INTERMEDIATE", "MILD", "MINOR", "INTERMEDIAIRE", "LEGER", "LEGERE", "MINEUR", "MINEURE",
+        "INTERMEDIO", "INTERMEDIA", "LEVE", "MENOR");
 
     private final AppointmentRepository appointmentRepository;
     private final PatientRepository patientRepository;
@@ -300,7 +302,8 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             .filter(history -> history.getRiskCategory() != null && !history.getRiskCategory().isBlank())
             .findFirst()
             .filter(history -> RECORDED_HIGH.equalsIgnoreCase(history.getRiskCategory().trim()))
-            .map(MaternalHistory::getRiskAssessedAt)
+            // No date: an instance still on the old code wrote this score during a deploy, as V267 ran.
+            .map(history -> history.getRiskAssessedAt() != null ? history.getRiskAssessedAt() : history.getUpdatedAt())
             .filter(assessedAt -> madeInThisPregnancy(assessedAt, lmp))
             .isPresent();
     }
