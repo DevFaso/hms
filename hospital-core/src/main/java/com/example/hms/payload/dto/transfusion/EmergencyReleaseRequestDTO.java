@@ -36,4 +36,12 @@ public class EmergencyReleaseRequestDTO {
      * obtained in time. Required then, on its field; ignored otherwise.
      */
     private Boolean negativeUnobtainable;
+
+    /** An uncrossmatched release documents nothing: named at the edge with the other fields. */
+    @jakarta.validation.constraints.AssertTrue(message = "{transfusion.emergency.typeNotDocumented}")
+    @com.example.hms.validation.ReportedOn("releaseType")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isReleaseTypeDocumented() {
+        return releaseType != EmergencyReleaseType.UNCROSSMATCHED;
+    }
 }
