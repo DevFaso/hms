@@ -253,6 +253,21 @@ describe('PatientDetailComponent', () => {
     expect(apply.disabled).toBeFalse();
   });
 
+  it('keeps restriction controls hidden for a non-manager in summary and Administration', () => {
+    fixture.detectChanges();
+    expect(component.canManageRestriction()).toBeFalse();
+    const privacy = fixture.nativeElement.querySelector('.privacy-card');
+    expect(privacy).toBeTruthy();
+    expect(privacy.querySelector('button')).toBeNull();
+
+    component.setSection('administration');
+    fixture.detectChanges();
+    expect(component.activeTab()).toBe('administration');
+    expect(fixture.nativeElement.querySelector('[data-testid="restriction-card"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="apply-restriction"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="lift-restriction"]')).toBeNull();
+  });
+
   it('does not expose restricted clinical subtabs through grouped navigation', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[data-testid="care-section-button"]')).toBeNull();
