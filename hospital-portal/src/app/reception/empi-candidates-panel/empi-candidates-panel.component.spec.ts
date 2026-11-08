@@ -5,7 +5,11 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Subject, of, throwError } from 'rxjs';
 
 import { EmpiCandidatesPanelComponent } from './empi-candidates-panel.component';
-import { EmpiCandidateMatch, EmpiService } from '../../services/empi.service';
+import {
+  EmpiCandidateMatch,
+  EmpiMergeEventResponse,
+  EmpiService,
+} from '../../services/empi.service';
 import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
 
@@ -230,5 +234,46 @@ describe('EmpiCandidatesPanelComponent', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[data-testid="empi-merge-bar"]')).toBeNull();
     expect(empi.mergeByPatient).not.toHaveBeenCalled();
+  });
+  it('keeps the surviving identity and controls locked while a merge is pending', () => {
+    const response = new Subject<EmpiMergeEventResponse>();
+    empi.mergeByPatient.and.returnValue(response);
+    const component = searchWithResults([sample, second]) as ReturnType<
+      typeof searchWithResults
+    > & {
+      swapMergeSelection: () => void;
+      reset: () => void;
+      search: (event: Event) => void;
+      newPatientFromForm: () => void;
+    };
+    component.toggleMergeSelection(sample);
+    component.toggleMergeSelection(second);
+    component.executeMerge();
+    component.executeMerge();
+    const reads = empi.findCandidates.calls.count();
+    component.swapMergeSelection();
+    component.toggleMergeSelection(sample);
+    component.reset();
+    component.search(new Event('submit'));
+    component.confirmMatch(second);
+    component.newPatientFromForm();
+    component.executeMerge();
+    fixture.detectChanges();
+    expect(empi.findCandidates.calls.count()).toBe(reads);
+    expect(empi.mergeByPatient).toHaveBeenCalledOnceWith(sample.patientId, second.patientId);
+    expect(router.navigate).not.toHaveBeenCalled();
+    const bar = fixture.nativeElement.querySelector('[data-testid="empi-merge-bar"]');
+    expect(bar.querySelector('strong').textContent).toContain(sample.displayName);
+    expect(bar.querySelector('[data-testid="empi-merge"]').disabled).toBeTrue();
+    response.next({
+      id: 'cdx-merge',
+      primaryIdentityId: 'cdx-primary',
+      secondaryIdentityId: 'cdx-secondary',
+      mergeType: 'MANUAL',
+      mergedAt: '2026-11-07T23:00:00',
+    });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-patient-id="p-2"]')).toBeNull();
+    expect(toast.success).toHaveBeenCalled();
   });
 });

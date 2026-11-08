@@ -2960,7 +2960,7 @@
       "SCORE_HINT": "La puntuación ayuda a comparar; no confirma la identidad automáticamente.",
       "CANDIDATES": "Comparar candidatos",
       "CANDIDATES_HINT": "Revise cada campo antes de confirmar una coincidencia.",
-      "RESULT_COUNT": "{{count}} candidatos",
+      "RESULT_COUNT": "Candidatos: {{count}}",
       "READY_TITLE": "Listo para buscar",
       "READY_HINT": "Introduzca los datos de identidad para encontrar posibles expedientes existentes.",
       "AGREES": "Coincide",

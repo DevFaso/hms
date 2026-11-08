@@ -30,7 +30,17 @@ describe('ChunkRecoveryService', () => {
     };
     TestBed.configureTestingModule({
       providers: [
-        { provide: Router, useValue: { events } },
+        {
+          provide: Router,
+          useValue: {
+            events,
+            config: [
+              { path: 'procedure-orders' },
+              { path: 'patients/:id' },
+              { path: 'reception/empi-candidates' },
+            ],
+          },
+        },
         { provide: CHUNK_RECOVERY_BROWSER, useValue: browser },
       ],
     });
@@ -77,5 +87,30 @@ describe('ChunkRecoveryService', () => {
     service.handle(failure('https://example.com'));
     expect(browser.navigate).not.toHaveBeenCalled();
     expect(service.failedUrl()).toBeNull();
+  });
+  it('allows another route and bounds A-B-A cycles without storing identities', () => {
+    service.handle(failure('/procedure-orders?hospitalId=cdx-secret'));
+    service.handle(failure('/patients/cdx-sensitive?search=private'));
+    service.handle(failure('/procedure-orders?hospitalId=cdx-other'));
+    expect(browser.navigate).toHaveBeenCalledTimes(2);
+    expect(saved).not.toContain('cdx-');
+    expect(saved).not.toContain('search');
+    expect(JSON.parse(saved!)).toEqual([
+      { route: 'procedure-orders', at: jasmine.any(Number) },
+      { route: 'patients/:id', at: jasmine.any(Number) },
+    ]);
+  });
+  it('expires attempts after one minute and migrates legacy guards', () => {
+    const now = spyOn(Date, 'now').and.returnValue(100_000);
+    saved = '1';
+    service.handle(failure());
+    expect(browser.navigate).toHaveBeenCalledTimes(1);
+    now.and.returnValue(160_000);
+    service.handle(failure());
+    expect(browser.navigate).toHaveBeenCalledTimes(2);
+    saved = '/patients/old-private-id';
+    service.handle(failure());
+    expect(browser.navigate).toHaveBeenCalledTimes(3);
+    expect(saved).not.toContain('old-private-id');
   });
 });

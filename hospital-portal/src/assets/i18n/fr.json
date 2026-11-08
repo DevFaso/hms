@@ -2960,7 +2960,7 @@
       "SCORE_HINT": "Le score aide à comparer ; il ne confirme pas automatiquement l’identité.",
       "CANDIDATES": "Comparer les candidats",
       "CANDIDATES_HINT": "Vérifiez chaque champ avant de confirmer une correspondance.",
-      "RESULT_COUNT": "{{count}} candidats",
+      "RESULT_COUNT": "Candidats : {{count}}",
       "READY_TITLE": "Prêt pour la recherche",
       "READY_HINT": "Renseignez les informations d’identité ci-dessus pour trouver les dossiers existants possibles.",
       "AGREES": "Concordance",
