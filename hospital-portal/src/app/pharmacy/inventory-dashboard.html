@@ -116,15 +116,13 @@
       </div>
     }
     @if (stockFailed()) {
-      @if (stockFailed()) {
-        <div class="workspace-error" role="alert">
-          <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
-          <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
-          <button class="btn-secondary" (click)="loadStockLevels()">
-            {{ 'PHARMACY_DASH.RETRY' | translate }}
-          </button>
-        </div>
-      }
+      <div class="workspace-error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+        <button class="btn-secondary" (click)="loadStockLevels()">
+          {{ 'PHARMACY_DASH.RETRY' | translate }}
+        </button>
+      </div>
     } @else if (stockLoading()) {
       <div class="loading-state">
         <div class="spinner"></div>
@@ -239,15 +237,13 @@
       </button>
     </div>
     @if (alertsFailed()) {
-      @if (alertsFailed()) {
-        <div class="workspace-error" role="alert">
-          <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
-          <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
-          <button class="btn-secondary" (click)="loadReorderAlerts()">
-            {{ 'PHARMACY_DASH.RETRY' | translate }}
-          </button>
-        </div>
-      }
+      <div class="workspace-error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+        <button class="btn-secondary" (click)="loadReorderAlerts()">
+          {{ 'PHARMACY_DASH.RETRY' | translate }}
+        </button>
+      </div>
     } @else if (alertsLoading()) {
       <div class="loading-state">
         <div class="spinner"></div>
@@ -304,15 +300,13 @@
       </select>
     </div>
     @if (expiryFailed()) {
-      @if (expiryFailed()) {
-        <div class="workspace-error" role="alert">
-          <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
-          <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
-          <button class="btn-secondary" (click)="loadExpiringLots()">
-            {{ 'PHARMACY_DASH.RETRY' | translate }}
-          </button>
-        </div>
-      }
+      <div class="workspace-error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+        <button class="btn-secondary" (click)="loadExpiringLots()">
+          {{ 'PHARMACY_DASH.RETRY' | translate }}
+        </button>
+      </div>
     } @else if (expiryLoading()) {
       <div class="loading-state">
         <div class="spinner"></div>
@@ -323,7 +317,7 @@
         class="table-wrapper"
         tabindex="0"
         role="region"
-        [attr.aria-label]="'PHARMACY.INVENTORY_TITLE' | translate"
+        [attr.aria-label]="'PHARMACY.EXPIRY_REPORT' | translate"
       >
         <table class="data-table">
           <thead>

@@ -168,9 +168,10 @@
         [(ngModel)]="searchTerm"
         [attr.aria-label]="'PHARMACY_DASH.SEARCH_LOTS' | translate"
         [placeholder]="'PHARMACY_DASH.SEARCH_LOTS' | translate" /></label
-    ><span class="workspace-note"
-      >{{ recentLots().length }} {{ 'PHARMACY_DASH.LOTS_LOADED' | translate }}</span
-    >
+    ><span class="workspace-note">{{
+      (recentLots().length === 1 ? 'PHARMACY_DASH.LOT_LOADED' : 'PHARMACY_DASH.LOTS_LOADED')
+        | translate: { count: recentLots().length }
+    }}</span>
   </div>
   @if (lotsPartial()) {
     <p class="workspace-error" role="status">
@@ -183,15 +184,13 @@
   <!-- Recent Lots -->
   <h3 class="section-title">{{ 'PHARMACY.RECENT_LOTS' | translate }}</h3>
   @if (lotsFailed()) {
-    @if (lotsFailed()) {
-      <div class="workspace-error" role="alert">
-        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
-        <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
-        <button class="btn-secondary" (click)="loadRecentLots()">
-          {{ 'PHARMACY_DASH.RETRY' | translate }}
-        </button>
-      </div>
-    }
+    <div class="workspace-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+      <button class="btn-secondary" (click)="loadRecentLots()">
+        {{ 'PHARMACY_DASH.RETRY' | translate }}
+      </button>
+    </div>
   } @else if (lotsLoading()) {
     <div class="loading-state">
       <div class="spinner"></div>
