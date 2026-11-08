@@ -700,6 +700,7 @@ export class LabResultsComponent implements OnInit {
     }
     this.filtered.set(list);
     if (resetPage) this.page.set(1);
+    else this.page.set(this.currentPage());
   }
 
   viewResult(r: LabResultResponse): void {
