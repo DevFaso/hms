@@ -1,3 +1,4 @@
+@use '../../shared/styles/diagnostics-workspace' as diagnostics;
 .lab-test-config-container {
   max-width: 1200px;
   margin: 0 auto;
@@ -656,3 +657,5 @@
   align-items: center;
   gap: 6px;
 }
+
+@include diagnostics.workspace;

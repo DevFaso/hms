@@ -1,3 +1,4 @@
+import { ResultEvolutionComponent } from '../shared/result-evolution.component';
 import { refusalReason } from '../../shared/refusal-reason';
 import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
 import { textMatches } from '../../shared/person-search';
@@ -30,14 +31,8 @@ import { AuthService } from '../../auth/auth.service';
 import { HospitalScopeUrlService } from '../../core/hospital-scope-url.service';
 import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
-import { currentLocale } from '../../shared/i18n/app-locale';
 import { shortOrderCode } from '../../shared/lab/order-code';
-import {
-  nowLocalDatetime,
-  toLocalInputValue,
-  toServerDateTime,
-  serverInstant,
-} from '../../shared/date-utils';
+import { nowLocalDatetime, toLocalInputValue, toServerDateTime } from '../../shared/date-utils';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { labSeverityFlag, labSeverityTone, labReleaseNeedsReview } from '../shared/lab-severity';
 import { LabValuePipe, formatLabNumber } from '../shared/lab-value.pipe';
@@ -88,6 +83,7 @@ export const ORDER_STATUSES_AWAITING_SPECIMEN: ReadonlySet<string> = new Set([
   selector: 'app-lab-results',
   standalone: true,
   imports: [
+    ResultEvolutionComponent,
     DateTimePipe,
     SubmitGuardDirective,
     MeasurePipe,
@@ -170,6 +166,24 @@ export class LabResultsComponent implements OnInit {
   loading = signal(true);
   results = signal<LabResultResponse[]>([]);
   filtered = signal<LabResultResponse[]>([]);
+  pageSize = signal(10);
+  page = signal(1);
+  pageCount = computed(() => Math.max(1, Math.ceil(this.filtered().length / this.pageSize())));
+  hasNextPage = computed(() => this.currentPage() * this.pageSize() < this.filtered().length);
+  currentPage = computed(() => Math.min(this.page(), this.pageCount()));
+  pageStart = computed(() => (this.currentPage() - 1) * this.pageSize());
+  pageEnd = computed(() => Math.min(this.pageStart() + this.pageSize(), this.filtered().length));
+  pagedResults = computed(() => this.filtered().slice(this.pageStart(), this.pageEnd()));
+  detailHistory = signal<LabResultTrendPoint[]>([]);
+  detailHistoryLoading = signal(false);
+  detailHistoryError = signal(false);
+  private detailRequest = 0;
+
+  setPageSize(size: number): void {
+    this.pageSize.set([10, 25, 50].includes(Number(size)) ? Number(size) : 10);
+    this.page.set(1);
+  }
+
   searchTerm = '';
   activeTab = signal<'all' | 'released' | 'pending' | 'critical'>('all');
 
@@ -346,6 +360,8 @@ export class LabResultsComponent implements OnInit {
 
   /** Re-fetch under the new scope when the chip emits. */
   onScopeChange(_hospitalId: string | null): void {
+    this.closeDetail();
+    this.page.set(1);
     this.loadResults();
   }
 
@@ -621,7 +637,7 @@ export class LabResultsComponent implements OnInit {
       next: ({ rows: list }) => {
         this.results.set(list);
         this.computeStats(list);
-        this.applyFilter();
+        this.applyFilter(false);
         this.loading.set(false);
       },
       error: () => {
@@ -655,7 +671,7 @@ export class LabResultsComponent implements OnInit {
       next: (list) => {
         this.criticalList.set(list ?? []);
         this.criticalLoading.set(false);
-        this.applyFilter();
+        this.applyFilter(false);
       },
       error: () => {
         this.toast.error(this.translate.instant('LAB_RESULTS.CRITICAL_LOAD_ERROR'));
@@ -664,7 +680,7 @@ export class LabResultsComponent implements OnInit {
     });
   }
 
-  applyFilter(): void {
+  applyFilter(resetPage = true): void {
     const tab = this.activeTab();
     let list = tab === 'critical' ? this.criticalList() : this.results();
     if (tab === 'released') {
@@ -683,26 +699,53 @@ export class LabResultsComponent implements OnInit {
       );
     }
     this.filtered.set(list);
+    if (resetPage) this.page.set(1);
+    else this.page.set(this.currentPage());
   }
 
   viewResult(r: LabResultResponse): void {
     this.selectedResult.set(r);
+    const request = ++this.detailRequest;
+    this.detailHistory.set([]);
+    this.detailHistoryLoading.set(true);
+    this.detailHistoryError.set(false);
+    this.labService.getResult(r.id).subscribe({
+      next: (detail) => {
+        if (request !== this.detailRequest) return;
+        this.detailHistoryLoading.set(false);
+        if (detail?.id !== r.id || detail.patientId !== r.patientId) {
+          this.detailHistoryError.set(true);
+          return;
+        }
+        this.detailHistory.set(
+          detail.trendHistory?.length
+            ? detail.trendHistory
+            : [
+                {
+                  resultDate: detail.resultDate,
+                  resultValue: detail.resultValue,
+                  resultUnit: detail.resultUnit,
+                  corrected: !!detail.supersedesResultId,
+                },
+              ],
+        );
+      },
+      error: () => {
+        if (request !== this.detailRequest) return;
+        this.detailHistoryLoading.set(false);
+        this.detailHistoryError.set(true);
+      },
+    });
   }
 
   closeDetail(): void {
+    ++this.detailRequest;
     this.selectedResult.set(null);
   }
 
   getReleasedByDisplay(r: LabResultResponse): string {
     const actor = (r.releasedByFullName ?? '').trim();
     return actor || this.translate.instant('LAB_RESULTS.AUTOVERIFICATION');
-  }
-
-  sortedTrendHistory(r: LabResultResponse): LabResultTrendPoint[] {
-    const history = r.trendHistory ?? [];
-    return [...history].sort(
-      (a, b) => serverInstant(b.resultDate).getTime() - serverInstant(a.resultDate).getTime(),
-    );
   }
 
   formatReferenceRange(range: {
@@ -762,15 +805,6 @@ export class LabResultsComponent implements OnInit {
       (graded.ageMax ?? null) === (range.ageMax ?? null) &&
       (graded.ageUnit ?? null) === (range.ageUnit ?? null)
     );
-  }
-
-  formatTrendDelta(sortedHistory: LabResultTrendPoint[], index: number): string {
-    const current = Number(sortedHistory[index]?.resultValue);
-    const previous = Number(sortedHistory[index + 1]?.resultValue);
-    if (!Number.isFinite(current) || !Number.isFinite(previous)) return '—';
-    const delta = current - previous;
-    const sign = delta > 0 ? '+' : '';
-    return `${sign}${new Intl.NumberFormat(currentLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(delta)}`;
   }
 
   /* ── Sign / acknowledge / compare ── */
@@ -860,7 +894,7 @@ export class LabResultsComponent implements OnInit {
           list.map((row) => (row.id === target.id ? { ...row, ...updated } : row));
         this.results.update(patch);
         this.criticalList.update((list) => list.filter((row) => row.id !== target.id));
-        this.applyFilter();
+        this.applyFilter(false);
         this.closeReadBack();
       },
       error: (err: { error?: { message?: string } }) => {
@@ -883,7 +917,7 @@ export class LabResultsComponent implements OnInit {
           list.map((row) => (row.id === r.id ? { ...row, acknowledged: true } : row));
         this.results.update(patch);
         this.criticalList.update((list) => list.filter((row) => row.id !== r.id));
-        this.applyFilter();
+        this.applyFilter(false);
       },
       error: (err: unknown) =>
         this.toast.error(

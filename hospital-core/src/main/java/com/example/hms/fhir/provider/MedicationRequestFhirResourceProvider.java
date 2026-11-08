@@ -43,7 +43,9 @@ public class MedicationRequestFhirResourceProvider implements IResourceProvider 
     @Read
     public MedicationRequest read(@IdParam IdType id) {
         UUID uuid = FhirIds.parseOrThrow(id);
-        return repository.findById(uuid)
+        // QA D1537: the search's rule, so the read never answers what the search leaves out.
+        return repository.findWithEncounterById(uuid)
+            .filter(com.example.hms.service.support.PrescriptionIssuance::wasIssued)
             .map(mapper::toFhir)
             .orElseThrow(() -> new ResourceNotFoundException(id));
     }
@@ -55,9 +57,16 @@ public class MedicationRequestFhirResourceProvider implements IResourceProvider 
     ) {
         UUID patientId = FhirIds.fromReference(patient != null ? patient : subject);
         if (patientId == null) return Collections.emptyList();
-        return repository.findByPatient_Id(patientId, PageRequest.of(0, MAX_RESULTS, NEWEST_FIRST))
-            .stream()
-            .map(mapper::toFhir)
+        // QA D1537: the orders that were issued, never a draft or a discarded one, chosen in the query
+        // so the capped page is never thinned after it was fetched.
+        List<com.example.hms.model.Prescription> issued = repository.findIssuedByPatientId(patientId,
+                com.example.hms.service.support.PrescriptionIssuance.PROPOSALS, PageRequest.of(0, MAX_RESULTS, NEWEST_FIRST))
+            .getContent();
+        // The patient's discharged stays, read once for the page and only when it holds an order (the
+        // course status the portal shows).
+        List<com.example.hms.model.Admission> closedStays = issued.isEmpty() ? List.of() : mapper.closedStaysOf(patientId);
+        return issued.stream()
+            .map(rx -> mapper.toFhir(rx, closedStays))
             .toList();
     }
 }

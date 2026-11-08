@@ -246,6 +246,11 @@ public enum AuditEventType {
     // who released it, the unit id and the request id only.
     EMERGENCY_BLOOD_RELEASED,
 
+    // QA D1538 (round 40): an obstetric order or referral placed as an emergency for a patient the
+    // obstetric rule would refuse (recorded male, or a child). The row carries the rule, the priority,
+    // the recorded sex and age at the time; the order itself is flagged for review.
+    OBSTETRIC_RULE_SKIPPED_EMERGENCY,
+
     OTHER
 }
 

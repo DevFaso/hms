@@ -74,6 +74,8 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
     private final ObjectMapper objectMapper;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    /** QA D1538 review: audits an obstetric rule skipped for an emergency. */
+    private final com.example.hms.service.support.ObstetricRuleSkipRecorder skipRecorder;
 
     @Override
     public ObgynReferralResponseDTO createReferral(ObgynReferralCreateRequestDTO request, String username) {
@@ -88,6 +90,12 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        // QA D1538 (round 40): every care context (antenatal, intrapartum, postpartum) is a
+        // pregnancy episode, so the maternity rule applies (ObstetricEligibility), refused on
+        // patientId. An URGENT referral is an emergency, which the rule never refuses; one placed for
+        // a patient the rule would refuse is flagged for review and the skip audited.
+        boolean ruleSkipped = com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(patient, "patientId",
+            request.getUrgency() == com.example.hms.enums.ObgynReferralUrgency.URGENT);
         User midwife = resolveUserByUsername(username);
 
         validateAttachmentsForUrgency(request);
@@ -105,6 +113,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
             .ongoingMidwiferyCare(request.isOngoingMidwiferyCare())
             .transferType(request.getTransferType())
             .status(ObgynReferralStatus.SUBMITTED)
+            .obstetricRuleSkipped(ruleSkipped)
             .slaDueAt(calculateSlaDueAt(request.getUrgency()))
             .patientContactSnapshot(buildPatientSnapshot(patient, hospital))
             .midwifeContactSnapshot(buildUserSnapshot(midwife))
@@ -115,6 +124,9 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         applyAttachments(referral, request.getAttachments(), midwife);
 
         ObgynReferral saved = referralRepository.save(referral);
+        if (ruleSkipped) {
+            skipRecorder.record(patient, String.valueOf(request.getUrgency()), com.example.hms.service.support.ObstetricRuleSkipRecorder.ENTITY_REFERRAL, saved.getId(), hospital.getId());
+        }
         log.info("Created OB-GYN referral {} for patient {}", saved.getId(), patient.getId());
         return referralMapper.toResponseDTO(saved);
     }

@@ -4,6 +4,7 @@ import com.example.hms.enums.ImagingOrderStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.model.ImagingOrder;
 import com.example.hms.model.Prescription;
+import com.example.hms.service.support.PrescriptionIssuance;
 
 import java.util.List;
 import java.util.UUID;
@@ -22,15 +23,23 @@ import java.util.UUID;
  */
 public final class NeverSentRule {
 
-    /** A prescription in one of these was never issued: unsigned work in progress (QA D101, D152, D652). */
-    public static final List<PrescriptionStatus> NEVER_SENT_PRESCRIPTION =
-        List.of(PrescriptionStatus.DRAFT, PrescriptionStatus.PENDING_SIGNATURE);
+    /**
+     * A prescription in one of these was never issued: unsigned work in progress (QA D101, D152, D652).
+     * The queries pair it with {@code withdrawnBeforeSigning = false} (QA D1537): a proposal withdrawn
+     * before anyone signed it was never sent either.
+     */
+    public static final List<PrescriptionStatus> NEVER_SENT_PRESCRIPTION = PrescriptionIssuance.PROPOSALS;
 
     private NeverSentRule() {
     }
 
-    public static boolean sent(PrescriptionStatus status) {
-        return status != PrescriptionStatus.DRAFT && status != PrescriptionStatus.PENDING_SIGNATURE;
+    /**
+     * QA D1537 (round 40): a prescription was sent when it was issued ({@link PrescriptionIssuance#wasIssued}):
+     * neither a proposal nor a proposal withdrawn before anyone signed it, which another hospital read as
+     * CANCELLED. The status alone cannot say so, so the rule takes the row.
+     */
+    public static boolean sent(Prescription prescription) {
+        return PrescriptionIssuance.wasIssued(prescription);
     }
 
     public static boolean sent(ImagingOrderStatus status) {
@@ -46,7 +55,7 @@ public final class NeverSentRule {
     public static List<Prescription> prescriptionsReadableHere(List<Prescription> rows, UUID activeHospitalId) {
         return rows.stream()
             .filter(p -> readableHere(CrossHospitalReachRecorder.hospitalIdOf(p.getHospital()), activeHospitalId,
-                sent(p.getStatus())))
+                sent(p)))
             .toList();
     }
 

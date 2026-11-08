@@ -1,3 +1,4 @@
+@use './operations-workspace' as operations;
 @use '../shared/styles/page-common';
 
 // Local accent variant — see dispensing.scss for the shared rationale.
@@ -332,3 +333,5 @@ textarea.form-control {
 .rx-selected {
   margin: 10px 0 0;
 }
+
+@include operations.workspace;

@@ -1,8 +1,24 @@
 <div class="pharmacy-checkout">
   <header class="page-header no-print">
-    <h2>{{ 'PHARMACY_CHECKOUT.TITLE' | translate }}</h2>
-    <p class="subtitle">{{ 'PHARMACY_CHECKOUT.SUBTITLE' | translate }}</p>
+    <div>
+      <p class="workspace-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">payments</span
+        ><span>{{ 'PHARMACY_WORKSPACE.LABEL' | translate }}</span>
+      </p>
+      <h1>{{ 'PHARMACY_CHECKOUT.TITLE' | translate }}</h1>
+      <p class="subtitle">{{ 'PHARMACY_CHECKOUT.SUBTITLE' | translate }}</p>
+    </div>
   </header>
+  @if (!receipt()) {
+    <ol class="workspace-steps no-print" [attr.aria-label]="'PHARMACY_CHECKOUT.TITLE' | translate">
+      <li [class.current]="!dispense()" [attr.aria-current]="!dispense() ? 'step' : null">
+        <b>1</b><span>{{ 'PHARMACY_CHECKOUT.STEP_LOOKUP' | translate }}</span>
+      </li>
+      <li [class.current]="dispense()" [attr.aria-current]="dispense() ? 'step' : null">
+        <b>2</b><span>{{ 'PHARMACY_CHECKOUT.STEP_PAYMENT' | translate }}</span>
+      </li>
+    </ol>
+  }
 
   <!-- Lookup card -->
   @if (!receipt()) {

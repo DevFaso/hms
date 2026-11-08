@@ -49,6 +49,21 @@ function mockResult(overrides: Record<string, unknown> = {}): Record<string, unk
 }
 
 describe('LabResultsComponent', () => {
+  it('keeps critical severity visible while filter buttons announce their selected state', () => {
+    fixture.detectChanges();
+    flushInit([mockResult({ severityFlag: 'CRITICAL', released: false })]);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const badge = el.querySelector<HTMLElement>('.severity-critical')!;
+    expect(badge).not.toBeNull();
+    expect(getComputedStyle(badge).color).toBe('rgb(153, 27, 27)');
+    const buttons = [...el.querySelectorAll<HTMLButtonElement>('.tabs .tab')];
+    buttons[2].click();
+    fixture.detectChanges();
+    expect(buttons[2].getAttribute('aria-pressed')).toBe('true');
+    expect(buttons[0].getAttribute('aria-pressed')).toBe('false');
+    expect(el.querySelectorAll('.data-table tbody tr').length).toBe(1);
+  });
   let fixture: ComponentFixture<LabResultsComponent>;
   let component: LabResultsComponent;
   let httpMock: HttpTestingController;
@@ -85,6 +100,199 @@ describe('LabResultsComponent', () => {
     const assignReq = httpMock.expectOne((r) => r.url.includes('/assignments'));
     assignReq.flush([{ id: 'assign-1', active: true }]);
   }
+
+  it('paginates results and resets the page after filtering', () => {
+    fixture.detectChanges();
+    flushInit(
+      Array.from({ length: 26 }, (_, i) =>
+        mockResult({ id: `result-${i}`, patientFullName: `Patient ${i}` }),
+      ),
+    );
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('tbody .data-row').length).toBe(10);
+    component.page.set(3);
+    expect(component.pagedResults().length).toBe(6);
+    expect(component.pageStart()).toBe(20);
+    component.setPageSize(25);
+    expect(component.currentPage()).toBe(1);
+    expect(component.pagedResults().length).toBe(25);
+    component.page.set(2);
+    component.searchTerm = 'Patient 25';
+    component.applyFilter();
+    expect(component.currentPage()).toBe(1);
+    expect(component.pagedResults().length).toBe(1);
+  });
+
+  it('ignores history received after switching patient details', () => {
+    fixture.detectChanges();
+    flushInit();
+    const first = component.results()[0];
+    component.viewResult(first);
+    const pending = httpMock.expectOne('/lab-results/result-1');
+    component.viewResult({ ...first, id: 'result-2', patientId: 'patient-2' });
+    httpMock
+      .expectOne('/lab-results/result-2')
+      .flush({ data: { ...first, id: 'result-2', patientId: 'patient-2', trendHistory: [] } });
+    pending.flush({
+      data: {
+        ...first,
+        trendHistory: [{ resultValue: '999', resultUnit: 'mg/dL', resultDate: first.resultDate }],
+      },
+    });
+    expect(component.detailHistory()[0].resultValue).toBe(first.resultValue);
+    expect(component.selectedResult()?.patientId).toBe('patient-2');
+  });
+
+  it('reports a failed history request', () => {
+    fixture.detectChanges();
+    flushInit();
+    component.viewResult(component.results()[0]);
+    httpMock
+      .expectOne('/lab-results/result-1')
+      .flush({}, { status: 503, statusText: 'Unavailable' });
+    expect(component.detailHistoryError()).toBeTrue();
+    expect(component.detailHistoryLoading()).toBeFalse();
+    expect(component.detailHistory()).toEqual([]);
+  });
+
+  it('rejects a detail response for another patient', () => {
+    fixture.detectChanges();
+    flushInit();
+    component.viewResult(component.results()[0]);
+    httpMock
+      .expectOne('/lab-results/result-1')
+      .flush({ data: mockResult({ patientId: 'other-patient' }) });
+    expect(component.detailHistoryError()).toBeTrue();
+    expect(component.detailHistory()).toEqual([]);
+  });
+
+  it('closes the detail and ignores pending history on hospital scope changes', () => {
+    fixture.detectChanges();
+    flushInit(Array.from({ length: 21 }, (_, i) => mockResult({ id: `result-${i}` })));
+    component.page.set(3);
+    expect(component.currentPage()).toBe(3);
+    component.viewResult(component.results()[0]);
+    const detail = httpMock.expectOne('/lab-results/result-0');
+    component.onScopeChange('new-hospital');
+    expect(component.selectedResult()).toBeNull();
+    expect(component.currentPage()).toBe(1);
+    httpMock
+      .expectOne((r) => r.url === '/lab-results')
+      .flush({ data: { content: [], totalElements: 0, totalPages: 0, number: 0 } });
+    detail.flush({
+      data: mockResult({
+        trendHistory: [
+          { resultDate: '2026-11-08T09:00:00Z', resultUnit: 'g/L', resultValue: '999' },
+        ],
+      }),
+    });
+    expect(component.detailHistory()).toEqual([]);
+  });
+
+  it('disables pager controls only at the first and last pages', () => {
+    fixture.detectChanges();
+    flushInit(Array.from({ length: 11 }, (_, i) => mockResult({ id: `result-${i}` })));
+    fixture.detectChanges();
+    const buttons = fixture.nativeElement.querySelectorAll(
+      '.results-pagination button',
+    ) as NodeListOf<HTMLButtonElement>;
+    expect(buttons[0].disabled).toBeTrue();
+    expect(buttons[1].disabled).toBeFalse();
+    buttons[1].click();
+    fixture.detectChanges();
+    expect(buttons[0].disabled).toBeFalse();
+    expect(buttons[1].disabled).toBeTrue();
+    expect(component.pageStart()).toBe(10);
+    expect(component.pageEnd()).toBe(11);
+  });
+
+  it('keeps the current page after a result reload following an action', () => {
+    fixture.detectChanges();
+    const rows = Array.from({ length: 21 }, (_, i) => mockResult({ id: `result-${i}` }));
+    flushInit(rows);
+    component.page.set(2);
+    component.loadResults();
+    httpMock
+      .expectOne((r) => r.url === '/lab-results')
+      .flush({ data: { content: rows, totalElements: rows.length, totalPages: 1, number: 0 } });
+    expect(component.currentPage()).toBe(2);
+    expect(component.pagedResults()[0].id).toBe('result-10');
+  });
+
+  it('keeps the clamped critical page after read-back and a later growing refresh', () => {
+    fixture.detectChanges();
+    flushInit();
+    const rows = Array.from({ length: 21 }, (_, i) =>
+      mockResult({ id: `critical-${i}`, severityFlag: 'CRITICAL' }),
+    ) as unknown as LabResultResponse[];
+    component.activeTab.set('critical');
+    component.criticalList.set(rows);
+    component.applyFilter();
+    component.page.set(2);
+    component.openReadBack(rows[0]);
+    component.readBackValue.set(rows[0].resultValue);
+    component.submitReadBack();
+    httpMock
+      .expectOne('/lab-results/critical-0/critical-read-back')
+      .flush({ ...rows[0], acknowledged: true });
+    expect(component.currentPage()).toBe(2);
+
+    component.page.set(3);
+    component.criticalList.set(rows);
+    component.applyFilter(false);
+    component.openReadBack(rows[1]);
+    component.readBackValue.set(rows[1].resultValue);
+    component.submitReadBack();
+    httpMock
+      .expectOne('/lab-results/critical-1/critical-read-back')
+      .flush({ ...rows[1], acknowledged: true });
+    expect(component.currentPage()).toBe(2);
+    component.criticalList.set(rows);
+    component.applyFilter(false);
+    expect(component.currentPage()).toBe(2);
+    expect(component.pageStart()).toBe(10);
+  });
+
+  it('resets pagination through the search input binding', () => {
+    fixture.detectChanges();
+    flushInit(
+      Array.from({ length: 21 }, (_, i) =>
+        mockResult({ id: `result-${i}`, patientFullName: `Patient ${i}` }),
+      ),
+    );
+    component.page.set(3);
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector('.search-box input') as HTMLInputElement;
+    input.value = 'Patient 20';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(component.page()).toBe(1);
+    expect(component.filtered().map((row) => row.id)).toEqual(['result-20']);
+  });
+
+  it('opens history for a critical queue row carrying the mapped patient identity', () => {
+    fixture.detectChanges();
+    flushInit();
+    const row = mockResult({ severityFlag: 'CRITICAL' }) as unknown as LabResultResponse;
+    component.criticalList.set([row]);
+    component.viewResult(component.criticalList()[0]);
+    httpMock.expectOne('/lab-results/result-1').flush({ data: row });
+    expect(component.detailHistoryError()).toBeFalse();
+    expect(component.detailHistory()[0].resultValue).toBe(row.resultValue);
+  });
+
+  it('resets the page when changing tabs even when both tabs contain several pages', () => {
+    fixture.detectChanges();
+    flushInit(
+      Array.from({ length: 31 }, (_, i) => mockResult({ id: `result-${i}`, released: true })),
+    );
+    component.page.set(3);
+    expect(component.currentPage()).toBe(3);
+    component.setTab('released');
+    expect(component.pageCount()).toBe(4);
+    expect(component.currentPage()).toBe(1);
+    expect(component.pagedResults()[0].id).toBe('result-0');
+  });
 
   it('should create the component', () => {
     expect(component).toBeTruthy();
@@ -194,6 +402,7 @@ describe('LabResultsComponent', () => {
     const trigger = host.querySelector<HTMLButtonElement>('.view-link')!;
     trigger.focus();
     trigger.click();
+    httpMock.expectOne('/lab-results/result-1').flush({ data: component.results()[0] });
     fixture.detectChanges();
     await fixture.whenStable();
     await new Promise((resolve) => setTimeout(resolve));
@@ -280,6 +489,7 @@ describe('LabResultsComponent', () => {
         'LAB_RESULTS.CORRECTED',
       );
       component.viewResult(component.results()[0]);
+      httpMock.expectOne('/lab-results/result-1').flush({ data: component.results()[0] });
       fixture.detectChanges();
       expect(host.querySelector('[data-testid="detail-corrected"]')).not.toBeNull();
     });
@@ -435,6 +645,7 @@ describe('LabResultsComponent', () => {
 
     const result = component.results()[0];
     component.viewResult(result);
+    httpMock.expectOne('/lab-results/result-1').flush({ data: result });
     expect(component.selectedResult()).toBe(result);
 
     component.closeDetail();

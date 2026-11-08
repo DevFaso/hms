@@ -2150,4 +2150,18 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
       expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before);
     });
   });
+
+  it('names the queue and recent dispense scroll regions by their section headings', async () => {
+    await render();
+    component.recentDispenses.set([
+      { id: 'dispense-fixture', medicationName: 'Fixture drug', status: 'COMPLETED' },
+    ] as never);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const regions = Array.from(el.querySelectorAll('.table-responsive[role="region"]'));
+    expect(regions.length).toBe(2);
+    const labels = regions.map((region) => region.getAttribute('aria-labelledby'));
+    expect(labels).toEqual(['dispensing-queue-title', 'recent-dispenses-title']);
+    for (const id of labels) expect(el.querySelector('#' + id)?.textContent?.trim()).toBeTruthy();
+  });
 });

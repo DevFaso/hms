@@ -89,6 +89,11 @@ public class ProgramEnrollmentService {
         Patient patient = requirePatientInTenant(patientId, hospitalId);
 
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        // QA D1538 (round 40): the antenatal programme follows a pregnancy, so the maternity rule
+        // applies (ObstetricEligibility), refused on the programme picked. Provisional.
+        if (request.getProgram() == CareProgram.ANC) {
+            com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(patient, "program", false);
+        }
         enrollmentRepository.findByPatientIdAndHospitalIdAndProgramAndStatus(
                 patientId, hospitalId, request.getProgram(), ProgramEnrollmentStatus.ACTIVE)
             .ifPresent(existing -> {

@@ -237,4 +237,14 @@ public class ObgynReferral extends BaseEntity {
         return s == ObgynReferralStatus.COMPLETED
             || s == ObgynReferralStatus.CANCELLED;
     }
+
+    /**
+     * QA D1538 (round 40): placed as an emergency (URGENT/STAT) for a patient the obstetric rule would
+     * have refused (recorded male, or a child). The rule never refuses an emergency, a clinical decision
+     * still pending; the order is flagged here for review and the skip is audited
+     * (OBSTETRIC_RULE_SKIPPED_EMERGENCY).
+     */
+    @Column(name = "obstetric_rule_skipped", nullable = false)
+    @Builder.Default
+    private boolean obstetricRuleSkipped = false;
 }

@@ -165,6 +165,22 @@ describe('StockRoutingComponent', () => {
     expect(pharmacySvc.checkStock).toHaveBeenCalledWith('rx-deep-1');
     // QA D888: the deep link still works alongside the search.
     expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalled();
+    // The linked order may be absent from the loaded queue page.
+    expect(c.selected()).toBeNull();
+    const steps = Array.from(
+      f.nativeElement.querySelectorAll('.workspace-steps li'),
+    ) as HTMLElement[];
+    expect(steps.map((step) => step.getAttribute('aria-current'))).toEqual([null, null, 'step']);
+    expect(steps.map((step) => step.classList.contains('current'))).toEqual([false, false, true]);
+
+    const pending = new Subject<any>();
+    pharmacySvc.checkStock.and.returnValue(pending);
+    c.checkStock();
+    f.detectChanges();
+    expect(steps.map((step) => step.getAttribute('aria-current'))).toEqual([null, 'step', null]);
+    pending.next(stockCheckResponse);
+    f.detectChanges();
+    expect(steps.map((step) => step.getAttribute('aria-current'))).toEqual([null, null, 'step']);
   });
 
   it('QA D888: offers no raw prescription-id box, only a search over the queue', () => {
@@ -757,5 +773,20 @@ describe('StockRoutingComponent', () => {
       (el.querySelector('[data-testid="reprint-copy"]') as HTMLButtonElement).click();
       expect(printSvc.openForPrint).toHaveBeenCalled();
     });
+  });
+
+  it('exposes exactly one current step while selecting and checking stock', () => {
+    const el: HTMLElement = fixture.nativeElement;
+    const current = () =>
+      Array.from(el.querySelectorAll('.workspace-steps li')).map((li) =>
+        li.getAttribute('aria-current'),
+      );
+    expect(current()).toEqual(['step', null, null]);
+    component.selected.set(component.queue()[0]);
+    fixture.detectChanges();
+    expect(current()).toEqual([null, 'step', null]);
+    component.stockResult.set(stockCheckResponse.data);
+    fixture.detectChanges();
+    expect(current()).toEqual([null, null, 'step']);
   });
 });
