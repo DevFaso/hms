@@ -1,3 +1,5 @@
+import { Location } from '@angular/common';
+import { GLOBAL_HOSPITAL_HISTORY_STATE } from './hospital-scope-gate.service';
 import { Injectable, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -31,6 +33,7 @@ import { RoleContextService } from './role-context.service';
 export class HospitalScopeUrlService {
   private readonly roleContext = inject(RoleContextService);
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
 
   /**
    * Read `?hospitalId=…` from the supplied route's snapshot and mutate
@@ -57,6 +60,14 @@ export class HospitalScopeUrlService {
    * isn't a separate history entry while the user explores.
    */
   syncScopeToUrl(route: ActivatedRoute, hospitalId: string | null): void {
+    // Clearing an inherited scope can leave the URL unchanged, so Router skips
+    // NavigationEnd. Preserve the explicit choice before requesting navigation.
+    if (this.roleContext.isSuperAdmin()) {
+      this.location.replaceState(this.location.path(true), '', {
+        ...(this.location.getState() as Record<string, unknown>),
+        [GLOBAL_HOSPITAL_HISTORY_STATE]: this.roleContext.globalView(),
+      });
+    }
     void this.router.navigate([], {
       relativeTo: route,
       queryParams: { hospitalId: hospitalId ?? null },
