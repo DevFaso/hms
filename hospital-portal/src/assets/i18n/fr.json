@@ -6601,6 +6601,7 @@
         "PROVIDER_VERIFICATION_REVOKED": "Vérification du prestataire révoquée",
         "PROVIDER_VERIFIED": "Prestataire vérifié",
         "EMERGENCY_BLOOD_RELEASED": "Sang délivré en urgence sans épreuve de compatibilité",
+        "OBSTETRIC_RULE_SKIPPED_EMERGENCY": "Règle obstétricale non appliquée en urgence",
         "PRO_ALERT_ACKNOWLEDGED": "Alerte PRO acquittée",
         "PRO_INSTRUMENT_IMPORTED": "Questionnaire PRO importé",
         "PRO_RESPONSE_RECORDED": "Réponse PRO enregistrée",

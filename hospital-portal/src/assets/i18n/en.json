@@ -6635,6 +6635,7 @@
         "PROVIDER_VERIFICATION_REVOKED": "Provider Verification Revoked",
         "PROVIDER_VERIFIED": "Provider Verified",
         "EMERGENCY_BLOOD_RELEASED": "Emergency blood released uncrossmatched",
+        "OBSTETRIC_RULE_SKIPPED_EMERGENCY": "Obstetric rule skipped for an emergency",
         "PRO_ALERT_ACKNOWLEDGED": "PRO Alert Acknowledged",
         "PRO_INSTRUMENT_IMPORTED": "PRO Instrument Imported",
         "PRO_RESPONSE_RECORDED": "PRO Response Recorded",

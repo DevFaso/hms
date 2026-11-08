@@ -6635,6 +6635,7 @@
         "PROVIDER_VERIFICATION_REVOKED": "Verificación del proveedor revocada",
         "PROVIDER_VERIFIED": "Proveedor verificado",
         "EMERGENCY_BLOOD_RELEASED": "Sangre entregada de urgencia sin prueba cruzada",
+        "OBSTETRIC_RULE_SKIPPED_EMERGENCY": "Regla obstétrica no aplicada por urgencia",
         "PRO_ALERT_ACKNOWLEDGED": "Alerta PRO confirmada",
         "PRO_INSTRUMENT_IMPORTED": "Instrumento PRO importado",
         "PRO_RESPONSE_RECORDED": "Respuesta PRO registrada",
