@@ -758,4 +758,19 @@ describe('StockRoutingComponent', () => {
       expect(printSvc.openForPrint).toHaveBeenCalled();
     });
   });
+
+  it('exposes exactly one current step while selecting and checking stock', () => {
+    const el: HTMLElement = fixture.nativeElement;
+    const current = () =>
+      Array.from(el.querySelectorAll('.workspace-steps li')).map((li) =>
+        li.getAttribute('aria-current'),
+      );
+    expect(current()).toEqual(['step', null, null]);
+    component.selected.set(component.queue()[0]);
+    fixture.detectChanges();
+    expect(current()).toEqual([null, 'step', null]);
+    component.stockResult.set(stockCheckResponse.data);
+    fixture.detectChanges();
+    expect(current()).toEqual([null, null, 'step']);
+  });
 });

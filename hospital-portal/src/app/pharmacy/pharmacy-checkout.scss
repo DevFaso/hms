@@ -173,6 +173,8 @@
 }
 
 /* ─── Print rules (T-44) ─── */
+@include operations.workspace;
+
 @media print {
   .no-print {
     display: none !important;
@@ -189,5 +191,3 @@
     padding: 0.5rem !important;
   }
 }
-
-@include operations.workspace;

@@ -13239,6 +13239,7 @@
     "LABEL": "Pharmacy workspace",
     "CLAIMS_SUBTITLE": "Track claims, decisions and reimbursements.",
     "LOADED_CLAIMS": "claims loaded",
+    "CLAIMS_NONE_HINT": "No claims yet. Refresh the list to check for new claims.",
     "CLAIMS_EMPTY_HINT": "No claims for this filter. Change the status or refresh the list.",
     "LOADED_MOVEMENTS": "movements loaded for this filter",
     "STOCK_HINT": "Review the lot, reason and author of each movement.",

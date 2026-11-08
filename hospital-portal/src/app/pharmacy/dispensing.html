@@ -574,8 +574,8 @@
 
   <!-- Work Queue -->
   <div class="section-card">
-    <h2 class="section-title">
-      <span class="material-symbols-outlined">assignment</span>
+    <h2 class="section-title" id="dispensing-queue-title">
+      <span class="material-symbols-outlined" aria-hidden="true">assignment</span>
       {{ 'PHARMACY.WORK_QUEUE' | translate }}
     </h2>
 
@@ -611,7 +611,7 @@
         class="table-responsive"
         tabindex="0"
         role="region"
-        [attr.aria-label]="'PHARMACY.DISPENSING_TITLE' | translate"
+        aria-labelledby="dispensing-queue-title"
       >
         <table class="data-table">
           <thead>
@@ -902,7 +902,7 @@
        heading (never on a look-alike row of the queue above). -->
   <div class="section-card" data-focus-return="#recent-dispenses-title">
     <h2 class="section-title" id="recent-dispenses-title" tabindex="-1">
-      <span class="material-symbols-outlined">history</span>
+      <span class="material-symbols-outlined" aria-hidden="true">history</span>
       {{ 'PHARMACY.RECENT_DISPENSES' | translate }}
     </h2>
 
@@ -968,7 +968,7 @@
         class="table-responsive"
         tabindex="0"
         role="region"
-        [attr.aria-label]="'PHARMACY.DISPENSING_TITLE' | translate"
+        aria-labelledby="recent-dispenses-title"
       >
         <table class="data-table">
           <thead>

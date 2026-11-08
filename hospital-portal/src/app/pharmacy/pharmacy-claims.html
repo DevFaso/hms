@@ -60,7 +60,14 @@
     <div class="claims-empty" role="status">
       <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
       <h2>{{ 'PHARMACY_CLAIMS.EMPTY' | translate }}</h2>
-      <p>{{ 'PHARMACY_WORKSPACE.CLAIMS_EMPTY_HINT' | translate }}</p>
+      <p>
+        {{
+          (filter() === 'ALL'
+            ? 'PHARMACY_WORKSPACE.CLAIMS_NONE_HINT'
+            : 'PHARMACY_WORKSPACE.CLAIMS_EMPTY_HINT'
+          ) | translate
+        }}
+      </p>
     </div>
   }
 

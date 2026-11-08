@@ -181,4 +181,27 @@ describe('ControlledRegisterComponent (QA D967)', () => {
     component.export('pdf');
     expect(toast.error).toHaveBeenCalledWith('PHARMACY.REGISTER_EXPORT_FAILED');
   });
+
+  it('names each scroll region with its own drug heading', () => {
+    component.register.set({
+      ...register,
+      drugs: [
+        register.drugs[0],
+        {
+          ...register.drugs[0],
+          inventoryItemId: 'inv-second',
+          medicationName: 'Second fixture drug',
+        },
+      ],
+    });
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const regions = Array.from(el.querySelectorAll('.table-scroll[role="region"]'));
+    expect(regions.length).toBe(2);
+    const labels = regions.map((region) =>
+      el.querySelector('#' + region.getAttribute('aria-labelledby'))?.textContent?.trim(),
+    );
+    expect(labels[0]).toContain('Morphine 10 mg');
+    expect(labels[1]).toContain('Second fixture drug');
+  });
 });
