@@ -1,3 +1,5 @@
+import { DestroyRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   Component,
   computed,
@@ -101,12 +103,17 @@ export class ConsultationsComponent implements OnInit {
   consultations = signal<ConsultationResponse[]>([]);
   filtered = signal<ConsultationResponse[]>([]);
   loading = signal(true);
+  readonly loadFailed = signal(false);
+  private readonly destroyRef = inject(DestroyRef);
+  private listRequest = 0;
   searchTerm = '';
   activeTab = signal<'all' | 'pending' | 'active' | 'completed' | 'mine' | 'overdue'>('all');
   selectedConsult = signal<ConsultationResponse | null>(null);
 
   stats = signal<ConsultationStats | null>(null);
   statsLoading = signal(false);
+  readonly statsFailed = signal(false);
+  private statsRequest = 0;
   showStats = signal(false);
 
   hospitals = signal<HospitalResponse[]>([]);
@@ -198,6 +205,8 @@ export class ConsultationsComponent implements OnInit {
    * the list and the summary stats under the new scope.
    */
   onScopeChange(_hospitalId: string | null): void {
+    this.selectedConsult.set(null);
+    this.searchTerm = '';
     this.load();
     this.loadStats();
   }
@@ -394,6 +403,8 @@ export class ConsultationsComponent implements OnInit {
   }
 
   load(): void {
+    const request = ++this.listRequest;
+    this.loadFailed.set(false);
     this.loading.set(true);
     const tab = this.activeTab();
     const source$ =
@@ -405,13 +416,16 @@ export class ConsultationsComponent implements OnInit {
             )
           : this.consultService.getAll();
 
-    source$.subscribe({
+    source$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (list) => {
+        if (request !== this.listRequest) return;
         this.consultations.set(Array.isArray(list) ? list : []);
         this.applyFilter();
         this.loading.set(false);
       },
       error: () => {
+        if (request !== this.listRequest) return;
+        this.loadFailed.set(true);
         this.toast.error(this.translate.instant('CONSULTATIONS.LOAD_FAILED'));
         this.loading.set(false);
       },
@@ -419,6 +433,9 @@ export class ConsultationsComponent implements OnInit {
   }
 
   loadStats(): void {
+    const request = ++this.statsRequest;
+    this.stats.set(null);
+    this.statsFailed.set(false);
     this.statsLoading.set(true);
     // effectiveHospitalIdForRequest, NOT activeHospitalId: the latter is the
     // JWT primary hospital and is non-null even for a super-admin in global
@@ -429,12 +446,18 @@ export class ConsultationsComponent implements OnInit {
     // query param.
     this.consultService
       .getStats(this.roleContext.effectiveHospitalIdForRequest() ?? undefined)
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (s) => {
+          if (request !== this.statsRequest) return;
           this.stats.set(s);
           this.statsLoading.set(false);
         },
-        error: () => this.statsLoading.set(false),
+        error: () => {
+          if (request !== this.statsRequest) return;
+          this.statsFailed.set(true);
+          this.statsLoading.set(false);
+        },
       });
   }
 

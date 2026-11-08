@@ -1,6 +1,7 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <span class="specialist-eyebrow">{{ 'SPECIALIST_DASH.CONSULT_EYEBROW' | translate }}</span>
       <h1 class="page-title">{{ 'CONSULTATIONS.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'CONSULTATIONS.SUBTITLE' | translate }}</p>
     </div>
@@ -13,55 +14,75 @@
       </button>
     </div>
   </div>
-  <div class="summary-cards">
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon pending">pending_actions</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByGroup('pending') }}</span
-        ><span class="card-label">{{ 'COMMON.PENDING' | translate }}</span>
-      </div>
+  <section class="specialist-overview">
+    <div class="overview-heading">
+      <h2>{{ 'SPECIALIST_DASH.OVERVIEW' | translate }}</h2>
+      <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
     </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon active">hourglass_top</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByGroup('active') }}</span
-        ><span class="card-label">{{ 'CONSULTATIONS.IN_PROGRESS' | translate }}</span>
+    <div class="summary-cards">
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon pending">pending_actions</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            loading() || loadFailed() || statsLoading() ? '—' : countByGroup('pending')
+          }}</span
+          ><span class="card-label">{{ 'COMMON.PENDING' | translate }}</span>
+        </div>
       </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon completed">task_alt</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByGroup('completed') }}</span
-        ><span class="card-label">{{ 'COMMON.COMPLETED' | translate }}</span>
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon active">hourglass_top</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            loading() || loadFailed() || statsLoading() ? '—' : countByGroup('active')
+          }}</span
+          ><span class="card-label">{{ 'CONSULTATIONS.IN_PROGRESS' | translate }}</span>
+        </div>
       </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon total">bar_chart</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByGroup('total') }}</span
-        ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon completed">task_alt</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            loading() || loadFailed() || statsLoading() ? '—' : countByGroup('completed')
+          }}</span
+          ><span class="card-label">{{ 'COMMON.COMPLETED' | translate }}</span>
+        </div>
       </div>
-    </div>
-    <div
-      class="summary-card overdue"
-      role="button"
-      tabindex="0"
-      (click)="setTab('overdue')"
-      (keydown.enter)="setTab('overdue')"
-      (keydown.space)="setTab('overdue')"
-    >
-      <span class="material-symbols-outlined card-icon overdue">schedule</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByGroup('overdue') }}</span
-        ><span class="card-label">{{ 'CONSULTATIONS.OVERDUE' | translate }}</span>
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon total">bar_chart</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            loading() || loadFailed() || statsLoading() ? '—' : countByGroup('total')
+          }}</span
+          ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
+        </div>
       </div>
+      <button
+        type="button"
+        class="summary-card overdue"
+        [class.has-overdue]="!loading() && !loadFailed() && countByGroup('overdue') > 0"
+        [attr.aria-pressed]="activeTab() === 'overdue'"
+        (click)="setTab('overdue')"
+      >
+        <span class="material-symbols-outlined card-icon overdue">schedule</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            loading() || loadFailed() || statsLoading() ? '—' : countByGroup('overdue')
+          }}</span
+          ><span class="card-label">{{ 'CONSULTATIONS.OVERDUE' | translate }}</span>
+        </div>
+      </button>
     </div>
-  </div>
+    <p class="specialist-scope-note">{{ 'SPECIALIST_DASH.CONSULT_SCOPE' | translate }}</p>
+  </section>
+  @if (statsFailed() && !loading() && !loadFailed()) {
+    <p class="summary-fallback" role="status">{{ 'SPECIALIST_DASH.STATS_FALLBACK' | translate }}</p>
+  }
   <div class="filter-bar">
     <div class="tabs">
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'all'"
+        [attr.aria-pressed]="activeTab() === 'all'"
         (click)="setTab('all')"
         [title]="'COMMON.SHOW_ALL' | translate"
       >
@@ -70,6 +91,7 @@
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'pending'"
+        [attr.aria-pressed]="activeTab() === 'pending'"
         (click)="setTab('pending')"
         [title]="'COMMON.SHOW_PENDING' | translate"
       >
@@ -78,6 +100,7 @@
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'active'"
+        [attr.aria-pressed]="activeTab() === 'active'"
         (click)="setTab('active')"
         [title]="'COMMON.SHOW_ACTIVE' | translate"
       >
@@ -86,6 +109,7 @@
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'completed'"
+        [attr.aria-pressed]="activeTab() === 'completed'"
         (click)="setTab('completed')"
         [title]="'COMMON.SHOW_COMPLETED' | translate"
       >
@@ -95,6 +119,7 @@
         <button
           class="tab-btn"
           [class.active]="activeTab() === 'mine'"
+          [attr.aria-pressed]="activeTab() === 'mine'"
           (click)="setTab('mine')"
           [title]="'CONSULTATIONS.ASSIGNED_TO_ME' | translate"
         >
@@ -104,6 +129,7 @@
       <button
         class="tab-btn overdue-tab"
         [class.active]="activeTab() === 'overdue'"
+        [attr.aria-pressed]="activeTab() === 'overdue'"
         (click)="setTab('overdue')"
         [title]="'CONSULTATIONS.OVERDUE_CONSULTATIONS' | translate"
       >
@@ -121,13 +147,38 @@
       />
     </div>
   </div>
+  @if (!loading() && !loadFailed()) {
+    <div class="workspace-caption">
+      <span>{{
+        'SPECIALIST_DASH.VISIBLE'
+          | translate: { shown: filtered().length, loaded: consultations().length }
+      }}</span>
+      @if (searchTerm) {
+        <button type="button" class="clear-search" (click)="searchTerm = ''; applyFilter()">
+          {{ 'SPECIALIST_DASH.CLEAR_SEARCH' | translate }}
+        </button>
+      }
+    </div>
+  }
+  @if (!loading() && loadFailed()) {
+    <div class="dashboard-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <div>
+        <h2>{{ 'SPECIALIST_DASH.UNAVAILABLE' | translate }}</h2>
+        <p>{{ 'CONSULTATIONS.LOAD_FAILED' | translate }}</p>
+      </div>
+      <button type="button" class="btn-secondary" (click)="reload()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  }
   @if (loading() || (statsLoading() && filtered().length === 0)) {
     <div class="loading-state">
       <div class="spinner"></div>
       <p>{{ 'CONSULTATIONS.LOADING' | translate }}</p>
     </div>
   }
-  @if (!loading() && !statsLoading() && filtered().length === 0) {
+  @if (!loading() && !loadFailed() && !statsLoading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">forum</span>
       <!-- Cross-tenant: a super-admin in global view who sees zero rows
@@ -146,8 +197,13 @@
       }
     </div>
   }
-  @if (!loading() && filtered().length > 0) {
-    <div class="data-table">
+  @if (!loading() && !loadFailed() && filtered().length > 0) {
+    <div
+      class="data-table"
+      tabindex="0"
+      role="region"
+      [attr.aria-label]="'CONSULTATIONS.TITLE' | translate"
+    >
       <table>
         <thead>
           <tr>

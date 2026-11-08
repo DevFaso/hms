@@ -12088,5 +12088,19 @@
     "TITLE": "No se pudo cargar esta página",
     "MESSAGE": "Un archivo necesario no está disponible. Recargue para probar la versión actual. Si el problema continúa, contacte con soporte.",
     "RELOAD": "Recargar página"
+  },
+  "SPECIALIST_DASH": {
+    "CONSULT_EYEBROW": "ATENCIÓN ESPECIALIZADA",
+    "PLAN_EYEBROW": "TRATAMIENTO COORDINADO",
+    "REFERRAL_EYEBROW": "COORDINACIÓN DE DERIVACIONES",
+    "OVERVIEW": "Resumen del trabajo",
+    "LOADED_SCOPE": "Los indicadores describen los planes o derivaciones cargados. La búsqueda filtra solo esta lista.",
+    "CONSULT_SCOPE": "Los indicadores usan el resumen disponible del ámbito; la búsqueda filtra la lista cargada.",
+    "STATS_FALLBACK": "El resumen del ámbito no está disponible. Los indicadores usan la lista de consultas cargada.",
+    "UNAVAILABLE": "No se pudo cargar este espacio",
+    "VISIBLE": "Mostrando {{shown}} / {{loaded}} cargados",
+    "CLEAR_SEARCH": "Borrar búsqueda",
+    "DRAFT_REVIEW": "Borrador / revisión",
+    "NO_MATCHES": "Ningún registro cargado coincide con los filtros actuales."
   }
 }

@@ -1,6 +1,7 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <span class="specialist-eyebrow">{{ 'SPECIALIST_DASH.REFERRAL_EYEBROW' | translate }}</span>
       <h1 class="page-title">{{ 'REFERRALS.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'REFERRALS.SUBTITLE' | translate }}</p>
     </div>
@@ -17,41 +18,55 @@
       }
     </div>
   </div>
-  <div class="summary-cards">
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon pending">pending_actions</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByGroup('pending') }}</span
-        ><span class="card-label">{{ 'COMMON.PENDING' | translate }}</span>
+  <section class="specialist-overview">
+    <div class="overview-heading">
+      <h2>{{ 'SPECIALIST_DASH.OVERVIEW' | translate }}</h2>
+      <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+    </div>
+    <div class="summary-cards">
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon pending">pending_actions</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            loading() || loadFailed() ? '—' : countByGroup('pending')
+          }}</span
+          ><span class="card-label">{{ 'COMMON.PENDING' | translate }}</span>
+        </div>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon active">sync</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            loading() || loadFailed() ? '—' : countByGroup('active')
+          }}</span
+          ><span class="card-label">{{ 'COMMON.ACTIVE' | translate }}</span>
+        </div>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon completed">check_circle</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            loading() || loadFailed() ? '—' : countByGroup('completed')
+          }}</span
+          ><span class="card-label">{{ 'COMMON.COMPLETED' | translate }}</span>
+        </div>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon total">bar_chart</span>
+        <div class="card-info">
+          <span class="card-value">{{ referrals().length }}</span
+          ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
+        </div>
       </div>
     </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon active">sync</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByGroup('active') }}</span
-        ><span class="card-label">{{ 'COMMON.ACTIVE' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon completed">check_circle</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByGroup('completed') }}</span
-        ><span class="card-label">{{ 'COMMON.COMPLETED' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon total">bar_chart</span>
-      <div class="card-info">
-        <span class="card-value">{{ referrals().length }}</span
-        ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
-      </div>
-    </div>
-  </div>
+    <p class="specialist-scope-note">{{ 'SPECIALIST_DASH.LOADED_SCOPE' | translate }}</p>
+  </section>
   <div class="filter-bar">
     <div class="tabs">
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'all'"
+        [attr.aria-pressed]="activeTab() === 'all'"
         (click)="setTab('all')"
         [title]="'COMMON.SHOW_ALL' | translate"
       >
@@ -60,6 +75,7 @@
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'pending'"
+        [attr.aria-pressed]="activeTab() === 'pending'"
         (click)="setTab('pending')"
         [title]="'COMMON.SHOW_PENDING' | translate"
       >
@@ -68,6 +84,7 @@
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'active'"
+        [attr.aria-pressed]="activeTab() === 'active'"
         (click)="setTab('active')"
         [title]="'COMMON.SHOW_ACTIVE' | translate"
       >
@@ -76,6 +93,7 @@
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'completed'"
+        [attr.aria-pressed]="activeTab() === 'completed'"
         (click)="setTab('completed')"
         [title]="'COMMON.SHOW_COMPLETED' | translate"
       >
@@ -93,16 +111,43 @@
       />
     </div>
   </div>
+  @if (!loading() && !loadFailed()) {
+    <div class="workspace-caption">
+      <span>{{
+        'SPECIALIST_DASH.VISIBLE'
+          | translate: { shown: filtered().length, loaded: referrals().length }
+      }}</span>
+      @if (searchTerm) {
+        <button type="button" class="clear-search" (click)="searchTerm = ''; applyFilter()">
+          {{ 'SPECIALIST_DASH.CLEAR_SEARCH' | translate }}
+        </button>
+      }
+    </div>
+  }
+  @if (!loading() && loadFailed()) {
+    <div class="dashboard-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <div>
+        <h2>{{ 'SPECIALIST_DASH.UNAVAILABLE' | translate }}</h2>
+        <p>{{ 'REFERRALS.LOAD_FAILED' | translate }}</p>
+      </div>
+      <button type="button" class="btn-secondary" (click)="load()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  }
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
       <p>{{ 'REFERRALS.LOADING' | translate }}</p>
     </div>
   }
-  @if (!loading() && filtered().length === 0) {
+  @if (!loading() && !loadFailed() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">send</span>
-      @if (isSuperAdmin() && globalView()) {
+      @if (referrals().length > 0) {
+        <h3>{{ 'SPECIALIST_DASH.NO_MATCHES' | translate }}</h3>
+      } @else if (isSuperAdmin() && globalView()) {
         <h3>{{ 'HOSPITAL_SCOPE.EMPTY_GLOBAL.REFERRALS' | translate }}</h3>
       } @else {
         <h3>{{ 'REFERRALS.NO_REFERRALS' | translate }}</h3>
@@ -110,8 +155,13 @@
       <p>{{ 'REFERRALS.WILL_APPEAR' | translate }}</p>
     </div>
   }
-  @if (!loading() && filtered().length > 0) {
-    <div class="data-table">
+  @if (!loading() && !loadFailed() && filtered().length > 0) {
+    <div
+      class="data-table"
+      tabindex="0"
+      role="region"
+      [attr.aria-label]="'REFERRALS.TITLE' | translate"
+    >
       <table>
         <thead>
           <tr>
