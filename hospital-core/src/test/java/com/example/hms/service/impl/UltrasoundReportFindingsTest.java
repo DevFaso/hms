@@ -201,22 +201,34 @@ class UltrasoundReportFindingsTest {
                 .getString("ultrasound.report.normalContradictsObservation")).contains("NORMAL").contains("catégorie");
     }
 
-    /** QA D1525 review: 0 fetuses is a finding; negatives and implausible counts are refused on the field. */
+    /**
+     * QA D1525 review: 0 fetuses is a finding; a count outside 0..8 is refused on
+     * the field, but only when it changes (a stored legacy count stays editable
+     * on the report's other fields).
+     */
     @Test
-    void theFetusCountIsBounded() {
-        try (jakarta.validation.ValidatorFactory factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
-            jakarta.validation.Validator validator = factory.getValidator();
-            for (int bad : new int[] {-1, 9}) {
-                assertThat(validator.validate(base().numberOfFetuses(bad).findingCategory(UltrasoundFindingCategory.NORMAL).build()))
-                        .as("fetuses " + bad)
-                        .anySatisfy(v -> assertThat(v.getPropertyPath()).hasToString("numberOfFetuses"));
-            }
-            for (int ok : new int[] {0, 1, 2, 8}) {
-                assertThat(validator.validate(base().numberOfFetuses(ok).findingCategory(UltrasoundFindingCategory.NORMAL).build()))
-                        .as("fetuses " + ok)
-                        .noneSatisfy(v -> assertThat(v.getPropertyPath()).hasToString("numberOfFetuses"));
-            }
+    void theFetusCountIsBoundedWhenItChanges() {
+        for (int bad : new int[] {-1, 9}) {
+            UltrasoundReportRequestDTO request = base().numberOfFetuses(bad).build();
+            assertThatThrownBy(() -> UltrasoundServiceImpl.requireFetusCountInRange(request, null))
+                    .as("fetuses " + bad)
+                    .isInstanceOfSatisfying(FieldBusinessException.class, ex -> {
+                        assertThat(ex.getField()).isEqualTo("numberOfFetuses");
+                        assertThat(ex.getMessageKey()).isEqualTo("ultrasoundReport.numberOfFetuses.range");
+                    });
         }
+        for (int ok : new int[] {0, 1, 2, 8}) {
+            UltrasoundReportRequestDTO request = base().numberOfFetuses(ok).build();
+            assertThatCode(() -> UltrasoundServiceImpl.requireFetusCountInRange(request, null)).doesNotThrowAnyException();
+        }
+        UltrasoundReport legacy = new UltrasoundReport();
+        legacy.setNumberOfFetuses(9);
+        UltrasoundReportRequestDTO unchanged = base().numberOfFetuses(9).build();
+        assertThatCode(() -> UltrasoundServiceImpl.requireFetusCountInRange(unchanged, legacy))
+                .as("a stored 9 sent back unchanged").doesNotThrowAnyException();
+        UltrasoundReportRequestDTO changed = base().numberOfFetuses(10).build();
+        assertThatThrownBy(() -> UltrasoundServiceImpl.requireFetusCountInRange(changed, legacy))
+                .isInstanceOf(FieldBusinessException.class);
         assertThat(java.util.ResourceBundle.getBundle("i18n/messages-lab", java.util.Locale.FRENCH)
                 .getString("ultrasoundReport.numberOfFetuses.range")).contains("0");
     }

@@ -10916,8 +10916,9 @@
     "NASAL_BONE_PRESENT": "Presente",
     "NASAL_BONE_ABSENT": "Ausente",
     "NASAL_BONE_NOT_ASSESSED": "No evaluado",
-    "NO_FETUS_CONTRADICTS_OBSERVATION": "Ningún feto visto contradice lo que constata este informe (actividad cardíaca o movimientos fetales presentes, una frecuencia cardíaca fetal, una medida fetal o un peso fetal estimado): corrija el número o las observaciones.",
-    "ANOMALY_DESCRIPTION_WITHOUT_ANOMALY": "Se describe una anomalía mientras el informe indica que no se vio ninguna: responda «anomalías detectadas» o borre la descripción."
+    "NO_FETUS_CONTRADICTS_OBSERVATION": "Ningún feto visto contradice un signo de feto en este informe: actividad cardíaca o movimientos fetales presentes, una frecuencia cardíaca fetal, una medida fetal (DBP, CC, CA, LF, LCN, translucencia nucal), un peso fetal estimado, una respuesta sobre el hueso nasal o el tono fetal, anomalías detectadas o hallazgos anatómicos. Corrija el número o esa entrada.",
+    "ANOMALY_DESCRIPTION_WITHOUT_ANOMALY": "Se describe una anomalía mientras el informe indica que no se vio ninguna: responda «anomalías detectadas» o borre la descripción.",
+    "ANATOMY_FINDINGS": "Hallazgos anatómicos"
   },
   "BIRTH_PLAN": {
     "TITLE": "Plan de parto",

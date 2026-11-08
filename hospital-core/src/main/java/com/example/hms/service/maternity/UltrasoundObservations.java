@@ -2,27 +2,45 @@ package com.example.hms.service.maternity;
 
 import com.example.hms.model.UltrasoundReport;
 import com.example.hms.payload.dto.ultrasound.UltrasoundReportBaseDTO;
+import com.example.hms.service.support.ClinicalContent;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 /**
- * QA D1525: the observations of an ultrasound report in one place: the
- * tri-state answers (cardiac activity, movement, tone, nasal bone, anomalies)
- * and the fetus count. A stated one is a finding, "absent" included; nothing
- * defaults them any more.
+ * QA D1525: the field lists of an ultrasound report's findings, in one place.
  *
- * <p>Used by the empty-report rule and by the legacy flip
- * ({@code UltrasoundServiceImpl}); {@code UltrasoundObservationFieldsTest} pins
- * that the portal's lists and V282's data step name the same fields.
+ * <ul>
+ *   <li>{@link #FIELDS}: the observations - the tri-state answers (cardiac
+ *       activity, movement, tone, nasal bone, anomalies) and the fetus count.
+ *       A stated one is a finding, "absent" included; nothing defaults them.</li>
+ *   <li>{@link #FINDINGS}: the other findings (measurements, dates, written
+ *       text). The empty-report rule counts both lists.</li>
+ *   <li>{@link #SIGNS_OF_A_FETUS}: what "no fetus seen" contradicts.</li>
+ *   <li>{@link #LEGACY_DEFAULTS}: what the old code filled before D1525.</li>
+ * </ul>
+ * {@code UltrasoundObservationFieldsTest} pins that the portal
+ * (ultrasound-tab.ts) and V282 name the same fields.
+ *
+ * <p>Known limits (tasklist.md, standing debt): {@code observations_stated} is
+ * per report, not per field, so once one observation changes on a legacy
+ * report the other cleared ones read "Not assessed" from then on; and on a
+ * signed legacy report a value equal to an old default reads "no answer" even
+ * if the clinician typed it before signing (the stored value is unchanged).
  */
 public final class UltrasoundObservations {
 
     /** One observation, read from a request and from a stored report. */
     public record Field(String name, Function<UltrasoundReportBaseDTO, Object> request,
                         Function<UltrasoundReport, Object> stored) {
+    }
+
+    /** One finding read from a request. */
+    public record Finding(String name, Function<UltrasoundReportBaseDTO, Object> request) {
     }
 
     public static final List<Field> FIELDS = List.of(
@@ -38,6 +56,58 @@ public final class UltrasoundObservations {
             UltrasoundReport::getAnomaliesDetected),
         new Field("numberOfFetuses", UltrasoundReportBaseDTO::getNumberOfFetuses,
             UltrasoundReport::getNumberOfFetuses));
+
+    /** The findings that are not observations: any one present makes a report non-empty. */
+    public static final List<Finding> FINDINGS = List.of(
+        new Finding("gestationalAgeAtScan", UltrasoundReportBaseDTO::getGestationalAgeAtScan),
+        new Finding("gestationalAgeDays", UltrasoundReportBaseDTO::getGestationalAgeDays),
+        new Finding("nuchalTranslucencyMm", UltrasoundReportBaseDTO::getNuchalTranslucencyMm),
+        new Finding("crownRumpLengthMm", UltrasoundReportBaseDTO::getCrownRumpLengthMm),
+        new Finding("estimatedDueDate", UltrasoundReportBaseDTO::getEstimatedDueDate),
+        new Finding("fetalPosition", UltrasoundReportBaseDTO::getFetalPosition),
+        new Finding("biparietalDiameterMm", UltrasoundReportBaseDTO::getBiparietalDiameterMm),
+        new Finding("headCircumferenceMm", UltrasoundReportBaseDTO::getHeadCircumferenceMm),
+        new Finding("abdominalCircumferenceMm", UltrasoundReportBaseDTO::getAbdominalCircumferenceMm),
+        new Finding("femurLengthMm", UltrasoundReportBaseDTO::getFemurLengthMm),
+        new Finding("estimatedFetalWeightGrams", UltrasoundReportBaseDTO::getEstimatedFetalWeightGrams),
+        new Finding("placentalLocation", UltrasoundReportBaseDTO::getPlacentalLocation),
+        new Finding("placentalGrade", UltrasoundReportBaseDTO::getPlacentalGrade),
+        new Finding("amnioticFluidIndex", UltrasoundReportBaseDTO::getAmnioticFluidIndex),
+        new Finding("amnioticFluidLevel", UltrasoundReportBaseDTO::getAmnioticFluidLevel),
+        new Finding("cervicalLengthMm", UltrasoundReportBaseDTO::getCervicalLengthMm),
+        new Finding("umbilicalArteryDoppler", UltrasoundReportBaseDTO::getUmbilicalArteryDoppler),
+        new Finding("uterineArteryDoppler", UltrasoundReportBaseDTO::getUterineArteryDoppler),
+        new Finding("fetalHeartRate", UltrasoundReportBaseDTO::getFetalHeartRate),
+        new Finding("anatomyFindings", UltrasoundReportBaseDTO::getAnatomyFindings),
+        new Finding("findingsSummary", UltrasoundReportBaseDTO::getFindingsSummary),
+        new Finding("interpretation", UltrasoundReportBaseDTO::getInterpretation),
+        new Finding("anomalyDescription", UltrasoundReportBaseDTO::getAnomalyDescription));
+
+    /**
+     * What "no fetus seen" (a count of 0) contradicts. Each field is shown and
+     * editable on the report form, so a refusal always names something the
+     * clinician can see. A sign is present when it is answered, except the
+     * ones in {@link #SIGNS_ONLY_WHEN_TRUE}, which count only when TRUE (their
+     * FALSE - no cardiac activity, no movement, no anomaly - fits an empty sac).
+     */
+    public static final List<Finding> SIGNS_OF_A_FETUS = List.of(
+        new Finding("fetalCardiacActivity", UltrasoundReportBaseDTO::getFetalCardiacActivity),
+        new Finding("fetalMovementObserved", UltrasoundReportBaseDTO::getFetalMovementObserved),
+        new Finding("anomaliesDetected", UltrasoundReportBaseDTO::getAnomaliesDetected),
+        new Finding("fetalHeartRate", UltrasoundReportBaseDTO::getFetalHeartRate),
+        new Finding("biparietalDiameterMm", UltrasoundReportBaseDTO::getBiparietalDiameterMm),
+        new Finding("headCircumferenceMm", UltrasoundReportBaseDTO::getHeadCircumferenceMm),
+        new Finding("abdominalCircumferenceMm", UltrasoundReportBaseDTO::getAbdominalCircumferenceMm),
+        new Finding("femurLengthMm", UltrasoundReportBaseDTO::getFemurLengthMm),
+        new Finding("crownRumpLengthMm", UltrasoundReportBaseDTO::getCrownRumpLengthMm),
+        new Finding("estimatedFetalWeightGrams", UltrasoundReportBaseDTO::getEstimatedFetalWeightGrams),
+        new Finding("nuchalTranslucencyMm", UltrasoundReportBaseDTO::getNuchalTranslucencyMm),
+        new Finding("nasalBonePresent", UltrasoundReportBaseDTO::getNasalBonePresent),
+        new Finding("fetalToneNormal", UltrasoundReportBaseDTO::getFetalToneNormal),
+        new Finding("anatomyFindings", UltrasoundReportBaseDTO::getAnatomyFindings));
+
+    public static final Set<String> SIGNS_ONLY_WHEN_TRUE =
+        Set.of("fetalCardiacActivity", "fetalMovementObserved", "anomaliesDetected");
 
     /**
      * The value the old code filled for each observation it defaulted, before
@@ -55,13 +125,24 @@ public final class UltrasoundObservations {
     private UltrasoundObservations() {
     }
 
-    /** The request's observations, in {@link #FIELDS} order. */
-    public static Object[] of(UltrasoundReportBaseDTO request) {
-        return FIELDS.stream().map(f -> f.request().apply(request)).toArray();
+    /** Every finding of the request, observations first: one list for the empty-report rule. */
+    public static Object[] allFindings(UltrasoundReportBaseDTO request) {
+        return Stream.concat(FIELDS.stream().map(f -> f.request().apply(request)),
+            FINDINGS.stream().map(f -> f.request().apply(request))).toArray();
     }
 
     /** Whether the request answers any observation differently from the stored report. */
     public static boolean differ(UltrasoundReportBaseDTO request, UltrasoundReport stored) {
         return FIELDS.stream().anyMatch(f -> !Objects.equals(f.request().apply(request), f.stored().apply(stored)));
+    }
+
+    /** Whether the request carries any sign of a fetus ({@link #SIGNS_OF_A_FETUS}). */
+    public static boolean hasSignOfAFetus(UltrasoundReportBaseDTO request) {
+        return SIGNS_OF_A_FETUS.stream().anyMatch(sign -> {
+            Object value = sign.request().apply(request);
+            return SIGNS_ONLY_WHEN_TRUE.contains(sign.name())
+                ? Boolean.TRUE.equals(value)
+                : ClinicalContent.isAnswer(value);
+        });
     }
 }

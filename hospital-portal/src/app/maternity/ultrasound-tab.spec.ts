@@ -653,6 +653,52 @@ describe('UltrasoundTabComponent', () => {
       ]);
     });
 
+    it('accepts a legacy fetus count out of range sent back unchanged, and refuses changing it out of range', () => {
+      create(['ROLE_MIDWIFE']);
+      const cmp = fixture.componentInstance;
+      service.submitReport.and.returnValue(of({ id: 'r-1' } as UltrasoundReportResponse));
+      cmp.openReport(
+        order({
+          report: {
+            id: 'r-1',
+            scanDate: '2026-01-10',
+            findingCategory: 'MONITORING_REQUIRED',
+            numberOfFetuses: 9,
+            observationsStated: false,
+          } as UltrasoundReportResponse,
+        }),
+      );
+      fixture.detectChanges();
+      cmp.reportForm.findingsSummary = 'Résumé corrigé';
+      save();
+      expect(service.submitReport).toHaveBeenCalled();
+      service.submitReport.calls.reset();
+      // The save closed the modal: open the same legacy report again.
+      cmp.openReport(
+        order({
+          report: {
+            id: 'r-1',
+            scanDate: '2026-01-10',
+            findingCategory: 'MONITORING_REQUIRED',
+            numberOfFetuses: 9,
+            observationsStated: false,
+          } as UltrasoundReportResponse,
+        }),
+      );
+      fixture.detectChanges();
+      cmp.reportForm.numberOfFetuses = 10;
+      save();
+      expect(service.submitReport).not.toHaveBeenCalled();
+      expect(host().querySelector('#rep-fetuses')?.getAttribute('aria-invalid')).toBe('true');
+    });
+
+    it('shows the anatomy findings on the form, so a refusal they cause is visible', () => {
+      create(['ROLE_MIDWIFE']);
+      fixture.componentInstance.openReport(order());
+      fixture.detectChanges();
+      expect(host().querySelector('#rep-anatomy')).not.toBeNull();
+    });
+
     it('refuses no fetus seen with any sign of a fetus on the fetus count, but not with NORMAL', () => {
       create(['ROLE_MIDWIFE']);
       const cmp = fixture.componentInstance;

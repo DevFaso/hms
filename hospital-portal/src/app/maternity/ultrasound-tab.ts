@@ -53,23 +53,35 @@ export const MAX_FETUSES = 8;
 /** QA D1447: the order form's fields checked before sending. */
 const ORDER_CHECKED_IDS = ['us-date', 'us-scan-count'];
 
-/** The measured or written findings of a report: at least one is required (QA D1150). */
-const FINDING_FIELDS: readonly (keyof UltrasoundReportRequest)[] = [
-  'fetalHeartRate',
+/**
+ * The other findings of a report (measurements, dates, written text): with the
+ * observations, at least one is required (QA D1150). The server's
+ * UltrasoundObservations.FINDINGS; UltrasoundObservationFieldsTest pins both.
+ */
+export const FINDING_FIELDS: readonly (keyof UltrasoundReportRequest)[] = [
   'gestationalAgeAtScan',
   'gestationalAgeDays',
-  'numberOfFetuses',
-  'estimatedFetalWeightGrams',
+  'nuchalTranslucencyMm',
+  'crownRumpLengthMm',
+  'estimatedDueDate',
+  'fetalPosition',
   'biparietalDiameterMm',
   'headCircumferenceMm',
   'abdominalCircumferenceMm',
   'femurLengthMm',
-  'nuchalTranslucencyMm',
-  'crownRumpLengthMm',
+  'estimatedFetalWeightGrams',
+  'placentalLocation',
+  'placentalGrade',
+  'amnioticFluidIndex',
+  'amnioticFluidLevel',
+  'cervicalLengthMm',
+  'umbilicalArteryDoppler',
+  'uterineArteryDoppler',
+  'fetalHeartRate',
+  'anatomyFindings',
   'findingsSummary',
   'interpretation',
   'anomalyDescription',
-  'anatomyFindings',
 ];
 
 /**
@@ -208,9 +220,13 @@ export function anomalyDescriptionContradictsAnswer(
  * activity or movement present, a heart rate, any fetal biometry (BPD, HC, AC,
  * FL, CRL), an estimated fetal weight, a nuchal translucency, any nasal-bone
  * or fetal-tone answer, anomalies detected or written anatomy findings (the
- * server's requireFetusCountMatchesObservations, on the fetus count).
+ * server's UltrasoundObservations.SIGNS_OF_A_FETUS, on the fetus count). Each is
+ * shown and editable on the form, so the refusal names something visible.
  */
-const SIGNS_OF_A_FETUS: readonly (keyof UltrasoundReportRequest)[] = [
+export const SIGNS_OF_A_FETUS: readonly (keyof UltrasoundReportRequest)[] = [
+  'fetalCardiacActivity',
+  'fetalMovementObserved',
+  'anomaliesDetected',
   'fetalHeartRate',
   'biparietalDiameterMm',
   'headCircumferenceMm',
@@ -221,6 +237,13 @@ const SIGNS_OF_A_FETUS: readonly (keyof UltrasoundReportRequest)[] = [
   'nuchalTranslucencyMm',
   'nasalBonePresent',
   'fetalToneNormal',
+  'anatomyFindings',
+];
+/** Signs that count only when TRUE (no heart, no movement, no anomaly fit an empty sac). */
+export const SIGNS_ONLY_WHEN_TRUE: readonly (keyof UltrasoundReportRequest)[] = [
+  'fetalCardiacActivity',
+  'fetalMovementObserved',
+  'anomaliesDetected',
 ];
 export function noFetusContradictsObservation(
   form: UltrasoundReportForm | Partial<UltrasoundReportRequest>,
@@ -228,11 +251,12 @@ export function noFetusContradictsObservation(
   const record = form as Record<string, unknown>;
   return (
     form.numberOfFetuses === 0 &&
-    (form.fetalCardiacActivity === true ||
-      form.fetalMovementObserved === true ||
-      form.anomaliesDetected === true ||
-      (form.anatomyFindings ?? '').trim() !== '' ||
-      SIGNS_OF_A_FETUS.some((sign) => record[sign] !== null && record[sign] !== undefined))
+    SIGNS_OF_A_FETUS.some((sign) => {
+      const value = record[sign];
+      if (SIGNS_ONLY_WHEN_TRUE.includes(sign)) return value === true;
+      if (typeof value === 'string') return value.trim() !== '';
+      return value !== null && value !== undefined;
+    })
   );
 }
 
@@ -343,6 +367,11 @@ export class UltrasoundTabComponent implements OnInit {
   reportForm: UltrasoundReportForm = this.emptyReportForm();
   readonly triStateFlags = TRI_STATE_FLAGS;
   readonly maxFetuses = MAX_FETUSES;
+  /**
+   * The stored fetus count of the report being edited: the range is judged only
+   * when the count changes (a legacy count outside 0..8 stays editable).
+   */
+  private loadedFetuses: number | undefined = undefined;
   reportActionBusy = signal(false);
 
   ngOnInit(): void {
@@ -729,6 +758,7 @@ export class UltrasoundTabComponent implements OnInit {
   openReport(order: UltrasoundOrderResponse): void {
     this.reportTargetOrder.set(order);
     const existing = order.report;
+    this.loadedFetuses = existing?.numberOfFetuses ?? undefined;
     if (existing) {
       // Strip the response-only bookkeeping fields before reusing as a request.
       const {
@@ -798,6 +828,7 @@ export class UltrasoundTabComponent implements OnInit {
     const fetuses = form.numberOfFetuses;
     if (
       typeof fetuses === 'number' &&
+      fetuses !== this.loadedFetuses &&
       (fetuses < 0 || fetuses > MAX_FETUSES || !Number.isInteger(fetuses))
     ) {
       this.refuseReport('rep-fetuses', 'ULTRASOUND.FETUSES_RANGE');
@@ -831,7 +862,8 @@ export class UltrasoundTabComponent implements OnInit {
     }
     refuseFields(this.host.nativeElement, [], REPORT_FIELD_IDS, '');
     // QA D1525: the observations are sent as shown (null = not assessed); any
-    // save marks the report stated on the server.
+    // save that changes an observation marks a legacy report stated on the
+    // server (a new report is stated already).
     const request = { ...form } as Partial<UltrasoundReportRequest>;
     this.reportSaving.set(true);
     this.ultrasoundService.submitReport(order.id, request as UltrasoundReportRequest).subscribe({

@@ -710,6 +710,11 @@
           <label for="rep-summary">{{ 'ULTRASOUND.SUMMARY' | translate }}</label>
           <textarea id="rep-summary" rows="3" [(ngModel)]="reportForm.findingsSummary"></textarea>
         </div>
+        <!-- QA D1525: anatomy findings count as a finding and a sign of a fetus, so they are editable here -->
+        <div class="field">
+          <label for="rep-anatomy">{{ 'ULTRASOUND.ANATOMY_FINDINGS' | translate }}</label>
+          <textarea id="rep-anatomy" rows="2" [(ngModel)]="reportForm.anatomyFindings"></textarea>
+        </div>
         <div class="field">
           <label for="rep-interpretation">{{ 'ULTRASOUND.INTERPRETATION' | translate }}</label>
           <textarea

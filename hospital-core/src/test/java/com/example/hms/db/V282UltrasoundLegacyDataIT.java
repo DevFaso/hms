@@ -87,6 +87,21 @@ class V282UltrasoundLegacyDataIT {
         assertRows();
         runV282(); // idempotent and re-runnable
         assertRows();
+
+        // An insert that does not name the column (an older application instance
+        // during a rolling deploy) lands as legacy.
+        UUID oldInstance = UUID.randomUUID();
+        try (Connection conn = newConnection(); Statement st = conn.createStatement()) {
+            st.execute("SET session_replication_role = replica");
+            st.execute("INSERT INTO clinical.ultrasound_reports (id, ultrasound_order_id, hospital_id, scan_date, "
+                + "finding_category, created_at, updated_at) VALUES ('" + oldInstance + "', '" + UUID.randomUUID()
+                + "', '" + UUID.randomUUID() + "', CURRENT_DATE, 'URGENT', NOW(), NOW())");
+            try (ResultSet rs = st.executeQuery("SELECT observations_stated FROM clinical.ultrasound_reports WHERE id = '"
+                    + oldInstance + "'")) {
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getBoolean(1)).isFalse();
+            }
+        }
     }
 
     private static void assertRows() throws Exception {
@@ -114,7 +129,8 @@ class V282UltrasoundLegacyDataIT {
                     + "WHERE table_schema = 'clinical' AND table_name = 'ultrasound_reports' "
                     + "AND column_name = 'observations_stated'")) {
                 assertThat(rs.next()).isTrue();
-                assertThat(rs.getString(1)).isEqualToIgnoringCase("true");
+                assertThat(rs.getString(1)).as("rolling deploy: an old instance's insert lands legacy")
+                    .isEqualToIgnoringCase("false");
                 assertThat(rs.getString(2)).isEqualTo("NO");
             }
         }

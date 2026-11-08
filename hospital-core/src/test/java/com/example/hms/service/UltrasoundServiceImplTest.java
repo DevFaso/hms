@@ -557,12 +557,12 @@ class UltrasoundServiceImplTest {
     }
 
     /**
-     * QA D1525 review: V282 removed a legacy row's old defaults, so any save of
-     * it, through any client, takes the values sent as stated and marks the row
-     * stated. Nothing is masked or cleared on the way.
+     * QA D1525 review: a save that changes an observation of a legacy row takes
+     * the values sent as stated and marks the row stated. Nothing is masked or
+     * cleared on the way (V282 already removed the old defaults).
      */
     @Test
-    void createOrUpdateReport_anySaveOfALegacyRowMakesItStatedWithTheValuesSent() {
+    void createOrUpdateReport_aSaveThatChangesAnObservationMakesALegacyRowStated() {
         UltrasoundOrder order = new UltrasoundOrder();
         order.setId(orderId);
         order.setHospital(hospital);
@@ -647,6 +647,32 @@ class UltrasoundServiceImplTest {
         ultrasoundService.createOrUpdateReport(orderId, typoFix, null);
 
         assertThat(legacy.getObservationsStated()).as("still legacy: no observation answered").isFalse();
+    }
+
+    /** QA D1525 review: a legacy count of 9, sent back unchanged with a summary edit, is accepted. */
+    @Test
+    void createOrUpdateReport_anUnchangedLegacyFetusCountOutOfRangeIsAccepted() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.IN_PROGRESS);
+        UltrasoundReport legacy = new UltrasoundReport();
+        legacy.setUltrasoundOrder(order);
+        legacy.setHospital(hospital);
+        legacy.setReportReviewedByProvider(false);
+        legacy.setObservationsStated(false);
+        legacy.setNumberOfFetuses(9);
+        UltrasoundReportRequestDTO edit = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).findingsSummary("Résumé corrigé").numberOfFetuses(9)
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.MONITORING_REQUIRED).build();
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.of(legacy));
+        when(reportRepository.save(legacy)).thenReturn(legacy);
+
+        ultrasoundService.createOrUpdateReport(orderId, edit, null);
+
+        verify(reportRepository).save(legacy);
+        assertThat(legacy.getObservationsStated()).as("nothing changed: still legacy").isFalse();
     }
 
     /** QA D1525 review: a new report is stated whatever the client sends; the client flag plays no part. */

@@ -20,7 +20,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * QA D1525 review: the observation fields are named in three places that must
  * agree: the server ({@link UltrasoundObservations}), the portal
- * ({@code TRI_STATE_FLAGS}, {@code OBSERVATION_FIELDS}, {@code LEGACY_DEFAULTS}
+ * ({@code TRI_STATE_FLAGS}, {@code OBSERVATION_FIELDS}, {@code FINDING_FIELDS},
+ * {@code SIGNS_OF_A_FETUS}, {@code SIGNS_ONLY_WHEN_TRUE}, {@code LEGACY_DEFAULTS}
  * in ultrasound-tab.ts) and V282's data step (the columns it clears).
  */
 class UltrasoundObservationFieldsTest {
@@ -36,6 +37,18 @@ class UltrasoundObservationFieldsTest {
         Set<String> portal = new TreeSet<>(quoted(arrayLiteral(ts, "TRI_STATE_FLAGS")));
         portal.addAll(quoted(arrayLiteral(ts, "OBSERVATION_FIELDS")));
         assertThat(portal).as("portal TRI_STATE_FLAGS + OBSERVATION_FIELDS").isEqualTo(server);
+
+        Set<String> serverFindings = UltrasoundObservations.FINDINGS.stream()
+            .map(UltrasoundObservations.Finding::name).collect(Collectors.toCollection(TreeSet::new));
+        assertThat(new TreeSet<>(quoted(arrayLiteral(ts, "FINDING_FIELDS"))))
+            .as("portal FINDING_FIELDS (the empty-report rule's other findings)").isEqualTo(serverFindings);
+
+        Set<String> serverSigns = UltrasoundObservations.SIGNS_OF_A_FETUS.stream()
+            .map(UltrasoundObservations.Finding::name).collect(Collectors.toCollection(TreeSet::new));
+        assertThat(new TreeSet<>(quoted(arrayLiteral(ts, "SIGNS_OF_A_FETUS")))).as("portal SIGNS_OF_A_FETUS")
+            .isEqualTo(serverSigns);
+        assertThat(new TreeSet<>(quoted(arrayLiteral(ts, "SIGNS_ONLY_WHEN_TRUE")))).as("portal SIGNS_ONLY_WHEN_TRUE")
+            .isEqualTo(new TreeSet<>(UltrasoundObservations.SIGNS_ONLY_WHEN_TRUE));
 
         Set<String> portalDefaults = new TreeSet<>(keys(objectLiteral(ts, "LEGACY_DEFAULTS")));
         assertThat(portalDefaults).as("portal LEGACY_DEFAULTS")

@@ -2,9 +2,10 @@
 --
 -- Before D1525 the server and the templates filled values nobody stated: cardiac activity, movement and tone TRUE,
 -- anomalies detected FALSE, one fetus, and the template's gestational age (12 or 20 weeks). This migration
---   1. adds observations_stated: FALSE on every report that exists when it runs (legacy), TRUE by default for every
---      report written afterwards (the entity creates reports as stated, a later save that answers an observation
---      marks a legacy row stated),
+--   1. adds observations_stated: FALSE on every report that exists when it runs (legacy). The column defaults to
+--      FALSE (NOT NULL) so a row an older application instance writes during a rolling deploy also lands as legacy.
+--      The new code sets TRUE explicitly on every report it creates, and on a legacy row once a save changes one
+--      of its observations,
 --   2. copies the original six values of every row the data step changes into ultrasound_report_legacy_backup,
 --   3. on the legacy rows NOT yet reviewed, sets to NULL exactly the values the old code could have defaulted, so
 --      every reader, export and query sees plain values. A typed value the old code could not have defaulted is
@@ -45,7 +46,7 @@ UPDATE clinical.ultrasound_reports
     WHERE observations_stated IS NULL;
 
 ALTER TABLE clinical.ultrasound_reports
-    ALTER COLUMN observations_stated SET DEFAULT TRUE;
+    ALTER COLUMN observations_stated SET DEFAULT FALSE;
 
 ALTER TABLE clinical.ultrasound_reports
     ALTER COLUMN observations_stated SET NOT NULL;

@@ -1,9 +1,10 @@
 package com.example.hms.service.impl;
 
-import com.example.hms.service.maternity.UltrasoundObservations;
+import com.example.hms.enums.UltrasoundFindingCategory;
 import com.example.hms.enums.UltrasoundOrderStatus;
 import com.example.hms.enums.UltrasoundScanType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.UltrasoundMapper;
 import com.example.hms.model.Hospital;
@@ -24,11 +25,14 @@ import com.example.hms.repository.UltrasoundReportRepository;
 import com.example.hms.service.UltrasoundService;
 import com.example.hms.service.PatientSubjectReadGuard;
 import com.example.hms.service.PatientSubjectReaderRoles;
+import com.example.hms.service.maternity.UltrasoundObservations;
+import com.example.hms.service.support.ClinicalContent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
@@ -349,20 +353,27 @@ public class UltrasoundServiceImpl implements UltrasoundService {
      * pins it.
      */
     static void requireReportFindings(UltrasoundReportRequestDTO request) {
-        Object[] observations = UltrasoundObservations.of(request);
-        Object[] others = {
-            request.getGestationalAgeAtScan(), request.getGestationalAgeDays(), request.getNuchalTranslucencyMm(),
-            request.getCrownRumpLengthMm(), request.getEstimatedDueDate(),
-            request.getFetalPosition(), request.getBiparietalDiameterMm(), request.getHeadCircumferenceMm(),
-            request.getAbdominalCircumferenceMm(), request.getFemurLengthMm(), request.getEstimatedFetalWeightGrams(),
-            request.getPlacentalLocation(), request.getPlacentalGrade(), request.getAmnioticFluidIndex(),
-            request.getAmnioticFluidLevel(), request.getCervicalLengthMm(), request.getUmbilicalArteryDoppler(),
-            request.getUterineArteryDoppler(), request.getFetalHeartRate(), request.getAnatomyFindings(),
-            request.getFindingsSummary(), request.getInterpretation(), request.getAnomalyDescription()};
-        Object[] all = java.util.stream.Stream.concat(java.util.Arrays.stream(observations), java.util.Arrays.stream(others))
-            .toArray();
-        com.example.hms.service.support.ClinicalContent.requireAnyAnswered("findingsSummary",
-            "ultrasound.report.findingsRequired", all);
+        ClinicalContent.requireAnyAnswered("findingsSummary", "ultrasound.report.findingsRequired",
+            UltrasoundObservations.allFindings(request));
+    }
+
+    /** QA D1525 review: 0 (no fetus seen) to 8 fetuses. */
+    static final int MAX_FETUSES = 8;
+
+    /**
+     * QA D1525 review: a fetus count is 0 (no fetus seen) to {@link #MAX_FETUSES}.
+     * Judged only when the value changes: a stored count outside the range (a
+     * legacy row) stays editable on its other fields, so the bounds cannot be
+     * bean constraints, which do not see the stored value.
+     */
+    static void requireFetusCountInRange(UltrasoundReportRequestDTO request, UltrasoundReport stored) {
+        Integer count = request.getNumberOfFetuses();
+        if (count == null || (stored != null && count.equals(stored.getNumberOfFetuses()))) {
+            return;
+        }
+        if (count < 0 || count > MAX_FETUSES) {
+            throw new FieldBusinessException("numberOfFetuses", "ultrasoundReport.numberOfFetuses.range");
+        }
     }
 
     /**
@@ -370,7 +381,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
      * to NORMAL. Asked after {@link #requireReportFindings}.
      */
     static void requireFindingCategory(UltrasoundReportRequestDTO request) {
-        com.example.hms.service.support.ClinicalContent.requirePresent(request.getFindingCategory(),
+        ClinicalContent.requirePresent(request.getFindingCategory(),
             "findingCategory", "ultrasoundReport.findingCategory.required");
     }
 
@@ -378,9 +389,8 @@ public class UltrasoundServiceImpl implements UltrasoundService {
      * The categories that claim no clinically significant finding: NORMAL and
      * VARIANT ("not clinically significant").
      */
-    static final java.util.Set<com.example.hms.enums.UltrasoundFindingCategory> NO_SIGNIFICANT_FINDING =
-        java.util.EnumSet.of(com.example.hms.enums.UltrasoundFindingCategory.NORMAL,
-            com.example.hms.enums.UltrasoundFindingCategory.VARIANT);
+    static final Set<UltrasoundFindingCategory> NO_SIGNIFICANT_FINDING =
+        EnumSet.of(UltrasoundFindingCategory.NORMAL, UltrasoundFindingCategory.VARIANT);
 
     /**
      * QA D1525: a category that claims no significant finding (NORMAL,
@@ -399,7 +409,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         if (Boolean.FALSE.equals(request.getFetalCardiacActivity())
                 || Boolean.FALSE.equals(request.getFetalToneNormal())
                 || Boolean.TRUE.equals(request.getAnomaliesDetected())) {
-            throw new com.example.hms.exception.FieldBusinessException("findingCategory",
+            throw new FieldBusinessException("findingCategory",
                 "ultrasound.report.normalContradictsObservation");
         }
     }
@@ -409,27 +419,13 @@ public class UltrasoundServiceImpl implements UltrasoundService {
      * activity or fetal movement present, a fetal heart rate, any fetal
      * biometry (BPD, HC, AC, FL, CRL), an estimated fetal weight, a nuchal
      * translucency, any nasal-bone or fetal-tone answer, anomalies detected or
-     * written anatomy findings. Refused on the fetus count. The portal's
-     * SIGNS_OF_A_FETUS mirrors this list.
+     * written anatomy findings ({@link UltrasoundObservations#SIGNS_OF_A_FETUS},
+     * which the portal mirrors). Refused on the fetus count.
      */
     static void requireFetusCountMatchesObservations(UltrasoundReportRequestDTO request) {
-        if (!Integer.valueOf(0).equals(request.getNumberOfFetuses())) {
-            return;
-        }
-        String anatomy = request.getAnatomyFindings();
-        boolean signOfAFetus = Boolean.TRUE.equals(request.getFetalCardiacActivity())
-                || Boolean.TRUE.equals(request.getFetalMovementObserved())
-                || Boolean.TRUE.equals(request.getAnomaliesDetected())
-                || (anatomy != null && !anatomy.isBlank())
-                || java.util.stream.Stream.of(request.getFetalHeartRate(), request.getBiparietalDiameterMm(),
-                    request.getHeadCircumferenceMm(), request.getAbdominalCircumferenceMm(),
-                    request.getFemurLengthMm(), request.getCrownRumpLengthMm(),
-                    request.getEstimatedFetalWeightGrams(), request.getNuchalTranslucencyMm(),
-                    request.getNasalBonePresent(), request.getFetalToneNormal())
-                    .anyMatch(java.util.Objects::nonNull);
-        if (signOfAFetus) {
-            throw new com.example.hms.exception.FieldBusinessException("numberOfFetuses",
-                "ultrasound.report.noFetusContradictsObservation");
+        if (Integer.valueOf(0).equals(request.getNumberOfFetuses())
+                && UltrasoundObservations.hasSignOfAFetus(request)) {
+            throw new FieldBusinessException("numberOfFetuses", "ultrasound.report.noFetusContradictsObservation");
         }
     }
 
@@ -438,9 +434,9 @@ public class UltrasoundServiceImpl implements UltrasoundService {
      * contradicts itself. Refused on the description.
      */
     static void requireAnomalyDescriptionMatchesAnswer(UltrasoundReportRequestDTO request) {
-        String description = request.getAnomalyDescription();
-        if (Boolean.FALSE.equals(request.getAnomaliesDetected()) && description != null && !description.isBlank()) {
-            throw new com.example.hms.exception.FieldBusinessException("anomalyDescription",
+        if (Boolean.FALSE.equals(request.getAnomaliesDetected())
+                && ClinicalContent.isPresent(request.getAnomalyDescription())) {
+            throw new FieldBusinessException("anomalyDescription",
                 "ultrasound.report.anomalyDescriptionWithoutAnomaly");
         }
     }
@@ -471,8 +467,10 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         if (report != null && Boolean.TRUE.equals(report.getReportReviewedByProvider())) {
             throw new BusinessException("ultrasound.report.reviewedNoEdit");
         }
-        // QA D1525: the empty report is refused first, then the category is
-        // asked for, then the contradictions - the portal runs the same order.
+        // QA D1525: the fetus count's range (judged only when it changes), then
+        // the empty report, the category, the contradictions - the portal runs
+        // the same order.
+        requireFetusCountInRange(request, report);
         requireReportFindings(request);
         requireFindingCategory(request);
         requireCategoryMatchesObservations(request);

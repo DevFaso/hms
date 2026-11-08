@@ -10916,8 +10916,9 @@
     "NASAL_BONE_PRESENT": "Présents",
     "NASAL_BONE_ABSENT": "Absents",
     "NASAL_BONE_NOT_ASSESSED": "Non évalués",
-    "NO_FETUS_CONTRADICTS_OBSERVATION": "Aucun fœtus vu contredit ce que ce compte rendu constate (activité cardiaque ou mouvements fœtaux présents, une fréquence cardiaque fœtale, une mesure fœtale ou un poids fœtal estimé) : corrigez le nombre ou les observations.",
-    "ANOMALY_DESCRIPTION_WITHOUT_ANOMALY": "Une anomalie est décrite alors que le compte rendu indique qu'aucune anomalie n'a été vue : répondez « anomalies détectées » ou effacez la description."
+    "NO_FETUS_CONTRADICTS_OBSERVATION": "Aucun fœtus vu contredit un signe de fœtus dans ce compte rendu : activité cardiaque ou mouvements fœtaux présents, une fréquence cardiaque fœtale, une mesure fœtale (BIP, PC, PA, LF, LCC, clarté nucale), un poids fœtal estimé, une réponse sur les os propres du nez ou le tonus fœtal, des anomalies détectées ou des constatations anatomiques. Corrigez le nombre ou cette saisie.",
+    "ANOMALY_DESCRIPTION_WITHOUT_ANOMALY": "Une anomalie est décrite alors que le compte rendu indique qu'aucune anomalie n'a été vue : répondez « anomalies détectées » ou effacez la description.",
+    "ANATOMY_FINDINGS": "Constatations anatomiques"
   },
   "BIRTH_PLAN": {
     "TITLE": "Plan de naissance",
