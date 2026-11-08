@@ -120,6 +120,19 @@ public class MortalityServiceImpl implements MortalityService {
         this.stayEncounters = stayEncounters;
     }
 
+    /** QA D1516: files the review of what a voided death closed, after commit; absent in hand-built tests. */
+    private OrderReviewAfterCommit notices;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setNotices(OrderReviewAfterCommit notices) {
+        this.notices = notices;
+    }
+
+    static final String VOIDED_CLOSURE_REFERENCE_TYPE = "DEATH_ENTERED_IN_ERROR_CLOSURES";
+    static final String VOIDED_CLOSURE_TITLE_KEY = "mortality.enteredInError.closures.title";
+    static final String VOIDED_CLOSURE_BODY_KEY = "mortality.enteredInError.closures.body";
+    static final String VOIDED_APPOINTMENT_NOTE_KEY = "mortality.enteredInError.appointmentNote";
+
     private final Clock clock;
     private final DeathRecordRepository deathRecordRepository;
     private final PatientRepository patientRepository;
@@ -314,12 +327,151 @@ public class MortalityServiceImpl implements MortalityService {
         // The holds stand and stay visible; none stays bound to a dispute now closed.
         open.forEach(dispute -> orderReview.disputeClosed(dispute.getId()));
 
-        auditEnteredInError(saved, patient.getId(), actorId, actorName, reason);
+        // QA D1516: nothing the death closed is reopened (#1068), but none of it stays marked as a death, and a
+        // clinician is told which stays, visits and appointments to readmit or rebook.
+        VoidedClosures closures = settleWhatTheDeathClosed(saved);
+        fileClosureReview(saved, patient, closures);
+
+        auditEnteredInError(saved, patient.getId(), actorId, actorName, reason, closures);
         return mapper.toDto(saved);
     }
 
+    /** What a voided death had closed at its hospital, as it reads now. */
+    record VoidedClosures(List<Admission> stays, List<Encounter> visits, List<Appointment> appointments) {
+        boolean isEmpty() {
+            return stays.isEmpty() && visits.isEmpty() && appointments.isEmpty();
+        }
+    }
+
+    /**
+     * QA D1516: the stays the death left DECEASED become {@link AdmissionStatus#CLOSED_IN_ERROR}, ended when the
+     * closure ran (the record's creation), and the appointments it cancelled say the death was an error. The visits
+     * stay completed: a completed visit says nothing about a death. Nothing is reopened.
+     */
+    private VoidedClosures settleWhatTheDeathClosed(DeathRecord deathRecord) {
+        UUID hospitalId = deathRecord.getHospital() != null ? deathRecord.getHospital().getId() : null;
+        LocalDateTime closedAt = deathRecord.getCreatedAt() != null ? deathRecord.getCreatedAt() : deathRecord.getEnteredInErrorAt();
+        List<Admission> stays = closedStays(deathRecord, hospitalId, Set.of(AdmissionStatus.DECEASED));
+        for (Admission stay : stays) {
+            stay.setStatus(AdmissionStatus.CLOSED_IN_ERROR);
+            if (stay.getActualDischargeDateTime() == null) {
+                stay.setActualDischargeDateTime(closedAt);
+                stay.calculateLengthOfStay();
+            }
+            admissionRepository.save(stay);
+        }
+        List<Appointment> appointments = closedAppointments(deathRecord, hospitalId);
+        if (!appointments.isEmpty()) {
+            String note = com.example.hms.utility.MessageUtil.resolve(
+                com.example.hms.service.i18n.NotificationLocales.STAFF, VOIDED_APPOINTMENT_NOTE_KEY);
+            for (Appointment appointment : appointments) {
+                appointment.setNotes(StringUtils.hasText(appointment.getNotes()) ? appointment.getNotes() + " — " + note : note);
+                appointmentRepository.save(appointment);
+            }
+        }
+        return new VoidedClosures(stays, closedVisits(deathRecord, hospitalId), appointments);
+    }
+
+    /** The ids the record kept of one kind; empty for a row written before V281, which kept none. */
+    private static java.util.Optional<List<UUID>> recordedIds(DeathRecord deathRecord, String kind) {
+        java.util.Map<String, List<String>> closed = deathRecord.getClosedRecords();
+        if (closed == null) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(closed.getOrDefault(kind, List.of()).stream().map(UUID::fromString).toList());
+    }
+
+    /** A row from before V281 names none: the stays still DECEASED at its hospital are the ones it closed. */
+    private List<Admission> closedStays(DeathRecord deathRecord, UUID hospitalId, Set<AdmissionStatus> statuses) {
+        List<Admission> candidates = recordedIds(deathRecord, DeathRecord.CLOSED_ADMISSIONS)
+            .map(ids -> ids.isEmpty() ? List.<Admission>of() : admissionRepository.findAllById(ids))
+            .orElseGet(() -> legacyGuessIsSafe(deathRecord)
+                ? admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(deathRecord.getPatient().getId())
+                : List.of());
+        return candidates.stream()
+            .filter(stay -> inScope(stay.getHospital(), hospitalId) && statuses.contains(stay.getStatus()))
+            .toList();
+    }
+
+    /**
+     * A row from before V281 names nothing, so what it closed is read off the records' marks (DECEASED, the closure
+     * note). Only while the patient has no live death: a real death recorded later leaves the same marks, and its
+     * closures must never be read as the voided one's ("readmit or rebook" for a patient who has died).
+     */
+    private boolean legacyGuessIsSafe(DeathRecord voided) {
+        return voided.getPatient() != null && deathRecordRepository.findByPatient_Id(voided.getPatient().getId())
+            .filter(live -> !Objects.equals(live.getId(), voided.getId()))
+            .isEmpty();
+    }
+
+    /** A row from before V281 kept only the first visit it closed. */
+    private List<Encounter> closedVisits(DeathRecord deathRecord, UUID hospitalId) {
+        List<UUID> ids = recordedIds(deathRecord, DeathRecord.CLOSED_ENCOUNTERS)
+            .orElseGet(() -> deathRecord.getEncounterId() != null ? List.of(deathRecord.getEncounterId()) : List.of());
+        return ids.isEmpty() ? List.of() : encounterRepository.findAllById(ids).stream()
+            .filter(visit -> inScope(visit.getHospital(), hospitalId))
+            .toList();
+    }
+
+    /** A row from before V281: the cancelled appointments after the death that carry its closure note. */
+    private List<Appointment> closedAppointments(DeathRecord deathRecord, UUID hospitalId) {
+        List<Appointment> candidates = recordedIds(deathRecord, DeathRecord.CLOSED_APPOINTMENTS)
+            .map(ids -> ids.isEmpty() ? List.<Appointment>of() : appointmentRepository.findAllById(ids))
+            .orElseGet(() -> !legacyGuessIsSafe(deathRecord) ? List.of()
+                : appointmentRepository.findByPatient_IdAndAppointmentDateAfter(deathRecord.getPatient().getId(),
+                    deathRecord.getDiedAt().toLocalDate()).stream()
+                .filter(a -> a.getNotes() != null && a.getNotes().contains(CLOSURE_REASON))
+                .toList());
+        return candidates.stream()
+            .filter(a -> inScope(a.getHospital(), hospitalId) && a.getStatus() == AppointmentStatus.CANCELLED)
+            .toList();
+    }
+
+    /**
+     * QA D1516: one urgent item at the death's hospital, to the attending of each stay it closed (its admitting
+     * doctor when none is named), else to the hospital's doctors, naming what was closed. Filed after commit in a
+     * transaction of its own: a failure to file never undoes the entered-in-error. Ids and text only cross the commit.
+     */
+    private void fileClosureReview(DeathRecord deathRecord, Patient patient, VoidedClosures closures) {
+        if (closures.isEmpty() || notices == null || deathRecord.getHospital() == null) {
+            return;
+        }
+        java.util.Set<UUID> attendings = new java.util.LinkedHashSet<>();
+        for (Admission stay : closures.stays()) {
+            Staff attending = stay.getAttendingPhysician() != null ? stay.getAttendingPhysician() : stay.getAdmittingProvider();
+            if (attending != null && attending.isActive() && attending.getUser() != null) {
+                attendings.add(attending.getUser().getId());
+            }
+        }
+        String patientName = patient.getFullName();
+        Object[] args = {patientName,
+            listOf(closures.stays().stream().map(s -> com.example.hms.utility.DisplayDates.dateTime(s.getAdmissionDateTime())).toList()),
+            listOf(closures.visits().stream().map(v -> com.example.hms.utility.DisplayDates.dateTime(v.getEncounterDate())).toList()),
+            listOf(closures.appointments().stream().map(a -> com.example.hms.utility.DisplayDates.date(a.getAppointmentDate())).toList())};
+        OrderReviewAfterCommit.Notice notice = new OrderReviewAfterCommit.Notice(deathRecord.getHospital().getId(),
+            patient.getId(), patientName,
+            UUID.nameUUIDFromBytes((deathRecord.getId() + "@closures").getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+            VOIDED_CLOSURE_REFERENCE_TYPE, VOIDED_CLOSURE_TITLE_KEY, VOIDED_CLOSURE_BODY_KEY, args, attendings);
+        OrderReviewAfterCommit filer = notices;
+        UUID recordId = deathRecord.getId();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                filer.file(notice);
+            } catch (RuntimeException ex) {
+                log.error("Review of what death record {} closed was not filed; the entered-in-error stands: {}",
+                    recordId, ex.getMessage());
+            }
+        });
+    }
+
+    /** "none" reads as a dash, so the sentence keeps its shape. */
+    private static String listOf(List<String> items) {
+        return items.isEmpty() ? "—" : String.join(", ", items);
+    }
+
     /** Ids only: the audit service writes in its own transaction, with no persistence context of this one. */
-    private void auditEnteredInError(DeathRecord record, UUID patientId, UUID actorId, String actorName, String reason) {
+    private void auditEnteredInError(DeathRecord record, UUID patientId, UUID actorId, String actorName, String reason,
+                                     VoidedClosures closures) {
         if (auditEventLogService == null) {
             return;
         }
@@ -335,7 +487,10 @@ public class MortalityServiceImpl implements MortalityService {
                 .userName(actorName)
                 .eventDescription("Death record " + record.getId() + " marked entered in error; the patient is no "
                     + "longer recorded as deceased. Stays, visits and appointments the death closed were not "
-                    + "reopened. Reason: " + reason)
+                    + "reopened: " + closures.stays().size() + " stay(s) marked closed in error, "
+                    + closures.visits().size() + " visit(s), " + closures.appointments().size()
+                    + " appointment(s); " + (closures.isEmpty() ? "nothing to review" : "an urgent review was filed")
+                    + ". Reason: " + reason)
                 .build());
         } catch (RuntimeException ex) {
             log.warn("Failed to audit death record {} entered in error: {}", record.getId(), ex.getMessage());
@@ -357,6 +512,36 @@ public class MortalityServiceImpl implements MortalityService {
             .filter(death -> death.getHospital() != null && hospitalId.equals(death.getHospital().getId()))
             .map(mapper::toDto)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_DEATH_NOT_FOUND, patientId));
+    }
+
+    /**
+     * QA D1516: for the chart, what each death of this patient marked entered in error at the acting hospital had
+     * closed. A stay is shown CLOSED_IN_ERROR, or still DECEASED when its death was voided before this was settled
+     * (the record then flags it too). Empty when nothing was closed.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.mortality.VoidedDeathClosuresDTO> getVoidedClosures(UUID patientId) {
+        UUID hospitalId = requireHospital();
+        patientChartAccess.require(patientId, hospitalId);
+        java.util.List<com.example.hms.payload.dto.mortality.VoidedDeathClosuresDTO> out = new java.util.ArrayList<>();
+        for (DeathRecord voided : deathRecordRepository.findEnteredInErrorForPatient(patientId, hospitalId)) {
+            List<Admission> stays = closedStays(voided, hospitalId,
+                Set.of(AdmissionStatus.CLOSED_IN_ERROR, AdmissionStatus.DECEASED));
+            List<Encounter> visits = closedVisits(voided, hospitalId);
+            List<Appointment> appointments = closedAppointments(voided, hospitalId);
+            if (stays.isEmpty() && visits.isEmpty() && appointments.isEmpty()) {
+                continue;
+            }
+            out.add(new com.example.hms.payload.dto.mortality.VoidedDeathClosuresDTO(voided.getId(), voided.getEnteredInErrorAt(),
+                stays.stream().map(s -> new com.example.hms.payload.dto.mortality.VoidedDeathClosuresDTO.Stay(
+                    s.getId(), s.getAdmissionDateTime(), s.getActualDischargeDateTime())).toList(),
+                visits.stream().map(v -> new com.example.hms.payload.dto.mortality.VoidedDeathClosuresDTO.Visit(
+                    v.getId(), v.getEncounterDate())).toList(),
+                appointments.stream().map(a -> new com.example.hms.payload.dto.mortality.VoidedDeathClosuresDTO.Booking(
+                    a.getId(), a.getAppointmentDate())).toList()));
+        }
+        return out;
     }
 
     @Override
@@ -428,16 +613,25 @@ public class MortalityServiceImpl implements MortalityService {
      * back to the caller rather than closed silently.
      */
     private DeathClosureSummaryDTO closeOpenRecords(Patient patient, UUID hospitalId, DeathRecord deathRecord) {
-        return DeathClosureSummaryDTO.builder()
-            .admissionsClosed(closeAdmissions(patient, hospitalId, deathRecord))
-            .encountersClosed(closeEncounters(patient, hospitalId, deathRecord))
-            .appointmentsCancelled(cancelFutureAppointments(patient, hospitalId, deathRecord))
+        // QA D1516: what was closed is kept on the record, so entered in error can flag it and name it.
+        java.util.Map<String, List<String>> closed = new java.util.LinkedHashMap<>();
+        DeathClosureSummaryDTO summary = DeathClosureSummaryDTO.builder()
+            .admissionsClosed(closeAdmissions(patient, hospitalId, deathRecord, ids(closed, DeathRecord.CLOSED_ADMISSIONS)))
+            .encountersClosed(closeEncounters(patient, hospitalId, deathRecord, ids(closed, DeathRecord.CLOSED_ENCOUNTERS)))
+            .appointmentsCancelled(cancelFutureAppointments(patient, hospitalId, deathRecord,
+                ids(closed, DeathRecord.CLOSED_APPOINTMENTS)))
             .recallsClosed(closeRecalls(patient, hospitalId))
             .build();
+        deathRecord.setClosedRecords(closed);
+        return summary;
+    }
+
+    private static List<String> ids(java.util.Map<String, List<String>> closed, String kind) {
+        return closed.computeIfAbsent(kind, k -> new java.util.ArrayList<>());
     }
 
     /** An open admission holds a bed and keeps the patient on the ward board. */
-    private int closeAdmissions(Patient patient, UUID hospitalId, DeathRecord deathRecord) {
+    private int closeAdmissions(Patient patient, UUID hospitalId, DeathRecord deathRecord, List<String> closedIds) {
         int closed = 0;
         for (Admission admission : admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patient.getId())) {
             if (!inScope(admission.getHospital(), hospitalId) || !OPEN_ADMISSIONS.contains(admission.getStatus())) {
@@ -459,13 +653,14 @@ public class MortalityServiceImpl implements MortalityService {
             if (deathRecord.getAdmissionId() == null) {
                 deathRecord.setAdmissionId(admission.getId());
             }
+            closedIds.add(String.valueOf(admission.getId()));
             closed++;
         }
         return closed;
     }
 
     /** An encounter left open keeps the patient on a worklist someone will work. */
-    private int closeEncounters(Patient patient, UUID hospitalId, DeathRecord deathRecord) {
+    private int closeEncounters(Patient patient, UUID hospitalId, DeathRecord deathRecord, List<String> closedIds) {
         int closed = 0;
         for (Encounter encounter : encounterRepository.findByPatient_Id(patient.getId())) {
             if (!inScope(encounter.getHospital(), hospitalId) || !OPEN_ENCOUNTERS.contains(encounter.getStatus())) {
@@ -485,6 +680,7 @@ public class MortalityServiceImpl implements MortalityService {
             if (deathRecord.getEncounterId() == null) {
                 deathRecord.setEncounterId(encounter.getId());
             }
+            closedIds.add(String.valueOf(encounter.getId()));
             closed++;
         }
         return closed;
@@ -495,7 +691,7 @@ public class MortalityServiceImpl implements MortalityService {
      * family. Only FUTURE ones are cancelled — a past appointment the patient
      * actually attended is history, and rewriting it would falsify the record.
      */
-    private int cancelFutureAppointments(Patient patient, UUID hospitalId, DeathRecord deathRecord) {
+    private int cancelFutureAppointments(Patient patient, UUID hospitalId, DeathRecord deathRecord, List<String> closedIds) {
         int cancelled = 0;
         LocalDate diedOn = deathRecord.getDiedAt().toLocalDate();
         for (Appointment appointment
@@ -507,6 +703,7 @@ public class MortalityServiceImpl implements MortalityService {
             appointment.setStatus(AppointmentStatus.CANCELLED);
             appointment.setNotes(appendReason(appointment.getNotes()));
             appointmentRepository.save(appointment);
+            closedIds.add(String.valueOf(appointment.getId()));
             cancelled++;
         }
         return cancelled;

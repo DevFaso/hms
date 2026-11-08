@@ -486,6 +486,58 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
         }
     }
 
+    /**
+     * QA D1515 on the real stack: a draft whose signature was refused stays a draft, and a withdrawn order
+     * is over. Neither is an order the patient takes, so a new routine order is judged alone (the same
+     * single "info" it gets with nothing else on file) and signs plainly, with no exception asked.
+     */
+    @Test
+    void d1515_aDraftLeftAfterARefusedSignatureAndAWithdrawnOrderNeverAddToTheTotal() throws Exception {
+        Prescription draft = prescriptionRepository.save(Prescription.builder()
+            .patient(patient).staff(authorStaff).encounter(encounter).hospital(hospital)
+            .assignment(authorStaff.getAssignment())
+            .medicationName("Paracétamol").medicationDisplayName("Paracétamol").route("PO")
+            .dosage("1500 mg").frequency("3 fois par jour").quantity(BigDecimal.TEN).quantityUnit("cp")
+            .status(PrescriptionStatus.DRAFT).build());
+        Prescription withdrawn = prescriptionRepository.save(Prescription.builder()
+            .patient(patient).staff(authorStaff).encounter(encounter).hospital(hospital)
+            .assignment(authorStaff.getAssignment())
+            .medicationName("Paracétamol 500 mg").medicationDisplayName("Paracétamol 500 mg").route("PO")
+            .dosage("1 g").frequency("4 fois par jour").quantity(BigDecimal.TEN).quantityUnit("cp")
+            .withdrawalReason("Arrêt").status(PrescriptionStatus.DISCONTINUED).build());
+        UUID created = null;
+        try {
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions/{id}/sign", draft.getId()).contextPath(API_CONTEXT).with(as(authorUser)))
+                .andExpect(status().isBadRequest());
+            assertThat(prescriptionRepository.findById(draft.getId()).orElseThrow().getStatus()).isEqualTo(PrescriptionStatus.DRAFT);
+
+            String body = "{\"patientId\":\"" + patient.getId() + "\",\"staffId\":\"" + authorStaff.getId()
+                + "\",\"encounterId\":\"" + encounter.getId() + "\",\"medicationName\":\"Paracétamol\","
+                + "\"dosage\":\"1 g\",\"frequency\":\"3 fois par jour\",\"route\":\"PO\",\"quantity\":3}";
+            String answer = mockMvc.perform(post(API_CONTEXT + "/prescriptions").contextPath(API_CONTEXT).with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+            created = UUID.fromString(com.jayway.jsonpath.JsonPath.read(answer, "$.id"));
+            List<String> indicators = com.jayway.jsonpath.JsonPath.read(answer, "$.cdsAdvisories[*].indicator");
+            List<String> summaries = com.jayway.jsonpath.JsonPath.read(answer, "$.cdsAdvisories[*].summary");
+            assertThat(indicators).as("judged alone: %s", summaries).containsExactly("info");
+            assertThat(summaries).noneMatch(s -> s.contains("7500") || s.contains("3000 mg") && s.contains("4000 mg"));
+
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions/{id}/sign", created).contextPath(API_CONTEXT).with(as(authorUser)))
+                .andExpect(status().is2xxSuccessful());
+            assertThat(prescriptionRepository.findById(created).orElseThrow().getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+        } finally {
+            for (UUID id : java.util.Arrays.asList(draft.getId(), withdrawn.getId(), created)) {
+                if (id != null) {
+                    auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
+                        .filter(row -> id.toString().equals(row.getResourceId())).toList());
+                    prescriptionRepository.deleteById(id);
+                }
+            }
+        }
+    }
+
     /** CR-02 on the real stack: the version in the token is the row's, and only the token passes a reason. */
     @Test
     void anAdultDoseOutsideTheLimitsIsSignedOnlyWithItsExceptionOnTheVersionItAnswered() throws Exception {

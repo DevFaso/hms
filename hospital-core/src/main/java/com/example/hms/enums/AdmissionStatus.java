@@ -42,7 +42,15 @@ public enum AdmissionStatus {
     /**
      * Patient deceased
      */
-    DECEASED;
+    DECEASED,
+
+    /**
+     * QA D1516: closed by a record later entered in error (a death recorded on the wrong patient). The patient
+     * neither died nor was discharged; the stay ended when the closure ran ({@code actualDischargeDateTime}), its bed
+     * was released then, and it is not reopened (#1068): a clinician readmits if care continues. Not a discharge
+     * and not a death, so neither count takes it.
+     */
+    CLOSED_IN_ERROR;
 
     /**
      * QA D1065 (round 18): the statuses of a stay the patient is still in. An

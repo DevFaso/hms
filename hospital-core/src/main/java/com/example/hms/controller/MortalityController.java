@@ -143,6 +143,15 @@ public class MortalityController {
         return ResponseEntity.ok(disputeService.uphold(disputeId, outcome));
     }
 
+    /** QA D1516: for the chart, what a death later entered in error had closed, so the next clinician sees it. */
+    @GetMapping("/patients/{patientId}/voided-closures")
+    @PreAuthorize(READER)
+    @Operation(summary = "What a death marked entered in error had closed for one patient at this hospital")
+    public ResponseEntity<List<com.example.hms.payload.dto.mortality.VoidedDeathClosuresDTO>> getVoidedClosures(
+        @PathVariable UUID patientId) {
+        return ResponseEntity.ok(mortalityService.getVoidedClosures(patientId));
+    }
+
     @GetMapping("/deaths/patient/{patientId}")
     @PreAuthorize(READER)
     @Operation(summary = "The death record for one patient")

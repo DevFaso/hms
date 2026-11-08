@@ -27,8 +27,8 @@ import java.util.UUID;
  *       even when the historical row was freetext.</li>
  * </ol>
  *
- * <p>Window is the last seven days against any prescription that has
- * not been fully terminal (CANCELLED / DISCONTINUED / PARTNER_REJECTED).
+ * <p>Window is the last seven days against any order in force (QA D1515:
+ * signed, not withdrawn or rejected; a draft is a proposal, not an order).
  * The engine pre-fetches {@code activePrescriptions} so this rule does
  * no I/O.
  */

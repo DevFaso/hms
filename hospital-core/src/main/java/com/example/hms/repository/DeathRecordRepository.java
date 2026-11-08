@@ -39,6 +39,12 @@ public interface DeathRecordRepository extends JpaRepository<DeathRecord, UUID> 
                                          @Param("from") LocalDateTime from,
                                          @Param("to") LocalDateTime to);
 
+    /** QA D1516: this patient's deaths at a hospital marked entered in error, most recent first, for the chart. */
+    @Query("SELECT d FROM DeathRecord d WHERE d.patient.id = :patientId AND d.hospital.id = :hospitalId "
+        + "AND d.enteredInErrorAt IS NOT NULL ORDER BY d.enteredInErrorAt DESC")
+    List<DeathRecord> findEnteredInErrorForPatient(@Param("patientId") UUID patientId,
+                                                   @Param("hospitalId") UUID hospitalId);
+
     /** The mortality register for a period. */
     @Query("SELECT d FROM DeathRecord d WHERE d.hospital.id = :hospitalId AND d.enteredInErrorAt IS NULL "
         + "AND d.diedAt >= :from AND d.diedAt < :to ORDER BY d.diedAt DESC")

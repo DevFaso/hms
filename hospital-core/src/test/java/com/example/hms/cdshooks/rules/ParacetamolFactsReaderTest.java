@@ -116,10 +116,11 @@ class ParacetamolFactsReaderTest {
         assertThat(reader.read(adult, hospitalId, "Doliprane", doliprane, null).proposedCombination()).isFalse();
     }
 
+    // QA D1515 (changed: DRAFT and PENDING_SIGNATURE were counted): a draft is a proposal, not an order.
     @ParameterizedTest(name = "{0}: counted = {1}")
     @CsvSource({
-        "DRAFT, true",
-        "PENDING_SIGNATURE, true",
+        "DRAFT, false",
+        "PENDING_SIGNATURE, false",
         "SIGNED, true",
         "DISPENSED, true",
         "PARTIALLY_FILLED, true",
@@ -132,9 +133,32 @@ class ParacetamolFactsReaderTest {
         assertThat(read().otherOrders()).hasSize(counted ? 1 : 0);
     }
 
+    /**
+     * QA D1515: the q37G replay. Oral 1 g q6h is signed; IV and rectal drafts were refused at signing and
+     * left; a draft is open. Only the signed order is counted, whatever the drafts hold.
+     */
+    @Test
+    void d1515_draftsLeftAfterARefusedSignatureAreNotCounted() {
+        Prescription signed = order("Paracétamol", PrescriptionStatus.SIGNED);
+        order("Paracétamol 1 g IV", PrescriptionStatus.DRAFT);
+        order("Paracétamol suppositoire", PrescriptionStatus.PENDING_SIGNATURE);
+        order("Paracétamol", PrescriptionStatus.DRAFT);
+        assertThat(read().otherOrders()).extracting(ParacetamolFacts.OtherOrder::order).containsExactly(signed);
+    }
+
+    @Test
+    void everyStatusIsCountedExactlyWhenTheOrderIsInForce() {
+        for (PrescriptionStatus status : PrescriptionStatus.values()) {
+            orders.clear();
+            order("Paracétamol", status);
+            assertThat(read().otherOrders()).as(status.name()).hasSize(status.isInForce() ? 1 : 0);
+        }
+    }
+
     @Test
     void theOrderBeingEditedIsNotAnotherOrder() {
-        Prescription edited = order("Paracétamol", PrescriptionStatus.DRAFT);
+        // QA D1515 (changed fixture: was a DRAFT, which is no longer counted at all): the exclusion is by id.
+        Prescription edited = order("Paracétamol", PrescriptionStatus.SIGNED);
         assertThat(reader.read(adult, hospitalId, "Paracétamol", null, edited.getId()).otherOrders()).isEmpty();
     }
 

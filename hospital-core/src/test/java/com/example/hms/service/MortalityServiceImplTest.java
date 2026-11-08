@@ -371,6 +371,209 @@ class MortalityServiceImplTest {
         assertThatThrownBy(() -> service.amendDeathRecord(id, amendment)).isInstanceOf(BusinessException.class);
     }
 
+    // ── QA D1516: what a death entered in error had closed ───────────
+
+    private Admission openStayWith(Staff attending) {
+        Admission stay = new Admission();
+        stay.setId(UUID.randomUUID());
+        stay.setHospital(hospital);
+        stay.setPatient(patient);
+        stay.setStatus(AdmissionStatus.ACTIVE);
+        stay.setAdmissionDateTime(LocalDateTime.now().minusDays(3));
+        stay.setAttendingPhysician(attending);
+        return stay;
+    }
+
+    private Staff doctorWithUser() {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(UUID.randomUUID());
+        Staff doctor = new Staff();
+        doctor.setId(UUID.randomUUID());
+        doctor.setUser(user);
+        doctor.setHospital(hospital);
+        return doctor;
+    }
+
+    private com.example.hms.model.Encounter openVisit() {
+        com.example.hms.model.Encounter visit = new com.example.hms.model.Encounter();
+        visit.setId(UUID.randomUUID());
+        visit.setHospital(hospital);
+        visit.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        visit.setEncounterDate(LocalDateTime.now().minusHours(5));
+        return visit;
+    }
+
+    private com.example.hms.model.Appointment futureBooking() {
+        com.example.hms.model.Appointment booking = new com.example.hms.model.Appointment();
+        booking.setId(UUID.randomUUID());
+        booking.setHospital(hospital);
+        booking.setStatus(com.example.hms.enums.AppointmentStatus.SCHEDULED);
+        booking.setAppointmentDate(java.time.LocalDate.now().plusDays(7));
+        return booking;
+    }
+
+    /** Records the death through the service, then lets the repositories find what it closed by id. */
+    private DeathRecord deathClosing(Admission stay, com.example.hms.model.Encounter visit,
+                                     com.example.hms.model.Appointment booking) {
+        when(admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId)).thenReturn(List.of(stay));
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(visit));
+        when(appointmentRepository.findByPatient_IdAndAppointmentDateAfter(any(), any())).thenReturn(List.of(booking));
+        when(admissionRepository.findAllById(List.of(stay.getId()))).thenReturn(List.of(stay));
+        when(encounterRepository.findAllById(List.of(visit.getId()))).thenReturn(List.of(visit));
+        when(appointmentRepository.findAllById(List.of(booking.getId()))).thenReturn(List.of(booking));
+        var captor = org.mockito.ArgumentCaptor.forClass(DeathRecord.class);
+        service.recordDeath(base().build());
+        verify(deathRecordRepository).save(captor.capture());
+        DeathRecord recorded = captor.getValue();
+        recorded.setId(UUID.randomUUID());
+        when(deathRecordRepository.findById(recorded.getId())).thenReturn(Optional.of(recorded));
+        when(roleValidator.isHospitalAdmin(callerUserId, hospitalId)).thenReturn(true);
+        return recorded;
+    }
+
+    private void markInError(DeathRecord recorded) {
+        service.markEnteredInError(recorded.getId(),
+            com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong patient").build());
+    }
+
+    @Test
+    void theDeathKeepsWhatItClosed() {
+        Admission stay = openStayWith(doctorWithUser());
+        var visit = openVisit();
+        var booking = futureBooking();
+
+        DeathRecord recorded = deathClosing(stay, visit, booking);
+
+        assertThat(recorded.getClosedRecords())
+            .containsEntry(DeathRecord.CLOSED_ADMISSIONS, List.of(stay.getId().toString()))
+            .containsEntry(DeathRecord.CLOSED_ENCOUNTERS, List.of(visit.getId().toString()))
+            .containsEntry(DeathRecord.CLOSED_APPOINTMENTS, List.of(booking.getId().toString()));
+        assertThat(stay.getStatus()).isEqualTo(AdmissionStatus.DECEASED);
+    }
+
+    @Test
+    void enteredInErrorFlagsTheStayItClosedEndsItWhenTheClosureRanAndFilesAnUrgentReviewToItsAttending() {
+        Staff attending = doctorWithUser();
+        Admission stay = openStayWith(attending);
+        var visit = openVisit();
+        var booking = futureBooking();
+        DeathRecord recorded = deathClosing(stay, visit, booking);
+        LocalDateTime closedAt = LocalDateTime.now().minusMinutes(10);
+        recorded.setCreatedAt(closedAt);
+        var notices = org.mockito.Mockito.mock(com.example.hms.service.impl.OrderReviewAfterCommit.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "notices", notices);
+
+        markInError(recorded);
+
+        assertThat(stay.getStatus()).isEqualTo(AdmissionStatus.CLOSED_IN_ERROR);
+        assertThat(stay.getActualDischargeDateTime()).isEqualTo(closedAt);
+        assertThat(stay.getLengthOfStayDays()).isNotNull();
+        // The visit stays completed and the appointment cancelled: nothing is reopened (#1068).
+        assertThat(visit.getStatus()).isEqualTo(com.example.hms.enums.EncounterStatus.COMPLETED);
+        assertThat(booking.getStatus()).isEqualTo(com.example.hms.enums.AppointmentStatus.CANCELLED);
+        // In the staff language, as the closure note and the in-basket are.
+        assertThat(booking.getNotes()).contains("Patient deceased").contains("Décès saisi par erreur");
+        var notice = org.mockito.ArgumentCaptor.forClass(com.example.hms.service.impl.OrderReviewAfterCommit.Notice.class);
+        verify(notices).file(notice.capture());
+        assertThat(notice.getValue().hospital()).isEqualTo(hospitalId);
+        assertThat(notice.getValue().patient()).isEqualTo(patientId);
+        assertThat(notice.getValue().recipients()).containsExactly(attending.getUser().getId());
+        assertThat(notice.getValue().referenceType()).isEqualTo("DEATH_ENTERED_IN_ERROR_CLOSURES");
+        assertThat(notice.getValue().titleKey()).isEqualTo("mortality.enteredInError.closures.title");
+        assertThat(notice.getValue().bodyArgs()).hasSize(4);
+        assertThat(String.valueOf(notice.getValue().bodyArgs()[3])).isNotEqualTo("—");
+    }
+
+    @Test
+    void withNoAttendingTheReviewFallsToTheHospitalsDoctors() {
+        Admission stay = openStayWith(null);
+        DeathRecord recorded = deathClosing(stay, openVisit(), futureBooking());
+        var notices = org.mockito.Mockito.mock(com.example.hms.service.impl.OrderReviewAfterCommit.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "notices", notices);
+
+        markInError(recorded);
+
+        var notice = org.mockito.ArgumentCaptor.forClass(com.example.hms.service.impl.OrderReviewAfterCommit.Notice.class);
+        verify(notices).file(notice.capture());
+        // Empty recipients: OrderReviewAfterCommit.file tells the hospital's doctors (OrderReviewAfterCommitTest).
+        assertThat(notice.getValue().recipients()).isEmpty();
+    }
+
+    @Test
+    void aFailureToFileTheReviewNeverUndoesTheEnteredInError() {
+        Admission stay = openStayWith(doctorWithUser());
+        DeathRecord recorded = deathClosing(stay, openVisit(), futureBooking());
+        var notices = org.mockito.Mockito.mock(com.example.hms.service.impl.OrderReviewAfterCommit.class);
+        org.mockito.Mockito.doThrow(new IllegalStateException("in-basket down")).when(notices).file(any());
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "notices", notices);
+
+        markInError(recorded);
+
+        assertThat(recorded.isEnteredInError()).isTrue();
+        assertThat(patient.isDeceased()).isFalse();
+        assertThat(stay.getStatus()).isEqualTo(AdmissionStatus.CLOSED_IN_ERROR);
+    }
+
+    @Test
+    void aRowFromBeforeV281FlagsTheStaysStillDeceasedAtItsHospitalOnly() {
+        DeathRecord legacy = recordedDeath();
+        Admission here = openStayWith(null);
+        here.setStatus(AdmissionStatus.DECEASED);
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        Admission elsewhere = openStayWith(null);
+        elsewhere.setHospital(other);
+        elsewhere.setStatus(AdmissionStatus.DECEASED);
+        Admission discharged = openStayWith(null);
+        discharged.setStatus(AdmissionStatus.DISCHARGED);
+        when(admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId))
+            .thenReturn(List.of(here, elsewhere, discharged));
+
+        markInError(legacy);
+
+        assertThat(here.getStatus()).isEqualTo(AdmissionStatus.CLOSED_IN_ERROR);
+        assertThat(here.getActualDischargeDateTime()).isNotNull();
+        assertThat(elsewhere.getStatus()).isEqualTo(AdmissionStatus.DECEASED);
+        assertThat(discharged.getStatus()).isEqualTo(AdmissionStatus.DISCHARGED);
+    }
+
+    @Test
+    void aRowFromBeforeV281NeverTakesTheClosuresOfALaterRealDeath() {
+        DeathRecord legacy = recordedDeath();
+        markInError(legacy);
+        Admission closedByTheRealDeath = openStayWith(null);
+        closedByTheRealDeath.setStatus(AdmissionStatus.DECEASED);
+        when(admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId)).thenReturn(List.of(closedByTheRealDeath));
+        DeathRecord live = DeathRecord.builder().patient(patient).hospital(hospital)
+            .diedAt(LocalDateTime.now().minusHours(1)).immediateCause("y").build();
+        live.setId(UUID.randomUUID());
+        when(deathRecordRepository.findByPatient_Id(patientId)).thenReturn(Optional.of(live));
+        when(deathRecordRepository.findEnteredInErrorForPatient(patientId, hospitalId)).thenReturn(List.of(legacy));
+
+        assertThat(service.getVoidedClosures(patientId)).isEmpty();
+        assertThat(closedByTheRealDeath.getStatus()).isEqualTo(AdmissionStatus.DECEASED);
+    }
+
+    @Test
+    void theChartReadsWhatAVoidedDeathClosedAtThisHospital() {
+        Admission stay = openStayWith(doctorWithUser());
+        var visit = openVisit();
+        var booking = futureBooking();
+        DeathRecord recorded = deathClosing(stay, visit, booking);
+        markInError(recorded);
+        when(deathRecordRepository.findEnteredInErrorForPatient(patientId, hospitalId)).thenReturn(List.of(recorded));
+
+        var closures = service.getVoidedClosures(patientId);
+
+        assertThat(closures).hasSize(1);
+        assertThat(closures.get(0).deathRecordId()).isEqualTo(recorded.getId());
+        assertThat(closures.get(0).stays()).extracting(s -> s.admissionId()).containsExactly(stay.getId());
+        assertThat(closures.get(0).stays().get(0).closedAt()).isNotNull();
+        assertThat(closures.get(0).visits()).extracting(v -> v.encounterId()).containsExactly(visit.getId());
+        assertThat(closures.get(0).appointments()).extracting(a -> a.appointmentId()).containsExactly(booking.getId());
+        verify(patientChartAccess, org.mockito.Mockito.atLeastOnce()).require(patientId, hospitalId);
+    }
+
     @Test
     void theDeathEventSnapshotsOutstandingOrdersAfterItsCascade() {
         service.recordDeath(base().build());

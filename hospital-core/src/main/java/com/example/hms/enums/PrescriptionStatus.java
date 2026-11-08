@@ -42,6 +42,24 @@ public enum PrescriptionStatus {
     }
 
     /**
+     * QA D1515: whether an order with this status is in force, the one definition every clinical
+     * decision check reads when it asks what else the patient is on (the paracetamol total, the
+     * duplicate check, interactions, the BPA rules). A draft or an order waiting for its signature is a
+     * proposal, not an order: it is judged when it is itself proposed or signed, never as something
+     * the patient already takes. A withdrawn order (CANCELLED, DISCONTINUED) and one a partner pharmacy
+     * rejected are over. Every other status is a signed order: the supply statuses say where the
+     * medicine is, not that the prescriber stopped it. An order past its stated duration or ended with
+     * its stay is not settled here: its status does not say so, and the readers that count it judge
+     * its dates ({@code ParacetamolFactsReader}, the duplicate check's look-back).
+     */
+    public boolean isInForce() {
+        return switch (this) {
+            case DRAFT, PENDING_SIGNATURE, CANCELLED, DISCONTINUED, PARTNER_REJECTED -> false;
+            default -> true;
+        };
+    }
+
+    /**
      * Whether this prescription is still a live authorization a refill can be
      * released against.
      *

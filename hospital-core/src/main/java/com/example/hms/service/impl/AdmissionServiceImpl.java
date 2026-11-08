@@ -60,7 +60,8 @@ public class AdmissionServiceImpl implements AdmissionService {
         java.util.EnumSet.of(com.example.hms.enums.AdmissionStatus.DISCHARGED,
             com.example.hms.enums.AdmissionStatus.CANCELLED,
             com.example.hms.enums.AdmissionStatus.TRANSFERRED,
-            com.example.hms.enums.AdmissionStatus.DECEASED);
+            com.example.hms.enums.AdmissionStatus.DECEASED,
+            com.example.hms.enums.AdmissionStatus.CLOSED_IN_ERROR);
 
 
     /**

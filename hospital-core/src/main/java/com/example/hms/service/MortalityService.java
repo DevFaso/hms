@@ -52,6 +52,12 @@ public interface MortalityService {
     DeathRecordResponseDTO getForPatient(UUID patientId);
 
     /**
+     * QA D1516: what the patient's deaths marked entered in error at the acting hospital had closed (stays, visits,
+     * appointments), for the chart: nothing was reopened, so a clinician readmits or rebooks.
+     */
+    java.util.List<com.example.hms.payload.dto.mortality.VoidedDeathClosuresDTO> getVoidedClosures(UUID patientId);
+
+    /**
      * The register for a period, with maternal (WHO definition), late maternal,
      * perinatal (WHO definition, without late neonatal deaths), stillbirth, early
      * neonatal and late neonatal counts broken out: the numbers the facility is

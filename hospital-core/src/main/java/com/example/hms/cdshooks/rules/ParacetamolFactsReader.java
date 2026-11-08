@@ -45,7 +45,9 @@ import java.util.regex.Pattern;
  * ({@link CrossHospitalRows}), and no hospital at all reads nothing.
  *
  * <p>What "active" means here, since nothing on an order says it is over (proposed for clinician
- * sign-off): not stopped; not past the duration it states, in English, French or Spanish; not ended
+ * sign-off): in force, so signed and not withdrawn (QA D1515: a draft, or one left unsigned after a
+ * refused signature, is a proposal and never adds to the total); not stopped; not past the duration
+ * it states, in English, French or Spanish; not ended
  * with its stay; a one-off only for 24 hours; and an order with no readable duration only for
  * {@link #NO_DURATION_WINDOW}, the window the duplicate-order check already uses, or for as long as
  * it is filed on a stay that is still open. Past that window it is not counted, and it is not
@@ -204,7 +206,7 @@ public class ParacetamolFactsReader {
             return new Orders(List.of(), List.of(), List.of(), List.of());
         }
         List<Prescription> live = prescriptions.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
-            .filter(rx -> rx.getStatus() != null && !CdsRuleEngine.isTerminal(rx.getStatus()))
+            .filter(CdsRuleEngine::inForce)
             .filter(rx -> !rx.getId().equals(editedOrderId))
             .toList();
         List<Prescription> combined = live.stream().filter(rx -> isCombination(rx, paracetamol, combinations)).toList();
@@ -288,7 +290,7 @@ public class ParacetamolFactsReader {
         return rx.getMedicationCode() != null && rx.getMedicationCode().equals(item.getCode());
     }
 
-    /** See the class comment. A draft counts: it is about to be given. */
+    /** See the class comment. Only an order in force reaches here (QA D1515): a draft is a proposal, not an order. */
     private static Running running(Prescription rx, List<Admission> closedStays) {
         if (InpatientOrderEnd.endedWithAStay(rx, closedStays)) {
             return Running.ENDED;

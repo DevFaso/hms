@@ -160,6 +160,7 @@ export class AdmissionsComponent implements OnInit {
     'CANCELLED',
     'TRANSFERRED',
     'DECEASED',
+    'CLOSED_IN_ERROR',
   ];
   readonly summaryMetrics = computed(() => [
     {
@@ -989,6 +990,8 @@ export class AdmissionsComponent implements OnInit {
         return 'status-transferred';
       case 'DECEASED':
         return 'status-deceased';
+      case 'CLOSED_IN_ERROR':
+        return 'status-cancelled';
       case 'CANCELLED':
         return 'status-cancelled';
       case 'ON_LEAVE':

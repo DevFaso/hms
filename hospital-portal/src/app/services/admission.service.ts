@@ -22,7 +22,9 @@ export type AdmissionStatus =
   | 'DISCHARGED'
   | 'CANCELLED'
   | 'TRANSFERRED'
-  | 'DECEASED';
+  | 'DECEASED'
+  /** QA D1516: closed by a death later entered in error; neither a death nor a discharge. */
+  | 'CLOSED_IN_ERROR';
 
 export interface AdmissionResponse {
   id: string;

@@ -160,6 +160,15 @@ export interface DeathDispute {
   statusMessage: string | null;
 }
 
+/** QA D1516: what a death later marked entered in error had closed at this hospital; nothing was reopened. */
+export interface VoidedDeathClosures {
+  deathRecordId: string;
+  enteredInErrorAt: string;
+  stays: { admissionId: string; admittedAt: string; closedAt: string | null }[];
+  visits: { encounterId: string; visitAt: string | null }[];
+  appointments: { appointmentId: string; appointmentDate: string }[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class MortalityService {
   private readonly http = inject(HttpClient);
@@ -197,6 +206,13 @@ export class MortalityService {
 
   getForPatient(patientId: string): Observable<DeathRecordResponse> {
     return this.http.get<DeathRecordResponse>(`${this.baseUrl}/deaths/patient/${patientId}`);
+  }
+
+  /** QA D1516: for the chart. */
+  voidedClosures(patientId: string): Observable<VoidedDeathClosures[]> {
+    return this.http.get<VoidedDeathClosures[]>(
+      `${this.baseUrl}/patients/${patientId}/voided-closures`,
+    );
   }
 
   getRegister(from: string, to: string): Observable<MortalityRegister> {

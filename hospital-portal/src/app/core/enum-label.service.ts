@@ -336,6 +336,7 @@ export class EnumLabelService implements OnDestroy {
       CANCELLED: 'Cancelled',
       TRANSFERRED: 'Transferred',
       DECEASED: 'Deceased',
+      CLOSED_IN_ERROR: 'Closed by a death entered in error',
     },
     bedStatus: {
       AVAILABLE: 'Available',

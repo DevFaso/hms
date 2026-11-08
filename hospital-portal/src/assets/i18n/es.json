@@ -6398,6 +6398,7 @@
         "ACTIVE": "Activo",
         "AWAITING_DISCHARGE": "En espera de alta",
         "CANCELLED": "Cancelado",
+        "CLOSED_IN_ERROR": "Cerrada por un fallecimiento introducido por error",
         "DECEASED": "Fallecido",
         "DISCHARGED": "Dado de alta",
         "ON_LEAVE": "De permiso",
@@ -12314,7 +12315,15 @@
     "ELIGIBILITY_UNKNOWN": "Elegibilidad perinatal sin confirmar",
     "PERINATAL_STILLBIRTH": "Mortinato",
     "PERINATAL_EARLY_NEONATAL": "Neonatal precoz (menos de 7 días cumplidos)",
-    "PERINATAL_LATE_NEONATAL": "Neonatal tardía (de 7 a menos de 28 días cumplidos)"
+    "PERINATAL_LATE_NEONATAL": "Neonatal tardía (de 7 a menos de 28 días cumplidos)",
+    "VOIDED_CLOSURES": {
+      "TITLE": "Un fallecimiento marcado como introducido por error el {{date}} había cerrado la atención aquí",
+      "NOT_REOPENED": "Nada de lo que cerró se reabrió. Si la atención continúa, readmita al paciente o reprograme.",
+      "STAYS": "Estancias que cerró:",
+      "STAY_LINE": "ingreso el {{admitted}}, cerrada el {{closed}}",
+      "VISITS": "Visitas que cerró:",
+      "APPOINTMENTS": "Citas que canceló:"
+    }
   },
   "BED_BOARD": {
     "TITLE": "Tablero de camas",

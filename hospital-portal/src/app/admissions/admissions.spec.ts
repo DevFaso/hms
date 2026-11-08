@@ -613,7 +613,13 @@ describe('AdmissionsComponent', () => {
 
   describe('QA D1428 / D1439', () => {
     it('offers no edit on a closed stay, and one on every open stay', () => {
-      for (const status of ['DISCHARGED', 'CANCELLED', 'TRANSFERRED', 'DECEASED']) {
+      for (const status of [
+        'DISCHARGED',
+        'CANCELLED',
+        'TRANSFERRED',
+        'DECEASED',
+        'CLOSED_IN_ERROR',
+      ]) {
         expect(component.isEditable(adm({ status } as Partial<AdmissionResponse>)))
           .withContext(status)
           .toBeFalse();
@@ -826,7 +832,7 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
   });
 
   // QA D603: a discharged (finalized, billed) stay was deleted from the "Sorti" row.
-  for (const status of ['DISCHARGED', 'TRANSFERRED', 'DECEASED', 'CANCELLED']) {
+  for (const status of ['DISCHARGED', 'TRANSFERRED', 'DECEASED', 'CANCELLED', 'CLOSED_IN_ERROR']) {
     it(`offers no Delete on a ${status} stay, even to a doctor`, () => {
       const el = render(['ROLE_DOCTOR'], status);
       expect(el.querySelector('.delete-link')).toBeNull();

@@ -1,7 +1,6 @@
 package com.example.hms.cdshooks.bpa;
 
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
-import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.ProblemStatus;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientProblem;
@@ -69,17 +68,6 @@ public class BpaRuleEngine {
      * continuous q1min monitoring for 24h with comfortable headroom.
      */
     private static final int VITALS_MAX_PAGES = 20;
-
-    /**
-     * Statuses considered terminal. Anything else (DRAFT, SIGNED,
-     * TRANSMITTED, DISPENSED, etc.) counts as a prescription the patient
-     * could currently be on.
-     */
-    private static final Set<PrescriptionStatus> TERMINAL_PRESCRIPTION_STATUSES = EnumSet.of(
-        PrescriptionStatus.CANCELLED,
-        PrescriptionStatus.DISCONTINUED,
-        PrescriptionStatus.PARTNER_REJECTED
-    );
 
     /** Problem statuses that count as "active" for BPA gating. */
     private static final Set<ProblemStatus> ACTIVE_PROBLEM_STATUSES = EnumSet.of(
@@ -326,7 +314,8 @@ public class BpaRuleEngine {
             ? prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)
             : prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged()).getContent();
         return all.stream()
-            .filter(p -> p.getStatus() != null && !TERMINAL_PRESCRIPTION_STATUSES.contains(p.getStatus()))
+            // QA D1515: the one definition of an order in force; a draft antimalarial is not treatment.
+            .filter(com.example.hms.cdshooks.rules.CdsRuleEngine::inForce)
             .toList();
     }
 }

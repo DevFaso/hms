@@ -31,6 +31,9 @@ class AdultParacetamolGuardTest {
     private static final Path MAIN = Path.of("src/main/java/com/example/hms");
     private static final Path RULE = MAIN.resolve("cdshooks/rules/AdultParacetamolRule.java");
     private static final Path ENGINE = MAIN.resolve("cdshooks/rules/CdsRuleEngine.java");
+    /** QA D1515: a read of a patient's prescriptions, the repository's patient finders, whatever the field is called. */
+    private static final java.util.regex.Pattern PRESCRIPTION_READ =
+        java.util.regex.Pattern.compile("(?i)prescriptions?+(?:Repository)?+\\.findByPatient_Id");
 
     private static List<Path> javaSources() throws IOException {
         try (Stream<Path> walk = Files.walk(MAIN)) {
@@ -86,6 +89,41 @@ class AdultParacetamolGuardTest {
         assertThat(code(MAIN.resolve("service/impl/NurseTaskServiceImpl.java")))
             .contains("TransactionCallbacks.afterCommit(")
             .doesNotContain("lockByIdUnscoped");
+    }
+
+    /**
+     * QA D1515 (class: an "active" list read with a status set of its own, which counted a draft as an
+     * order the patient takes). Every CDS file that reads a patient's prescriptions keeps only the ones
+     * {@code CdsRuleEngine.inForce} keeps, the one reading of {@code PrescriptionStatus.isInForce()}, and
+     * none holds a status set of its own.
+     */
+    @Test
+    void everyCdsReaderOfOrdersCountsOnlyOrdersInForce() throws IOException {
+        Path cds = MAIN.resolve("cdshooks");
+        Set<String> readers = new TreeSet<>();
+        Set<String> ownSets = new TreeSet<>();
+        for (Path source : javaSources()) {
+            if (!source.startsWith(cds)) {
+                continue;
+            }
+            String code = code(source);
+            String name = MAIN.relativize(source).toString().replace('\\', '/');
+            if (code.contains("Set<PrescriptionStatus>") || code.contains("PrescriptionStatus.DRAFT")
+                || code.contains("PrescriptionStatus.CANCELLED")) {
+                ownSets.add(name);
+            }
+            if (PRESCRIPTION_READ.matcher(code).find()) {
+                readers.add(name);
+                assertThat(code).as(name + ": its read of the orders keeps only orders in force")
+                    .contains("CdsRuleEngine::inForce");
+            }
+        }
+        assertThat(ownSets).as("a status set of its own beside PrescriptionStatus.isInForce()").isEmpty();
+        // The three readers: the engine's context, the paracetamol facts and the BPA engine. A new one is checked above.
+        assertThat(readers).containsExactlyInAnyOrder("cdshooks/rules/CdsRuleEngine.java",
+            "cdshooks/rules/ParacetamolFactsReader.java", "cdshooks/bpa/BpaRuleEngine.java");
+        assertThat(code(MAIN.resolve("cdshooks/rules/CdsRuleEngine.java")))
+            .contains("return order != null && order.getStatus() != null && order.getStatus().isInForce();");
     }
 
     @Test
