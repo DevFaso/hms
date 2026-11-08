@@ -8,9 +8,9 @@ History loading and failure are distinct from insufficient history. Late respons
 
 This is frontend pagination over the existing all-pages loader, not new server pagination. No backend, authorization, clinical rule, release, signing or correction policy changes are included.
 
-Validation uses synthetic data and intercepted local APIs only. Screenshots and the local preview gallery are in `C:/dev/hms-qa/designs/lab-results-evolution/`. Browser checks cover French, English and Spanish, desktop/tablet/mobile, pagination, filtering, mixed units, correction markers, history failure and accessibility. Unit coverage includes page changes, filtering, stale history, history failures and numeric/unit/date exclusions.
+Validation uses synthetic data and intercepted local APIs only. Repository screenshots are linked below. Browser checks cover French, English and Spanish, desktop/tablet/mobile, pagination, filtering, mixed units, correction markers, history failure and accessibility. Unit coverage includes page changes, filtering, stale history, history failures and numeric/unit/date exclusions.
 
-Verified: 4,975 frontend tests, 535 script tests, production build, ESLint, formatting, coverage floors, repository guards and translation parity/reference checks passed. The final browser run passed 11 screenshot/accessibility checks with no page errors; desktop rows measured 53px in FR/EN/ES.
+Initial validation, before the follow-up recorded below: 4,975 frontend tests, 535 script tests, production build, ESLint, formatting, coverage floors, repository guards and translation parity/reference checks passed. That browser run passed 11 screenshot/accessibility checks with no page errors; desktop rows measured 53px in FR/EN/ES.
 
 ## Rex review corrections
 

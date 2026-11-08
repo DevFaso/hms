@@ -168,11 +168,14 @@ describe('LabResultsComponent', () => {
 
   it('closes the detail and ignores pending history on hospital scope changes', () => {
     fixture.detectChanges();
-    flushInit();
+    flushInit(Array.from({ length: 21 }, (_, i) => mockResult({ id: `result-${i}` })));
+    component.page.set(3);
+    expect(component.currentPage()).toBe(3);
     component.viewResult(component.results()[0]);
-    const detail = httpMock.expectOne('/lab-results/result-1');
+    const detail = httpMock.expectOne('/lab-results/result-0');
     component.onScopeChange('new-hospital');
     expect(component.selectedResult()).toBeNull();
+    expect(component.currentPage()).toBe(1);
     httpMock
       .expectOne((r) => r.url === '/lab-results')
       .flush({ data: { content: [], totalElements: 0, totalPages: 0, number: 0 } });
@@ -214,6 +217,19 @@ describe('LabResultsComponent', () => {
       .flush({ data: { content: rows, totalElements: rows.length, totalPages: 1, number: 0 } });
     expect(component.currentPage()).toBe(2);
     expect(component.pagedResults()[0].id).toBe('result-10');
+  });
+
+  it('resets the page when changing tabs even when both tabs contain several pages', () => {
+    fixture.detectChanges();
+    flushInit(
+      Array.from({ length: 31 }, (_, i) => mockResult({ id: `result-${i}`, released: true })),
+    );
+    component.page.set(3);
+    expect(component.currentPage()).toBe(3);
+    component.setTab('released');
+    expect(component.pageCount()).toBe(4);
+    expect(component.currentPage()).toBe(1);
+    expect(component.pagedResults()[0].id).toBe('result-0');
   });
 
   it('should create the component', () => {
