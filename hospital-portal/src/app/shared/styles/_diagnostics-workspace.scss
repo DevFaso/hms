@@ -352,6 +352,12 @@
       color: #52677a;
       margin: 0 0 16px;
     }
+    .error-state {
+      color: #a12432;
+      background: #fff4f2;
+      border: 1px solid #ebc0bd;
+      border-radius: 14px;
+    }
     .numeric,
     .result-value {
       font-variant-numeric: tabular-nums;

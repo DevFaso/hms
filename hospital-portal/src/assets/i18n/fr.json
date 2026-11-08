@@ -13237,7 +13237,7 @@
   },
   "DIAGNOSTICS_WORKSPACE": {
     "LABEL": "Espace diagnostic",
-    "LOADED_DEFINITIONS": "définitions sur cette page",
+    "LOADED_DEFINITIONS": "sur cette page",
     "APPROVAL_NOTE": "Examinez chaque définition et ses justificatifs avant de décider.",
     "CONFIG_NOTE": "Versions des tests, types de prélèvement et plages de référence."
   }

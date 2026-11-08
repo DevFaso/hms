@@ -49,6 +49,21 @@ function mockResult(overrides: Record<string, unknown> = {}): Record<string, unk
 }
 
 describe('LabResultsComponent', () => {
+  it('keeps critical severity visible while filter buttons announce their selected state', () => {
+    fixture.detectChanges();
+    flushInit([mockResult({ severityFlag: 'CRITICAL', released: false })]);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const badge = el.querySelector<HTMLElement>('.severity-critical')!;
+    expect(badge).not.toBeNull();
+    expect(getComputedStyle(badge).color).toBe('rgb(153, 27, 27)');
+    const buttons = [...el.querySelectorAll<HTMLButtonElement>('.tabs .tab')];
+    buttons[2].click();
+    fixture.detectChanges();
+    expect(buttons[2].getAttribute('aria-pressed')).toBe('true');
+    expect(buttons[0].getAttribute('aria-pressed')).toBe('false');
+    expect(el.querySelectorAll('.data-table tbody tr').length).toBe(1);
+  });
   let fixture: ComponentFixture<LabResultsComponent>;
   let component: LabResultsComponent;
   let httpMock: HttpTestingController;

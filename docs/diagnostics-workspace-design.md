@@ -2,7 +2,7 @@
 
 The imaging, laboratory orders, laboratory results, definition approval, test configuration, quality-control dashboard and validation queue use a consistent teal workspace. The implementation changes templates and SCSS; services, endpoints, roles, result severity, reference ranges, approval transitions and validation rules are unchanged.
 
-The workspace has clear page headers, grouped filters, readable summary cards, wider tables and keyboard-focusable scrolling areas. The results table keeps its request code and patient column visible at the left. The validation queue preserves urgency, critical indicators, units, provenance and both result/received timestamps. QC sections have distinct table names and retain the existing Levey–Jennings drill-down and calculations.
+The workspace has clear page headers, grouped filters, readable summary cards, wider tables and keyboard-focusable scrolling areas. The results table places the request code and patient columns first. These columns scroll with the table; they are not sticky. The validation queue preserves urgency, critical indicators, units, provenance and both result/received timestamps. QC sections have distinct table names and retain the existing Levey–Jennings drill-down and calculations.
 
 Approval and configuration counts explicitly describe definitions on the current page. Existing order/result/QC counters keep their existing scope and computation. Scope controls and the shared super-admin hospital workspace remain in place; this change does not introduce clinical aggregation or widen write permissions.
 

@@ -13237,7 +13237,7 @@
   },
   "DIAGNOSTICS_WORKSPACE": {
     "LABEL": "Diagnostics workspace",
-    "LOADED_DEFINITIONS": "definitions on this page",
+    "LOADED_DEFINITIONS": "on this page",
     "APPROVAL_NOTE": "Review each definition and its evidence before an approval decision.",
     "CONFIG_NOTE": "Test versions, specimen types and reference ranges in one place."
   }
