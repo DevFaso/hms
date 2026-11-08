@@ -177,14 +177,15 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
      * QA D652 - the paged list across the readable hospitals, less the rows
      * another hospital never sent ({@code NeverSentRule}): a foreign row in
      * {@code unsent} is that hospital's work in progress, and its by-id read
-     * answers 404 here. QA D1537: so is a row withdrawn before anyone signed it
-     * ({@code withdrawnBeforeSigning}). Rows of the acting hospital are kept whatever their status.
+     * answers 404 here. Rows of the acting hospital are kept whatever their status, but for one
+     * withdrawn before anyone signed it ({@code withdrawnBeforeSigning}, QA D1537), which no hospital
+     * lists: it was never an order (the clinician's list showed it as CANCELLED).
      */
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
     @Query(value = "SELECT p FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
-        + " AND (p.hospital.id = :actingHospitalId OR (p.status NOT IN :unsent AND p.withdrawnBeforeSigning = false))",
+        + " AND p.withdrawnBeforeSigning = false AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent)",
         countQuery = "SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
-        + " AND (p.hospital.id = :actingHospitalId OR (p.status NOT IN :unsent AND p.withdrawnBeforeSigning = false))")
+        + " AND p.withdrawnBeforeSigning = false AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent)")
     Page<Prescription> findSentAcrossHospitals(@Param("patientId") UUID patientId,
                                                @Param("hospitalIds") Collection<UUID> hospitalIds,
                                                @Param("actingHospitalId") UUID actingHospitalId,
@@ -225,9 +226,9 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     /** {@link #findSentAcrossHospitals} restricted to a set of statuses (Gap G12). */
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
     @Query(value = "SELECT p FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
-        + " AND (p.hospital.id = :actingHospitalId OR (p.status NOT IN :unsent AND p.withdrawnBeforeSigning = false)) AND p.status IN :statuses",
+        + " AND p.withdrawnBeforeSigning = false AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent) AND p.status IN :statuses",
         countQuery = "SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
-        + " AND (p.hospital.id = :actingHospitalId OR (p.status NOT IN :unsent AND p.withdrawnBeforeSigning = false)) AND p.status IN :statuses")
+        + " AND p.withdrawnBeforeSigning = false AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent) AND p.status IN :statuses")
     Page<Prescription> findSentAcrossHospitalsAndStatusIn(@Param("patientId") UUID patientId,
                                                           @Param("hospitalIds") Collection<UUID> hospitalIds,
                                                           @Param("actingHospitalId") UUID actingHospitalId,

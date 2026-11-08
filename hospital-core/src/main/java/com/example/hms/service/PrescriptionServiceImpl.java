@@ -1645,19 +1645,15 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         UUID requesterUserId = authService.getCurrentUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-        Page<Prescription> rows;
-        if (readable.equals(Set.of(hospitalId))) {
-            rows = filter.isEmpty()
-                ? prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable)
-                : prescriptionRepository.findByPatient_IdAndHospital_IdInAndStatusIn(patientId, readable, filter, pageable);
-        } else {
-            // QA D652: another hospital's never-sent prescription is not listed
-            // here, as its by-id read answers 404 here (NeverSentRule).
-            rows = filter.isEmpty()
-                ? prescriptionRepository.findSentAcrossHospitals(patientId, readable, hospitalId, NEVER_SENT, pageable)
-                : prescriptionRepository.findSentAcrossHospitalsAndStatusIn(
-                    patientId, readable, hospitalId, NEVER_SENT, filter, pageable);
-        }
+        // QA D652: another hospital's never-sent prescription is not listed
+        // here, as its by-id read answers 404 here (NeverSentRule). QA D1537
+        // review: nor any hospital's proposal withdrawn before signing, the
+        // acting hospital's included (it was listed as CANCELLED). One query
+        // for one hospital or several: the acting hospital's rows are kept.
+        Page<Prescription> rows = filter.isEmpty()
+            ? prescriptionRepository.findSentAcrossHospitals(patientId, readable, hospitalId, NEVER_SENT, pageable)
+            : prescriptionRepository.findSentAcrossHospitalsAndStatusIn(
+                patientId, readable, hospitalId, NEVER_SENT, filter, pageable);
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(rows.getContent().stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
             CROSS_HOSPITAL_READ);
@@ -2391,8 +2387,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             UUID requesterUserId = authService.getCurrentUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
             // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
-            List<Prescription> rows = NeverSentRule.prescriptionsReadableHere(
-                prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable), hospitalId);
+            // QA D1537 review: and less any proposal withdrawn before signing.
+            List<Prescription> rows = com.example.hms.service.support.PrescriptionIssuance.withoutDiscardedProposals(
+                NeverSentRule.prescriptionsReadableHere(
+                    prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable), hospitalId));
             reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(rows.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
                 CROSS_HOSPITAL_READ);

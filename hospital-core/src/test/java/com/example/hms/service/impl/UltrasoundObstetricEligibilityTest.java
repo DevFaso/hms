@@ -176,6 +176,25 @@ class UltrasoundObstetricEligibilityTest {
         assertThat(UltrasoundServiceImpl.requireObstetricPatientOnEdit(lowered, edit("ROUTINE"))).isFalse();
     }
 
+    /**
+     * QA D1538 review (round 4): an edit that leaves the priority out keeps the order's own. The request
+     * had a default of ROUTINE, so an edit of a STAT order's time alone read as lowering an emergency.
+     */
+    @Test
+    void anEditOfAStatOrdersTimeAloneKeepsItsPriority() {
+        UltrasoundOrderRequestDTO timeOnly = new UltrasoundOrderRequestDTO();
+        timeOnly.setScheduledTime("10:30");
+        assertThat(timeOnly.getPriority()).as("absent, not ROUTINE").isNull();
+        assertThat(UltrasoundOrderRequestDTO.builder().build().getPriority()).isNull();
+
+        UltrasoundOrder stat = order(patient("MALE", 40), "STAT");
+        stat.setScanType(com.example.hms.enums.UltrasoundScanType.GROWTH_SCAN);
+        stat.setObstetricRuleSkipped(true);
+        assertThatCode(() -> UltrasoundServiceImpl.requireObstetricPatientOnEdit(stat, timeOnly)).doesNotThrowAnyException();
+        assertThat(UltrasoundServiceImpl.requireObstetricPatientOnEdit(stat, timeOnly)).as("still flagged").isTrue();
+        assertThat(UltrasoundServiceImpl.normalisedPriority(timeOnly.getPriority(), null)).as("kept").isNull();
+    }
+
     /** QA D1538 review: the priority is stored normalised; a value that names none is refused on priority. */
     @Test
     void thePriorityIsStoredNormalised() {

@@ -168,7 +168,7 @@ class CrossHospitalListByIdAgreementTest {
     void theListQueryLeavesOutAWithdrawnProposal() throws IOException {
         String repository = read(MAIN.resolve("repository/PrescriptionRepository.java"));
         java.util.regex.Matcher sentQueries = Pattern.compile(
-            "p\\.hospital\\.id = :actingHospitalId OR \\(p\\.status NOT IN :unsent AND p\\.withdrawnBeforeSigning = false\\)")
+            "p\\.withdrawnBeforeSigning = false AND \\(p\\.hospital\\.id = :actingHospitalId OR p\\.status NOT IN :unsent\\)")
             .matcher(repository);
         int found = 0;
         while (sentQueries.find()) {

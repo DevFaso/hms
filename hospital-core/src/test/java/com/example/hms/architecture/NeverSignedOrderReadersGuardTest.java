@@ -148,6 +148,15 @@ class NeverSignedOrderReadersGuardTest {
             .contains("PrescriptionIssuance.withoutDiscardedProposals(");
         assertThat(SourceScan.methodBody(read("service/impl/MedicationHistoryServiceImpl.java"), "getMedicationTimeline"))
             .contains("PrescriptionIssuance.withoutDiscardedProposals(");
+        // QA D1537 review (round 4): the clinician's prescriptions list, paged and unpaged, leaves out a
+        // proposal withdrawn before signing at the acting hospital too.
+        String prescriptions = read("service/PrescriptionServiceImpl.java");
+        assertThat(SourceScan.methodBody(prescriptions, "patientRows"))
+            .contains("findSentAcrossHospitals(").doesNotContain("findByPatient_IdAndHospital_IdIn");
+        assertThat(SourceScan.methodBody(prescriptions, "getPrescriptionsByPatientId"))
+            .contains("PrescriptionIssuance.withoutDiscardedProposals(");
+        assertThat(read("repository/PrescriptionRepository.java"))
+            .contains("p.withdrawnBeforeSigning = false AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent)");
     }
 
     /**
@@ -200,7 +209,7 @@ class NeverSignedOrderReadersGuardTest {
         // QA D1537 review: the builder and the all-args constructor skip the setter; the insert hook
         // derives the fact by the same rule.
         assertThat(SourceScan.methodBody(entity, "deriveWithdrawalFactOnInsert")).contains("carriesIssueEvidence()");
-        assertThat(SourceScan.methodBody(entity, "onInsert")).contains("deriveWithdrawalFactOnInsert()");
+        assertThat(SourceScan.methodBody(entity, "prescriptionOnInsert")).contains("deriveWithdrawalFactOnInsert()");
         assertThat(SourceScan.methodBody(entity, "setStatus")).contains("carriesIssueEvidence()");
         List<String> writers = new ArrayList<>();
         try (Stream<Path> files = Files.walk(ROOT)) {

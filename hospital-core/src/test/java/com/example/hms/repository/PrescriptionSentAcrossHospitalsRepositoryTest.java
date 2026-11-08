@@ -181,6 +181,27 @@ class PrescriptionSentAcrossHospitalsRepositoryTest {
         return em.persist(p);
     }
 
+    /**
+     * QA D1537 review (round 4): Prescription's update callback overrode BaseEntity.onUpdate (same name,
+     * same package), so updatedAt stopped moving on an update and the FHIR _since exports missed changes.
+     */
+    @Test
+    @DisplayName("QA D1537 review: an update moves updatedAt (BaseEntity's callback still runs)")
+    void anUpdateMovesUpdatedAt() {
+        java.time.LocalDateTime before = em.find(Prescription.class, signedAtA.getId()).getUpdatedAt();
+        em.getEntityManager().createQuery("UPDATE Prescription p SET p.updatedAt = :past WHERE p.id = :id")
+            .setParameter("past", java.time.LocalDateTime.now().minusDays(3)).setParameter("id", signedAtA.getId())
+            .executeUpdate();
+        em.clear();
+        Prescription loaded = em.find(Prescription.class, signedAtA.getId());
+        java.time.LocalDateTime stale = loaded.getUpdatedAt();
+        loaded.setNotes("edited");
+        em.flush();
+        em.clear();
+        assertThat(before).isNotNull();
+        assertThat(em.find(Prescription.class, signedAtA.getId()).getUpdatedAt()).isAfter(stale);
+    }
+
     @Test
     @DisplayName("QA D1537 review: a builder-made CANCELLED draft is flagged when it is inserted")
     void aBuilderMadeWithdrawnDraftIsFlaggedOnInsert() {
@@ -208,7 +229,8 @@ class PrescriptionSentAcrossHospitalsRepositoryTest {
 
         Page<Prescription> atA = prescriptionRepository.findSentAcrossHospitals(patient.getId(),
             Set.of(hospital.getId(), otherHospital.getId()), hospital.getId(), NEVER_SENT, PageRequest.of(0, 20));
-        assertThat(ids(atA)).contains(discardedAtA.getId(), stoppedAtA.getId());
+        // QA D1537 review (round 4): the acting hospital's own discarded draft is no longer listed either.
+        assertThat(ids(atA)).contains(stoppedAtA.getId()).doesNotContain(discardedAtA.getId());
     }
 
     @Test

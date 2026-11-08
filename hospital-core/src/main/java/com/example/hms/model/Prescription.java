@@ -549,8 +549,13 @@ public class Prescription extends BaseEntity {
      * issued, unless it carries the evidence it was ({@link #carriesIssueEvidence}): the same rule as
      * the setter, applied on insert.
      */
+    /**
+     * Named apart from BaseEntity's callbacks (onCreate, onUpdate): a package-private method of the
+     * same name here would override them, and createdAt/updatedAt would stop being stamped
+     * ({@code EntityCallbackShadowingGuardTest}).
+     */
     @PrePersist
-    void onInsert() {
+    void prescriptionOnInsert() {
         deriveWithdrawalFactOnInsert();
         validate();
     }
@@ -564,7 +569,7 @@ public class Prescription extends BaseEntity {
     }
 
     @PreUpdate
-    void onUpdate() {
+    void prescriptionOnUpdate() {
         validate();
     }
 

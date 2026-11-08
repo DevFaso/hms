@@ -101,6 +101,10 @@ export type PrescriptionStatusTab = Exclude<PrescriptionTab, 'all'>;
 const DOSE_REVIEW_REASON_ID = 'rx-dose-review-reason';
 
 /** CANCELLED and DISCONTINUED: the prescriber withdrew the order, which the server treats as final. */
+export function isWithdrawnStatus(status: string | null | undefined): boolean {
+  return status === 'CANCELLED' || status === 'DISCONTINUED';
+}
+
 /**
  * QA D1537 review (round 40): a status a signature led to: not a proposal (DRAFT,
  * PENDING_SIGNATURE) and not withdrawn. The server's rule for refusing a return to a proposal
@@ -110,10 +114,6 @@ export function isIssuedStatus(status: string | null | undefined): boolean {
   return (
     !!status && status !== 'DRAFT' && status !== 'PENDING_SIGNATURE' && !isWithdrawnStatus(status)
   );
-}
-
-export function isWithdrawnStatus(status: string | null | undefined): boolean {
-  return status === 'CANCELLED' || status === 'DISCONTINUED';
 }
 
 export const ATTENTION_REASONS: readonly { status: string; labelKey: string }[] = [

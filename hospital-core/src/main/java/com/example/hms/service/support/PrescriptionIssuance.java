@@ -31,7 +31,7 @@ public final class PrescriptionIssuance {
 
     /** A draft and an order waiting for its signature: proposals, never issued (QA D101, D152, D652). */
     public static final List<PrescriptionStatus> PROPOSALS =
-        List.of(PrescriptionStatus.DRAFT, PrescriptionStatus.PENDING_SIGNATURE);
+        java.util.Arrays.stream(PrescriptionStatus.values()).filter(PrescriptionStatus::isProposal).toList();
 
     private PrescriptionIssuance() {
     }

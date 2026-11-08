@@ -893,13 +893,17 @@ class PrescriptionServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId));
-        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId), pageable)).thenReturn(page);
+        // QA D1537 review: one query for one hospital or several, leaving out a proposal withdrawn
+        // before signing at the acting hospital too.
+        when(prescriptionRepository.findSentAcrossHospitals(patientId, Set.of(hospitalId), hospitalId,
+            PrescriptionServiceImpl.NEVER_SENT, pageable)).thenReturn(page);
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(dto);
 
         Page<PrescriptionResponseDTO> result = prescriptionService.list(patientId, null, null, null, pageable, Locale.ENGLISH);
 
         assertThat(result.getContent()).containsExactly(dto);
-        verify(prescriptionRepository).findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId), pageable);
+        verify(prescriptionRepository).findSentAcrossHospitals(patientId, Set.of(hospitalId), hospitalId,
+            PrescriptionServiceImpl.NEVER_SENT, pageable);
         verify(prescriptionRepository, never()).findAll(any(Pageable.class));
     }
 
@@ -3358,8 +3362,8 @@ class PrescriptionServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospId))).thenReturn(Set.of(hospId));
-        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospId), pageable))
-            .thenReturn(Page.empty());
+        when(prescriptionRepository.findSentAcrossHospitals(patientId, Set.of(hospId), hospId,
+            PrescriptionServiceImpl.NEVER_SENT, pageable)).thenReturn(Page.empty());
 
         Page<PrescriptionResponseDTO> result = prescriptionService.list(patientId, null, null, null, pageable, Locale.ENGLISH);
         assertThat(result).isEmpty();
@@ -3461,12 +3465,12 @@ class PrescriptionServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospId))).thenReturn(Set.of(hospId));
-        when(prescriptionRepository.findByPatient_IdAndHospital_IdInAndStatusIn(
-                patientId, Set.of(hospId), statuses, pageable)).thenReturn(Page.empty());
+        when(prescriptionRepository.findSentAcrossHospitalsAndStatusIn(
+                patientId, Set.of(hospId), hospId, PrescriptionServiceImpl.NEVER_SENT, statuses, pageable)).thenReturn(Page.empty());
 
         assertThat(prescriptionService.list(patientId, null, null, statuses, pageable, Locale.ENGLISH)).isEmpty();
         verify(prescriptionRepository)
-            .findByPatient_IdAndHospital_IdInAndStatusIn(patientId, Set.of(hospId), statuses, pageable);
+            .findSentAcrossHospitalsAndStatusIn(patientId, Set.of(hospId), hospId, PrescriptionServiceImpl.NEVER_SENT, statuses, pageable);
     }
 
     @Test

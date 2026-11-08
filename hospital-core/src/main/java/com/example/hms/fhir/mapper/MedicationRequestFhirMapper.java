@@ -119,6 +119,8 @@ public class MedicationRequestFhirMapper {
             case DRAFT, PENDING_SIGNATURE -> MedicationRequest.MedicationRequestStatus.DRAFT;
             case CANCELLED -> MedicationRequest.MedicationRequestStatus.CANCELLED;
             case DISCONTINUED -> MedicationRequest.MedicationRequestStatus.STOPPED;
+            // PARTNER_REJECTED means "held for review" after a partner's refusal or a recall: on-hold
+            // for now (whether it is stopped or cancelled is standing debt, tasklist.md round 40).
             case TRANSMISSION_FAILED, PENDING_CLARIFICATION, PARTNER_REJECTED ->
                 MedicationRequest.MedicationRequestStatus.ONHOLD;
             case SIGNED, TRANSMITTED, PARTIALLY_FILLED, PENDING_STOCK, SENT_TO_PARTNER, PARTNER_ACCEPTED,
