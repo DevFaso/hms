@@ -258,12 +258,12 @@ class UltrasoundReportFindingsTest {
             for (int bad : new int[] {-1, 9}) {
                 assertThat(validator.validate(base().numberOfFetuses(bad).findingCategory(UltrasoundFindingCategory.NORMAL).build()))
                         .as("fetuses " + bad)
-                        .anySatisfy(v -> assertThat(v.getPropertyPath().toString()).isEqualTo("numberOfFetuses"));
+                        .anySatisfy(v -> assertThat(v.getPropertyPath()).hasToString("numberOfFetuses"));
             }
             for (int ok : new int[] {0, 1, 2, 8}) {
                 assertThat(validator.validate(base().numberOfFetuses(ok).findingCategory(UltrasoundFindingCategory.NORMAL).build()))
                         .as("fetuses " + ok)
-                        .noneSatisfy(v -> assertThat(v.getPropertyPath().toString()).isEqualTo("numberOfFetuses"));
+                        .noneSatisfy(v -> assertThat(v.getPropertyPath()).hasToString("numberOfFetuses"));
             }
         }
         assertThat(java.util.ResourceBundle.getBundle("i18n/messages-lab", java.util.Locale.FRENCH)
@@ -273,11 +273,13 @@ class UltrasoundReportFindingsTest {
     /** QA D1525 review: an absent nasal bone contradicts NORMAL; absent movement deliberately does not. */
     @Test
     void anAbsentNasalBoneContradictsNormalButAbsentMovementDoesNot() {
-        assertThatThrownBy(() -> UltrasoundServiceImpl.requireCategoryMatchesObservations(
-                base().nasalBonePresent(false).findingCategory(UltrasoundFindingCategory.NORMAL).build()))
+        UltrasoundReportRequestDTO noNasalBone =
+                base().nasalBonePresent(false).findingCategory(UltrasoundFindingCategory.NORMAL).build();
+        UltrasoundReportRequestDTO noMovement =
+                base().fetalMovementObserved(false).findingCategory(UltrasoundFindingCategory.NORMAL).build();
+        assertThatThrownBy(() -> UltrasoundServiceImpl.requireCategoryMatchesObservations(noNasalBone))
                 .isInstanceOf(FieldBusinessException.class);
-        assertThatCode(() -> UltrasoundServiceImpl.requireCategoryMatchesObservations(
-                base().fetalMovementObserved(false).findingCategory(UltrasoundFindingCategory.NORMAL).build()))
+        assertThatCode(() -> UltrasoundServiceImpl.requireCategoryMatchesObservations(noMovement))
                 .doesNotThrowAnyException();
     }
 }
