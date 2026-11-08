@@ -1,6 +1,10 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <p class="workspace-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">swap_vert</span
+        ><span>{{ 'PHARMACY_WORKSPACE.LABEL' | translate }}</span>
+      </p>
       <h1 class="page-title">{{ 'PHARMACY.STOCK_ADJUSTMENT_TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'PHARMACY.STOCK_ADJUSTMENT_SUBTITLE' | translate }}</p>
     </div>
@@ -351,6 +355,13 @@
     </div>
   }
 
+  <div class="workspace-strip">
+    <p>
+      <strong>{{ txLoading() ? '—' : transactions().length }}</strong
+      ><span>{{ 'PHARMACY_WORKSPACE.LOADED_MOVEMENTS' | translate }}</span>
+    </p>
+    <p>{{ 'PHARMACY_WORKSPACE.STOCK_HINT' | translate }}</p>
+  </div>
   <!-- Filter -->
   <div class="filter-bar">
     <label for="txFilterType"
@@ -371,7 +382,12 @@
       <p>{{ 'COMMON.LOADING' | translate }}</p>
     </div>
   } @else if (transactions().length > 0) {
-    <div class="table-wrapper">
+    <div
+      class="table-wrapper"
+      tabindex="0"
+      role="region"
+      [attr.aria-label]="'PHARMACY.STOCK_ADJUSTMENT_TITLE' | translate"
+    >
       <table class="data-table">
         <thead>
           <tr>
@@ -403,7 +419,7 @@
                   —
                 }
               </td>
-              <td class="reason-cell">{{ reasonLabel(tx) }}</td>
+              <td class="reason-cell" [title]="reasonLabel(tx)">{{ reasonLabel(tx) }}</td>
               <td>{{ tx.createdAt | serverTime | dateTime }}</td>
               <td>
                 {{ tx.performedByName | dash }}

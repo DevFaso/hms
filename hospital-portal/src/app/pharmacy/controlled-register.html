@@ -1,6 +1,10 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <p class="workspace-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">lock</span
+        ><span>{{ 'PHARMACY_WORKSPACE.LABEL' | translate }}</span>
+      </p>
       <h1 class="page-title">{{ 'PHARMACY.REGISTER_TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'PHARMACY.REGISTER_SUBTITLE' | translate }}</p>
     </div>
@@ -100,7 +104,7 @@
       }
       @for (drug of reg.drugs; track drug.inventoryItemId) {
         <section class="drug-card" [attr.data-testid]="'register-drug-' + drug.inventoryItemId">
-          <h2>
+          <h2 [id]="'register-drug-title-' + drug.inventoryItemId">
             {{ drug.medicationName }}
             @if (drug.unit) {
               <span class="muted">({{ drug.unit }})</span>
@@ -128,7 +132,12 @@
           @if (drug.entries.length === 0) {
             <p class="muted">{{ 'PHARMACY.REGISTER_NO_MOVEMENT' | translate }}</p>
           } @else {
-            <div class="table-scroll">
+            <div
+              class="table-scroll"
+              tabindex="0"
+              role="region"
+              [attr.aria-labelledby]="'register-drug-title-' + drug.inventoryItemId"
+            >
               <table class="data-table">
                 <thead>
                   <tr>

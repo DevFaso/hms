@@ -180,4 +180,34 @@ describe('PharmacyCheckoutComponent (QA D264)', () => {
       option?.textContent?.indexOf('Paracétamol') ?? 0,
     );
   });
+
+  it('exposes the current lookup/payment step and hides steps on the receipt', () => {
+    const c = create(2250);
+    fixture.detectChanges();
+    c.pickDispense('d-1');
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelectorAll('.workspace-steps [aria-current="step"]').length).toBe(1);
+    expect(
+      el.querySelector('.workspace-steps li:nth-child(2)')?.classList.contains('current'),
+    ).toBeTrue();
+    expect(el.querySelector('.workspace-steps li:nth-child(2)')?.getAttribute('aria-current')).toBe(
+      'step',
+    );
+    c.reset();
+    fixture.detectChanges();
+    expect(el.querySelector('.workspace-steps li:first-child')?.getAttribute('aria-current')).toBe(
+      'step',
+    );
+    c.pickDispense('d-1');
+    svc.createPayment.and.returnValue(
+      of({
+        data: { id: 'pay-fixture', amount: 2250, currency: 'XOF', paymentMethod: 'CASH' },
+      }) as never,
+    );
+    c.submit();
+    fixture.detectChanges();
+    expect(el.querySelector('.workspace-steps')).toBeNull();
+    expect(el.querySelector('.receipt')).not.toBeNull();
+  });
 });

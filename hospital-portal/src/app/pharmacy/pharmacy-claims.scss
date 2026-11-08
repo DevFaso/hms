@@ -1,3 +1,4 @@
+@use './operations-workspace' as operations;
 .claims {
   padding: 1.25rem;
 
@@ -90,4 +91,47 @@
       color: #5b21b6;
     }
   }
+}
+
+@include operations.workspace;
+
+.claim-status-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.claims .claim-status-tabs button {
+  min-height: 36px;
+  padding: 7px 12px;
+  border-radius: 999px;
+}
+.claims .claim-status-tabs button[aria-pressed='true'] {
+  background: #08796c;
+  color: white;
+  border-color: #08796c;
+}
+.claims-empty h2 {
+  font-size: 17px;
+  color: #244259;
+}
+.claims-empty p {
+  font-size: 13px;
+}
+
+// Keep the compact select for narrow screens and quick status chips on desktop.
+@media (min-width: 721px) {
+  .claims .filter {
+    display: none;
+  }
+}
+@media (max-width: 720px) {
+  .claims .claim-status-tabs {
+    display: none;
+  }
+}
+.claims__table td.actions {
+  display: table-cell;
+}
+.claims__table td.actions button + button {
+  margin-left: 6px;
 }

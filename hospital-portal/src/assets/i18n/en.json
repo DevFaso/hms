@@ -13240,5 +13240,18 @@
     "LOADED_DEFINITIONS": "on this page",
     "APPROVAL_NOTE": "Review each definition and its evidence before an approval decision.",
     "CONFIG_NOTE": "Test versions, specimen types and reference ranges in one place."
+  },
+  "PHARMACY_WORKSPACE": {
+    "LABEL": "Pharmacy workspace",
+    "CLAIMS_SUBTITLE": "Track claims, decisions and reimbursements.",
+    "LOADED_CLAIMS": "claims loaded",
+    "CLAIMS_NONE_HINT": "No claims yet. Refresh the list to check for new claims.",
+    "CLAIMS_EMPTY_HINT": "No claims for this filter. Change the status or refresh the list.",
+    "LOADED_MOVEMENTS": "movements loaded for this filter",
+    "STOCK_HINT": "Review the lot, reason and author of each movement.",
+    "LOADED_QUEUE": "prescriptions on this queue page",
+    "DISPENSE_HINT": "Check the patient, medication and quantity before handover.",
+    "ROUTING_DECISION": "Choose a routing option",
+    "VISIBLE_INTERACTIONS": "interactions matching the filters"
   }
 }
