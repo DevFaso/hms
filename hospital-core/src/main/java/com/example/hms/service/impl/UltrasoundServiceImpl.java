@@ -1,6 +1,5 @@
 package com.example.hms.service.impl;
 
-import com.example.hms.service.maternity.LegacyUltrasoundDefaults;
 import com.example.hms.enums.UltrasoundOrderStatus;
 import com.example.hms.enums.UltrasoundScanType;
 import com.example.hms.exception.BusinessException;
@@ -391,10 +390,12 @@ public class UltrasoundServiceImpl implements UltrasoundService {
 
     /**
      * QA D1525: a report cannot read NORMAL while it states absent cardiac
-     * activity, an abnormal fetal tone, detected anomalies, an absent nasal
-     * bone (a recognised soft marker) or no fetus seen. Refused on the category, which the
-     * clinician corrects. Absent fetal movement is deliberately NOT a
-     * contradiction: on a single scan it can be normal (a resting fetus).
+     * activity, an abnormal fetal tone, detected anomalies or no fetus seen.
+     * Refused on the category, which the clinician corrects. Deliberately NOT
+     * contradictions: absent fetal movement (it can be normal on a single scan,
+     * a resting fetus) and an absent nasal bone (an isolated absent or
+     * hypoplastic nasal bone occurs in euploid fetuses, more often in
+     * African-descent populations; no clinician approved a hard rule).
      */
     static void requireCategoryMatchesObservations(UltrasoundReportRequestDTO request) {
         if (request.getFindingCategory() != com.example.hms.enums.UltrasoundFindingCategory.NORMAL) {
@@ -403,7 +404,6 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         if (Boolean.FALSE.equals(request.getFetalCardiacActivity())
                 || Boolean.FALSE.equals(request.getFetalToneNormal())
                 || Boolean.TRUE.equals(request.getAnomaliesDetected())
-                || Boolean.FALSE.equals(request.getNasalBonePresent())
                 || Integer.valueOf(0).equals(request.getNumberOfFetuses())) {
             throw new com.example.hms.exception.FieldBusinessException("findingCategory",
                 "ultrasound.report.normalContradictsObservation");
@@ -411,13 +411,22 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     }
 
     /**
-     * QA D1525 review: no fetus seen contradicts cardiac activity or fetal
-     * movement present. Refused on the fetus count.
+     * QA D1525 review: no fetus seen contradicts a sign of a fetus: cardiac
+     * activity or fetal movement present, a fetal heart rate, any fetal
+     * biometry (BPD, HC, AC, FL, CRL) or an estimated fetal weight. Refused on
+     * the fetus count.
      */
     static void requireFetusCountMatchesObservations(UltrasoundReportRequestDTO request) {
-        if (Integer.valueOf(0).equals(request.getNumberOfFetuses())
-                && (Boolean.TRUE.equals(request.getFetalCardiacActivity())
-                    || Boolean.TRUE.equals(request.getFetalMovementObserved()))) {
+        if (!Integer.valueOf(0).equals(request.getNumberOfFetuses())) {
+            return;
+        }
+        boolean signOfAFetus = Boolean.TRUE.equals(request.getFetalCardiacActivity())
+                || Boolean.TRUE.equals(request.getFetalMovementObserved())
+                || java.util.stream.Stream.of(request.getFetalHeartRate(), request.getBiparietalDiameterMm(),
+                    request.getHeadCircumferenceMm(), request.getAbdominalCircumferenceMm(),
+                    request.getFemurLengthMm(), request.getCrownRumpLengthMm(),
+                    request.getEstimatedFetalWeightGrams()).anyMatch(java.util.Objects::nonNull);
+        if (signOfAFetus) {
             throw new com.example.hms.exception.FieldBusinessException("numberOfFetuses",
                 "ultrasound.report.noFetusContradictsObservation");
         }
@@ -442,11 +451,8 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         if (report != null && Boolean.TRUE.equals(report.getReportReviewedByProvider())) {
             throw new BusinessException("ultrasound.report.reviewedNoEdit");
         }
-        // QA D1525: on a legacy row (existed before V282), values equal to an old
-        // default are unknown unless the client says it states them; cleared
-        // first, so the checks below never count what will read back as unknown.
-        LegacyUltrasoundDefaults.clearEchoedDefaults(report, request);
-        // The empty report is refused first, then the category is asked for.
+        // QA D1525: the empty report is refused first, then the category is
+        // asked for, then the contradictions - the portal runs the same order.
         requireReportFindings(request);
         requireFindingCategory(request);
         requireCategoryMatchesObservations(request);
@@ -461,12 +467,9 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             ultrasoundMapper.updateReportFromRequest(report, request);
         }
 
-        // QA D1525: a new report is stated (entity default). A legacy row
-        // becomes stated only when the client says it showed the old defaults
-        // as unknown and the clinician answered; a stated row stays stated.
-        if (LegacyUltrasoundDefaults.legacy(report) && Boolean.TRUE.equals(request.getObservationsStated())) {
-            report.setObservationsStated(Boolean.TRUE);
-        }
+        // QA D1525: any save states the observations. V282 already removed a
+        // legacy row's old defaults, so nothing ambiguous can be echoed back.
+        report.setObservationsStated(Boolean.TRUE);
 
         // Update order status
         if (order.getStatus() == UltrasoundOrderStatus.ORDERED || order.getStatus() == UltrasoundOrderStatus.SCHEDULED) {

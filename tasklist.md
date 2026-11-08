@@ -6388,4 +6388,6 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 
 ## Standing debt — D1525 (fix/d1525-review-followups)
 
-- **D1525, legacy gestational age (Low):** on a report that existed before V282, the template's gestational age (12 or 20 weeks) reads as unknown only while the row keeps the whole template signature (no days, every text blank, no biometry, no heart rate, the flags at their defaults). A legacy row whose template age was kept while other fields were typed shows that age as stated; the stored data cannot tell it from a typed 12 or 20 (`LegacyUltrasoundDefaults.gestationalAgeAtScan`).
+- **D1525, legacy gestational age (Low):** V282 sets a legacy report's gestational age to NULL only while the whole template signature holds (12 or 20 weeks, no days, every text blank, no biometry, no heart rate, the flags at their defaults). A legacy row whose template age was kept while other fields were typed keeps that age; the stored data cannot tell it from a typed 12 or 20.
+- **D1525, legacy category NORMAL (Low):** V282 keeps `finding_category` NORMAL on a legacy report (NOT NULL column, usually a deliberate choice), although the old form preselected NORMAL. Clinicians reading old reports should know it may be the old preselection.
+- **D1525, nasal bone (clinical decision):** an absent nasal bone does NOT contradict NORMAL (an isolated absent or hypoplastic nasal bone occurs in euploid fetuses, more often in African-descent populations). Whether to warn, never block, is for a clinician.

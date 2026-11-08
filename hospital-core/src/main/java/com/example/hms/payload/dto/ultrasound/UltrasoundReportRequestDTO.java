@@ -32,15 +32,6 @@ public class UltrasoundReportRequestDTO extends UltrasoundReportBaseDTO {
      */
     private UltrasoundFindingCategory findingCategory;
 
-    /**
-     * QA D1525: read only on the edit of a LEGACY report (one that existed
-     * before V282). TRUE says the client showed that report's old defaults as
-     * unknown and the clinician answered: the values are taken as stated and
-     * the row becomes stated. Without it, values equal to an old default are
-     * treated as unknown. Ignored on create (always stated) and on a stated row.
-     */
-    private Boolean observationsStated;
-
     // Report finalization
     private Boolean reportFinalized;
 

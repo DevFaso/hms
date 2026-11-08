@@ -10897,7 +10897,7 @@
     "FLAG_FETAL_TONE": "Fetal tone",
     "ANOMALIES_YES": "Anomalies detected",
     "ANOMALIES_NO": "No anomaly seen",
-    "NORMAL_CONTRADICTS_OBSERVATION": "A NORMAL finding contradicts what this report states (no cardiac activity, abnormal fetal tone, anomalies detected, an absent nasal bone or no fetus seen): choose the category that matches.",
+    "NORMAL_CONTRADICTS_OBSERVATION": "A NORMAL finding contradicts what this report states (no cardiac activity, abnormal fetal tone, anomalies detected or no fetus seen): choose the category that matches.",
     "FLAG_CARDIAC_PRESENT": "Present",
     "FLAG_CARDIAC_ABSENT": "Absent",
     "FLAG_CARDIAC_NOT_ASSESSED": "Not assessed",
@@ -10916,7 +10916,7 @@
     "NASAL_BONE_PRESENT": "Present",
     "NASAL_BONE_ABSENT": "Absent",
     "NASAL_BONE_NOT_ASSESSED": "Not assessed",
-    "NO_FETUS_CONTRADICTS_OBSERVATION": "No fetus seen contradicts cardiac activity or fetal movement present: correct the count or the observations."
+    "NO_FETUS_CONTRADICTS_OBSERVATION": "No fetus seen contradicts what this report states (cardiac activity or fetal movement present, a fetal heart rate, a fetal measurement or an estimated fetal weight): correct the count or the observations."
   },
   "BIRTH_PLAN": {
     "TITLE": "Birth plan",

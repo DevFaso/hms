@@ -8,7 +8,6 @@ import com.example.hms.payload.dto.ultrasound.UltrasoundOrderRequestDTO;
 import com.example.hms.payload.dto.ultrasound.UltrasoundOrderResponseDTO;
 import com.example.hms.payload.dto.ultrasound.UltrasoundReportRequestDTO;
 import com.example.hms.payload.dto.ultrasound.UltrasoundReportResponseDTO;
-import com.example.hms.service.maternity.LegacyUltrasoundDefaults;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -152,8 +151,7 @@ public class UltrasoundMapper {
             .scanDate(report.getScanDate())
             .scanPerformedBy(report.getScanPerformedBy())
             .scanPerformedByCredentials(report.getScanPerformedByCredentials())
-            // QA D1525: a row not marked as stated reads its old defaults as unknown
-            .gestationalAgeAtScan(LegacyUltrasoundDefaults.gestationalAgeAtScan(report))
+            .gestationalAgeAtScan(report.getGestationalAgeAtScan())
             .gestationalAgeDays(report.getGestationalAgeDays())
             // First trimester measurements
             .nuchalTranslucencyMm(report.getNuchalTranslucencyMm())
@@ -163,7 +161,7 @@ public class UltrasoundMapper {
             .estimatedDueDate(report.getEstimatedDueDate())
             .dueDateConfirmed(report.getDueDateConfirmed())
             // Fetal count and position
-            .numberOfFetuses(LegacyUltrasoundDefaults.numberOfFetuses(report))
+            .numberOfFetuses(report.getNumberOfFetuses())
             .fetalPosition(report.getFetalPosition())
             // Second trimester measurements
             .biparietalDiameterMm(report.getBiparietalDiameterMm())
@@ -183,17 +181,17 @@ public class UltrasoundMapper {
             .uterineArteryDoppler(report.getUterineArteryDoppler())
             // Fetal well-being
             .fetalHeartRate(report.getFetalHeartRate())
-            .fetalCardiacActivity(LegacyUltrasoundDefaults.flag(report, report.getFetalCardiacActivity()))
-            .fetalMovementObserved(LegacyUltrasoundDefaults.flag(report, report.getFetalMovementObserved()))
-            .fetalToneNormal(LegacyUltrasoundDefaults.flag(report, report.getFetalToneNormal()))
+            .fetalCardiacActivity(report.getFetalCardiacActivity())
+            .fetalMovementObserved(report.getFetalMovementObserved())
+            .fetalToneNormal(report.getFetalToneNormal())
             // Anatomy
             .anatomySurveyComplete(report.getAnatomySurveyComplete())
             .anatomyFindings(report.getAnatomyFindings())
             // Findings
-            .findingCategory(LegacyUltrasoundDefaults.findingCategory(report))
+            .findingCategory(report.getFindingCategory())
             .findingsSummary(report.getFindingsSummary())
             .interpretation(report.getInterpretation())
-            .anomaliesDetected(LegacyUltrasoundDefaults.anomaliesDetected(report))
+            .anomaliesDetected(report.getAnomaliesDetected())
             .anomalyDescription(report.getAnomalyDescription())
             // Genetic screening
             .geneticScreeningRecommended(report.getGeneticScreeningRecommended())
@@ -210,7 +208,8 @@ public class UltrasoundMapper {
             .reportReviewedByProvider(report.getReportReviewedByProvider())
             .providerReviewNotes(report.getProviderReviewNotes())
             .patientNotified(report.getPatientNotified())
-            .observationsStated(!LegacyUltrasoundDefaults.legacy(report))
+            // QA D1525: display only (a null on a legacy row reads "no answer", on a stated row "not assessed")
+            .observationsStated(!Boolean.FALSE.equals(report.getObservationsStated()))
             .patientNotifiedAt(report.getPatientNotifiedAt())
             .createdAt(report.getCreatedAt())
             .updatedAt(report.getUpdatedAt())

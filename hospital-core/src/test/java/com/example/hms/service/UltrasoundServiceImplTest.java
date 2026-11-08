@@ -557,14 +557,12 @@ class UltrasoundServiceImplTest {
     }
 
     /**
-     * QA D1525 review: on a LEGACY row (existed before V282) a client that does
-     * not say it states the observations has its echoed old defaults (true
-     * flags, "no anomalies", one fetus, NORMAL) treated as unknown: they are
-     * neither counted nor stored, NORMAL must be chosen again, and the row stays
-     * legacy. The D1525 portal (observationsStated=true) makes it stated.
+     * QA D1525 review: V282 removed a legacy row's old defaults, so any save of
+     * it, through any client, takes the values sent as stated and marks the row
+     * stated. Nothing is masked or cleared on the way.
      */
     @Test
-    void createOrUpdateReport_aStaleClientEchoingLegacyDefaultsDoesNotStampThemAsStated() {
+    void createOrUpdateReport_anySaveOfALegacyRowMakesItStatedWithTheValuesSent() {
         UltrasoundOrder order = new UltrasoundOrder();
         order.setId(orderId);
         order.setHospital(hospital);
@@ -574,54 +572,55 @@ class UltrasoundServiceImplTest {
         legacy.setHospital(hospital);
         legacy.setReportReviewedByProvider(false);
         legacy.setObservationsStated(false);
+        UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now())
+            .fetalCardiacActivity(true).anomaliesDetected(false).numberOfFetuses(1)
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
+            .build();
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
         when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.of(legacy));
-
-        // Only echoed defaults: they will read back as unknown, so they are no finding.
-        UltrasoundReportRequestDTO onlyDefaults = UltrasoundReportRequestDTO.builder()
-            .scanDate(LocalDate.now())
-            .fetalCardiacActivity(true).fetalMovementObserved(true).fetalToneNormal(true)
-            .anomaliesDetected(false).numberOfFetuses(1)
-            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
-            .build();
-        assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, onlyDefaults, null))
-            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
-                ex -> assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.findingsRequired"));
-
-        // With a real finding, the echoed NORMAL is unknown: the category is asked for.
-        UltrasoundReportRequestDTO echo = UltrasoundReportRequestDTO.builder()
-            .scanDate(LocalDate.now())
-            .fetalCardiacActivity(true).fetalMovementObserved(true).fetalToneNormal(true)
-            .anomaliesDetected(false).numberOfFetuses(1)
-            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
-            .findingsSummary("Revu")
-            .build();
-        assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, echo, null))
-            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
-                ex -> assertThat(ex.getField()).isEqualTo("findingCategory"));
-        verify(reportRepository, never()).save(any());
-
-        // A chosen category: saved, the echoed defaults cleared, the row still legacy.
         when(reportRepository.save(legacy)).thenReturn(legacy);
-        echo.setFindingCategory(com.example.hms.enums.UltrasoundFindingCategory.VARIANT);
-        echo.setFetalCardiacActivity(true);
-        echo.setAnomaliesDetected(false);
-        echo.setNumberOfFetuses(1);
-        ultrasoundService.createOrUpdateReport(orderId, echo, null);
-        assertThat(echo.getFetalCardiacActivity()).as("echoed default, not stored as a statement").isNull();
-        assertThat(echo.getAnomaliesDetected()).isNull();
-        assertThat(echo.getNumberOfFetuses()).isNull();
-        assertThat(legacy.getObservationsStated()).as("still legacy").isFalse();
 
-        // The D1525 portal says it states them: taken as stated, the row becomes stated.
-        UltrasoundReportRequestDTO stated = UltrasoundReportRequestDTO.builder()
-            .scanDate(LocalDate.now()).fetalCardiacActivity(true).numberOfFetuses(1)
-            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
-            .observationsStated(Boolean.TRUE)
-            .build();
-        ultrasoundService.createOrUpdateReport(orderId, stated, null);
-        assertThat(stated.getFetalCardiacActivity()).isTrue();
+        ultrasoundService.createOrUpdateReport(orderId, request, null);
+
+        assertThat(request.getFetalCardiacActivity()).as("nothing cleared").isTrue();
+        assertThat(request.getNumberOfFetuses()).isEqualTo(1);
+        verify(ultrasoundMapper).updateReportFromRequest(legacy, request);
         assertThat(legacy.getObservationsStated()).isTrue();
+    }
+
+    /**
+     * QA D1525 review: one input, the same refusal as the portal's spec
+     * ("the same input refuses on the same field on both sides"): no fetus seen,
+     * cardiac activity present and NORMAL is refused on the category first (the
+     * NORMAL contradiction runs before the fetus-count one); with URGENT and a
+     * heart rate it is refused on the fetus count.
+     */
+    @Test
+    void createOrUpdateReport_runsTheContradictionsInThePortalsOrder() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.empty());
+        UltrasoundReportRequestDTO both = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).numberOfFetuses(0).fetalCardiacActivity(true)
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL).build();
+        assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, both, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("findingCategory");
+                assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.normalContradictsObservation");
+            });
+        UltrasoundReportRequestDTO heartRate = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).numberOfFetuses(0).fetalHeartRate(140)
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.URGENT).build();
+        assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, heartRate, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("numberOfFetuses");
+                assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.noFetusContradictsObservation");
+            });
+        verify(reportRepository, never()).save(any());
     }
 
     /** QA D1525 review: a new report is stated whatever the client sends; the client flag plays no part. */

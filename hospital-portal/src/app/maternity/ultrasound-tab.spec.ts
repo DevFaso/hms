@@ -357,9 +357,9 @@ describe('UltrasoundTabComponent', () => {
     expect(sent['fetalToneNormal']).toBeNull();
     expect(sent['anomaliesDetected']).toBeNull();
     expect(sent['numberOfFetuses']).toBeUndefined();
-    expect(sent['observationsStated'])
-      .withContext('this client states its observations')
-      .toBeTrue();
+    expect('observationsStated' in sent)
+      .withContext('no client flag: any save states the report on the server')
+      .toBeFalse();
   });
 
   it('QA D1525: a stated observation is shown, and "not assessed" is sent as null', () => {
@@ -449,7 +449,7 @@ describe('UltrasoundTabComponent', () => {
         .toBeFalse();
     });
 
-    it('refuses NORMAL with absent cardiac activity, abnormal tone, anomalies or an absent nasal bone, on the category', () => {
+    it('refuses NORMAL with absent cardiac activity, abnormal tone or anomalies, on the category', () => {
       create(['ROLE_MIDWIFE']);
       const cmp = fixture.componentInstance;
       cmp.openReport(order());
@@ -458,7 +458,6 @@ describe('UltrasoundTabComponent', () => {
         { fetalCardiacActivity: false },
         { fetalToneNormal: false },
         { anomaliesDetected: true, anomalyDescription: 'Hygroma' },
-        { nasalBonePresent: false, nuchalTranslucencyMm: 3.5 },
       ]) {
         cmp.reportForm = {
           ...cmp.emptyReportForm(),
@@ -623,12 +622,22 @@ describe('UltrasoundTabComponent', () => {
       expect(hasUltrasoundFinding({ findingsSummary: 'Grossesse évolutive' })).toBeTrue();
     });
 
-    it('refuses no fetus seen with a present heart or movement on the fetus count, and with NORMAL on the category', () => {
+    it('refuses no fetus seen with any sign of a fetus on the fetus count, and with NORMAL on the category', () => {
       create(['ROLE_MIDWIFE']);
       const cmp = fixture.componentInstance;
       cmp.openReport(order());
       fixture.detectChanges();
-      for (const present of [{ fetalCardiacActivity: true }, { fetalMovementObserved: true }]) {
+      for (const present of [
+        { fetalCardiacActivity: true },
+        { fetalMovementObserved: true },
+        { fetalHeartRate: 140 },
+        { biparietalDiameterMm: 48 },
+        { headCircumferenceMm: 170 },
+        { abdominalCircumferenceMm: 150 },
+        { femurLengthMm: 32 },
+        { crownRumpLengthMm: 55 },
+        { estimatedFetalWeightGrams: 320 },
+      ]) {
         cmp.reportForm = {
           ...cmp.emptyReportForm(),
           findingCategory: 'URGENT',
@@ -652,13 +661,49 @@ describe('UltrasoundTabComponent', () => {
       ).toBeFalse();
     });
 
-    it('NORMAL contradicts only a stated absent, abnormal, anomaly or absent-nasal-bone answer', () => {
+    /**
+     * QA D1525 review: the server's createOrUpdateReport_runsTheContradictionsInThePortalsOrder
+     * runs these two inputs and refuses on the same fields with the same messages.
+     */
+    it('refuses the same input on the same field as the server, in the same order', () => {
+      create(['ROLE_MIDWIFE']);
+      const cmp = fixture.componentInstance;
+      const translate = TestBed.inject(TranslateService);
+      spyOn(translate, 'instant').and.callFake(((key: string) => key) as never);
+      cmp.openReport(order());
+      fixture.detectChanges();
+      cmp.reportForm = {
+        ...cmp.emptyReportForm(),
+        numberOfFetuses: 0,
+        fetalCardiacActivity: true,
+        findingCategory: 'NORMAL',
+      };
+      fixture.detectChanges();
+      save();
+      expect(host().querySelector('#rep-category')?.getAttribute('aria-invalid')).toBe('true');
+      expect(host().querySelector('#rep-fetuses')?.getAttribute('aria-invalid')).toBeNull();
+      expect(host().textContent).toContain('ULTRASOUND.NORMAL_CONTRADICTS_OBSERVATION');
+      cmp.reportForm = {
+        ...cmp.emptyReportForm(),
+        numberOfFetuses: 0,
+        fetalHeartRate: 140,
+        findingCategory: 'URGENT',
+      };
+      fixture.detectChanges();
+      save();
+      expect(host().querySelector('#rep-fetuses')?.getAttribute('aria-invalid')).toBe('true');
+      expect(host().querySelector('#rep-category')?.getAttribute('aria-invalid')).toBeNull();
+      expect(host().textContent).toContain('ULTRASOUND.NO_FETUS_CONTRADICTS_OBSERVATION');
+      expect(service.submitReport).not.toHaveBeenCalled();
+    });
+
+    it('NORMAL contradicts only a stated absent heart, abnormal tone, anomaly or no fetus', () => {
       expect(
         normalContradictsObservation({ findingCategory: 'NORMAL', numberOfFetuses: 0 }),
       ).toBeTrue();
-      expect(
-        normalContradictsObservation({ findingCategory: 'NORMAL', nasalBonePresent: false }),
-      ).toBeTrue();
+      expect(normalContradictsObservation({ findingCategory: 'NORMAL', nasalBonePresent: false }))
+        .withContext('an isolated absent nasal bone is not a hard contradiction')
+        .toBeFalse();
       expect(
         normalContradictsObservation({ findingCategory: 'NORMAL', fetalMovementObserved: false }),
       )
