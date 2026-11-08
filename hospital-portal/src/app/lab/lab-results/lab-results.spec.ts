@@ -129,7 +129,6 @@ describe('LabResultsComponent', () => {
     const first = component.results()[0];
     component.viewResult(first);
     const pending = httpMock.expectOne('/lab-results/result-1');
-    component.closeDetail();
     component.viewResult({ ...first, id: 'result-2', patientId: 'patient-2' });
     httpMock
       .expectOne('/lab-results/result-2')

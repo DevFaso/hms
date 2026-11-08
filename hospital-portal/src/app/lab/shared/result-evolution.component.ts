@@ -209,7 +209,7 @@ export class ResultEvolutionComponent {
   loading = input(false);
   failed = input(false);
   resultId = input('');
-  chosenUnit = linkedSignal({ source: () => this.resultId(), computation: () => '' });
+  chosenUnit = linkedSignal({ source: () => ({ id: this.resultId(), history: this.history(), unit: this.preferredUnit() }), computation: () => '' });
   preferredUnit = input('');
   units = computed(() => [
     ...new Set(
