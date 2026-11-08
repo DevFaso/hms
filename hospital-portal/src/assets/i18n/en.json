@@ -13182,7 +13182,7 @@
     "SEARCH_STOCK": "Search medications on this page",
     "PAGE_SCOPE": "Counts cover the loaded page only.",
     "NO_MATCHES": "No loaded rows match this search. Clear the search to see them again.",
-    "LOT_SCOPE": "Latest 20 received lots across all inventory items in the selected pharmacy. This view is not a complete delivery history.",
+    "LOT_SCOPE": "Latest {{count}} received lots across all inventory items in the selected pharmacy. This view is not a complete delivery history.",
     "SEARCH_LOTS": "Search loaded lots, medications or suppliers",
     "LOTS_LOADED": "{{count}} lots loaded",
     "LOT_LOADED": "{{count}} lot loaded",

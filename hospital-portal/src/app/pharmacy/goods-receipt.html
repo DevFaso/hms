@@ -170,9 +170,18 @@
       </button>
     </div>
   }
+  @if (itemsFailed()) {
+    <div class="workspace-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <p>{{ 'PHARMACY.INVENTORY_LOAD_FAILED' | translate }}</p>
+      <button class="btn-secondary" (click)="loadInventoryItems()">
+        {{ 'PHARMACY_DASH.RETRY' | translate }}
+      </button>
+    </div>
+  }
   <p class="workspace-note scope-note">
     <span class="material-symbols-outlined" aria-hidden="true">info</span
-    >{{ 'PHARMACY_DASH.LOT_SCOPE' | translate }}
+    >{{ 'PHARMACY_DASH.LOT_SCOPE' | translate: { count: recentLotsLimit } }}
   </p>
   <div class="workspace-toolbar">
     <label class="workspace-search"

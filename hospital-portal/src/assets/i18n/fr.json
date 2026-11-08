@@ -13182,7 +13182,7 @@
     "SEARCH_STOCK": "Rechercher un médicament sur cette page",
     "PAGE_SCOPE": "Les compteurs concernent uniquement la page chargée.",
     "NO_MATCHES": "Aucune ligne chargée ne correspond. Effacez la recherche pour les retrouver.",
-    "LOT_SCOPE": "Les 20 derniers lots reçus, tous articles confondus, dans la pharmacie sélectionnée. Cette vue ne constitue pas un historique complet des livraisons.",
+    "LOT_SCOPE": "Les {{count}} derniers lots reçus, tous articles confondus, dans la pharmacie sélectionnée. Cette vue ne constitue pas un historique complet des livraisons.",
     "SEARCH_LOTS": "Rechercher un lot, médicament ou fournisseur chargé",
     "LOTS_LOADED": "{{count}} lots chargés",
     "LOT_LOADED": "{{count}} lot chargé",

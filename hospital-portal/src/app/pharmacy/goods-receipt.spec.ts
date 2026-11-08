@@ -27,6 +27,7 @@ describe('GoodsReceiptComponent', () => {
   ];
 
   it('keeps lot medication search local to loaded rows', () => {
+    component.inventoryItems.set(items as any);
     component.recentLots.set([
       { id: 'lot-a', inventoryItemId: 'inv-mor', lotNumber: 'CDX-A' },
     ] as any);
@@ -35,6 +36,42 @@ describe('GoodsReceiptComponent', () => {
     component.searchTerm = 'missing';
     expect(component.visibleLots().length).toBe(0);
     expect(component.recentLots().length).toBe(1);
+  });
+
+  it('reports an inventory page failure and retries medication identification from the alert', () => {
+    svc.listInventoryByPharmacy.and.callFake((_id, page) =>
+      page === 0
+        ? of({ data: { content: items, number: 0, totalPages: 2 } } as any)
+        : throwError(() => new Error('offline')),
+    );
+    component.onPharmacyChange();
+    component.recentLots.set([{ id: 'lot-a', inventoryItemId: 'inv-mor' }] as any);
+    fixture.detectChanges();
+    expect(component.inventoryItems()).toEqual([]);
+    expect(component.itemsFailed()).toBeTrue();
+    const alert: HTMLElement = Array.from(
+      fixture.nativeElement.querySelectorAll('[role="alert"]') as NodeListOf<HTMLElement>,
+    ).find((el) => el.textContent?.includes('PHARMACY.INVENTORY_LOAD_FAILED'))!;
+    expect(alert).toBeDefined();
+    svc.listInventoryByPharmacy.and.returnValue(of({ data: { content: items } } as any));
+    alert.querySelector<HTMLButtonElement>('button')!.click();
+    fixture.detectChanges();
+    expect(component.itemsFailed()).toBeFalse();
+    expect(component.lotMedication(component.recentLots()[0])).toBe('Morphine');
+    expect(fixture.nativeElement.textContent).not.toContain('PHARMACY.INVENTORY_LOAD_FAILED');
+  });
+
+  it('ignores late inventory results and errors from a previous pharmacy', () => {
+    const old = new Subject<any>();
+    svc.listInventoryByPharmacy.and.returnValue(old);
+    component.onPharmacyChange();
+    svc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } } as any));
+    component.selectedPharmacyId = 'new';
+    component.onPharmacyChange();
+    old.next({ data: { content: items } });
+    old.error(new Error('offline'));
+    expect(component.inventoryItems()).toEqual([]);
+    expect(component.itemsFailed()).toBeFalse();
   });
   it('ignores a late recent-lots response from the previous pharmacy', () => {
     const old = new Subject<any>();

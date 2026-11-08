@@ -13182,7 +13182,7 @@
     "SEARCH_STOCK": "Buscar medicamentos en esta página",
     "PAGE_SCOPE": "Los contadores cubren solo la página cargada.",
     "NO_MATCHES": "Ninguna fila cargada coincide. Borre la búsqueda para volver a verlas.",
-    "LOT_SCOPE": "Los 20 últimos lotes recibidos de todos los artículos de la farmacia seleccionada. Esta vista no es un historial completo de entregas.",
+    "LOT_SCOPE": "Los {{count}} últimos lotes recibidos de todos los artículos de la farmacia seleccionada. Esta vista no es un historial completo de entregas.",
     "SEARCH_LOTS": "Buscar lotes, medicamentos o proveedores cargados",
     "LOTS_LOADED": "{{count}} lotes cargados",
     "LOT_LOADED": "{{count}} lote cargado",

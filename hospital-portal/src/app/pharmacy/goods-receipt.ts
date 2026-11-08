@@ -66,8 +66,11 @@ export class GoodsReceiptComponent implements OnInit {
 
   private scopeVersion = 0;
   private lotsVersion = 0;
+  private itemsVersion = 0;
   pharmacyFailed = signal(false);
   lotsFailed = signal(false);
+  itemsFailed = signal(false);
+  readonly recentLotsLimit = RECENT_LOTS;
   searchTerm = '';
   visibleLots(): StockLotResponse[] {
     const query = this.searchTerm.trim().toLocaleLowerCase();
@@ -127,6 +130,7 @@ export class GoodsReceiptComponent implements OnInit {
   onPharmacyChange(): void {
     this.scopeVersion++;
     this.inventoryItems.set([]);
+    this.itemsFailed.set(false);
     this.recentLots.set([]);
     this.searchTerm = '';
     this.closeForm();
@@ -135,15 +139,21 @@ export class GoodsReceiptComponent implements OnInit {
     this.loadRecentLots();
   }
 
-  private loadInventoryItems(): void {
+  loadInventoryItems(): void {
     const scope = this.scopeVersion;
+    const version = ++this.itemsVersion;
     const pharmacyId = this.selectedPharmacyId;
+    this.itemsFailed.set(false);
     allRows((page, size) =>
       this.svc.listInventoryByPharmacy(pharmacyId, page, size).pipe(map((r) => r?.data)),
     ).subscribe({
       next: (items) => {
-        if (scope !== this.scopeVersion) return;
+        if (scope !== this.scopeVersion || version !== this.itemsVersion) return;
         this.inventoryItems.set(items);
+      },
+      error: () => {
+        if (scope !== this.scopeVersion || version !== this.itemsVersion) return;
+        this.itemsFailed.set(true);
       },
     });
   }
