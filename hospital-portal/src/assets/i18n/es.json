@@ -2950,6 +2950,27 @@
       "MERGED": "Identidades fusionadas — se conserva {{name}}",
       "MERGE_FAILED": "Error al fusionar las identidades",
       "NEW_PATIENT_HANDOFF": "Transferencia al formulario de nuevo paciente (próximo)."
+    },
+    "WORKSPACE": {
+      "EYEBROW": "IDENTIDAD DEL PACIENTE",
+      "IDENTITY": "Buscar identidad",
+      "IDENTITY_HINT": "Introduzca los datos conocidos. Se requiere al menos un campo.",
+      "GUIDE_TITLE": "Una persona. El expediente correcto.",
+      "GUIDE_TEXT": "Compare los datos disponibles antes de abrir un expediente o crear uno nuevo.",
+      "SCORE_HINT": "La puntuación ayuda a comparar; no confirma la identidad automáticamente.",
+      "CANDIDATES": "Comparar candidatos",
+      "CANDIDATES_HINT": "Revise cada campo antes de confirmar una coincidencia.",
+      "RESULT_COUNT": "Candidatos: {{count}}",
+      "READY_TITLE": "Listo para buscar",
+      "READY_HINT": "Introduzca los datos de identidad para encontrar posibles expedientes existentes.",
+      "AGREES": "Coincide",
+      "NOT_AGREED": "No indicado como coincidente",
+      "MERGE_TITLE": "Fusión administrativa"
+    },
+    "SEX": {
+      "F": "Femenino",
+      "M": "Masculino",
+      "X": "X"
     }
   },
   "ENCOUNTERS": {
@@ -12062,5 +12083,10 @@
     "RANGE": "{{field}}: el valor debe estar entre {{min}} y {{max}}.",
     "MIN": "{{field}}: el valor debe ser como mínimo {{min}}.",
     "FIELD_REASON": "{{field}}: {{reason}}"
+  },
+  "CHUNK_RECOVERY": {
+    "TITLE": "No se pudo cargar esta página",
+    "MESSAGE": "Un archivo necesario no está disponible. Recargue para probar la versión actual. Si el problema continúa, contacte con soporte.",
+    "RELOAD": "Recargar página"
   }
 }

@@ -1,3 +1,4 @@
+import { ChunkRecoveryService } from './core/chunk-recovery.service';
 import { installDecimalCommaSupport } from './shared/decimal-comma';
 import { ApplicationConfig, LOCALE_ID, provideAppInitializer, inject } from '@angular/core';
 import { DOCUMENT, registerLocaleData } from '@angular/common';
@@ -19,31 +20,8 @@ import { offlineDispenseInterceptor } from './interceptors/offline-dispense.inte
 import { languageInterceptor } from './interceptors/language.interceptor';
 import { currentLocale } from './shared/i18n/app-locale';
 
-/**
- * Recover from stale-deployment chunk failures. After a redeploy replaces the
- * hashed lazy chunks, a browser tab still running the previous session gets
- * `Failed to fetch dynamically imported module: .../chunk-XXXX.js` on the next
- * lazy navigation and the route silently dies. One full reload fetches the new
- * index.html + chunk graph and replays the navigation. The sessionStorage
- * guard (cleared on success) prevents a reload loop when the chunk is missing
- * for a different reason (e.g. broken deploy).
- */
-const CHUNK_RELOAD_GUARD = 'hms-chunk-reload';
-
 export function handleChunkLoadNavigationError(error: NavigationError): void {
-  const message = String((error.error as Error | undefined)?.message ?? error.error ?? '');
-  const isChunkLoadFailure =
-    /Failed to fetch dynamically imported module|Importing a module script failed|ChunkLoadError/i.test(
-      message,
-    );
-  if (!isChunkLoadFailure || typeof window === 'undefined') return;
-
-  if (window.sessionStorage.getItem(CHUNK_RELOAD_GUARD)) {
-    console.error('Chunk load failed again after reload — deploy may be broken:', message);
-    return;
-  }
-  window.sessionStorage.setItem(CHUNK_RELOAD_GUARD, '1');
-  window.location.assign(error.url);
+  inject(ChunkRecoveryService).handle(error);
 }
 
 // Angular ships only en-US; every other locale's date, number and currency
