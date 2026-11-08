@@ -90,6 +90,10 @@ export class EmarComponent implements OnInit, OnDestroy {
     () => new Set(this.tasks().map((task) => task.patientId)).size,
   );
   protected readonly activeTask = signal<NurseMedicationTask | null>(null);
+  protected readonly selectedTaskHidden = computed(() => {
+    const selected = this.activeTask();
+    return !!selected && !this.visibleTasks().some((task) => task.id === selected.id);
+  });
 
   protected readonly patientScan = signal('');
   protected readonly medicationScan = signal('');

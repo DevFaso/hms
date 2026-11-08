@@ -156,7 +156,6 @@ export class PanelComponent implements OnInit {
           this.noStaffProfile.set(true);
         } else {
           this.myPanelFailed.set(true);
-          this.toast.error(this.translate.instant('PANEL.LOAD_FAILED'));
         }
       },
     });

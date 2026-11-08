@@ -12107,7 +12107,7 @@
     "PERSONAL_PANEL": "Mi panel · total del servidor",
     "PANEL_SUBTITLE": "Revise los paneles del hospital y las asignaciones por profesional.",
     "VISIBLE": "Mostrando {{shown}} / {{total}} cargados",
-    "SEARCH_PATIENTS": "Buscar pacientes cargados o expediente",
+    "SEARCH_PATIENTS": "Buscar pacientes cargados, número de historia o teléfono",
     "SEARCH_PROVIDERS": "Buscar profesionales",
     "SEARCH_DOSES": "Buscar paciente o medicamento",
     "NO_MATCHES": "Ninguna fila cargada coincide. Borre la búsqueda para ver la lista cargada.",
@@ -12115,6 +12115,7 @@
     "PATIENTS_LOADED": "Pacientes representados",
     "PHARMACY_PENDING": "Pendiente de verificación farmacéutica",
     "DOSE_QUEUE": "Cola de dosis",
+    "SELECTED_DOSE_HIDDEN": "La dosis seleccionada para {{patient}} · {{medication}} está oculta por la búsqueda. El formulario de administración sigue correspondiendo a esta dosis.",
     "MATERNITY_GUIDE": "Una vista clara del recorrido de atención materna",
     "MATERNITY_HINT": "Elija un área de atención y una lista de trabajo. Las alertas de riesgo y los requisitos de revisión siguen visibles en cada expediente."
   }

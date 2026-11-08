@@ -52,7 +52,7 @@
 
   <!-- ── My panel ─────────────────────────────────────────────────── -->
   <section class="card">
-    <h2>{{ 'PANEL.MY_PANEL' | translate }}</h2>
+    <h2 id="my-panel-heading">{{ 'PANEL.MY_PANEL' | translate }}</h2>
     @if (myPanelFailed()) {
       <div role="alert">
         <p class="hint error-hint">{{ 'PANEL.LOAD_FAILED' | translate }}</p>
@@ -78,12 +78,7 @@
           }}
         </p>
       }
-      <div
-        class="table-scroll"
-        tabindex="0"
-        role="region"
-        [attr.aria-label]="'PANEL.TITLE' | translate"
-      >
+      <div class="table-scroll" tabindex="0" role="region" aria-labelledby="my-panel-heading">
         <table>
           <thead>
             <tr>
@@ -119,26 +114,28 @@
   <!-- ── Admin overview ───────────────────────────────────────────── -->
   @if (isAdmin()) {
     <section class="card">
-      <h2>{{ 'PANEL.OVERVIEW' | translate }}</h2>
-      <div class="care-toolbar">
-        <label class="care-search"
-          ><span class="material-symbols-outlined" aria-hidden="true">search</span
-          ><input
-            type="search"
-            [attr.aria-label]="'CARE_DASH.SEARCH_PROVIDERS' | translate"
-            [placeholder]="'CARE_DASH.SEARCH_PROVIDERS' | translate"
-            [ngModel]="providerSearch()"
-            (ngModelChange)="providerSearch.set($event)" /></label
-        ><span class="care-visible-count">{{
-          'CARE_DASH.VISIBLE'
-            | translate: { shown: visibleOverviewRows().length, total: overviewRows().length }
-        }}</span>
-        @if (providerSearch()) {
-          <button type="button" class="btn-secondary" (click)="providerSearch.set('')">
-            {{ 'COMMON.CLEAR' | translate }}
-          </button>
-        }
-      </div>
+      <h2 id="panel-overview-heading">{{ 'PANEL.OVERVIEW' | translate }}</h2>
+      @if (!overviewLoading() && !overviewFailed() && overviewRows().length > 0) {
+        <div class="care-toolbar">
+          <label class="care-search"
+            ><span class="material-symbols-outlined" aria-hidden="true">search</span
+            ><input
+              type="search"
+              [attr.aria-label]="'CARE_DASH.SEARCH_PROVIDERS' | translate"
+              [placeholder]="'CARE_DASH.SEARCH_PROVIDERS' | translate"
+              [ngModel]="providerSearch()"
+              (ngModelChange)="providerSearch.set($event)" /></label
+          ><span class="care-visible-count">{{
+            'CARE_DASH.VISIBLE'
+              | translate: { shown: visibleOverviewRows().length, total: overviewRows().length }
+          }}</span>
+          @if (providerSearch()) {
+            <button type="button" class="btn-secondary" (click)="providerSearch.set('')">
+              {{ 'COMMON.CLEAR' | translate }}
+            </button>
+          }
+        </div>
+      }
       @if (overviewLoading()) {
         <p class="hint" role="status">{{ 'COMMON.LOADING' | translate }}</p>
       } @else if (overviewFailed()) {
@@ -152,7 +149,7 @@
           class="table-scroll"
           tabindex="0"
           role="region"
-          [attr.aria-label]="'PANEL.TITLE' | translate"
+          aria-labelledby="panel-overview-heading"
         >
           <table>
             <thead>
@@ -186,7 +183,7 @@
       }
 
       @if (drilldownProvider(); as drill) {
-        <h3>
+        <h3 id="panel-drilldown-heading">
           {{ 'PANEL.DRILLDOWN' | translate: { name: drill.providerName } }} —
           {{ roleKey(drill.panelRole) | translate }}
         </h3>
@@ -202,7 +199,7 @@
           class="table-scroll"
           tabindex="0"
           role="region"
-          [attr.aria-label]="'PANEL.TITLE' | translate"
+          aria-labelledby="panel-drilldown-heading"
         >
           <table>
             <thead>

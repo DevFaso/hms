@@ -172,6 +172,7 @@ describe('PanelComponent', () => {
     fixture.detectChanges();
     expect(component.myPanelFailed()).toBeTrue();
     expect(fixture.nativeElement.querySelector('[role="alert"]')).not.toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
     expect(component.noStaffProfile()).toBeFalse();
   });
   it('filters the provider overview locally while preserving its source rows', () => {

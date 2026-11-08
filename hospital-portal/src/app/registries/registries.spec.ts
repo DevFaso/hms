@@ -302,6 +302,9 @@ describe('RegistriesComponent', () => {
     component.patientSearch.set('MRN-1');
     expect(component.visibleRows().length).toBe(1);
     component.patientSearch.set('cdx-no-match');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.care-no-matches')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.registry-table')).toBeNull();
     expect(component.visibleRows().length).toBe(0);
     expect(component.totalRows()).toBe(total);
     expect(registryService.registry.calls.count()).toBe(reads);

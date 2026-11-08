@@ -12107,7 +12107,7 @@
     "PERSONAL_PANEL": "Mon panel · total serveur",
     "PANEL_SUBTITLE": "Consultez les panels de l’hôpital et les affectations par soignant.",
     "VISIBLE": "Affichés : {{shown}} / {{total}} chargés",
-    "SEARCH_PATIENTS": "Rechercher un patient chargé ou son dossier",
+    "SEARCH_PATIENTS": "Rechercher parmi les patients chargés, par numéro de dossier ou téléphone",
     "SEARCH_PROVIDERS": "Rechercher un soignant",
     "SEARCH_DOSES": "Rechercher un patient ou un médicament",
     "NO_MATCHES": "Aucune ligne chargée ne correspond. Effacez la recherche pour retrouver la liste chargée.",
@@ -12115,6 +12115,7 @@
     "PATIENTS_LOADED": "Patients représentés",
     "PHARMACY_PENDING": "Vérification pharmaceutique attendue",
     "DOSE_QUEUE": "File des doses",
+    "SELECTED_DOSE_HIDDEN": "La dose sélectionnée pour {{patient}} · {{medication}} est masquée par votre recherche. Le formulaire au chevet concerne toujours cette dose.",
     "MATERNITY_GUIDE": "Une vue claire du parcours de soins maternels",
     "MATERNITY_HINT": "Choisissez un domaine de soins, puis une liste de travail. Les indicateurs de risque et les exigences de revue restent visibles dans chaque dossier."
   }

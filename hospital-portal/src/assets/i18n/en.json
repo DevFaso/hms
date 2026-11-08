@@ -12107,7 +12107,7 @@
     "PERSONAL_PANEL": "My panel · server total",
     "PANEL_SUBTITLE": "Review hospital panels and care assignments by provider.",
     "VISIBLE": "Showing {{shown}} / {{total}} loaded",
-    "SEARCH_PATIENTS": "Search loaded patients or MRN",
+    "SEARCH_PATIENTS": "Search loaded patients, MRN or phone",
     "SEARCH_PROVIDERS": "Search providers",
     "SEARCH_DOSES": "Search patient or medication",
     "NO_MATCHES": "No loaded rows match your search. Clear it to see the full loaded list.",
@@ -12115,6 +12115,7 @@
     "PATIENTS_LOADED": "Patients represented",
     "PHARMACY_PENDING": "Awaiting pharmacist verification",
     "DOSE_QUEUE": "Dose queue",
+    "SELECTED_DOSE_HIDDEN": "Selected dose for {{patient}} · {{medication}} is hidden by your search. The bedside form still applies to this dose.",
     "MATERNITY_GUIDE": "A clear view of the maternal care journey",
     "MATERNITY_HINT": "Choose a care area, then a worklist. Existing risk flags and review requirements remain visible in each record."
   }

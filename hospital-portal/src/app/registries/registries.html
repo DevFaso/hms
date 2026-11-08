@@ -103,6 +103,7 @@
         type="search"
         [attr.aria-label]="'CARE_DASH.SEARCH_PATIENTS' | translate"
         [placeholder]="'CARE_DASH.SEARCH_PATIENTS' | translate"
+        [disabled]="loading() || loadFailed()"
         [ngModel]="patientSearch()"
         (ngModelChange)="patientSearch.set($event)" /></label
     ><span class="care-visible-count">{{
@@ -147,96 +148,98 @@
         {{ 'REGISTRIES.SHOWING_FIRST' | translate: { shown: rows().length, total: totalRows() } }}
       </p>
     }
-    <div
-      class="table-wrap"
-      tabindex="0"
-      role="region"
-      [attr.aria-label]="'REGISTRIES.TITLE' | translate"
-    >
-      <table class="registry-table">
-        <thead>
-          <tr>
-            <th>{{ 'REGISTRIES.COL_PATIENT' | translate }}</th>
-            <th>{{ 'REGISTRIES.COL_ENROLLED' | translate }}</th>
-            <th>{{ 'REGISTRIES.COL_CADENCE' | translate }}</th>
-            <th>{{ 'REGISTRIES.COL_LAST_VISIT' | translate }}</th>
-            <th>{{ 'REGISTRIES.COL_NEXT_VISIT' | translate }}</th>
-            <th>{{ 'REGISTRIES.COL_STATUS' | translate }}</th>
-            <th class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (row of visibleRows(); track row.id) {
-            <tr [class.overdue-row]="row.overdueDays > 0">
-              <td>
-                <div class="patient-cell">
-                  <span class="patient-name">{{ row.patientName }}</span>
-                  <span class="patient-meta">
-                    @if (row.mrn) {
-                      {{ row.mrn }}
-                    }
-                    @if (row.phoneNumber) {
-                      · {{ row.phoneNumber }}
-                    }
+    @if (visibleRows().length > 0) {
+      <div
+        class="table-wrap"
+        tabindex="0"
+        role="region"
+        [attr.aria-label]="'REGISTRIES.TITLE' | translate"
+      >
+        <table class="registry-table">
+          <thead>
+            <tr>
+              <th>{{ 'REGISTRIES.COL_PATIENT' | translate }}</th>
+              <th>{{ 'REGISTRIES.COL_ENROLLED' | translate }}</th>
+              <th>{{ 'REGISTRIES.COL_CADENCE' | translate }}</th>
+              <th>{{ 'REGISTRIES.COL_LAST_VISIT' | translate }}</th>
+              <th>{{ 'REGISTRIES.COL_NEXT_VISIT' | translate }}</th>
+              <th>{{ 'REGISTRIES.COL_STATUS' | translate }}</th>
+              <th class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of visibleRows(); track row.id) {
+              <tr [class.overdue-row]="row.overdueDays > 0">
+                <td>
+                  <div class="patient-cell">
+                    <span class="patient-name">{{ row.patientName }}</span>
+                    <span class="patient-meta">
+                      @if (row.mrn) {
+                        {{ row.mrn }}
+                      }
+                      @if (row.phoneNumber) {
+                        · {{ row.phoneNumber }}
+                      }
+                    </span>
+                  </div>
+                </td>
+                <td>{{ row.enrolledOn | serverTime | date: 'mediumDate' }}</td>
+                <td>{{ 'REGISTRIES.EVERY_N_DAYS' | translate: { days: row.visitCadenceDays } }}</td>
+                <td>
+                  @if (row.lastVisitOn) {
+                    {{ row.lastVisitOn | serverTime | date: 'mediumDate' }}
+                  } @else {
+                    <span class="muted">{{ 'REGISTRIES.NO_VISIT_YET' | translate }}</span>
+                  }
+                </td>
+                <td>
+                  {{ row.nextExpectedVisit | serverTime | date: 'mediumDate' }}
+                  @if (row.overdueDays > 0) {
+                    <span class="overdue-chip" data-testid="overdue-chip">
+                      {{ 'REGISTRIES.OVERDUE_DAYS' | translate: { days: row.overdueDays } }}
+                    </span>
+                  }
+                </td>
+                <td>
+                  <span class="status-badge" [ngClass]="statusClass(row.status)">
+                    {{ 'REGISTRIES.STATUS.' + row.status | translate }}
                   </span>
-                </div>
-              </td>
-              <td>{{ row.enrolledOn | serverTime | date: 'mediumDate' }}</td>
-              <td>{{ 'REGISTRIES.EVERY_N_DAYS' | translate: { days: row.visitCadenceDays } }}</td>
-              <td>
-                @if (row.lastVisitOn) {
-                  {{ row.lastVisitOn | serverTime | date: 'mediumDate' }}
-                } @else {
-                  <span class="muted">{{ 'REGISTRIES.NO_VISIT_YET' | translate }}</span>
-                }
-              </td>
-              <td>
-                {{ row.nextExpectedVisit | serverTime | date: 'mediumDate' }}
-                @if (row.overdueDays > 0) {
-                  <span class="overdue-chip" data-testid="overdue-chip">
-                    {{ 'REGISTRIES.OVERDUE_DAYS' | translate: { days: row.overdueDays } }}
-                  </span>
-                }
-              </td>
-              <td>
-                <span class="status-badge" [ngClass]="statusClass(row.status)">
-                  {{ 'REGISTRIES.STATUS.' + row.status | translate }}
-                </span>
-                @if (row.closureReason) {
-                  <span class="closure-reason" [title]="row.closureReason">
-                    {{ row.closureReason }}
-                  </span>
-                }
-              </td>
-              <td class="col-actions">
-                @if (row.status === 'ACTIVE') {
+                  @if (row.closureReason) {
+                    <span class="closure-reason" [title]="row.closureReason">
+                      {{ row.closureReason }}
+                    </span>
+                  }
+                </td>
+                <td class="col-actions">
+                  @if (row.status === 'ACTIVE') {
+                    <button
+                      type="button"
+                      class="btn-row"
+                      [disabled]="actingOnId() !== null"
+                      (click)="recordVisit(row)"
+                      data-testid="record-visit"
+                    >
+                      <span class="material-symbols-outlined">event_available</span>
+                      {{ 'REGISTRIES.RECORD_VISIT' | translate }}
+                    </button>
+                  }
                   <button
                     type="button"
                     class="btn-row"
                     [disabled]="actingOnId() !== null"
-                    (click)="recordVisit(row)"
-                    data-testid="record-visit"
+                    (click)="openStatusModal(row, $event)"
+                    data-testid="change-status"
                   >
-                    <span class="material-symbols-outlined">event_available</span>
-                    {{ 'REGISTRIES.RECORD_VISIT' | translate }}
+                    <span class="material-symbols-outlined">swap_horiz</span>
+                    {{ 'REGISTRIES.CHANGE_STATUS' | translate }}
                   </button>
-                }
-                <button
-                  type="button"
-                  class="btn-row"
-                  [disabled]="actingOnId() !== null"
-                  (click)="openStatusModal(row, $event)"
-                  data-testid="change-status"
-                >
-                  <span class="material-symbols-outlined">swap_horiz</span>
-                  {{ 'REGISTRIES.CHANGE_STATUS' | translate }}
-                </button>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
   }
 
   <!-- Enrol modal -->
