@@ -54,7 +54,7 @@
       <div class="summary-card">
         <span class="material-symbols-outlined card-icon total">bar_chart</span>
         <div class="card-info">
-          <span class="card-value">{{ referrals().length }}</span
+          <span class="card-value">{{ loading() || loadFailed() ? '—' : referrals().length }}</span
           ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
         </div>
       </div>

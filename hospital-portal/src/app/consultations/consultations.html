@@ -59,17 +59,19 @@
       <button
         type="button"
         class="summary-card overdue"
-        [class.has-overdue]="!loading() && !loadFailed() && countByGroup('overdue') > 0"
+        [class.has-overdue]="
+          !loading() && !loadFailed() && !statsLoading() && countByGroup('overdue') > 0
+        "
         [attr.aria-pressed]="activeTab() === 'overdue'"
         (click)="setTab('overdue')"
       >
         <span class="material-symbols-outlined card-icon overdue">schedule</span>
-        <div class="card-info">
+        <span class="card-info">
           <span class="card-value">{{
             loading() || loadFailed() || statsLoading() ? '—' : countByGroup('overdue')
           }}</span
           ><span class="card-label">{{ 'CONSULTATIONS.OVERDUE' | translate }}</span>
-        </div>
+        </span>
       </button>
     </div>
     <p class="specialist-scope-note">{{ 'SPECIALIST_DASH.CONSULT_SCOPE' | translate }}</p>

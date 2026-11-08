@@ -1,5 +1,5 @@
 import { Type, WritableSignal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
@@ -16,10 +16,26 @@ import { ToastService } from '../core/toast.service';
 import { roleContextStub } from '../testing/role-context.stub';
 
 interface Dashboard {
+  ngOnInit(): void;
+  onScopeChange(hospitalId: string | null): void;
+  applyFilter(): void;
+  searchTerm: string;
   load(): void;
   loading: WritableSignal<boolean>;
   loadFailed: WritableSignal<boolean>;
   filtered: WritableSignal<unknown[]>;
+}
+
+function listSignal(page: Dashboard): WritableSignal<unknown[]> {
+  if (page instanceof ConsultationsComponent) return page.consultations;
+  if (page instanceof TreatmentPlansComponent) return page.plans;
+  return (page as ReferralsComponent).referrals;
+}
+
+function selectionSignal(page: Dashboard): WritableSignal<unknown> {
+  if (page instanceof ConsultationsComponent) return page.selectedConsult;
+  if (page instanceof TreatmentPlansComponent) return page.selectedPlan;
+  return (page as ReferralsComponent).selectedReferral;
 }
 
 for (const entry of [
@@ -29,11 +45,12 @@ for (const entry of [
 ]) {
   describe(`${entry.component.name} dashboard reads`, () => {
     let component: Dashboard;
+    let fixture: ComponentFixture<Dashboard>;
     let reads: jasmine.Spy;
     let toast: jasmine.SpyObj<ToastService>;
 
     beforeEach(() => {
-      reads = jasmine.createSpy('getAll');
+      reads = jasmine.createSpy('getAll').and.returnValue(of([]));
       toast = jasmine.createSpyObj('ToastService', ['error', 'success', 'info']);
       TestBed.configureTestingModule({
         imports: [entry.component, TranslateModule.forRoot()],
@@ -53,7 +70,64 @@ for (const entry of [
           { provide: ToastService, useValue: toast },
         ],
       });
-      component = TestBed.createComponent(entry.component as Type<Dashboard>).componentInstance;
+      fixture = TestBed.createComponent(entry.component as Type<Dashboard>);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+    });
+
+    it('hides every metric during loading and failure, and renders error rather than empty', () => {
+      listSignal(component).set([{ id: 'cdx-old', status: 'REQUESTED' }]);
+      component.loading.set(true);
+      fixture.detectChanges();
+      const values = () =>
+        Array.from(
+          fixture.nativeElement.querySelectorAll('.card-value') as NodeListOf<HTMLElement>,
+        ).map((node) => node.textContent?.trim());
+      expect(values().every((value) => value === '—')).toBeTrue();
+      component.loading.set(false);
+      component.loadFailed.set(true);
+      fixture.detectChanges();
+      expect(values().every((value) => value === '—')).toBeTrue();
+      expect(fixture.nativeElement.querySelector('.dashboard-error')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('.empty-state')).toBeNull();
+      expect(fixture.nativeElement.querySelector('.data-table')).toBeNull();
+      component.loadFailed.set(false);
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.dashboard-error')).toBeNull();
+      expect(fixture.nativeElement.querySelector('.empty-state')).not.toBeNull();
+      expect(values()).toContain('1');
+    });
+
+    it('clears previous scope rows, detail and search even if the replacement read fails', () => {
+      const current = new Subject<unknown[]>();
+      reads.and.returnValue(current);
+      const old = { id: 'cdx-old', status: 'REQUESTED' };
+      listSignal(component).set([old]);
+      component.filtered.set([old]);
+      selectionSignal(component).set(old);
+      component.searchTerm = 'cdx-old';
+      component.onScopeChange('cdx-next-hospital');
+      expect(selectionSignal(component)()).toBeNull();
+      expect(component.searchTerm).toBe('');
+      expect(listSignal(component)()).toEqual([]);
+      expect(component.filtered()).toEqual([]);
+      current.error(new Error('next scope unavailable'));
+      expect(listSignal(component)()).toEqual([]);
+      expect(component.filtered()).toEqual([]);
+      expect(component.loadFailed()).toBeTrue();
+    });
+
+    it('explains when a search excludes all loaded records', () => {
+      listSignal(component).set([{ id: 'cdx-loaded', status: 'REQUESTED' }]);
+      component.loading.set(false);
+      component.searchTerm = 'no-match';
+      component.applyFilter();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.empty-state h3')?.textContent).toContain(
+        entry.component === ConsultationsComponent
+          ? 'CONSULTATIONS.NO_MATCHING_CONSULTATIONS'
+          : 'SPECIALIST_DASH.NO_MATCHES',
+      );
     });
 
     it('keeps newer scope results when a previous read completes or fails late', () => {
@@ -98,6 +172,7 @@ for (const entry of [
         page.loadStats();
         const summary = { total: 9, requested: 2, active: 3, completed: 4 } as ConsultationStats;
         current.next(summary);
+        old.next({ total: 99 } as ConsultationStats);
         old.error(new Error('previous scope failed'));
         expect(page.stats()).toEqual(summary);
         expect(page.statsFailed()).toBeFalse();

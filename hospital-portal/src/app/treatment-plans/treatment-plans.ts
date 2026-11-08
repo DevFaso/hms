@@ -102,6 +102,8 @@ export class TreatmentPlansComponent implements OnInit {
   onScopeChange(_hospitalId: string | null): void {
     this.selectedPlan.set(null);
     this.searchTerm = '';
+    this.plans.set([]);
+    this.filtered.set([]);
     this.load();
   }
 

@@ -207,6 +207,8 @@ export class ConsultationsComponent implements OnInit {
   onScopeChange(_hospitalId: string | null): void {
     this.selectedConsult.set(null);
     this.searchTerm = '';
+    this.consultations.set([]);
+    this.filtered.set([]);
     this.load();
     this.loadStats();
   }

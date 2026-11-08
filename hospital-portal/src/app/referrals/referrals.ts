@@ -273,6 +273,8 @@ export class ReferralsComponent implements OnInit {
   onScopeChange(_hospitalId: string | null): void {
     this.selectedReferral.set(null);
     this.searchTerm = '';
+    this.referrals.set([]);
+    this.filtered.set([]);
     this.load();
   }
 
