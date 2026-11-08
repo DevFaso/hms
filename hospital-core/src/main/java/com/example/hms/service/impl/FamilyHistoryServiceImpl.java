@@ -171,6 +171,10 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
                 .orElseThrow(() -> new ResourceNotFoundException(FAMILY_HISTORY_NOT_FOUND_KEY, id));
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(familyHistory.getHospital(), FAMILY_HISTORY_NOT_FOUND_KEY, id);
 
+        // QA D1242 class (round 25): a removed entry stays removed; a repeat is refused.
+        if (Boolean.FALSE.equals(familyHistory.getActive())) {
+            throw new com.example.hms.exception.BusinessException("medicalHistory.r25.alreadyRemoved");
+        }
         familyHistory.setActive(false);
         familyHistoryRepository.save(familyHistory);
 

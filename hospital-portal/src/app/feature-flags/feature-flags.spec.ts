@@ -4,6 +4,8 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TranslateModule } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { FeatureFlagsComponent } from './feature-flags';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 
 describe('FeatureFlagsComponent', () => {
   let component: FeatureFlagsComponent;
@@ -27,15 +29,15 @@ describe('FeatureFlagsComponent', () => {
 
   const flag = { key: 'beta.x', enabled: true, editing: false, description: '' };
 
-  it('does not delete an override the admin did not confirm (D126)', () => {
-    spyOn(globalThis, 'confirm').and.returnValue(false);
-    component.removeOverride(flag);
+  it('does not delete an override the admin did not confirm (D126)', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    await component.removeOverride(flag);
     httpMock.expectNone((r) => r.method === 'DELETE');
   });
 
-  it('deletes the override once confirmed', () => {
-    spyOn(globalThis, 'confirm').and.returnValue(true);
-    component.removeOverride(flag);
+  it('deletes the override once confirmed', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+    await component.removeOverride(flag);
     httpMock.expectOne((r) => r.method === 'DELETE' && r.url === '/feature-flags/beta.x');
   });
 
@@ -61,5 +63,24 @@ describe('FeatureFlagsComponent', () => {
         { status: 400, statusText: 'Bad Request' },
       );
     expect(toast.error).toHaveBeenCalledWith('Drapeau de fonctionnalité inconnu.');
+  });
+
+  it('QA CX-004: an empty key is marked, starred, and nothing is sent', () => {
+    const fixture = TestBed.createComponent(FeatureFlagsComponent);
+    component = fixture.componentInstance;
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    httpMock.expectOne('/feature-flags').flush({});
+    httpMock.match('/feature-flags/overrides').forEach((r) => r.flush([]));
+    component.openCreate();
+    fixture.detectChanges();
+
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="flag-create-save"]',
+    });
+
+    expect(marked).toEqual(['flag-key']);
+    httpMock.expectNone((r) => r.method === 'PUT');
+    (fixture.nativeElement as HTMLElement).remove();
   });
 });

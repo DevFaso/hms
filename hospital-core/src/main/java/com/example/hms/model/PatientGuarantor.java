@@ -80,6 +80,16 @@ public class PatientGuarantor extends BaseEntity {
     @Column(name = "active", nullable = false)
     private boolean active = true;
 
+    /** QA D1247 (round 25): why, when and by whom the guarantor was deactivated (kept, never overwritten). */
+    @Column(name = "deactivation_reason", length = 500)
+    private String deactivationReason;
+
+    @Column(name = "deactivated_at")
+    private java.time.LocalDateTime deactivatedAt;
+
+    @Column(name = "deactivated_by_user_id")
+    private java.util.UUID deactivatedByUserId;
+
     @Size(max = 500)
     @Column(name = "notes", length = 500)
     private String notes;

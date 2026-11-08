@@ -65,6 +65,8 @@ class StockTransactionServiceImplTest {
     @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
 
+    /** QA D964: FEFO is followed unless a test says otherwise (null = no override recorded). */
+    @org.mockito.Mock private FefoLotPolicy fefoLotPolicy;
     @InjectMocks
     private StockTransactionServiceImpl service;
 
@@ -381,6 +383,37 @@ class StockTransactionServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D964: a transfer out of a later-dated lot with no reason is refused; nothing moves")
+        void aTransferSkippingTheShorterDatedLotIsRefused() {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.TRANSFER, new BigDecimal("15"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(fefoLotPolicy.requireFefoOrReason(eq(stockLot), org.mockito.ArgumentMatchers.isNull()))
+                    .thenThrow(new BusinessException("pharmacy.fefo.reasonRequired", "LOT-COURT", "1 déc. 2026"));
+
+            assertThatThrownBy(() -> service.recordTransaction(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.fefo.reasonRequired");
+            verify(stockTransactionRepository, never()).save(any());
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D964: the reason for skipping the shorter-dated lot follows the transfer's own reason on the ledger")
+        void aTransferFefoOverrideIsKeptOnTheLedgerRow() {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.TRANSFER, new BigDecimal("15"));
+            dto.setFefoOverrideReason("lot court promis au CSPS");
+            stubCommonMocks(dto, true);
+            when(fefoLotPolicy.requireFefoOrReason(stockLot, "lot court promis au CSPS"))
+                    .thenReturn("lot court promis au CSPS");
+
+            service.recordTransaction(dto);
+
+            assertThat(dto.getReason()).isEqualTo("Test reason | FEFO: lot court promis au CSPS");
+        }
+
+        @Test
         @DisplayName("throws when insufficient stock for transfer")
         void insufficientStock() {
             stockLot.setRemainingQuantity(new BigDecimal("500.00")); // the item is what refuses
@@ -448,10 +481,47 @@ class StockTransactionServiceImplTest {
 
             assertThatThrownBy(() -> service.recordTransaction(dto))
                     .isInstanceOf(BusinessException.class)
-                    .matches(e -> e.getMessage().toLowerCase(java.util.Locale.ROOT).contains("received"));
+                    .matches(e -> e.getMessage().toLowerCase(java.util.Locale.ROOT).contains("received"))
+                    // QA D1354 (round 30): on the adjustment's quantity, so the form marks it.
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasFieldOrPropertyWithValue("field", "quantity");
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("50.00"));
             assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("100.00"));
             verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        }
+
+        /** QA D1243 replay (j1.js): "Détérioration" with +2 added two units; a write-off only removes. */
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+        @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "DAMAGE: Flacon cassé", "EXPIRY_WRITE_OFF: lot périmé", "DAMAGED", "Détérioration", "perte"})
+        @DisplayName("D1243: a positive adjustment with a write-off reason is refused on the quantity, nothing moves")
+        void aPositiveWriteOffIsRefused(String reason) {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal("2"));
+            dto.setReason(reason);
+            org.mockito.Mockito.lenient().when(inventoryItemRepository.findById(inventoryItemId))
+                    .thenReturn(Optional.of(inventoryItem));
+            org.mockito.Mockito.lenient().when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            org.mockito.Mockito.lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            assertThatThrownBy(() -> service.recordTransaction(dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasFieldOrPropertyWithValue("field", "quantity")
+                    .hasFieldOrPropertyWithValue("messageKey", StockWriteOffReason.MUST_REMOVE_KEY);
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("100.00"));
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+            verify(stockTransactionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D1243: the same write-off as a removal goes through, and a count variance may still add")
+        void aNegativeWriteOffAndAPositiveCountVarianceGoThrough() {
+            StockTransactionRequestDTO writeOff = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal("-2.00"));
+            writeOff.setReason("DAMAGE: Flacon cassé");
+            stubCommonMocks(writeOff, true);
+            service.recordTransaction(writeOff);
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("98.00"));
         }
 
         @Test
@@ -548,7 +618,9 @@ class StockTransactionServiceImplTest {
 
             assertThatThrownBy(() -> service.recordTransaction(dto))
                     .isInstanceOf(BusinessException.class)
-                    .matches(e -> e.getMessage().contains("stockTransaction.witness.required") || e.getMessage().contains("witness"));
+                    .matches(e -> e.getMessage().contains("stockTransaction.witness.required") || e.getMessage().contains("witness"))
+                    // QA D1282: the refusal names the request's field, so the form marks the witness picker.
+                    .hasFieldOrPropertyWithValue("field", "witnessedBy");
             verify(stockTransactionRepository, never()).save(any());
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("50.00"));
         }
@@ -563,7 +635,10 @@ class StockTransactionServiceImplTest {
 
             assertThatThrownBy(() -> service.recordTransaction(dto))
                     .isInstanceOf(BusinessException.class)
-                    .matches(e -> e.getMessage().contains("stockTransaction.witness.notSelf") || e.getMessage().contains("someone other"));
+                    .matches(e -> e.getMessage().contains("stockTransaction.witness.notSelf") || e.getMessage().contains("someone other"))
+                    // QA D1354 (round 30): on the witness picker.
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasFieldOrPropertyWithValue("field", "witnessedBy");
             verify(stockTransactionRepository, never()).save(any());
         }
 
@@ -579,7 +654,10 @@ class StockTransactionServiceImplTest {
 
             assertThatThrownBy(() -> service.recordTransaction(dto))
                     .isInstanceOf(BusinessException.class)
-                    .matches(e -> e.getMessage().contains("stockTransaction.witness.invalid") || e.getMessage().contains("of this hospital"));
+                    .matches(e -> e.getMessage().contains("stockTransaction.witness.invalid") || e.getMessage().contains("of this hospital"))
+                    // QA D1354 (round 30): on the witness picker.
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasFieldOrPropertyWithValue("field", "witnessedBy");
             verify(stockTransactionRepository, never()).save(any());
         }
 
@@ -859,6 +937,126 @@ class StockTransactionServiceImplTest {
             org.mockito.InOrder order = org.mockito.Mockito.inOrder(dispenseRepository, inventoryItemRepository);
             order.verify(dispenseRepository).findLockedById(dispense.getId());
             order.verify(inventoryItemRepository).lockById(inventoryItemId);
+        }
+
+        @Test
+        @DisplayName("QA D932: the return form lists the lot's fills with stock still out, and what each can take back")
+        void listsTheFillsAReturnCanBeBookedAgainst() {
+            var open = dispenseOf(new BigDecimal("5"), com.example.hms.enums.DispenseStatus.COMPLETED, stockLot);
+            var partlyBack = dispenseOf(new BigDecimal("4"), com.example.hms.enums.DispenseStatus.PARTIAL, stockLot);
+            var allBack = dispenseOf(new BigDecimal("2"), com.example.hms.enums.DispenseStatus.COMPLETED, stockLot);
+            com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
+            patient.setFirstName("Awa");
+            patient.setLastName("Ouedraogo");
+            open.setPatient(patient);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseRepository.findReturnableFillsOfLot(eq(stockLotId), any()))
+                    .thenReturn(List.of(open, partlyBack, allBack));
+            when(roleValidator.hasAnyAuthority(any(String[].class))).thenReturn(true);
+            when(stockTransactionRepository.sumQuantityByReferences(any(), eq(java.util.EnumSet.of(StockTransactionType.RETURN))))
+                    .thenReturn(List.<Object[]>of(new Object[] {partlyBack.getId(), new BigDecimal("1")},
+                            new Object[] {allBack.getId(), new BigDecimal("2")}));
+
+            var rows = service.listReturnableDispenses(inventoryItemId, stockLotId);
+
+            assertThat(rows).extracting(com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO::dispenseId)
+                    .containsExactly(open.getId(), partlyBack.getId());
+            assertThat(rows.get(0).returnableQuantity()).isEqualByComparingTo("5");
+            assertThat(rows.get(0).patientName()).isEqualTo("Awa Ouedraogo");
+            assertThat(rows.get(0).lotNumber()).isEqualTo("LOT-001");
+            assertThat(rows.get(1).returnableQuantity()).isEqualByComparingTo("3");
+        }
+
+        /**
+         * CX-003 class (round 33): the newest 50 fills, fully returned ones among them, then
+         * nothing. An older fill could not be returned, and the form did not say so.
+         */
+        @Test
+        @DisplayName("every returnable fill is listed, however old, past a thousand returned-sum values")
+        void everyReturnableFillIsListed() {
+            List<com.example.hms.model.pharmacy.Dispense> fills = new java.util.ArrayList<>();
+            for (int i = 0; i < 1203; i++) {
+                fills.add(dispenseOf(new BigDecimal("2"), com.example.hms.enums.DispenseStatus.COMPLETED, stockLot));
+            }
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseRepository.findReturnableFillsOfLot(eq(stockLotId), any()))
+                    .thenReturn(fills);
+            when(roleValidator.hasAnyAuthority(any(String[].class))).thenReturn(false);
+            UUID newestFullyReturned = fills.get(0).getId();
+            UUID oldestPartlyReturned = fills.get(1202).getId();
+            when(stockTransactionRepository.sumQuantityByReferences(any(), eq(java.util.EnumSet.of(StockTransactionType.RETURN))))
+                    .thenAnswer(call -> {
+                        java.util.Collection<UUID> ids = call.getArgument(0);
+                        assertThat(ids).hasSizeLessThanOrEqualTo(1000);
+                        List<Object[]> rows = new java.util.ArrayList<>();
+                        if (ids.contains(newestFullyReturned)) {
+                            rows.add(new Object[] {newestFullyReturned, new BigDecimal("2")});
+                        }
+                        if (ids.contains(oldestPartlyReturned)) {
+                            rows.add(new Object[] {oldestPartlyReturned, new BigDecimal("1")});
+                        }
+                        return rows;
+                    });
+
+            var rows = service.listReturnableDispenses(inventoryItemId, stockLotId);
+
+            assertThat(rows).hasSize(1202);
+            assertThat(rows.get(1201).dispenseId()).isEqualTo(oldestPartlyReturned);
+            assertThat(rows.get(1201).returnableQuantity()).isEqualByComparingTo("1");
+        }
+
+        @Test
+        @DisplayName("review of #975: an inventory clerk picks the fill without the patient's name (minimum necessary)")
+        void aStockRoleSeesTheFillsWithoutThePatientsName() {
+            var open = dispenseOf(new BigDecimal("5"), com.example.hms.enums.DispenseStatus.COMPLETED, stockLot);
+            com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
+            patient.setFirstName("Awa");
+            patient.setLastName("Ouedraogo");
+            open.setPatient(patient);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseRepository.findReturnableFillsOfLot(eq(stockLotId), any()))
+                    .thenReturn(List.of(open));
+            when(roleValidator.hasAnyAuthority(any(String[].class))).thenReturn(false);
+
+            var rows = service.listReturnableDispenses(inventoryItemId, stockLotId);
+
+            assertThat(rows).hasSize(1);
+            assertThat(rows.get(0).patientName()).isNull();
+            assertThat(rows.get(0).returnableQuantity()).isEqualByComparingTo("5");
+        }
+
+        @Test
+        @DisplayName("QA D932: another hospital's item is not found, and its fills are never read")
+        void anotherHospitalsItemIsNotListed() {
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            pharmacy.setHospital(other);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.listReturnableDispenses(inventoryItemId, stockLotId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(dispenseRepository, never()).findReturnableFillsOfLot(any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D932: a lot of another item is refused")
+        void aLotOfAnotherItemIsRefused() {
+            InventoryItem otherItem = InventoryItem.builder().pharmacy(pharmacy).build();
+            otherItem.setId(UUID.randomUUID());
+            stockLot.setInventoryItem(otherItem);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+
+            assertThatThrownBy(() -> service.listReturnableDispenses(inventoryItemId, stockLotId))
+                    .isInstanceOf(BusinessException.class);
         }
 
         @Test

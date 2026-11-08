@@ -30,3 +30,20 @@ export function missingRequiredMessage(
   if (missing.length === 0) return null;
   return translate.instant('COMMON.MISSING_REQUIRED_FIELDS', { fields: missing.join(', ') });
 }
+
+/**
+ * QA D1256 class (round 27): every reason a submit guard has, said at once —
+ * a guard reason method that returned the first rule only made the reader
+ * press once per rule (empty triage: "Score ESI", then "a vital sign").
+ * Null when there is none.
+ */
+export function joinReasons(
+  reasons: readonly (string | null | false | undefined)[],
+): string | null {
+  const said = reasons
+    .filter((r): r is string => typeof r === 'string' && r.trim() !== '')
+    .map((r) => r.trim());
+  if (said.length <= 1) return said[0] ?? null;
+  // Each reason reads as its own sentence, whether its text ends with a stop or not.
+  return said.map((r) => (/[.!?…]$/u.test(r) ? r : `${r}.`)).join(' ');
+}

@@ -12,6 +12,8 @@
   role="dialog"
   aria-modal="true"
   [attr.aria-label]="'RECEPTION.REGISTER_WALKIN' | translate"
+  appDialogFocus
+  (dialogDismiss)="dismissed.emit()"
 >
   <div class="dialog-header">
     <span class="material-symbols-outlined header-icon">person_add</span>
@@ -33,12 +35,17 @@
       >
       <div class="search-wrapper">
         <input
+          required
+          data-escape-discards
           id="patientSearch"
+          [attr.data-submit-blank]="selectedPatient() ? 'false' : 'true'"
           type="text"
           class="form-control"
           [placeholder]="'RECEPTION.SEARCH_PATIENT_PLACEHOLDER' | translate"
           [ngModel]="patientQuery()"
           (ngModelChange)="onPatientQueryChange($event)"
+          [appListEscape]="patientResults().length > 0 && !selectedPatient()"
+          (listEscape)="patientResults.set([])"
           autocomplete="off"
         />
         @if (searchingPatients()) {
@@ -54,9 +61,9 @@
               (click)="selectPatient(p)"
               (keydown.enter)="selectPatient(p)"
             >
-              <span class="result-name">{{ p.firstName }} {{ p.lastName }}</span>
+              <span class="result-name">{{ p | personName }}</span>
               @if (p | patientSubline; as sub) {
-                <span class="result-meta">{{ sub }}</span>
+                {{ ' ' }}<span class="result-meta">{{ sub }}</span>
               }
             </li>
           }
@@ -65,12 +72,17 @@
       @if (selectedPatient()) {
         <div class="selected-badge">
           <span class="material-symbols-outlined">check_circle</span>
-          {{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}
+          {{ selectedPatient() | personName }}
           @if (selectedPatient() | patientSubline; as sub) {
             <span class="result-meta">{{ sub }}</span>
           }
-          <button class="clear-btn" (click)="selectedPatient.set(null); patientQuery.set('')">
-            <span class="material-symbols-outlined">close</span>
+          <button
+            type="button"
+            class="clear-btn"
+            (click)="selectedPatient.set(null); patientQuery.set('')"
+            [attr.aria-label]="'RECEPTION.CLEAR_PATIENT' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </div>
       }
@@ -83,16 +95,21 @@
       >
       <div class="search-wrapper">
         <input
+          required
+          data-escape-discards
           id="staffSearch"
+          [attr.data-submit-blank]="selectedStaff() ? 'false' : 'true'"
           type="text"
           class="form-control"
           [placeholder]="'RECEPTION.FILTER_PROVIDER' | translate"
           [ngModel]="staffQuery()"
-          (ngModelChange)="staffQuery.set($event); selectedStaff.set(null)"
+          (ngModelChange)="onStaffQueryChange($event)"
+          [appListEscape]="staffListShown()"
+          (listEscape)="staffListDismissed.set(true)"
           autocomplete="off"
         />
       </div>
-      @if (filteredStaff().length > 0 && !selectedStaff()) {
+      @if (staffListShown()) {
         <ul class="autocomplete-list">
           @for (s of filteredStaff().slice(0, 10); track s.id) {
             <li
@@ -103,7 +120,7 @@
             >
               <span class="result-name">{{ s.name }}</span>
               @if (s.departmentName) {
-                <span class="result-meta">{{ s.departmentName }}</span>
+                {{ ' ' }}<span class="result-meta">{{ s.departmentName }}</span>
               }
             </li>
           }
@@ -116,8 +133,13 @@
           @if (selectedStaff()!.departmentName) {
             <span class="result-meta">— {{ selectedStaff()!.departmentName }}</span>
           }
-          <button class="clear-btn" (click)="selectedStaff.set(null); staffQuery.set('')">
-            <span class="material-symbols-outlined">close</span>
+          <button
+            type="button"
+            class="clear-btn"
+            (click)="onStaffQueryChange('')"
+            [attr.aria-label]="'RECEPTION.CLEAR_PROVIDER' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </div>
       }
@@ -131,6 +153,7 @@
         {{ 'RECEPTION.DEPARTMENT' | translate }} <span class="required">*</span>
       </label>
       <select
+        required
         id="walkinDept"
         class="form-control"
         [ngModel]="departmentId()"
@@ -178,7 +201,10 @@
     </button>
     <button
       class="btn-primary"
-      [disabled]="!selectedPatient() || !selectedStaff() || saving()"
+      [disabled]="saving()"
+      submitGuardRequired
+      [appSubmitGuard]="!selectedPatient() || !selectedStaff() || !departmentId()"
+      [submitGuardFields]="['patientSearch', 'staffSearch', 'walkinDept']"
       (click)="submit()"
     >
       @if (saving()) {

@@ -1,7 +1,13 @@
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { personName } from '../shared/pipes/person-name.pipe';
+import { isOrderCancellable } from '../shared/order-lifecycle';
 import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -13,6 +19,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   MaternityService,
   MaternalHistoryRequest,
+  ObstetricHistory,
   MaternalHistoryResponse,
   PageResponse,
 } from '../services/maternity.service';
@@ -31,7 +38,7 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
-import { labelledRefusalReason } from '../shared/refusal-reason';
+import { labelledRefusalReason, refusalReason } from '../shared/refusal-reason';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import {
   localInputInstant,
@@ -45,11 +52,25 @@ import { PrenatalTabComponent } from './prenatal-tab';
 import { PostpartumTabComponent } from './postpartum-tab';
 import { LaborTabComponent } from './labor-tab';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import {
+  dueDateFromLmp,
+  effectiveDueDate,
+  gestationalAge,
+  isDelivered,
+  ongoingPregnancy,
+} from './pregnancy-dates';
+import { AuthorshipService } from '../shared/authorship.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { missingRequiredMessage } from '../shared/required-fields';
 /** The history form's fields the server names under `fieldErrors`. */
 const HISTORY_LABELS: Record<string, string> = {
   recordedDate: 'MATERNITY.RECORDED',
   'menstrualHistory.lastMenstrualPeriod': 'MATERNITY.LMP',
+  'menstrualHistory.estimatedDueDate': 'MATERNITY.EDD',
   'obstetricHistory.gravida': 'MATERNITY.GRAVIDA',
   'obstetricHistory.para': 'MATERNITY.PARA',
   'obstetricHistory.termBirths': 'MATERNITY.TERM_BIRTHS',
@@ -59,6 +80,36 @@ const HISTORY_LABELS: Record<string, string> = {
   'obstetricHistory.previousCesareanSections': 'MATERNITY.CSECTIONS',
 };
 
+const HISTORY_PATIENT_ID = 'history-patient';
+const HISTORY_RECORDED_ID = 'history-recorded';
+const HISTORY_PARA_ID = 'ob-para';
+const HISTORY_ABORTIONS_ID = 'ob-abortions';
+const HISTORY_EDD_ID = 'history-edd';
+const HISTORY_TERM_ID = 'ob-term';
+const HISTORY_LIVING_ID = 'ob-living';
+const HISTORY_CSECTIONS_ID = 'ob-csections';
+/** QA D1306 (round 28): the history field each historyFormProblem() key refuses. */
+const HISTORY_PROBLEM_FIELD: Readonly<Record<string, string>> = {
+  'MATERNITY.RECORDED_FUTURE': HISTORY_RECORDED_ID,
+  'MATERNITY.PARA_ABOVE_GRAVIDA': HISTORY_PARA_ID,
+  'MATERNITY.OUTCOMES_ABOVE_GRAVIDA': HISTORY_ABORTIONS_ID,
+  'MATERNITY.EDD_BEFORE_LMP': HISTORY_EDD_ID,
+  'MATERNITY.TERM_PRETERM_ABOVE_PARA': HISTORY_TERM_ID,
+  'MATERNITY.CESAREANS_ABOVE_PARA': HISTORY_CSECTIONS_ID,
+  'MATERNITY.LIVING_ABOVE_PARA': HISTORY_LIVING_ID,
+};
+/** Every history field submitHistory() may refuse. */
+const HISTORY_FIELD_IDS = [
+  HISTORY_PATIENT_ID,
+  HISTORY_RECORDED_ID,
+  HISTORY_PARA_ID,
+  HISTORY_ABORTIONS_ID,
+  HISTORY_EDD_ID,
+  HISTORY_TERM_ID,
+  HISTORY_LIVING_ID,
+  HISTORY_CSECTIONS_ID,
+];
+
 /** The charting-device clock allowance the server grants a clinical time (NotInClinicalFuture). */
 const CLOCK_SKEW_MS = 10 * 60 * 1000;
 
@@ -67,8 +118,9 @@ const CLOCK_SKEW_MS = 10 * 60 * 1000;
  * key, or null. QA D821: a record dated in the future (the server refuses it
  * beyond its clock allowance). QA D809: "G1 P3" was saved; parity counts
  * births, each of which ended a pregnancy counted in gravidity, and a
- * pregnancy ends in at most one birth or one abortion. The server refuses the
- * same, on the same fields.
+ * pregnancy ends in at most one birth or one abortion. QA D1465: a due date on
+ * or before the LMP; births and living children against parity. The server
+ * refuses the same, on the same fields.
  */
 export function historyFormProblem(
   form: MaternalHistoryRequest,
@@ -78,7 +130,15 @@ export function historyFormProblem(
   if (recorded && recorded.getTime() > now.getTime() + CLOCK_SKEW_MS) {
     return 'MATERNITY.RECORDED_FUTURE';
   }
+  const lmp = form.menstrualHistory?.lastMenstrualPeriod;
+  const edd = form.menstrualHistory?.estimatedDueDate;
+  if (lmp && edd && edd <= lmp) return 'MATERNITY.EDD_BEFORE_LMP';
   const counts = form.obstetricHistory ?? {};
+  return gravidaProblem(counts) ?? parityProblem(counts);
+}
+
+/** P and A against G; a blank gravidity is not compared. */
+function gravidaProblem(counts: ObstetricHistory): string | null {
   const gravida = counts.gravida;
   if (gravida === undefined || gravida === null) return null;
   const para = counts.para ?? 0;
@@ -93,6 +153,20 @@ export function historyFormProblem(
   return null;
 }
 
+/** What parity bounds (ObstetricCounts on the server); a blank parity is not compared. */
+function parityProblem(counts: ObstetricHistory): string | null {
+  const para = counts.para;
+  if (para === undefined || para === null) return null;
+  if ((counts.termBirths ?? 0) + (counts.pretermBirths ?? 0) > para) {
+    return 'MATERNITY.TERM_PRETERM_ABOVE_PARA';
+  }
+  if ((counts.previousCesareanSections ?? 0) > para) return 'MATERNITY.CESAREANS_ABOVE_PARA';
+  if ((counts.livingChildren ?? 0) > para && !counts.multipleBirth) {
+    return 'MATERNITY.LIVING_ABOVE_PARA';
+  }
+  return null;
+}
+
 type BoardWorklist =
   'high-risk' | 'pending-review' | 'specialist-referral' | 'psychosocial' | 'all';
 type ReferralListMode = 'hospital' | 'assigned' | 'patient';
@@ -103,6 +177,11 @@ type MaternityTab =
   selector: 'app-maternity',
   standalone: true,
   imports: [
+    DateTimePipe,
+    InlineDiscardAskComponent,
+    InlineSubFormDirective,
+    SubmitGuardDirective,
+    ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -120,6 +199,8 @@ type MaternityTab =
 })
 export class MaternityComponent implements OnInit {
   private readonly maternityService = inject(MaternityService);
+  private readonly hostEl = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly authorship = inject(AuthorshipService);
   private readonly referralService = inject(ObgynReferralService);
   private readonly patientService = inject(PatientService);
   private readonly auth = inject(AuthService);
@@ -316,18 +397,52 @@ export class MaternityComponent implements OnInit {
     if (!this.hospitalId) return;
     this.patientService.list(this.hospitalId).subscribe({
       next: (patients) => {
-        this.patientNames = new Map(
-          (patients ?? []).map((p) => [p.id, `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim()]),
-        );
+        this.patientNames = new Map((patients ?? []).map((p) => [p.id, personName(p)]));
       },
       error: () => {
-        // Names stay blank; the table falls back to the MRN-less id prefix.
+        // Names stay blank; the table says the name is unavailable.
       },
     });
   }
 
+  /**
+   * QA D1005: the due date follows the LMP (Naegele, as the server computes
+   * it) unless the midwife typed her own; the gestational age is shown beside
+   * it and on the list.
+   */
+  onLmpChange(lmp: string): void {
+    const menstrual = this.historyForm.menstrualHistory ?? (this.historyForm.menstrualHistory = {});
+    const previousAuto = dueDateFromLmp(menstrual.lastMenstrualPeriod);
+    menstrual.lastMenstrualPeriod = lmp;
+    if (!menstrual.estimatedDueDate || menstrual.estimatedDueDate === previousAuto) {
+      menstrual.estimatedDueDate = dueDateFromLmp(lmp) || undefined;
+    }
+  }
+
+  formGestationalAge(): { weeks: number; days: number } | null {
+    return gestationalAge(effectiveDueDate(this.historyForm.menstrualHistory));
+  }
+
+  dueDateOf(history: MaternalHistoryResponse): string {
+    return effectiveDueDate(history.menstrualHistory);
+  }
+
+  /** QA D1067: a delivered woman's history shows no running gestational age. */
+  gestationalAgeOf(history: MaternalHistoryResponse): { weeks: number; days: number } | null {
+    return ongoingPregnancy(history);
+  }
+
+  /** QA D1067: the delivery that ended this history's pregnancy, if any. */
+  deliveredAtOf(history: MaternalHistoryResponse): string | null {
+    return isDelivered(history) ? (history.deliveredAt ?? null) : null;
+  }
+
   patientName(patientId: string): string {
-    return this.patientNames.get(patientId) || `${patientId.substring(0, 8)}…`;
+    // QA D992 class: never a slice of the UUID; say the name is unavailable.
+    return (
+      this.patientNames.get(patientId) ||
+      (this.translate.instant('MATERNITY.PATIENT_NAME_UNAVAILABLE') as string)
+    );
   }
 
   setWorklist(w: BoardWorklist): void {
@@ -426,8 +541,8 @@ export class MaternityComponent implements OnInit {
         this.reviewBusyId.set(null);
         this.replaceHistory(updated);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MATERNITY.REVIEW_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('MATERNITY.REVIEW_ERROR'));
         this.reviewBusyId.set(null);
       },
     });
@@ -441,8 +556,8 @@ export class MaternityComponent implements OnInit {
         this.reviewBusyId.set(null);
         this.replaceHistory(updated);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MATERNITY.RISK_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('MATERNITY.RISK_ERROR'));
         this.reviewBusyId.set(null);
       },
     });
@@ -522,6 +637,19 @@ export class MaternityComponent implements OnInit {
     this.showHistoryModal.set(false);
   }
 
+  /**
+   * QA D1124: why the history form refuses, shown next to "Save"; null when
+   * it may be sent. The button is never silently disabled.
+   */
+  historyBlockReason(): string | null {
+    if (!this.historyForm.patientId) return this.translate.instant('SUBMIT_GUARD.PATIENT');
+    if (this.editingHistoryId()) return null;
+    if (this.existingHistory()) return this.translate.instant('MATERNITY.HISTORY_ALREADY_EXISTS');
+    if (this.historyHeldElsewhere())
+      return this.translate.instant('MATERNITY.HISTORY_HELD_ELSEWHERE');
+    return null;
+  }
+
   onHistoryPatientPicked(p: PatientResponse | null): void {
     this.selectedPatient.set(p);
     this.historyForm.patientId = p?.id ?? '';
@@ -587,14 +715,39 @@ export class MaternityComponent implements OnInit {
     if (!this.editingHistoryId() && this.historyHeldElsewhere()) return;
     const form = this.historyForm;
     if (!form.patientId || !form.recordedDate) {
-      this.toast.error(this.translate.instant('MATERNITY.HISTORY_REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'MATERNITY.PATIENT', value: form.patientId },
+          { labelKey: 'MATERNITY.RECORDED', value: form.recordedDate },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
+      const blank = [
+        form.patientId ? null : HISTORY_PATIENT_ID,
+        form.recordedDate ? null : HISTORY_RECORDED_ID,
+      ].filter((id): id is string => id !== null);
+      refuseFields(
+        this.hostEl.nativeElement,
+        blank,
+        HISTORY_FIELD_IDS,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
+      this.toast.error(message);
       return;
     }
     const problem = historyFormProblem(form);
     if (problem) {
-      this.toast.error(this.translate.instant(problem));
+      const message = this.translate.instant(problem);
+      // QA D1306 (round 28): the field is marked, not only a toast.
+      refuseFields(
+        this.hostEl.nativeElement,
+        [HISTORY_PROBLEM_FIELD[problem]],
+        HISTORY_FIELD_IDS,
+        message,
+      );
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.hostEl.nativeElement, [], HISTORY_FIELD_IDS, '');
     form.hospitalId = this.hospitalId;
     form.recordedByStaffId = this.auth.getUserProfile()?.staffId ?? undefined;
     this.historySaving.set(true);
@@ -734,7 +887,7 @@ export class MaternityComponent implements OnInit {
   patientDisplay(referral: ObgynReferralResponse): string {
     const p = referral.patient;
     if (!p) return '—';
-    return `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() || (p.mrn ?? p.id);
+    return personName(p) || (p.mrn ?? p.id);
   }
 
   /** Mirrors the backend summary: SUBMITTED and ACKNOWLEDGED both count. */
@@ -782,7 +935,13 @@ export class MaternityComponent implements OnInit {
     if (!this.hospitalId) return;
     const form = this.referralForm;
     if (!form.patientId || !form.referralReason.trim()) {
-      this.toast.error(this.translate.instant('MATERNITY.REFERRAL_REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list.
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'MATERNITY.PATIENT', value: form.patientId },
+          { labelKey: 'MATERNITY.REFERRAL_REASON', value: form.referralReason.trim() },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
       return;
     }
     // The backend rejects PRIORITY/URGENT referrals without at least one
@@ -803,8 +962,10 @@ export class MaternityComponent implements OnInit {
         this.loadSummary();
         this.loadReferrals();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MATERNITY.REFERRAL_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MATERNITY.REFERRAL_SAVE_ERROR'),
+        );
         this.referralSaving.set(false);
       },
     });
@@ -849,8 +1010,10 @@ export class MaternityComponent implements OnInit {
         this.messageDraft = '';
         this.messageSending.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MATERNITY.MESSAGE_SEND_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MATERNITY.MESSAGE_SEND_ERROR'),
+        );
         this.messageSending.set(false);
       },
     });
@@ -860,6 +1023,13 @@ export class MaternityComponent implements OnInit {
     this.referralAction.set(action);
     this.referralActionText = '';
     this.referralActionUpdateCareTeam = false;
+    // QA D1144 sibling: the keyboard goes to the reason the action asks for.
+    focusWhenRendered(this.hostEl.nativeElement, '#referral-action-text');
+  }
+
+  /** QA D1081: an OB/GYN referral is cancelled by the midwife who sent it. */
+  canCancelThisReferral(r: ObgynReferralResponse): boolean {
+    return this.canCancelReferral && isOrderCancellable(r.status) && this.authorship.isAuthor(r);
   }
 
   cancelReferralAction(): void {
@@ -872,7 +1042,7 @@ export class MaternityComponent implements OnInit {
     this.referralActionBusy.set(true);
     this.referralService.start(referral.id).subscribe({
       next: (updated) => this.afterReferralAction(updated, 'MATERNITY.REFERRAL_STARTED'),
-      error: () => this.referralActionError(),
+      error: (err: unknown) => this.referralActionError(err),
     });
   }
 
@@ -896,7 +1066,7 @@ export class MaternityComponent implements OnInit {
           : 'MATERNITY.REFERRAL_CANCELLED';
     op.subscribe({
       next: (updated) => this.afterReferralAction(updated, successKey),
-      error: () => this.referralActionError(),
+      error: (err: unknown) => this.referralActionError(err),
     });
   }
 
@@ -909,8 +1079,11 @@ export class MaternityComponent implements OnInit {
     this.loadSummary();
   }
 
-  private referralActionError(): void {
-    this.toast.error(this.translate.instant('MATERNITY.REFERRAL_ACTION_ERROR'));
+  private referralActionError(err?: unknown): void {
+    // QA D930 class: a cancel refused to anyone but the referring midwife says so.
+    this.toast.error(
+      refusalReason(err) ?? this.translate.instant('MATERNITY.REFERRAL_ACTION_ERROR'),
+    );
     this.referralActionBusy.set(false);
   }
 }

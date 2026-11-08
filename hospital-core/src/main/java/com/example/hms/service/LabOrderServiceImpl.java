@@ -62,6 +62,9 @@ public class LabOrderServiceImpl implements LabOrderService {
     // i18n key for "lab order not found" appears 7x in this file.
     // One constant, one source of truth.
     private static final String LAB_ORDER_NOT_FOUND = "laborder.notfound";
+    /** QA D1428 class: the statuses in which an order's content is closed to an edit. */
+    private static final java.util.Set<LabOrderStatus> CLOSED_TO_EDIT = java.util.EnumSet.of(
+        LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED, LabOrderStatus.CANCELLED);
 
     /** The key an unknown staff id gets; every ordering-staff refusal reuses it. */
     private static final String STAFF_NOT_FOUND = "staff.notfound";
@@ -128,6 +131,11 @@ public class LabOrderServiceImpl implements LabOrderService {
         // QA D820: an order voided as entered in error is kept as it was voided.
         if (existing.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
             throw new BusinessException("lab.order.enteredInError");
+        }
+        // QA D1428 class: a resulted or cancelled order is the record of what
+        // was asked and done; a correction is a new order or a superseding result.
+        if (CLOSED_TO_EDIT.contains(existing.getStatus())) {
+            throw new BusinessException("lab.order.closed.readOnly");
         }
 
         Hospital previousPerformer = existing.getPerformingHospital();
@@ -292,8 +300,9 @@ public class LabOrderServiceImpl implements LabOrderService {
     }
 
     private LabOrder buildLabOrder(LabOrder base, LabOrderRequestDTO request, boolean isNew) {
-    String clinicalIndication = normalizeRequiredText(request.getClinicalIndication(), "Clinical indication is required for lab orders.");
-    String medicalNecessityNote = normalizeRequiredText(request.getMedicalNecessityNote(), "Medical necessity rationale is required for lab orders.");
+    String clinicalIndication = normalizeRequiredText(request.getClinicalIndication(), "labOrder.clinicalIndication.required", "clinicalIndication");
+    String medicalNecessityNote = normalizeRequiredText(request.getMedicalNecessityNote(), "labOrder.medicalNecessityNote.required",
+        "medicalNecessityNote");
         String notes = normalizeOptionalText(request.getNotes());
 
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
@@ -308,8 +317,9 @@ public class LabOrderServiceImpl implements LabOrderService {
 
         Hospital hospital = encounter != null ? encounter.getHospital() : null;
         if (hospital != null && requestedHospitalId != null && !hospital.getId().equals(requestedHospitalId)) {
-            throw new BusinessException("lab.order.encounterHospitalMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "lab.order.encounterHospitalMismatch");
         }
+        requireOrderableEncounter(encounter, patient, base);
 
         if (hospital == null && requestedHospitalId != null) {
             hospital = hospitalRepository.findClinicalById(requestedHospitalId)
@@ -328,6 +338,9 @@ public class LabOrderServiceImpl implements LabOrderService {
             throw new BusinessException("lab.order.patientNotRegistered");
         }
 
+        if (isNew) {
+            com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        }
         Staff staff = keptOrderingStaff(base, request.getOrderingStaffId(), hospital);
         if (staff == null) {
             staff = resolveOrderingStaff(request.getOrderingStaffId(), hospital);
@@ -386,7 +399,32 @@ public class LabOrderServiceImpl implements LabOrderService {
         return labOrder;
     }
 
-    private static final java.util.Set<String> LAB_PRIORITIES = java.util.Set.of("ROUTINE", "URGENT", "STAT");
+    /**
+     * QA D1094: the visit a lab order is attached to. Any clinician of the
+     * visit's hospital who may order tests orders on it (the role check
+     * follows), as in a real hospital: the visit need not be theirs. It must
+     * be this patient's, and a NEW order (or one moved onto another visit) goes
+     * only on a visit still open - a closed visit takes a new visit. Each
+     * refusal is a translated 400; the entity's invariants are never the first
+     * to say no (they answered a colleague's visit with a 500).
+     */
+    static void requireOrderableEncounter(Encounter encounter, Patient patient, LabOrder base) {
+        if (encounter == null) {
+            return;
+        }
+        if (encounter.getPatient() == null || patient == null
+                || !java.util.Objects.equals(encounter.getPatient().getId(), patient.getId())) {
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "lab.order.encounterPatientMismatch");
+        }
+        boolean sameVisitAsBefore = base != null && base.getEncounter() != null
+            && java.util.Objects.equals(base.getEncounter().getId(), encounter.getId());
+        if (!sameVisitAsBefore && encounter.getStatus() != null && encounter.getStatus().isClosed()) {
+            throw new BusinessException("lab.order.encounterClosed", encounter.getStatus().localizedLabel());
+        }
+    }
+
+    private static final java.util.Set<String> LAB_PRIORITIES = java.util.Arrays.stream(
+        com.example.hms.enums.ClinicalPriority.values()).map(Enum::name).collect(java.util.stream.Collectors.toUnmodifiableSet());
 
     /**
      * D266: the requested priority was never copied onto the entity, so URGENT
@@ -400,7 +438,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         String normalized = requested.trim().toUpperCase(java.util.Locale.ROOT);
         if (!LAB_PRIORITIES.contains(normalized)) {
-            throw new BusinessException("lab.order.priority.invalid");
+            throw new com.example.hms.exception.FieldBusinessException("priority", "lab.order.priority.invalid");
         }
         return normalized;
     }
@@ -446,7 +484,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             throw new ResourceNotFoundException("labtestdefinition.notfound");
         }
         if (!definition.isOrderable()) {
-            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labtestdefinition.notOrderable"));
+            throw new com.example.hms.exception.FieldBusinessException("labTestDefinitionId", com.example.hms.utility.MessageUtil.resolve("labtestdefinition.notOrderable"));
         }
     }
 
@@ -641,7 +679,7 @@ public class LabOrderServiceImpl implements LabOrderService {
                 // caller can already see, so "staff not found" only misled. Say
                 // what is wrong; a row elsewhere still reads as unknown.
                 if (named.getHospital() != null && hospital.getId().equals(named.getHospital().getId())) {
-                    throw new BusinessException("labOrder.orderingStaff.notCaller");
+                    throw new com.example.hms.exception.FieldBusinessException("orderingStaffId", "labOrder.orderingStaff.notCaller");
                 }
                 throw new ResourceNotFoundException(STAFF_NOT_FOUND, requestedStaffId);
             }
@@ -702,7 +740,9 @@ public class LabOrderServiceImpl implements LabOrderService {
         try {
             requested = LabOrderStatus.valueOf(requestedStatus.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw new BusinessException("lab.order.unknownStatus", String.valueOf(requestedStatus));
+            // QA D1370 (round 31): named, so the form marks the field (the edge check refuses it first).
+            throw new com.example.hms.exception.FieldBusinessException("status", "lab.order.unknownStatus",
+                String.valueOf(requestedStatus));
         }
         if (isNew) {
             if (!CREATABLE_STATUSES.contains(requested)) {
@@ -975,6 +1015,10 @@ public class LabOrderServiceImpl implements LabOrderService {
             .toList();
     }
 
+    /** QA D1098: a lab order's resulted states, in lifecycle order. */
+    private static final List<LabOrderStatus> RESULTED_STATES =
+        List.of(LabOrderStatus.RESULTED, LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED);
+
     /** QA D673: matches lab.lab_orders.cancellation_reason (V219). */
     private static final int MAX_CANCELLATION_REASON = 1000;
 
@@ -987,13 +1031,23 @@ public class LabOrderServiceImpl implements LabOrderService {
         ALLOWED_TRANSITIONS.put(LabOrderStatus.COLLECTED,   EnumSet.of(LabOrderStatus.RECEIVED,    LabOrderStatus.CANCELLED));
         ALLOWED_TRANSITIONS.put(LabOrderStatus.RECEIVED,    EnumSet.of(LabOrderStatus.IN_PROGRESS, LabOrderStatus.CANCELLED));
         ALLOWED_TRANSITIONS.put(LabOrderStatus.IN_PROGRESS, EnumSet.of(LabOrderStatus.RESULTED,    LabOrderStatus.CANCELLED));
-        ALLOWED_TRANSITIONS.put(LabOrderStatus.RESULTED,    EnumSet.of(LabOrderStatus.VERIFIED,    LabOrderStatus.CANCELLED));
-        ALLOWED_TRANSITIONS.put(LabOrderStatus.VERIFIED,    EnumSet.of(LabOrderStatus.COMPLETED,   LabOrderStatus.CANCELLED));
+        // QA D1098 (round 19, order class): a resulted order is not cancelled -
+        // a wrong result is voided as entered in error (voidLabOrder), which
+        // keeps the account of what was released.
+        ALLOWED_TRANSITIONS.put(LabOrderStatus.RESULTED,    EnumSet.of(LabOrderStatus.VERIFIED));
+        ALLOWED_TRANSITIONS.put(LabOrderStatus.VERIFIED,    EnumSet.of(LabOrderStatus.COMPLETED));
     }
 
     @Override
     @Transactional
     public LabOrderResponseDTO voidLabOrder(UUID id, String reason, Locale locale) {
+        // QA round 29 (D1333 class): the body is read before any lookup, so a
+        // missing reason is named under fieldErrors.reason whatever the order.
+        String voidReason = normalizeRequiredText(reason, "lab.order.voidReasonRequired", "reason");
+        if (voidReason.length() > MAX_CANCELLATION_REASON) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "lab.order.voidReasonTooLong",
+                MAX_CANCELLATION_REASON);
+        }
         // Locked first, so a result being released concurrently cannot
         // complete the order underneath the void (the release path decides
         // under the same lock).
@@ -1013,10 +1067,6 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         requireOrderDecisionAuthority(roleValidator.getCurrentUserId(), labOrder.getHospital().getId(),
             "lab.order.voidForbidden");
-        String voidReason = normalizeRequiredText(reason, "lab.order.voidReasonRequired");
-        if (voidReason.length() > MAX_CANCELLATION_REASON) {
-            throw new BusinessException("lab.order.voidReasonTooLong", MAX_CANCELLATION_REASON);
-        }
         // The one reason column on the order: for a voided order it says why it
         // was entered in error. Who voided it and when is the audit row.
         labOrder.setCancellationReason(voidReason);
@@ -1044,12 +1094,14 @@ public class LabOrderServiceImpl implements LabOrderService {
         // (the ordering hospital or the performing laboratory); cancelling is
         // an ordering-side decision and stays with the ordering hospital.
         UUID authorityHospitalId = hospitalId != null ? hospitalId : orderingHospitalId;
+        // QA D1098: the shared order rule, so the refusal names the reason.
+        com.example.hms.service.support.CancelledOrders.requireResultStaysClosed(current, toStatus, RESULTED_STATES);
         validateStatusTransition(current, toStatus, authorityHospitalId, orderingHospitalId);
         if (toStatus == LabOrderStatus.CANCELLED) {
             // QA D673: a cancel states why, and the reason is kept on the order.
-            String cancelReason = normalizeRequiredText(reason, "lab.order.cancelReasonRequired");
+            String cancelReason = normalizeRequiredText(reason, "lab.order.cancelReasonRequired", "reason");
             if (cancelReason.length() > MAX_CANCELLATION_REASON) {
-                throw new BusinessException("lab.order.cancelReasonTooLong", MAX_CANCELLATION_REASON);
+                throw new com.example.hms.exception.FieldBusinessException("reason", "lab.order.cancelReasonTooLong", MAX_CANCELLATION_REASON);
             }
             labOrder.setCancellationReason(cancelReason);
         }
@@ -1098,10 +1150,11 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
     }
 
-    private String normalizeRequiredText(String value, String errorMessage) {
+    /** QA D1299: the refusal names the request field the text belongs to. */
+    private String normalizeRequiredText(String value, String errorMessage, String field) {
         String normalized = normalizeOptionalText(value);
         if (normalized == null) {
-            throw new BusinessException(errorMessage);
+            throw new com.example.hms.exception.FieldBusinessException(field, errorMessage);
         }
         return normalized;
     }
@@ -1120,11 +1173,11 @@ public class LabOrderServiceImpl implements LabOrderService {
             if (base != null) {
                 return base.getPrimaryDiagnosisCode();
             }
-            throw new BusinessException("lab.order.primaryDiagnosisRequired");
+            throw new com.example.hms.exception.FieldBusinessException("primaryDiagnosisCode", "lab.order.primaryDiagnosisRequired");
         }
         normalized = normalized.toUpperCase(Locale.ROOT);
         if (!DiagnosisCodeValidator.isValidIcd10(normalized)) {
-            throw new BusinessException("lab.order.invalidIcd10", normalized);
+            throw new com.example.hms.exception.FieldBusinessException("primaryDiagnosisCode", "lab.order.invalidIcd10", normalized);
         }
         return normalized;
     }
@@ -1150,7 +1203,8 @@ public class LabOrderServiceImpl implements LabOrderService {
             try {
                 return LabOrderChannel.fromCode(requestedChannel);
             } catch (IllegalArgumentException ex) {
-                throw new BusinessException(ex.getMessage());
+                // QA D1370 (round 31): translated and named, never the enum's English text.
+                throw new com.example.hms.exception.FieldBusinessException("orderChannel", "lab.order.orderChannel.invalid");
             }
         }
         if (base != null && base.getOrderChannel() != null) {
@@ -1170,7 +1224,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         if (base != null && base.getOrderChannelOther() != null) {
             return base.getOrderChannelOther();
         }
-        throw new BusinessException("lab.order.channelOtherRequired");
+        throw new com.example.hms.exception.FieldBusinessException("orderChannelOther", "lab.order.channelOtherRequired");
     }
 
     private String resolveOrderingProviderNpi(Staff staff, String override, LabOrder base) {
@@ -1192,10 +1246,10 @@ public class LabOrderServiceImpl implements LabOrderService {
             return null;
         }
         if (!resolved.matches("\\d{10}")) {
-            throw new BusinessException("lab.order.npiFormat");
+            throw new com.example.hms.exception.FieldBusinessException("orderingProviderNpi", "lab.order.npiFormat");
         }
         if (staffNpi != null && requestNpi != null && !staffNpi.equals(requestNpi)) {
-            throw new BusinessException("lab.order.npiMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("orderingProviderNpi", "lab.order.npiMismatch");
         }
         return resolved;
     }
@@ -1207,7 +1261,7 @@ public class LabOrderServiceImpl implements LabOrderService {
                 return base.getProviderSignatureDigest();
             }
             if (isNew) {
-                throw new BusinessException("lab.order.signatureRequired");
+                throw new com.example.hms.exception.FieldBusinessException("providerSignature", "lab.order.signatureRequired");
             }
             return null;
         }
@@ -1266,7 +1320,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         if (!documentationShared) {
             String channelName = channel.name().toLowerCase(Locale.ENGLISH);
-            throw new BusinessException("lab.order.channelDocumentationRequired", channelName);
+            throw new com.example.hms.exception.FieldBusinessException("documentationSharedWithLab", "lab.order.channelDocumentationRequired", channelName);
         }
     }
 
@@ -1304,10 +1358,10 @@ public class LabOrderServiceImpl implements LabOrderService {
             expiresAt = base.getStandingOrderExpiresAt();
         }
         if (expiresAt == null) {
-            throw new BusinessException("lab.order.standingExpiryRequired");
+            throw new com.example.hms.exception.FieldBusinessException("standingOrderExpiresAt", "lab.order.standingExpiryRequired");
         }
         if (orderDatetime != null && expiresAt.isBefore(orderDatetime)) {
-            throw new BusinessException("lab.order.standingExpiryAfterOrder");
+            throw new com.example.hms.exception.FieldBusinessException("standingOrderExpiresAt", "lab.order.standingExpiryAfterOrder");
         }
         return expiresAt;
     }
@@ -1318,7 +1372,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             lastReviewedAt = base.getStandingOrderLastReviewedAt();
         }
         if (lastReviewedAt == null) {
-            throw new BusinessException("lab.order.standingLastReviewRequired");
+            throw new com.example.hms.exception.FieldBusinessException("standingOrderLastReviewedAt", "lab.order.standingLastReviewRequired");
         }
         return lastReviewedAt;
     }
@@ -1329,7 +1383,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             reviewIntervalDays = base.getStandingOrderReviewIntervalDays();
         }
         if (reviewIntervalDays == null || reviewIntervalDays <= 0) {
-            throw new BusinessException("lab.order.standingReviewInterval");
+            throw new com.example.hms.exception.FieldBusinessException("standingOrderReviewIntervalDays", "lab.order.standingReviewInterval");
         }
         return reviewIntervalDays;
     }

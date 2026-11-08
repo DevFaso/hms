@@ -12,6 +12,7 @@ import com.example.hms.repository.PrescriptionRepository;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.MedicationRequest;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -22,6 +23,8 @@ import java.util.UUID;
 public class MedicationRequestFhirResourceProvider implements IResourceProvider {
 
     private static final int MAX_RESULTS = 200;
+    /** QA D1295 class: the capped page keeps the newest orders, not whatever the database returns first. */
+    public static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt", "id");
 
     private final PrescriptionRepository repository;
     private final MedicationRequestFhirMapper mapper;
@@ -52,7 +55,7 @@ public class MedicationRequestFhirResourceProvider implements IResourceProvider 
     ) {
         UUID patientId = FhirIds.fromReference(patient != null ? patient : subject);
         if (patientId == null) return Collections.emptyList();
-        return repository.findByPatient_Id(patientId, PageRequest.of(0, MAX_RESULTS))
+        return repository.findByPatient_Id(patientId, PageRequest.of(0, MAX_RESULTS, NEWEST_FIRST))
             .stream()
             .map(mapper::toFhir)
             .toList();

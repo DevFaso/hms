@@ -118,6 +118,23 @@ class CriticalValueNotificationServiceTest {
     }
 
     @Test
+    void d931_aCriticalCorrectionSaysItIsACorrectionAndNamesTheReplacedValue() {
+        LabResult original = new LabResult();
+        original.setId(UUID.randomUUID());
+        original.setResultValue("10.4");
+        original.setResultUnit("mmol/L");
+        result.setSupersedesResultId(original.getId());
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        when(labResultRepository.findById(original.getId())).thenReturn(java.util.Optional.of(original));
+
+        service.notifyIfCritical(result);
+
+        verify(notificationService).created(
+            contains("CORRIGÉ : Potassium 7,1 mmol/L pour Bea Ward (remplace 10,4 mmol/L)"),
+            eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
+    }
+
+    @Test
     void notifiesForComputedHighSeverity() {
         when(labResultMapper.severityFlagOf(result)).thenReturn("HIGH");
         when(labResultMapper.raisesCriticalAlert("HIGH")).thenReturn(true);
@@ -685,6 +702,43 @@ class CriticalValueNotificationServiceTest {
 
         assertThat(updated.getCriticalReadBackAt()).isNotNull();
         assertThat(updated.isAcknowledged()).isTrue();
+    }
+
+    /**
+     * QA D1292 (round 27, user decision): a read-back that repeats the value
+     * with its unit and/or a comma decimal is accepted when the number and,
+     * if given, the unit match the result; a wrong number or a wrong unit is
+     * still refused.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} {1} <- {2}: {3}")
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "6.8 | mmol/L | 6,8 mmol/L | true",
+        "6.8 | mmol/L | 6,8 | true",
+        "6.8 | mmol/L | 6.80 MMOL/L | true",
+        "6.8 | mmol/L | 6,8mmol/l | true",
+        "6.8 | mmol/L | 6.8 mmol / L | true",
+        "6.8 mmol/L | | 6,8 mmol/L | true",
+        "12 | µmol/L | 12 umol/L | true",
+        "6.8 | mmol/L | 6,9 mmol/L | false",
+        "6.8 | mmol/L | 6,8 mg/dL | false",
+        "6.8 | mmol/L | 68 mmol/L | false",
+        "6.8 | | 6,8 mmol/L | false",
+        "POSITIF | | positif | true",
+        "POSITIF | | négatif | false",
+        "6.8 | mmol/L | | false",
+        // QA D1394: a value critical from its comparator reads back with it.
+        ">6.5 | mmol/L | >6,5 | true",
+        ">6.5 | mmol/L | > 6,5 mmol/L | true",
+        "> 6.5 | mmol/L | >6.50 | true",
+        "<1.5 | mmol/L | <1,5 MMOL/L | true",
+        ">6.5 | mmol/L | 6,5 | false",
+        ">6.5 | mmol/L | <6,5 | false",
+        ">6.5 | mmol/L | >7 | false",
+        "6.5 | mmol/L | >6,5 | false",
+    })
+    void readBackAcceptsTheUnitAndTheCommaButNotAWrongNumberOrUnit(String value, String unit, String repeated,
+                                                                     boolean matches) {
+        assertThat(CriticalValueNotificationService.readBackMatches(value, unit, repeated)).isEqualTo(matches);
     }
 
     @Test

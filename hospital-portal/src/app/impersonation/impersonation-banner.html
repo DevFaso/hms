@@ -15,7 +15,8 @@
       </span>
     </span>
     @if (remainingLabel()) {
-      <span
+      {{ ' '
+      }}<span
         class="countdown-badge"
         [class.countdown-warning]="nearingExpiry()"
         data-test="impersonation-countdown"

@@ -229,11 +229,17 @@ describe('AdmissionsComponent (inpatient round 3: D153 departments and stay flow
   it('deletes an admission, and reports a failed delete', () => {
     const component = setup();
     component.confirmDelete(adm());
+    // QA D1381: no reason, no call.
     component.executeDelete();
-    expect(admissions.delete).toHaveBeenCalledWith('a1');
+    expect(admissions.delete).not.toHaveBeenCalled();
+    component.deleteReason.set('  Admission en double  ');
+    component.executeDelete();
+    expect(admissions.delete).toHaveBeenCalledWith('a1', 'Admission en double');
     expect(component.showDeleteConfirm()).toBeFalse();
     admissions.delete.and.returnValue(throwError(() => new Error('x')));
     component.confirmDelete(adm());
+    expect(component.deleteReason()).withContext('a new dialog starts blank').toBe('');
+    component.deleteReason.set('Erreur de saisie');
     component.executeDelete();
     expect(component.deleting()).toBeFalse();
     expect(toast.error).toHaveBeenCalled();
@@ -266,9 +272,15 @@ describe('AdmissionsComponent (inpatient round 3: D153 departments and stay flow
     component.selectedBedId.set('b1');
     component.submitBedAssign();
     expect(component.bedAssigning()).toBeFalse();
-    component.unassignBed(adm());
+    // QA D1100: the bed is freed through its dialog, with a reason.
+    component.openUnassignBed(adm());
+    component.unassignReason.set('Transfert');
+    component.confirmUnassignBed();
     admissions.unassignBed.and.returnValue(throwError(() => new Error('x')));
-    component.unassignBed(adm());
+    // QA D1100: the bed is freed through its dialog, with a reason.
+    component.openUnassignBed(adm());
+    component.unassignReason.set('Transfert');
+    component.confirmUnassignBed();
     beds.getAvailableBeds.and.returnValue(throwError(() => new Error('x')));
     component.openBedAssign(adm());
     expect(component.bedsLoading()).toBeFalse();

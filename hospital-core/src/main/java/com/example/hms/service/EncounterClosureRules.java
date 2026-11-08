@@ -2,6 +2,9 @@ package com.example.hms.service;
 
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.model.Encounter;
+import com.example.hms.model.Staff;
+import com.example.hms.security.CallerIdentity;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -10,6 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * QA D788: how an outpatient visit may be closed, written once for every path
@@ -63,6 +67,53 @@ public final class EncounterClosureRules {
         return auth.getAuthorities().stream()
             .map(GrantedAuthority::getAuthority)
             .anyMatch(CLINICIAN_AUTHORITIES::contains);
+    }
+
+    /** The statuses that end an examination when reached from IN_PROGRESS (QA D1099). */
+    public static final Set<EncounterStatus> EXAMINATION_ENDED = Collections.unmodifiableSet(EnumSet.of(
+        EncounterStatus.AWAITING_RESULTS, EncounterStatus.READY_FOR_DISCHARGE, EncounterStatus.COMPLETED));
+
+    /**
+     * QA D1099 (round 19): who ends an examination in progress, the mirror of
+     * who starts it (QA D1085, {@code EncounterServiceImpl.startEncounter}). A
+     * midwife ended a doctor's examination ("Terminer l'examen" and "Sortie" on
+     * his tracker card; the server answered 200 and the visit moved to
+     * READY_FOR_DISCHARGE while still assigned to him).
+     *
+     * <ul>
+     *   <li>a super-admin always;</li>
+     *   <li>a visit assigned to a clinician: only that clinician;</li>
+     *   <li>an unassigned visit: a doctor (who may have started it).</li>
+     * </ul>
+     * Every path that takes a visit out of IN_PROGRESS to AWAITING_RESULTS,
+     * READY_FOR_DISCHARGE or COMPLETED calls this ({@code ExaminingClinicianGuardTest}).
+     */
+    public static void requireExaminingClinician(Encounter encounter) {
+        requireExaminingClinicianUser(assignedClinicianUserId(encounter));
+    }
+
+    /** The same rule, given the assigned clinician's user id read before an edit could change it. */
+    public static void requireExaminingClinicianUser(UUID assigned) {
+        if (callerHas("ROLE_SUPER_ADMIN")) {
+            return;
+        }
+        if (assigned != null ? assigned.equals(CallerIdentity.currentUserId()) : callerHas("ROLE_DOCTOR")) {
+            return;
+        }
+        throw new BusinessException("encounter.exam.notExaminingClinician");
+    }
+
+    /** The user of the visit's assigned clinician, or null when the visit is unassigned. */
+    public static UUID assignedClinicianUserId(Encounter encounter) {
+        Staff staff = encounter == null ? null : encounter.getStaff();
+        return staff != null && staff.getUser() != null ? staff.getUser().getId() : null;
+    }
+
+    private static boolean callerHas(String authority) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+            .map(GrantedAuthority::getAuthority)
+            .anyMatch(authority::equals);
     }
 
     public static boolean isNeverSeen(EncounterStatus status) {

@@ -18,6 +18,8 @@ public class NurseDashboardSummaryDTO {
     private long vitalsDue;
     private long medicationsDue;
     private long medicationsOverdue;
+    /** QA D1402: the as-needed orders on the eMAR, which the two counts above leave out. */
+    private long medicationsAsNeeded;
     private long ordersPending;
     private long handoffsPending;
     private long announcements;

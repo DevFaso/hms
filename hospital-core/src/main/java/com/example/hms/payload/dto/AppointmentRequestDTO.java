@@ -18,16 +18,26 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+// QA D1318 (round 29): POST /appointments {} named startTime, then patientId,
+// then hospitalId, then staffId, one request each. Every part a booking needs
+// is declared here, so one answer names them all.
+@OneOf(fields = {"staffId", "staffEmail", "staffUsername"}, message = "{appointment.staff.required}")
+@OneOf(fields = {"hospitalId", "hospitalCode", "hospitalName"}, message = "{appointment.hospital.required}")
 public class AppointmentRequestDTO {
 
     private UUID id;
 
+    @NotNull(message = "{appointment.date.required}")
     @FutureOrPresent(message = "{appointment.appointmentDate.future}")
     private LocalDate appointmentDate;
 
     @NotNull(message = "{appointment.startTime.required}")
     private LocalTime startTime;
 
+    /**
+     * QA D1060: ignored on create, and on an edit that moves the visit: the
+     * slot rules set the length. The service writes the resolved end here.
+     */
     private LocalTime endTime;
 
 
@@ -50,6 +60,12 @@ public class AppointmentRequestDTO {
 
     // Optionally allow department to be specified directly
     private UUID departmentId;
+
+    /**
+     * QA D985: the recall this booking answers, when the desk books from the
+     * recall list. Optional; the recall then moves to SCHEDULED.
+     */
+    private UUID recallId;
     private String departmentName;
     private String departmentCode;
 
@@ -57,4 +73,51 @@ public class AppointmentRequestDTO {
 
     private String reason;
     private String notes;
+
+    /**
+     * QA D1126: why the visit is cancelled or marked a no-show, required when
+     * this edit moves the status to CANCELLED or NO_SHOW (the same rule as the
+     * status action). Not the booking {@link #reason}.
+     */
+    @jakarta.validation.constraints.Size(max = 500)
+    private String statusReason;
+
+    /**
+     * QA D1429: why staff book or move this visit outside any published free slot.
+     * Required then, ignored on a slot. A patient never overbooks.
+     */
+    @jakarta.validation.constraints.Size(max = 500)
+    private String overbookReason;
+
+    /**
+     * QA D1318 (round 29): a booking by staff names its patient (QA D824); a
+     * patient booking through this endpoint books for themselves. Read from
+     * the caller's authorities, so the rule is checked with the other fields.
+     * With no caller (a unit test, an internal build) the patient is required.
+     */
+    @jakarta.validation.constraints.AssertTrue(message = "{appointment.patient.required}")
+    @com.example.hms.validation.ReportedOn("patientId")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @io.swagger.v3.oas.annotations.Hidden
+    public boolean isPatientNamedForStaffBooking() {
+        if (patientId != null || hasText(patientUsername) || hasText(patientEmail)) {
+            return true;
+        }
+        org.springframework.security.core.Authentication caller =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (caller == null) {
+            return false;
+        }
+        // Required for a staff booker only; any other caller (a patient, an OIDC token carrying
+        // scopes beside its role) books for themselves, which the service resolves.
+        return caller.getAuthorities().stream().noneMatch(a -> STAFF_BOOKER_ROLES.contains(a.getAuthority()));
+    }
+
+    /** The staff roles of {@code POST /appointments} (AppointmentController.APPOINTMENT_BOOK_ROLES, less PATIENT). */
+    private static final java.util.Set<String> STAFF_BOOKER_ROLES = java.util.Set.of("ROLE_SUPER_ADMIN",
+        "ROLE_HOSPITAL_ADMIN", "ROLE_STAFF", "ROLE_RECEPTIONIST", "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE");
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
 }

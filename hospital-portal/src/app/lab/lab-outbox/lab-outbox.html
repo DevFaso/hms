@@ -12,7 +12,8 @@
         <span class="count-badge" data-testid="outbox-count-pending">
           {{ 'LAB_OUTBOX.PENDING_COUNT' | translate: { count: p.pendingCount } }}
         </span>
-        <span
+        {{ ' '
+        }}<span
           class="count-badge count-badge-error"
           [class.has-errors]="p.errorCount > 0"
           data-testid="outbox-count-error"
@@ -20,7 +21,12 @@
           {{ 'LAB_OUTBOX.ERROR_COUNT' | translate: { count: p.errorCount } }}
         </span>
       }
-      <button class="btn-refresh" (click)="load()" [disabled]="loading()">
+      <button
+        [attr.aria-label]="'COMMON.REFRESH' | translate"
+        class="btn-refresh"
+        (click)="load()"
+        [disabled]="loading()"
+      >
         <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
       </button>
     </div>
@@ -161,21 +167,32 @@
       tabindex="-1"
       data-testid="outbox-detail-modal"
     >
+      <!-- QA D1154 / D1004 / D1125: the shared modal directive takes the keyboard
+           in as soon as the dialog opens (the old focus trap never captured: the
+           card rendered while the message was still loading), closes on Escape
+           and gives focus back to "Voir le message". The title is there from the
+           first frame, so the dialog is named while it loads. -->
       <div
         class="form-card detail-card"
+        appModalDialog
+        aria-labelledby="lab-outbox-dialog-title-1"
+        (escaped)="closeDetail()"
         (click)="$event.stopPropagation()"
         (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
+        <h2 id="lab-outbox-dialog-title-1">
+          {{ 'LAB_OUTBOX.DETAIL_TITLE' | translate }}
+          @if (detail(); as d) {
+            <span class="mono">{{ d.message.messageType }}</span>
+          }
+        </h2>
         @if (detailLoading()) {
-          <div class="state-block">
-            <span class="material-symbols-outlined spin">progress_activity</span>
+          <div class="state-block" role="status">
+            <span class="material-symbols-outlined spin" aria-hidden="true">progress_activity</span>
+            <span class="sr-only">{{ 'COMMON.LOADING' | translate }}</span>
           </div>
         } @else if (detail(); as d) {
-          <h2>
-            {{ 'LAB_OUTBOX.DETAIL_TITLE' | translate }}
-            <span class="mono">{{ d.message.messageType }}</span>
-          </h2>
           <p>
             <span class="status-badge" [attr.data-status]="d.message.status">
               {{ 'LAB_OUTBOX.STATUS_' + d.message.status | translate }}
@@ -192,7 +209,8 @@
               @for (sibling of d.siblings; track sibling.id) {
                 <li>
                   <span class="mono">{{ sibling.messageType }}</span>
-                  <span class="status-badge" [attr.data-status]="sibling.status">
+                  {{ ' '
+                  }}<span class="status-badge" [attr.data-status]="sibling.status">
                     {{ 'LAB_OUTBOX.STATUS_' + sibling.status | translate }}
                   </span>
                   <span>{{ sibling.createdAt | serverTime | date: 'short' }}</span>

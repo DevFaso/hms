@@ -47,6 +47,7 @@ public class PatientProblemMapper {
         .notes(problem.getNotes())
         .supportingEvidence(problem.getSupportingEvidence())
         .statusChangeReason(problem.getStatusChangeReason())
+        .enteredInError(problem.isEnteredInError())
         .chronic(problem.isChronic())
         .diagnosisCodes(problem.getDiagnosisCodes() == null ? List.of() : List.copyOf(problem.getDiagnosisCodes()))
             .build();

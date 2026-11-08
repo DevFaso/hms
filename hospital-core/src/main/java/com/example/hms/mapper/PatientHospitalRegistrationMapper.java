@@ -54,6 +54,7 @@ public class PatientHospitalRegistrationMapper {
             .patientId(p != null ? p.getId() : null)
             .patientUsername(resolveUsername(p))
             .patientFirstName(pFirst)
+            .patientMiddleName(p != null ? safeTrim(p.getMiddleName()) : null)
             .patientLastName(pLast)
             .patientEmail(p != null ? p.getEmail() : null)
             .patientPhone(p != null ? p.getPhoneNumberPrimary() : null)
@@ -66,6 +67,7 @@ public class PatientHospitalRegistrationMapper {
             // Registration
             .registrationDate(entity.getRegistrationDate())
             .active(entity.isActive())
+            .deactivationReason(entity.getDeactivationReason())
             .stayStatus(entity.getStayStatus())
             .stayStatusUpdatedAt(entity.getStayStatusUpdatedAt())
             .currentRoom(entity.getCurrentRoom())
@@ -95,6 +97,7 @@ public class PatientHospitalRegistrationMapper {
             .patientId(row.patientId())
             .patientUsername(safeTrim(row.patientUsername()))
             .patientFirstName(safeTrim(row.patientFirstName()))
+            .patientMiddleName(safeTrim(row.patientMiddleName()))
             .patientLastName(safeTrim(row.patientLastName()))
             .patientEmail(row.patientEmail())
             .patientPhone(row.patientPhone())
@@ -107,6 +110,7 @@ public class PatientHospitalRegistrationMapper {
             // Registration
             .registrationDate(row.registrationDate())
             .active(Boolean.TRUE.equals(row.active()))
+            .deactivationReason(row.deactivationReason())
             .stayStatus(row.stayStatus())
             .stayStatusUpdatedAt(row.stayStatusUpdatedAt())
             .currentRoom(row.currentRoom())

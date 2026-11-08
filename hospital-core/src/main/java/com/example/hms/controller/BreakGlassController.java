@@ -71,7 +71,7 @@ public class BreakGlassController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<BreakGlassSessionResponseDTO> revoke(
             @PathVariable UUID sessionId,
-            @RequestBody(required = false) BreakGlassRevokeRequestDTO request) {
+            @Valid @RequestBody(required = false) BreakGlassRevokeRequestDTO request) {
         return ResponseEntity.ok(breakGlassService.revoke(sessionId, request));
     }
 

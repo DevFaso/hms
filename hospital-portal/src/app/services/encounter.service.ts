@@ -1,6 +1,8 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { Observable, defer, map } from 'rxjs';
+
+import { allRows, PageSlice } from '../shared/all-pages';
 import { WithheldResult, recordsWithheld } from './patient.service';
 
 export type EncounterStatus =
@@ -110,6 +112,8 @@ export interface EncounterResponse {
   patientEmail: string;
   patientPhoneNumber: string;
   staffId: string;
+  /** QA D1085: the assigned clinician's user (null when unassigned); who may start the visit. */
+  staffUserId?: string | null;
   staffName: string;
   staffEmail: string;
   departmentId: string;
@@ -127,6 +131,8 @@ export interface EncounterResponse {
   encounterDate: string;
   notes: string;
   arrivalTimestamp: string | null;
+  /** When the visit was checked out (server local time); absent while it is open. */
+  checkoutTimestamp?: string | null;
   chiefComplaint: string;
   esiScore: number | null;
   roomAssignment: string;
@@ -164,6 +170,8 @@ export interface TriageSubmissionRequest {
   /** NEWS2 (P3 #25b): ACVPU consciousness assessment. */
   consciousnessLevel?: 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
   painScale?: number;
+  /** QA D1031: the antenatal fundal height, in cm. */
+  fundalHeightCm?: number;
   chiefComplaint?: string;
   esiScore: number;
   fallRisk?: boolean;
@@ -355,8 +363,17 @@ export interface EncounterFilterRequest {
   status?: EncounterStatus;
   fromDate?: string;
   toDate?: string;
-  /** Page size (GET /encounters is paged, default 20). */
+  /** Transfer size: list() reads every page whatever it is (QA D1347). */
   size?: number;
+}
+
+/**
+ * Newest first, ties broken on the id: read page by page, an order that
+ * leaves ties to the database can repeat a visit on two pages and skip
+ * another (QA D1347).
+ */
+function withStableOrder(params: HttpParams): HttpParams {
+  return params.append('sort', 'encounterDate,desc').append('sort', 'id,desc');
 }
 
 @Injectable({ providedIn: 'root' })
@@ -364,6 +381,12 @@ export class EncounterService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = '/encounters';
 
+  /**
+   * The encounters the filters match. QA D1347: EVERY one (all pages; `size`
+   * is only the transfer size). This read the server's first page — 20 by
+   * default — so the encounters page and a patient's visit history stopped
+   * at the 20 newest with nothing to say so.
+   */
   list(filters?: EncounterFilterRequest): Observable<EncounterResponse[]> {
     let params = new HttpParams();
     if (filters) {
@@ -373,27 +396,40 @@ export class EncounterService {
       if (filters.status) params = params.set('status', filters.status);
       if (filters.fromDate) params = params.set('from', filters.fromDate);
       if (filters.toDate) params = params.set('to', filters.toDate);
-      if (filters.size) params = params.set('size', filters.size);
     }
-    return this.http
-      .get<{ content: EncounterResponse[] }>(this.baseUrl, { params })
-      .pipe(map((res) => res?.content ?? []));
+    return allRows(
+      (page, size) =>
+        this.http.get<PageSlice<EncounterResponse>>(this.baseUrl, {
+          params: withStableOrder(params.set('page', page).set('size', size)),
+        }),
+      filters?.size,
+    );
   }
 
   /**
    * QA D504 — one patient's visit history, with whether the patient's sharing
-   * opt-out held other hospitals' encounters back from it.
+   * opt-out held other hospitals' encounters back from it. QA D1347: every
+   * page, not the 20 newest; withheld when any page says so.
    */
   listForPatient(patientId: string): Observable<WithheldResult<EncounterResponse[]>> {
-    const params = new HttpParams().set('patientId', patientId);
-    return this.http
-      .get<{ content: EncounterResponse[] }>(this.baseUrl, { params, observe: 'response' })
-      .pipe(
-        map((res) => ({
-          items: res.body?.content ?? [],
-          withheld: recordsWithheld(res.headers),
-        })),
-      );
+    return defer(() => {
+      let withheld = false;
+      return allRows((page, size) =>
+        this.http
+          .get<PageSlice<EncounterResponse>>(this.baseUrl, {
+            params: withStableOrder(
+              new HttpParams().set('patientId', patientId).set('page', page).set('size', size),
+            ),
+            observe: 'response',
+          })
+          .pipe(
+            map((res) => {
+              withheld = withheld || recordsWithheld(res.headers);
+              return res.body;
+            }),
+          ),
+      ).pipe(map((items) => ({ items, withheld })));
+    });
   }
 
   getById(id: string): Observable<EncounterResponse> {

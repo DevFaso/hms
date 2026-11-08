@@ -123,24 +123,18 @@ class ReceptionControllerTest {
 
     @Test
     void updateEncounterStatus_missingStatusField_returns400() {
-        ResponseEntity<Void> response = controller.updateEncounterStatus(
-            ENCOUNTER_ID,
-            Map.of(),
-            receptionistPrincipal
-        );
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        // QA round 29 sweep (assertion changed): still a 400, now named on "status" (it was an empty body).
+        assertThatThrownBy(() -> controller.updateEncounterStatus(ENCOUNTER_ID, Map.of(), receptionistPrincipal))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getFieldErrors()).containsKey("status"));
     }
 
     @Test
     void updateEncounterStatus_invalidStatusValue_returns400() {
-        ResponseEntity<Void> response = controller.updateEncounterStatus(
-            ENCOUNTER_ID,
-            Map.of("status", "NOT_A_REAL_STATUS"),
-            receptionistPrincipal
-        );
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        // QA round 29 sweep (assertion changed): still a 400, now named on "status" (it was an empty body).
+        assertThatThrownBy(() -> controller.updateEncounterStatus(ENCOUNTER_ID, Map.of("status", "NOT_A_REAL_STATUS"), receptionistPrincipal))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getFieldErrors()).containsKey("status"));
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -155,5 +149,64 @@ class ReceptionControllerTest {
 
         org.assertj.core.api.Assertions.assertThat(response.getBody()).isEmpty();
         org.mockito.Mockito.verifyNoInteractions(receptionService);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       QA D1385 (round 32): GET /reception/queue and /reception/waitlist
+       ═══════════════════════════════════════════════════════════════════ */
+
+    @Test
+    void d1385_anUnknownWaitlistStatusIsRefusedByName() {
+        for (String bad : java.util.List.of("BOGUS", "En attente", "tous")) {
+            assertThatThrownBy(() -> controller.getWaitlist(null, bad))
+                .isInstanceOf(com.example.hms.exception.InvalidQueryParameterException.class)
+                .extracting("parameter").isEqualTo("status");
+        }
+        org.mockito.Mockito.verifyNoInteractions(receptionService);
+    }
+
+    @Test
+    void d1385_aWaitlistStatusIsReadInAnyCaseAndAllListsEveryEntry() {
+        controller.getWaitlist(null, " waiting ");
+        verify(receptionService).getWaitlist(HOSPITAL_ID, null, "WAITING");
+        controller.getWaitlist(null, "all");
+        verify(receptionService).getWaitlist(HOSPITAL_ID, null, null);
+    }
+
+    @Test
+    void d1385_anUnknownQueueStatusIsRefusedByName() {
+        assertThatThrownBy(() -> controller.getQueue(null, "BOGUS", null, null))
+            .isInstanceOf(com.example.hms.exception.InvalidQueryParameterException.class)
+            .extracting("parameter").isEqualTo("status");
+        org.mockito.Mockito.verifyNoInteractions(receptionService);
+    }
+
+    @Test
+    void d1385_aQueueStatusIsReadInAnyCase() {
+        controller.getQueue(java.time.LocalDate.of(2026, 11, 3), "arrived", null, null);
+        verify(receptionService).getQueue(java.time.LocalDate.of(2026, 11, 3), HOSPITAL_ID, "ARRIVED", null, null);
+    }
+
+    /**
+     * QA D1385: the accepted queue and waitlist statuses are every status the
+     * service can put on a row - a status missing here would be refused while
+     * the service still shows it.
+     */
+    @Test
+    void d1385_theAcceptedStatusesCoverEveryStatusTheServiceProduces() throws IllegalAccessException {
+        for (java.lang.reflect.Field f : com.example.hms.service.ReceptionServiceImpl.class.getDeclaredFields()) {
+            if (f.getType() != String.class || !java.lang.reflect.Modifier.isStatic(f.getModifiers())) {
+                continue;
+            }
+            f.setAccessible(true);
+            if (f.getName().startsWith("WAITLIST_STATUS_")) {
+                assertThat((String) f.get(null)).as(f.getName()).isIn(ReceptionController.WAITLIST_STATUSES);
+            } else if (f.getName().startsWith("STATUS_")) {
+                assertThat((String) f.get(null)).as(f.getName()).isIn(ReceptionController.QUEUE_STATUSES);
+            }
+        }
+        for (com.example.hms.enums.AppointmentStatus value : com.example.hms.enums.AppointmentStatus.values()) {
+            assertThat(value.name()).isIn(ReceptionController.QUEUE_STATUSES);
+        }
     }
 }

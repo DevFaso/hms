@@ -28,7 +28,10 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { joinReasons, missingRequiredMessage } from '../shared/required-fields';
 type StatusFilter = 'ACTIVE' | ProgramEnrollmentStatus;
 
 interface RegistryLoad {
@@ -55,7 +58,15 @@ interface RegistryLoad {
 @Component({
   selector: 'app-registries',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    SubmitGuardDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+    ModalDialogDirective,
+  ],
   templateUrl: './registries.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './registries.scss',
@@ -222,7 +233,19 @@ export class RegistriesComponent implements OnInit, OnDestroy {
     const patient = this.selectedPatient();
     const cadence = this.cadenceDays();
     if (!patient || !cadence || cadence < 1 || cadence > 365) {
-      this.toast.error(this.translate.instant('REGISTRIES.ENROLL_FIELDS_REQUIRED'));
+      // QA D1358: name the blank fields, not a fixed list. A cadence that is
+      // given but outside 1–365 keeps its range sentence.
+      const outOfRange = cadence != null && (cadence < 1 || cadence > 365);
+      const range = this.translate.instant('REGISTRIES.ENROLL_FIELDS_REQUIRED');
+      this.toast.error(
+        joinReasons([
+          missingRequiredMessage(this.translate, [
+            { labelKey: 'REGISTRIES.PATIENT', value: patient },
+            { labelKey: 'REGISTRIES.CADENCE', value: cadence },
+          ]),
+          outOfRange ? range : null,
+        ]) ?? range,
+      );
       return;
     }
     if (this.saving()) return;

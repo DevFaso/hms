@@ -4,6 +4,7 @@ import com.example.hms.enums.SensitivityCategory;
 import com.example.hms.enums.AcuityLevel;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AdmissionType;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.enums.DischargeDisposition;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -130,6 +131,18 @@ public class Admission {
      * Actual discharge date and time
      */
     private LocalDateTime actualDischargeDateTime;
+
+    /** QA D1381 (round 32): why the admission was cancelled (V260); required by the cancel. */
+    @Column(name = "cancellation_reason", length = 1000)
+    private String cancellationReason;
+
+    /** QA D1381: when the admission was cancelled (server time). */
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
+    /** QA D1381: the user who cancelled the admission. */
+    @Column(name = "cancelled_by_user_id")
+    private UUID cancelledByUserId;
 
     /**
      * Chief complaint/reason for admission
@@ -309,6 +322,22 @@ public class Admission {
         this.status = AdmissionStatus.ACTIVE;
     }
 
+
+    /**
+     * QA D1428 (round 34): a closed stay's record is protected. Every write to
+     * an admission goes through here; only the acts that close a stay and the
+     * record of what happened afterwards (a note addendum, the discharge
+     * summary, the invoice) live elsewhere and do not write this row.
+     *
+     * @throws ConflictException when the stay is discharged, cancelled, transferred or the patient died
+     */
+    public void requireOpen() {
+        if (status != null && !AdmissionStatus.OPEN.contains(status)) {
+            throw new ConflictException(status == AdmissionStatus.CANCELLED
+                ? "admission.cancelled.readOnly" : "admission.closed.readOnly");
+        }
+    }
+
     /**
      * Discharge the patient
      */
@@ -323,10 +352,15 @@ public class Admission {
     }
 
     /**
-     * Cancel admission
+     * QA D1381 (round 32): cancel the admission with its reason, who and when,
+     * as real hospitals require of any void (the reason is kept on the row,
+     * V260; the write is audited by the WriteAuditInterceptor's DATA_DELETE row).
      */
-    public void cancel() {
+    public void cancel(String reason, UUID byUserId, LocalDateTime at) {
         this.status = AdmissionStatus.CANCELLED;
+        this.cancellationReason = reason;
+        this.cancelledByUserId = byUserId;
+        this.cancelledAt = at;
     }
 
     /**

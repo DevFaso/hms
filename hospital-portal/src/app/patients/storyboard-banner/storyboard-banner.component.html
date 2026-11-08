@@ -59,7 +59,7 @@
                   }
                   @if (a.severity) {
                     <span class="storyboard__chip-severity">
-                      {{ 'STORYBOARD.SEVERITY.' + a.severity | translate }}
+                      {{ a.severity | keyLabel: 'STORYBOARD.SEVERITY.' }}
                     </span>
                   }
                 </li>
@@ -171,8 +171,8 @@
                 'STORYBOARD.LAST_VISIT'
                   | translate
                     : {
-                        date: (last.encounterDate | serverTime | date: 'dd/MM/yyyy') ?? '—',
-                        department: last.departmentName ?? '—',
+                        date: (last.encounterDate | serverTime | date: 'shortDate' | dash),
+                        department: (last.departmentName | dash),
                       }
               }}
             </p>
@@ -191,7 +191,7 @@
           @if (hasCodeStatus() && s.codeStatus; as cs) {
             @if (cs.status) {
               <span class="storyboard__pill" [ngClass]="codeStatusPillClass(cs.status)">
-                {{ cs.status | enumLabel: 'status' }}
+                {{ cs.status | enumLabel: 'codeStatus' }}
               </span>
             }
             @if (activeDirectives().length > 0) {
@@ -199,7 +199,7 @@
                 @for (d of activeDirectives(); track d.id) {
                   <li class="storyboard__chip storyboard__chip--neutral">
                     <span class="storyboard__chip-label">
-                      {{ d.directiveType }}
+                      {{ d.directiveType | enumLabel: 'advanceDirectiveType' }}
                     </span>
                     @if (d.status === 'PENDING') {
                       <span class="storyboard__chip-detail">{{
@@ -207,7 +207,9 @@
                       }}</span>
                     }
                     @if (d.effectiveDate) {
-                      <span class="storyboard__chip-detail">{{ d.effectiveDate }}</span>
+                      <span class="storyboard__chip-detail">{{
+                        d.effectiveDate | serverTime | date: 'mediumDate'
+                      }}</span>
                     }
                   </li>
                 }

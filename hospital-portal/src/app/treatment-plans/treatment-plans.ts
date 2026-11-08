@@ -1,11 +1,20 @@
-import { DestroyRef } from '@angular/core';
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches, rankPeopleByName } from '../shared/person-search';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { debounceTime, switchMap } from 'rxjs/operators';
 import {
   TreatmentPlanService,
   TreatmentPlanResponse,
@@ -21,14 +30,24 @@ import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { missingRequiredMessage } from '../shared/required-fields';
-import { labelledRefusalReason } from '../shared/refusal-reason';
+import { hasValue, missingRequiredMessage } from '../shared/required-fields';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { labelledRefusalReason, refusedFieldReasons } from '../shared/refusal-reason';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { AuthService } from '../auth/auth.service';
+import { AuthorshipService } from '../shared/authorship.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 @Component({
   selector: 'app-treatment-plans',
   standalone: true,
   imports: [
+    ListEscapeDirective,
+    SubmitGuardDirective,
+    PersonNamePipe,
+    ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
     CommonModule,
@@ -51,6 +70,9 @@ export class TreatmentPlansComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly authorship = inject(AuthorshipService);
+  private readonly auth = inject(AuthService);
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -68,6 +90,10 @@ export class TreatmentPlansComponent implements OnInit {
 
   hospitals = signal<HospitalResponse[]>([]);
   staffList = signal<StaffResponse[]>([]);
+  /** Every staff row of the scope, the caller's own included whatever their role. */
+  private readonly allStaff = signal<StaffResponse[]>([]);
+  /** The author named by the plan being edited, when it is not in the staff list. */
+  private editAuthorName = '';
 
   // Patient picker
   patientQuery = signal('');
@@ -92,9 +118,10 @@ export class TreatmentPlansComponent implements OnInit {
 
     this.load();
     this.loadAssignedHospitals();
-    this.staffService
-      .list()
-      .subscribe((s) => this.staffList.set((s ?? []).filter(isClinicalProvider)));
+    this.staffService.list().subscribe((s) => {
+      this.allStaff.set(s ?? []);
+      this.staffList.set((s ?? []).filter(isClinicalProvider));
+    });
     this.initPatientSearch();
   }
 
@@ -113,12 +140,17 @@ export class TreatmentPlansComponent implements OnInit {
    * user's language; the wire value stays the raw enum.
    */
   get treatmentPlanStatuses(): { value: string; label: string }[] {
-    return ['DRAFT', 'IN_REVIEW', 'REVISIONS_REQUIRED', 'APPROVED', 'ARCHIVED', 'CANCELLED'].map(
-      (value) => ({
-        value,
-        label: this.translate.instant(`PORTAL.ENUM.TREATMENT_PLAN_STATUS.${value}`),
-      }),
-    );
+    // QA D1127: the author never sets APPROVED (the server refuses it); another
+    // clinician approves from the plan's detail. Shown only on a plan that is
+    // already approved, so the edit keeps reading its status.
+    const statuses = ['DRAFT', 'IN_REVIEW', 'REVISIONS_REQUIRED', 'ARCHIVED', 'CANCELLED'];
+    if (this.form?.status === 'APPROVED') {
+      statuses.splice(3, 0, 'APPROVED');
+    }
+    return statuses.map((value) => ({
+      value,
+      label: this.translate.instant(`PORTAL.ENUM.TREATMENT_PLAN_STATUS.${value}`),
+    }));
   }
 
   emptyForm(): TreatmentPlanRequest {
@@ -161,7 +193,6 @@ export class TreatmentPlansComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
           return this.patientService.list(this.patientSearchHospitalId(), q);
@@ -169,7 +200,8 @@ export class TreatmentPlansComponent implements OnInit {
       )
       .subscribe({
         next: (list) => {
-          this.patientSuggestions.set(list.slice(0, 8));
+          // QA D1239: ranked by how the name answers the query, then cut.
+          this.patientSuggestions.set(rankPeopleByName(list, this.patientQuery()).slice(0, 8));
           this.patientDropdownOpen.set(list.length > 0);
           this.patientSearchLoading.set(false);
         },
@@ -212,6 +244,37 @@ export class TreatmentPlansComponent implements OnInit {
     return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
   }
 
+  /**
+   * QA D1332 (round 29, user decision): a treatment plan's author is the
+   * signed-in clinician, as real hospitals record it. The server refuses any
+   * other author ("you can only act in your own name") unless the caller is a
+   * super-admin, so only a super-admin is offered the staff list; everyone
+   * else sees their own name, read-only, and it is sent for them.
+   */
+  get authorChoosable(): boolean {
+    return this.roleContext.isSuperAdmin();
+  }
+
+  /** The caller's own staff row at the form's hospital, or '' when they have none there. */
+  ownAuthorStaffId(): string {
+    const userId = this.auth.getUserProfile()?.id;
+    if (!userId) return '';
+    const hospitalId = this.form.hospitalId;
+    return (
+      this.allStaff().find(
+        (st) => st.userId === userId && (!hospitalId || st.hospitalId === hospitalId),
+      )?.id ?? ''
+    );
+  }
+
+  /** The author shown read-only: the plan's on an edit, the caller on a create. */
+  authorDisplayName(): string {
+    const id = this.editing() ? this.form.authorStaffId : this.ownAuthorStaffId();
+    const row = this.allStaff().find((st) => st.id === id);
+    if (row) return row.name;
+    return this.editing() ? this.editAuthorName : '';
+  }
+
   openCreate(): void {
     this.form = this.emptyForm();
     this.editing.set(false);
@@ -226,6 +289,15 @@ export class TreatmentPlansComponent implements OnInit {
     this.showModal.set(true);
   }
 
+  /**
+   * QA D1081: the plan's author rewrites it. The row names the author by
+   * user when the server sends it, else by staff record.
+   */
+  canEditPlan(p: TreatmentPlanResponse): boolean {
+    const myStaffId = this.auth.getUserProfile()?.staffId ?? null;
+    return this.authorship.isAuthor(p, !p.authorStaffId || p.authorStaffId === myStaffId);
+  }
+
   openEdit(p: TreatmentPlanResponse): void {
     this.form = {
       patientId: p.patientId ?? '',
@@ -237,6 +309,7 @@ export class TreatmentPlansComponent implements OnInit {
       status: p.status ?? 'DRAFT',
     };
     this.editId = p.id;
+    this.editAuthorName = p.authorStaffName ?? '';
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.editing.set(true);
@@ -255,7 +328,32 @@ export class TreatmentPlansComponent implements OnInit {
     problemStatement: 'TREATMENT.PROBLEM_STATEMENT',
   };
 
+  /** QA D1306 (round 28): the control each required field is entered in. */
+  private static readonly FIELD_IDS: Readonly<Record<string, string>> = {
+    patientId: 'tp-patientSearch',
+    hospitalId: 'tp-hospitalId',
+    authorStaffId: 'tp-authorStaff',
+    problemStatement: 'tp-problem',
+  };
+
+  /**
+   * The control of each required field as rendered: the author is the staff
+   * select for a super-admin, the read-only name of the caller otherwise (QA D1332).
+   */
+  private fieldIds(): Readonly<Record<string, string>> {
+    return {
+      ...TreatmentPlansComponent.FIELD_IDS,
+      authorStaffId: this.authorChoosable ? 'tp-authorStaff' : 'tp-authorSelf',
+    };
+  }
+
   submitForm(): void {
+    // QA D1332: on a create the author is the caller (the staff list arrives
+    // after the dialog may have opened, so it is read now); an edit keeps the
+    // plan's author, as the server requires.
+    if (!this.editing() && !this.authorChoosable) {
+      this.form.authorStaffId = this.ownAuthorStaffId();
+    }
     // QA D890: an empty form was posted and answered with a generic toast.
     const missing = missingRequiredMessage(this.translate, [
       { labelKey: 'PATIENTS.PATIENT', value: this.form.patientId },
@@ -263,10 +361,24 @@ export class TreatmentPlansComponent implements OnInit {
       { labelKey: 'TREATMENT.AUTHOR_STAFF', value: this.form.authorStaffId },
       { labelKey: 'TREATMENT.PROBLEM_STATEMENT', value: this.form.problemStatement },
     ]);
+    const fieldIds = this.fieldIds();
+    const allIds = Object.values(fieldIds);
     if (missing) {
+      // QA D1306 (round 28): the blank fields are marked, not only a toast.
+      const values = this.form as unknown as Record<string, unknown>;
+      const blankIds = Object.entries(fieldIds)
+        .filter(([field]) => !hasValue(values[field]))
+        .map(([, id]) => id);
+      refuseFields(
+        this.host.nativeElement,
+        blankIds,
+        allIds,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.error(missing);
       return;
     }
+    refuseFields(this.host.nativeElement, [], allIds, '');
     this.saving.set(true);
     const op = this.editing()
       ? this.tpService.update(this.editId, this.form)
@@ -283,6 +395,16 @@ export class TreatmentPlansComponent implements OnInit {
         this.load();
       },
       error: (err: unknown) => {
+        // D1256 class (round 29): the fields a 400 names are marked too, each
+        // with the server's own reason, not only listed in the toast.
+        const refused = refusedFieldReasons(err, fieldIds);
+        if (refused.length > 0) {
+          refuseFields(
+            this.host.nativeElement,
+            refused.map(([id, message]) => ({ id, message })),
+            allIds,
+          );
+        }
         this.toast.error(
           labelledRefusalReason(err, this.translate, TreatmentPlansComponent.FIELD_LABELS) ??
             this.translate.instant('TREATMENT.SAVE_FAILED'),
@@ -296,8 +418,9 @@ export class TreatmentPlansComponent implements OnInit {
     const request = ++this.listRequest;
     this.loadFailed.set(false);
     this.loading.set(true);
+    // QA D1347: every plan (all pages), not the 200 newest.
     this.tpService
-      .getAll({ size: 200 })
+      .getAll()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (list) => {
@@ -331,9 +454,9 @@ export class TreatmentPlansComponent implements OnInit {
     if (term) {
       list = list.filter(
         (p) =>
-          (p.patientName ?? '').toLowerCase().includes(term) ||
+          textMatches(p.patientName, term) ||
           (p.problemStatement ?? '').toLowerCase().includes(term) ||
-          (p.authorStaffName ?? '').toLowerCase().includes(term),
+          textMatches(p.authorStaffName, term),
       );
     }
     this.filtered.set(list);
@@ -341,6 +464,46 @@ export class TreatmentPlansComponent implements OnInit {
 
   viewDetail(p: TreatmentPlanResponse): void {
     this.selectedPlan.set(p);
+  }
+
+  /** QA D1127: a plan not yet approved, opened by a clinician other than its author. */
+  canApprovePlan(p: TreatmentPlanResponse): boolean {
+    const myStaffId = this.auth.getUserProfile()?.staffId ?? null;
+    return (
+      !!myStaffId &&
+      !this.canEditPlan(p) &&
+      ['DRAFT', 'IN_REVIEW', 'REVISIONS_REQUIRED'].includes(p.status)
+    );
+  }
+
+  readonly approving = signal(false);
+
+  /**
+   * QA D1127 (round 20): the approval is another clinician's review (the
+   * server refuses the author's, and refuses APPROVED on the create and the
+   * edit). It moves the plan to APPROVED on the server.
+   */
+  approvePlan(p: TreatmentPlanResponse): void {
+    const myStaffId = this.auth.getUserProfile()?.staffId ?? null;
+    if (!myStaffId) {
+      return;
+    }
+    this.approving.set(true);
+    this.tpService.addReview(p.id, { reviewerStaffId: myStaffId, action: 'APPROVED' }).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('TREATMENT.PLAN_APPROVED'));
+        this.approving.set(false);
+        this.closeDetail();
+        this.load();
+      },
+      error: (err: unknown) => {
+        this.toast.error(
+          labelledRefusalReason(err, this.translate, TreatmentPlansComponent.FIELD_LABELS) ??
+            this.translate.instant('TREATMENT.SAVE_FAILED'),
+        );
+        this.approving.set(false);
+      },
+    });
   }
   closeDetail(): void {
     this.selectedPlan.set(null);

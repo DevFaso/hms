@@ -39,6 +39,8 @@ public class LookupController {
 
     private final AppointmentRepository appointmentRepository;
     private final RoleValidator roleValidator;
+    /** QA D942: the acting hospital's country gives a national number its calling code. */
+    private final com.example.hms.repository.HospitalRepository hospitalRepository;
 
     // Lookup appointments by patient email
     // Not attributable by PatientAccessAuditInterceptor: the patient is
@@ -69,13 +71,28 @@ public class LookupController {
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByPatientPhone(@PathVariable String phone) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        List<Appointment> appointments;
-        if (activeHospitalId != null) {
-            appointments = appointmentRepository.findByPatientPhoneNumberAndHospitalId(phone, activeHospitalId);
-        } else {
-            appointments = appointmentRepository.findByPatientPhoneNumber(phone);
+        // QA D942: numbers are stored in E.164 now; the subscriber digits
+        // narrow the rows and the full number decides, as for every patient match.
+        String key = com.example.hms.utility.PatientMatchKeys.phoneKey(phone);
+        if (key == null) {
+            return ResponseEntity.ok(List.of());
         }
-        return ResponseEntity.ok(appointments.stream().map(this::toAppointmentSummaryDTO).toList());
+        boolean subscriber = com.example.hms.utility.PatientMatchKeys.isSubscriberKey(key);
+        String pattern = subscriber ? "%" + key : key;
+        List<Appointment> appointments = activeHospitalId != null
+            ? appointmentRepository.findByPatientPhoneNumberAndHospitalId(pattern, activeHospitalId)
+            : appointmentRepository.findByPatientPhoneNumber(pattern);
+        // A national number takes the acting hospital's calling code, as every patient match does.
+        String callingCode = com.example.hms.utility.PhoneNumbers.callingCodeForCountry(activeHospitalId == null
+            ? null
+            : hospitalRepository.findById(activeHospitalId).map(com.example.hms.model.Hospital::getCountry).orElse(null));
+        // The full-number check reads the summary the handler builds anyway, not the
+        // patient association (PostCommitLazyAssociationGuardTest: no controller chain).
+        return ResponseEntity.ok(appointments.stream()
+            .map(this::toAppointmentSummaryDTO)
+            .filter(dto -> !subscriber || dto.getPatientId() == null
+                || com.example.hms.utility.PatientMatchKeys.samePhone(dto.getPatientPhone(), phone, callingCode))
+            .toList());
     }
 
     // Lookup appointments by patient MRN

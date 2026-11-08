@@ -27,6 +27,12 @@
   color: #92400e;
 }
 
+/* Round 18 (QA D935): paediatric limits that are a default awaiting approval. */
+.badge-pending {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .code-chip {
   font-family: monospace;
   font-size: 0.8125rem;

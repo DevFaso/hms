@@ -28,7 +28,8 @@
             </strong>
             @if (card.median) {
               <span class="kpi-cards__median">
-                {{ 'ANALYTICS.KPI.MEDIAN_LABEL' | translate }}: {{ card.median }}
+                {{ 'ANALYTICS.KPI.MEDIAN_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
+                {{ card.median }}
               </span>
             }
             <span class="kpi-cards__sub">{{ card.sub.key | translate: card.sub.params }}</span>

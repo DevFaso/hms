@@ -83,6 +83,9 @@ class ResultReviewServiceImplTest {
     @Mock private com.example.hms.repository.NotificationRepository notificationRepository;
 
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
+    /** QA D1286: real, over the real bundles, so a keyed item is rendered for the reader. */
+    @Spy private com.example.hms.service.i18n.NotificationLocalizer notificationLocalizer =
+            new com.example.hms.service.i18n.NotificationLocalizer(TestMessageSources.bundles());
     /** QA D178: the queue grades a result the way the lab-results screen does. */
     @Mock private com.example.hms.mapper.LabResultMapper labResultMapper;
 
@@ -142,6 +145,7 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         lenient().when(patient.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(patient.getFullName()).thenReturn("Awa Traore"); // QA D1036: the whole name
         lenient().when(patient.getFirstName()).thenReturn("Awa");
         lenient().when(patient.getLastName()).thenReturn("Traore");
 
@@ -197,6 +201,7 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         lenient().when(patient.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(patient.getFullName()).thenReturn("Awa Traore"); // QA D1036: the whole name
         lenient().when(patient.getFirstName()).thenReturn("Awa");
         lenient().when(patient.getLastName()).thenReturn("Traore");
         UUID orderId = UUID.randomUUID();
@@ -291,8 +296,9 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(UUID.randomUUID());
-        when(patient.getFirstName()).thenReturn("Awa");
-        when(patient.getLastName()).thenReturn("Traore");
+        lenient().when(patient.getFullName()).thenReturn("Awa Traore"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Awa");
+        lenient().when(patient.getLastName()).thenReturn("Traore");
 
         LabOrder order = mock(LabOrder.class);
         when(order.getId()).thenReturn(orderId);
@@ -324,8 +330,9 @@ class ResultReviewServiceImplTest {
         UUID patientId = UUID.randomUUID();
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(patientId);
-        when(patient.getFirstName()).thenReturn("Alice");
-        when(patient.getLastName()).thenReturn("Wong");
+        lenient().when(patient.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Alice");
+        lenient().when(patient.getLastName()).thenReturn("Wong");
 
         LabTestDefinition testDef = mock(LabTestDefinition.class);
         when(testDef.getName()).thenReturn("CBC");
@@ -371,8 +378,9 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(UUID.randomUUID());
-        when(patient.getFirstName()).thenReturn("Bob");
-        when(patient.getLastName()).thenReturn("Smith");
+        lenient().when(patient.getFullName()).thenReturn("Bob Smith"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Bob");
+        lenient().when(patient.getLastName()).thenReturn("Smith");
 
         LabOrder order = mock(LabOrder.class);
         UUID orderId = UUID.randomUUID();
@@ -441,8 +449,9 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(UUID.randomUUID());
-        when(patient.getFirstName()).thenReturn("Jane");
-        when(patient.getLastName()).thenReturn("Doe");
+        lenient().when(patient.getFullName()).thenReturn("Jane Doe"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Jane");
+        lenient().when(patient.getLastName()).thenReturn("Doe");
 
         UUID orderId = UUID.randomUUID();
         LabOrder order = mock(LabOrder.class);
@@ -514,6 +523,34 @@ class ResultReviewServiceImplTest {
         assertEquals("NORMAL", item.getUrgency());
     }
 
+    /** QA D1286: a keyed notification is read in the reader's language, not its stored French copy. */
+    @Test
+    void getInboxItems_keyedPharmacyEventIsRenderedInTheReadersLanguage() {
+        UUID userId = UUID.randomUUID();
+        Staff staff = stubStaff(UUID.randomUUID());
+        User account = mock(User.class);
+        when(account.getUsername()).thenReturn("dr.awa");
+        when(staff.getUser()).thenReturn(account);
+        givenStaffFor(userId, staff);
+        com.example.hms.model.Notification keyed = com.example.hms.model.Notification.builder()
+                .id(UUID.randomUUID())
+                .message("Score NEWS2 7 (ÉLEVÉ) pour Drissa Konaté")
+                .messageKey("news2.escalation.high")
+                .messageArgs(List.of(7, "Drissa Konaté", 15))
+                .type("PHARMACY_EVENT")
+                .createdAt(LocalDateTime.now())
+                .recipientUsername("dr.awa")
+                .build();
+        when(notificationRepository.findByRecipientUsernameAndTypeAndReadFalseOrderByCreatedAtDesc(
+                "dr.awa", "PHARMACY_EVENT")).thenReturn(List.of(keyed));
+
+        ClinicalInboxItemDTO item = service.getInboxItems(userId).stream()
+                .filter(i -> "PHARMACY_EVENT".equals(i.getCategory())).findFirst().orElseThrow();
+
+        org.assertj.core.api.Assertions.assertThat(item.getSubject()).startsWith("NEWS2 score 7")
+                .doesNotContain("ÉLEVÉ");
+    }
+
     @Test
     void getInboxItems_noStaff_shouldReturnEmptyList() {
         UUID userId = UUID.randomUUID();
@@ -583,8 +620,9 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(UUID.randomUUID());
-        when(patient.getFirstName()).thenReturn("Alice");
-        when(patient.getLastName()).thenReturn("Wong");
+        lenient().when(patient.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Alice");
+        lenient().when(patient.getLastName()).thenReturn("Wong");
 
         Staff requestingDoc = mock(Staff.class);
         when(requestingDoc.getFullName()).thenReturn("Dr. Smith");
@@ -655,8 +693,9 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(UUID.randomUUID());
-        when(patient.getFirstName()).thenReturn("Bob");
-        when(patient.getLastName()).thenReturn("Lee");
+        lenient().when(patient.getFullName()).thenReturn("Bob Lee"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Bob");
+        lenient().when(patient.getLastName()).thenReturn("Lee");
 
         Encounter enc = mock(Encounter.class);
         when(enc.getId()).thenReturn(UUID.randomUUID());
@@ -707,6 +746,7 @@ class ResultReviewServiceImplTest {
         UUID patientId = UUID.randomUUID();
         Patient patient = mock(Patient.class);
         lenient().when(patient.getId()).thenReturn(patientId);
+        lenient().when(patient.getFullName()).thenReturn("Carla Diaz"); // QA D1036: the whole name
         lenient().when(patient.getFirstName()).thenReturn("Carla");
         lenient().when(patient.getLastName()).thenReturn("Diaz");
 
@@ -900,8 +940,9 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(UUID.randomUUID());
-        when(patient.getFirstName()).thenReturn("R");
-        when(patient.getLastName()).thenReturn("P");
+        lenient().when(patient.getFullName()).thenReturn("R P"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("R");
+        lenient().when(patient.getLastName()).thenReturn("P");
 
         Staff reqDoc = mock(Staff.class);
         when(reqDoc.getFullName()).thenReturn("Dr. Routine");
@@ -1043,8 +1084,9 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(UUID.randomUUID());
-        when(patient.getFirstName()).thenReturn("T");
-        when(patient.getLastName()).thenReturn("P");
+        lenient().when(patient.getFullName()).thenReturn("T P"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("T");
+        lenient().when(patient.getLastName()).thenReturn("P");
 
         UUID orderId = UUID.randomUUID();
         LabOrder order = mock(LabOrder.class);
@@ -1127,8 +1169,9 @@ class ResultReviewServiceImplTest {
 
         LabOrder order = mock(LabOrder.class);
         Patient p = mock(Patient.class);
-        when(p.getFirstName()).thenReturn("Test");
-        when(p.getLastName()).thenReturn("Pat");
+        lenient().when(p.getFullName()).thenReturn("Test Pat"); // QA D1036: the whole name
+        lenient().when(p.getFirstName()).thenReturn("Test");
+        lenient().when(p.getLastName()).thenReturn("Pat");
         when(p.getId()).thenReturn(UUID.randomUUID());
         when(order.getStatus()).thenReturn(LabOrderStatus.COMPLETED);
         when(order.getPatient()).thenReturn(p);
@@ -1166,8 +1209,9 @@ class ResultReviewServiceImplTest {
 
         LabOrder order = mock(LabOrder.class);
         Patient p = mock(Patient.class);
-        when(p.getFirstName()).thenReturn("Test");
-        when(p.getLastName()).thenReturn("Pat");
+        lenient().when(p.getFullName()).thenReturn("Test Pat"); // QA D1036: the whole name
+        lenient().when(p.getFirstName()).thenReturn("Test");
+        lenient().when(p.getLastName()).thenReturn("Pat");
         when(p.getId()).thenReturn(UUID.randomUUID());
         when(order.getStatus()).thenReturn(LabOrderStatus.COMPLETED);
         when(order.getPatient()).thenReturn(p);
@@ -1293,6 +1337,7 @@ class ResultReviewServiceImplTest {
         givenStaffFor(userId, stubStaff(staffId));
 
         Patient p = mock(Patient.class);
+        lenient().when(p.getFullName()).thenReturn("Sort Test"); // QA D1036: the whole name
         lenient().when(p.getFirstName()).thenReturn("Sort");
         lenient().when(p.getLastName()).thenReturn("Test");
         lenient().when(p.getId()).thenReturn(UUID.randomUUID());
@@ -1358,6 +1403,7 @@ class ResultReviewServiceImplTest {
         EncounterNote note = stubPendingCosignNote(UUID.randomUUID(), "Resident A");
         Patient patient = mock(Patient.class);
         lenient().when(patient.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(patient.getFullName()).thenReturn("Awa Kaboré"); // QA D1036: the whole name
         lenient().when(patient.getFirstName()).thenReturn("Awa");
         lenient().when(patient.getLastName()).thenReturn("Kaboré");
         lenient().when(note.getPatient()).thenReturn(patient);

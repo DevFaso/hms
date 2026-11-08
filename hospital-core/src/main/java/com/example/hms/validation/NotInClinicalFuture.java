@@ -25,7 +25,13 @@ import java.lang.annotation.Target;
 @Constraint(validatedBy = NotInClinicalFutureValidator.class)
 public @interface NotInClinicalFuture {
 
-    String message() default "{clinical.timestamp.future}";
+    /** The wording for a date and time. */
+    String DEFAULT_MESSAGE = "{clinical.timestamp.future}";
+
+    /** The wording for a date-only field (QA D1449), applied by the validator. */
+    String DATE_MESSAGE = "{clinical.date.future}";
+
+    String message() default DEFAULT_MESSAGE;
 
     Class<?>[] groups() default {};
 

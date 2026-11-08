@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
@@ -43,6 +44,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class UserRoleHospitalAssignmentController {
+
+    private static final String CONFIRMATION_CODE = "confirmationCode";
 
     private final UserRoleHospitalAssignmentService assignmentService;
 
@@ -162,7 +165,8 @@ public class UserRoleHospitalAssignmentController {
             @Parameter(description = "Filter by assignment code")
             @RequestParam(required = false) String assignmentCode
     ) {
-        Pageable pageable = PageRequest.of(page, size);
+        // QA D1295 class: pages of an unordered query repeat or skip rows; newest assignment first.
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "assignedAt", "id"));
         AssignmentSearchCriteria criteria = AssignmentSearchCriteria.builder()
             .hospitalId(hospitalId != null ? hospitalId.toString() : null)
             .active(active)
@@ -199,9 +203,29 @@ public class UserRoleHospitalAssignmentController {
             @PathVariable String assignmentCode,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "JSON body with confirmationCode field")
             @RequestBody java.util.Map<String, String> body) {
-        String confirmationCode = body != null ? body.get("confirmationCode") : null;
+        String confirmationCode = body != null ? body.get(CONFIRMATION_CODE) : null;
+        // QA round 29 sweep: a missing code is named, not answered "invalid code".
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(confirmationCode, CONFIRMATION_CODE, "assignment.verify.codeRequired")
+            .orThrow();
         log.info("🔐 Self-service verification attempt for assignment code '{}'", assignmentCode);
         return ResponseEntity.ok(assignmentService.verifyAssignmentByCode(assignmentCode, confirmationCode));
+    }
+
+    @Operation(summary = "Self-service activation by phone number and the one-time code from the SMS (QA D1123)")
+    @PostMapping("/public/activate-by-phone")
+    public ResponseEntity<UserRoleAssignmentPublicViewDTO> verifyAssignmentByPhone(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "JSON body with phone and confirmationCode")
+            @RequestBody java.util.Map<String, String> body) {
+        String phone = body != null ? body.get("phone") : null;
+        String confirmationCode = body != null ? body.get(CONFIRMATION_CODE) : null;
+        // QA round 29 sweep: both are named at once when missing, not answered "invalid code".
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(phone, "phone", "assignment.verify.phoneRequired")
+            .requireValue(confirmationCode, CONFIRMATION_CODE, "assignment.verify.codeRequired")
+            .orThrow();
+        log.info("🔐 Self-service activation attempt by phone");
+        return ResponseEntity.ok(assignmentService.verifyAssignmentByPhone(phone, confirmationCode));
     }
 
     @Operation(

@@ -811,7 +811,10 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.receiveStock(dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class)
-                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.aboveReceived"));
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.aboveReceived"))
+                    // QA D1354 (round 30): on the quantity the lot cannot hold.
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasFieldOrPropertyWithValue("field", "remainingQuantity");
             verify(stockLotRepository, never()).save(any());
             verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         }

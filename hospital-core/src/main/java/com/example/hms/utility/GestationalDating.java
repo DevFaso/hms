@@ -1,5 +1,7 @@
 package com.example.hms.utility;
 
+import com.example.hms.exception.FieldBusinessException;
+
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 
@@ -19,6 +21,9 @@ public final class GestationalDating {
     /** Beyond this many weeks since the LMP, a current pregnancy is implausible. */
     public static final int MAX_PLAUSIBLE_WEEKS = 44;
 
+    /** The most weeks a gestational age is recorded at: the labour admission's ceiling and the forms'. */
+    public static final int MAX_RECORDED_WEEKS = 45;
+
     private static final int REFERENCE_CYCLE_DAYS = 28;
     private static final int MIN_CYCLE_DAYS = 21;
     private static final int MAX_CYCLE_DAYS = 45;
@@ -32,6 +37,16 @@ public final class GestationalDating {
             return false;
         }
         return ChronoUnit.DAYS.between(lmp, today) <= MAX_PLAUSIBLE_WEEKS * 7L;
+    }
+
+    /**
+     * QA D1465: a pregnancy cannot end on or before it began. By logic alone: how far a date may stand
+     * from the LMP is a clinical number no source here gives, and an uncertain LMP moves it a long way.
+     */
+    public static void requireDueDateFitsLmp(LocalDate lmp, LocalDate dueDate, String field) {
+        if (lmp != null && dueDate != null && !dueDate.isAfter(lmp)) {
+            throw new FieldBusinessException(field, "maternity.dating.dueDateBeforeLmp");
+        }
     }
 
     /** The estimated due date for {@code lmp}, or null when there is no LMP. */

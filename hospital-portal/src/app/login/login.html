@@ -55,6 +55,7 @@
                 />
               </svg>
               <input
+                required
                 id="bs-firstName"
                 type="text"
                 [(ngModel)]="bootstrap.firstName"
@@ -79,6 +80,7 @@
                 />
               </svg>
               <input
+                required
                 id="bs-lastName"
                 type="text"
                 [(ngModel)]="bootstrap.lastName"
@@ -99,6 +101,7 @@
               />
             </svg>
             <input
+              required
               id="bs-username"
               type="text"
               [(ngModel)]="bootstrap.username"
@@ -119,6 +122,7 @@
               />
             </svg>
             <input
+              required
               id="bs-email"
               type="email"
               [(ngModel)]="bootstrap.email"
@@ -173,6 +177,7 @@
               />
             </svg>
             <input
+              required
               id="bs-password"
               [type]="showBootstrapPassword ? 'text' : 'password'"
               [(ngModel)]="bootstrap.password"
@@ -218,6 +223,7 @@
               />
             </svg>
             <input
+              required
               id="bs-confirm"
               type="password"
               [(ngModel)]="bootstrap.confirmPassword"
@@ -229,7 +235,13 @@
           </div>
         </div>
 
-        <button type="submit" class="btn-login btn-bootstrap" [disabled]="bootstrapLoading">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          type="submit"
+          class="btn-login btn-bootstrap"
+          [disabled]="bootstrapLoading"
+        >
           @if (bootstrapLoading) {
             <span class="spinner"></span>
             <span>{{ 'LOGIN.CREATING_ACCOUNT' | translate }}</span>
@@ -265,7 +277,8 @@
               }}</span>
               <span class="role-card-label">{{ role | roleLabel }}</span>
               @if (isRecommendedRole(role)) {
-                <span class="role-card-badge">{{ 'LOGIN.ROLE_RECOMMENDED' | translate }}</span>
+                {{ ' '
+                }}<span class="role-card-badge">{{ 'LOGIN.ROLE_RECOMMENDED' | translate }}</span>
               }
             </button>
           }
@@ -407,6 +420,14 @@
               (click)="openResendActivation()"
               >{{ 'LOGIN.RESEND_ACTIVATION' | translate }}</a
             >
+            <span class="link-separator">·</span>
+            <!-- QA D1123: a phone-only patient activates with the number and the SMS code. -->
+            <a
+              class="forgot-link"
+              data-testid="have-a-code-link"
+              routerLink="/onboarding/role-welcome"
+              >{{ 'LOGIN.HAVE_A_CODE' | translate }}</a
+            >
           </div>
         </div>
 
@@ -437,6 +458,7 @@
   >
     <dialog
       class="fp-card"
+      appModalDialog
       aria-labelledby="forgot-password-title"
       [open]="forgotPasswordMode"
       (click)="$event.stopPropagation()"
@@ -449,6 +471,7 @@
           class="fp-close"
           type="button"
           [title]="'COMMON.CLOSE' | translate"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
           (click)="closeForgotPassword()"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -487,7 +510,7 @@
         }
         <form (ngSubmit)="submitForgotPassword()" class="login-form">
           <div class="form-group">
-            <label for="fp-email">{{ 'LOGIN.FP_IDENTIFIER_LABEL' | translate }}</label>
+            <label for="fp-email">{{ 'LOGIN.FP_IDENTIFIER_LABEL' | translate }} *</label>
             <div class="input-wrapper">
               <svg
                 class="input-icon"
@@ -511,7 +534,13 @@
               />
             </div>
           </div>
-          <button type="submit" class="btn-login" [disabled]="forgotPasswordLoading">
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="submit"
+            class="btn-login"
+            [disabled]="forgotPasswordLoading"
+          >
             @if (forgotPasswordLoading) {
               <span class="spinner"></span>
               <span>{{ 'LOGIN.SENDING' | translate }}</span>
@@ -538,6 +567,7 @@
   >
     <dialog
       class="fp-card"
+      appModalDialog
       aria-labelledby="forgot-username-title"
       [open]="forgotUsernameMode"
       (click)="$event.stopPropagation()"
@@ -550,6 +580,7 @@
           class="fp-close"
           type="button"
           [title]="'COMMON.CLOSE' | translate"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
           (click)="closeForgotUsername()"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -608,6 +639,7 @@
   >
     <dialog
       class="fp-card"
+      appModalDialog
       aria-labelledby="resend-activation-title"
       data-testid="resend-activation-dialog"
       [open]="resendActivationMode"
@@ -621,6 +653,7 @@
           class="fp-close"
           type="button"
           [title]="'COMMON.CLOSE' | translate"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
           (click)="closeResendActivation()"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -659,7 +692,7 @@
         }
         <form (ngSubmit)="submitResendActivation()" class="login-form">
           <div class="form-group">
-            <label for="ra-email">{{ 'LOGIN.EMAIL_OR_PHONE' | translate }}</label>
+            <label for="ra-email">{{ 'LOGIN.EMAIL_OR_PHONE' | translate }} *</label>
             <div class="input-wrapper">
               <svg
                 class="input-icon"
@@ -683,7 +716,13 @@
               />
             </div>
           </div>
-          <button type="submit" class="btn-login" [disabled]="resendActivationLoading">
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="submit"
+            class="btn-login"
+            [disabled]="resendActivationLoading"
+          >
             @if (resendActivationLoading) {
               <span class="spinner"></span>
               <span>{{ 'LOGIN.SENDING' | translate }}</span>

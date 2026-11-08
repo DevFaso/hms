@@ -1,14 +1,7 @@
 package com.example.hms.service.impl;
 
-import com.example.hms.enums.AppointmentStatus;
-import com.example.hms.enums.EncounterStatus;
-import com.example.hms.enums.InvoiceStatus;
-import com.example.hms.model.Appointment;
-import com.example.hms.model.BillingInvoice;
 import com.example.hms.model.Department;
-import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
-import com.example.hms.model.Patient;
 import com.example.hms.payload.dto.analytics.PlatformAnalyticsDTO;
 import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.BillingInvoiceRepository;
@@ -17,7 +10,9 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.PlatformCountRows;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -28,7 +23,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -36,8 +31,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * QA CX-002 / CX-003: the service reads the grouped counts of its repositories
+ * (their SQL runs on PostgreSQL in {@code PlatformAnalyticsCountsPostgresIT};
+ * the anchors of QA D791 are left out there, by the query).
+ */
 @ExtendWith(MockitoExtension.class)
 class PlatformAnalyticsServiceImplTest {
 
@@ -50,24 +52,41 @@ class PlatformAnalyticsServiceImplTest {
     @Mock private UserRepository userRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private DepartmentRepository departmentRepository;
+    @Mock private StaffRepository staffRepository;
 
     @InjectMocks
     private PlatformAnalyticsServiceImpl service;
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private Appointment appointmentWith(AppointmentStatus status, Department dept, Hospital hospital) {
-        Appointment a = mock(Appointment.class);
-        when(a.getStatus()).thenReturn(status);
-        when(a.getDepartment()).thenReturn(dept);
-        when(a.getHospital()).thenReturn(hospital);
-        return a;
+    private static PlatformCountRows.IdCount idCount(UUID id, long total) {
+        return new PlatformCountRows.IdCount() {
+            @Override public UUID getOwnerId() { return id; }
+            @Override public long getTotal() { return total; }
+        };
     }
 
-    private Department deptWith(UUID id, String name) {
+    private static PlatformCountRows.StatusCount statusCount(String label, long total) {
+        return new PlatformCountRows.StatusCount() {
+            @Override public String getLabel() { return label; }
+            @Override public long getTotal() { return total; }
+        };
+    }
+
+    private static PlatformCountRows.DayCount dayCount(LocalDate day, long total) {
+        return new PlatformCountRows.DayCount() {
+            @Override public LocalDate getDay() { return day; }
+            @Override public long getTotal() { return total; }
+        };
+    }
+
+    private Department deptWith(UUID id, String name, String hospitalName) {
         Department d = mock(Department.class);
         when(d.getId()).thenReturn(id);
         when(d.getName()).thenReturn(name);
+        Hospital h = mock(Hospital.class);
+        when(h.getName()).thenReturn(hospitalName);
+        when(d.getHospital()).thenReturn(h);
         return d;
     }
 
@@ -77,12 +96,6 @@ class PlatformAnalyticsServiceImplTest {
         lenient().when(h.getName()).thenReturn(name);
         lenient().when(h.isActive()).thenReturn(active);
         return h;
-    }
-
-    private Patient patientWithHospital(UUID hospitalId) {
-        Patient p = mock(Patient.class);
-        when(p.getHospitalId()).thenReturn(hospitalId);
-        return p;
     }
 
     // ── getAnalytics ─────────────────────────────────────────────────────────
@@ -102,13 +115,6 @@ class PlatformAnalyticsServiceImplTest {
             when(prescriptionRepository.count()).thenReturn(60L);
             when(userRepository.count()).thenReturn(40L);
             when(hospitalRepository.countActiveHospitals()).thenReturn(3L);
-            when(appointmentRepository.countByAppointmentDateBetween(any(), any())).thenReturn(0L);
-            when(appointmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(encounterRepository.findAll()).thenReturn(Collections.emptyList());
-            when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
-            when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
-            when(patientRepository.findAll()).thenReturn(Collections.emptyList());
 
             PlatformAnalyticsDTO result = service.getAnalytics(7);
 
@@ -123,64 +129,45 @@ class PlatformAnalyticsServiceImplTest {
         }
 
         @Test
-        @DisplayName("builds appointment trend for specified days")
-        void buildsAppointmentTrend() {
-            stubCountsToZero();
-            when(appointmentRepository.countByAppointmentDateBetween(any(LocalDate.class), any(LocalDate.class)))
-                    .thenReturn(5L);
-            when(appointmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(encounterRepository.findAll()).thenReturn(Collections.emptyList());
-            when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
-            when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
-            when(patientRepository.findAll()).thenReturn(Collections.emptyList());
+        @DisplayName("builds every trend for the specified days, a day with no row a true zero")
+        void buildsTrends() {
+            LocalDate today = LocalDate.now();
+            when(appointmentRepository.countPerDay(today.minusDays(2), today))
+                .thenReturn(List.of(dayCount(today, 5L), dayCount(today.minusDays(2), 1L)));
+            when(encounterRepository.countVisitsPerDay(any(), any())).thenReturn(List.of(dayCount(today, 4L)));
+            when(patientRepository.countRegistrationsPerDay(any(), any()))
+                .thenReturn(List.of(dayCount(today.minusDays(1), 2L)));
 
             PlatformAnalyticsDTO result = service.getAnalytics(3);
 
-            assertThat(result.getAppointmentTrend()).hasSize(3);
-            assertThat(result.getAppointmentTrend()).allSatisfy(tp ->
-                    assertThat(tp.getCount()).isEqualTo(5L));
+            assertThat(result.getAppointmentTrend()).extracting(PlatformAnalyticsDTO.TrendPoint::getDate)
+                .containsExactly(today.minusDays(2), today.minusDays(1), today);
+            assertThat(result.getAppointmentTrend()).extracting(PlatformAnalyticsDTO.TrendPoint::getCount)
+                .containsExactly(1L, 0L, 5L);
+            assertThat(result.getEncounterTrend()).extracting(PlatformAnalyticsDTO.TrendPoint::getCount)
+                .containsExactly(0L, 0L, 4L);
+            assertThat(result.getPatientRegistrationTrend()).extracting(PlatformAnalyticsDTO.TrendPoint::getCount)
+                .containsExactly(0L, 2L, 0L);
         }
 
         @Test
-        @DisplayName("groups appointments by status with null-safe UNKNOWN fallback")
+        @DisplayName("groups appointments by status with null-safe UNKNOWN fallback, largest first")
         void groupsAppointmentsByStatus() {
-            stubCountsToZero();
-            Appointment withStatus = mock(Appointment.class);
-            when(withStatus.getStatus()).thenReturn(AppointmentStatus.SCHEDULED);
-            Appointment withNull = mock(Appointment.class);
-            when(withNull.getStatus()).thenReturn(null);
-
-            when(appointmentRepository.findAll()).thenReturn(List.of(withStatus, withNull));
-            when(appointmentRepository.countByAppointmentDateBetween(any(), any())).thenReturn(0L);
-            when(encounterRepository.findAll()).thenReturn(Collections.emptyList());
-            when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
-            when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
-            when(patientRepository.findAll()).thenReturn(Collections.emptyList());
+            when(appointmentRepository.countPerStatus())
+                .thenReturn(List.of(statusCount("SCHEDULED", 1L), statusCount(null, 2L)));
 
             PlatformAnalyticsDTO result = service.getAnalytics(1);
 
             assertThat(result.getAppointmentsByStatus()).containsEntry("SCHEDULED", 1L);
-            assertThat(result.getAppointmentsByStatus()).containsEntry("UNKNOWN", 1L);
+            assertThat(result.getAppointmentsByStatus()).containsEntry("UNKNOWN", 2L);
+            assertThat(result.getAppointmentsByStatus().keySet()).containsExactly("UNKNOWN", "SCHEDULED");
         }
 
         @Test
-        @DisplayName("groups encounters by status with null-safe UNKNOWN fallback")
+        @DisplayName("groups encounters by status with null-safe UNKNOWN fallback, by the visits query")
         void groupsEncountersByStatus() {
-            stubCountsToZero();
-            Encounter enc = mock(Encounter.class);
-            when(enc.getStatus()).thenReturn(EncounterStatus.IN_PROGRESS);
-            Encounter encNull = mock(Encounter.class);
-            when(encNull.getStatus()).thenReturn(null);
-
-            when(appointmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(appointmentRepository.countByAppointmentDateBetween(any(), any())).thenReturn(0L);
-            when(encounterRepository.findAll()).thenReturn(List.of(enc, encNull));
-            when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
-            when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
-            when(patientRepository.findAll()).thenReturn(Collections.emptyList());
+            when(encounterRepository.countVisitsPerStatus())
+                .thenReturn(List.of(statusCount("IN_PROGRESS", 1L), statusCount(null, 1L)));
 
             PlatformAnalyticsDTO result = service.getAnalytics(1);
 
@@ -189,43 +176,10 @@ class PlatformAnalyticsServiceImplTest {
         }
 
         @Test
-        @DisplayName("QA D791: a prescription's anchor is not counted as a completed visit")
-        void anchorsAreNotCounted() {
-            stubCountsToZero();
-            Encounter visit = mock(Encounter.class);
-            when(visit.getStatus()).thenReturn(EncounterStatus.COMPLETED);
-            Encounter anchor = mock(Encounter.class);
-            when(anchor.isPrescriptionAnchor()).thenReturn(true);
-
-            when(appointmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(appointmentRepository.countByAppointmentDateBetween(any(), any())).thenReturn(0L);
-            when(encounterRepository.findAll()).thenReturn(List.of(visit, anchor));
-            when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
-            when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
-            when(patientRepository.findAll()).thenReturn(Collections.emptyList());
-
-            PlatformAnalyticsDTO result = service.getAnalytics(1);
-
-            assertThat(result.getEncountersByStatus()).containsEntry("COMPLETED", 1L);
-        }
-
-        @Test
         @DisplayName("groups invoices by status with null-safe UNKNOWN fallback")
         void groupsInvoicesByStatus() {
-            stubCountsToZero();
-            BillingInvoice inv = mock(BillingInvoice.class);
-            when(inv.getStatus()).thenReturn(InvoiceStatus.PAID);
-            BillingInvoice invNull = mock(BillingInvoice.class);
-            when(invNull.getStatus()).thenReturn(null);
-
-            when(appointmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(appointmentRepository.countByAppointmentDateBetween(any(), any())).thenReturn(0L);
-            when(encounterRepository.findAll()).thenReturn(Collections.emptyList());
-            when(billingInvoiceRepository.findAll()).thenReturn(List.of(inv, invNull));
-            when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
-            when(patientRepository.findAll()).thenReturn(Collections.emptyList());
+            when(billingInvoiceRepository.countPerStatus())
+                .thenReturn(List.of(statusCount("PAID", 1L), statusCount(null, 1L)));
 
             PlatformAnalyticsDTO result = service.getAnalytics(1);
 
@@ -234,95 +188,87 @@ class PlatformAnalyticsServiceImplTest {
         }
 
         @Test
-        @DisplayName("builds department utilization sorted desc, limited to 10")
+        @DisplayName("QA CX-002: department utilization carries real encounter counts and its hospital")
         void buildsDepartmentUtilization() {
-            stubCountsToZero();
             UUID deptId = UUID.randomUUID();
-            Department dept = deptWith(deptId, "Cardiology");
-
-            Appointment a1 = appointmentWith(AppointmentStatus.SCHEDULED, dept, null);
-            Appointment a2 = appointmentWith(AppointmentStatus.CONFIRMED, dept, null);
-            Appointment noDept = mock(Appointment.class);
-            when(noDept.getDepartment()).thenReturn(null);
-
-            when(appointmentRepository.findAll()).thenReturn(List.of(a1, a2, noDept));
-            when(appointmentRepository.countByAppointmentDateBetween(any(), any())).thenReturn(0L);
-            when(encounterRepository.findAll()).thenReturn(Collections.emptyList());
-            when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
-            when(departmentRepository.findAll()).thenReturn(List.of(dept));
-            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
-            when(patientRepository.findAll()).thenReturn(Collections.emptyList());
+            Department dept = deptWith(deptId, "Cardiology", "Central");
+            when(appointmentRepository.countPerDepartment()).thenReturn(List.of(idCount(deptId, 2L)));
+            when(encounterRepository.countVisitsPerDepartment()).thenReturn(List.of(idCount(deptId, 95L)));
+            when(departmentRepository.findAllForAnalytics()).thenReturn(List.of(dept));
 
             PlatformAnalyticsDTO result = service.getAnalytics(1);
 
             assertThat(result.getDepartmentUtilization()).hasSize(1);
-            assertThat(result.getDepartmentUtilization().get(0).getDepartmentName()).isEqualTo("Cardiology");
-            assertThat(result.getDepartmentUtilization().get(0).getAppointmentCount()).isEqualTo(2L);
+            PlatformAnalyticsDTO.DepartmentUtilization row = result.getDepartmentUtilization().get(0);
+            assertThat(row.getDepartmentId()).isEqualTo(deptId);
+            assertThat(row.getDepartmentName()).isEqualTo("Cardiology");
+            assertThat(row.getHospitalName()).isEqualTo("Central");
+            assertThat(row.getAppointmentCount()).isEqualTo(2L);
+            assertThat(row.getEncounterCount()).isEqualTo(95L);
         }
 
         @Test
-        @DisplayName("builds hospital metrics — filters inactive, sorts by patient count desc")
+        @DisplayName("QA CX-003: every department is listed, busiest first, none cut")
+        void everyDepartmentIsListed() {
+            List<Department> all = new ArrayList<>();
+            List<PlatformCountRows.IdCount> counts = new ArrayList<>();
+            for (int i = 0; i < 14; i++) {
+                UUID id = UUID.randomUUID();
+                all.add(deptWith(id, "Dept " + i, "Central"));
+                counts.add(idCount(id, i));
+            }
+            when(appointmentRepository.countPerDepartment()).thenReturn(counts);
+            when(departmentRepository.findAllForAnalytics()).thenReturn(all);
+
+            PlatformAnalyticsDTO result = service.getAnalytics(1);
+
+            assertThat(result.getDepartmentUtilization()).hasSize(14);
+            assertThat(result.getDepartmentUtilization().get(0).getDepartmentName()).isEqualTo("Dept 13");
+            assertThat(result.getDepartmentUtilization().get(13).getDepartmentName()).isEqualTo("Dept 0");
+        }
+
+        @Test
+        @DisplayName("QA CX-002: builds hospital metrics with real staff — filters inactive, sorts by patient count desc")
         void buildsHospitalMetrics() {
-            stubCountsToZero();
             UUID h1Id = UUID.randomUUID();
             UUID h2Id = UUID.randomUUID();
+            UUID h3Id = UUID.randomUUID();
             Hospital h1 = hospitalWith(h1Id, "Central Hospital", true);
             Hospital h2 = hospitalWith(h2Id, "Closed Hospital", false);
-
-            Patient p1 = patientWithHospital(h1Id);
-            Patient p2 = patientWithHospital(h1Id);
-            Patient pNull = mock(Patient.class);
-            when(pNull.getHospitalId()).thenReturn(null);
-
-            Appointment appt = mock(Appointment.class);
-            when(appt.getHospital()).thenReturn(h1);
-
-            when(appointmentRepository.findAll()).thenReturn(List.of(appt));
-            when(appointmentRepository.countByAppointmentDateBetween(any(), any())).thenReturn(0L);
-            when(encounterRepository.findAll()).thenReturn(Collections.emptyList());
-            when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
-            when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAllHospitals()).thenReturn(List.of(h1, h2));
-            when(patientRepository.findAll()).thenReturn(List.of(p1, p2, pNull));
+            Hospital h3 = hospitalWith(h3Id, "Small Hospital", true);
+            when(hospitalRepository.findAllHospitals()).thenReturn(List.of(h3, h1, h2));
+            when(patientRepository.countPerHospital()).thenReturn(List.of(idCount(h1Id, 2L)));
+            when(appointmentRepository.countPerHospital()).thenReturn(List.of(idCount(h1Id, 1L)));
+            when(staffRepository.countPerHospitalExcludingDeletedUsers())
+                .thenReturn(List.of(idCount(h1Id, 14L), idCount(h3Id, 8L)));
 
             PlatformAnalyticsDTO result = service.getAnalytics(1);
 
-            assertThat(result.getHospitalMetrics()).hasSize(1); // h2 is inactive
-            assertThat(result.getHospitalMetrics().get(0).getHospitalName()).isEqualTo("Central Hospital");
-            assertThat(result.getHospitalMetrics().get(0).getPatientCount()).isEqualTo(2L);
-            assertThat(result.getHospitalMetrics().get(0).getAppointmentCount()).isEqualTo(1L);
+            assertThat(result.getHospitalMetrics()).hasSize(2); // h2 is inactive
+            PlatformAnalyticsDTO.HospitalMetric central = result.getHospitalMetrics().get(0);
+            assertThat(central.getHospitalId()).isEqualTo(h1Id);
+            assertThat(central.getHospitalName()).isEqualTo("Central Hospital");
+            assertThat(central.getPatientCount()).isEqualTo(2L);
+            assertThat(central.getAppointmentCount()).isEqualTo(1L);
+            assertThat(central.getStaffCount()).isEqualTo(14L);
+            assertThat(result.getHospitalMetrics().get(1).getStaffCount()).isEqualTo(8L);
         }
 
         @Test
-        @DisplayName("encounter and patient-registration trends are always empty lists")
-        void emptyTrends() {
-            stubCountsToZero();
-            when(appointmentRepository.countByAppointmentDateBetween(any(), any())).thenReturn(0L);
-            when(appointmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(encounterRepository.findAll()).thenReturn(Collections.emptyList());
-            when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
-            when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
-            when(patientRepository.findAll()).thenReturn(Collections.emptyList());
+        @DisplayName("QA CX-002: counting never loads the records")
+        void neverLoadsTheRecordsToCountThem() {
+            service.getAnalytics(7);
 
-            PlatformAnalyticsDTO result = service.getAnalytics(1);
-
-            assertThat(result.getEncounterTrend()).isEmpty();
-            assertThat(result.getPatientRegistrationTrend()).isEmpty();
+            verify(appointmentRepository, never()).findAll();
+            verify(encounterRepository, never()).findAll();
+            verify(billingInvoiceRepository, never()).findAll();
+            verify(patientRepository, never()).findAll();
+            verify(appointmentRepository, never()).countByAppointmentDateBetween(any(), any());
         }
 
         @Test
         @DisplayName("handles all empty repositories gracefully")
         void handlesEmptyRepos() {
-            stubCountsToZero();
-            when(appointmentRepository.countByAppointmentDateBetween(any(), any())).thenReturn(0L);
-            when(appointmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(encounterRepository.findAll()).thenReturn(Collections.emptyList());
-            when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
-            when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
-            when(patientRepository.findAll()).thenReturn(Collections.emptyList());
-
             PlatformAnalyticsDTO result = service.getAnalytics(7);
 
             assertThat(result.getTotalPatients()).isZero();
@@ -332,17 +278,8 @@ class PlatformAnalyticsServiceImplTest {
             assertThat(result.getDepartmentUtilization()).isEmpty();
             assertThat(result.getHospitalMetrics()).isEmpty();
             assertThat(result.getAppointmentTrend()).hasSize(7);
+            assertThat(result.getEncounterTrend()).hasSize(7);
+            assertThat(result.getPatientRegistrationTrend()).hasSize(7);
         }
-    }
-
-    private void stubCountsToZero() {
-        when(patientRepository.count()).thenReturn(0L);
-        when(encounterRepository.countVisits()).thenReturn(0L);
-        when(appointmentRepository.count()).thenReturn(0L);
-        when(billingInvoiceRepository.count()).thenReturn(0L);
-        when(labOrderRepository.count()).thenReturn(0L);
-        when(prescriptionRepository.count()).thenReturn(0L);
-        when(userRepository.count()).thenReturn(0L);
-        when(hospitalRepository.countActiveHospitals()).thenReturn(0L);
     }
 }

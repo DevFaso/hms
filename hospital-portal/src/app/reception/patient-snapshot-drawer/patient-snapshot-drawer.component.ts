@@ -1,3 +1,4 @@
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import {
   Component,
   Input,
@@ -10,16 +11,25 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ReceptionService, FrontDeskPatientSnapshot } from '../reception.service';
 import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { refusalReason } from '../../shared/refusal-reason';
 
 @Component({
   selector: 'app-patient-snapshot-drawer',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    ModalDialogDirective,
+    ServerTimePipe,
+    CfaPipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './patient-snapshot-drawer.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-snapshot-drawer.component.scss',
@@ -82,8 +92,8 @@ export class PatientSnapshotDrawerComponent implements OnChanges {
         this.attestSaving.set(false);
         if (this.patientId) this.loadSnapshot(this.patientId);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('RECEPTION.ATTEST_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('RECEPTION.ATTEST_FAILED'));
         this.attestSaving.set(false);
       },
     });

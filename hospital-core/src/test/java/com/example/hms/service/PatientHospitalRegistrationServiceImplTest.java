@@ -292,24 +292,35 @@ class PatientHospitalRegistrationServiceImplTest {
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
+    // QA D1299 (round 28; assertions changed): the refusal was an IllegalArgumentException with no
+    // field; it is a FieldBusinessException (a 400, as before) naming the missing reference.
     @Test
-    void registerPatient_noPatientRef_throwsIllegalArg() {
+    void registerPatient_noPatientRef_namesPatientId() {
         PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
             .hospitalId(hospitalId).build();
 
         assertThatThrownBy(() -> service.registerPatient(dto))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Patient");
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refusal -> assertThat(refusal.getFieldErrors()).containsOnlyKeys("patientId"));
     }
 
     @Test
-    void registerPatient_noHospitalRef_throwsIllegalArg() {
+    void registerPatient_noHospitalRef_namesHospitalId() {
         PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
             .patientId(patientId).build();
 
         assertThatThrownBy(() -> service.registerPatient(dto))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Hospital");
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refusal -> assertThat(refusal.getFieldErrors()).containsOnlyKeys("hospitalId"));
+    }
+
+    /** QA D1299: an empty body names the patient and the hospital in one refusal. */
+    @Test
+    void registerPatient_emptyBody_namesBothReferences_D1299() {
+        assertThatThrownBy(() -> service.registerPatient(PatientHospitalRegistrationRequestDTO.builder().build()))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refusal -> assertThat(refusal.getFieldErrors())
+                    .containsOnlyKeys("patientId", "hospitalId"));
     }
 
     @Test
@@ -393,12 +404,12 @@ class PatientHospitalRegistrationServiceImplTest {
         return new RegistrationDeskRow(
             UUID.randomUUID(), "mrn-ABC1234",
             rowPatientId, rowPatientId == null ? null : "jdoe",
-            rowPatientId == null ? null : "John", rowPatientId == null ? null : "Doe",
+            rowPatientId == null ? null : "John", null, rowPatientId == null ? null : "Doe",
             null, null, null,
             hospitalId, "General Hospital", "GH", "1 Main St",
             LocalDate.now(), active,
             PatientStayStatus.ADMITTED, null,
-            null, null, null, null, null);
+            null, null, null, null, null, null);
     }
 
     @Test
@@ -469,6 +480,70 @@ class PatientHospitalRegistrationServiceImplTest {
         when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
 
         assertThat(service.updateRegistration(registrationId, dto)).isEqualTo(responseDTO);
+    }
+
+    /** QA D1430: ending a registration takes a reason, kept on the row and audited; reactivating clears it. */
+    @Test
+    void deactivatingNeedsAReasonKeepsItAndReactivatingClearsIt() {
+        registration.setActive(true);
+        when(registrationRepository.findById(registrationId)).thenReturn(Optional.of(registration));
+
+        for (String blank : new String[] {null, "", "  "}) {
+            PatientHospitalRegistrationRequestDTO refused = PatientHospitalRegistrationRequestDTO.builder()
+                .active(false).deactivationReason(blank).build();
+            assertThatThrownBy(() -> service.updateRegistration(registrationId, refused))
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                    ex -> assertThat(ex.getField()).isEqualTo("deactivationReason"));
+            assertThat(registration.isActive()).isTrue();
+        }
+        when(registrationRepository.save(registration)).thenReturn(registration);
+        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
+        service.updateRegistration(registrationId, PatientHospitalRegistrationRequestDTO.builder()
+            .active(false).deactivationReason("  Parti vivre ailleurs ").build());
+        assertThat(registration.isActive()).isFalse();
+        assertThat(registration.getDeactivationReason()).isEqualTo("Parti vivre ailleurs");
+        verify(auditService).logEvent(org.mockito.ArgumentMatchers.argThat(event ->
+            "Patient registration deactivated".equals(event.getEventDescription())));
+
+        // Still inactive, another field edited: nothing to ask, the reason stays.
+        service.updateRegistration(registrationId, PatientHospitalRegistrationRequestDTO.builder()
+            .active(false).currentRoom("12").build());
+        assertThat(registration.getDeactivationReason()).isEqualTo("Parti vivre ailleurs");
+
+        when(hospitalRepository.findClinicalById(registration.getHospital().getId()))
+            .thenReturn(Optional.of(registration.getHospital()));
+        service.updateRegistration(registrationId, PatientHospitalRegistrationRequestDTO.builder().active(true).build());
+        assertThat(registration.isActive()).isTrue();
+        assertThat(registration.getDeactivationReason()).isNull();
+    }
+
+    /** RCPT-CLIN: the desk's form no longer holds the note, and its PUT emptied what an administrator wrote. */
+    @Test
+    void aReceptionistsUpdateKeepsTheStoredDischargeNote_anAdministratorsWritesIt() {
+        registration.setReadyForDischargeNote("Sortie apr\u00e8s avis");
+        when(registrationRepository.findById(registrationId)).thenReturn(Optional.of(registration));
+        when(registrationRepository.save(registration)).thenReturn(registration);
+        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
+        try {
+            signIn("ROLE_RECEPTIONIST");
+            service.updateRegistration(registrationId, PatientHospitalRegistrationRequestDTO.builder()
+                .currentRoom("Room A").readyForDischargeNote("").build());
+            assertThat(registration.getReadyForDischargeNote()).isEqualTo("Sortie apr\u00e8s avis");
+            assertThat(registration.getCurrentRoom()).isEqualTo("Room A");
+
+            signIn("ROLE_HOSPITAL_ADMIN");
+            service.updateRegistration(registrationId, PatientHospitalRegistrationRequestDTO.builder()
+                .readyForDischargeNote("Autre").build());
+            assertThat(registration.getReadyForDischargeNote()).isEqualTo("Autre");
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    private static void signIn(String role) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("someone", "n/a",
+                org.springframework.security.core.authority.AuthorityUtils.createAuthorityList(role)));
     }
 
     @Test

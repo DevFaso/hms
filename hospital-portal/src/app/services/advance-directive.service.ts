@@ -75,8 +75,12 @@ export class AdvanceDirectiveService {
   /**
    * There is deliberately no delete — a directive that was once in force is
    * part of the record. Revoke sets status = REVOKED and stamps lastReviewedAt.
+   * QA D1180 / D1148: the server requires the reason (`{ reason }`,
+   * CloseReasonRequestDTO, stored as revocationReason); an empty body is refused.
    */
-  revoke(id: string): Observable<AdvanceDirectiveResponse> {
-    return this.http.put<AdvanceDirectiveResponse>(`/advance-directives/${id}/revoke`, {});
+  revoke(id: string, reason: string): Observable<AdvanceDirectiveResponse> {
+    return this.http.put<AdvanceDirectiveResponse>(`/advance-directives/${id}/revoke`, {
+      reason,
+    });
   }
 }

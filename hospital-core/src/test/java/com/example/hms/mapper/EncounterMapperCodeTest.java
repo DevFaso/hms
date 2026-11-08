@@ -57,6 +57,38 @@ class EncounterMapperCodeTest {
     }
 
     @Test
+    void whatTheDeskTypedIsKeptApartFromTheClinicalComplaint() {
+        EncounterMapper mapper = new EncounterMapper();
+        com.example.hms.payload.dto.EncounterRequestDTO body = new com.example.hms.payload.dto.EncounterRequestDTO();
+        body.setChiefComplaint("  Fievre  ");
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.TestingAuthenticationToken("desk", "p", "ROLE_RECEPTIONIST"));
+        Encounter walkIn;
+        try {
+            walkIn = mapper.mergeEncounter(body, null, null, null, null, null, null);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+        assertThat(walkIn.getChiefComplaint()).isEqualTo("Fievre");
+        assertThat(walkIn.getDeskChiefComplaint()).isEqualTo("Fievre");
+
+        // Triage writes the clinical column; the desk's own stays what the desk typed.
+        walkIn.setChiefComplaint("Douleur thoracique");
+        EncounterResponseDTO read = mapper.toEncounterResponseDTO(walkIn);
+        assertThat(read.getChiefComplaint()).isEqualTo("Douleur thoracique");
+        assertThat(read.getDeskChiefComplaint()).isEqualTo("Fievre");
+
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.TestingAuthenticationToken("doc", "p", "ROLE_DOCTOR"));
+        try {
+            assertThat(mapper.mergeEncounter(body, null, null, null, null, null, null).getDeskChiefComplaint())
+                .as("a clinician's complaint is not the desk's").isNull();
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
     void d759_theAnchorsEnglishBookkeepingNoteIsNotShownAsIs() {
         Encounter anchor = new Encounter();
         anchor.setId(UUID.randomUUID());
@@ -69,5 +101,19 @@ class EncounterMapperCodeTest {
             .isNotEqualTo(Encounter.PRESCRIPTION_ANCHOR_NOTE);
         // Path re-verified: a clinician's own note is untouched.
         assertThat(new EncounterMapper().toEncounterResponseDTO(visit).getNotes()).isEqualTo("Toux depuis 3 jours");
+    }
+
+    @Test
+    void qaD944_theWalkInReasonTypedAtTheDeskIsTheChiefComplaint() {
+        com.example.hms.payload.dto.EncounterRequestDTO dto = new com.example.hms.payload.dto.EncounterRequestDTO();
+        dto.setChiefComplaint("  Fièvre depuis 2 jours, toux ");
+        Encounter merged = new EncounterMapper().mergeEncounter(dto, null, null, null, null, null, null);
+        assertThat(merged.getChiefComplaint()).isEqualTo("Fièvre depuis 2 jours, toux");
+
+        Encounter kept = new Encounter();
+        kept.setChiefComplaint("Toux");
+        new EncounterMapper().mergeEncounter(new com.example.hms.payload.dto.EncounterRequestDTO(),
+            kept, null, null, null, null, null);
+        assertThat(kept.getChiefComplaint()).isEqualTo("Toux");
     }
 }

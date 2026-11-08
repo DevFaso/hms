@@ -26,6 +26,7 @@ import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -47,6 +48,8 @@ public class ObservationFhirResourceProvider implements IResourceProvider {
 
     private static final int MAX_VITALS_PER_PATIENT = 250;
     private static final int MAX_LAB_RESULTS_PER_PATIENT = 250;
+    /** QA D1295 class: the capped page keeps the newest results, not whatever the database returns first. */
+    public static final Sort LAB_NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "resultDate", "id");
     private static final String VITAL_PREFIX = "vital-";
     private static final int UUID_LENGTH = 36;
 
@@ -147,7 +150,7 @@ public class ObservationFhirResourceProvider implements IResourceProvider {
         }
         if (wantsLabs) {
             ClinicalLabResultView.releasedAndCurrent(labResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
-                    patientId, hospitalId, PageRequest.of(0, MAX_LAB_RESULTS_PER_PATIENT)).getContent())
+                    patientId, hospitalId, PageRequest.of(0, MAX_LAB_RESULTS_PER_PATIENT, LAB_NEWEST_FIRST)).getContent())
                 .forEach(r -> {
                     Observation mapped = mapper.toFhir(r);
                     if (mapped != null) out.add(mapped);

@@ -54,13 +54,25 @@ public class ObservationFhirMapper {
         return out;
     }
 
+    /**
+     * QA D1016: a released correction is {@code corrected} in FHIR (R4
+     * ObservationStatus), so a receiving system replaces the value rather than
+     * filing a second final one.
+     */
+    static Observation.ObservationStatus labStatusOf(LabResult src) {
+        if (!src.isReleased()) {
+            return Observation.ObservationStatus.PRELIMINARY;
+        }
+        return com.example.hms.service.lab.LabResultCorrections.isCorrection(src)
+            ? Observation.ObservationStatus.CORRECTED
+            : Observation.ObservationStatus.FINAL;
+    }
+
     public Observation toFhir(LabResult src) {
         if (src == null) return null;
         Observation o = new Observation();
         o.setId("labresult-" + (src.getId() == null ? "" : src.getId()));
-        o.setStatus(src.isReleased()
-            ? Observation.ObservationStatus.FINAL
-            : Observation.ObservationStatus.PRELIMINARY);
+        o.setStatus(labStatusOf(src));
         o.addCategory(category("laboratory", "Laboratory"));
         setLabSubject(o, src);
         setLabEffective(o, src);
@@ -120,8 +132,9 @@ public class ObservationFhirMapper {
             return;
         }
         Quantity q = new Quantity().setValue(numeric);
-        if (src.getResultUnit() != null && !src.getResultUnit().isBlank()) {
-            String unit = src.getResultUnit().trim();
+        // QA D1095: the definition's unit when none was typed.
+        String unit = com.example.hms.mapper.LabResultMapper.unitOf(src);
+        if (unit != null) {
             q.setUnit(unit).setSystem(UCUM).setCode(unit);
         }
         o.setValue(q);

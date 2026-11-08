@@ -127,3 +127,21 @@ export function withServerDateTimes<F extends object>(form: F, fields: (keyof F)
   }
   return copy;
 }
+
+/**
+ * QA D949: whether a server (UTC, zone-less) time falls on the reader's
+ * today. A time-only column ("19:04") is only honest for today; any other day
+ * shows its date. An empty or unreadable value counts as today (nothing to add).
+ */
+export function isServerTimeToday(
+  serverValue: string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  const instant = fromServerDateTime(serverValue);
+  if (!instant) return true;
+  return (
+    instant.getFullYear() === now.getFullYear() &&
+    instant.getMonth() === now.getMonth() &&
+    instant.getDate() === now.getDate()
+  );
+}

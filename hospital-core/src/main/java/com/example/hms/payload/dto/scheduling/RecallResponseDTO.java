@@ -43,6 +43,8 @@ public class RecallResponseDTO {
     private LocalDateTime notifiedAt;
     private UUID linkedAppointmentId;
     private LocalDateTime closedAt;
+    /** QA D1157: why the recall was cancelled. */
+    private String closeReason;
 
     private LocalDateTime createdAt;
     private String createdBy;

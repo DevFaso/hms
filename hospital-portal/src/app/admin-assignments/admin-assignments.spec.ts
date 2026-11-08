@@ -11,6 +11,7 @@ import { RoleResponse, RoleService } from '../services/role.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 /**
  * QA D194: a PATIENT assignment is activated by the patient's verification,
@@ -299,10 +300,10 @@ describe('AdminAssignmentsComponent — delete refusal names what still uses the
       ],
     });
     component = TestBed.runInInjectionContext(() => new AdminAssignmentsComponent());
-    spyOn(window, 'confirm').and.returnValue(true);
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
   });
 
-  it("shows the server's sentence on a 409", () => {
+  it("shows the server's sentence on a 409", async () => {
     service.delete.and.returnValue(
       throwError(
         () =>
@@ -312,27 +313,27 @@ describe('AdminAssignmentsComponent — delete refusal names what still uses the
           }),
       ),
     );
-    component.delete(row);
+    await component.delete(row);
     expect(toast.error).toHaveBeenCalledWith(
       'Impossible de supprimer l’affectation : … des services.',
     );
   });
 
-  it('falls back to the generic conflict text when the 409 has no message', () => {
+  it('falls back to the generic conflict text when the 409 has no message', async () => {
     service.delete.and.returnValue(
       throwError(() => new HttpErrorResponse({ status: 409, error: null })),
     );
-    component.delete(row);
+    await component.delete(row);
     expect(toast.error).toHaveBeenCalledWith('ASSIGN_ADMIN.DELETE_CONFLICT');
   });
 
-  it('keeps the generic error for anything other than a 409', () => {
+  it('keeps the generic error for anything other than a 409', async () => {
     service.delete.and.returnValue(
       throwError(
         () => new HttpErrorResponse({ status: 500, error: { message: 'Internal Server Error' } }),
       ),
     );
-    component.delete(row);
+    await component.delete(row);
     expect(toast.error).toHaveBeenCalledWith('ASSIGN_ADMIN.ACTION_ERROR');
   });
 });
@@ -379,13 +380,21 @@ describe('AdminAssignmentsComponent — the signed-in account cannot remove its 
     expect(component.isOwnRow({ id: 'a-x' } as AssignmentResponse)).toBeFalse();
   });
 
-  it('shows the server’s sentence when a deactivation is refused with a 409', () => {
+  it('QA CX-010: deactivating asks first; a no sends nothing', async () => {
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    await component.deactivate(other);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(service.deactivate).not.toHaveBeenCalled();
+  });
+
+  it('shows the server’s sentence when a deactivation is refused with a 409', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     const sentence =
       'Cette modification laisserait la plateforme sans aucun super administrateur actif. Attribuez d’abord ce rôle à un autre compte.';
     service.deactivate.and.returnValue(
       throwError(() => new HttpErrorResponse({ status: 409, error: { message: sentence } })),
     );
-    component.deactivate(other);
+    await component.deactivate(other);
     expect(toast.error).toHaveBeenCalledWith(sentence);
   });
 });

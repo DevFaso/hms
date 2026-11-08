@@ -100,7 +100,8 @@ class BillingInvoiceTest {
                 patient, hospital, encounter,
                 "INV-001", invoiceDate, dueDate,
                 total, paid, InvoiceStatus.SENT,
-                "Some notes", items, createdBy, updatedBy, null, false, null, null
+                "Some notes", items, createdBy, updatedBy, null, false, null, null,
+                null, null, null // QA D1069: cancel reason, when and by whom (V251)
             );
 
             assertAll(

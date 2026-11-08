@@ -345,11 +345,15 @@ class PatientControllerDiagnosisIT extends BaseIT {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content(objectMapper.writeValueAsBytes(request))
 			.accept(MediaType.APPLICATION_JSON)
+			.header("Accept-Language", "en")
 			.with(doctorAuthentication()))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.message").value("Diagnosis removed successfully."));
+			// QA D1249 (round 25): the confirmation is keyed and follows the reader's language.
+			.andExpect(jsonPath("$.message").value("Diagnosis removed."));
 
 		PatientProblem deleted = patientProblemRepository.findById(problem.getId()).orElseThrow();
+		// QA D1240 (round 25): the removal marks the row entered in error (V259 column on PostgreSQL).
+		org.assertj.core.api.Assertions.assertThat(deleted.isEnteredInError()).isTrue();
 		assertThat(deleted.getStatus()).isEqualTo(ProblemStatus.INACTIVE);
 		assertThat(deleted.getStatusChangeReason()).isEqualTo(DELETE_REASON);
 
@@ -378,6 +382,11 @@ class PatientControllerDiagnosisIT extends BaseIT {
 		patientProblemRepository.deleteAllById(createdProblemIds);
 		createdProblemIds.clear();
 		auditEventLogRepository.deleteAllInBatch();
+		// Then the doctor's staff row, assignment, user, patient and hospital
+		// this class seeded, in FK order: a class that runs next in the same
+		// context and deletes assignments table-wide (SuperAdminContinuityIT)
+		// otherwise trips on fk_staff_assignment (round-20 merge, #996).
+		SharedClinicalRowsCleanup.deleteAll(applicationContext);
 	}
 
 	private Role ensureDoctorRole() {

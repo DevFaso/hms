@@ -23,7 +23,12 @@
       >
         {{ 'BREAK_GLASS_REVIEW.FILTER_ALL' | translate }}
       </button>
-      <button type="button" class="btn-secondary" (click)="reload()" [disabled]="!scopeReady()">
+      <button
+        type="button"
+        class="btn-secondary"
+        (click)="reload()"
+        [appSubmitGuard]="!scopeReady() && ('SUBMIT_GUARD.SCOPE' | translate)"
+      >
         {{ 'COMMON.REFRESH' | translate }}
       </button>
     </div>
@@ -84,7 +89,8 @@
                   @if (s.patientName) {
                     {{ s.patientName }}
                   } @else {
-                    {{ s.patientId | slice: 0 : 8 }}…
+                    <!-- QA D992 class: the MRN below identifies the patient; never a slice of the id. -->
+                    {{ 'BREAK_GLASS_REVIEW.PATIENT_UNNAMED' | translate }}
                   }
                 </a>
                 @if (s.patientMrn) {
@@ -100,7 +106,8 @@
                 } @else if (s.revokedAt) {
                   <span class="chip revoked">{{ 'BREAK_GLASS_REVIEW.REVOKED' | translate }}</span>
                 } @else {
-                  <span class="chip expired">{{ 'BREAK_GLASS_REVIEW.EXPIRED' | translate }}</span>
+                  {{ ' '
+                  }}<span class="chip expired">{{ 'BREAK_GLASS_REVIEW.EXPIRED' | translate }}</span>
                 }
               </td>
               <td class="num">{{ s.auditCount }}</td>

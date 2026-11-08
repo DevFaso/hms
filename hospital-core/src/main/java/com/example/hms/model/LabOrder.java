@@ -322,13 +322,12 @@ public class LabOrder extends BaseEntity {
         if (!Objects.equals(encounter.getPatient().getId(), patient.getId())) {
             throw new IllegalStateException("Encounter.patient must match LabOrder.patient");
         }
-        // QA D736: as for prescriptions, a stay is ordered on by any treating
-        // clinician of its hospital, not only its lead (hospital and patient
-        // are still pinned above).
-        if (encounter.getAdmissionId() == null
-            && !Objects.equals(encounter.getStaff().getId(), orderingStaff.getId())) {
-            throw new IllegalStateException("Encounter.staff must match orderingStaff");
-        }
+        // QA D736 / D1094: a visit or a stay is ordered on by any treating
+        // clinician of its hospital, not only the clinician of record, as in a
+        // real hospital (a colleague covering a consultation orders the
+        // glucose). Hospital and patient stay pinned above; who may order at
+        // the hospital is the service's role check. This invariant answered a
+        // colleague's visit with a 500.
     }
 
     private void normalizeClinicalDetails() {

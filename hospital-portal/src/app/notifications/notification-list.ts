@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { isCriticalNotification, notificationIcon } from '../core/notification-icon';
 import { CommonModule } from '@angular/common';
@@ -6,11 +7,13 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { Notification, NotificationService } from '../services/notification.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { refusalReason } from '../shared/refusal-reason';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 
 @Component({
   selector: 'app-notification-list',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, RouterLink, TranslateModule],
+  imports: [DateTimePipe, ServerTimePipe, CommonModule, RouterLink, TranslateModule],
   templateUrl: './notification-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './notification-list.scss',
@@ -32,9 +35,9 @@ export class NotificationListComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    this.notifService.getNotifications({ page: 0, size: 100 }).subscribe({
-      next: (page) => {
-        const list = page?.content ?? [];
+    // QA D1347: every notification (all pages), not the 100 newest.
+    allRows((page, size) => this.notifService.getNotifications({ page, size })).subscribe({
+      next: (list) => {
         this.notifications.set(list);
         this.applyFilter();
         this.loading.set(false);
@@ -79,7 +82,10 @@ export class NotificationListComponent implements OnInit {
         this.applyFilter();
         this.toast.success(this.translate.instant('NOTIFICATIONS.ALL_MARKED_READ'));
       },
-      error: () => this.toast.error(this.translate.instant('NOTIFICATIONS.MARK_ALL_READ_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('NOTIFICATIONS.MARK_ALL_READ_FAILED'),
+        ),
     });
   }
 

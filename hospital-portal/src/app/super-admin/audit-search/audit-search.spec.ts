@@ -3,7 +3,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 import { SuperAdminAuditSearchComponent } from './audit-search';
 import { AuditSearchService } from '../../services/audit-search.service';
@@ -11,6 +11,7 @@ import { AuditSavedSearchService } from '../../services/audit-saved-search.servi
 import { DataResidencyService } from '../../services/data-residency.service';
 import { AggregatedAuditEvent } from '../../services/audit-search.model';
 import fr from '../../../assets/i18n/fr.json';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 
 describe('SuperAdminAuditSearchComponent — MVP-8c source toggles', () => {
   let auditSearch: jasmine.SpyObj<AuditSearchService>;
@@ -156,5 +157,27 @@ describe('SuperAdminAuditSearchComponent — MVP-8c source toggles', () => {
     const cmp = setup();
     expect(cmp.aggregatedSources()).toContain('PLATFORM_CONFIG');
     expect(cmp.allSources).toContain('PLATFORM_CONFIG');
+  });
+
+  it('QA CX-010: deleting a saved search asks first, and a refused delete keeps the chip', async () => {
+    const cmp = setup();
+    const saved = { id: 's1', name: 'Mine' } as never;
+    cmp.savedSearches.set([saved]);
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+
+    await cmp.deleteSaved(saved);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(savedSearch.delete).not.toHaveBeenCalled();
+
+    ask.and.resolveTo(true);
+    savedSearch.delete.and.returnValue(throwError(() => new Error('503')));
+    await cmp.deleteSaved(saved);
+    expect(cmp.savedSearches().length).toBe(1);
+    expect(cmp.savedDeleteFailed()).toBeTrue();
+
+    savedSearch.delete.and.returnValue(of(void 0));
+    await cmp.deleteSaved(saved);
+    expect(cmp.savedSearches().length).toBe(0);
+    expect(cmp.savedDeleteFailed()).toBeFalse();
   });
 });

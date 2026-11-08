@@ -20,6 +20,7 @@ import com.example.hms.service.ReceptionService;
 import com.example.hms.utility.RoleValidator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -46,7 +47,27 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ReceptionController {
 
+    /**
+     * QA D1385: the statuses a queue row can carry - the appointment's own,
+     * and the front-desk statuses ReceptionServiceImpl computes from the
+     * visit - plus ALL. {@code ReceptionControllerTest} keeps it complete.
+     */
+    static final java.util.Set<String> QUEUE_STATUSES = queueStatuses();
+
+    /** QA D1385: the waitlist entry statuses (AppointmentWaitlist.status), plus ALL. */
+    static final java.util.Set<String> WAITLIST_STATUSES = java.util.Set.of("WAITING", "OFFERED", "CLOSED", "ALL");
+
+    private static java.util.Set<String> queueStatuses() {
+        java.util.Set<String> out = new java.util.TreeSet<>(java.util.List.of(
+            "ALL", "ARRIVED", "WALK_IN", "IN_PROGRESS", "COMPLETED", "CANCELLED", "LEFT_WITHOUT_BEING_SEEN", "NO_SHOW"));
+        for (com.example.hms.enums.AppointmentStatus value : com.example.hms.enums.AppointmentStatus.values()) {
+            out.add(value.name());
+        }
+        return java.util.Collections.unmodifiableSet(out);
+    }
+
     private static final String SYSTEM_ACTOR = "system";
+    private static final String FIELD_STATUS = "status";
 
     private final ReceptionService receptionService;
     private final RoleValidator roleValidator;
@@ -60,7 +81,7 @@ public class ReceptionController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Check in a patient for their scheduled appointment. Creates an ARRIVED encounter.")
     public ResponseEntity<CheckInResponseDTO> checkInPatient(
-            @RequestBody CheckInRequestDTO request,
+            @Valid @RequestBody CheckInRequestDTO request,
             @AuthenticationPrincipal UserDetails principal) {
         UUID hospitalId = resolveHospitalId();
         String actor = principal != null ? principal.getUsername() : SYSTEM_ACTOR;
@@ -88,9 +109,12 @@ public class ReceptionController {
             @RequestParam(defaultValue = "ALL") String status,
             @RequestParam(required = false) UUID departmentId,
             @RequestParam(required = false) UUID providerId) {
+        // QA D1385 (round 32): an unknown status is refused by name, any case accepted.
+        String filter = com.example.hms.controller.support.QueryParameterValues.oneOf("status", status, QUEUE_STATUSES);
         UUID hospitalId = resolveHospitalId();
         LocalDate effectiveDate = date != null ? date : LocalDate.now();
-        return ResponseEntity.ok(receptionService.getQueue(effectiveDate, hospitalId, status, departmentId, providerId));
+        return ResponseEntity.ok(receptionService.getQueue(effectiveDate, hospitalId,
+            filter == null ? "ALL" : filter, departmentId, providerId));
     }
 
     // ── MVP 9: Patient Snapshot ───────────────────────────────────────────────
@@ -169,7 +193,7 @@ public class ReceptionController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Add a patient to the appointment waitlist")
     public ResponseEntity<WaitlistEntryResponseDTO> addToWaitlist(
-            @RequestBody WaitlistEntryRequestDTO request,
+            @Valid @RequestBody WaitlistEntryRequestDTO request,
             @AuthenticationPrincipal UserDetails principal) {
         UUID hospitalId = resolveHospitalId();
         String actor = principal != null ? principal.getUsername() : SYSTEM_ACTOR;
@@ -183,8 +207,12 @@ public class ReceptionController {
     public ResponseEntity<List<WaitlistEntryResponseDTO>> getWaitlist(
             @RequestParam(required = false) UUID departmentId,
             @RequestParam(required = false, defaultValue = "WAITING") String status) {
+        // QA D1385 (round 32): an unknown status is refused by name (it listed nobody), any case accepted.
+        String code = com.example.hms.controller.support.QueryParameterValues.oneOf("status", status, WAITLIST_STATUSES);
         UUID hospitalId = resolveHospitalId();
-        return ResponseEntity.ok(receptionService.getWaitlist(hospitalId, departmentId, status));
+        // QA D1324 (round 29): "Tous" lists every entry; ALL (any case) reads as no status filter.
+        String effective = code == null || "ALL".equals(code) ? null : code;
+        return ResponseEntity.ok(receptionService.getWaitlist(hospitalId, departmentId, effective));
     }
 
     @PostMapping("/waitlist/{id}/offer")
@@ -222,9 +250,13 @@ public class ReceptionController {
     @PostMapping("/waitlist/{id}/close")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Close / remove a waitlist entry")
-    public ResponseEntity<Void> closeWaitlistEntry(@PathVariable UUID id) {
+    public ResponseEntity<Void> closeWaitlistEntry(
+            @PathVariable UUID id,
+            // QA D1157: the reason is required by the service; an empty body is refused like a blank one.
+            @jakarta.validation.Valid @RequestBody(required = false)
+            com.example.hms.payload.dto.scheduling.CloseReasonRequestDTO body) {
         UUID hospitalId = resolveHospitalId();
-        receptionService.closeWaitlistEntry(id, hospitalId);
+        receptionService.closeWaitlistEntry(id, hospitalId, body == null ? null : body.getReason());
         return ResponseEntity.noContent().build();
     }
 
@@ -254,15 +286,16 @@ public class ReceptionController {
             @RequestBody java.util.Map<String, String> body,
             @AuthenticationPrincipal UserDetails principal) {
         UUID hospitalId = resolveHospitalId();
-        String statusStr = body.get("status");
+        String statusStr = body.get(FIELD_STATUS);
+        // QA round 29 sweep: a missing or unknown status is named (it was an empty 400).
         if (statusStr == null || statusStr.isBlank()) {
-            return ResponseEntity.badRequest().build();
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "reception.encounterStatus.required");
         }
         EncounterStatus status;
         try {
-            status = EncounterStatus.valueOf(statusStr.toUpperCase());
+            status = EncounterStatus.valueOf(statusStr.trim().toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "reception.encounterStatus.required");
         }
         String callerUsername = principal != null ? principal.getUsername() : SYSTEM_ACTOR;
         receptionService.updateEncounterStatus(encounterId, status, hospitalId, callerUsername);

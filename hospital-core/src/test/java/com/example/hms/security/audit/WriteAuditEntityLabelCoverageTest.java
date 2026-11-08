@@ -207,16 +207,14 @@ class WriteAuditEntityLabelCoverageTest {
                 if (annotation == null) {
                     annotation = AnnotatedElementUtils.findMergedAnnotation(controller, WriteAudited.class);
                 }
-                if (annotation != null && annotation.skip()) {
+                if ((annotation != null && annotation.skip())
+                    || method.isAnnotationPresent(com.example.hms.security.ReadsOnly.class)) {
                     continue;
                 }
                 RequestMapping mapping = AnnotatedElementUtils.findMergedAnnotation(method, RequestMapping.class);
                 for (String base : bases) {
                     for (String tail : paths(mapping)) {
                         String pattern = (base + "/" + tail).replaceAll("/+", "/");
-                        if (WriteAuditInterceptor.isReadOnlyPost(verb, pattern)) {
-                            continue;
-                        }
                         out.putIfAbsent(WriteAuditInterceptor.entityTypeFor(pattern, annotation),
                             verb + " " + pattern);
                     }

@@ -1,4 +1,7 @@
+import { LocaleNumberPipe } from '../shared/pipes/lab-value.pipe';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 import { glucoseMgDlToMmol } from '../shared/glucose-units';
+import { formatDecimal } from '../shared/i18n/app-locale';
 import {
   Component,
   computed,
@@ -7,9 +10,14 @@ import {
   signal,
   viewChild,
   ChangeDetectionStrategy,
+  ElementRef,
 } from '@angular/core';
+import { saveBlob } from '../shared/download-file';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { DeathDisputeDialogComponent } from '../mortality/death-dispute-dialog.component';
+import { VoidedDeathClosuresBannerComponent } from '../mortality/voided-death-closures-banner.component';
+import { OrderReviewPanelComponent } from './order-review-panel/order-review-panel.component';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -24,9 +32,12 @@ import { PatientChartComponent } from './patient-chart/patient-chart.component';
 import {
   APPOINTMENT_VIEW_ROLES,
   CHART_REVIEW_VIEW_ROLES,
+  isFrontDeskOnly,
   CHART_VIEW_ROLES,
   ENCOUNTER_VIEW_ROLES,
+  STORYBOARD_VIEW_ROLES,
   VITALS_VIEW_ROLES,
+  VOIDED_CLOSURES_VIEW_ROLES,
   canInvokeCds,
 } from './patient-chart/chart-access';
 import { AdvanceDirectivesTabComponent } from './advance-directives/advance-directives-tab.component';
@@ -48,6 +59,18 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverDateOrInstant } from '../shared/date-utils';
 import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
+import { NursingNotesPanelComponent } from '../encounters/nursing-notes-panel/nursing-notes-panel.component';
+import { NursingNoteService } from '../services/nursing-note.service';
+import { PatientDemographicsEditComponent } from './patient-demographics-edit/patient-demographics-edit.component';
+import { isGrowthAge } from '../shared/patient-measures';
+import { refusalReason, refusedFieldReasons } from '../shared/refusal-reason';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { DashPipe } from '../shared/pipes/dash.pipe';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+
+/** The chart-restriction reason box: the server names it `reason` in a 400. */
+const RESTRICTION_REASON_FIELD = 'restriction-reason';
 
 type SectionKey = 'overview' | 'clinical' | 'documents' | 'care' | 'administration';
 
@@ -72,10 +95,19 @@ type TabKey =
   selector: 'app-patient-detail',
   standalone: true,
   imports: [
+    DateTimePipe,
+    DashPipe,
+    SubmitGuardDirective,
+    LocaleNumberPipe,
+    MeasurePipe,
+    NursingNotesPanelComponent,
     ClockTimePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,
+    DeathDisputeDialogComponent,
+    VoidedDeathClosuresBannerComponent,
+    OrderReviewPanelComponent,
     RouterLink,
     TranslateModule,
     PatientChartComponent,
@@ -93,6 +125,7 @@ type TabKey =
     ChartReviewComponent,
     BreakGlassBannerComponent,
     EnumLabelPipe,
+    PatientDemographicsEditComponent,
   ],
   templateUrl: './patient-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -110,6 +143,8 @@ export class PatientDetailComponent implements OnInit {
   protected readonly permissions = inject(PermissionService);
   private readonly roleContext = inject(RoleContextService);
   private readonly printService = inject(PrintLabelService);
+  // Optional: a few specs build the component outside a view (no ElementRef there).
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef, { optional: true });
 
   patient = signal<PatientResponse | null>(null);
   loading = signal(true);
@@ -226,6 +261,17 @@ export class PatientDetailComponent implements OnInit {
   /** The route's patient id; read by the template for the restricted-chart prompt (E8 #54). */
   patientId = '';
 
+  /**
+   * QA D1036 / D926: the full name with the middle name, each part once and
+   * single-spaced. The header and "Full name" showed first and last only.
+   */
+  fullName(p: Pick<PatientResponse, 'firstName' | 'middleName' | 'lastName'>): string {
+    return [p.firstName, p.middleName, p.lastName]
+      .map((part) => (part ?? '').trim())
+      .filter((part) => part !== '')
+      .join(' ');
+  }
+
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) {
@@ -278,10 +324,30 @@ export class PatientDetailComponent implements OnInit {
 
   /** E8 #54 — the chart is restricted and the caller holds no live session: the page shows the declaration prompt. */
   readonly restricted = signal(false);
+  /**
+   * QA D998: a chart that does not open here (not registered at this
+   * hospital, or no longer there) is explained on this page. A toast followed
+   * by a redirect to the list was lost with the navigation, so the user saw
+   * the list with no word on why.
+   */
+  readonly unavailable = signal(false);
+
+  /** The urgent dispute of a recorded death: a doctor here; the server asks the role at this hospital. */
+  showDeathDispute = signal(false);
+
+  canDisputeDeath(): boolean {
+    return this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']);
+  }
+
+  onDeathDisputed(): void {
+    this.showDeathDispute.set(false);
+    this.loadPatient(this.patientId);
+  }
 
   loadPatient(id: string): void {
     this.loading.set(true);
     this.restricted.set(false);
+    this.unavailable.set(false);
     const hospitalId = this.scopedHospitalId() ?? undefined;
     this.patientService.getById(id, hospitalId).subscribe({
       next: (p) => {
@@ -295,8 +361,7 @@ export class PatientDetailComponent implements OnInit {
           this.restricted.set(true);
           return;
         }
-        this.toast.error(this.translate.instant('PATIENTS.NOT_FOUND'));
-        this.router.navigate(['/patients']);
+        this.unavailable.set(true);
       },
     });
   }
@@ -314,9 +379,17 @@ export class PatientDetailComponent implements OnInit {
     if (!p || this.restrictionSubmitting()) return;
     const reason = this.restrictionReason().trim();
     if (restricted && reason.length < 5) {
-      this.toast.error(this.translate.instant('PATIENTS.CHART_RESTRICTION_REASON_REQUIRED'));
+      const message = this.translate.instant('PATIENTS.CHART_RESTRICTION_REASON_REQUIRED');
+      refuseFields(
+        this.host?.nativeElement,
+        [RESTRICTION_REASON_FIELD],
+        [RESTRICTION_REASON_FIELD],
+        message,
+      );
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host?.nativeElement, [], [RESTRICTION_REASON_FIELD], '');
     this.restrictionSubmitting.set(true);
     this.patientService
       .setChartRestriction(p.id, restricted, restricted ? reason : undefined)
@@ -335,6 +408,15 @@ export class PatientDetailComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.restrictionSubmitting.set(false);
+          // A 400 that names the reason is shown on the field, not only in a toast.
+          const named = refusedFieldReasons(err, { reason: RESTRICTION_REASON_FIELD });
+          if (named.length) {
+            refuseFields(
+              this.host?.nativeElement,
+              named.map(([id, message]) => ({ id, message })),
+              [RESTRICTION_REASON_FIELD],
+            );
+          }
           this.toast.error(
             err?.error?.message ?? this.translate.instant('PATIENTS.CHART_RESTRICTION_FAILED'),
           );
@@ -362,6 +444,11 @@ export class PatientDetailComponent implements OnInit {
     return this.scopedHospitalId() != null;
   }
 
+  /** QA D927: only the roles `GET /nurse/notes` admits load the panel (a refused read would leave the page). */
+  canReadNursingNotes(): boolean {
+    return this.roleContext.hasAnyActiveRole(NursingNoteService.READER_ROLES);
+  }
+
   /** Mirrors EncounterController's list READ gate — likewise not the
    *  'Create Encounters' write permission it used to check. */
   canViewEncounters(): boolean {
@@ -378,6 +465,16 @@ export class PatientDetailComponent implements OnInit {
    *  that difference. */
   canViewChartReview(): boolean {
     return this.roleContext.hasAnyActiveRole(CHART_REVIEW_VIEW_ROLES);
+  }
+
+  /**
+   * RCPT-CLIN (user decision 2026-11-06): the front desk reads no clinical
+   * content. The server refuses the storyboard and removes allergies and the
+   * history from the patient it answers; this hides what would otherwise read
+   * as "none recorded", a false statement about the patient.
+   */
+  isFrontDeskOnly(): boolean {
+    return isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
   }
 
   /** Mirrors GrowthChartController's @PreAuthorize list exactly — NOT the
@@ -412,7 +509,10 @@ export class PatientDetailComponent implements OnInit {
         this.addressHistory.set(entries);
         this.addressHistoryLoaded.set(true);
       },
-      error: () => this.toast.error(this.translate.instant('PATIENTS.ADDRESS_HISTORY_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PATIENTS.ADDRESS_HISTORY_FAILED'),
+        ),
     });
   }
 
@@ -437,12 +537,8 @@ export class PatientDetailComponent implements OnInit {
     this.patientService.downloadRecordPdf(this.patientId).subscribe({
       next: (blob) => {
         this.recordDownloadLoading.set(false);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `patient-record-${this.patientId}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
+        // QA D1009: named by the MRN the user can read, not the patient's database id.
+        saveBlob(blob, `patient-record-${this.patient()?.mrn || 'export'}.pdf`);
       },
       error: (err: HttpErrorResponse) => {
         this.recordDownloadLoading.set(false);
@@ -508,11 +604,33 @@ export class PatientDetailComponent implements OnInit {
         this.wristbandLoading.set(false);
         this.printService.openForPrint(blob);
       },
-      error: () => {
+      error: (err: unknown) => {
         this.wristbandLoading.set(false);
-        this.toast.error(this.translate.instant('PATIENTS.WRISTBAND_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PATIENTS.WRISTBAND_FAILED'));
       },
     });
+  }
+
+  /** QA D926: the demographics edit dialog is open. */
+  editingDemographics = signal(false);
+
+  /** QA D926: mirrors PATCH /patients/{id}'s @PreAuthorize list. */
+  canEditDemographics(): boolean {
+    return this.roleContext.hasAnyActiveRole([
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_RECEPTIONIST',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_DOCTOR',
+      'ROLE_SUPER_ADMIN',
+    ]);
+  }
+
+  /** QA D926: the corrected chart replaces the shown one. */
+  onDemographicsSaved(updated: PatientResponse): void {
+    const current = this.patient();
+    this.patient.set(current ? { ...current, ...updated } : updated);
+    this.editingDemographics.set(false);
   }
 
   /** Mirrors PatientPhotoController.WRITE_ROLES exactly (P3 #21). */
@@ -548,10 +666,8 @@ export class PatientDetailComponent implements OnInit {
    *  tab hides for adults rather than rendering a lifetime weight log. */
   showGrowthTab(): boolean {
     if (!this.canViewGrowth()) return false;
-    const dob = this.patient()?.dateOfBirth;
-    if (!dob) return false;
-    const ageMs = Date.now() - serverDateOrInstant(dob).getTime();
-    return ageMs >= 0 && ageMs < 20 * 365.25 * 24 * 3600 * 1000;
+    // QA D1077: one rule for every growth surface (shared/patient-measures).
+    return isGrowthAge(this.patient()?.dateOfBirth);
   }
 
   /** Whether the current user can view the structured Chart tab (roles that can
@@ -568,6 +684,16 @@ export class PatientDetailComponent implements OnInit {
    */
   canSeeBpaPanel(): boolean {
     return canInvokeCds(this.roleContext);
+  }
+
+  /** QA D1524: the voided-death banner, for the roles GET .../voided-closures admits. */
+  canSeeVoidedClosures(): boolean {
+    return this.roleContext.hasAnyActiveRole(VOIDED_CLOSURES_VIEW_ROLES);
+  }
+
+  /** QA D1524: the storyboard banner, for the roles GET /patients/{id}/storyboard admits. */
+  canSeeStoryboard(): boolean {
+    return this.roleContext.hasAnyActiveRole(STORYBOARD_VIEW_ROLES);
   }
 
   /** Insurance endpoints grant HOSPITAL_ADMIN/RECEPTIONIST/NURSE/DOCTOR only
@@ -719,12 +845,7 @@ export class PatientDetailComponent implements OnInit {
    *  exact gap once hid this tab's wire mismatch behind "sparse data".) */
   /** QA D530: glucose shown in mmol/L, the unit the lab reports. */
   glucoseMmol(mgDl: number | null | undefined): string {
-    return mgDl == null
-      ? ''
-      : glucoseMgDlToMmol(mgDl).toLocaleString(this.translate.currentLang || 'fr', {
-          minimumFractionDigits: 1,
-          maximumFractionDigits: 1,
-        });
+    return mgDl == null ? '' : formatDecimal(glucoseMgDlToMmol(mgDl), 1);
   }
 
   hasValue(value: number | null | undefined): boolean {

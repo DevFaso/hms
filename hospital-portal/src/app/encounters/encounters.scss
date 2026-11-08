@@ -637,6 +637,13 @@ select:focus-visible {
   line-height: 1.6;
 }
 
+.addendum-label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+
 .note-input {
   width: 100%;
   padding: 0.75rem;
@@ -997,4 +1004,11 @@ select:focus-visible {
   color: #92400e;
   font-size: 0.72rem;
   font-weight: 600;
+}
+
+// QA D954: the left-without-being-seen action above the visit details.
+.detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
 }

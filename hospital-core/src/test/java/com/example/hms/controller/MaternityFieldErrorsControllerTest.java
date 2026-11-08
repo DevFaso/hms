@@ -146,4 +146,16 @@ class MaternityFieldErrorsControllerTest {
         return new UsernamePasswordAuthenticationToken("midwife.a", null,
             List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_MIDWIFE")));
     }
+
+    @Test
+    @DisplayName("D1424: 70/120 on the partograph is refused on the diastolic and never reaches the service, so no alert")
+    void aReversedPressureNeverReachesThePartograph() throws Exception {
+        mvc.perform(post("/patients/{p}/labor/episodes/{e}/entries", patientId, episodeId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Accept-Language", "fr")
+                .content("{\"systolicBpMmHg\":70,\"diastolicBpMmHg\":120}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors.diastolicBpMmHg").isNotEmpty());
+        verifyNoInteractions(laborService);
+    }
 }

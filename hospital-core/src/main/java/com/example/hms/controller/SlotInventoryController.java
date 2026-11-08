@@ -70,6 +70,29 @@ public class SlotInventoryController {
             slotInventoryService.searchOpen(departmentId, staffId, visitTypeId, from, to, limit));
     }
 
+    /**
+     * QA D1390 (D1347 class): the open-slot search one page at a time, with the
+     * total of every open slot in the window. {@code /search} answers a bare
+     * list capped at 200; the slot admin list and the waitlist offer picker
+     * read this instead, so no slot of the window is out of reach.
+     */
+    @GetMapping("/search/page")
+    @PreAuthorize(READ_ROLES)
+    @Operation(summary = "Find open slots, one page at a time with the total (QA D1390)",
+        description = "Defaults to the next two weeks, at most 180 days. Never returns a slot in the past, "
+            + "and treats an expired hold as available.")
+    public ResponseEntity<org.springframework.data.domain.Page<AppointmentSlotDTO>> searchPage(
+        @RequestParam(required = false) UUID departmentId,
+        @RequestParam(required = false) UUID staffId,
+        @RequestParam(required = false) UUID visitTypeId,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "50") int size) {
+        return ResponseEntity.ok(
+            slotInventoryService.searchOpenPage(departmentId, staffId, visitTypeId, from, to, page, size));
+    }
+
     @PostMapping("/generate")
     @PreAuthorize(ADMIN_ROLES)
     @Operation(summary = "Materialise slots from the active session templates",

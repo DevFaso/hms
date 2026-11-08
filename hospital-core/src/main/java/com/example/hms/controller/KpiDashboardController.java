@@ -51,13 +51,14 @@ public class KpiDashboardController {
         @RequestParam("to")   @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
         @RequestParam(value = "withTrends", required = false, defaultValue = "false") boolean withTrends
     ) {
+        // QA round 29 sweep: a refusal names its field (it was an empty 400).
         if (to.isBefore(from)) {
-            return ResponseEntity.badRequest().build();
+            throw new com.example.hms.exception.FieldBusinessException("to", "query.dateRange.reversed");
         }
         if (from.plusDays(MAX_WINDOW_DAYS - 1L).isBefore(to)) {
             // Cap at an inclusive 180-day window. Larger ranges go through
             // the analytics export pipeline, not the live dashboard.
-            return ResponseEntity.badRequest().build();
+            throw new com.example.hms.exception.FieldBusinessException("to", "query.dateRange.tooLong", MAX_WINDOW_DAYS);
         }
         return ResponseEntity.ok(kpiDashboardService.computeDashboard(from, to, withTrends));
     }

@@ -1,5 +1,5 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
 import { FluidBalanceTabComponent } from './fluid-balance-tab.component';
 import {
@@ -126,6 +126,49 @@ describe('FluidBalanceTabComponent', () => {
     component.submit();
     expect(fluidServiceSpy.record).not.toHaveBeenCalled();
     expect(toastSpy.error).toHaveBeenCalledTimes(2);
+  });
+
+  // QA D1279 (round 27; the D1256 / D1272 class): "Voie" and "Volume" had no
+  // star, and an empty save named them one per press with a toast that marked
+  // nothing.
+  it('QA D1279: both required fields show the star and declare it', () => {
+    fixture.detectChanges();
+    component.openModal();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    for (const id of ['io-route', 'io-volume']) {
+      expect(el.querySelector(`label[for="${id}"]`)?.textContent).toContain('*');
+      expect(el.querySelector(`#${id}`)?.hasAttribute('required'))
+        .withContext(id)
+        .toBeTrue();
+    }
+  });
+
+  it('QA D1279: an empty save names and marks both fields on the first press', async () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      COMMON: { MISSING_REQUIRED_FIELDS: 'Champs obligatoires manquants : {{fields}}' },
+      FLUID_BALANCE: { FIELD_ROUTE: 'Voie', FIELD_VOLUME: 'Volume' },
+    });
+    translate.use('fr');
+    fixture.detectChanges();
+    component.openModal();
+    fixture.detectChanges();
+    // ngModel writes the empty route on the next microtask.
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    el.querySelector<HTMLButtonElement>('[data-testid="io-save"]')!.click();
+    fixture.detectChanges();
+    expect(fluidServiceSpy.record).not.toHaveBeenCalled();
+    expect(el.querySelector('#io-route')?.getAttribute('aria-invalid')).toBe('true');
+    expect(el.querySelector('#io-volume')?.getAttribute('aria-invalid')).toBe('true');
+    const said = el.querySelector('[data-testid="submit-guard-reason"]')?.textContent ?? '';
+    expect(said).toContain('Voie');
+    expect(said).toContain('Volume');
+
+    // The same from code: one refusal naming both.
+    component.submit();
+    expect(toastSpy.error).toHaveBeenCalledOnceWith('Champs obligatoires manquants : Voie, Volume');
   });
 
   it('guards against double submission while the first call is in flight', () => {

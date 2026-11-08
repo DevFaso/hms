@@ -33,6 +33,12 @@ public class PatientMedicationResponseDTO {
     private String indication;
     private String instructions;
 
+    @Schema(description = "QA D1398: the prescriber wrote this as needed (PRN), not on a fixed schedule.")
+    private boolean asNeeded;
+
+    @Schema(description = "QA D1398: the least time, in hours, between two doses of an as-needed medicine.")
+    private Integer prnMinIntervalHours;
+
     // ── Refills ──────────────────────────────────────────────────────
     // `refillsAllowed` and `refillsRemaining` have been on the prescriptions
     // table since V1 with no consumer anywhere — the patient portal even

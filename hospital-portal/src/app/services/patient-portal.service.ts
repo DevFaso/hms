@@ -1,7 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { currentLocale } from '../shared/i18n/app-locale';
-import { HttpClient } from '@angular/common/http';
-import { Observable, map, catchError, of } from 'rxjs';
+import { HttpClient, HttpResponse } from '@angular/common/http';
+import { Observable, map, catchError, of, defer } from 'rxjs';
+import { allRows, PageSlice } from '../shared/all-pages';
 
 /* ── DTOs matching backend PatientPortalController ── */
 
@@ -13,7 +14,8 @@ export interface PatientProfileDTO {
   dateOfBirth: string;
   gender: string;
   email: string;
-  phone: string;
+  /** The record's phone, as the backend names it (the hospital calls this one). */
+  phoneNumberPrimary: string;
   address: string;
   emergencyContactName: string;
   emergencyContactPhone: string;
@@ -54,6 +56,45 @@ export interface HealthSummaryDTO {
   immunizations: ImmunizationSummary[];
   allergies: string[];
   activeDiagnoses: string[];
+  /**
+   * QA D1362 (round 31): the server's own count of the patient's current lab
+   * results and of their medications (every issued prescription). A card
+   * that shows a few rows counts the rest from these, never from the rows it
+   * loaded. Null when the server could not count.
+   */
+  labResultTotal?: number | null;
+  medicationTotal?: number | null;
+}
+
+/** QA D1213: how many lab results a portal page shows at a time. */
+export const LAB_RESULTS_PAGE_SIZE = 20;
+
+/** One page of lab results, and whether an older one exists. */
+/** QA D1379: records per `/my-vitals` page. */
+export const VITALS_PAGE_SIZE = 10;
+
+/** QA D1379: one page of vital-sign records, flattened, with the server's total of RECORDS. */
+export interface VitalsPage {
+  items: VitalSignSummary[];
+  /** Records on this page (each is one group of readings). */
+  records: number;
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface LabResultPage {
+  items: LabResultSummary[];
+  hasMore: boolean;
+}
+
+/** The rows of a page asked for with one look-ahead row (`limit = size + 1`). */
+function toLabResultPage(
+  rows: LabResultApiResponse[] | null | undefined,
+  size: number,
+): LabResultPage {
+  const mapped = (rows ?? []).map(mapLabResult);
+  return { items: mapped.slice(0, size), hasMore: mapped.length > size };
 }
 
 export interface LabResultSummary {
@@ -69,6 +110,8 @@ export interface LabResultSummary {
   /** Ordered and awaiting release: show it as expected, never as a normal result. */
   isPending: boolean;
   isAbnormal: boolean;
+  /** QA D1016: the laboratory corrected a result it had released; shown as such, never as a new one. */
+  corrected?: boolean;
   /**
    * Released, not flagged abnormal, and never compared with a reference range
    * (none is configured in the result's unit): neither normal nor abnormal.
@@ -94,12 +137,16 @@ interface LabResultApiResponse {
   status: string;
   /** No configured reference range is in the result's unit, so nothing graded it. */
   unitMismatch?: boolean;
+  /** QA D1394: a range applies but the value (">1") does not settle a grade against it. */
+  gradeUnknown?: boolean;
   collectedAt: string;
   resultedAt: string;
   orderedBy: string;
   performedBy: string;
   category: string;
   notes: string;
+  /** QA D1016: a released correction of a result the patient may already have read. */
+  corrected?: boolean;
 }
 
 export interface MedicationSummary {
@@ -114,6 +161,10 @@ export interface MedicationSummary {
   endDate: string;
   indication: string;
   instructions: string;
+  /** QA D1398: as needed (PRN), not on a fixed schedule. */
+  asNeeded?: boolean;
+  /** QA D1398: the least time, in hours, between two doses of an as-needed medicine. */
+  prnMinIntervalHours?: number | null;
 
   /** Refills the prescriber authorized when writing the prescription. */
   refillsAllowed?: number;
@@ -178,8 +229,60 @@ interface HealthSummaryRaw {
   recentVitals: PatientVitalSignRaw[];
   immunizations: ImmunizationApiResponse[];
   allergies: string[];
-  activeDiagnoses: string[];
-  chronicConditions: string[];
+  /**
+   * QA D1214: the patient's ACTIVE problems. Display strings today; an object
+   * per problem (`{ display | name | problem | description, code }`) is read
+   * too, so the backend may send either shape.
+   */
+  activeDiagnoses: (string | PortalDiagnosisRaw)[] | null;
+  chronicConditions: (string | PortalDiagnosisRaw)[] | null;
+  /** QA D1362: the server's totals (null when it could not count). */
+  labResultTotal?: number | null;
+  medicationTotal?: number | null;
+}
+
+/** One problem when the backend sends an object rather than a display string. */
+interface PortalDiagnosisRaw {
+  display?: string | null;
+  name?: string | null;
+  problem?: string | null;
+  description?: string | null;
+  code?: string | null;
+  icdCode?: string | null;
+}
+
+/** The text a patient reads for one problem: its name, with its code when there is one. */
+function diagnosisLabel(d: string | PortalDiagnosisRaw | null | undefined): string {
+  if (typeof d === 'string') return d.trim();
+  if (!d) return '';
+  const name = (d.display ?? d.name ?? d.problem ?? d.description ?? '').trim();
+  const code = (d.code ?? d.icdCode ?? '').trim();
+  if (!name) return code;
+  return code && !name.includes(code) ? `${name} (${code})` : name;
+}
+
+/**
+ * QA D1214 (round 23): "Pathologies actives" was always empty. The mapper
+ * read `activeDiagnoses ?? chronicConditions`, so an empty `activeDiagnoses`
+ * list hid every chronic condition, and the backend never filled
+ * `activeDiagnoses` at all. Every patient-facing surface (my-records, the
+ * patient dashboard, the proxy Records tab) goes through this one merge: the
+ * active problems and the chronic conditions, blanks dropped, each named once.
+ */
+export function mergeDiagnoses(
+  active: readonly (string | PortalDiagnosisRaw)[] | null | undefined,
+  chronic: readonly (string | PortalDiagnosisRaw)[] | null | undefined,
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const d of [...(active ?? []), ...(chronic ?? [])]) {
+    const label = diagnosisLabel(d);
+    const key = label.toLocaleLowerCase();
+    if (!label || seen.has(key)) continue;
+    seen.add(key);
+    out.push(label);
+  }
+  return out;
 }
 
 /**
@@ -364,12 +467,13 @@ function mapLabResult(l: LabResultApiResponse): LabResultSummary {
     released: !pending,
     isPending: pending,
     isAbnormal: !pending && ABNORMAL_LAB_STATUSES.has(l.status),
+    corrected: !pending && l.corrected === true,
     // D31: UNKNOWN = released but nothing interpreted it (no range applies,
     // no flag recorded) — never drawn as a green "within normal limits".
     isUngraded:
       !pending &&
       !ABNORMAL_LAB_STATUSES.has(l.status) &&
-      (l.unitMismatch === true || l.status === 'UNKNOWN'),
+      (l.unitMismatch === true || l.gradeUnknown === true || l.status === 'UNKNOWN'),
     unit: l.unit ?? '',
     orderedBy: l.orderedBy ?? '',
     performedBy: l.performedBy ?? '',
@@ -399,7 +503,9 @@ function mapHealthSummary(d: HealthSummaryRaw | null | undefined): HealthSummary
       totalDosesInSeries: im.totalDosesInSeries ?? null,
     })),
     allergies: d?.allergies ?? [],
-    activeDiagnoses: d?.activeDiagnoses ?? d?.chronicConditions ?? [],
+    activeDiagnoses: mergeDiagnoses(d?.activeDiagnoses, d?.chronicConditions),
+    labResultTotal: d?.labResultTotal ?? null,
+    medicationTotal: d?.medicationTotal ?? null,
   };
 }
 
@@ -427,6 +533,8 @@ interface EncounterApiResponse {
   departmentName: string;
   hospitalName: string;
   appointmentReason: string;
+  /** QA D981: the reason the visit or stay was opened (an admission's reason too). */
+  chiefComplaint?: string;
   notes: string;
   status: string;
   note?: {
@@ -448,9 +556,13 @@ export interface InvoiceApiResponse {
   totalAmount?: number | null;
   amountPaid?: number | null;
   balanceDue?: number | null;
+  /** QA D1466: paid above the total (a copay above the visit total), owed back. */
+  refundDue?: number | null;
   status?: string | null;
   hospitalName?: string | null;
-  encounterDescription?: string | null;
+  /** QA D1421: a visit is named by its type and date, never by the visit's clinical notes. */
+  encounterType?: string | null;
+  encounterDate?: string | null;
   notes?: string | null;
   /** QA D421: declared by the patient, not yet confirmed by staff. */
   pendingDeclaredAmount?: number | null;
@@ -477,10 +589,48 @@ export function mapPortalInvoice(api: InvoiceApiResponse): PortalInvoice {
           : Math.max(total - paid, 0),
     status: api.status ?? '',
     facility: api.hospitalName ?? '',
-    description: api.encounterDescription ?? '',
+    visitType: api.encounterType ?? null,
+    visitDate: api.encounterDate ?? null,
+    refundDue: Number(api.refundDue ?? 0),
     pending: Number(api.pendingDeclaredAmount ?? 0),
     creditedTo: api.creditedToInvoiceNumber ?? null,
   };
+}
+
+/** QA D982: one line of an invoice, as the cashier priced it. */
+export interface PortalInvoiceLine {
+  id: string;
+  itemDescription: string;
+  itemCategory?: string | null;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+/** QA D982: one payment on an invoice and where it stands. */
+export interface PortalInvoicePayment {
+  id: string;
+  amount: number;
+  paymentDate?: string | null;
+  paymentMethod?: string | null;
+  referenceNumber?: string | null;
+  status: 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'REVERSED' | string;
+  reversalReason?: string | null;
+  createdAt?: string | null;
+}
+
+/** QA D982: the invoice behind a portal card: its lines and every payment. */
+export interface PortalInvoiceDetail {
+  invoice: PortalInvoice;
+  lines: PortalInvoiceLine[];
+  payments: PortalInvoicePayment[];
+  /** QA D974: what was discounted, waived or credited. */
+  adjustments: {
+    id: string;
+    type: string;
+    amount: number;
+    invoiceItemDescription?: string | null;
+  }[];
 }
 
 export interface PortalInvoice {
@@ -493,7 +643,11 @@ export interface PortalInvoice {
   balance: number;
   status: string;
   facility: string;
-  description: string;
+  /** QA D1421: what titles the card when the invoice is of a visit. */
+  visitType?: string | null;
+  visitDate?: string | null;
+  /** QA D1466: paid above the total (a copay above the visit total), owed back to the patient. */
+  refundDue?: number;
   /** QA D421: already declared and awaiting confirmation; it counts against the balance. */
   pending?: number;
   /** QA D428: the invoice a folded check-in copay was credited to. */
@@ -568,6 +722,10 @@ export interface PortalPrescription {
   prescribedBy: string;
   prescribedDate: string;
   status: string;
+  /** QA D1398: as needed (PRN), not on a fixed schedule. */
+  asNeeded?: boolean;
+  /** QA D1398: the least time, in hours, between two doses. */
+  prnMinIntervalHours?: number | null;
   /** G15: when a fill was marked ready for collection; absent when nothing is waiting. */
   readyForCollectionAt?: string;
   /** G15: the pharmacy where it is waiting. */
@@ -577,6 +735,8 @@ export interface PortalPrescription {
 /** Raw shape returned by backend PrescriptionResponseDTO. */
 interface PrescriptionApiResponse {
   id: string;
+  asNeeded?: boolean;
+  prnMinIntervalHours?: number | null;
   medicationName: string;
   medicationDisplayName?: string;
   dosage: string;
@@ -739,7 +899,6 @@ export interface RescheduleAppointmentRequest {
   appointmentId: string;
   newDate: string;
   newStartTime: string;
-  newEndTime: string;
   reason: string;
 }
 
@@ -806,8 +965,7 @@ export interface BookAppointmentRequest {
   departmentId: string;
   staffId?: string;
   date: string; // yyyy-MM-dd
-  startTime: string; // HH:mm
-  endTime?: string; // HH:mm — defaults to startTime + 30 min
+  startTime: string; // HH:mm — the end is set by the clinic's slot rules (QA D1060)
   reason?: string;
   notes?: string;
 }
@@ -829,6 +987,21 @@ export interface SchedulingProvider {
   fullName?: string;
   /** Bare role token (DOCTOR), or null/absent when the provider has none. */
   role?: string | null;
+}
+
+/**
+ * QA D1093: one published, free slot a patient may book (or move their visit
+ * to). A self-booking takes exactly one of these; the server refuses any other
+ * time.
+ */
+export interface PortalOpenSlot {
+  slotId: string;
+  staffId: string;
+  staffName?: string | null;
+  date: string;
+  /** 24 h wall-clock time, "HH:mm" or "HH:mm:ss". */
+  startTime: string;
+  endTime: string;
 }
 
 export interface PatientPaymentRequest {
@@ -929,6 +1102,8 @@ export type PatientDocumentType =
   | 'INSURANCE_DOCUMENT'
   | 'INVOICE'
   | 'IMMUNIZATION_RECORD'
+  /** QA D961: issued by a doctor from a visit; never uploaded by the patient. */
+  | 'MEDICAL_CERTIFICATE'
   | 'OTHER';
 
 export interface PatientDocumentResponse {
@@ -937,6 +1112,8 @@ export interface PatientDocumentResponse {
   uploadedByUserId: string;
   uploadedByDisplayName: string;
   documentType: PatientDocumentType;
+  /** QA D1048: issued by a hospital (a medical certificate), not uploaded by the patient. */
+  issuedByHospital?: boolean;
   displayName: string;
   fileUrl: string;
   mimeType: string;
@@ -1067,6 +1244,17 @@ export class PatientPortalService {
       .pipe(map((r) => r.data));
   }
 
+  /**
+   * QA D939: the patient's own contact details on the patient record (PUT
+   * /me/patient/profile). The account phone (PUT /users/{id}) is the login
+   * contact only; the hospital calls the record's phone.
+   */
+  updateMyProfile(changes: { phoneNumberPrimary?: string }): Observable<PatientProfileDTO> {
+    return this.http
+      .put<ApiWrapper<PatientProfileDTO>>(`${this.base}/profile`, changes)
+      .pipe(map((r) => r.data));
+  }
+
   getHealthSummary(): Observable<HealthSummaryDTO> {
     return this.http
       .get<ApiWrapper<HealthSummaryRaw>>(`${this.base}/health-summary`)
@@ -1097,6 +1285,16 @@ export class PatientPortalService {
     );
   }
 
+  /**
+   * QA D1399 (D1347 class): every medication of mine, every page read, active
+   * first. `/my-medications` read the list with its default limit: 20 of 249 past
+   * medicines and nothing to say so. Errors propagate so the page can say the load
+   * failed rather than "no medicines".
+   */
+  getAllMyMedications(): Observable<MedicationSummary[]> {
+    return this.allPortalRows<MedicationSummary>(`${this.base}/medications/page`);
+  }
+
   getMyPrescriptions(): Observable<PortalPrescription[]> {
     return this.http.get<ApiWrapper<PrescriptionApiResponse[]>>(`${this.base}/prescriptions`).pipe(
       map((r) =>
@@ -1110,6 +1308,8 @@ export class PatientPortalService {
           prescribedBy: p.staffFullName ?? '',
           prescribedDate: p.createdAt ?? '',
           status: p.status ?? '',
+          asNeeded: p.asNeeded === true,
+          prnMinIntervalHours: p.prnMinIntervalHours ?? null,
           readyForCollectionAt: p.readyForCollectionAt ?? undefined,
           readyForCollectionPharmacyName: p.readyForCollectionPharmacyName ?? undefined,
         })),
@@ -1118,7 +1318,14 @@ export class PatientPortalService {
     );
   }
 
-  getMyLabResults(limit = 20): Observable<LabResultSummary[]> {
+  /** QA D1399: how many lab results my list holds, in all. */
+  getMyLabResultTotal(): Observable<number> {
+    return this.http
+      .get<ApiWrapper<number>>(`${this.base}/lab-results/count`)
+      .pipe(map((r) => r.data ?? 0));
+  }
+
+  getMyLabResults(limit: number): Observable<LabResultSummary[]> {
     return this.http
       .get<ApiWrapper<LabResultApiResponse[]>>(`${this.base}/lab-results`, { params: { limit } })
       .pipe(
@@ -1127,12 +1334,52 @@ export class PatientPortalService {
       );
   }
 
-  getMyVitals(limit = 10): Observable<VitalSignSummary[]> {
+  /**
+   * QA D1213 (round 23): one page of the patient's lab results, newest first.
+   * `/my-lab-results` read `limit=20` once, so a patient with more lost the
+   * older ones (a critical K 6,8 among them) with no way to reach them.
+   *
+   * Contract (`GET /api/me/patient/lab-results?offset={n}&limit={k}`): the
+   * patient's CURRENT results (released and pending; superseded rows already
+   * removed by the server), newest first; skip the first `offset` of them and
+   * return at most `limit`. The list shape is unchanged (the dashboard and
+   * the mobile apps read it), and `offset` defaults to 0. The page asks for
+   * one row more than it shows: that row only says whether there is more.
+   *
+   * Errors are not swallowed here (unlike {@link getMyLabResults}): the page
+   * says that a load failed, and why, rather than showing "no results".
+   */
+  getMyLabResultsPage(offset: number, size = LAB_RESULTS_PAGE_SIZE): Observable<LabResultPage> {
     return this.http
-      .get<ApiWrapper<PatientVitalSignRaw[]>>(`${this.base}/vitals`, { params: { limit } })
+      .get<ApiWrapper<LabResultApiResponse[]>>(`${this.base}/lab-results`, {
+        params: { offset, limit: size + 1 },
+      })
+      .pipe(map((r) => toLabResultPage(r.data, size)));
+  }
+
+  /**
+   * QA D1379 (D1347 class): one page of my vital-sign records, newest first,
+   * with the server's total. `/my-vitals` used to read `/vitals?limit=10`
+   * and show those 10 records as the whole history (45 existed). Errors reach
+   * the page, which says the load failed rather than "no readings".
+   */
+  getMyVitalsPage(page: number, size = VITALS_PAGE_SIZE): Observable<VitalsPage> {
+    return this.http
+      .get<ApiWrapper<PageSlice<PatientVitalSignRaw>>>(`${this.base}/vitals/history`, {
+        params: { page, size },
+      })
       .pipe(
-        map((r) => flattenVitals(r.data ?? [])),
-        catchError(() => of([])),
+        map((r) => {
+          const slice = r.data ?? {};
+          const records = slice.content ?? [];
+          return {
+            items: flattenVitals(records),
+            records: records.length,
+            total: slice.totalElements ?? records.length,
+            page: slice.number ?? page,
+            size: slice.size ?? size,
+          };
+        }),
       );
   }
 
@@ -1145,7 +1392,10 @@ export class PatientPortalService {
           type: e.encounterType ?? '',
           providerName: e.staffName ?? e.staffFullName ?? '',
           department: e.departmentName ?? '',
-          chiefComplaint: e.note?.chiefComplaint ?? '',
+          // QA D981: the note's complaint, else the visit's own reason (an
+          // admission's reason lives there), else the booking reason.
+          chiefComplaint: e.note?.chiefComplaint || e.chiefComplaint || e.appointmentReason || '',
+          // The doctor's assessment, labelled as such (it is not a coded diagnosis).
           diagnosisSummary: e.note?.assessment ?? '',
           status: e.status ?? '',
           notes: e.notes ?? '',
@@ -1157,13 +1407,72 @@ export class PatientPortalService {
     );
   }
 
+  /** Every invoice of mine (QA D1347: was the server's first page). */
   getMyInvoices(): Observable<PortalInvoice[]> {
+    return this.allPortalRows<InvoiceApiResponse>(`${this.base}/billing/invoices`).pipe(
+      map((rows) => rows.map(mapPortalInvoice)),
+      catchError(() => of([])),
+    );
+  }
+
+  /**
+   * QA D1347: every row of a paged portal endpoint (`ApiWrapper<Page>`), all
+   * pages read — never only its first page.
+   */
+  private allPortalRows<T>(url: string): Observable<T[]> {
+    return allRows((page, size) =>
+      this.http
+        .get<ApiWrapper<PageSlice<T>>>(url, { params: { page, size } })
+        .pipe(map((r) => r.data)),
+    );
+  }
+
+  /** QA D982: one of my invoices with its lines and every payment. */
+  getMyInvoiceDetail(invoiceId: string): Observable<PortalInvoiceDetail> {
     return this.http
-      .get<ApiWrapper<{ content: InvoiceApiResponse[] }>>(`${this.base}/billing/invoices`)
+      .get<
+        ApiWrapper<{
+          invoice: InvoiceApiResponse;
+          items: PortalInvoiceLine[] | null;
+          payments: PortalInvoicePayment[] | null;
+          adjustments?: PortalInvoiceDetail['adjustments'] | null;
+        }>
+      >(`${this.base}/billing/invoices/${invoiceId}`)
       .pipe(
-        map((r) => (r.data?.content ?? []).map(mapPortalInvoice)),
-        catchError(() => of([])),
+        map((r) => ({
+          invoice: mapPortalInvoice(r.data.invoice),
+          lines: (r.data.items ?? []).map((l) => ({
+            ...l,
+            quantity: Number(l.quantity ?? 0),
+            unitPrice: Number(l.unitPrice ?? 0),
+            totalPrice: Number(l.totalPrice ?? 0),
+          })),
+          payments: (r.data.payments ?? []).map((p) => ({ ...p, amount: Number(p.amount ?? 0) })),
+          adjustments: (r.data.adjustments ?? []).map((a) => ({
+            ...a,
+            amount: Number(a.amount ?? 0),
+          })),
+        })),
       );
+  }
+
+  /** QA D982: my invoice PDF, with the server's file name. */
+  getMyInvoicePdf(invoiceId: string): Observable<HttpResponse<Blob>> {
+    return this.http.get(`${this.base}/billing/invoices/${invoiceId}/pdf`, {
+      responseType: 'blob',
+      observe: 'response',
+    });
+  }
+
+  /** QA D982: the receipt of one of my confirmed payments. */
+  getMyReceiptPdf(invoiceId: string, paymentId: string): Observable<HttpResponse<Blob>> {
+    return this.http.get(
+      `${this.base}/billing/invoices/${invoiceId}/payments/${paymentId}/receipt`,
+      {
+        responseType: 'blob',
+        observe: 'response',
+      },
+    );
   }
 
   payInvoice(invoiceId: string, payment: PatientPaymentRequest): Observable<PortalInvoice> {
@@ -1352,22 +1661,37 @@ export class PatientPortalService {
    * makes.
    */
   getMyDisclosures(): Observable<DisclosureAccounting> {
-    return this.http
-      .get<ApiWrapper<DisclosureAccounting>>(`${this.base}/disclosures`, {
-        params: { page: 0, size: 50 },
-      })
-      .pipe(
-        // actorRole arrives bare, or null for an unresolvable role:
-        // DisclosureAccountingServiceImpl.toEntry normalises every row,
-        // legacy spellings included, so the portal no longer maps it.
-        map((r) => {
-          const d = r.data;
-          if (!d) {
-            throw new Error('empty disclosure accounting response');
-          }
-          return { ...d, entries: d.entries ?? [] };
-        }),
+    // QA D1347: every entry (all pages), not the 50 newest with nothing to
+    // say the older ones exist; the counts are the first page's (they cover
+    // the whole window whatever the page).
+    return defer(() => {
+      let first: DisclosureAccounting | null = null;
+      const fetchPage = (page: number, size: number) =>
+        this.http
+          .get<ApiWrapper<DisclosureAccounting>>(`${this.base}/disclosures`, {
+            params: { page, size },
+          })
+          .pipe(
+            // actorRole arrives bare, or null for an unresolvable role:
+            // DisclosureAccountingServiceImpl.toEntry normalises every row,
+            // legacy spellings included, so the portal no longer maps it.
+            map((r) => {
+              const d = r.data;
+              if (!d) {
+                throw new Error('empty disclosure accounting response');
+              }
+              if (page === 0) first = d;
+              return {
+                content: d.entries ?? [],
+                totalPages: d.totalPages ?? 1,
+                number: d.page ?? page,
+              };
+            }),
+          );
+      return allRows(fetchPage).pipe(
+        map((entries) => ({ ...(first as DisclosureAccounting), entries, page: 0 })),
       );
+    });
   }
 
   // ── Appointment Actions ────────────────────────────────────────────
@@ -1410,6 +1734,35 @@ export class PatientPortalService {
       );
   }
 
+  /** QA D1093: the published, free slots of a day (narrowed to a clinician when one is chosen). */
+  getOpenSlots(
+    hospitalId: string,
+    departmentId: string,
+    date: string,
+    staffId?: string,
+  ): Observable<PortalOpenSlot[]> {
+    const params: Record<string, string> = { date };
+    if (staffId) params['staffId'] = staffId;
+    return this.http
+      .get<ApiWrapper<PortalOpenSlot[]>>(
+        `${this.base}/booking/hospitals/${hospitalId}/departments/${departmentId}/slots`,
+        { params },
+      )
+      .pipe(map((r) => r.data ?? []));
+  }
+
+  /** QA D1093: the published, free slots the patient's own visit can move to on a day. */
+  getRescheduleSlots(appointmentId: string, date: string): Observable<PortalOpenSlot[]> {
+    return this.http
+      .get<ApiWrapper<PortalOpenSlot[]>>(
+        `${this.base}/appointments/${appointmentId}/reschedule-slots`,
+        {
+          params: { date },
+        },
+      )
+      .pipe(map((r) => r.data ?? []));
+  }
+
   getSchedulingProviders(
     hospitalId: string,
     departmentId: string,
@@ -1442,15 +1795,11 @@ export class PatientPortalService {
       .pipe(map((r) => r.data));
   }
 
+  /** Every refill request of mine (QA D1347: was the 50 newest). */
   getMyRefills(): Observable<MedicationRefill[]> {
-    return this.http
-      .get<ApiWrapper<PageWrapper<MedicationRefill>>>(`${this.base}/refills`, {
-        params: { page: 0, size: 50 },
-      })
-      .pipe(
-        map((r) => r.data?.content ?? []),
-        catchError(() => of([])),
-      );
+    return this.allPortalRows<MedicationRefill>(`${this.base}/refills`).pipe(
+      catchError(() => of([])),
+    );
   }
 
   cancelRefill(refillId: string): Observable<MedicationRefill> {
@@ -1547,34 +1896,43 @@ export class PatientPortalService {
       .pipe(map((r) => (r.data ?? []).map(mapAppointment)));
   }
 
-  getProxyMedications(patientId: string, limit = 50): Observable<MedicationSummary[]> {
-    return this.http
-      .get<ApiWrapper<MedicationSummary[]>>(`${this.base}/proxy-access/${patientId}/medications`, {
-        params: { limit },
-      })
-      .pipe(map((r) => r.data ?? []));
+  /** QA D1399 (D1347 class): every medication of the grantor (was active + 50). */
+  getProxyMedications(patientId: string): Observable<MedicationSummary[]> {
+    return this.allPortalRows<MedicationSummary>(
+      `${this.base}/proxy-access/${patientId}/medications/page`,
+    );
   }
 
-  getProxyLabResults(patientId: string, limit = 50): Observable<LabResultSummary[]> {
+  /** QA D1399: how many lab results the grantor's list holds, in all. */
+  getProxyLabResultTotal(patientId: string): Observable<number> {
+    return this.http
+      .get<ApiWrapper<number>>(`${this.base}/proxy-access/${patientId}/lab-results/count`)
+      .pipe(map((r) => r.data ?? 0));
+  }
+
+  /**
+   * QA D1213 (sibling): one page of a grantor's lab results for a proxy, with
+   * the same contract as {@link getMyLabResultsPage}
+   * (`GET /api/me/patient/proxy-access/{patientId}/lab-results?offset=&limit=`).
+   */
+  getProxyLabResultsPage(
+    patientId: string,
+    offset: number,
+    size = LAB_RESULTS_PAGE_SIZE,
+  ): Observable<LabResultPage> {
     return this.http
       .get<ApiWrapper<LabResultApiResponse[]>>(
         `${this.base}/proxy-access/${patientId}/lab-results`,
-        {
-          params: { limit },
-        },
+        { params: { offset, limit: size + 1 } },
       )
-      .pipe(map((r) => (r.data ?? []).map(mapLabResult)));
+      .pipe(map((r) => toLabResultPage(r.data, size)));
   }
 
+  /** Every invoice of the grantor (QA D1347: was the 20 newest). */
   getProxyBilling(patientId: string): Observable<PortalInvoice[]> {
-    return this.http
-      .get<ApiWrapper<{ content: InvoiceApiResponse[] }>>(
-        `${this.base}/proxy-access/${patientId}/billing`,
-        {
-          params: { page: 0, size: 20 },
-        },
-      )
-      .pipe(map((r) => (r.data?.content ?? []).map(mapPortalInvoice)));
+    return this.allPortalRows<InvoiceApiResponse>(
+      `${this.base}/proxy-access/${patientId}/billing`,
+    ).pipe(map((rows) => rows.map(mapPortalInvoice)));
   }
 
   getProxyRecords(patientId: string): Observable<HealthSummaryDTO> {
@@ -1627,6 +1985,14 @@ export class PatientPortalService {
     return this.http
       .delete<ApiWrapper<void>>(`${this.base}/documents/${documentId}`)
       .pipe(map(() => void 0));
+  }
+
+  /** QA D966: the copy of a prescription the pharmacy printed for me (PDF, my own only). */
+  getMyPrintedPrescription(prescriptionId: string): Observable<HttpResponse<Blob>> {
+    return this.http.get(`${this.base}/prescriptions/${prescriptionId}/printed-copy`, {
+      responseType: 'blob',
+      observe: 'response',
+    });
   }
 
   /**

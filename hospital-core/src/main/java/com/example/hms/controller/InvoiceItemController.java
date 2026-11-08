@@ -38,13 +38,15 @@ public class InvoiceItemController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
     @Operation(summary = "Create Invoice Item")
     public ResponseEntity<InvoiceItemResponseDTO> createInvoiceItem(
-        @Valid @RequestBody InvoiceItemRequestDTO dto,
+        // QA D1300: the create-only invoice is checked with the other fields, in one refusal.
+        @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+            com.example.hms.validation.OnCreate.class}) @RequestBody InvoiceItemRequestDTO dto,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         return new ResponseEntity<>(invoiceItemService.createInvoiceItem(dto, locale), HttpStatus.CREATED);
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
     @Operation(summary = "Get Invoice Item by ID")
     public ResponseEntity<InvoiceItemResponseDTO> getInvoiceItemById(
         @PathVariable UUID id,
@@ -53,7 +55,7 @@ public class InvoiceItemController {
     }
 
     @GetMapping("/invoice/{invoiceId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
     @Operation(summary = "Get Items by Invoice ID")
     public ResponseEntity<List<InvoiceItemResponseDTO>> getItemsByInvoiceId(
         @PathVariable UUID invoiceId,

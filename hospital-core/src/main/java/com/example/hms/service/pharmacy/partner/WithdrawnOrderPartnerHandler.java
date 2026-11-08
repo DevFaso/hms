@@ -2,6 +2,7 @@ package com.example.hms.service.pharmacy.partner;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
+import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
 import com.example.hms.enums.RoutingType;
 import com.example.hms.model.Prescription;
@@ -83,6 +84,55 @@ public class WithdrawnOrderPartnerHandler {
     }
 
     /**
+     * An order held for review. An unanswered offer is closed and the order
+     * comes back to the in-house queue, where the hold is shown and asked; an
+     * accepted one stays open so a dispense confirmation still matches. Either
+     * partner is told, once this has committed, not to dispense it.
+     */
+    public void recallForReview(Prescription prescription) {
+        if (prescription == null || prescription.getId() == null) {
+            return;
+        }
+        for (PrescriptionRoutingDecision decision
+                : routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescription.getId())) {
+            if (decision.getRoutingType() != RoutingType.PARTNER) {
+                continue;
+            }
+            if (decision.getStatus() == RoutingDecisionStatus.PENDING) {
+                recallOffer(decision, prescription);
+            } else if (decision.getStatus() == RoutingDecisionStatus.ACCEPTED) {
+                tellPartnerOfReviewAfterCommit(decision);
+            }
+        }
+    }
+
+    /** An unanswered offer of a held order: it closes, and the order is no longer this partner's. */
+    public PrescriptionRoutingDecision recallOffer(PrescriptionRoutingDecision decision, Prescription prescription) {
+        decision.setStatus(RoutingDecisionStatus.CANCELLED);
+        PrescriptionRoutingDecision saved = routingDecisionRepository.save(decision);
+        if (prescription.getStatus() == PrescriptionStatus.SENT_TO_PARTNER) {
+            prescription.setStatus(PrescriptionStatus.PARTNER_REJECTED);
+            prescription.clearPharmacy();
+        }
+        tellPartnerOfReviewAfterCommit(decision);
+        audit(AuditEventType.PRESCRIPTION_ROUTED_EXTERNAL, AuditStatus.SUCCESS,
+                "Partner offer recalled: prescription " + prescription.getId() + " is held for review",
+                decision.getId());
+        return saved;
+    }
+
+    /**
+     * The partner handed a held order over: that happened and is recorded as
+     * ever, the hold stands, and a person must check with the patient.
+     */
+    public void raiseDispenseOfHeld(PrescriptionRoutingDecision decision, Prescription prescription, String source) {
+        audit(AuditEventType.SECURITY_ALERT_TRIGGERED, AuditStatus.FAILURE,
+                source + " confirmed dispensing prescription " + prescription.getId() + ", which is held for review; "
+                        + "the hold stands. A person must check with the patient and the partner.",
+                decision.getId());
+    }
+
+    /**
      * An accept, a refusal, a timeout or a no-show on an offer whose order is
      * withdrawn: the offer is closed (CANCELLED) and the event audited; the
      * prescription is not changed and nobody is notified.
@@ -149,6 +199,24 @@ public class WithdrawnOrderPartnerHandler {
                 channel.sendWithdrawn(decision, partner);
             } catch (RuntimeException ex) {
                 log.warn("Could not tell the partner pharmacy that decision {} was withdrawn: {}",
+                        decisionId, ex.getMessage());
+            }
+        });
+    }
+
+    /** As {@link #tellPartnerAfterCommit}: a rolled-back hold must not stop a pharmacy preparing a live order. */
+    private void tellPartnerOfReviewAfterCommit(PrescriptionRoutingDecision decision) {
+        Pharmacy partner = decision.getTargetPharmacy();
+        String phone = partner != null ? partner.getPhoneNumber() : null;
+        if (phone == null || phone.isBlank()) {
+            return;
+        }
+        UUID decisionId = decision.getId();
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                channel.sendHeldForReview(decision, partner);
+            } catch (RuntimeException ex) {
+                log.warn("Could not tell the partner pharmacy that decision {} is held for review: {}",
                         decisionId, ex.getMessage());
             }
         });

@@ -82,14 +82,15 @@ public class MaternalHistoryController {
     @GetMapping("/patient/{patientId}/current")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get current maternal history for patient",
-               description = "Retrieves the latest version of maternal history for a patient")
+               description = "Retrieves the latest version of maternal history for a patient; 204 No Content when there is none")
     public ResponseEntity<MaternalHistoryResponseDTO> getCurrentMaternalHistory(
         @PathVariable UUID patientId,
         Authentication authentication
     ) {
         String username = authentication.getName();
         MaternalHistoryResponseDTO response = maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username);
-        return ResponseEntity.ok(response);
+        // QA D1082: a woman with no maternal history yet is 204, as birth plans and care plans answer.
+        return response == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(response);
     }
 
     @GetMapping("/patient/{patientId}/versions")
@@ -136,7 +137,12 @@ public class MaternalHistoryController {
     ) {
         String username = authentication.getName();
         Page<MaternalHistoryResponseDTO> response = maternalHistoryService.searchMaternalHistory(
-            hospitalId, patientId, riskCategory, dataComplete, reviewedByProvider,
+            hospitalId, patientId,
+            // QA D1385 class (round 32): MaternalHistoryServiceImpl#calculateRiskScore writes only these;
+            // an unknown or lower-case value matched nothing and listed nobody.
+            com.example.hms.controller.support.QueryParameterValues.oneOf("riskCategory", riskCategory,
+                java.util.Set.of("LOW", "MODERATE", "HIGH")),
+            dataComplete, reviewedByProvider,
             dateFrom, dateTo, pageable, username
         );
         return ResponseEntity.ok(response);
@@ -224,6 +230,8 @@ public class MaternalHistoryController {
         return ResponseEntity.ok(response);
     }
 
+    // Stores the score on the existing history, so an update: a POST is DATA_CREATE by default.
+    @com.example.hms.security.audit.WriteAudited(eventType = com.example.hms.enums.AuditEventType.DATA_UPDATE)
     @PostMapping("/{id}/calculate-risk")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Calculate risk score",

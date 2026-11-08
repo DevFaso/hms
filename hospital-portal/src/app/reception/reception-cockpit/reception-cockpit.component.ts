@@ -1,3 +1,4 @@
+import { refusalReason } from '../../shared/refusal-reason';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Observable } from 'rxjs';
 import {
@@ -35,6 +36,8 @@ import { WaitlistPanelComponent } from '../waitlist-panel/waitlist-panel.compone
 import { RecallsPanelComponent } from '../recalls-panel/recalls-panel.component';
 import { CheckinDialogComponent } from '../checkin-dialog/checkin-dialog.component';
 import { localDateString } from '../../shared/date-utils';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
+import { DashPipe } from '../../shared/pipes/dash.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 type Tab = 'queue' | 'insurance' | 'payments' | 'flowboard' | 'waitlist' | 'recalls';
@@ -56,6 +59,8 @@ function todayIso(): string {
   selector: 'app-reception-cockpit',
   standalone: true,
   imports: [
+    DashPipe,
+    KeyLabelPipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -127,9 +132,13 @@ export class ReceptionCockpitComponent implements OnInit {
 
   filteredQueue = computed(() => {
     const term = this.searchTerm().trim().toLocaleLowerCase();
+    const f = this.statusFilter();
     return this.queueItems().filter(
       (item) =>
-        (this.statusFilter() === 'ALL' || item.status === this.statusFilter()) &&
+        // QA D1400 + D1401: the server says which filters open a row, by the rule its
+        // summary counts through, so a card's number is the rows it opens. A walk-in's
+        // status is ARRIVED, IN_PROGRESS, ...: it carries WALK_IN here, never as a status.
+        (f === 'ALL' || (item.queueFilters ?? [item.status]).includes(f)) &&
         (this.attentionFilter() !== 'insurance' || item.hasInsuranceIssue) &&
         (this.attentionFilter() !== 'balance' || item.hasOutstandingBalance) &&
         (!term ||
@@ -278,7 +287,7 @@ export class ReceptionCockpitComponent implements OnInit {
         // QA D788: the server says why (a visit nobody saw, the clinician's
         // steps), and the card goes back where it was.
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.STATUS_UPDATE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('RECEPTION.STATUS_UPDATE_FAILED'),
         );
         this.reloadFlowBoard();
       },
@@ -320,6 +329,12 @@ export class ReceptionCockpitComponent implements OnInit {
   }
 
   canCheckIn(item: ReceptionQueueItem): boolean {
-    return !!item.appointmentId && (item.status === 'SCHEDULED' || item.status === 'CONFIRMED');
+    return (
+      !!item.appointmentId &&
+      (item.status === 'SCHEDULED' || item.status === 'CONFIRMED') &&
+      // QA D1489: an action that could only be refused is not offered.
+      !item.patientDeceased &&
+      !item.registrationInactive
+    );
   }
 }

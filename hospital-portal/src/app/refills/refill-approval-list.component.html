@@ -46,6 +46,16 @@
             }}</span>
           </div>
           <dl class="refill-card__meta">
+            <!-- QA D1276: each card names the patient (and the MRN here). -->
+            <div data-testid="refill-patient">
+              <dt>{{ 'PATIENTS.PATIENT' | translate }}</dt>
+              <dd>
+                {{ r.patientName || ('REFILLS.UNKNOWN_PATIENT' | translate) }}
+                @if (r.patientMrn) {
+                  {{ ' ' }}<span class="refill-card__mrn">({{ r.patientMrn }})</span>
+                }
+              </dd>
+            </div>
             @if (r.requestedAt) {
               <div>
                 <dt>{{ 'REFILLS.FIELD_REQUESTED_AT' | translate }}</dt>
@@ -73,9 +83,15 @@
           </dl>
           @if (isOpen(r.status)) {
             <div class="refill-card__actions">
+              <!-- QA D1305: required to refuse or pause only, so the label says
+                   so in words (a star would claim approval needs it too). -->
               <label class="refill-card__notes">
-                <span>{{ 'REFILLS.FIELD_PROVIDER_NOTES' | translate }}</span>
+                <span
+                  >{{ 'REFILLS.FIELD_PROVIDER_NOTES' | translate }}
+                  {{ 'REFILLS.NOTES_REQUIRED_FOR' | translate }}</span
+                >
                 <textarea
+                  [id]="notesFieldId(r.id)"
                   rows="2"
                   [(ngModel)]="decisionNotes[r.id]"
                   [name]="'notes-' + r.id"

@@ -157,9 +157,12 @@ public class LabResultController {
             @Parameter(description = "D58: true confirms that the caller, who entered this result, releases it "
                 + "without a second reviewer. Without it a self-release answers 409.")
             @RequestParam(name = "selfRelease", defaultValue = "false") boolean selfRelease,
+            @Parameter(description = "QA D1092: true confirms that the caller reviewed a result no reference "
+                + "range can grade (its unit matches none). Without it such a release answers 409.")
+            @RequestParam(name = "ungradedConfirmed", defaultValue = "false") boolean ungradedConfirmed,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         return ResponseEntity.ok(auditLabResult(com.example.hms.enums.AuditEventType.LAB_RESULT_RELEASED,
-            labResultService.releaseLabResult(id, selfRelease, locale)));
+            labResultService.releaseLabResult(id, selfRelease, ungradedConfirmed, locale)));
     }
 
     @PostMapping("/{id}/sign")

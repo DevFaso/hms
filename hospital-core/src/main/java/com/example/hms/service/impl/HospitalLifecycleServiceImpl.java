@@ -98,9 +98,10 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO suspend(UUID hospitalId, TenantLifecycleActionRequestDTO request, String mfaToken) {
+        // QA round 29: the body before the state, so a missing reason is always named.
+        String reason = requireReason(request, ACTION_SUSPEND);
         Hospital hospital = lockOrThrow(hospitalId);
         requireTransition(hospital, SUSPENDABLE, ACTION_SUSPEND);
-        String reason = requireReason(request, ACTION_SUSPEND);
         requireStepUp(ACTION_SUSPEND, mfaToken);
 
         hospital.setLifecycleState(HospitalLifecycleState.SUSPENDED);
@@ -165,9 +166,10 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO archive(UUID hospitalId, TenantLifecycleActionRequestDTO request, String mfaToken) {
+        // QA round 29: the body before the state, so a missing reason is always named.
+        String reason = requireReason(request, ACTION_ARCHIVE);
         Hospital hospital = lockOrThrow(hospitalId);
         requireTransition(hospital, ARCHIVABLE, ACTION_ARCHIVE);
-        String reason = requireReason(request, ACTION_ARCHIVE);
         requireStepUp(ACTION_ARCHIVE, mfaToken);
 
         hospital.setLifecycleState(HospitalLifecycleState.ARCHIVED);
@@ -184,9 +186,10 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO schedulePurge(UUID hospitalId, TenantLifecycleActionRequestDTO request, String mfaToken) {
+        // QA round 29: the body before the state, so a missing reason is always named.
+        String reason = requireReason(request, ACTION_SCHEDULE_PURGE);
         Hospital hospital = lockOrThrow(hospitalId);
         requireTransition(hospital, PURGE_SCHEDULABLE, ACTION_SCHEDULE_PURGE);
-        String reason = requireReason(request, ACTION_SCHEDULE_PURGE);
 
         Instant scheduledFor = request.getPurgeScheduledFor() != null
             ? request.getPurgeScheduledFor()
@@ -293,7 +296,8 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
     private String requireReason(TenantLifecycleActionRequestDTO request, String action) {
         String reason = request != null ? request.getReason() : null;
         if (reason == null || reason.trim().isEmpty()) {
-            throw new BusinessRuleException(com.example.hms.utility.MessageUtil.resolveOrRaw("hospital.lifecycle.reasonRequired", actionLabel(action)));
+            throw new com.example.hms.exception.FieldBusinessException("reason", "hospital.lifecycle.reasonRequired",
+                actionLabel(action));
         }
         return reason.trim();
     }

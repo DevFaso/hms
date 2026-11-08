@@ -12,6 +12,10 @@ export class ToastService {
   readonly toasts = signal<ToastMessage[]>([]);
 
   push(type: ToastMessage['type'], message: string, durationMs = 5000): void {
+    // QA D995: the error interceptor reports a write's business refusal and the
+    // page may report the same reason; the same toast already on screen is not
+    // stacked a second time.
+    if (this.toasts().some((t) => t.type === type && t.message === message)) return;
     const id = ++this.counter;
     this.toasts.update((list) => [...list, { id, type, message }]);
     setTimeout(() => this.dismiss(id), durationMs);

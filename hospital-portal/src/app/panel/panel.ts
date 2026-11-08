@@ -26,7 +26,9 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /**
  * Panel management (Tier 2 item 37).
  *
@@ -45,6 +47,8 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
   selector: 'app-panel',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,

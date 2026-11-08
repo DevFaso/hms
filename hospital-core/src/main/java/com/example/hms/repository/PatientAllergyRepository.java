@@ -13,6 +13,9 @@ public interface PatientAllergyRepository extends JpaRepository<PatientAllergy, 
 
     List<PatientAllergy> findByPatient_Id(UUID patientId);
 
+    /** QA D1314: {@link #findByPatient_Id} for a whole ward. */
+    List<PatientAllergy> findByPatient_IdIn(java.util.Collection<UUID> patientIds);
+
     List<PatientAllergy> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
 
     /**

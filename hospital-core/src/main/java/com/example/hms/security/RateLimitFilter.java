@@ -61,7 +61,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
             // SMS to the named account; the confirm takes a token. The current
             // ones are under /api/auth/password above.
             "/api/auth/request-reset",
-            "/api/auth/reset-password"
+            "/api/auth/reset-password",
+            // Anonymous and taking a one-time code (QA D1123): the assignment
+            // view, the code check by reference and the code check by phone.
+            "/api/assignments/public"
     );
 
     private final int requestsPerMinute;

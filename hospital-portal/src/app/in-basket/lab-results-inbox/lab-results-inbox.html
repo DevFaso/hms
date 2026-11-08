@@ -4,7 +4,7 @@
       <h2 class="category-title">
         <span>{{ 'inBasket.labResults' | translate }}</span>
         @if (!loading() && !loadError() && results().length > 0) {
-          <span class="badge">{{ results().length }}</span>
+          {{ ' ' }}<span class="badge">{{ results().length }}</span>
         }
       </h2>
       <p class="category-subtitle">{{ 'inBasket.labResultsSubtitle' | translate }}</p>
@@ -146,7 +146,9 @@
                     </a>
                   </td>
                   <td>
-                    <span class="result-value">{{ r.resultValue || '—' }}</span>
+                    <span class="result-value">{{ r.resultValue | labValue: r.resultUnit }}</span>
+                    <!-- QA D1016: a correction of a value already released -->
+                    <app-lab-correction-badge [corrected]="r.corrected" />
                     @if (directionKey(r); as dirKey) {
                       <span class="result-direction">{{ dirKey | translate }}</span>
                     }

@@ -337,6 +337,40 @@ class PatientPortalServiceImplMvp4Test {
         }
 
         @Test
+        @DisplayName("QA D1494: no consent, absent or false, is refused on its field and nothing is written")
+        void noConsentIsRefusedOnItsField() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appt = buildAppointment(apptId, AppointmentStatus.SCHEDULED, 3);
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appt));
+
+            for (Boolean consent : new Boolean[] {null, Boolean.FALSE}) {
+                PreCheckInRequestDTO dto = PreCheckInRequestDTO.builder()
+                        .appointmentId(apptId).consentAcknowledged(consent).build();
+                assertThatThrownBy(() -> service.submitPreCheckIn(auth, dto))
+                        .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                                e -> assertThat(e.getField()).isEqualTo("consentAcknowledged"));
+            }
+            verify(appointmentRepository, org.mockito.Mockito.never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D1488: a recorded death refuses the pre-check-in")
+        void aDeadPatientIsRefused() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appt = buildAppointment(apptId, AppointmentStatus.SCHEDULED, 3);
+            patient.setDeceasedAt(java.time.LocalDateTime.now().minusDays(1));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appt));
+            PreCheckInRequestDTO dto = buildDto(apptId);
+
+            assertThatThrownBy(() -> service.submitPreCheckIn(auth, dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        }
+
+        @Test
         @DisplayName("persists the consent the form always collected (P3 #21)")
         void persistsConsentAcknowledged() {
             stubPatientResolution();
@@ -538,8 +572,9 @@ class PatientPortalServiceImplMvp4Test {
 
             PreCheckInRequestDTO dto = buildDto(apptId);
             assertThatThrownBy(() -> service.submitPreCheckIn(auth, dto))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("SCHEDULED or CONFIRMED");
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(e -> ((BusinessException) e).getMessageKey())
+                    .isEqualTo("portal.precheckin.status");
         }
 
         @Test
@@ -553,7 +588,7 @@ class PatientPortalServiceImplMvp4Test {
 
             PreCheckInRequestDTO dto = buildDto(apptId);
             assertThatThrownBy(() -> service.submitPreCheckIn(auth, dto))
-                    .isInstanceOf(IllegalStateException.class);
+                    .isInstanceOf(BusinessException.class);
         }
 
         @Test
@@ -568,7 +603,8 @@ class PatientPortalServiceImplMvp4Test {
             PreCheckInRequestDTO dto = buildDto(apptId);
             assertThatThrownBy(() -> service.submitPreCheckIn(auth, dto))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("1–7 days");
+                    .extracting(e -> ((BusinessException) e).getMessageKey())
+                    .isEqualTo("portal.precheckin.window");
         }
 
         @Test
@@ -583,7 +619,8 @@ class PatientPortalServiceImplMvp4Test {
             PreCheckInRequestDTO dto = buildDto(apptId);
             assertThatThrownBy(() -> service.submitPreCheckIn(auth, dto))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("1–7 days");
+                    .extracting(e -> ((BusinessException) e).getMessageKey())
+                    .isEqualTo("portal.precheckin.window");
         }
 
         @Test

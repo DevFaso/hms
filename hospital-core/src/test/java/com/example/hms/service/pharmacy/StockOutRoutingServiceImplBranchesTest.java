@@ -410,6 +410,7 @@ class StockOutRoutingServiceImplBranchesTest {
 
         assertThatThrownBy(() -> service.partnerRespond(decisionId, true))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("PENDING");
+                // QA D1090 class: the refusal reads as people do, never the raw code.
+                .extracting("messageKey").isEqualTo("stock.routing.notPending");
     }
 }

@@ -150,4 +150,64 @@ describe('csrfInterceptor', () => {
     httpMock.expectNone('/data');
     expect(status).toBe(403);
   });
+
+  /**
+   * QA D1145 (round 22, BILLING_B 2/28): after a language switch the bootstrap
+   * answered but the cookie had already been dropped again by a sibling
+   * request, so the fallback `next(req)` sent POST /billing-invoices/search
+   * with no X-XSRF-TOKEN, it got 403 CSRF_TOKEN_INVALID, and nothing replayed it.
+   */
+  it('QA D1145: a search sent without a token after the bootstrap is replayed with a fresh one', () => {
+    let body: unknown;
+    let error: unknown;
+    http.post('/billing-invoices/search', {}).subscribe({
+      next: (b) => (body = b),
+      error: (e) => (error = e),
+    });
+
+    httpMock.expectOne('/auth/csrf-token').flush(null); // the cookie is gone again
+
+    const bare = httpMock.expectOne('/billing-invoices/search');
+    expect(bare.request.headers.has('X-XSRF-TOKEN')).toBeFalse();
+    bare.flush(
+      { code: 'CSRF_TOKEN_INVALID', message: 'Jeton CSRF invalide' },
+      { status: 403, statusText: 'Forbidden' },
+    );
+
+    // The refusal is not the end: a fresh cookie is fetched and the search replayed with it.
+    const second = httpMock.expectOne('/auth/csrf-token');
+    setXsrfCookie('fresh-after-switch');
+    second.flush(null);
+
+    const replay = httpMock.expectOne('/billing-invoices/search');
+    expect(replay.request.headers.get('X-XSRF-TOKEN')).toBe('fresh-after-switch');
+    replay.flush({ content: [] });
+    expect(error).toBeUndefined();
+    expect(body).toEqual({ content: [] });
+  });
+
+  it('QA D1145: a bare request that a sibling’s cookie arrived for is replayed with that cookie', () => {
+    let body: unknown;
+    http.post('/billing-invoices/search', {}).subscribe((b) => (body = b));
+    httpMock.expectOne('/auth/csrf-token').flush(null);
+    const bare = httpMock.expectOne('/billing-invoices/search');
+    setXsrfCookie('set-by-sibling');
+    bare.flush({ code: 'CSRF_TOKEN_INVALID' }, { status: 403, statusText: 'Forbidden' });
+    const replay = httpMock.expectOne('/billing-invoices/search');
+    expect(replay.request.headers.get('X-XSRF-TOKEN')).toBe('set-by-sibling');
+    replay.flush({ ok: true });
+    expect(body).toEqual({ ok: true });
+  });
+
+  it('QA D1145: a bare request refused for a role, not a token, is passed on with no replay', () => {
+    let status = 0;
+    http.post('/billing-invoices/search', {}).subscribe({ error: (e) => (status = e.status) });
+    httpMock.expectOne('/auth/csrf-token').flush(null);
+    httpMock
+      .expectOne('/billing-invoices/search')
+      .flush({ code: 'ACCESS_DENIED' }, { status: 403, statusText: 'Forbidden' });
+    httpMock.expectNone('/auth/csrf-token');
+    httpMock.expectNone('/billing-invoices/search');
+    expect(status).toBe(403);
+  });
 });

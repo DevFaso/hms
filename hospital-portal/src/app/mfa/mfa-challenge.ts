@@ -1,4 +1,4 @@
-import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ElementRef, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -7,6 +7,9 @@ import { AuthService, type LoginUserProfile } from '../auth/auth.service';
 import { MfaService } from '../auth/mfa.service';
 import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
+import { refuseFields } from '../shared/forms/invalid-fields';
+
+const CODE_FIELD_IDS = ['mfa-challenge-code'];
 
 /**
  * T-33: MFA Challenge page.
@@ -28,6 +31,7 @@ export class MfaChallengeComponent {
   private readonly router = inject(Router);
   private readonly roleContext = inject(RoleContextService);
   private readonly sessionScope = inject(SessionScopeService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   loading = signal(false);
   error = signal('');
@@ -59,9 +63,13 @@ export class MfaChallengeComponent {
 
   submitCode(): void {
     if (!this.code || this.code.length < 6) {
-      this.error.set(this.translate.instant('MFA.CHALLENGE_INVALID_CODE'));
+      // QA D1306 (round 28): the field is marked, not only the banner.
+      const message = this.translate.instant('MFA.CHALLENGE_INVALID_CODE');
+      refuseFields(this.host.nativeElement, CODE_FIELD_IDS, CODE_FIELD_IDS, message);
+      this.error.set(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], CODE_FIELD_IDS, '');
     this.loading.set(true);
     this.error.set('');
 

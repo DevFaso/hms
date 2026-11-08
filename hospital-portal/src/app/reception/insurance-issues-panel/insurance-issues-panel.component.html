@@ -13,9 +13,12 @@
       </tr>
     </thead>
     <tbody>
-      @for (issue of issues; track issue.patientId + (issue.appointmentId ?? '')) {
+      @for (
+        issue of issues;
+        track issue.patientId + (issue.appointmentId ?? issue.encounterId ?? '')
+      ) {
         <tr>
-          <td>{{ issue.appointmentTime ?? '—' }}</td>
+          <td>{{ issue.appointmentTime | dash }}</td>
           <td>
             <button class="patient-link" (click)="patientClicked.emit(issue.patientId)">
               {{ issue.patientName }}
@@ -26,15 +29,16 @@
               {{ issueLabel(issue.issueType) }}
             </span>
           </td>
-          <td>{{ issue.providerName ?? '—' }}</td>
-          <td>{{ issue.departmentName ?? '—' }}</td>
+          <td>{{ issue.providerName | dash }}</td>
+          <td>{{ issue.departmentName | dash }}</td>
           <td>
             <button
               class="btn-icon"
               (click)="patientClicked.emit(issue.patientId)"
               [title]="'RECEPTION.VIEW_PATIENT' | translate"
+              [attr.aria-label]="'RECEPTION.VIEW_PATIENT' | translate"
             >
-              <span class="material-symbols-outlined">person_search</span>
+              <span class="material-symbols-outlined" aria-hidden="true">person_search</span>
             </button>
           </td>
         </tr>

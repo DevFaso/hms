@@ -64,6 +64,11 @@
           }
         }
       </div>
+      @if (savedDeleteFailed()) {
+        <p class="form-error" role="alert" data-test="saved-delete-failed">
+          {{ 'AUDIT_SEARCH.SAVED.DELETE_FAILED' | translate }}
+        </p>
+      }
       <div class="saved-row">
         <input
           type="text"
@@ -151,7 +156,12 @@
         </label>
         <label class="filter-field">
           <span>{{ 'AUDIT_SEARCH.FILTER.TO_DATE' | translate }}</span>
-          <input type="datetime-local" [ngModel]="toDate()" (ngModelChange)="toDate.set($event)" />
+          <input
+            type="datetime-local"
+            [attr.min]="fromDate() || null"
+            [ngModel]="toDate()"
+            (ngModelChange)="toDate.set($event)"
+          />
         </label>
       </div>
       <div class="filter-actions">
@@ -315,7 +325,12 @@
         </label>
         <label class="filter-field">
           <span>{{ 'AUDIT_SEARCH.FILTER.TO_DATE' | translate }}</span>
-          <input type="datetime-local" [ngModel]="toDate()" (ngModelChange)="toDate.set($event)" />
+          <input
+            type="datetime-local"
+            [attr.min]="fromDate() || null"
+            [ngModel]="toDate()"
+            (ngModelChange)="toDate.set($event)"
+          />
         </label>
       </div>
       <div class="filter-actions">
@@ -371,7 +386,7 @@
                 <tr [attr.data-test]="'aggregated-row-' + row.source">
                   <td>
                     <span class="source-badge" [attr.data-source]="row.source">
-                      {{ 'AUDIT_SEARCH.AGGREGATED.SOURCE.' + row.source | translate }}
+                      {{ row.source | keyLabel: 'AUDIT_SEARCH.AGGREGATED.SOURCE.' }}
                     </span>
                   </td>
                   <td class="cell-time">

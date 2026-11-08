@@ -51,6 +51,7 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @Service
 @RequiredArgsConstructor
 public class AdmissionServiceImpl implements AdmissionService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AdmissionServiceImpl.class);
     private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
     private static final String DEPARTMENT_NOT_FOUND_KEY = "department.notFound";
     private static final String ADMISSION_NOT_FOUND_KEY = "admission.notFound";
@@ -59,7 +60,8 @@ public class AdmissionServiceImpl implements AdmissionService {
         java.util.EnumSet.of(com.example.hms.enums.AdmissionStatus.DISCHARGED,
             com.example.hms.enums.AdmissionStatus.CANCELLED,
             com.example.hms.enums.AdmissionStatus.TRANSFERRED,
-            com.example.hms.enums.AdmissionStatus.DECEASED);
+            com.example.hms.enums.AdmissionStatus.DECEASED,
+            com.example.hms.enums.AdmissionStatus.CLOSED_IN_ERROR);
 
 
     /**
@@ -133,6 +135,7 @@ public class AdmissionServiceImpl implements AdmissionService {
             throw new ResourceNotFoundException("patient.notFound", request.getPatientId());
         }
         
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         Staff admittingProvider = staffRepository.findById(request.getAdmittingProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("admission.admittingProvider.notFound", request.getAdmittingProviderId()));
 
@@ -213,6 +216,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     public AdmissionResponseDTO updateAdmission(UUID admissionId, AdmissionUpdateRequestDTO request) {
         // QA D262: a write loads under the same tenant guard as the read.
         Admission admission = loadTenantScopedAdmission(admissionId);
+        requireWritableBy(admission, request);
 
         if (request.getDepartmentId() != null) {
             admission.setDepartment(loadDepartmentAt(request.getDepartmentId(), admission.getHospital().getId()));
@@ -227,7 +231,7 @@ public class AdmissionServiceImpl implements AdmissionService {
             admission.setAttendingPhysician(attending);
         }
 
-        if (request.getRoomBed() != null) admission.setRoomBed(request.getRoomBed());
+        applyRoomBed(admission, request.getRoomBed());
         if (request.getAcuityLevel() != null) admission.setAcuityLevel(request.getAcuityLevel());
         if (request.getExpectedDischargeDateTime() != null) admission.setExpectedDischargeDateTime(request.getExpectedDischargeDateTime());
         if (request.getAdmissionNotes() != null) admission.setAdmissionNotes(request.getAdmissionNotes());
@@ -244,11 +248,57 @@ public class AdmissionServiceImpl implements AdmissionService {
         return admissionMapper.toResponseDTO(admission);
     }
 
+    /**
+     * QA D1428 (round 34): a closed stay's record is protected, as D1393 says a
+     * cancelled stay never happened; the PUT answered 200 and rewrote its notes,
+     * acuity and room. The one edit kept after discharge is coding: a secondary
+     * diagnosis added with nothing else, which rewrites nothing. A cancelled
+     * stay has no coding. Late clinical documentation does not come through
+     * here: it is a note addendum or the discharge summary.
+     */
+    private static void requireWritableBy(Admission admission, AdmissionUpdateRequestDTO request) {
+        if (admission.getStatus() != AdmissionStatus.CANCELLED && isLateCodingOnly(request)) {
+            return;
+        }
+        admission.requireOpen();
+    }
+
+    private static boolean isLateCodingOnly(AdmissionUpdateRequestDTO request) {
+        return request.getSecondaryDiagnosesToAdd() != null
+            && request.getDepartmentId() == null && request.getRoomBed() == null
+            && request.getAcuityLevel() == null && request.getExpectedDischargeDateTime() == null
+            && request.getAdmissionNotes() == null && request.getAttendingPhysicianId() == null
+            && request.getConsultingPhysiciansToAdd() == null && request.getMetadata() == null;
+    }
+
+    /**
+     * QA D1428: the room of a stay that holds a bed is that bed, on every stay:
+     * QA put "MA-09" on a stay lying in MA-01. Moving the patient is the bed
+     * assignment or a transfer (BedAssignmentService keeps the two together).
+     * The form echoes what it read, so the bed's label and the stored text are
+     * not changes. A stay with no structured bed keeps its free text.
+     */
+    private static void applyRoomBed(Admission admission, String roomBed) {
+        if (roomBed == null) {
+            return;
+        }
+        if (admission.getBed() == null) {
+            admission.setRoomBed(roomBed);
+            return;
+        }
+        String held = BedAssignmentService.bedLabel(admission.getBed());
+        String written = roomBed.strip();
+        if (!written.equalsIgnoreCase(held) && !written.equalsIgnoreCase(admission.getRoomBed())) {
+            throw new com.example.hms.exception.FieldBusinessException("roomBed", "admission.roomBed.notHeldBed", held);
+        }
+    }
+
     @Override
     @Transactional
     public AdmissionResponseDTO applyOrderSets(UUID admissionId, AdmissionOrderExecutionRequestDTO request) {
         // QA D262: a write loads under the same tenant guard as the read.
         Admission admission = loadTenantScopedAdmission(admissionId);
+        admission.requireOpen();
 
         loadOrderSetsAt(request.getOrderSetIds(), admission.getHospital().getId())
             .forEach(admission::applyOrderSet);
@@ -320,7 +370,18 @@ public class AdmissionServiceImpl implements AdmissionService {
 
     @Override
     @Transactional
-    public void cancelAdmission(UUID admissionId) {
+    public void cancelAdmission(UUID admissionId, String reason) {
+        // QA D1381 (round 32): a stay is cancelled with its reason, as real
+        // hospitals record why any stay is voided; it is kept on the row with
+        // who and when (the DELETE is audited by the WriteAuditInterceptor).
+        String cancelReason = reason == null ? "" : reason.trim();
+        if (cancelReason.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "admission.cancel.reasonRequired");
+        }
+        if (cancelReason.length() > MAX_CANCEL_REASON) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "admission.cancel.reasonTooLong",
+                MAX_CANCEL_REASON);
+        }
         // QA D262: a write loads under the same tenant guard as the read.
         Admission admission = loadTenantScopedAdmission(admissionId);
         // QA D603: a discharged, finalized and PAID stay was cancelled by a DELETE,
@@ -333,10 +394,15 @@ public class AdmissionServiceImpl implements AdmissionService {
                 com.example.hms.enums.InvoiceStatus.CANCELLED)) {
             throw new ConflictException("admission.cancel.billed");
         }
-        admission.cancel();
+        java.util.UUID cancelledBy = com.example.hms.security.CallerIdentity.currentUserId();
+        admission.cancel(cancelReason, cancelledBy, LocalDateTime.now(java.time.ZoneId.systemDefault()));
         // A cancelled admission must not keep its bed occupied
         bedAssignmentService.releaseBed(admission);
         admissionRepository.save(admission);
+        // QA D1393: the stay's orders end, then its encounter, so an order written
+        // from now on is an outpatient order (no discharge meaning, no bill).
+        stayEncounters.recordCancellation(admission, cancelledBy);
+        encounterAutoCompletion.cancelAdmissionEncounters(admission.getId());
         // QA D764: a cancelled stay never happened; the patient is registered only.
         syncRegistrationStayStatus(admission, com.example.hms.enums.PatientStayStatus.REGISTERED);
     }
@@ -372,11 +438,95 @@ public class AdmissionServiceImpl implements AdmissionService {
 
     @Override
     @Transactional
-    public AdmissionResponseDTO unassignBed(UUID admissionId) {
+    public AdmissionResponseDTO unassignBed(UUID admissionId, String reason) {
+        // QA D1100 (round 19): "Retirer le lit" freed an inpatient's bed in one
+        // click, with no reason recorded. The reason is required and audited.
+        String releaseReason = reason == null ? "" : reason.trim();
+        if (releaseReason.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "admission.bed.unassignReasonRequired");
+        }
+        if (releaseReason.length() > MAX_BED_RELEASE_REASON) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "admission.bed.unassignReasonTooLong", MAX_BED_RELEASE_REASON);
+        }
         Admission admission = loadTenantScopedAdmission(admissionId);
+        String bedLabel = admission.getBed() == null ? null : BedAssignmentService.bedLabel(admission.getBed());
         bedAssignmentService.unassignBed(admission);
         admission = admissionRepository.save(admission);
+        if (bedLabel != null) {
+            auditBedReleaseAfterCommit(admission, bedLabel, releaseReason);
+        }
         return admissionMapper.toResponseDTO(admission);
+    }
+
+    /**
+     * QA D1384 (round 32): the {@code status} filter of the admission lists.
+     * An unknown value answered "No enum constant ...AdmissionStatus.BOGUS"
+     * (raw Java text) in every language; it is now refused on {@code status},
+     * in the reader's language ({@code EnumQueryParam}). Case is ignored, as
+     * before.
+     */
+    static AdmissionStatus admissionStatusParam(String status) {
+        try {
+            return AdmissionStatus.valueOf(status.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw com.example.hms.utility.EnumQueryParam.refusal("status");
+        }
+    }
+
+    /** QA D1381: the longest cancellation reason kept (admissions.cancellation_reason, V260). */
+    private static final int MAX_CANCEL_REASON = 1000;
+
+    /** QA D1100: the audit trail's only record of why the bed was freed (no column holds it). */
+    private static final int MAX_BED_RELEASE_REASON = 500;
+
+    private com.example.hms.service.AuditEventLogService auditEventLogService;
+
+    private com.example.hms.service.orderset.OrderSetItemQuantityRules orderSetItemQuantityRules;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setOrderSetItemQuantityRules(com.example.hms.service.orderset.OrderSetItemQuantityRules rules) {
+        this.orderSetItemQuantityRules = rules;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setAuditEventLogService(com.example.hms.service.AuditEventLogService auditEventLogService) {
+        this.auditEventLogService = auditEventLogService;
+    }
+
+    /**
+     * QA D1100: who freed which bed of which stay, and why. Written after the
+     * commit, so a refused or rolled-back release leaves no row; a failed audit
+     * write never undoes the release. Ids and the bed label in the description;
+     * the nurse's reason goes in the details, as the brief requires (no column
+     * holds it and this slice adds no migration).
+     */
+    private void auditBedReleaseAfterCommit(Admission admission, String bedLabel, String reason) {
+        if (auditEventLogService == null) {
+            return;
+        }
+        UUID actorId = com.example.hms.security.CallerIdentity.currentUserId();
+        UUID hospitalId = admission.getHospital() == null ? null : admission.getHospital().getId();
+        UUID patientId = admission.getPatient() == null ? null : admission.getPatient().getId();
+        String admissionIdText = String.valueOf(admission.getId());
+        java.util.Map<String, String> details = java.util.Map.of("bed", bedLabel, "reason", reason);
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(com.example.hms.enums.AuditEventType.ADMISSION_BED_RELEASED)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .hospitalId(hospitalId)
+                    .patientId(patientId)
+                    .eventDescription("Bed " + bedLabel + " released from admission " + admissionIdText)
+                    .details(details)
+                    .entityType("ADMISSION")
+                    .resourceId(admissionIdText)
+                    .build());
+            } catch (RuntimeException ex) {
+                log.warn("Bed release audit not written for admission {}: {}", admissionIdText,
+                    ex.getClass().getSimpleName());
+            }
+        });
     }
 
     /** Load with the same tenant guard as {@link #getAdmission}. */
@@ -473,7 +623,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Transactional(readOnly = true)
     public List<AdmissionResponseDTO> getAdmissionsByHospital(UUID hospitalId, String status, LocalDateTime startDate, LocalDateTime endDate) {
         if (status != null && !status.isEmpty()) {
-            AdmissionStatus admissionStatus = AdmissionStatus.valueOf(status.toUpperCase());
+            AdmissionStatus admissionStatus = admissionStatusParam(status);
             return admissionRepository.findByHospitalIdAndStatusOrderByAdmissionDateTimeDesc(hospitalId, admissionStatus)
                 .stream()
                 .filter(a -> admittedWithin(a, startDate, endDate))
@@ -510,7 +660,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     private List<AdmissionResponseDTO> admissionsOfPatient(UUID patientId, UUID activeHospitalId, String status,
                                                            LocalDateTime startDate, LocalDateTime endDate) {
         AdmissionStatus wanted = status != null && !status.isEmpty()
-            ? AdmissionStatus.valueOf(status.toUpperCase()) : null;
+            ? admissionStatusParam(status) : null;
         List<Admission> stays = activeHospitalId != null
             ? admissionRepository.findByPatient_IdAndHospital_IdInOrderByAdmissionDateTimeDesc(
                 patientId, java.util.Set.of(activeHospitalId))
@@ -537,7 +687,7 @@ public class AdmissionServiceImpl implements AdmissionService {
             return self.getAdmissionsByHospital(activeHospitalId, status, startDate, endDate);
         }
         if (status != null && !status.isEmpty()) {
-            AdmissionStatus admissionStatus = AdmissionStatus.valueOf(status.toUpperCase());
+            AdmissionStatus admissionStatus = admissionStatusParam(status);
             return admissionRepository.findByStatusOrderByAdmissionDateTimeDesc(admissionStatus)
                 .stream()
                 .filter(a -> admittedWithin(a, startDate, endDate))
@@ -561,9 +711,19 @@ public class AdmissionServiceImpl implements AdmissionService {
     public AdmissionResponseDTO getCurrentAdmissionForPatient(UUID patientId) {
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        // QA D1065 (round 18): the open stay at THIS hospital, in any open
+        // status (awaiting discharge is still a stay). It used to take the
+        // patient's latest open admission anywhere and then drop it when it
+        // was another hospital's, hiding this hospital's own stay.
+        if (activeHospitalId != null) {
+            return admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(patientId, activeHospitalId,
+                    com.example.hms.enums.AdmissionStatus.OPEN).stream()
+                .max(java.util.Comparator.comparing(com.example.hms.model.Admission::getAdmissionDateTime,
+                    java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
+                .map(admissionMapper::toResponseDTO)
+                .orElse(null);
+        }
         return admissionRepository.findCurrentAdmissionByPatient(patientId)
-            .filter(admission -> activeHospitalId == null
-                || (admission.getHospital() != null && activeHospitalId.equals(admission.getHospital().getId())))
             .map(admissionMapper::toResponseDTO)
             .orElse(null);
     }
@@ -577,6 +737,12 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         Staff createdBy = staffRepository.findById(request.getCreatedByStaffId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getCreatedByStaffId()));
+        // QA D1382 / D1378: the second order-set writer is held to the same item rule.
+        com.example.hms.service.orderset.OrderSetItemPrnRules.requireValid(request.getOrderItems());
+        // QA D1396: and to the quantity rule.
+        if (orderSetItemQuantityRules != null) {
+            orderSetItemQuantityRules.requireValid(request.getOrderItems(), hospital.getId());
+        }
 
         AdmissionOrderSet orderSet = new AdmissionOrderSet();
         orderSet.setName(request.getName());
@@ -608,7 +774,13 @@ public class AdmissionServiceImpl implements AdmissionService {
     public List<AdmissionOrderSetResponseDTO> getOrderSetsByHospital(UUID hospitalId, String admissionType) {
         List<AdmissionOrderSet> orderSets;
         if (admissionType != null && !admissionType.isEmpty()) {
-            AdmissionType type = AdmissionType.valueOf(admissionType.toUpperCase());
+            AdmissionType type;
+            try {
+                type = AdmissionType.valueOf(admissionType.trim().toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException ex) {
+                // QA D1384: the refusal names the parameter, never raw Java text.
+                throw com.example.hms.utility.EnumQueryParam.refusal("admissionType");
+            }
             orderSets = orderSetRepository.findByHospitalIdAndAdmissionTypeAndActiveOrderByNameAsc(hospitalId, type, true);
         } else {
             orderSets = orderSetRepository.findByHospitalIdAndActiveOrderByNameAsc(hospitalId, true);
@@ -623,8 +795,11 @@ public class AdmissionServiceImpl implements AdmissionService {
     public void deactivateOrderSet(UUID orderSetId, String reason, UUID deactivatedByStaffId) {
         AdmissionOrderSet orderSet = loadTenantScopedOrderSet(orderSetId);
 
-        Staff deactivatedBy = staffRepository.findById(deactivatedByStaffId)
-            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", deactivatedByStaffId));
+        // QA D1226 class (round 24): who deactivated it is the session, never a
+        // staff id the client names (any staff of any hospital was accepted).
+        // The parameter is kept for old clients and ignored.
+        Staff deactivatedBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, null,
+            com.example.hms.security.CallerIdentity.hospitalIdOf(orderSet.getHospital()));
 
         orderSet.deactivate(reason, deactivatedBy);
         orderSetRepository.save(orderSet);

@@ -45,8 +45,8 @@
       <tbody>
         @for (c of filtered(); track c) {
           <tr>
-            <td>{{ c.createdAt | serverTime | date: 'dd/MM/yyyy' }}</td>
-            <td class="muted">{{ c.patientId.substring(0, 8) }}…</td>
+            <td>{{ c.createdAt | serverTime | date: 'shortDate' }}</td>
+            <td>{{ c.patientName || ('PHARMACY_CLAIMS.PATIENT_UNNAMED' | translate) }}</td>
             <td>{{ c.coverageReference || '—' }}</td>
             <td>{{ c.amount | cfa: c.currency }}</td>
             <td>
@@ -76,3 +76,14 @@
     </table>
   }
 </section>
+
+<!-- QA D1201 (round 22): the reason is asked in the shared dialog, never a browser prompt. -->
+@if (rejecting(); as c) {
+  <app-reason-dialog
+    titleKey="PHARMACY.CLAIM_REJECT_REASON_PROMPT"
+    confirmKey="PHARMACY_CLAIMS.REJECT"
+    [busy]="rejectBusy()"
+    (confirmed)="confirmReject(c, $event)"
+    (cancelled)="rejecting.set(null)"
+  />
+}

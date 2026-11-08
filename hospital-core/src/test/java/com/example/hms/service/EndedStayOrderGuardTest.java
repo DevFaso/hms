@@ -153,4 +153,25 @@ class EndedStayOrderGuardTest {
         enc.setStatus(status);
         return enc;
     }
+
+    /** QA D1393: an order written after the cancel goes on an outpatient anchor, which ends with no stay. */
+    @Test
+    @DisplayName("an order on a finished outpatient anchor is dispensable, whatever stay was cancelled")
+    void d1393_anOrderOnAnOutpatientAnchorIsNotEnded() {
+        stay.setStatus(com.example.hms.enums.AdmissionStatus.CANCELLED);
+        rx.setEncounter(encounter(EncounterType.CONSULTATION, EncounterStatus.COMPLETED));
+        assertThat(guard.endedWithAStay(rx)).isFalse();
+    }
+
+    /** QA D1393: and the refusal that protects the cancelled stay's own orders is kept. */
+    @Test
+    @DisplayName("an order filed on the cancelled stay stays refused")
+    void d1393_anOrderOfTheCancelledStayStaysRefused() {
+        Encounter cancelled = encounter(EncounterType.INPATIENT, EncounterStatus.CANCELLED);
+        cancelled.setAdmissionId(UUID.randomUUID());
+        rx.setEncounter(cancelled);
+        assertThat(guard.endedWithAStay(rx)).isTrue();
+        rx.setTakeHome(true);
+        assertThat(guard.endedWithAStay(rx)).as("a take-home order outlives it").isFalse();
+    }
 }

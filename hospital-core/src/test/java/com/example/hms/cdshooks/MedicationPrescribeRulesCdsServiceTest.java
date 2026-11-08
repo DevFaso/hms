@@ -91,7 +91,7 @@ class MedicationPrescribeRulesCdsServiceTest {
             List.of(medRequest("Amoxicillin", "AMOX", "500 mg"))));
 
         assertThat(response.cards()).isEmpty();
-        verify(engine, never()).evaluateProposedPrescription(any(), any(), any(), any(), any());
+        verify(engine, never()).evaluateProposedPrescription(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -103,7 +103,7 @@ class MedicationPrescribeRulesCdsServiceTest {
         when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
 
         CdsCard card = warningCard("warn");
-        when(engine.evaluateProposedPrescription(any(), eq(hospitalId), any(), any(), any()))
+        when(engine.evaluateProposedPrescription(any(), eq(hospitalId), any(), any(), any(), any()))
             .thenReturn(List.of(card));
         // catalog lookup misses for both → no tall-man advisory.
         when(catalog.findByHospitalIdAndCode(eq(hospitalId), any())).thenReturn(Optional.empty());
@@ -116,8 +116,8 @@ class MedicationPrescribeRulesCdsServiceTest {
         )));
 
         assertThat(response.cards()).hasSize(2);
-        verify(engine).evaluateProposedPrescription(patient, hospitalId, "Aspirin", "ASA", "100 mg");
-        verify(engine).evaluateProposedPrescription(patient, hospitalId, "Warfarin", "WAR", "5 mg");
+        verify(engine).evaluateProposedPrescription(patient, hospitalId, "Aspirin", "ASA", "100 mg", null);
+        verify(engine).evaluateProposedPrescription(patient, hospitalId, "Warfarin", "WAR", "5 mg", null);
     }
 
     @Test
@@ -127,7 +127,7 @@ class MedicationPrescribeRulesCdsServiceTest {
         UUID hospitalId = UUID.randomUUID();
         Patient patient = patient(patientId, hospitalId);
         when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
+        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any()))
             .thenReturn(List.of());
         when(catalog.findByHospitalIdAndCode(eq(hospitalId), any())).thenReturn(Optional.empty());
         when(catalog.findActiveByHospitalIdAndRxnormCode(eq(hospitalId), any()))
@@ -138,7 +138,7 @@ class MedicationPrescribeRulesCdsServiceTest {
         )));
 
         verify(engine).evaluateProposedPrescription(
-            patient, hospitalId, "Aspirin 100 mg", "1191", "100 mg");
+            patient, hospitalId, "Aspirin 100 mg", "1191", "100 mg", null);
     }
 
     @Test
@@ -148,7 +148,7 @@ class MedicationPrescribeRulesCdsServiceTest {
         UUID hospitalId = UUID.randomUUID();
         Patient patient = patient(patientId, hospitalId);
         when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
+        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any()))
             .thenReturn(List.of());
 
         MedicationCatalogItem item = MedicationCatalogItem.builder()
@@ -186,7 +186,7 @@ class MedicationPrescribeRulesCdsServiceTest {
         UUID hospitalId = UUID.randomUUID();
         Patient patient = patient(patientId, hospitalId);
         when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
+        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any()))
             .thenReturn(List.of());
         // No catalog hit by formulary code.
         when(catalog.findByHospitalIdAndCode(eq(hospitalId), any()))
@@ -210,7 +210,7 @@ class MedicationPrescribeRulesCdsServiceTest {
         UUID hospitalId = UUID.randomUUID();
         Patient patient = patient(patientId, hospitalId);
         when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
+        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any()))
             .thenReturn(List.of());
         when(catalog.findByHospitalIdAndCode(eq(hospitalId), eq("7052")))
             .thenReturn(Optional.empty());
@@ -249,7 +249,7 @@ class MedicationPrescribeRulesCdsServiceTest {
 
         assertThat(service.evaluate(prescribeRequest(patientId, List.of(serviceRequest))).cards())
             .isEmpty();
-        verify(engine, never()).evaluateProposedPrescription(any(), any(), any(), any(), any());
+        verify(engine, never()).evaluateProposedPrescription(any(), any(), any(), any(), any(), any());
     }
 
     /* helpers */

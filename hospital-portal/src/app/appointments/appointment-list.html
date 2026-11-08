@@ -37,9 +37,11 @@
         <button
           class="search-clear"
           [title]="'COMMON.CLEAR_SEARCH' | translate"
+          [attr.aria-label]="'COMMON.CLEAR_SEARCH' | translate"
           (click)="onSearchChange('')"
+          [attr.aria-label]="'COMMON.CLEAR_SEARCH' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       }
     </div>
@@ -189,25 +191,42 @@
     <div class="active-chips">
       @if (dateFrom) {
         <span class="filter-chip">
-          {{ 'APPOINTMENTS.FROM' | translate }}: {{ dateFrom }}
-          <button class="chip-remove" (click)="removeFilter('dateFrom')">
-            <span class="material-symbols-outlined">close</span>
+          {{ 'APPOINTMENTS.FROM' | translate }}{{ 'COMMON.COLON' | translate }} {{ dateFrom }}
+          <button
+            type="button"
+            class="chip-remove"
+            (click)="removeFilter('dateFrom')"
+            [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </span>
       }
       @if (dateTo) {
-        <span class="filter-chip">
-          {{ 'APPOINTMENTS.TO' | translate }}: {{ dateTo }}
-          <button class="chip-remove" (click)="removeFilter('dateTo')">
-            <span class="material-symbols-outlined">close</span>
+        {{ ' '
+        }}<span class="filter-chip">
+          {{ 'APPOINTMENTS.TO' | translate }}{{ 'COMMON.COLON' | translate }} {{ dateTo }}
+          <button
+            type="button"
+            class="chip-remove"
+            (click)="removeFilter('dateTo')"
+            [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </span>
       }
       @if (hospitalFilter) {
-        <span class="filter-chip">
+        {{ ' '
+        }}<span class="filter-chip">
           {{ hospitalName(hospitalFilter) }}
-          <button class="chip-remove" (click)="removeFilter('hospital')">
-            <span class="material-symbols-outlined">close</span>
+          <button
+            type="button"
+            class="chip-remove"
+            (click)="removeFilter('hospital')"
+            [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </span>
       }
@@ -304,7 +323,9 @@
               </td>
               <td>{{ appt.staffName }}</td>
               <td class="date-cell">
-                <span class="date-primary">{{ appt.appointmentDate }}</span>
+                <span class="date-primary">{{
+                  appt.appointmentDate | serverTime | date: 'mediumDate'
+                }}</span>
                 <span class="date-time"
                   >{{ appt.startTime | clockTime }} – {{ appt.endTime | clockTime }}</span
                 >
@@ -321,6 +342,7 @@
                   [routerLink]="['/appointments', appt.id]"
                   class="action-link"
                   [title]="'APPOINTMENTS.VIEW' | translate"
+                  [attr.aria-label]="'APPOINTMENTS.VIEW' | translate"
                 >
                   <span class="material-symbols-outlined">arrow_forward</span>
                 </a>

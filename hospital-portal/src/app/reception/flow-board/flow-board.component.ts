@@ -55,7 +55,6 @@ export class FlowBoardComponent implements OnChanges {
     { key: 'inProgress', labelKey: 'RECEPTION.IN_PROGRESS', colorClass: 'col-in-progress' },
     { key: 'completed', labelKey: 'RECEPTION.COMPLETED', colorClass: 'col-completed' },
     { key: 'noShow', labelKey: 'RECEPTION.NO_SHOW', colorClass: 'col-no-show' },
-    { key: 'walkIn', labelKey: 'RECEPTION.WALKIN', colorClass: 'col-walk-in' },
   ];
 
   /** Mutable local copy so CDK can splice arrays */
@@ -76,19 +75,73 @@ export class FlowBoardComponent implements OnChanges {
       this.localBoard = {
         scheduled: [...(this.board.scheduled ?? [])],
         confirmed: [...(this.board.confirmed ?? [])],
-        arrived: [...(this.board.arrived ?? [])],
+        // QA D1445: no column of its own, which stayed empty: walk-ins sit in their status
+        // column, and one the server still files apart is on the board with the arrived ones.
+        // Its card keeps its WALK_IN status, so the drop rules read it as before.
+        arrived: [...(this.board.arrived ?? []), ...(this.board.walkIn ?? [])],
         inProgress: [...(this.board.inProgress ?? [])],
         completed: [...(this.board.completed ?? [])],
         noShow: [...(this.board.noShow ?? [])],
-        walkIn: [...(this.board.walkIn ?? [])],
+        walkIn: [],
       };
     }
   }
 
   drop(event: CdkDragDrop<ReceptionQueueItem[]>, targetKey: ColKey): void {
     if (event.previousContainer === event.container) return;
+    this.applyMove(
+      event.previousContainer.data,
+      event.container.data,
+      event.previousIndex,
+      event.currentIndex,
+      targetKey,
+    );
+  }
 
-    const draggedItem = event.previousContainer.data[event.previousIndex];
+  /** Whether the card is a visit nobody has seen, which the desk may close as left unseen. */
+  canCloseUnseen(item: ReceptionQueueItem): boolean {
+    return !!item.encounterId && NEVER_SEEN_STATUSES.has(item.status);
+  }
+
+  /**
+   * QA D1023 (WCAG 2.1.1): the keyboard and button path to what a drop on
+   * "completed" or "no-show" does for a visit nobody has seen. The close-unseen
+   * dialog opened only on a mouse drag.
+   */
+  requestCloseUnseen(item: ReceptionQueueItem, event?: Event): void {
+    event?.stopPropagation();
+    if (!this.canCloseUnseen(item)) return;
+    this.closeUnseenRequested.emit({
+      encounterId: item.encounterId!,
+      patientName: item.patientName ?? null,
+      outcome: 'LEFT_WITHOUT_BEING_SEEN',
+    });
+  }
+
+  /**
+   * QA D1023 (WCAG 2.1.1): Alt+Right / Alt+Left on a focused card moves it to
+   * the next or previous column, through exactly the rules of a drop.
+   */
+  moveCard(item: ReceptionQueueItem, fromKey: ColKey, step: 1 | -1, event?: Event): void {
+    event?.preventDefault();
+    const at = this.columns.findIndex((c) => c.key === fromKey);
+    const target = this.columns[at + step];
+    if (!target) return;
+    const from = this.localBoard[fromKey];
+    const index = from.indexOf(item);
+    if (index < 0) return;
+    const to = this.localBoard[target.key];
+    this.applyMove(from, to, index, to.length, target.key);
+  }
+
+  private applyMove(
+    from: ReceptionQueueItem[],
+    to: ReceptionQueueItem[],
+    fromIndex: number,
+    toIndex: number,
+    targetKey: ColKey,
+  ): void {
+    const draggedItem = from[fromIndex];
     const newStatus = this.colStatusMap[targetKey];
 
     // QA D788: a visit nobody has seen is never "completed": the desk closes it
@@ -116,12 +169,7 @@ export class FlowBoardComponent implements OnChanges {
       return;
     }
 
-    transferArrayItem(
-      event.previousContainer.data,
-      event.container.data,
-      event.previousIndex,
-      event.currentIndex,
-    );
+    transferArrayItem(from, to, fromIndex, toIndex);
 
     this.statusChanged.emit({ encounterId: draggedItem.encounterId, newStatus });
   }

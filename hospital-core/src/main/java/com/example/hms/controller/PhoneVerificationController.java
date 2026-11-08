@@ -83,7 +83,7 @@ public class PhoneVerificationController {
     private UUID requireUserId(Authentication auth) {
         authUtils.requireAuth(auth);
         return authUtils.resolveUserId(auth)
-            .orElseThrow(() -> new BusinessException("Unable to resolve the requesting user."));
+            .orElseThrow(() -> new BusinessException("phoneVerification.user.unresolved"));
     }
 
     private static ChallengeResponse toResponse(PhoneVerificationService.ChallengeView view) {

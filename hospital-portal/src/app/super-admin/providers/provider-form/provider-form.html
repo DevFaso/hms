@@ -44,7 +44,7 @@
       <p>{{ 'PROVIDER.COMMON.LOAD_FAILED' | translate }}</p>
     </div>
   } @else {
-    <div class="form-card provider-form-card">
+    <div class="form-card provider-form-card" data-submit-scope>
       @if (resubmitting()) {
         @if (provider(); as p) {
           <p class="resubmit-for">
@@ -122,6 +122,8 @@
           class="btn-primary"
           data-test="submit"
           [disabled]="saving()"
+          appSubmitGuard
+          submitGuardRequired
           (click)="submit()"
         >
           @if (saving()) {

@@ -45,12 +45,22 @@ export const WALL_CLOCK = new Map([
     "copy of the offered slot's wall-clock start",
   ],
   [
+    'reception/waitlist-panel/waitlist-panel.component.html:requestedDateFrom',
+    'LocalDate the desk typed (a calendar day, no clock): QA D1119',
+  ],
+  [
+    'reception/waitlist-panel/waitlist-panel.component.html:requestedDateTo',
+    'LocalDate the desk typed (a calendar day, no clock): QA D1119',
+  ],
+  [
     'referrals/referrals.html:scheduledAppointmentAt',
     "booked as the Appointment's local date and start time (#948 review)",
   ],
 ]);
 
-const DATE_PIPE = /\|\s*date\b/g;
+// QA D1340 (round 29): `dateTime` (shared/pipes/date-time.pipe.ts) reads its
+// value as the date pipe does, so it needs `serverTime` in front of it too.
+const DATE_PIPE = /\|\s*date(?:Time)?\b/g;
 
 /** The index of the `(` that opens the group closed by the `)` at `close`. */
 function openingParen(text, close) {

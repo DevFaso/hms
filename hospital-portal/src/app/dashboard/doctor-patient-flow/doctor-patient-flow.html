@@ -52,7 +52,7 @@
                 }
                 <div class="flow-card-bottom">
                   <span class="flow-elapsed" [class]="getElapsedClass(item.elapsedMinutes)">
-                    {{ item.elapsedMinutes }}m
+                    {{ item.elapsedMinutes | elapsed }}
                   </span>
                   @if (item.nurseAssigned) {
                     <span class="flow-nurse">{{ item.nurseAssigned }}</span>

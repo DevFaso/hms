@@ -22,6 +22,8 @@ public class PharmacyClaimResponseDTO {
     private UUID id;
     private UUID dispenseId;
     private UUID patientId;
+    /** QA D992 class: the claims list names the patient instead of a slice of the id. */
+    private String patientName;
     private UUID hospitalId;
     private String coverageReference;
     private String claimStatus;

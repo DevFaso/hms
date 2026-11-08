@@ -175,7 +175,9 @@ public class PatientMapper {
             .middleName(patient.getMiddleName())
             .dateOfBirth(patient.getDateOfBirth())
             .gender(patient.getGender())
-            .address(resolveMessage(patient.getAddress()))
+            // QA D1074: a legacy pipe-joined composite shows its street lines.
+            .address(resolveMessage(com.example.hms.utility.PatientAddressText.display(
+                patient.getAddress(), patient.getAddressLine1(), patient.getAddressLine2())))
             .addressLine1(patient.getAddressLine1())
             .addressLine2(patient.getAddressLine2())
             .city(patient.getCity())
@@ -197,13 +199,20 @@ public class PatientMapper {
             .careTeamNotes(patient.getCareTeamNotes())
             .chronicConditions(parseChronicConditions(patient.getChronicConditions()))
             .active(patient.isActive())
+            .deceased(patient.isDeceased())
+            .deceasedAt(patient.getDeceasedAt())
+            .deathDisputed(com.example.hms.service.support.DeceasedPatientGuard.deathDisputedHere(patient))
+            .careBlockedByDeath(com.example.hms.service.support.DeceasedPatientGuard.careBlocked(patient))
             .chartRestricted(patient.isChartRestricted())
             .chartRestrictionReason(patient.getChartRestrictionReason())
             .chartRestrictedAt(patient.getChartRestrictedAt())
             .mrn(resolvedMrn)
+            // QA D1036 / D926: the live name first. The registration's copy is
+            // taken once, when the patient is registered, so a middle name
+            // added later never showed, and a blank middle name left two spaces.
             .displayName(nullIfBlank(firstNonBlank(
-                scopedRegistration != null ? scopedRegistration.getPatientFullName() : null,
-                outPatientName
+                outPatientName,
+                scopedRegistration != null ? scopedRegistration.getPatientFullName() : null
             )))
             .username(safeInit(patient.getUser()) != null ? patient.getUser().getUsername() : null)
             .room(scopedRegistration != null ? nullIfBlank(firstNonBlank(
@@ -259,7 +268,7 @@ public class PatientMapper {
         patient.setLastName(dto.getLastName());
         patient.setMiddleName(dto.getMiddleName());
         patient.setDateOfBirth(dto.getDateOfBirth());
-        patient.setGender(dto.getGender());
+        patient.setGender(com.example.hms.enums.PatientGender.normalize(dto.getGender()));
         patient.setAddress(dto.getAddress());
     patient.setAddressLine1(dto.getAddressLine1());
     patient.setAddressLine2(dto.getAddressLine2());

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -24,6 +25,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -104,6 +106,119 @@ class DispenseJsonbPostgresIT {
                 .setParameter("id", id)
                 .getSingleResult());
         assertThat(storedType).isEqualTo("array");
+    }
+
+    @Test
+    void qaD1128EveryDispenseListIsNewestFirstWithAPreparedFillByItsPreparationTime() {
+        UUID patientId = UUID.randomUUID();
+        LocalDateTime now = LocalDateTime.now();
+        UUID threeDaysAgo = insertFor(patientId, now.minusDays(3));
+        UUID yesterday = insertFor(patientId, now.minusDays(1));
+        UUID twoDaysAgo = insertFor(patientId, now.minusDays(2));
+        UUID prepared = insertFor(patientId, null);
+
+        List<UUID> order = new TransactionTemplate(transactionManager).execute(status ->
+            repository.findByPatientId(patientId, PageRequest.of(0, 10)).getContent().stream()
+                .map(Dispense::getId).toList());
+
+        assertThat(order).containsExactly(prepared, yesterday, twoDaysAgo, threeDaysAgo);
+
+        List<UUID> firstTwo = new TransactionTemplate(transactionManager).execute(status ->
+            repository.findByPatientId(patientId, PageRequest.of(0, 2)).getContent().stream()
+                .map(Dispense::getId).toList());
+        assertThat(firstTwo).containsExactly(prepared, yesterday);
+    }
+
+    /**
+     * CX-003 class (round 33): the return form's two reads on a real PostgreSQL, the only
+     * parameters their one caller varies being the lot or the pharmacy and catalogue item.
+     * More fills than the 50 the queries stopped at, newest first, in the states it asks.
+     */
+    @Test
+    void theReturnFormReadsEveryFillOfALotAndOfAnItemKeptOutOfLots() {
+        UUID lotId = UUID.randomUUID();
+        UUID pharmacyId = UUID.randomUUID();
+        UUID catalogueItemId = UUID.randomUUID();
+        java.util.Set<com.example.hms.enums.DispenseStatus> states = java.util.EnumSet.of(
+            com.example.hms.enums.DispenseStatus.COMPLETED, com.example.hms.enums.DispenseStatus.PARTIAL);
+        UUID patientId = insertPatient();
+        int fills = 55;
+        for (int i = 0; i < fills; i++) {
+            insertFill(patientId, pharmacyId, null, lotId, com.example.hms.enums.DispenseStatus.COMPLETED);
+            insertFill(patientId, pharmacyId, catalogueItemId, null, com.example.hms.enums.DispenseStatus.PARTIAL);
+        }
+        insertFill(patientId, pharmacyId, null, lotId, com.example.hms.enums.DispenseStatus.CANCELLED);
+        insertFill(patientId, pharmacyId, catalogueItemId, UUID.randomUUID(), com.example.hms.enums.DispenseStatus.COMPLETED);
+
+        List<Dispense> ofTheLot = new TransactionTemplate(transactionManager).execute(status ->
+            repository.findReturnableFillsOfLot(lotId, states));
+        List<Dispense> ofTheItem = new TransactionTemplate(transactionManager).execute(status ->
+            repository.findReturnableFillsOutOfLots(
+                pharmacyId, catalogueItemId, states));
+
+        assertThat(ofTheLot).hasSize(fills).isSortedAccordingTo(
+            java.util.Comparator.comparing(Dispense::getCreatedAt).reversed());
+        assertThat(ofTheItem).hasSize(fills).isSortedAccordingTo(
+            java.util.Comparator.comparing(Dispense::getCreatedAt).reversed());
+    }
+
+    /** The form's name read fetches the patient, so this one row is real; the rest of the graph need not be. */
+    private UUID insertPatient() {
+        UUID id = UUID.randomUUID();
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            skipForeignKeysInThisTransaction();
+            entityManager.createNativeQuery("""
+                INSERT INTO clinical.patients (id, user_id, first_name, last_name, date_of_birth, phone_number_primary,
+                    is_active, created_at, updated_at)
+                VALUES (:id, :u, 'Awa', 'Kabore', DATE '2018-06-15', :phone, true, now(), now())
+                """).setParameter("id", id).setParameter("u", UUID.randomUUID())
+                .setParameter("phone", "+226" + id).executeUpdate();
+        });
+        return id;
+    }
+
+    private void insertFill(UUID patientId, UUID pharmacyId, UUID catalogueItemId, UUID lotId, com.example.hms.enums.DispenseStatus state) {
+        UUID id = new TransactionTemplate(transactionManager).execute(status -> {
+            skipForeignKeysInThisTransaction();
+            Dispense dispense = Dispense.builder()
+                .prescription(entityManager.getReference(Prescription.class, UUID.randomUUID()))
+                .patient(entityManager.getReference(Patient.class, patientId))
+                .pharmacy(entityManager.getReference(Pharmacy.class, pharmacyId))
+                .dispensedByUser(entityManager.getReference(User.class, UUID.randomUUID()))
+                .medicationName("Amoxicillin 500 mg")
+                .quantityRequested(new BigDecimal("10"))
+                .quantityDispensed(new BigDecimal("10"))
+                .status(state)
+                .build();
+            if (catalogueItemId != null) {
+                dispense.setMedicationCatalogItem(entityManager.getReference(
+                    com.example.hms.model.medication.MedicationCatalogItem.class, catalogueItemId));
+            }
+            if (lotId != null) {
+                dispense.setStockLot(entityManager.getReference(com.example.hms.model.pharmacy.StockLot.class, lotId));
+            }
+            return repository.saveAndFlush(dispense).getId();
+        });
+        saved.add(id);
+    }
+
+    private UUID insertFor(UUID patientId, LocalDateTime dispensedAt) {
+        UUID id = new TransactionTemplate(transactionManager).execute(status -> {
+            skipForeignKeysInThisTransaction();
+            Dispense dispense = Dispense.builder()
+                .prescription(entityManager.getReference(Prescription.class, UUID.randomUUID()))
+                .patient(entityManager.getReference(Patient.class, patientId))
+                .pharmacy(entityManager.getReference(Pharmacy.class, UUID.randomUUID()))
+                .dispensedByUser(entityManager.getReference(User.class, UUID.randomUUID()))
+                .medicationName("Amoxicillin 500 mg")
+                .quantityRequested(new BigDecimal("10"))
+                .quantityDispensed(new BigDecimal("10"))
+                .dispensedAt(dispensedAt)
+                .build();
+            return repository.saveAndFlush(dispense).getId();
+        });
+        saved.add(id);
+        return id;
     }
 
     private UUID insert(String overrides) {

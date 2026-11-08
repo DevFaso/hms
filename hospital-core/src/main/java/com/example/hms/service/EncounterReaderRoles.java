@@ -107,8 +107,9 @@ public final class EncounterReaderRoles {
      * <p>{@code ROLE_RECEPTIONIST} IS here: the front desk completes the
      * check-out that produces the after-visit summary
      * ({@code POST /&#123;encounterId&#125;/checkout} admits the role) and
-     * hands the printed copy to the patient, so at their own hospital the
-     * summary is theirs to read. The three consulting clinicians are absent:
+     * hands the copy to the patient, so at their own hospital the read is
+     * theirs, without its clinical content (RCPT-CLIN: ReceptionistResponseShaping
+     * removes it from the answer). The three consulting clinicians are absent:
      * the AVS read does not admit them.
      */
     public static final ReadEndpoint AVS = new ReadEndpoint(Set.of(

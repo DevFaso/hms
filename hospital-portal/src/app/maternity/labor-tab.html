@@ -8,7 +8,7 @@
   </div>
   @if (patient() && !activeEpisode() && !episodesLoading()) {
     <button class="btn-primary" (click)="openStartForm()">
-      <span class="material-symbols-outlined">add</span>
+      <span class="material-symbols-outlined" aria-hidden="true">add</span>
       {{ 'LABOR.START_EPISODE' | translate }}
     </button>
   }
@@ -37,11 +37,11 @@
 
   <!-- ══ Start episode form ══ -->
   @if (startFormOpen()) {
-    <div class="view-section action-form">
+    <div class="view-section action-form" data-submit-scope>
       <h3 class="section-heading">{{ 'LABOR.START_EPISODE' | translate }}</h3>
       <div class="form-row">
         <div class="field">
-          <label for="labor-onset">{{ 'LABOR.ONSET_TIME' | translate }}</label>
+          <label for="labor-onset">{{ 'LABOR.ONSET_TIME' | translate }} *</label>
           <input
             id="labor-onset"
             type="datetime-local"
@@ -85,9 +85,15 @@
         <textarea id="labor-risk" rows="2" [(ngModel)]="startForm.riskNotes"></textarea>
       </div>
       <div class="field">
-        <label for="labor-override">{{ 'LABOR.RECENT_DELIVERY_OVERRIDE' | translate }}</label>
+        <label for="labor-override"
+          >{{ 'LABOR.RECENT_DELIVERY_OVERRIDE' | translate }}
+          @if (startOverrideRequired()) {
+            *
+          }
+        </label>
         <textarea
           id="labor-override"
+          [required]="startOverrideRequired()"
           rows="2"
           maxlength="500"
           aria-describedby="labor-override-hint"
@@ -104,8 +110,12 @@
         </button>
         <button
           class="btn-primary"
+          data-testid="labor-start-submit"
           (click)="submitStart()"
-          [disabled]="saving() || !startForm.laborOnsetAt"
+          [disabled]="saving()"
+          [appSubmitGuard]="!startForm.laborOnsetAt"
+          submitGuardRequired
+          [submitGuardFields]="['labor-onset']"
         >
           {{ 'LABOR.START_EPISODE' | translate }}
         </button>
@@ -122,19 +132,21 @@
         <h3 class="section-heading">{{ 'LABOR.ACTIVE_EPISODE' | translate }}</h3>
         <div>
           <button class="btn-secondary" (click)="entryFormOpen.set(true)">
-            <span class="material-symbols-outlined">add</span>
+            <span class="material-symbols-outlined" aria-hidden="true">add</span>
             {{ 'LABOR.NEW_ENTRY' | translate }}
           </button>
           <button class="btn-primary" (click)="openDeliveryForm()">
-            <span class="material-symbols-outlined">child_care</span>
+            <span class="material-symbols-outlined" aria-hidden="true">child_care</span>
             {{ 'LABOR.RECORD_DELIVERY' | translate }}
           </button>
         </div>
       </div>
       <p class="muted">
-        {{ 'LABOR.ADMITTED' | translate }}: {{ episode.admittedAt | serverTime | date: 'short' }}
+        {{ 'LABOR.ADMITTED' | translate }}{{ 'COMMON.COLON' | translate }}
+        {{ episode.admittedAt | serverTime | date: 'short' }}
         @if (episode.gestationalAgeWeeks) {
-          · {{ 'MATERNITY.GESTATIONAL_AGE' | translate }}: {{ episode.gestationalAgeWeeks }}
+          · {{ 'MATERNITY.GESTATIONAL_AGE' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ episode.gestationalAgeWeeks }}
           {{ 'MATERNITY.WEEKS' | translate }}
         }
         @if (episode.gravida !== null) {
@@ -147,12 +159,19 @@
           · {{ 'LABOR.MEMBRANE_' + episode.membraneStatus | translate }}
         }
         @if (episode.activePhaseStartAt) {
-          · {{ 'LABOR.ACTIVE_PHASE_SINCE' | translate }}:
+          · {{ 'LABOR.ACTIVE_PHASE_SINCE' | translate }}{{ 'COMMON.COLON' | translate }}
           {{ episode.activePhaseStartAt | serverTime | date: 'shortTime' }}
         } @else {
           · {{ 'LABOR.LATENT_PHASE' | translate }}
         }
       </p>
+      <!-- QA D1068: the risk notes typed at admission are read back. -->
+      @if (episode.riskNotes) {
+        <p class="saved-note" data-testid="labor-risk-notes">
+          <strong>{{ 'LABOR.RISK_NOTES' | translate }}{{ 'COMMON.COLON' | translate }}</strong>
+          {{ episode.riskNotes }}
+        </p>
+      }
     </div>
   }
 
@@ -165,7 +184,7 @@
           <span class="risk-badge risk-low">{{ 'LABOR.STATUS_DELIVERED' | translate }}</span>
         </h3>
         <p>
-          {{ record.birthDateTime | serverTime | date: 'medium' }} ·
+          {{ record.birthDateTime | serverTime | dateTime }} ·
           {{ 'LABOR.MODE_' + record.deliveryMode | translate }}
           @if (record.infantSex) {
             · {{ 'LABOR.SEX_' + record.infantSex | translate }}
@@ -185,12 +204,36 @@
             }}
           }
         </p>
+        <!-- QA D1068: the third stage and the delivery notes, as recorded. -->
+        <p data-testid="delivery-third-stage">
+          {{ 'LABOR.PLACENTA_COMPLETE' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{
+            record.placentaComplete === null
+              ? '—'
+              : ((record.placentaComplete ? 'COMMON.YES' : 'COMMON.NO') | translate)
+          }}
+          @if (record.placentaDeliveredAt) {
+            · {{ 'LABOR.PLACENTA_TIME' | translate }}
+            {{ record.placentaDeliveredAt | serverTime | date: 'shortTime' }}
+          }
+          · {{ 'LABOR.UTEROTONIC_GIVEN' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{
+            record.uterotonicGiven === null
+              ? '—'
+              : ((record.uterotonicGiven ? 'COMMON.YES' : 'COMMON.NO') | translate)
+          }}
+        </p>
+        @if (record.notes) {
+          <p class="saved-note" data-testid="delivery-notes">
+            <strong>{{ 'LABOR.NOTES' | translate }}{{ 'COMMON.COLON' | translate }}</strong>
+            {{ record.notes }}
+          </p>
+        }
         @for (alert of record.alerts; track $index) {
           <p>
             <!-- QA D797: a CAUTION (an implausible weight to check) is not shown as urgent. -->
             <span
               class="risk-badge {{ alert.severity === 'URGENT' ? 'risk-high' : 'risk-moderate' }}"
-              [title]="alert.triggeredBy"
               >{{ alert.message }}</span
             >
           </p>
@@ -218,6 +261,7 @@
             <th scope="col">{{ 'LABOR.CONTRACTIONS' | translate }}</th>
             <th scope="col">{{ 'LABOR.MATERNAL_VITALS' | translate }}</th>
             <th scope="col">{{ 'LABOR.ALERTS' | translate }}</th>
+            <th scope="col">{{ 'LABOR.NOTES' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -229,7 +273,7 @@
                 {{ entry.liquorColour ? ('LABOR.LIQUOR_' + entry.liquorColour | translate) : '—' }}
               </td>
               <td>
-                {{ entry.cervicalDilationCm !== null ? entry.cervicalDilationCm + ' cm' : '—' }}
+                {{ entry.cervicalDilationCm | measure: 'cm' }}
               </td>
               <td>{{ entry.descentFifths !== null ? entry.descentFifths + '/5' : '—' }}</td>
               <td>
@@ -257,6 +301,21 @@
                   >
                     {{ 'LABOR.ALERT_' + alert.type | translate }}
                   </span>
+                }
+              </td>
+              <!-- QA D1068: the drugs given and the free-text note of each observation. -->
+              <td class="saved-note" data-testid="partograph-entry-notes">
+                @if (entry.drugsGiven) {
+                  <div>
+                    {{ 'LABOR.DRUGS_GIVEN' | translate }}{{ 'COMMON.COLON' | translate }}
+                    {{ entry.drugsGiven }}
+                  </div>
+                }
+                @if (entry.notes) {
+                  <div>{{ entry.notes }}</div>
+                }
+                @if (!entry.drugsGiven && !entry.notes) {
+                  —
                 }
               </td>
             </tr>
@@ -308,20 +367,22 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="labor-tab-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="entryFormOpen.set(false); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'LABOR.NEW_ENTRY' | translate }}</h2>
+        <h2 id="labor-tab-dialog-1-title">{{ 'LABOR.NEW_ENTRY' | translate }}</h2>
         <button
           class="modal-close"
           (click)="entryFormOpen.set(false)"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -418,15 +479,21 @@
         <div class="form-row gtpal-row">
           <div class="field">
             <label for="pe-pulse">{{ 'LABOR.PULSE' | translate }}</label>
-            <input id="pe-pulse" type="number" min="0" max="300" [(ngModel)]="entryForm.pulseBpm" />
+            <input
+              id="pe-pulse"
+              type="number"
+              min="20"
+              max="300"
+              [(ngModel)]="entryForm.pulseBpm"
+            />
           </div>
           <div class="field">
             <label for="pe-sys">{{ 'LABOR.SYSTOLIC' | translate }}</label>
             <input
               id="pe-sys"
               type="number"
-              min="0"
-              max="350"
+              min="40"
+              max="300"
               [(ngModel)]="entryForm.systolicBpMmHg"
             />
           </div>
@@ -435,8 +502,8 @@
             <input
               id="pe-dia"
               type="number"
-              min="0"
-              max="250"
+              min="20"
+              max="200"
               [(ngModel)]="entryForm.diastolicBpMmHg"
             />
           </div>
@@ -501,20 +568,22 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="labor-tab-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="cancelDelivery(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'LABOR.RECORD_DELIVERY' | translate }}</h2>
+        <h2 id="labor-tab-dialog-2-title">{{ 'LABOR.RECORD_DELIVERY' | translate }}</h2>
         <button
           class="modal-close"
           (click)="cancelDelivery()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -525,7 +594,7 @@
           </div>
           <div class="field">
             <label for="dl-mode">{{ 'LABOR.DELIVERY_MODE' | translate }} *</label>
-            <select id="dl-mode" [(ngModel)]="deliveryForm.deliveryMode">
+            <select required id="dl-mode" [(ngModel)]="deliveryForm.deliveryMode">
               <option [ngValue]="undefined">—</option>
               @for (mode of deliveryModes; track mode) {
                 <option [ngValue]="mode">{{ 'LABOR.MODE_' + mode | translate }}</option>
@@ -638,9 +707,15 @@
           <textarea id="dl-notes" rows="2" [(ngModel)]="deliveryForm.notes"></textarea>
         </div>
         <div class="field">
-          <label for="dl-override">{{ 'LABOR.RECENT_DELIVERY_OVERRIDE' | translate }}</label>
+          <label for="dl-override"
+            >{{ 'LABOR.RECENT_DELIVERY_OVERRIDE' | translate }}
+            @if (deliveryOverrideRequired()) {
+              *
+            }
+          </label>
           <textarea
             id="dl-override"
+            [required]="deliveryOverrideRequired()"
             rows="2"
             maxlength="500"
             aria-describedby="dl-override-hint"
@@ -655,7 +730,14 @@
         <button class="btn-secondary" (click)="cancelDelivery()" [disabled]="saving()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="submitDelivery()" [disabled]="saving()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          data-testid="labor-delivery-submit"
+          (click)="submitDelivery()"
+          [disabled]="saving()"
+        >
           {{ 'LABOR.SAVE_DELIVERY' | translate }}
         </button>
       </div>

@@ -1,6 +1,10 @@
+import { allRows } from '../shared/all-pages';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { Subscription } from 'rxjs';
 import {
   Component,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -30,6 +34,12 @@ import {
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { toServerDateTime, localDateString } from '../shared/date-utils';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { missingRequiredMessage } from '../shared/required-fields';
 
 /* ── View state types ── */
 
@@ -123,9 +133,6 @@ const STATUS_OPTIONS: PlatformServiceStatus[] = [
   'DECOMMISSIONED',
 ];
 
-/** Organizations offered in the org pickers (services toolbar, provision target). */
-const ORG_PAGE_SIZE = 50;
-
 /**
  * Hosts that only ever appear in seeded or example data. A catalog entry
  * pointing at one has no working page behind it, so the page shows the
@@ -167,10 +174,24 @@ function linkKey(serviceId: string, hospitalId: string): string {
   return serviceId + ':' + hospitalId;
 }
 
+/** The required fields of the release-window form (QA D1306). */
+const RELEASE_FIELD_IDS = ['relName', 'relEnvironment', 'relStartsAt', 'relEndsAt'];
+
 @Component({
   selector: 'app-platform',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe, OrgTextPipe],
+  imports: [
+    InlineDiscardAskComponent,
+    InlineSubFormDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    OrgTextPipe,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+  ],
   templateUrl: './platform.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './platform.scss',
@@ -180,6 +201,8 @@ export class PlatformComponent implements OnInit {
   private readonly orgSvc = inject(OrganizationService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly confirmService = inject(ConfirmService);
 
   /* ── Reactive state ── */
   activeView = signal<ActiveView>('dashboard');
@@ -362,8 +385,10 @@ export class PlatformComponent implements OnInit {
         this.toast.success(this.translate.instant('PLATFORM.TOAST.SNAPSHOT_EXPORTED'));
         this.saving.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PLATFORM.TOAST.SNAPSHOT_EXPORT_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PLATFORM.TOAST.SNAPSHOT_EXPORT_FAILED'),
+        );
         this.saving.set(false);
       },
     });
@@ -380,16 +405,17 @@ export class PlatformComponent implements OnInit {
    */
   loadOrganizations(): void {
     this.servicesLoading.set(true);
-    this.orgSvc.list(0, ORG_PAGE_SIZE).subscribe({
-      next: (page) => {
-        this.organizations.set(page.content);
+    // QA D1347: every organization (all pages), not the first 50.
+    allRows((page, size) => this.orgSvc.list(page, size)).subscribe({
+      next: (orgs) => {
+        this.organizations.set(orgs);
         this.organizationsLoaded.set(true);
         this.servicesLoading.set(false);
         const current = this.selectedOrgId();
-        if (current && page.content.some((o) => o.id === current)) {
+        if (current && orgs.some((o) => o.id === current)) {
           this.loadOrgServices(current);
-        } else if (page.content.length > 0) {
-          this.selectOrg(page.content[0].id);
+        } else if (orgs.length > 0) {
+          this.selectOrg(orgs[0].id);
         } else {
           this.selectedOrgId.set(null);
           this.orgServices.set([]);
@@ -405,9 +431,9 @@ export class PlatformComponent implements OnInit {
   /** The provision picker needs the organizations; it never selects one (D1). */
   private ensureOrganizations(): void {
     if (this.organizationsLoaded()) return;
-    this.orgSvc.list(0, ORG_PAGE_SIZE).subscribe({
-      next: (page) => {
-        this.organizations.set(page.content);
+    allRows((page, size) => this.orgSvc.list(page, size)).subscribe({
+      next: (orgs) => {
+        this.organizations.set(orgs);
         this.organizationsLoaded.set(true);
       },
       error: () => this.toast.error(this.translate.instant('PLATFORM.TOAST.ORGS_LOAD_FAILED')),
@@ -560,6 +586,8 @@ export class PlatformComponent implements OnInit {
   }
 
   changeServiceStatus(service: OrgServiceResponse, newStatus: PlatformServiceStatus): void {
+    // QA D1124: the current status is a pressed toggle, not a dead button; choosing it again changes nothing.
+    if (service.status === newStatus) return;
     this.saving.set(true);
     this.platformSvc
       .updateOrgService(service.organizationId, service.id, { status: newStatus })
@@ -693,16 +721,16 @@ export class PlatformComponent implements OnInit {
   }
 
   /** Deletes the link and its settings, after the user confirms the hard delete. */
-  unlinkHospital(row: HospitalLinkRow): void {
+  async unlinkHospital(row: HospitalLinkRow): Promise<void> {
     const svc = this.selectedService();
     if (!svc || !row.link) return;
-    if (
-      !window.confirm(
-        this.translate.instant('PLATFORM.CONFIRM_UNLINK', { hospital: row.hospitalName }),
-      )
-    ) {
-      return;
-    }
+    // QA D1229: the in-app confirmation, never the browser's.
+    const confirmed = await this.confirmService.ask({
+      titleKey: 'PLATFORM.CONFIRM_UNLINK',
+      params: { hospital: row.hospitalName },
+      confirmKey: 'PLATFORM.UNLINK',
+    });
+    if (!confirmed) return;
     this.setLinkBusy(svc.id, row.hospitalId, true);
     this.platformSvc.unlinkHospital(row.hospitalId, svc.id).subscribe({
       next: () => {
@@ -873,10 +901,31 @@ export class PlatformComponent implements OnInit {
 
   scheduleRelease(): void {
     const f = this.releaseForm();
-    if (!f.name || !f.startsAt || !f.endsAt || !f.environment) {
-      this.toast.error(this.translate.instant('PLATFORM.TOAST.RELEASE_REQUIRED_FIELDS'));
+    const root = this.host.nativeElement;
+    const blank = blankFields(
+      {
+        relName: f.name,
+        relEnvironment: f.environment,
+        relStartsAt: f.startsAt,
+        relEndsAt: f.endsAt,
+      },
+      RELEASE_FIELD_IDS,
+    );
+    if (blank.length > 0) {
+      // QA D1306 (round 28): every blank field is marked, not only a toast.
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'COMMON.NAME', value: f.name },
+          { labelKey: 'PLATFORM.ENVIRONMENT', value: f.environment },
+          { labelKey: 'PLATFORM.STARTS_AT', value: f.startsAt },
+          { labelKey: 'PLATFORM.ENDS_AT', value: f.endsAt },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
+      refuseFields(root, blank, RELEASE_FIELD_IDS, this.translate.instant('COMMON.FIELD_REQUIRED'));
+      this.toast.error(message);
       return;
     }
+    refuseFields(root, [], RELEASE_FIELD_IDS, '');
 
     const request: ReleaseWindowRequest = {
       name: f.name,
@@ -922,11 +971,13 @@ export class PlatformComponent implements OnInit {
     const body = (err as { error?: ApiErrorBody | null } | null)?.error;
     const fieldErrors = body?.fieldErrors;
     if (fieldErrors && Object.keys(fieldErrors).length > 0) {
+      // QA D1079: the colon is the reader's ("Fournisseur : …" in French).
+      const colon = this.translate.instant('COMMON.COLON');
       const details = Object.entries(fieldErrors)
         .map(([field, message]) => {
           const labelKey = FIELD_LABEL_KEYS[field];
           const label = labelKey ? this.translate.instant(labelKey) : field;
-          return `${label}: ${message}`;
+          return `${label}${colon} ${message}`;
         })
         .join('; ');
       return this.translate.instant('PLATFORM.TOAST.VALIDATION_FAILED', { errors: details });

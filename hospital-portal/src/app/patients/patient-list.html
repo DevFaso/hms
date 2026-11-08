@@ -7,8 +7,8 @@
     </div>
     <div class="page-actions">
       <button type="button" class="refresh-button" (click)="loadPatients()" [disabled]="loading()">
-        <span class="material-symbols-outlined" aria-hidden="true">refresh</span
-        >{{ 'PATIENTS.REFRESH' | translate }}
+        <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+        {{ 'PATIENTS.REFRESH' | translate }}
       </button>
       @if (canCreate) {
         <a routerLink="/patients/new" class="btn-primary">
@@ -33,7 +33,7 @@
           [attr.aria-pressed]="metricSelected(metric.id)"
           [attr.data-metric]="metric.id"
           (click)="selectMetric(metric.id)"
-          [disabled]="loading() || loadError()"
+          [disabled]="loading()"
         >
           <span
             class="material-symbols-outlined card-icon"
@@ -86,6 +86,7 @@
           <button
             class="search-clear"
             [title]="'COMMON.CLEAR_SEARCH' | translate"
+            [attr.aria-label]="'COMMON.CLEAR_SEARCH' | translate"
             (click)="onSearchChange('')"
           >
             <span class="material-symbols-outlined">close</span>
@@ -143,23 +144,26 @@
           </select>
         </div>
 
-        <div class="filter-group">
-          <label class="filter-label" for="bloodTypeFilter">{{
-            'PATIENTS.BLOOD_TYPE' | translate
-          }}</label>
-          <select
-            id="bloodTypeFilter"
-            class="filter-select"
-            [title]="'PATIENTS.FILTER_BLOOD_TYPE' | translate"
-            [(ngModel)]="bloodTypeFilter"
-            (ngModelChange)="onFilterChange()"
-          >
-            <option value="">{{ 'COMMON.ALL' | translate }}</option>
-            @for (bt of bloodTypes; track bt) {
-              <option [value]="bt">{{ bt }}</option>
-            }
-          </select>
-        </div>
+        <!-- RCPT-CLIN: the desk neither reads the blood type nor filters on it. -->
+        @if (!frontDeskOnly()) {
+          <div class="filter-group">
+            <label class="filter-label" for="bloodTypeFilter">{{
+              'PATIENTS.BLOOD_TYPE' | translate
+            }}</label>
+            <select
+              id="bloodTypeFilter"
+              class="filter-select"
+              [title]="'PATIENTS.FILTER_BLOOD_TYPE' | translate"
+              [(ngModel)]="bloodTypeFilter"
+              (ngModelChange)="onFilterChange()"
+            >
+              <option value="">{{ 'COMMON.ALL' | translate }}</option>
+              @for (bt of bloodTypes; track bt) {
+                <option [value]="bt">{{ bt }}</option>
+              }
+            </select>
+          </div>
+        }
 
         <div class="filter-group">
           <label class="filter-label" for="contactFilter">{{
@@ -190,10 +194,11 @@
       <div class="active-chips">
         @if (genderFilter) {
           <span class="filter-chip">
-            {{ 'PATIENTS.GENDER' | translate }}: {{ genderFilter | enumLabel: 'gender' }}
+            {{ 'PATIENTS.GENDER' | translate }}{{ 'COMMON.COLON' | translate }}
+            {{ genderFilter | enumLabel: 'gender' }}
             <button
               class="chip-remove"
-              [attr.aria-label]="'COMMON.REMOVE' | translate"
+              [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
               (click)="removeFilter('gender')"
             >
               <span class="material-symbols-outlined">close</span>
@@ -201,12 +206,13 @@
           </span>
         }
         @if (statusFilter) {
-          <span class="filter-chip">
-            {{ 'COMMON.STATUS' | translate }}:
+          {{ ' '
+          }}<span class="filter-chip">
+            {{ 'COMMON.STATUS' | translate }}{{ 'COMMON.COLON' | translate }}
             {{ (statusFilter === 'active' ? 'COMMON.ACTIVE' : 'COMMON.INACTIVE') | translate }}
             <button
               class="chip-remove"
-              [attr.aria-label]="'COMMON.REMOVE' | translate"
+              [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
               (click)="removeFilter('status')"
             >
               <span class="material-symbols-outlined">close</span>
@@ -214,11 +220,12 @@
           </span>
         }
         @if (bloodTypeFilter) {
-          <span class="filter-chip">
-            {{ 'PATIENTS.BLOOD' | translate }}: {{ bloodTypeFilter }}
+          {{ ' '
+          }}<span class="filter-chip">
+            {{ 'PATIENTS.BLOOD' | translate }}{{ 'COMMON.COLON' | translate }} {{ bloodTypeFilter }}
             <button
               class="chip-remove"
-              [attr.aria-label]="'COMMON.REMOVE' | translate"
+              [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
               (click)="removeFilter('bloodType')"
             >
               <span class="material-symbols-outlined">close</span>
@@ -226,11 +233,13 @@
           </span>
         }
         @if (hospitalFilter) {
-          <span class="filter-chip">
-            {{ 'ENCOUNTERS.HOSPITAL' | translate }}: {{ hospitalName(hospitalFilter) }}
+          {{ ' '
+          }}<span class="filter-chip">
+            {{ 'ENCOUNTERS.HOSPITAL' | translate }}{{ 'COMMON.COLON' | translate }}
+            {{ hospitalName(hospitalFilter) }}
             <button
               class="chip-remove"
-              [attr.aria-label]="'COMMON.REMOVE' | translate"
+              [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
               (click)="removeFilter('hospital')"
             >
               <span class="material-symbols-outlined">close</span>
@@ -238,13 +247,14 @@
           </span>
         }
         @if (contactFilter) {
-          <span class="filter-chip"
+          {{ ' '
+          }}<span class="filter-chip"
             >{{
               (contactFilter === 'missing' ? 'PATIENTS.NO_CONTACT' : 'PATIENTS.CONTACT_RECORDED')
                 | translate
             }}<button
               class="chip-remove"
-              [attr.aria-label]="'COMMON.REMOVE' | translate"
+              [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
               (click)="removeFilter('contact')"
             >
               <span class="material-symbols-outlined" aria-hidden="true">close</span>
@@ -337,7 +347,9 @@
                   }}</span>
                 </button>
               </th>
-              <th scope="col">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</th>
+              @if (!frontDeskOnly()) {
+                <th scope="col">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</th>
+              }
               <th
                 class="sortable-th"
                 scope="col"
@@ -367,14 +379,14 @@
                     {{ patient.firstName.charAt(0) }}{{ patient.lastName.charAt(0) }}
                   </div>
                   <div class="name-stack">
-                    <span class="name-primary">{{ patient.firstName }} {{ patient.lastName }}</span>
+                    <span class="name-primary">{{ patient | personName }}</span>
                     @if (patient.hospitalName) {
-                      <span class="name-sub">{{ patient.hospitalName }}</span>
+                      {{ ' ' }}<span class="name-sub">{{ patient.hospitalName }}</span>
                     }
                   </div>
                 </td>
                 <td>
-                  <code class="mrn-code">{{ patient.mrn ?? '—' }}</code>
+                  <code class="mrn-code">{{ patient.mrn | dash }}</code>
                 </td>
                 <td class="contact-cell">
                   @if (displayPhone(patient); as phone) {
@@ -388,25 +400,34 @@
                   }
                 </td>
                 <td>{{ patient.gender ? (patient.gender | enumLabel: 'gender') : '—' }}</td>
-                <td>
-                  @if (patient.bloodType) {
-                    <span class="blood-badge">{{ patient.bloodType }}</span>
-                  } @else {
-                    —
-                  }
-                </td>
+                @if (!frontDeskOnly()) {
+                  <td>
+                    @if (patient.bloodType) {
+                      <span class="blood-badge">{{ patient.bloodType }}</span>
+                    } @else {
+                      —
+                    }
+                  </td>
+                }
                 <td>
                   <span
                     class="status-badge with-dot"
-                    [class.active]="patient.active"
-                    [class.inactive]="!patient.active"
+                    [class.active]="patient.active && !patient.deceased"
+                    [class.inactive]="!patient.active || patient.deceased"
                   >
                     <span class="status-dot"></span>
-                    {{
-                      patient.active
-                        ? ('COMMON.ACTIVE' | translate)
-                        : ('COMMON.INACTIVE' | translate)
-                    }}
+                    <!-- QA D1488: a recorded death is shown, never "Active". -->
+                    @if (patient.deceased && patient.deathDisputed) {
+                      {{ 'MORTALITY.DISPUTED' | translate }}
+                    } @else if (patient.deceased) {
+                      {{ 'PATIENTS.DECEASED' | translate }}
+                    } @else {
+                      {{
+                        patient.active
+                          ? ('COMMON.ACTIVE' | translate)
+                          : ('COMMON.INACTIVE' | translate)
+                      }}
+                    }
                   </span>
                 </td>
                 <td>
@@ -415,8 +436,7 @@
                     class="action-link"
                     [title]="'PATIENTS.VIEW' | translate"
                     [attr.aria-label]="
-                      'PATIENTS.OPEN_PATIENT'
-                        | translate: { name: patient.firstName + ' ' + patient.lastName }
+                      'PATIENTS.OPEN_PATIENT' | translate: { name: (patient | personName) }
                     "
                   >
                     <span>{{ 'PATIENTS.OPEN_RECORD' | translate }}</span

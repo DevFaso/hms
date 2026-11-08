@@ -224,7 +224,7 @@ class PanelServiceTest {
 
         assertThatThrownBy(() -> service.assign(patientId, tooEarly))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("before the current owner's start");
+            .extracting("messageKey").isEqualTo("panel.assignedOn.beforeCurrentOwner");
         verify(panelRepository, never()).saveAndFlush(any());
     }
 

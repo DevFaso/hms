@@ -44,7 +44,10 @@ class HospitalIdParameterCoverageTest {
         "PatientPortalController.getDepartments",
         "a patient choosing where to book: the hospital is the booking target",
         "PatientPortalController.getProviders",
-        "a patient choosing where to book: the hospital is the booking target");
+        "a patient choosing where to book: the hospital is the booking target",
+        "PatientPortalController.getOpenSlots",
+        "a patient choosing a slot to book (QA D1093): the hospital is the booking target, checked against "
+            + "the patient's active registrations");
 
     @Test
     @DisplayName("every handler taking a hospitalId is narrowed to it, or exempt with a reason from the frozen list")

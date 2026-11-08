@@ -9,6 +9,10 @@ import lombok.Data;
  * Supports both DAR and SOAPIE templates; unused fields are ignored.
  */
 @Data
+// QA D1331 (round 29): {} named the template, the narrative one request later.
+// The content rule is checked with the template, in one answer.
+@com.example.hms.validation.AnyAnswer(metadata = {"template", "title"}, reportedOn = "narrative",
+    message = "{nurse.careNote.contentRequired}")
 public class NurseCareNoteRequestDTO {
 
     /** DAR | SOAPIE */
@@ -32,5 +36,6 @@ public class NurseCareNoteRequestDTO {
     private String narrative;
 
     /** Optional: short title / summary shown in the note list. */
+    @jakarta.validation.constraints.Size(max = 255)
     private String title;
 }

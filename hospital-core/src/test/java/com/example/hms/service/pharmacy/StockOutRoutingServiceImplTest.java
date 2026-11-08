@@ -225,6 +225,19 @@ class StockOutRoutingServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D1282: routeToPartner with no target pharmacy names the field")
+    void routeToPartnerWithoutATargetNamesTheField() {
+        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                .prescriptionId(prescriptionId).reason("no stock").build();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .hasFieldOrPropertyWithValue("field", "targetPharmacyId");
+    }
+
+    @Test
     @DisplayName("routeToPartner should update prescription and persist a routing decision")
     void routeToPartnerShouldUpdatePrescriptionAndPersistDecision() {
         RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
@@ -295,7 +308,8 @@ class StockOutRoutingServiceImplTest {
 
         assertThatThrownBy(() -> service.confirmPartnerDispense(decisionId))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("ACCEPTED status");
+                // QA D1090 class: worded for people, the raw status code is gone from the message.
+                .extracting("messageKey").isEqualTo("stock.routing.dispenseNotAccepted");
     }
 
     @Nested
@@ -734,7 +748,8 @@ class StockOutRoutingServiceImplTest {
 
         assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("PARTNER_PHARMACY");
+                // QA D1371 class (changed assertion): the message names the choices, not raw codes.
+                .hasMessageContaining("partner pharmacy");
     }
 
     @Test
@@ -1237,7 +1252,11 @@ class StockOutRoutingServiceImplTest {
 
             assertThatThrownBy(() -> service.partnerNoShow(decision.getId(), "never came"))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("ACCEPTED");
+                    // QA D1090 class: the status is passed as its label, never the raw code.
+                    .satisfies(e -> {
+                        assertThat(((BusinessException) e).getMessageKey()).isEqualTo("stock.routing.noShowNotAccepted");
+                        assertThat(((BusinessException) e).getArgs()).doesNotContain("PENDING");
+                    });
             verify(prescriptionRepository, never()).save(any());
         }
 
@@ -1553,6 +1572,31 @@ class StockOutRoutingServiceImplTest {
             verify(prescriptionRepository, never()).save(any());
             verify(partnerChannel, never()).notifyPatientAccepted(any(), any());
             verifyNoInteractions(prescriberNotifier);
+        }
+    }
+
+    @Test
+    @DisplayName("a pharmacist cannot record a partner's acceptance of a held order; a refusal stays open")
+    void partnerRespondRefusesAcceptingAHeldOrder() {
+        PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                .prescription(prescription)
+                .targetPharmacy(partnerPharmacy)
+                .decidedByUser(currentUser)
+                .decidedForPatient(patient)
+                .routingType(RoutingType.PARTNER)
+                .status(RoutingDecisionStatus.PENDING)
+                .build();
+        UUID decisionId = UUID.randomUUID();
+        decision.setId(decisionId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(routingDecisionRepository.findById(decisionId)).thenReturn(Optional.of(decision));
+        com.example.hms.service.support.OrderReviewHoldGuard.useHolds((type, id) -> true);
+        try {
+            assertThatThrownBy(() -> service.partnerRespond(decisionId, true))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+            assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.PENDING);
+        } finally {
+            com.example.hms.service.support.OrderReviewHoldGuard.useHolds(null);
         }
     }
 }

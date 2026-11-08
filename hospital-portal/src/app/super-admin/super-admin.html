@@ -9,12 +9,12 @@
       @if (generatedAt()) {
         <span class="header-meta"
           ><span class="material-symbols-outlined" aria-hidden="true">schedule</span>
-          {{ 'SUPER_ADMIN.AS_OF' | translate }} {{ generatedAt() | serverTime | date: 'short' }}
+          {{ 'SUPER_ADMIN.AS_OF' | translate }} {{ generatedAt() | serverTime | dateTime }}
         </span>
       }
       <button type="button" class="refresh-button" (click)="loadAll()" [disabled]="loading()">
-        <span class="material-symbols-outlined" aria-hidden="true">refresh</span
-        >{{ 'COMMON.REFRESH' | translate }}
+        <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+        {{ 'COMMON.REFRESH' | translate }}
       </button>
     </div>
   </header>
@@ -39,8 +39,8 @@
           <p>{{ 'SUPER_ADMIN.NETWORK_HELP' | translate }}</p>
         </div>
         <span class="scope-badge"
-          ><span class="material-symbols-outlined" aria-hidden="true">public</span
-          >{{ 'SUPER_ADMIN.NETWORK_SCOPE' | translate }}</span
+          ><span class="material-symbols-outlined" aria-hidden="true">public</span>
+          {{ 'SUPER_ADMIN.NETWORK_SCOPE' | translate }}</span
         >
       </div>
       @if (summaryUnavailable()) {
@@ -63,7 +63,8 @@
               <span class="stat-value">{{ stat.value | number }}</span>
               <span class="stat-label">{{ stat.labelKey | translate }}</span>
               @if (stat.sublabelKey) {
-                <span class="stat-sub">
+                {{ ' '
+                }}<span class="stat-sub">
                   <em>{{ stat.subvalue }}</em>
                   {{ stat.sublabelKey | translate }}
                 </span>
@@ -200,7 +201,7 @@
               @for (row of selectedActivityRows(); track row.id; let i = $index) {
                 <div class="activity-row" [attr.data-test]="'activity-row-' + i">
                   <div class="activity-id">
-                    <code>{{ row.id || '—' }}</code>
+                    <code>{{ row.code || '—' }}</code>
                   </div>
                   <div class="activity-summary">{{ row.summary || '—' }}</div>
                   <div class="activity-timestamp">

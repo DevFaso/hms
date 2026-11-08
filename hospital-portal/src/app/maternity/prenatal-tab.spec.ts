@@ -13,6 +13,7 @@ import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { roleContextStub } from '../testing/role-context.stub';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 /**
  * The prenatal schedule generator. Asserted through the rendered DOM in French
@@ -102,12 +103,13 @@ describe('PrenatalTabComponent', () => {
         SCHEDULED: 'Planifiée',
         UNSCHEDULED: 'Non planifiée',
         EXISTING: 'Rendez-vous existants',
-        REQUIRED_FIELDS: 'La patiente et la date des dernières règles sont requises',
         GENERATE_ERROR: 'Échec de la génération du calendrier',
         RESCHEDULED: 'Rendez-vous reprogrammé',
         BOOK: 'Planifier',
         BOOK_REASON: 'Consultation prénatale (CPN) — {{week}} SA',
       },
+      MATERNITY: { PATIENT: 'Patiente', LMP: 'Date des dernières règles' },
+      COMMON: { MISSING_REQUIRED_FIELDS: 'Champs obligatoires manquants : {{fields}}' },
     });
 
     fixture = TestBed.createComponent(PrenatalTabComponent);
@@ -118,14 +120,24 @@ describe('PrenatalTabComponent', () => {
   it('shows nothing but the form until a schedule is generated', () => {
     expect(host().querySelector('table')).toBeNull();
     const generate = host().querySelector('.modal-actions .btn-primary') as HTMLButtonElement;
-    expect(generate.disabled).toBeTrue();
+    expect(isSubmitBlocked(generate)).toBeTrue();
   });
 
   it('refuses to generate without a patient and an LMP, in French', () => {
     component.generate();
     expect(service.schedule).not.toHaveBeenCalled();
+    // QA D1358: the toast names the blank fields, not a fixed sentence.
     expect(toast.error).toHaveBeenCalledWith(
-      'La patiente et la date des dernières règles sont requises',
+      'Champs obligatoires manquants : Patiente, Date des dernières règles',
+    );
+  });
+
+  it('QA D1358: names only the LMP when the patient is chosen', () => {
+    component.onPatientPicked({ id: 'p-1' } as PatientResponse);
+    component.generate();
+    expect(service.schedule).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith(
+      'Champs obligatoires manquants : Date des dernières règles',
     );
   });
 
@@ -283,6 +295,8 @@ describe('PrenatalTabComponent', () => {
       date: target,
       time: '09:30',
       reason: 'Consultation prénatale (CPN) — 24 SA',
+      // QA D1055: the recommended length travels with the link.
+      duration: '30',
     });
     // The scheduler counts a reason naming antenatal care as the visit.
     expect(links[0]?.['reason']).toMatch(/pr[ée]natal/i);
@@ -290,6 +304,27 @@ describe('PrenatalTabComponent', () => {
     const book = host().querySelectorAll('a[href^="/appointments/new"]');
     expect(book.length).toBe(1);
     expect(book[0].textContent).toContain('Planifier');
+  });
+
+  it('QA D1055 / D1031: Book carries the first-visit length and the provider; the contacts held are shown', () => {
+    generateFor(
+      schedule({
+        staffId: 'staff-midwife',
+        completedContacts: 2,
+        recommendations: [
+          {
+            gestationalWeek: 12,
+            durationMinutes: 45,
+            visitType: 'INITIAL_INTAKE',
+            scheduled: false,
+          },
+        ],
+      }),
+    );
+    const link = component.bookLinks()[0];
+    expect(link?.['duration']).toBe('45');
+    expect(link?.['staffId']).toBe('staff-midwife');
+    expect(host().querySelector('[data-testid="anc-contacts"]')).toBeTruthy();
   });
 
   it('QA D810: a recommended day already past is booked from today', () => {
@@ -309,5 +344,108 @@ describe('PrenatalTabComponent', () => {
     const today = new Date();
     const expected = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     expect(component.bookLinks()[0]?.['date']).toBe(expected);
+  });
+
+  it('QA D1273: a visit is offered only the actions the server accepts, for every status', () => {
+    const future = '2999-01-01';
+    const past = '2000-01-01';
+    const all = [
+      'SCHEDULED',
+      'CONFIRMED',
+      'CHECKED_IN',
+      'CANCELLED',
+      'COMPLETED',
+      'NO_SHOW',
+      'PENDING',
+      'RESCHEDULED',
+      'IN_PROGRESS',
+      'FAILED',
+      'UNKNOWN',
+    ];
+    const movable = ['PENDING', 'SCHEDULED', 'CONFIRMED', 'RESCHEDULED', 'NO_SHOW', 'FAILED'];
+    const upcoming = ['PENDING', 'SCHEDULED', 'CONFIRMED', 'RESCHEDULED'];
+    for (const status of all) {
+      const a = { appointmentId: 'x', appointmentDate: future, status, gestationalWeek: 30 };
+      expect(component.canReschedule(a)).withContext(status).toBe(movable.includes(status));
+      expect(component.canRemind(a)).withContext(status).toBe(upcoming.includes(status));
+      expect(component.canRemind({ ...a, appointmentDate: past }))
+        .withContext(status)
+        .toBeFalse();
+    }
+  });
+
+  it('QA D1273: the completed past visit of round 26 shows no action button', () => {
+    generateFor(
+      schedule({
+        existingAppointments: [
+          {
+            appointmentId: 'a-done',
+            appointmentDate: '2026-10-31',
+            startTime: '23:52',
+            status: 'COMPLETED',
+            gestationalWeek: 23,
+          },
+        ],
+      }),
+    );
+    const existing = host().querySelectorAll('table')[1];
+    expect(existing.querySelectorAll('.actions-cell button').length).toBe(0);
+    expect(existing.querySelector('.actions-cell')?.textContent?.trim()).toBe('—');
+  });
+
+  it('QA D1273: an upcoming visit keeps both actions', () => {
+    generateFor(
+      schedule({
+        existingAppointments: [
+          {
+            appointmentId: 'a-next',
+            appointmentDate: '2999-01-01',
+            startTime: '09:00',
+            status: 'SCHEDULED',
+            gestationalWeek: 30,
+          },
+        ],
+      }),
+    );
+    const existing = host().querySelectorAll('table')[1];
+    expect(existing.querySelectorAll('.actions-cell button').length).toBe(2);
+  });
+});
+
+describe('PrenatalTabComponent: the front desk (RCPT-CLIN)', () => {
+  function create(roles: string[]) {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [PrenatalTabComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        {
+          provide: PrenatalService,
+          useValue: jasmine.createSpyObj('PrenatalService', ['schedule']),
+        },
+        {
+          provide: AuthService,
+          useValue: jasmine.createSpyObj('AuthService', ['getHospitalId', 'getUserProfile']),
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+        {
+          provide: RoleContextService,
+          useValue: roleContextStub({ superAdmin: false, hospitalId: 'h-1', roles }),
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(PrenatalTabComponent);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  it('hides the high-risk flag from a receptionist and keeps it for a midwife', () => {
+    expect(create(['ROLE_RECEPTIONIST']).componentInstance.frontDeskOnly()).toBeTrue();
+    expect(create(['ROLE_MIDWIFE']).componentInstance.frontDeskOnly()).toBeFalse();
   });
 });

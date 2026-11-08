@@ -33,6 +33,9 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class InBasketServiceImpl implements InBasketService {
 
+    /** The one kind of item a hospital administrator with no clinical role reads. */
+    private static final String DISPUTE_REVIEW_TYPE = "DEATH_DISPUTE";
+
     private final InBasketItemRepository inBasketItemRepository;
     private final UserRepository userRepository;
     private final HospitalRepository hospitalRepository;
@@ -47,6 +50,27 @@ public class InBasketServiceImpl implements InBasketService {
         return inBasketItemRepository
                 .findByRecipientFiltered(userId, hospitalId, type, status, pageable)
                 .map(inBasketMapper::toDto);
+    }
+
+    @Override
+    public Page<InBasketItemDTO> getDisputeReviewItems(UUID userId, UUID hospitalId, InBasketItemStatus status, Pageable pageable) {
+        return inBasketItemRepository
+                .findByRecipientAndReferenceType(userId, hospitalId, DISPUTE_REVIEW_TYPE, status, pageable)
+                .map(inBasketMapper::toDto);
+    }
+
+    @Override
+    public InBasketSummaryDTO getDisputeReviewSummary(UUID userId, UUID hospitalId) {
+        long unread = inBasketItemRepository.countByRecipientAndReferenceType(
+                userId, hospitalId, DISPUTE_REVIEW_TYPE, InBasketItemStatus.UNREAD);
+        return InBasketSummaryDTO.builder().totalUnread(unread).taskUnread(unread).build();
+    }
+
+    @Override
+    public void requireDisputeReviewItem(UUID itemId, UUID userId) {
+        if (!DISPUTE_REVIEW_TYPE.equals(findItemOwnedBy(itemId, userId).getReferenceType())) {
+            throw new com.example.hms.exception.ResourceNotFoundException("error.inBasketItem.notFound", itemId);
+        }
     }
 
     @Override
@@ -118,6 +142,20 @@ public class InBasketServiceImpl implements InBasketService {
         return fileItem(request);
     }
 
+    @Override
+    @Transactional
+    public int removeOpenItemsForReference(UUID referenceId, String referenceType) {
+        if (referenceId == null || referenceType == null) {
+            return 0;
+        }
+        int removed = inBasketItemRepository.deleteOpenByReference(referenceId, referenceType);
+        if (removed > 0) {
+            log.info("In-Basket: {} open item(s) removed for superseded reference {} ({})",
+                removed, referenceId, referenceType);
+        }
+        return removed;
+    }
+
     /** The one body of both entry points; each brings its own transaction. */
     private InBasketItemDTO fileItem(CreateInBasketItemRequest request) {
         // Deduplicate — don't create a second item for the same reference + recipient
@@ -142,6 +180,13 @@ public class InBasketServiceImpl implements InBasketService {
                 .priority(request.getPriority())
                 .title(request.getTitle())
                 .body(request.getBody())
+                // QA D1053: keys and arguments, rendered in the reader's language.
+                .titleKey(request.getTitleKey())
+                .titleArgs(request.getTitleKey() != null
+                        ? com.example.hms.service.i18n.NotificationLocalizer.storable(request.getTitleArgs()) : null)
+                .bodyKey(request.getBodyKey())
+                .bodyArgs(request.getBodyKey() != null
+                        ? com.example.hms.service.i18n.NotificationLocalizer.storable(request.getBodyArgs()) : null)
                 .referenceId(request.getReferenceId())
                 .referenceType(request.getReferenceType())
                 .patientName(request.getPatientName())

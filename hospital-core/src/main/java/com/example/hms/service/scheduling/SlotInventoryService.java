@@ -33,6 +33,22 @@ public interface SlotInventoryService {
                                         LocalDate from, LocalDate to, int limit);
 
     /**
+     * QA D1390 (D1347 class): the same search, one page of {@code size} slots
+     * (at most {@link #SEARCH_PAGE_MAX}) WITH the total of every open slot in
+     * the window. The slot admin list asked for 200 and showed 182 (the
+     * booked-over ones were filtered after the cut), with no notice.
+     */
+    org.springframework.data.domain.Page<AppointmentSlotDTO> searchOpenPage(UUID departmentId, UUID staffId,
+                                                                           UUID visitTypeId, LocalDate from,
+                                                                           LocalDate to, int page, int size);
+
+    /** QA D1390: the largest page {@link #searchOpenPage} answers. */
+    int SEARCH_PAGE_MAX = 200;
+
+    /** QA D1390: the longest window one paged search reads (the generation horizon). */
+    int MAX_SEARCH_DAYS = 180;
+
+    /**
      * Reserve a slot briefly while a booking completes.
      *
      * <p>Booking is not instantaneous — choosing a time, confirming details and

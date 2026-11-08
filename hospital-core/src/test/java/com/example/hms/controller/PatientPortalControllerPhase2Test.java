@@ -114,10 +114,16 @@ class PatientPortalControllerPhase2Test {
         public PharmacyClaimService pharmacyClaimService() {
             return mock(PharmacyClaimService.class);
         }
+
+        @Bean
+        public com.example.hms.service.pharmacy.PrescriptionCopyPdfService prescriptionCopyPdfService() {
+            return mock(com.example.hms.service.pharmacy.PrescriptionCopyPdfService.class);
+        }
     }
 
     @Autowired private MockMvc mockMvc;
     @Autowired private PatientPortalService portalService;
+    @Autowired private com.example.hms.service.pharmacy.PrescriptionCopyPdfService prescriptionCopyPdfService;
 
     private ObjectMapper objectMapper;
     private Authentication auth;
@@ -130,6 +136,27 @@ class PatientPortalControllerPhase2Test {
         auth = new UsernamePasswordAuthenticationToken(
                 "patient.jane", "password",
                 List.of(new SimpleGrantedAuthority("ROLE_PATIENT")));
+    }
+
+    @Test
+    @DisplayName("QA D966: the patient downloads the printed copy of their own prescription, as a PDF")
+    void printedCopyIsServedForTheCallersOwnPatient() throws Exception {
+        UUID patientId = UUID.randomUUID();
+        UUID prescriptionId = UUID.randomUUID();
+        byte[] pdf = "%PDF-1.4 copy".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        when(portalService.resolvePatientId(any(Authentication.class))).thenReturn(patientId);
+        when(prescriptionCopyPdfService.copyForPatient(prescriptionId, patientId)).thenReturn(pdf);
+
+        mockMvc.perform(get("/me/patient/prescriptions/" + prescriptionId + "/printed-copy").principal(auth))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .contentType(MediaType.APPLICATION_PDF))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(pdf))
+            // QA D1443: a readable name, with no database id.
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string(
+                org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                org.hamcrest.Matchers.allOf(org.hamcrest.Matchers.containsString("ordonnance.pdf"),
+                    org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(prescriptionId.toString())))));
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -275,6 +302,26 @@ class PatientPortalControllerPhase2Test {
     // ══════════════════════════════════════════════════════════════════════
     // Request Medication Refill
     // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("GET /me/patient/vitals/history (QA D1379)")
+    class MyVitalsHistory {
+
+        @Test
+        @DisplayName("answers one page of the history with the total of every record")
+        void pagesTheHistoryWithTheTotal() throws Exception {
+            com.example.hms.payload.dto.PatientVitalSignResponseDTO record =
+                com.example.hms.payload.dto.PatientVitalSignResponseDTO.builder().id(UUID.randomUUID()).build();
+            when(portalService.getMyVitalsPage(any(Authentication.class), eq(2), eq(10)))
+                .thenReturn(new PageImpl<>(List.of(record), org.springframework.data.domain.PageRequest.of(2, 10), 45));
+
+            mockMvc.perform(get("/me/patient/vitals/history").param("page", "2").param("size", "10").principal(auth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(45))
+                .andExpect(jsonPath("$.data.number").value(2))
+                .andExpect(jsonPath("$.data.content", hasSize(1)));
+        }
+    }
 
     @Nested
     @DisplayName("POST /me/patient/refills")
@@ -861,5 +908,40 @@ class PatientPortalControllerPhase2Test {
                     .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.not(
                             org.hamcrest.Matchers.containsString("com.example"))));
         }
+    }
+
+    /** QA D1399: the pages and totals of the lists that used to stop at their default limit. */
+    @Test
+    @DisplayName("GET /medications/page answers the server's total")
+    void d1399_myMedicationsPage() throws Exception {
+        when(portalService.getMyMedicationsPage(any(), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(
+                com.example.hms.payload.dto.medication.PatientMedicationResponseDTO.builder()
+                    .medicationName("Paracétamol").asNeeded(true).prnMinIntervalHours(6).build()),
+                org.springframework.data.domain.PageRequest.of(0, 20), 249));
+
+        mockMvc.perform(get("/me/patient/medications/page").param("page", "0").param("size", "20").principal(auth))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.totalElements").value(249))
+            .andExpect(jsonPath("$.data.content[0].asNeeded").value(true))
+            .andExpect(jsonPath("$.data.content[0].prnMinIntervalHours").value(6));
+    }
+
+    @Test
+    @DisplayName("GET /proxy-access/{id}/medications/page and the lab counts answer the server's total")
+    void d1399_proxyMedicationsPageAndLabCounts() throws Exception {
+        java.util.UUID grantor = java.util.UUID.randomUUID();
+        when(portalService.getProxyMedicationsPage(any(), eq(grantor), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(),
+                org.springframework.data.domain.PageRequest.of(0, 20), 340));
+        when(portalService.countProxyLabResults(any(), eq(grantor))).thenReturn(121L);
+        when(portalService.countMyLabResults(any())).thenReturn(7L);
+
+        mockMvc.perform(get("/me/patient/proxy-access/" + grantor + "/medications/page").principal(auth))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalElements").value(340));
+        mockMvc.perform(get("/me/patient/proxy-access/" + grantor + "/lab-results/count").principal(auth))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.data").value(121));
+        mockMvc.perform(get("/me/patient/lab-results/count").principal(auth))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.data").value(7));
     }
 }

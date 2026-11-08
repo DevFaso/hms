@@ -2,7 +2,10 @@ package com.example.hms.model;
 
 import com.example.hms.enums.MannerOfDeath;
 import com.example.hms.enums.MaternalDeathTiming;
+import com.example.hms.enums.PerinatalAgeBasis;
+import com.example.hms.enums.PerinatalBirthStatus;
 import com.example.hms.enums.PerinatalDeathType;
+import com.example.hms.enums.PerinatalReportingEligibility;
 import com.example.hms.enums.PlaceOfDeath;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -35,9 +38,9 @@ import java.time.LocalDateTime;
  * <p><b>Cause of death is amendable.</b> An autopsy or a coroner routinely
  * revises it weeks later, so the record carries {@link #amendmentReason} and
  * {@link #amendedAt} instead of being frozen. What is NOT amendable is the fact
- * of death: there is no un-death path here, because reversing a death is a
- * data-correction exercise and not a workflow anyone should be able to trigger
- * from a form.
+ * of death. The one way back is QA D1488's: a hospital administrator marks a
+ * record made on the wrong patient as {@link #enteredInErrorAt entered in error}.
+ * The row is kept with who, when and why, and stops counting as a death.
  */
 @Entity
 @Table(
@@ -75,6 +78,11 @@ public class DeathRecord extends BaseEntity {
 
     @Column(name = "died_at", nullable = false)
     private LocalDateTime diedAt;
+
+    /** The state of this record a dispute read; moved by every amendment. */
+    @jakarta.persistence.Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "place_of_death", nullable = false, length = 30)
@@ -128,6 +136,25 @@ public class DeathRecord extends BaseEntity {
     @Column(name = "perinatal_type", length = 30)
     private PerinatalDeathType perinatalType;
 
+    /** CR-08: the birth time the age at death was counted from, stated or found on the delivery record. */
+    @Column(name = "born_at")
+    private LocalDateTime bornAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "birth_status", nullable = false, length = 20)
+    @Builder.Default
+    private PerinatalBirthStatus birthStatus = PerinatalBirthStatus.UNKNOWN;
+
+    /** Completed weeks; null is unknown, which leaves gestation-dependent reporting eligibility unknown. */
+    @Column(name = "gestational_age_weeks")
+    private Integer gestationalAgeWeeks;
+
+    /** Written when the perinatal classification is judged. A row from before that stays UNKNOWN. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "perinatal_age_basis", nullable = false, length = 20)
+    @Builder.Default
+    private PerinatalAgeBasis perinatalAgeBasis = PerinatalAgeBasis.UNKNOWN;
+
     @Column(name = "autopsy_requested", nullable = false)
     @Builder.Default
     private Boolean autopsyRequested = Boolean.FALSE;
@@ -156,6 +183,38 @@ public class DeathRecord extends BaseEntity {
         foreignKey = @ForeignKey(name = "fk_death_recorder"))
     private Staff recordedBy;
 
+    /** QA D1488: when this row was marked entered in error. It is then no death, and leaves every count. */
+    @Column(name = "entered_in_error_at")
+    private LocalDateTime enteredInErrorAt;
+
+    @Column(name = "entered_in_error_by_id")
+    private java.util.UUID enteredInErrorById;
+
+    @Size(max = 255)
+    @Column(name = "entered_in_error_by_name", length = 255)
+    private String enteredInErrorByName;
+
+    @Size(max = 500)
+    @Column(name = "entered_in_error_reason", length = 500)
+    private String enteredInErrorReason;
+
+    /**
+     * QA D1516 (V281): what this death closed at its hospital, by kind ({@link #CLOSED_ADMISSIONS},
+     * {@link #CLOSED_ENCOUNTERS}, {@link #CLOSED_APPOINTMENTS}), as ids, so marking it entered in error can flag
+     * and name them. Null on a row written before V281.
+     */
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "closed_records", columnDefinition = "jsonb")
+    private java.util.Map<String, java.util.List<String>> closedRecords;
+
+    public static final String CLOSED_ADMISSIONS = "admissions";
+    public static final String CLOSED_ENCOUNTERS = "encounters";
+    public static final String CLOSED_APPOINTMENTS = "appointments";
+
+    public boolean isEnteredInError() {
+        return enteredInErrorAt != null;
+    }
+
     /**
      * A maternal death by the WHO definition — during pregnancy or within 42
      * days of its end.
@@ -168,6 +227,44 @@ public class DeathRecord extends BaseEntity {
         return Boolean.TRUE.equals(maternalDeath)
             && maternalDeathTiming != null
             && maternalDeathTiming != MaternalDeathTiming.LATE_MATERNAL;
+    }
+
+    /**
+     * CR-07: the classification measured against WHO's perinatal definition, derived on read so that an amendment
+     * cannot leave it stale. Null with no classification.
+     *
+     * <p>NOT CLINICALLY APPROVED: awaits the obstetric/neonatal lead and the responsible coding authority.
+     */
+    public PerinatalReportingEligibility getPerinatalEligibility() {
+        if (!Boolean.TRUE.equals(perinatalDeath) || perinatalType == null) {
+            return null;
+        }
+        if (!perinatalType.inWhoPerinatalPeriod() || isBelowWhoPerinatalGestation()) {
+            return PerinatalReportingEligibility.NOT_ELIGIBLE;
+        }
+        return gestationalAgeWeeks != null && birthFactsSupportTheType()
+            ? PerinatalReportingEligibility.ELIGIBLE : PerinatalReportingEligibility.UNKNOWN;
+    }
+
+    /** A known gestation under WHO's start. Unknown gestation is not below it. */
+    public boolean isBelowWhoPerinatalGestation() {
+        return gestationalAgeWeeks != null && gestationalAgeWeeks < PerinatalDeathType.WHO_PERINATAL_MIN_GESTATION_WEEKS;
+    }
+
+    /**
+     * The WHO perinatal numerator: stillbirths and early neonatal deaths, without a late neonatal death or a known
+     * gestation under the start. Missing facts keep a death in, shown as unconfirmed: the clinician classified it.
+     */
+    public boolean isInWhoPerinatalNumerator() {
+        PerinatalReportingEligibility eligibility = getPerinatalEligibility();
+        return eligibility != null && eligibility != PerinatalReportingEligibility.NOT_ELIGIBLE;
+    }
+
+    private boolean birthFactsSupportTheType() {
+        PerinatalBirthStatus expected = perinatalType == PerinatalDeathType.STILLBIRTH
+            ? PerinatalBirthStatus.STILLBIRTH : PerinatalBirthStatus.LIVE_BIRTH;
+        return birthStatus == expected
+            && (perinatalAgeBasis == PerinatalAgeBasis.ELAPSED_TIME || perinatalAgeBasis == PerinatalAgeBasis.DATE_ONLY);
     }
 
     public boolean isAmended() {

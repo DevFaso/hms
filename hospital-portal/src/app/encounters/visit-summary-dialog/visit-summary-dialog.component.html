@@ -10,10 +10,10 @@
     aria-modal="true"
     aria-labelledby="avs-title"
     aria-describedby="avs-patient"
-    cdkTrapFocus
-    [cdkTrapFocusAutoCapture]="true"
+    appModalDialog
+    (escaped)="closed.emit()"
     (click)="$event.stopPropagation()"
-    (keydown.escape)="closed.emit(); $event.stopPropagation()"
+    (keydown.escape)="$event.stopPropagation()"
     tabindex="-1"
     data-testid="visit-summary-dialog"
   >
@@ -33,7 +33,6 @@
         class="avs-close"
         (click)="closed.emit()"
         [attr.aria-label]="'COMMON.CLOSE' | translate"
-        cdkFocusInitial
         data-testid="avs-close"
       >
         <span class="material-symbols-outlined" aria-hidden="true">close</span>
@@ -58,35 +57,35 @@
       <dl class="avs-metadata">
         <div>
           <dt>
-            <span class="material-symbols-outlined" aria-hidden="true">event</span
-            >{{ 'ENCOUNTERS.DATE' | translate }}
+            <span class="material-symbols-outlined" aria-hidden="true">event</span>
+            {{ 'ENCOUNTERS.DATE' | translate }}
           </dt>
           <dd>
             {{
               summary().visitDate
-                ? (summary().visitDate | serverTime | date: 'medium')
+                ? (summary().visitDate | serverTime | dateTime)
                 : ('VISIT_SUMMARY.NOT_PROVIDED' | translate)
             }}
           </dd>
         </div>
         <div>
           <dt>
-            <span class="material-symbols-outlined" aria-hidden="true">stethoscope</span
-            >{{ 'VISIT_SUMMARY.PROVIDER' | translate }}
+            <span class="material-symbols-outlined" aria-hidden="true">stethoscope</span>
+            {{ 'VISIT_SUMMARY.PROVIDER' | translate }}
           </dt>
           <dd>{{ summary().providerName || ('VISIT_SUMMARY.NOT_PROVIDED' | translate) }}</dd>
         </div>
         <div>
           <dt>
-            <span class="material-symbols-outlined" aria-hidden="true">domain</span
-            >{{ 'VISIT_SUMMARY.DEPARTMENT' | translate }}
+            <span class="material-symbols-outlined" aria-hidden="true">domain</span>
+            {{ 'VISIT_SUMMARY.DEPARTMENT' | translate }}
           </dt>
           <dd>{{ summary().departmentName || ('VISIT_SUMMARY.NOT_PROVIDED' | translate) }}</dd>
         </div>
         <div>
           <dt>
-            <span class="material-symbols-outlined" aria-hidden="true">local_hospital</span
-            >{{ 'ENCOUNTERS.HOSPITAL' | translate }}
+            <span class="material-symbols-outlined" aria-hidden="true">local_hospital</span>
+            {{ 'ENCOUNTERS.HOSPITAL' | translate }}
           </dt>
           <dd>{{ summary().hospitalName || ('VISIT_SUMMARY.NOT_PROVIDED' | translate) }}</dd>
         </div>
@@ -98,8 +97,8 @@
             data-testid="avs-complaint"
           >
             <h3>
-              <span class="material-symbols-outlined" aria-hidden="true">clinical_notes</span
-              >{{ 'ENCOUNTERS.CHIEF_COMPLAINT' | translate }}
+              <span class="material-symbols-outlined" aria-hidden="true">clinical_notes</span>
+              {{ 'ENCOUNTERS.CHIEF_COMPLAINT' | translate }}
             </h3>
             <p>{{ summary().chiefComplaint }}</p>
           </section>
@@ -107,8 +106,8 @@
         @if (summary().dischargeDiagnoses.length) {
           <section class="avs-section" data-testid="avs-diagnoses">
             <h3>
-              <span class="material-symbols-outlined" aria-hidden="true">diagnosis</span
-              >{{ 'ENCOUNTERS.AVS_DIAGNOSES' | translate }}
+              <span class="material-symbols-outlined" aria-hidden="true">diagnosis</span>
+              {{ 'ENCOUNTERS.AVS_DIAGNOSES' | translate }}
             </h3>
             <ul>
               @for (diagnosis of summary().dischargeDiagnoses; track $index) {
@@ -120,8 +119,8 @@
         @if (summary().prescriptionSummary) {
           <section class="avs-section" data-testid="avs-prescriptions">
             <h3>
-              <span class="material-symbols-outlined" aria-hidden="true">medication</span
-              >{{ 'ENCOUNTERS.AVS_PRESCRIPTIONS' | translate }}
+              <span class="material-symbols-outlined" aria-hidden="true">medication</span>
+              {{ 'ENCOUNTERS.AVS_PRESCRIPTIONS' | translate }}
             </h3>
             <p>{{ summary().prescriptionSummary }}</p>
           </section>
@@ -129,8 +128,8 @@
         @if (summary().referralSummary) {
           <section class="avs-section avs-section--wide" data-testid="avs-referrals">
             <h3>
-              <span class="material-symbols-outlined" aria-hidden="true">forward_to_inbox</span
-              >{{ 'ENCOUNTERS.AVS_REFERRALS' | translate }}
+              <span class="material-symbols-outlined" aria-hidden="true">forward_to_inbox</span>
+              {{ 'ENCOUNTERS.AVS_REFERRALS' | translate }}
             </h3>
             <p>{{ summary().referralSummary }}</p>
           </section>
@@ -141,8 +140,8 @@
             data-testid="avs-follow-up"
           >
             <h3>
-              <span class="material-symbols-outlined" aria-hidden="true">assignment</span
-              >{{ 'ENCOUNTERS.AVS_FOLLOW_UP' | translate }}
+              <span class="material-symbols-outlined" aria-hidden="true">assignment</span>
+              {{ 'ENCOUNTERS.AVS_FOLLOW_UP' | translate }}
             </h3>
             <p>{{ summary().followUpInstructions }}</p>
           </section>
@@ -150,8 +149,8 @@
         @if (summary().patientEducationMaterials) {
           <section class="avs-section avs-section--wide" data-testid="avs-education">
             <h3>
-              <span class="material-symbols-outlined" aria-hidden="true">auto_stories</span
-              >{{ 'ENCOUNTERS.AVS_EDUCATION' | translate }}
+              <span class="material-symbols-outlined" aria-hidden="true">auto_stories</span>
+              {{ 'ENCOUNTERS.AVS_EDUCATION' | translate }}
             </h3>
             <p>{{ summary().patientEducationMaterials }}</p>
           </section>
@@ -159,10 +158,10 @@
         @if (summary().followUpAppointmentDate) {
           <section class="avs-section avs-section--wide" data-testid="avs-appointment">
             <h3>
-              <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span
-              >{{ 'ENCOUNTERS.AVS_FOLLOW_UP_APPT' | translate }}
+              <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+              {{ 'ENCOUNTERS.AVS_FOLLOW_UP_APPT' | translate }}
             </h3>
-            <p>{{ summary().followUpAppointmentDate }}</p>
+            <p>{{ summary().followUpAppointmentDate | serverTime | date: 'mediumDate' }}</p>
           </section>
         }
       </div>
@@ -172,8 +171,8 @@
     </div>
     <footer class="avs-footer">
       <span
-        ><span class="material-symbols-outlined" aria-hidden="true">article</span
-        >{{ 'VISIT_SUMMARY.READ_ONLY' | translate }}</span
+        ><span class="material-symbols-outlined" aria-hidden="true">article</span>
+        {{ 'VISIT_SUMMARY.READ_ONLY' | translate }}</span
       ><button type="button" class="avs-done" (click)="closed.emit()" data-testid="avs-done">
         {{ 'COMMON.CLOSE' | translate }}
       </button>

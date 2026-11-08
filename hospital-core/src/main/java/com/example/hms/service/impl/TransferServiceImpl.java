@@ -86,17 +86,17 @@ public class TransferServiceImpl implements TransferService {
         UUID hospitalId = requireHospital();
 
         if (!StringUtils.hasText(request.getReason())) {
-            throw new BusinessException("transfer.r7.reasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "transfer.r7.reasonRequired");
         }
         Admission admission = loadAdmissionScoped(request.getAdmissionId(), hospitalId);
 
         if (!TRANSFERABLE_STATUSES.contains(admission.getStatus())) {
-            throw new BusinessException(
+            throw new com.example.hms.exception.FieldBusinessException("admissionId", 
                 "transfer.r7.noBedHeld");
         }
         transferOrderRepository.findPendingForAdmission(admission.getId())
             .ifPresent(existing -> {
-                throw new BusinessException("transfer.r7.alreadyPending");
+                throw new com.example.hms.exception.FieldBusinessException("admissionId", "transfer.r7.alreadyPending");
             });
 
         Bed destination = bedRepository.findByIdAndWard_Hospital_Id(request.getToBedId(), hospitalId)
@@ -104,16 +104,18 @@ public class TransferServiceImpl implements TransferService {
 
         Bed origin = admission.getBed();
         if (origin != null && Objects.equals(origin.getId(), destination.getId())) {
-            throw new BusinessException("transfer.r7.alreadyInBed");
+            throw new com.example.hms.exception.FieldBusinessException(BedAssignmentService.FIELD_TO_BED_ID, "transfer.r7.alreadyInBed");
         }
         // QA D609: the same sex and age rule bed assignment applies, checked when
         // the transfer is ORDERED. It was only checked on completion, so a
         // 6-year-old's transfer reserved a maternity bed and then stuck at 400.
-        BedAssignmentService.requireWardFitsPatient(destination, admission.getPatient());
+        // QA D1366 class: refused on the destination picker (toBedId), so the form marks it.
+        BedAssignmentService.requireWardFitsPatient(destination, admission.getPatient(),
+            BedAssignmentService.FIELD_TO_BED_ID);
         transferOrderRepository.findPendingForDestinationBed(destination.getId())
             .ifPresent(existing -> {
-                throw new BusinessException("transfer.r7.destinationTaken",
-                    BedAssignmentService.bedLabel(destination));
+                throw new com.example.hms.exception.FieldBusinessException(BedAssignmentService.FIELD_TO_BED_ID,
+                    "transfer.r7.destinationTaken", BedAssignmentService.bedLabel(destination));
             });
 
         List<IsolationPrecaution> precautions =
@@ -193,8 +195,7 @@ public class TransferServiceImpl implements TransferService {
     public TransferOrderResponseDTO cancelTransfer(UUID orderId,
                                                    TransferCancellationRequestDTO request) {
         if (!StringUtils.hasText(request.getCancellationReason())) {
-            throw new BusinessException(
-                "transfer.r7.heldBedReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("cancellationReason", "transfer.r7.heldBedReasonRequired");
         }
         TransferOrder order = loadScoped(orderId);
         if (!order.isPending()) {
@@ -257,11 +258,11 @@ public class TransferServiceImpl implements TransferService {
         if (!request.isIsolationOverride()) {
             // The bed label is a MessageFormat argument: the clinician reads
             // the bed, never a raw placeholder.
-            throw new BusinessException("transfer.r7.isolationRequired",
+            throw new com.example.hms.exception.FieldBusinessException("isolationOverride", "transfer.r7.isolationRequired",
                 BedAssignmentService.bedLabel(destination));
         }
         if (!StringUtils.hasText(request.getIsolationOverrideReason())) {
-            throw new BusinessException("transfer.r7.overrideReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("isolationOverrideReason", "transfer.r7.overrideReasonRequired");
         }
         return true;
     }

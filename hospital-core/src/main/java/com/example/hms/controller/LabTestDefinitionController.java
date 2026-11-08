@@ -55,7 +55,9 @@ public class LabTestDefinitionController {
     @PreAuthorize(MANAGE_ROLES)
     @Operation(summary = "Create multiple Lab Test Definitions")
     public ResponseEntity<ApiResponseWrapper<List<LabTestDefinitionResponseDTO>>> createBatch(
-        @RequestBody List<LabTestDefinitionRequestDTO> dtoList) {
+        // QA D1349 (round 30): validated at the edge, so a malformed value and
+        // the missing names of every row are refused in one answer, keyed [i].field.
+        @jakarta.validation.Valid @RequestBody List<LabTestDefinitionRequestDTO> dtoList) {
         // QA D667: every element is validated as the single POST validates its
         // body, all before the first create, so an incomplete row is a 400 and
         // nothing is half-created.
@@ -155,6 +157,21 @@ public class LabTestDefinitionController {
         @PathVariable UUID id,
         @Valid @RequestBody LabTestDefinitionApprovalRequestDTO dto) {
         return ResponseEntity.ok(ApiResponseWrapper.success(service.processApprovalAction(id, dto)));
+    }
+
+    /**
+     * QA D1120: a new DRAFT version of an ACTIVE definition, linked to it. It
+     * is approved like any definition and, on ACTIVATE, retires the version it
+     * replaces. 409 for a definition that is not ACTIVE or already has a
+     * version in progress.
+     */
+    @PostMapping("/{id}/new-version")
+    @PreAuthorize(MANAGE_ROLES)
+    @com.example.hms.security.audit.WriteAudited(skip = true,
+        reason = "QA D1120: the service writes one CONFIGURATION_CHANGED row naming the NEW_VERSION step")
+    @Operation(summary = "Create a new draft version of an active Lab Test Definition")
+    public ResponseEntity<ApiResponseWrapper<LabTestDefinitionResponseDTO>> createNewVersion(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(service.createNewVersion(id)));
     }
 
     @PutMapping("/{id}/reference-ranges")

@@ -318,6 +318,64 @@ class LabOrderEndToEndIT extends BaseIT {
         assertThat(orderStatus(orderId)).isEqualTo(LabOrderStatus.ORDERED);
     }
 
+    /** QA D1394: reached by the doctor's notification on release, in every spelling of the report. */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} {1}")
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        ">20    | mmol/L", "> 25,5 | mmol/L", ">=21 | MMOL/L", "50 | mEq/L", "50 | MEQ/L", "50 | MMOL/L",
+    })
+    @DisplayName("a critical value with a comparator or another unit spelling reaches the doctor on release")
+    void aCriticalInAnySpellingReachesTheDoctor(String value, String unit) throws Exception {
+        UUID orderId = placeOrder(LocalDateTime.now().minusMinutes(30));
+        collectSpecimen(orderId);
+
+        UUID resultId = postResult(scientist, orderId, value, unit).andExpect(status().isCreated())
+            .andExpect(jsonPath("$.severityFlag").value("CRITICAL"))
+            .andExpect(jsonPath("$.gradeUnknown").value(false))
+            .andReturn().getResponse().getContentAsString().transform(this::idOf);
+
+        releaseAs(director, resultId);
+
+        assertThat(labResultRepository.findById(resultId).orElseThrow().getCriticalNotifiedAt()).isNotNull();
+        assertThat(notificationRepository
+            .findByRecipientUsernameAndReadOrderByCreatedAtDesc(doctor.user().getUsername(), false))
+            .extracting(Notification::getType).contains("CRITICAL_LAB_RESULT");
+
+        // The doctor repeats it the way it was phoned through; the loop closes.
+        mockMvc.perform(post(RESULT_READ_BACK, resultId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(readBack(value)))
+                .with(signedInAs(doctor)).with(csrf()))
+            .andExpect(status().isOk());
+    }
+
+    /** QA D1394: what the bound cannot settle is reviewed, marked, never passed as fine. */
+    @Test
+    @DisplayName("a comparator its bound cannot settle is marked and released only by someone who reviewed it")
+    void aComparatorThatSettlesNoGradeIsReviewedBeforeRelease() throws Exception {
+        UUID orderId = placeOrder(LocalDateTime.now().minusMinutes(30));
+        collectSpecimen(orderId);
+
+        UUID resultId = postResult(scientist, orderId, ">1", "mmol/L").andExpect(status().isCreated())
+            .andExpect(jsonPath("$.severityFlag").value("UNSPECIFIED"))
+            .andExpect(jsonPath("$.gradeUnknown").value(true))
+            .andExpect(jsonPath("$.unitMismatch").value(false))
+            .andReturn().getResponse().getContentAsString().transform(this::idOf);
+
+        // Never in one unconsidered click.
+        mockMvc.perform(post(RESULT_RELEASE, resultId).contextPath(API).with(signedInAs(director)).with(csrf()))
+            .andExpect(status().isConflict());
+        assertThat(labResultRepository.findById(resultId).orElseThrow().isReleased()).isFalse();
+
+        mockMvc.perform(post(RESULT_RELEASE, resultId).contextPath(API).param("ungradedConfirmed", "true")
+                .with(signedInAs(director)).with(csrf()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.gradeUnknown").value(true));
+
+        LabResult released = labResultRepository.findById(resultId).orElseThrow();
+        assertThat(released.isReleased()).isTrue();
+        assertThat(released.getCriticalNotifiedAt()).as("nothing says it is critical").isNull();
+    }
+
     @Test
     @DisplayName("a critical value notifies the doctor, stays unreleased, and is acknowledged only by a matching read-back")
     void criticalValueClosesTheLoopThroughReadBack() throws Exception {
@@ -784,12 +842,22 @@ class LabOrderEndToEndIT extends BaseIT {
     /** A retry resends the identical payload, result date included. */
     private org.springframework.test.web.servlet.ResultActions postResult(
             Actor actor, UUID orderId, String value, LocalDateTime resultDate) throws Exception {
+        return postResult(actor, orderId, value, "mmol/L", resultDate);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions postResult(
+            Actor actor, UUID orderId, String value, String unit) throws Exception {
+        return postResult(actor, orderId, value, unit, LocalDateTime.now());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions postResult(
+            Actor actor, UUID orderId, String value, String unit, LocalDateTime resultDate) throws Exception {
         LabResultRequestDTO request = LabResultRequestDTO.builder()
             .labOrderId(orderId)
             .assignmentId(actor.assignmentId())
             .patientId(patient.getId())
             .resultValue(value)
-            .resultUnit("mmol/L")
+            .resultUnit(unit)
             .resultDate(resultDate)
             .build();
         return mockMvc.perform(post(LAB_RESULTS).contextPath(API)

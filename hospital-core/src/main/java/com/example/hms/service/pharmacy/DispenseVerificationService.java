@@ -7,6 +7,7 @@ import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.model.pharmacy.InventoryItem;
 import com.example.hms.model.pharmacy.StockLot;
 import com.example.hms.utility.LotBarcode;
+import com.example.hms.utility.DisplayDates;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -184,8 +185,7 @@ public class DispenseVerificationService {
         if (!expiry.isAfter(today)) {
             b.fail(DispenseCheck.EXPIRY,
                 com.example.hms.utility.MessageUtil.resolve("pharmacy.check.lotExpired", lot.getLotNumber(),
-                    expiry.format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
-                        .withLocale(org.springframework.context.i18n.LocaleContextHolder.getLocale()))));
+                    DisplayDates.date(expiry)));
         } else {
             b.pass(DispenseCheck.EXPIRY);
         }
@@ -204,10 +204,21 @@ public class DispenseVerificationService {
         // QA D899: the catalog item the order was written from (V221) is the
         // drug, whatever its code or name. A UI-created item has no code, so
         // without this the match fell to the typed name alone.
-        if (rx.getMedicationCatalogItemId() != null && rx.getMedicationCatalogItemId().equals(item.getId())) {
+        String prescribedCode = normalize(rx.getMedicationCode());
+        boolean linked = rx.getMedicationCatalogItemId() != null && rx.getMedicationCatalogItemId().equals(item.getId());
+        // QA D1223 (round 24): the link (or the formulary code the link wrote)
+        // says "this item", but the name written on the order names another
+        // drug - an order saved with a mismatched catalogue id. The lot is not
+        // the drug the order reads as: the DRUG check fails rather than letting
+        // one input hide the other. The prescription is refused at creation,
+        // edit and signature since round 24; this closes an older row.
+        if ((linked || (!prescribedCode.isEmpty() && prescribedCode.equals(normalize(item.getCode()))))
+                && OrderedDrugIdentity.contradicts(rx.getMedicationName(), item)) {
+            return false;
+        }
+        if (linked) {
             return true;
         }
-        String prescribedCode = normalize(rx.getMedicationCode());
         if (!prescribedCode.isEmpty()) {
             return prescribedCode.equals(normalize(item.getCode()))
                 || prescribedCode.equals(normalize(item.getRxnormCode()))
@@ -227,7 +238,25 @@ public class DispenseVerificationService {
         // name when it is the whole first part of the prescribed text,
         // ending on a word boundary ("paracetamol 500 mg" matches, a longer
         // word that merely starts with the name does not).
-        String folded = fold(prescribedName);
+        // QA D1492: one reading of a drug. The limits and allergy checks read a cited brand as its generic,
+        // so the pharmacy does too, by the same map. A brand with no mapping stays refused.
+        return namesCatalogItem(prescribedName, item)
+            || OrderedDrugIdentity.citedBrandIsThisDrug(prescribedName, item);
+    }
+
+    /**
+     * QA D138 / D922: whether free text names this catalogue item, the way
+     * people write it ("Paracétamol 500 mg comprimé" names "paracetamol").
+     * Accent- and case-insensitive; the catalogue name must be the whole first
+     * part of the text, ending on a word boundary. The one name rule shared by
+     * the dispense DRUG check and the prescription's catalogue resolution.
+     */
+    public static boolean namesCatalogItem(String prescribedName, MedicationCatalogItem item) {
+        String normalized = normalize(prescribedName);
+        if (normalized.isEmpty() || item == null) {
+            return false;
+        }
+        String folded = fold(normalized);
         return namesDrug(folded, item.getGenericName())
             || namesDrug(folded, item.getBrandName())
             || namesDrug(folded, item.getNameFr());
@@ -260,18 +289,25 @@ public class DispenseVerificationService {
         return inventoryItem == null ? null : inventoryItem.getMedicationCatalogItem();
     }
 
-    /** Human-readable name of a catalogue item, for the refusal message. */
-    private String describe(MedicationCatalogItem item) {
-        String name = firstNonBlank(
-            item.getGenericName(), item.getBrandName(), item.getNameFr());
-        return name == null ? "an unnamed product" : name;
+    /**
+     * Human-readable name of a catalogue item, for the refusal message.
+     * QA D1221 (round 23) and D1235 (round 24): in the reader's language,
+     * through the one naming rule ({@link com.example.hms.utility.DrugDisplayNames}):
+     * the French name for a French reader, the INN for an English one, and the
+     * catalogue's display name for a Spanish one (it holds no Spanish name; the
+     * English INN read as a foreign word beside the prescribed "Paracétamol").
+     * No name at all is said in the reader's language, never in English.
+     */
+    public static String describe(MedicationCatalogItem item) {
+        String name = com.example.hms.utility.DrugDisplayNames.forReader(item);
+        return name == null ? com.example.hms.utility.MessageUtil.resolve("pharmacy.check.unnamedProduct") : name;
     }
 
-    /** Human-readable name of what was prescribed, for the refusal message. */
+    /** Human-readable name of what was prescribed, for the refusal message (the reader's words when none). */
     private String describePrescribed(Prescription rx) {
         String name = firstNonBlank(
             rx.getMedicationDisplayName(), rx.getMedicationName(), rx.getMedicationCode());
-        return name == null ? "prescribed medication" : name;
+        return name == null ? com.example.hms.utility.MessageUtil.resolve("pharmacy.check.prescribedMedication") : name;
     }
 
     private static String firstNonBlank(String... candidates) {

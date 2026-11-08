@@ -59,12 +59,13 @@ public interface DispenseService {
 
     Page<DispenseResponseDTO> listByPharmacy(UUID pharmacyId, Pageable pageable);
 
-    default DispenseResponseDTO cancelDispense(UUID id) {
-        return cancelDispense(id, null);
-    }
-
-    /** QA D654: {@code witnessedBy} is required when the cancel returns a controlled substance. */
-    DispenseResponseDTO cancelDispense(UUID id, UUID witnessedBy);
+    /**
+     * QA D654: {@code witnessedBy} is required when the cancel returns a
+     * controlled substance. QA D1069: {@code reason} is always required (it
+     * voids the payment and returns the stock); it is kept on the dispense and
+     * on the voided payment. There is no overload without it.
+     */
+    DispenseResponseDTO cancelDispense(UUID id, UUID witnessedBy, String reason);
 
     /** Paginated list of prescriptions ready to dispense at the caller's active hospital. */
     default Page<WorkQueuePrescriptionDTO> getWorkQueue(Pageable pageable) {

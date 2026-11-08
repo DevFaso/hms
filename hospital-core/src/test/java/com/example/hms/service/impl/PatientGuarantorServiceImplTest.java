@@ -30,6 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -110,7 +112,7 @@ class PatientGuarantorServiceImplTest {
 
         assertThatThrownBy(() -> service.add(patientId, null, dto))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("active hospital");
+            .hasMessageContaining("guarantor.hospital.required");
     }
 
     @Test
@@ -123,7 +125,7 @@ class PatientGuarantorServiceImplTest {
 
         assertThatThrownBy(() -> service.add(patientId, foreignHospitalId, dto))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not registered");
+            .hasMessageContaining("guarantor.patient.notRegistered");
     }
 
     @Test
@@ -170,10 +172,29 @@ class PatientGuarantorServiceImplTest {
         PatientGuarantor existing = stored(true, true);
         when(guarantorRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
 
-        GuarantorResponseDTO deactivated = service.deactivate(patientId, existing.getId(), hospitalId);
+        UUID actor = UUID.randomUUID();
+        GuarantorResponseDTO deactivated = service.deactivate(patientId, existing.getId(), hospitalId,
+            "  Ne prend plus en charge les frais  ", actor);
 
         assertThat(deactivated.isActive()).isFalse();
         assertThat(deactivated.isPrimary()).isFalse();
+        // QA D1247 (round 25): the reason, time and actor are kept with the row.
+        assertThat(deactivated.getDeactivationReason()).isEqualTo("Ne prend plus en charge les frais");
+        assertThat(deactivated.getDeactivatedAt()).isNotNull();
+        assertThat(existing.getDeactivatedByUserId()).isEqualTo(actor);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullAndEmptySource
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"   "})
+    void aDeactivationWithoutAReasonIsRefused_D1247(String reason) {
+        UUID id = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.deactivate(patientId, id, hospitalId, reason, actor))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("guarantor.deactivate.reasonRequired"); // QA D1267
+        verify(guarantorRepository, never()).save(any());
     }
 
     @Test
@@ -182,9 +203,9 @@ class PatientGuarantorServiceImplTest {
         when(guarantorRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
         UUID id = existing.getId();
 
-        assertThatThrownBy(() -> service.deactivate(patientId, id, hospitalId))
+        assertThatThrownBy(() -> service.deactivate(patientId, id, hospitalId, "doublon", null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already inactive");
+            .hasMessageContaining("guarantor.alreadyInactive");
     }
 
     @Test

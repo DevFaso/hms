@@ -321,10 +321,11 @@ public class PatientEverythingService {
 
     private void appendDocumentReferenceSection(Bundle bundle, SectionContext ctx) {
         if (!ctx.includes("DocumentReference")) return;
-        // Uploaded documents are patient-anchored (no hospital column); the
-        // registration gate in loadAndVerifyTenantOwnedPatient already ran.
+        // Uploaded documents follow the patient (the registration gate in
+        // loadAndVerifyTenantOwnedPatient already ran); a document another
+        // hospital issued, such as its medical certificate, does not (QA D961).
         Page<PatientUploadedDocument> docs = uploadedDocumentRepository
-            .findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(ctx.patientId(), ctx.pageRequest());
+            .findForStaffNewestFirst(ctx.patientId(), ctx.hospitalId(), ctx.pageRequest());
         ctx.notePageOverflow(docs);
         docs.forEach(d -> {
             if (ctx.passesSinceFilter(d.getUpdatedAt())) {
@@ -439,6 +440,8 @@ public class PatientEverythingService {
         // problem in a sensitive category is withheld (D3).
         List<com.example.hms.model.PatientProblem> problems = patientProblemRepository
             .findByPatient_IdAndHospital_IdIn(ctx.patientId(), ctx.readable()).stream()
+            // QA D1240 (round 25): a problem removed as entered in error is not part of the record.
+            .filter(c -> !c.isEnteredInError())
             .filter(c -> CrossHospitalRows.maySurface(c.getHospital(), ctx.hospitalId(), sensitivityClassifier.effectiveCategory(c), ctx.unlocked()))
             .toList();
         ctx.account(problems.stream().map(c -> CrossHospitalReachRecorder.hospitalIdOf(c.getHospital())).toList());

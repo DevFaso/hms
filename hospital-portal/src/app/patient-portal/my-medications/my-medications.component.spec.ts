@@ -1,3 +1,4 @@
+import { HttpHeaders, HttpResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
@@ -15,10 +16,17 @@ describe('MyMedicationsComponent', () => {
   let fixture: ComponentFixture<MyMedicationsComponent>;
 
   const mockPortalService = {
-    getMyMedications: () => of([]),
+    getAllMyMedications: () => of([]),
     getMyPrescriptions: () => of([]),
     getMyRefills: () => of([]),
     requestRefill: () => of({}),
+    getMyPrintedPrescription: (_id: string) =>
+      of(
+        new HttpResponse({
+          body: new Blob(['%PDF-1.4']),
+          headers: new HttpHeaders({ 'Content-Disposition': 'inline; filename="ordonnance.pdf"' }),
+        }),
+      ),
   };
 
   const mockToast = {
@@ -64,6 +72,55 @@ describe('MyMedicationsComponent', () => {
     ]);
     expect(groups[0].meds.map((m) => m.id)).toEqual(['a']);
     expect(groups[1].meds.map((m) => m.id)).toEqual(['c', 'd']);
+  });
+
+  it('QA D966: a prescription printed for the patient offers its copy, which opens', () => {
+    component.prescriptions.set([
+      { id: 'rx-p', medicationName: 'Métronidazole', status: 'PRINTED_FOR_PATIENT' } as never,
+      { id: 'rx-s', medicationName: 'Fer', status: 'SIGNED' } as never,
+    ]);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="rx-printed-copy-rx-s"]')).toBeNull();
+    const fetch = spyOn(mockPortalService, 'getMyPrintedPrescription').and.callThrough();
+    // QA D1443: saved under the server's readable name, never a tab named after a random id.
+    const links: HTMLAnchorElement[] = [];
+    const create = document.createElement.bind(document);
+    spyOn(document, 'createElement').and.callFake((tag: string) => {
+      const made = create(tag);
+      if (tag === 'a') {
+        spyOn(made as HTMLAnchorElement, 'click');
+        links.push(made as HTMLAnchorElement);
+      }
+      return made;
+    });
+
+    (el.querySelector('[data-testid="rx-printed-copy-rx-p"]') as HTMLButtonElement).click();
+
+    expect(fetch).toHaveBeenCalledWith('rx-p');
+    expect(links[0].download).toBe('ordonnance.pdf');
+  });
+
+  it('QA D1442: the prescriptions show a page and the total, and every one is a click away', () => {
+    component.prescriptions.set(
+      Array.from({ length: 45 }, (_, i) => ({ id: 'rx' + i, medicationName: 'M' + i }) as never),
+    );
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="rx-count"]')?.textContent).toContain('PORTAL_PAGING');
+    expect(component.prescriptionRows.shown().length).toBe(20);
+    expect(component.prescriptionRows.total()).toBe(45);
+
+    (el.querySelector('[data-testid="rx-more"]') as HTMLButtonElement).click();
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '[data-testid="rx-more"]',
+    );
+    fixture.detectChanges();
+    expect(component.prescriptionRows.shown().length).toBe(40);
+    (el.querySelector('[data-testid="rx-more"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(component.prescriptionRows.shown().length).toBe(45);
+    expect(el.querySelector('[data-testid="rx-more"]')).toBeNull();
   });
 
   it('should toggle medication expand', () => {
@@ -126,7 +183,7 @@ describe('MyMedicationsComponent — refill visibility', () => {
         {
           provide: PatientPortalService,
           useValue: {
-            getMyMedications: () => of([m]),
+            getAllMyMedications: () => of([m]),
             getMyPrescriptions: () => of([]),
             getMyRefills: () => of(refills),
             requestRefill,
@@ -231,6 +288,7 @@ describe('MyMedicationsComponent — refill visibility', () => {
     await render(med());
     requestRefill.and.returnValue(
       throwError(() => ({
+        status: 409,
         error: { message: 'You already have a refill request awaiting review' },
       })),
     );
@@ -338,7 +396,7 @@ describe('MyMedicationsComponent — ready for collection', () => {
         {
           provide: PatientPortalService,
           useValue: {
-            getMyMedications: () => of(meds),
+            getAllMyMedications: () => of(meds),
             getMyPrescriptions: () => of(rxs),
             getMyRefills: () => of([]),
             requestRefill: () => of({}),
@@ -392,5 +450,91 @@ describe('MyMedicationsComponent — ready for collection', () => {
     );
 
     expect(el.querySelector('[data-testid="rx-ready-rx-9"]')).not.toBeNull();
+  });
+
+  describe('QA D1398 / D1399', () => {
+    let component: MyMedicationsComponent;
+    const base = {
+      id: 'x',
+      medicationName: 'Paracétamol',
+      dosage: '500 mg',
+      frequency: 'q6h',
+      prescribedBy: '',
+      startDate: '',
+      status: 'COMPLETED',
+      route: '',
+      endDate: '',
+      indication: '',
+      instructions: '',
+    } as MedicationSummary;
+
+    async function renderWith(service: object): Promise<HTMLElement> {
+      TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({
+        imports: [MyMedicationsComponent, TranslateModule.forRoot()],
+        providers: [
+          { provide: PatientPortalService, useValue: service },
+          {
+            provide: ToastService,
+            useValue: { success: jasmine.createSpy('success'), error: jasmine.createSpy('error') },
+          },
+        ],
+      }).compileComponents();
+      fixture = TestBed.createComponent(MyMedicationsComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    }
+
+    const serviceWith = (meds: MedicationSummary[]) => ({
+      getAllMyMedications: () => of(meds),
+      getMyPrescriptions: () => of([]),
+      getMyRefills: () => of([]),
+    });
+
+    it('QA D1398: a card says as needed and its least interval; a fixed schedule says nothing', async () => {
+      const el = await renderWith(
+        serviceWith([
+          { ...base, id: 'prn', asNeeded: true, prnMinIntervalHours: 6 },
+          { ...base, id: 'prn-no-interval', asNeeded: true },
+          { ...base, id: 'fixed' },
+        ]),
+      );
+
+      expect(el.querySelector('[data-testid="med-prn-prn"]')?.textContent).toContain(
+        'PORTAL.MEDICATIONS.AS_NEEDED_INTERVAL',
+      );
+      expect(el.querySelector('[data-testid="med-prn-prn-no-interval"]')?.textContent).toContain(
+        'PORTAL.MEDICATIONS.AS_NEEDED',
+      );
+      expect(el.querySelector('[data-testid="med-prn-fixed"]')).toBeNull();
+    });
+
+    it('QA D1399: every past medicine is one click away, with the total', async () => {
+      const rows = Array.from({ length: 45 }, (_, i) => ({ ...base, id: 'p' + i }));
+      const el = await renderWith(serviceWith(rows));
+
+      const past = () => el.querySelectorAll('.portal-list-item').length;
+      expect(past()).toBe(20);
+      expect(component.pastRows.total()).toBe(45);
+      expect(el.querySelector('[data-testid="med-past-count"]')).not.toBeNull();
+
+      for (const expected of [40, 45]) {
+        (el.querySelector('[data-testid="med-past-more"]') as HTMLButtonElement).click();
+        fixture.detectChanges();
+        expect(past()).toBe(expected);
+      }
+      expect(el.querySelector('[data-testid="med-past-more"]')).toBeNull();
+    });
+
+    it('QA D1399: a failed read says so, never "no medicines"', async () => {
+      const el = await renderWith({
+        ...serviceWith([]),
+        getAllMyMedications: () => throwError(() => new Error('down')),
+      });
+
+      expect(el.querySelector('[data-testid="medications-load-failed"]')).not.toBeNull();
+      expect(el.querySelector('.portal-empty')).toBeNull();
+    });
   });
 });

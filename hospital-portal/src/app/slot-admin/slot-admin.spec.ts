@@ -17,6 +17,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { roleContextStub } from '../testing/role-context.stub';
 import { AuthService } from '../auth/auth.service';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 /**
  * Slot-inventory administration (P2 #11) — the populator without which
@@ -82,14 +83,16 @@ describe('SlotAdminComponent', () => {
       'deactivateTemplate',
       'reactivateTemplate',
       'generate',
-      'searchOpen',
+      'searchOpenPage',
       'block',
       'release',
       'listDepartments',
     ]);
     slotService.listVisitTypes.and.returnValue(of(visitTypes));
     slotService.listTemplates.and.returnValue(of([]));
-    slotService.searchOpen.and.returnValue(of([]));
+    slotService.searchOpenPage.and.returnValue(
+      of({ content: [], totalElements: 0, number: 0, size: 50 }),
+    );
     slotService.listDepartments.and.returnValue(of([]));
 
     const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
@@ -225,7 +228,9 @@ describe('SlotAdminComponent', () => {
   it('blocks an open slot only through the confirm modal, sending the reason', () => {
     const open = slot({ id: 'slot-1' });
     setup();
-    slotService.searchOpen.and.returnValue(of([open]));
+    slotService.searchOpenPage.and.returnValue(
+      of({ content: [open], totalElements: 1, number: 0, size: 50 }),
+    );
     slotService.block.and.returnValue(of({ ...open, status: 'BLOCKED' }));
     component.setSection('slots');
     fixture.detectChanges();
@@ -240,6 +245,28 @@ describe('SlotAdminComponent', () => {
     expect(slotService.block).toHaveBeenCalledWith('slot-1', 'Clinic cancelled');
   });
 
+  it('QA D1390: pages the open slots with the server total and reads the next page', () => {
+    setup();
+    const page0 = Array.from({ length: 50 }, (_, i) => slot({ id: `slot-a${i}` }));
+    slotService.searchOpenPage.and.callFake((_filter, page: number) =>
+      of({
+        content: page === 0 ? page0 : [slot({ id: 'slot-last' })],
+        totalElements: 285,
+        number: page,
+        size: 50,
+      }),
+    );
+    component.setSection('slots');
+    fixture.detectChanges();
+    expect(component.slotTotal()).toBe(285);
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="slot-pager"]')).not.toBeNull();
+    (el.querySelector('[data-testid="slot-pager-next"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(slotService.searchOpenPage).toHaveBeenCalledWith(jasmine.any(Object), 1, 50);
+    expect(component.slotPage()).toBe(1);
+  });
+
   it('releases a blocked slot back to open', () => {
     const blocked = slot({ id: 'slot-2', status: 'BLOCKED' });
     setup();
@@ -248,5 +275,19 @@ describe('SlotAdminComponent', () => {
     component.release(blocked);
 
     expect(slotService.release).toHaveBeenCalledWith('slot-2');
+  });
+
+  it('QA CX-010: retiring asks first and a no sends nothing; restoring asks nothing', async () => {
+    setup();
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    await component.toggleVisitTypeActive({
+      id: 'v1',
+      name: 'Consultation',
+      active: true,
+    } as never);
+    await component.toggleTemplateActive({ id: 't1', active: true } as never);
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(slotService.deactivateVisitType).not.toHaveBeenCalled();
+    expect(slotService.deactivateTemplate).not.toHaveBeenCalled();
   });
 });

@@ -93,7 +93,7 @@ class OrderSelectRulesCdsServiceTest {
                 List.of(medRequest("mr-1", "Amoxicillin", "AMOX", "500 mg"))));
 
         assertThat(response.cards()).isEmpty();
-        verify(engine, never()).evaluateProposedPrescription(any(), any(), any(), any(), any());
+        verify(engine, never()).evaluateProposedPrescription(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -108,7 +108,7 @@ class OrderSelectRulesCdsServiceTest {
 
         CdsCard card = new CdsCard("warn", null, CdsCard.Indicator.WARNING,
             new Source("test", null, null), null, null, null, "u");
-        when(engine.evaluateProposedPrescription(any(), eq(hospitalId), any(), any(), any()))
+        when(engine.evaluateProposedPrescription(any(), eq(hospitalId), any(), any(), any(), any()))
             .thenReturn(List.of(card));
 
         CdsHookResponse response = service.evaluate(
@@ -118,8 +118,8 @@ class OrderSelectRulesCdsServiceTest {
                     medRequest("mr-2", "Warfarin", "WAR", "5 mg"))));
 
         assertThat(response.cards()).hasSize(2);
-        verify(engine).evaluateProposedPrescription(patient, hospitalId, "Aspirin", "ASA", "100 mg");
-        verify(engine).evaluateProposedPrescription(patient, hospitalId, "Warfarin", "WAR", "5 mg");
+        verify(engine).evaluateProposedPrescription(patient, hospitalId, "Aspirin", "ASA", "100 mg", null);
+        verify(engine).evaluateProposedPrescription(patient, hospitalId, "Warfarin", "WAR", "5 mg", null);
     }
 
     @Test
@@ -129,7 +129,7 @@ class OrderSelectRulesCdsServiceTest {
         Patient patient = Patient.builder().build();
         patient.setId(patientId);
         when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
+        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any()))
             .thenReturn(List.of());
 
         // FHIR-reference form ("MedicationRequest/mr-2") — exercises the
@@ -142,11 +142,11 @@ class OrderSelectRulesCdsServiceTest {
                 medRequest("mr-2", "Warfarin", "WAR", "5 mg"),
                 medRequest("mr-3", "Paracetamol", "PARA", "500 mg"))));
 
-        verify(engine).evaluateProposedPrescription(any(), any(), eq("Warfarin"), eq("WAR"), any());
+        verify(engine).evaluateProposedPrescription(any(), any(), eq("Warfarin"), eq("WAR"), any(), any());
         verify(engine, never())
-            .evaluateProposedPrescription(any(), any(), eq("Aspirin"), any(), any());
+            .evaluateProposedPrescription(any(), any(), eq("Aspirin"), any(), any(), any());
         verify(engine, never())
-            .evaluateProposedPrescription(any(), any(), eq("Paracetamol"), any(), any());
+            .evaluateProposedPrescription(any(), any(), eq("Paracetamol"), any(), any(), any());
     }
 
     @Test
@@ -156,7 +156,7 @@ class OrderSelectRulesCdsServiceTest {
         Patient patient = Patient.builder().build();
         patient.setId(patientId);
         when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
+        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any()))
             .thenReturn(List.of());
 
         service.evaluate(selectRequest(patientId, List.of(),
@@ -165,7 +165,7 @@ class OrderSelectRulesCdsServiceTest {
         // ATC ("B01AC06") would have been picked by the legacy first-coding path;
         // the RxNorm-preferring extractor must yield "1191" instead.
         verify(engine).evaluateProposedPrescription(
-            patient, null, "Aspirin 100 mg", "1191", "100 mg");
+            patient, null, "Aspirin 100 mg", "1191", "100 mg", null);
     }
 
     @Test
@@ -184,7 +184,7 @@ class OrderSelectRulesCdsServiceTest {
 
         CdsHookResponse response = service.evaluate(selectRequest(patientId, List.of(), List.of(nonMed)));
         assertThat(response.cards()).isEmpty();
-        verify(engine, never()).evaluateProposedPrescription(any(), any(), any(), any(), any());
+        verify(engine, never()).evaluateProposedPrescription(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -194,7 +194,7 @@ class OrderSelectRulesCdsServiceTest {
         Patient patient = Patient.builder().build();
         patient.setId(patientId);
         when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
+        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any()))
             .thenReturn(List.of());
 
         // selections list containing only a malformed trailing-slash ref.
@@ -211,9 +211,9 @@ class OrderSelectRulesCdsServiceTest {
 
         // No narrowing → both drafts evaluated (selection list is effectively empty).
         verify(engine).evaluateProposedPrescription(
-            patient, null, "Aspirin", "ASA", "100 mg");
+            patient, null, "Aspirin", "ASA", "100 mg", null);
         verify(engine).evaluateProposedPrescription(
-            patient, null, "Warfarin", "WAR", "5 mg");
+            patient, null, "Warfarin", "WAR", "5 mg", null);
     }
 
     @Test

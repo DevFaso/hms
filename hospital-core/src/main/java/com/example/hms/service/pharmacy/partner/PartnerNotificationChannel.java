@@ -50,6 +50,9 @@ public interface PartnerNotificationChannel {
      */
     void sendWithdrawn(PrescriptionRoutingDecision decision, Pharmacy partner);
 
+    /** Tell a pharmacy holding an offer that the order is held for a prescriber's review: not to be dispensed. */
+    void sendHeldForReview(PrescriptionRoutingDecision decision, Pharmacy partner);
+
     /** Outbound to patient: partner accepted. */
     void notifyPatientAccepted(Patient patient, Pharmacy partner);
 

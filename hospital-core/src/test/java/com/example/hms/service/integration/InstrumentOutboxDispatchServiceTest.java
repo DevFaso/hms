@@ -172,4 +172,17 @@ class InstrumentOutboxDispatchServiceTest {
         verify(outboxRepository).save(message);
         assertThat(message.getLastError()).contains("IOException");
     }
+
+    /** QA D1392 class: an order cancelled after its work order was queued is not sent either. */
+    @Test
+    void aMessageForACancelledOrderIsNeverSent() throws Exception {
+        LabOrder order = new LabOrder();
+        order.setStatus(LabOrderStatus.CANCELLED);
+        message.setLabOrder(order);
+
+        assertThat(service.dispatchPending()).isZero();
+        verify(sender, never()).send(anyString());
+        assertThat(message.getStatus()).isEqualTo(InstrumentOutboxStatus.ERROR);
+        assertThat(message.getLastError()).contains("cancelled");
+    }
 }

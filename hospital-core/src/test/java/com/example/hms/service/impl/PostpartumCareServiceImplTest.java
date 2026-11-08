@@ -214,7 +214,8 @@ class PostpartumCareServiceImplTest {
         ArgumentCaptor<PostpartumObservation> observationCaptor = ArgumentCaptor.forClass(PostpartumObservation.class);
         verify(observationRepository).save(observationCaptor.capture());
         PostpartumObservation savedObservation = observationCaptor.getValue();
-        assertTrue(savedObservation.isHemorrhageProtocolActivated(), "Hemorrhage protocol should be activated on alert");
+        // CR-06 class: the alert stays, but it does not record that anyone activated the protocol.
+        assertFalse(savedObservation.isHemorrhageProtocolActivated(), "An alert must not attest the protocol");
     }
 
     @Test
@@ -385,6 +386,100 @@ class PostpartumCareServiceImplTest {
         assertTrue(plan.getShiftFrequencyMinutes() < PostpartumCarePlan.DEFAULT_SHIFT_FREQUENCY_MINUTES);
     }
 
+    /* ── QA D1181 (round 22): a note that checks nothing leaves the clock ── */
+
+    @Test
+    void aMoodOnlyObservationLeavesTheOverdueFifteenMinuteCheckOverdue_D1181() {
+        PostpartumCarePlan plan = PostpartumCarePlan.builder().patient(patient).hospital(hospital).build();
+        plan.setId(UUID.randomUUID());
+        plan.setDeliveryOccurredAt(LocalDateTime.now().minusMinutes(90));
+        plan.setImmediateObservationTarget(8);
+        plan.setImmediateObservationsCompleted(4);
+        plan.markActivePhase(PostpartumSchedulePhase.IMMEDIATE_RECOVERY);
+        LocalDateTime overdueSince = LocalDateTime.now().minusMinutes(20).truncatedTo(ChronoUnit.SECONDS);
+        plan.setNextDueAt(overdueSince);
+        plan.setOverdueSince(overdueSince);
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(plan));
+
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(1))
+            .moodStatus(PostpartumMoodStatus.CALM)
+            .psychosocialNotes("Calme, entourée")
+            .build();
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId, request, recorderId);
+
+        assertEquals(4, plan.getImmediateObservationsCompleted(), "a mood is not one of the checks");
+        assertEquals(overdueSince, plan.getNextDueAt(), "a mood does not move the next check");
+        assertEquals(overdueSince, plan.getOverdueSince(), "the missed check stays overdue");
+        assertFalse(plan.isImmediateWindowCompleted());
+        assertEquals(PostpartumSchedulePhase.IMMEDIATE_RECOVERY, plan.getActivePhase());
+        assertTrue(response.getSchedule().isOverdue());
+        verify(observationRepository).save(any(PostpartumObservation.class));
+    }
+
+    @Test
+    void anEducationNoteAfterTheWindowClosesNeverClosesItOrMovesTheShiftCheck_D1181() {
+        PostpartumCarePlan plan = PostpartumCarePlan.builder().patient(patient).hospital(hospital).build();
+        plan.setId(UUID.randomUUID());
+        // Past the two-hour window with 1/8 checks: a note used to close the window.
+        plan.setDeliveryOccurredAt(LocalDateTime.now().minusHours(4));
+        plan.setImmediateObservationTarget(8);
+        plan.setImmediateObservationsCompleted(1);
+        plan.markActivePhase(PostpartumSchedulePhase.IMMEDIATE_RECOVERY);
+        LocalDateTime due = LocalDateTime.now().minusMinutes(100).truncatedTo(ChronoUnit.SECONDS);
+        plan.setNextDueAt(due);
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(plan));
+
+        service.recordObservation(patientId, PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(1))
+            .educationTopics(Set.of(PostpartumEducationTopic.WARNING_SIGNS_FEVER))
+            .educationNotes("Signes d'alerte expliqués")
+            .build(), recorderId);
+
+        assertFalse(plan.isImmediateWindowCompleted(), "a note does not close the immediate-recovery window");
+        assertEquals(PostpartumSchedulePhase.IMMEDIATE_RECOVERY, plan.getActivePhase());
+        assertEquals(due, plan.getNextDueAt());
+        assertEquals(due, plan.getOverdueSince());
+    }
+
+    @Test
+    void inTheShiftPhaseANoteLeavesTheNextCheckAndAnEscalatingNoteOnlyBringsItForward_D1181() {
+        PostpartumCarePlan plan = PostpartumCarePlan.builder().patient(patient).hospital(hospital).build();
+        plan.setId(UUID.randomUUID());
+        plan.setDeliveryOccurredAt(LocalDateTime.now().minusHours(10));
+        plan.setImmediateWindowCompleted(true);
+        plan.markActivePhase(PostpartumSchedulePhase.SHIFT_BASELINE);
+        plan.setShiftFrequencyMinutes(PostpartumCarePlan.DEFAULT_SHIFT_FREQUENCY_MINUTES);
+        LocalDateTime due = LocalDateTime.now().minusMinutes(30).truncatedTo(ChronoUnit.SECONDS);
+        plan.setNextDueAt(due);
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(plan));
+
+        service.recordObservation(patientId, PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(2))
+            .sleepStatus(com.example.hms.enums.PostpartumSleepQuality.INTERRUPTED)
+            .painScore(3)
+            .build(), recorderId);
+        assertEquals(due, plan.getNextDueAt(), "sleep and pain are recorded, the check stays due");
+        assertEquals(PostpartumSchedulePhase.SHIFT_BASELINE, plan.getActivePhase());
+
+        // Chills alone raise the infection alert: monitoring is escalated, the overdue check is not pushed back.
+        service.recordObservation(patientId, PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(1))
+            .chillsOrRigors(Boolean.TRUE)
+            .build(), recorderId);
+        assertEquals(PostpartumSchedulePhase.ENHANCED_MONITORING, plan.getActivePhase());
+        assertEquals(due, plan.getNextDueAt(), "an escalation brings the check forward, never back");
+        assertEquals(due, plan.getOverdueSince());
+    }
+
     /* ── QA D268 (round 5) ────────────────────────────────────────────── */
 
     @Test
@@ -418,8 +513,7 @@ class PostpartumCareServiceImplTest {
         plan.markActivePhase(PostpartumSchedulePhase.IMMEDIATE_RECOVERY);
         when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
             .thenReturn(Optional.of(plan));
-        when(observationRepository.existsByCarePlan_IdAndHemorrhageProtocolActivatedTrue(plan.getId()))
-            .thenReturn(true);
+        when(observationRepository.existsHaemorrhageOnPlan(plan.getId())).thenReturn(true);
 
         LocalDateTime observationTime = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
         PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
@@ -434,6 +528,105 @@ class PostpartumCareServiceImplTest {
         assertFalse(plan.isImmediateWindowCompleted());
         assertEquals(PostpartumSchedulePhase.IMMEDIATE_RECOVERY, plan.getActivePhase());
         assertEquals(observationTime.plusMinutes(PostpartumCarePlan.IMMEDIATE_INTERVAL_MINUTES), plan.getNextDueAt());
+    }
+
+    /* CR-06 class: an alert never records the protocol as activated. */
+
+    private PostpartumCarePlan planThreeHoursAfterBirth() {
+        PostpartumCarePlan plan = PostpartumCarePlan.builder().patient(patient).hospital(hospital).build();
+        plan.setId(UUID.randomUUID());
+        plan.setDeliveryOccurredAt(LocalDateTime.now().minusHours(3));
+        plan.setImmediateObservationsCompleted(2);
+        plan.markActivePhase(PostpartumSchedulePhase.IMMEDIATE_RECOVERY);
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(plan));
+        return plan;
+    }
+
+    private PostpartumObservationRequestDTO.PostpartumObservationRequestDTOBuilder aCheckAt(LocalDateTime time) {
+        return PostpartumObservationRequestDTO.builder().hospitalId(hospitalId).observationTime(time);
+    }
+
+    private void assertFifteenMinuteChecksContinue(PostpartumCarePlan plan, LocalDateTime time) {
+        assertFalse(plan.isImmediateWindowCompleted());
+        assertEquals(PostpartumSchedulePhase.IMMEDIATE_RECOVERY, plan.getActivePhase());
+        assertEquals(time.plusMinutes(PostpartumCarePlan.IMMEDIATE_INTERVAL_MINUTES), plan.getNextDueAt());
+    }
+
+    @Test
+    void indicatorsWithASubmittedFalseStayFalseKeepTheAlertAndKeepTheChecks() {
+        PostpartumCarePlan plan = planThreeHoursAfterBirth();
+        LocalDateTime time = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId,
+            aCheckAt(time).excessiveBleeding(true).hemorrhageProtocolActivated(false).build(), recorderId);
+
+        assertFalse(response.isHemorrhageProtocolActivated());
+        assertEquals(PostpartumAlertType.HEMORRHAGE, response.getAlerts().get(0).getType());
+        assertFifteenMinuteChecksContinue(plan, time);
+    }
+
+    @Test
+    void indicatorsWithNothingSubmittedStayFalseAndKeepTheChecks() {
+        PostpartumCarePlan plan = planThreeHoursAfterBirth();
+        LocalDateTime time = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId,
+            aCheckAt(time).fundusTone(PostpartumFundusTone.BOGGY).build(), recorderId);
+
+        assertFalse(response.isHemorrhageProtocolActivated());
+        assertFifteenMinuteChecksContinue(plan, time);
+    }
+
+    @Test
+    void aSubmittedTrueStaysTrueWithIndicators() {
+        PostpartumCarePlan plan = planThreeHoursAfterBirth();
+        LocalDateTime time = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId,
+            aCheckAt(time).excessiveBleeding(true).hemorrhageProtocolActivated(true).build(), recorderId);
+
+        assertTrue(response.isHemorrhageProtocolActivated());
+        assertFifteenMinuteChecksContinue(plan, time);
+    }
+
+    @Test
+    void aSubmittedTrueStaysTrueWithoutIndicatorsAndKeepsTheChecks() {
+        PostpartumCarePlan plan = planThreeHoursAfterBirth();
+        LocalDateTime time = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId,
+            aCheckAt(time).fundusTone(PostpartumFundusTone.FIRM).hemorrhageProtocolActivated(true).build(), recorderId);
+
+        assertTrue(response.isHemorrhageProtocolActivated());
+        assertTrue(response.getAlerts().isEmpty());
+        assertFifteenMinuteChecksContinue(plan, time);
+    }
+
+    @Test
+    void noIndicatorsAndFalseMeanNoEnhancedSchedule() {
+        PostpartumCarePlan plan = planThreeHoursAfterBirth();
+        LocalDateTime time = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId,
+            aCheckAt(time).fundusTone(PostpartumFundusTone.FIRM).hemorrhageProtocolActivated(false).build(), recorderId);
+
+        assertFalse(response.isHemorrhageProtocolActivated());
+        assertTrue(response.getAlerts().isEmpty());
+        assertTrue(plan.isImmediateWindowCompleted());
+        assertEquals(PostpartumSchedulePhase.SHIFT_BASELINE, plan.getActivePhase());
+    }
+
+    @Test
+    void indicatorsAtTheClosingStabilizationStillLandInEnhancedMonitoringWithAFalseFlag_D104() {
+        PostpartumCarePlan plan = planThreeHoursAfterBirth();
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId,
+            aCheckAt(LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS)).excessiveBleeding(true)
+                .stabilizationConfirmed(true).hemorrhageProtocolActivated(false).build(), recorderId);
+
+        assertFalse(response.isHemorrhageProtocolActivated());
+        assertEquals(PostpartumSchedulePhase.ENHANCED_MONITORING, plan.getActivePhase());
     }
 
     @Test
