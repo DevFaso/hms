@@ -54,6 +54,7 @@ public class ObgynReferralMapper {
             .referralReason(referral.getReferralReason())
             .clinicalIndication(referral.getClinicalIndication())
             .urgency(referral.getUrgency())
+            .obstetricRuleSkipped(referral.isObstetricRuleSkipped())
             .historySummary(referral.getHistorySummary())
             .ongoingMidwiferyCare(referral.isOngoingMidwiferyCare())
             .transferType(referral.getTransferType())

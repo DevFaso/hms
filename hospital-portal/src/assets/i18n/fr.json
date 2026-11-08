@@ -1862,7 +1862,10 @@
       "DOSE_LIMITS_DEFAULT": "Limites de dose pédiatriques définies par défaut, en attente de validation, sur l’article du catalogue {{item}}",
       "RX_SIGN_REAUTH_VERIFIED": "Identité confirmée pour signer une ordonnance de stupéfiant ({{method}})",
       "RX_SIGN_REAUTH_REFUSED": "Identité non confirmée pour signer une ordonnance de stupéfiant ({{reason}})",
-      "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} annulé sur la facture {{invoice}}, motif enregistré"
+      "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} annulé sur la facture {{invoice}}, motif enregistré",
+      "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Règle obstétricale non appliquée pour une échographie en urgence",
+      "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Règle obstétricale non appliquée pour une orientation gynéco-obstétricale en urgence",
+      "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Exception à la règle obstétricale levée sur une échographie"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -6599,6 +6602,7 @@
         "PROVIDER_VERIFICATION_REVOKED": "Vérification du prestataire révoquée",
         "PROVIDER_VERIFIED": "Prestataire vérifié",
         "EMERGENCY_BLOOD_RELEASED": "Sang délivré en urgence sans épreuve de compatibilité",
+        "OBSTETRIC_RULE_SKIPPED_EMERGENCY": "Règle obstétricale non appliquée en urgence",
         "PRO_ALERT_ACKNOWLEDGED": "Alerte PRO acquittée",
         "PRO_INSTRUMENT_IMPORTED": "Questionnaire PRO importé",
         "PRO_RESPONSE_RECORDED": "Réponse PRO enregistrée",

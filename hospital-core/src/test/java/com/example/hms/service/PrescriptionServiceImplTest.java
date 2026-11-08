@@ -893,13 +893,17 @@ class PrescriptionServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId));
-        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId), pageable)).thenReturn(page);
+        // QA D1537 review: one query for one hospital or several, leaving out a proposal withdrawn
+        // before signing at the acting hospital too.
+        when(prescriptionRepository.findSentAcrossHospitals(patientId, Set.of(hospitalId), hospitalId,
+            PrescriptionServiceImpl.NEVER_SENT, pageable)).thenReturn(page);
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(dto);
 
         Page<PrescriptionResponseDTO> result = prescriptionService.list(patientId, null, null, null, pageable, Locale.ENGLISH);
 
         assertThat(result.getContent()).containsExactly(dto);
-        verify(prescriptionRepository).findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId), pageable);
+        verify(prescriptionRepository).findSentAcrossHospitals(patientId, Set.of(hospitalId), hospitalId,
+            PrescriptionServiceImpl.NEVER_SENT, pageable);
         verify(prescriptionRepository, never()).findAll(any(Pageable.class));
     }
 
@@ -3358,8 +3362,8 @@ class PrescriptionServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospId))).thenReturn(Set.of(hospId));
-        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospId), pageable))
-            .thenReturn(Page.empty());
+        when(prescriptionRepository.findSentAcrossHospitals(patientId, Set.of(hospId), hospId,
+            PrescriptionServiceImpl.NEVER_SENT, pageable)).thenReturn(Page.empty());
 
         Page<PrescriptionResponseDTO> result = prescriptionService.list(patientId, null, null, null, pageable, Locale.ENGLISH);
         assertThat(result).isEmpty();
@@ -3461,12 +3465,12 @@ class PrescriptionServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospId))).thenReturn(Set.of(hospId));
-        when(prescriptionRepository.findByPatient_IdAndHospital_IdInAndStatusIn(
-                patientId, Set.of(hospId), statuses, pageable)).thenReturn(Page.empty());
+        when(prescriptionRepository.findSentAcrossHospitalsAndStatusIn(
+                patientId, Set.of(hospId), hospId, PrescriptionServiceImpl.NEVER_SENT, statuses, pageable)).thenReturn(Page.empty());
 
         assertThat(prescriptionService.list(patientId, null, null, statuses, pageable, Locale.ENGLISH)).isEmpty();
         verify(prescriptionRepository)
-            .findByPatient_IdAndHospital_IdInAndStatusIn(patientId, Set.of(hospId), statuses, pageable);
+            .findSentAcrossHospitalsAndStatusIn(patientId, Set.of(hospId), hospId, PrescriptionServiceImpl.NEVER_SENT, statuses, pageable);
     }
 
     @Test
@@ -4583,6 +4587,55 @@ class PrescriptionServiceImplTest {
         assertThat(prescriptionService.getPrescriptionsForPortalPatient(patientId, Locale.FRENCH))
             .extracting(PrescriptionResponseDTO::getId)
             .containsExactly(signed.getId());
+    }
+
+    /** QA D1537 (round 40): a draft cancelled unsigned is not the patient's prescription; a signed one stopped is. */
+    @Test
+    void d1537_portalPrescriptionsLeaveOutADiscardedDraft() {
+        Prescription discarded = new Prescription();
+        discarded.setId(UUID.randomUUID());
+        discarded.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        Prescription stopped = new Prescription();
+        stopped.setId(UUID.randomUUID());
+        stopped.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        stopped.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(discarded, stopped)));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class)))
+            .thenAnswer(inv -> PrescriptionResponseDTO.builder().id(((Prescription) inv.getArgument(0)).getId()).build());
+        when(readyForCollection.openPreparations(List.of(stopped))).thenReturn(java.util.Map.of());
+
+        assertThat(prescriptionService.getPrescriptionsForPortalPatient(patientId, Locale.FRENCH))
+            .extracting(PrescriptionResponseDTO::getId)
+            .containsExactly(stopped.getId());
+    }
+
+    /**
+     * QA D1537 review (round 40): a signed order is never put back to a draft or to awaiting signature by
+     * an edit; a signed, part-dispensed order withdrawn "as a draft" was read as never issued.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "PARTIALLY_FILLED, DRAFT", "TRANSMITTED, PENDING_SIGNATURE", "PENDING_STOCK, DRAFT", "SENT_TO_PARTNER, DRAFT"})
+    void d1537_aSignedOrderIsNeverPutBackToAProposal(com.example.hms.enums.PrescriptionStatus current,
+                                                     com.example.hms.enums.PrescriptionStatus requested) {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        existing.setStatus(current);
+        existing.setSignedAt(java.time.LocalDateTime.now().minusDays(2));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        org.mockito.Mockito.lenient().when(dispenseRepository.sumQuantityDispensedForPrescription(any(), any()))
+            .thenReturn(java.math.BigDecimal.ONE);
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, requestWithStatus(requested), Locale.ENGLISH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("status");
+                assertThat(e.getMessageKey()).isEqualTo("prescription.signed.noReturnToProposal");
+            });
+        assertThat(existing.getStatus()).isEqualTo(current);
+        verify(prescriptionRepository, never()).save(any());
     }
 
     @Test

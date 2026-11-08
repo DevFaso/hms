@@ -105,6 +105,17 @@ export function isWithdrawnStatus(status: string | null | undefined): boolean {
   return status === 'CANCELLED' || status === 'DISCONTINUED';
 }
 
+/**
+ * QA D1537 review (round 40): a status a signature led to: not a proposal (DRAFT,
+ * PENDING_SIGNATURE) and not withdrawn. The server's rule for refusing a return to a proposal
+ * (PrescriptionServiceImpl.rejectStatusChangeOnUpdate).
+ */
+export function isIssuedStatus(status: string | null | undefined): boolean {
+  return (
+    !!status && status !== 'DRAFT' && status !== 'PENDING_SIGNATURE' && !isWithdrawnStatus(status)
+  );
+}
+
 export const ATTENTION_REASONS: readonly { status: string; labelKey: string }[] = [
   { status: 'PENDING_CLARIFICATION', labelKey: 'PRESCRIPTIONS.ATTENTION.PENDING_CLARIFICATION' },
   { status: 'TRANSMISSION_FAILED', labelKey: 'PRESCRIPTIONS.ATTENTION.TRANSMISSION_FAILED' },
@@ -457,6 +468,13 @@ export class PrescriptionsComponent implements OnInit {
   editingSigned = signal(false);
   /** QA D1098 class: an order awaiting the pharmacist's clarification was signed. */
   editingClarification = signal(false);
+  /**
+   * QA D1537 review (round 40): the order being edited was signed, whatever status the pharmacy
+   * moved it to (sent, part-filled, at a partner, awaiting stock or a clarification...). The server
+   * never puts a signed order back to a draft or to awaiting signature, so the form offers it only
+   * the withdrawal statuses, as for SIGNED itself.
+   */
+  editingIssued = signal(false);
 
   /** QA D670: the prescriber of record shown on a signed order's withdrawal form. */
   editingPrescriberName = signal('');
@@ -515,7 +533,7 @@ export class PrescriptionsComponent implements OnInit {
       // Discontinued at creation recorded an order nobody ever placed (D129).
       return this.prescriptionStatuses.filter((s) => !isWithdrawnStatus(s.value));
     }
-    if (!this.editingWithdrawn() && !this.editingSigned()) {
+    if (!this.editingWithdrawn() && !this.editingSigned() && !this.editingIssued()) {
       return this.prescriptionStatuses;
     }
     return this.prescriptionStatuses.filter((s) => isWithdrawnStatus(s.value));
@@ -704,6 +722,7 @@ export class PrescriptionsComponent implements OnInit {
     this.editingWithdrawn.set(false);
     this.editingSigned.set(false);
     this.editingClarification.set(false);
+    this.editingIssued.set(false);
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.formError.set('');
@@ -756,6 +775,7 @@ export class PrescriptionsComponent implements OnInit {
     const signed = p.status === 'SIGNED';
     this.editingSigned.set(signed);
     this.editingClarification.set(p.status === 'PENDING_CLARIFICATION');
+    this.editingIssued.set(isIssuedStatus(p.status));
     this.editingPrescriberName.set(p.staffFullName ?? '');
     if (signed) {
       // No withdrawal is pre-selected: the prescriber chooses one, deliberately.

@@ -1862,7 +1862,10 @@
       "DOSE_LIMITS_DEFAULT": "Paediatric dose limits set as a default pending approval on the catalogue item {{item}}",
       "RX_SIGN_REAUTH_VERIFIED": "Identity confirmed to sign a controlled-drug prescription ({{method}})",
       "RX_SIGN_REAUTH_REFUSED": "Identity not confirmed to sign a controlled-drug prescription ({{reason}})",
-      "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} undone on invoice {{invoice}}, reason recorded"
+      "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} undone on invoice {{invoice}}, reason recorded",
+      "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Obstetric rule skipped for an emergency ultrasound order",
+      "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Obstetric rule skipped for an emergency OB/GYN referral",
+      "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Obstetric rule skip cleared on an ultrasound order"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -6633,6 +6636,7 @@
         "PROVIDER_VERIFICATION_REVOKED": "Provider Verification Revoked",
         "PROVIDER_VERIFIED": "Provider Verified",
         "EMERGENCY_BLOOD_RELEASED": "Emergency blood released uncrossmatched",
+        "OBSTETRIC_RULE_SKIPPED_EMERGENCY": "Obstetric rule skipped for an emergency",
         "PRO_ALERT_ACKNOWLEDGED": "PRO Alert Acknowledged",
         "PRO_INSTRUMENT_IMPORTED": "PRO Instrument Imported",
         "PRO_RESPONSE_RECORDED": "PRO Response Recorded",

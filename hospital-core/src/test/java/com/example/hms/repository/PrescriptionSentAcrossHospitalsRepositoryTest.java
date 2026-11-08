@@ -168,4 +168,92 @@ class PrescriptionSentAcrossHospitalsRepositoryTest {
         assertThat(ids(page)).containsExactly(draftAtB.getId());
         assertThat(page.getTotalElements()).isEqualTo(1);
     }
+
+    /** A row moved through the status setter, as every withdrawal path moves it (QA D1537). */
+    private Prescription withdrawn(PrescriptionStatus before, PrescriptionStatus to, Hospital at) {
+        boolean atA = at == hospital;
+        Prescription p = Prescription.builder()
+                .patient(patient).staff(atA ? doctorStaff : doctorStaffB).encounter(atA ? encounter : encounterB)
+                .hospital(at).assignment(atA ? doctorAssignment : doctorAssignmentB).medicationName("Paracetamol")
+                .quantity(BigDecimal.TEN).build();
+        p.setStatus(before);
+        p.setStatus(to);
+        return em.persist(p);
+    }
+
+    /**
+     * QA D1537 review (round 4): Prescription's update callback overrode BaseEntity.onUpdate (same name,
+     * same package), so updatedAt stopped moving on an update and the FHIR _since exports missed changes.
+     */
+    @Test
+    @DisplayName("QA D1537 review: an update moves updatedAt (BaseEntity's callback still runs)")
+    void anUpdateMovesUpdatedAt() {
+        java.time.LocalDateTime before = em.find(Prescription.class, signedAtA.getId()).getUpdatedAt();
+        em.getEntityManager().createQuery("UPDATE Prescription p SET p.updatedAt = :past WHERE p.id = :id")
+            .setParameter("past", java.time.LocalDateTime.now().minusDays(3)).setParameter("id", signedAtA.getId())
+            .executeUpdate();
+        em.clear();
+        Prescription loaded = em.find(Prescription.class, signedAtA.getId());
+        java.time.LocalDateTime stale = loaded.getUpdatedAt();
+        loaded.setNotes("edited");
+        em.flush();
+        em.clear();
+        assertThat(before).isNotNull();
+        assertThat(em.find(Prescription.class, signedAtA.getId()).getUpdatedAt()).isAfter(stale);
+    }
+
+    @Test
+    @DisplayName("QA D1537 review: a builder-made CANCELLED draft is flagged when it is inserted")
+    void aBuilderMadeWithdrawnDraftIsFlaggedOnInsert() {
+        Prescription built = em.persist(Prescription.builder()
+                .patient(patient).staff(doctorStaff).encounter(encounter).hospital(hospital).assignment(doctorAssignment)
+                .medicationName("Paracetamol").quantity(BigDecimal.TEN).status(PrescriptionStatus.CANCELLED).build());
+        em.flush();
+        em.clear();
+        assertThat(prescriptionRepository.findById(built.getId())).get()
+            .extracting(Prescription::isWithdrawnBeforeSigning).isEqualTo(true);
+    }
+
+    @Test
+    @DisplayName("QA D1537: acting at B, A's draft withdrawn before signing is left out; A's signed order stopped stays")
+    void aForeignDiscardedDraftIsLeftOut() {
+        Prescription discardedAtA = withdrawn(PrescriptionStatus.DRAFT, PrescriptionStatus.CANCELLED, hospital);
+        Prescription stoppedAtA = withdrawn(PrescriptionStatus.SIGNED, PrescriptionStatus.DISCONTINUED, hospital);
+        em.flush();
+        em.clear();
+
+        Page<Prescription> atB = prescriptionRepository.findSentAcrossHospitals(patient.getId(),
+            Set.of(hospital.getId(), otherHospital.getId()), otherHospital.getId(), NEVER_SENT, PageRequest.of(0, 20));
+        assertThat(ids(atB)).contains(stoppedAtA.getId()).doesNotContain(discardedAtA.getId());
+        assertThat(atB.getTotalElements()).isEqualTo(3);
+
+        Page<Prescription> atA = prescriptionRepository.findSentAcrossHospitals(patient.getId(),
+            Set.of(hospital.getId(), otherHospital.getId()), hospital.getId(), NEVER_SENT, PageRequest.of(0, 20));
+        // QA D1537 review (round 4): the acting hospital's own discarded draft is no longer listed either.
+        assertThat(ids(atA)).contains(stoppedAtA.getId()).doesNotContain(discardedAtA.getId());
+    }
+
+    @Test
+    @DisplayName("QA D1537: the issued-orders page is chosen in the query, so a capped page is never thinned")
+    void theIssuedPageIsChosenInTheQuery() {
+        Prescription discardedAtA = withdrawn(PrescriptionStatus.PENDING_SIGNATURE, PrescriptionStatus.DISCONTINUED, hospital);
+        Prescription stoppedAtA = withdrawn(PrescriptionStatus.SIGNED, PrescriptionStatus.CANCELLED, hospital);
+        em.flush();
+        em.clear();
+
+        Page<Prescription> issued = prescriptionRepository.findIssuedByPatientId(patient.getId(),
+            com.example.hms.service.support.PrescriptionIssuance.PROPOSALS, PageRequest.of(0, 1));
+        assertThat(issued.getTotalElements()).isEqualTo(2);
+        assertThat(issued.getContent()).hasSize(1);
+        assertThat(prescriptionRepository.countIssuedByPatientId(patient.getId(),
+            com.example.hms.service.support.PrescriptionIssuance.PROPOSALS)).isEqualTo(2);
+        Page<Prescription> all = prescriptionRepository.findIssuedByPatientId(patient.getId(),
+            com.example.hms.service.support.PrescriptionIssuance.PROPOSALS, PageRequest.of(0, 20));
+        assertThat(ids(all)).containsExactlyInAnyOrder(signedAtA.getId(), stoppedAtA.getId())
+            .doesNotContain(draftAtA.getId(), pendingAtA.getId(), draftAtB.getId(), discardedAtA.getId());
+
+        Page<Prescription> atA = prescriptionRepository.findIssuedByPatientIdAndHospitalIdIn(patient.getId(),
+            Set.of(hospital.getId()), com.example.hms.service.support.PrescriptionIssuance.PROPOSALS, PageRequest.of(0, 20));
+        assertThat(ids(atA)).containsExactlyInAnyOrder(signedAtA.getId(), stoppedAtA.getId());
+    }
 }

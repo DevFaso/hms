@@ -248,6 +248,26 @@ public final class SourceScan {
         return starts[Math.max(insertion - 1, 0)];
     }
 
+    /**
+     * The body, braces included, of the first method declared with {@code name} in {@code code}, or
+     * null: a call ({@code return name(...);}) is skipped, since a {@code ;} comes before any {@code {}.
+     */
+    public static String methodBody(String code, String name) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[\\w>\\]]\\s++" + java.util.regex.Pattern.quote(name)
+            + "\\s*+\\(").matcher(code);
+        while (m.find()) {
+            int open = code.indexOf('(', m.start());
+            int close = closingParen(code, open);
+            int brace = indexOfOutsideLiterals(code, '{', close);
+            int semicolon = indexOfOutsideLiterals(code, ';', close);
+            if (brace < 0 || (semicolon >= 0 && semicolon < brace)) {
+                continue;
+            }
+            return code.substring(brace, closingBrace(code, brace) + 1);
+        }
+        return null;
+    }
+
     /** 1-based line of {@code index} in {@code source}. */
     public static int lineOf(String source, int index) {
         return 1 + (int) source.chars().limit(index).filter(c -> c == '\n').count();

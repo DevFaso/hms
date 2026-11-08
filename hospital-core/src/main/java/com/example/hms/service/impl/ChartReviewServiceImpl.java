@@ -422,13 +422,14 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         // QA D1380: every prescription (667 for one QA patient), counted.
         Pageable page = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt"));
         // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
-        List<Prescription> source = readable != null
+        // QA D1537 review: a draft withdrawn before anyone signed it was no order; not listed as CANCELLED.
+        List<Prescription> source = com.example.hms.service.support.PrescriptionIssuance.withoutDiscardedProposals(readable != null
             ? NeverSentRule.prescriptionsReadableHere(prescriptionRepository
                 .findByPatient_IdAndHospital_IdIn(patientId, readable, page)
                 .getContent(), hospitalId)
             : prescriptionRepository
                 .findByPatient_Id(patientId, page)
-                .getContent();
+                .getContent());
         source.forEach(p -> sources.treatment(p.getId(), CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())));
         return source.stream()
             .map(this::toMedicationDto)

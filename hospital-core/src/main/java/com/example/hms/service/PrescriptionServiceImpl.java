@@ -303,7 +303,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     static final List<PrescriptionStatus> NEVER_SENT = NeverSentRule.NEVER_SENT_PRESCRIPTION;
 
     static boolean wasSent(Prescription prescription) {
-        return NeverSentRule.sent(prescription.getStatus());
+        return NeverSentRule.sent(prescription);
     }
 
     /**
@@ -1426,6 +1426,15 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (requested == null) {
             return;
         }
+        // QA D1537 review (round 40): a signed order is never put back to a draft or an unsigned order.
+        // It was the root of a signed, part-dispensed order later withdrawn "as a draft" and read as never
+        // issued. A withdrawn one keeps its own refusal (rejectAnyEditOfWithdrawn), and one awaiting a
+        // clarification its own (409, below: resolve-clarification is the only way back).
+        PrescriptionStatus current = existing.getStatus();
+        if (requested.isProposal() && current != null && !current.isProposal() && !current.isWithdrawn()
+                && current != PrescriptionStatus.PENDING_CLARIFICATION) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "prescription.signed.noReturnToProposal");
+        }
         if (existing.getStatus() != PrescriptionStatus.PENDING_CLARIFICATION) {
             rejectClientAssertedWorkflowStatus(request);
             return;
@@ -1636,19 +1645,15 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         UUID requesterUserId = authService.getCurrentUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-        Page<Prescription> rows;
-        if (readable.equals(Set.of(hospitalId))) {
-            rows = filter.isEmpty()
-                ? prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable)
-                : prescriptionRepository.findByPatient_IdAndHospital_IdInAndStatusIn(patientId, readable, filter, pageable);
-        } else {
-            // QA D652: another hospital's never-sent prescription is not listed
-            // here, as its by-id read answers 404 here (NeverSentRule).
-            rows = filter.isEmpty()
-                ? prescriptionRepository.findSentAcrossHospitals(patientId, readable, hospitalId, NEVER_SENT, pageable)
-                : prescriptionRepository.findSentAcrossHospitalsAndStatusIn(
-                    patientId, readable, hospitalId, NEVER_SENT, filter, pageable);
-        }
+        // QA D652: another hospital's never-sent prescription is not listed
+        // here, as its by-id read answers 404 here (NeverSentRule). QA D1537
+        // review: nor any hospital's proposal withdrawn before signing, the
+        // acting hospital's included (it was listed as CANCELLED). One query
+        // for one hospital or several: the acting hospital's rows are kept.
+        Page<Prescription> rows = filter.isEmpty()
+            ? prescriptionRepository.findSentAcrossHospitals(patientId, readable, hospitalId, NEVER_SENT, pageable)
+            : prescriptionRepository.findSentAcrossHospitalsAndStatusIn(
+                patientId, readable, hospitalId, NEVER_SENT, filter, pageable);
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(rows.getContent().stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
             CROSS_HOSPITAL_READ);
@@ -2382,8 +2387,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             UUID requesterUserId = authService.getCurrentUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
             // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
-            List<Prescription> rows = NeverSentRule.prescriptionsReadableHere(
-                prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable), hospitalId);
+            // QA D1537 review: and less any proposal withdrawn before signing.
+            List<Prescription> rows = com.example.hms.service.support.PrescriptionIssuance.withoutDiscardedProposals(
+                NeverSentRule.prescriptionsReadableHere(
+                    prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable), hospitalId));
             reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(rows.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
                 CROSS_HOSPITAL_READ);
@@ -2400,12 +2407,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Transactional
     public java.util.List<PrescriptionResponseDTO> getPrescriptionsForPortalPatient(UUID patientId, Locale locale) {
         // QA D101: an unsigned prescription (DRAFT, PENDING_SIGNATURE) is the prescriber's
-        // work in progress, not something issued to the patient.
-        java.util.List<Prescription> rows = prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged())
-            .getContent().stream()
-            .filter(p -> p.getStatus() != com.example.hms.enums.PrescriptionStatus.DRAFT
-                && p.getStatus() != com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE)
-            .toList();
+        // work in progress, not something issued to the patient. QA D1537: nor is a draft
+        // that was cancelled before anyone signed it (PrescriptionIssuance).
+        java.util.List<Prescription> rows = com.example.hms.service.support.PrescriptionIssuance.issuedOnly(
+            prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged()).getContent());
         // G15 AC-12: a fill waiting at the counter, one query for the list.
         java.util.Map<UUID, com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness> ready =
             readyForCollection.openPreparations(rows);

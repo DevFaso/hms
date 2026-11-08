@@ -1862,7 +1862,10 @@
       "DOSE_LIMITS_DEFAULT": "Límites de dosis pediátricos definidos por defecto, pendientes de aprobación, en el artículo del catálogo {{item}}",
       "RX_SIGN_REAUTH_VERIFIED": "Identidad confirmada para firmar una receta de estupefaciente ({{method}})",
       "RX_SIGN_REAUTH_REFUSED": "Identidad no confirmada para firmar una receta de estupefaciente ({{reason}})",
-      "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} anulado en la factura {{invoice}}, motivo registrado"
+      "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} anulado en la factura {{invoice}}, motivo registrado",
+      "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Regla obstétrica no aplicada a una ecografía de urgencia",
+      "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Regla obstétrica no aplicada a una derivación de ginecoobstetricia de urgencia",
+      "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Excepción a la regla obstétrica retirada en una ecografía"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -6633,6 +6636,7 @@
         "PROVIDER_VERIFICATION_REVOKED": "Verificación del proveedor revocada",
         "PROVIDER_VERIFIED": "Proveedor verificado",
         "EMERGENCY_BLOOD_RELEASED": "Sangre entregada de urgencia sin prueba cruzada",
+        "OBSTETRIC_RULE_SKIPPED_EMERGENCY": "Regla obstétrica no aplicada por urgencia",
         "PRO_ALERT_ACKNOWLEDGED": "Alerta PRO confirmada",
         "PRO_INSTRUMENT_IMPORTED": "Instrumento PRO importado",
         "PRO_RESPONSE_RECORDED": "Respuesta PRO registrada",

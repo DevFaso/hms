@@ -1,6 +1,9 @@
 package com.example.hms.fhir.mapper;
 
+import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.model.Admission;
 import com.example.hms.model.Prescription;
+import com.example.hms.service.MedicationCourseStatus;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Dosage;
@@ -12,6 +15,8 @@ import org.springframework.stereotype.Component;
 
 import java.time.ZoneId;
 import java.util.Date;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * Maps {@link com.example.hms.model.Prescription} → FHIR R4 {@code MedicationRequest}.
@@ -26,11 +31,42 @@ public class MedicationRequestFhirMapper {
     private static final String SYSTEM_RXNORM = "http://www.nlm.nih.gov/research/umls/rxnorm";
     private static final String SYSTEM_HMS_LOCAL = "urn:hms:medication:code";
 
+    /**
+     * QA D1537 review: the discharged stays an inpatient order ends with ({@code InpatientOrderEnd}), read
+     * as the portal reads them. Optional so a mapper built by hand (tests) reads no stays.
+     */
+    private com.example.hms.repository.AdmissionRepository admissionRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setAdmissionRepository(com.example.hms.repository.AdmissionRepository admissionRepository) {
+        this.admissionRepository = admissionRepository;
+    }
+
+    /**
+     * The patient's discharged stays, read once per patient by a caller mapping many orders
+     * ({@link #toFhir(Prescription, List)}): the same list the portal's medication list reads.
+     */
+    public List<Admission> closedStaysOf(UUID patientId) {
+        if (patientId == null || admissionRepository == null) {
+            return List.of();
+        }
+        // QA D1537 review: lean rows, not every admission through its entity graph.
+        return admissionRepository.findClosedStayRows(patientId).stream()
+            .map(com.example.hms.repository.ClosedStayRow::toAdmission)
+            .toList();
+    }
+
+    /** One order: its patient's stays are read here. A caller mapping many passes them in. */
     public MedicationRequest toFhir(Prescription src) {
+        if (src == null) return null;
+        return toFhir(src, closedStaysOf(src.getPatient() == null ? null : src.getPatient().getId()));
+    }
+
+    public MedicationRequest toFhir(Prescription src, List<Admission> closedStays) {
         if (src == null) return null;
         MedicationRequest out = new MedicationRequest();
         out.setId(src.getId() == null ? null : src.getId().toString());
-        out.setStatus(MedicationRequest.MedicationRequestStatus.ACTIVE);
+        out.setStatus(statusOf(src, closedStays));
         out.setIntent(MedicationRequest.MedicationRequestIntent.ORDER);
 
         if (src.getPatient() != null && src.getPatient().getId() != null) {
@@ -60,6 +96,40 @@ public class MedicationRequestFhirMapper {
             out.setDispenseRequest(disp);
         }
         return out;
+    }
+
+    /**
+     * QA D1537 review (round 40): the order's own status, never "active" for all. The switch names
+     * every PrescriptionStatus and has no default, so a new status does not compile until it is decided:
+     * <ul>
+     *   <li>draft: DRAFT, PENDING_SIGNATURE. Never exported (every reader chooses issued orders only);
+     *       named because the switch is exhaustive;</li>
+     *   <li>cancelled: CANCELLED (FHIR: withdrawn before any administration). A proposal withdrawn
+     *       before signing is never exported either, for the same reason;</li>
+     *   <li>stopped: DISCONTINUED;</li>
+     *   <li>on-hold: not in force, waiting on the pharmacy or the prescriber (TRANSMISSION_FAILED,
+     *       PENDING_CLARIFICATION, PARTNER_REJECTED);</li>
+     *   <li>every other signed order: active, or completed when the course status the patient's portal
+     *       shows says so ({@code MedicationCourseStatus.of}, with the discharged stays it ends with): its
+     *       stated duration passed, or it ended with its stay.</li>
+     * </ul>
+     */
+    static MedicationRequest.MedicationRequestStatus statusOf(Prescription src, List<Admission> closedStays) {
+        return switch (src.getStatus()) {
+            case DRAFT, PENDING_SIGNATURE -> MedicationRequest.MedicationRequestStatus.DRAFT;
+            case CANCELLED -> MedicationRequest.MedicationRequestStatus.CANCELLED;
+            case DISCONTINUED -> MedicationRequest.MedicationRequestStatus.STOPPED;
+            // PARTNER_REJECTED means "held for review" after a partner's refusal or a recall: on-hold
+            // for now (whether it is stopped or cancelled is standing debt, tasklist.md round 40).
+            case TRANSMISSION_FAILED, PENDING_CLARIFICATION, PARTNER_REJECTED ->
+                MedicationRequest.MedicationRequestStatus.ONHOLD;
+            case SIGNED, TRANSMITTED, PARTIALLY_FILLED, PENDING_STOCK, SENT_TO_PARTNER, PARTNER_ACCEPTED,
+                 PRINTED_FOR_PATIENT, DISPENSED, PARTNER_DISPENSED ->
+                MedicationCourseStatus.COMPLETED.equals(
+                    MedicationCourseStatus.of(src, closedStays == null ? List.of() : closedStays))
+                    ? MedicationRequest.MedicationRequestStatus.COMPLETED
+                    : MedicationRequest.MedicationRequestStatus.ACTIVE;
+        };
     }
 
     private static CodeableConcept buildMedicationCode(Prescription src) {
