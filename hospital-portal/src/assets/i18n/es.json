@@ -13160,5 +13160,14 @@
     "CLEAR_SEARCH": "Borrar búsqueda",
     "DRAFT_REVIEW": "Borrador / revisión",
     "NO_MATCHES": "Ningún registro cargado coincide con los filtros actuales."
+  },
+  "VISIT_SUMMARY": {
+    "EYEBROW": "DOCUMENTO DE LA VISITA",
+    "PATIENT": "Nombre del paciente",
+    "READ_ONLY": "Documento de la visita de solo lectura",
+    "NOT_PROVIDED": "No facilitado",
+    "PROVIDER": "Profesional sanitario",
+    "DEPARTMENT": "Servicio",
+    "NO_SECTIONS": "No se recibieron secciones adicionales en este resumen de la visita."
   }
 }

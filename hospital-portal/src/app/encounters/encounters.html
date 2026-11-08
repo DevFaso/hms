@@ -442,7 +442,12 @@
               </button>
             }
             @if (enc.status === 'COMPLETED') {
-              <button class="btn-secondary" [disabled]="avsLoading()" (click)="viewAvs(enc)">
+              <button
+                #avsTrigger
+                class="btn-secondary"
+                [disabled]="avsLoading()"
+                (click)="viewAvs(enc)"
+              >
                 <span class="material-symbols-outlined" aria-hidden="true">summarize</span>
                 {{ 'ENCOUNTERS.VIEW_AVS' | translate }}
               </button>
@@ -801,90 +806,7 @@
 
 <!-- ═══ AFTER-VISIT SUMMARY MODAL ═══ -->
 @if (avs(); as summary) {
-  <div class="modal-backdrop" tabindex="-1" (click)="closeAvs()" (keydown.escape)="closeAvs()">
-    <div
-      class="modal modal-lg"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="encounters-dialog-1-title"
-      tabindex="-1"
-      (click)="$event.stopPropagation()"
-      (keydown.escape)="closeAvs(); $event.stopPropagation()"
-      appModalDialog
-    >
-      <div class="modal-header">
-        <h2 id="encounters-dialog-1-title">
-          {{ 'ENCOUNTERS.AVS_TITLE' | translate }} — {{ summary.patientName }}
-        </h2>
-        <button
-          [attr.aria-label]="'COMMON.CLOSE' | translate"
-          class="modal-close"
-          (click)="closeAvs()"
-        >
-          <span class="material-symbols-outlined" aria-hidden="true">close</span>
-        </button>
-      </div>
-      <div class="modal-body">
-        <div class="avs-meta">
-          <p>
-            {{ summary.visitDate | serverTime | dateTime }} · {{ summary.providerName }} ·
-            {{ summary.departmentName }} · {{ summary.hospitalName }}
-          </p>
-        </div>
-        @if (summary.chiefComplaint) {
-          <div class="detail-section">
-            <h3>{{ 'ENCOUNTERS.CHIEF_COMPLAINT' | translate }}</h3>
-            <p>{{ summary.chiefComplaint }}</p>
-          </div>
-        }
-        @if (summary.dischargeDiagnoses.length) {
-          <div class="detail-section">
-            <h3>{{ 'ENCOUNTERS.AVS_DIAGNOSES' | translate }}</h3>
-            <ul>
-              @for (d of summary.dischargeDiagnoses; track $index) {
-                <li>{{ d }}</li>
-              }
-            </ul>
-          </div>
-        }
-        @if (summary.prescriptionSummary) {
-          <div class="detail-section">
-            <h3>{{ 'ENCOUNTERS.AVS_PRESCRIPTIONS' | translate }}</h3>
-            <p>{{ summary.prescriptionSummary }}</p>
-          </div>
-        }
-        @if (summary.referralSummary) {
-          <div class="detail-section">
-            <h3>{{ 'ENCOUNTERS.AVS_REFERRALS' | translate }}</h3>
-            <p>{{ summary.referralSummary }}</p>
-          </div>
-        }
-        @if (summary.followUpInstructions) {
-          <div class="detail-section">
-            <h3>{{ 'ENCOUNTERS.AVS_FOLLOW_UP' | translate }}</h3>
-            <p>{{ summary.followUpInstructions }}</p>
-          </div>
-        }
-        @if (summary.patientEducationMaterials) {
-          <div class="detail-section">
-            <h3>{{ 'ENCOUNTERS.AVS_EDUCATION' | translate }}</h3>
-            <p>{{ summary.patientEducationMaterials }}</p>
-          </div>
-        }
-        @if (summary.followUpAppointmentDate) {
-          <div class="detail-section">
-            <h3>{{ 'ENCOUNTERS.AVS_FOLLOW_UP_APPT' | translate }}</h3>
-            <p>{{ summary.followUpAppointmentDate | serverTime | date: 'mediumDate' }}</p>
-          </div>
-        }
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeAvs()">
-          {{ 'COMMON.CLOSE' | translate }}
-        </button>
-      </div>
-    </div>
-  </div>
+  <app-visit-summary-dialog [summary]="summary" (closed)="closeAvs()" />
 }
 
 <!-- ═══ CREATE/EDIT ENCOUNTER MODAL ═══ -->
