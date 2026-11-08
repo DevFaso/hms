@@ -250,7 +250,7 @@ public class UltrasoundMapper {
             .estimatedDueDate(dto.getEstimatedDueDate())
             .dueDateConfirmed(Boolean.TRUE.equals(dto.getDueDateConfirmed()))
             // Fetal count and position
-            .numberOfFetuses(dto.getNumberOfFetuses() != null ? dto.getNumberOfFetuses() : 1)
+            .numberOfFetuses(dto.getNumberOfFetuses())
             .fetalPosition(dto.getFetalPosition())
             // Second trimester
             .biparietalDiameterMm(dto.getBiparietalDiameterMm())
@@ -270,9 +270,10 @@ public class UltrasoundMapper {
             .uterineArteryDoppler(dto.getUterineArteryDoppler())
             // Fetal well-being
             .fetalHeartRate(dto.getFetalHeartRate())
-            .fetalCardiacActivity(dto.getFetalCardiacActivity() == null || dto.getFetalCardiacActivity())
-            .fetalMovementObserved(dto.getFetalMovementObserved() == null || dto.getFetalMovementObserved())
-            .fetalToneNormal(dto.getFetalToneNormal() == null || dto.getFetalToneNormal())
+            // QA D1525: tri-state, null stays "not assessed" (it was turned into TRUE)
+            .fetalCardiacActivity(dto.getFetalCardiacActivity())
+            .fetalMovementObserved(dto.getFetalMovementObserved())
+            .fetalToneNormal(dto.getFetalToneNormal())
             // Anatomy
             .anatomySurveyComplete(Boolean.TRUE.equals(dto.getAnatomySurveyComplete()))
             .anatomyFindings(dto.getAnatomyFindings())

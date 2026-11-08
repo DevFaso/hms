@@ -10893,7 +10893,16 @@
     "NT_MM": "CN (mm)",
     "CRL_MM": "LCC (mm)",
     "FINDING_CHOOSE": "Choisir le résultat…",
-    "REPORT_NO_FINDINGS": "Saisissez au moins un résultat (une mesure, le résumé ou l'interprétation) avant d'enregistrer le compte rendu."
+    "REPORT_NO_FINDINGS": "Saisissez au moins un résultat (une mesure, le résumé ou l'interprétation) avant d'enregistrer le compte rendu.",
+    "FLAG_ABNORMAL": "Anormal",
+    "FLAG_ABSENT": "Absente",
+    "FLAG_NORMAL": "Normal",
+    "FLAG_NOT_ASSESSED": "Non évalué",
+    "FLAG_PRESENT": "Présente",
+    "FLAG_fetalCardiacActivity": "Activité cardiaque",
+    "FLAG_fetalMovementObserved": "Mouvements fœtaux",
+    "FLAG_fetalToneNormal": "Tonus fœtal",
+    "OBSERVATIONS": "Observations"
   },
   "BIRTH_PLAN": {
     "TITLE": "Plan de naissance",

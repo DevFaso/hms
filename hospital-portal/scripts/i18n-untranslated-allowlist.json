@@ -457,6 +457,8 @@
     "TRIAGE.SPO2": "SpO₂",
     "ULTRASOUND.FINDING_NORMAL": "Normal",
     "ULTRASOUND.FINDING_URGENT": "Urgent",
+    "ULTRASOUND.FLAG_NORMAL": "Normal",
+    "ULTRASOUND.OBSERVATIONS": "Observations",
     "ULTRASOUND.WORKLIST_ANOMALIES": "Anomalies",
     "USERS.TOTAL": "Total",
     "WEBHOOKS.DESCRIPTION": "Description",

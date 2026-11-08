@@ -10893,7 +10893,16 @@
     "NT_MM": "NT (mm)",
     "CRL_MM": "CRL (mm)",
     "FINDING_CHOOSE": "Choose the finding…",
-    "REPORT_NO_FINDINGS": "Record at least one finding (a measurement, the summary or the interpretation) before saving the report."
+    "REPORT_NO_FINDINGS": "Record at least one finding (a measurement, the summary or the interpretation) before saving the report.",
+    "FLAG_ABNORMAL": "Abnormal",
+    "FLAG_ABSENT": "Absent",
+    "FLAG_NORMAL": "Normal",
+    "FLAG_NOT_ASSESSED": "Not assessed",
+    "FLAG_PRESENT": "Present",
+    "FLAG_fetalCardiacActivity": "Cardiac activity",
+    "FLAG_fetalMovementObserved": "Fetal movement",
+    "FLAG_fetalToneNormal": "Fetal tone",
+    "OBSERVATIONS": "Observations"
   },
   "BIRTH_PLAN": {
     "TITLE": "Birth plan",

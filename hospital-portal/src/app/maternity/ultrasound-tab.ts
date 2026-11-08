@@ -71,14 +71,15 @@ const FINDING_FIELDS: readonly (keyof UltrasoundReportRequest)[] = [
 ];
 
 /**
- * QA D1182 (round 22): values the stored report carries by DEFAULT, never
- * entered by anyone — the server saves cardiac activity, movement and tone as
- * "yes" and one fetus on every report. Echoed back by the edit form, they
- * passed the "at least one finding" check and a blank report was saved as
- * "Normal". The form has no control for the three flags, so it never sends
- * them; one fetus is not a finding on its own (twins are).
+ * QA D1525 (round 38): cardiac activity, movement and tone are tri-state
+ * observations the clinician states — true present/normal, false
+ * absent/abnormal, null "not assessed" (the default). They are shown and
+ * sent; the server keeps null as null. Before, the form had no control for
+ * them (QA D1182 called them UNSHOWN_DEFAULT_FLAGS and never sent them), and
+ * the server then defaulted every missing flag to "yes". They are still not
+ * findings on their own (the D1182 rule): hasUltrasoundFinding ignores them.
  */
-export const UNSHOWN_DEFAULT_FLAGS = [
+export const TRI_STATE_FLAGS = [
   'fetalCardiacActivity',
   'fetalMovementObserved',
   'fetalToneNormal',
@@ -198,6 +199,7 @@ export class UltrasoundTabComponent implements OnInit {
   reportTargetOrder = signal<UltrasoundOrderResponse | null>(null);
   reportSaving = signal(false);
   reportForm: UltrasoundReportForm = this.emptyReportForm();
+  readonly triStateFlags = TRI_STATE_FLAGS;
   templateLoading = signal(false);
   reportActionBusy = signal(false);
 
@@ -491,12 +493,16 @@ export class UltrasoundTabComponent implements OnInit {
   /**
    * QA D1150: the finding is never preselected. A blank report saved with the
    * seeded "NORMAL" read back as "Rapport Normal" with "Notify the patient"
-   * offered; the clinician now picks the finding.
+   * offered; the clinician now picks the finding. QA D1525: the three
+   * observations start at "not assessed".
    */
   emptyReportForm(): UltrasoundReportForm {
     return {
       scanDate: localDateString(),
       findingCategory: '',
+      fetalCardiacActivity: null,
+      fetalMovementObserved: null,
+      fetalToneNormal: null,
       reportFinalized: false,
     };
   }
@@ -523,6 +529,9 @@ export class UltrasoundTabComponent implements OnInit {
         ...fields,
         scanDate: existing.scanDate ?? localDateString(),
         findingCategory: existing.findingCategory ?? '',
+        fetalCardiacActivity: existing.fetalCardiacActivity ?? null,
+        fetalMovementObserved: existing.fetalMovementObserved ?? null,
+        fetalToneNormal: existing.fetalToneNormal ?? null,
         reportFinalized: false,
         providerReviewNotes: providerReviewNotes ?? undefined,
       };
@@ -565,6 +574,9 @@ export class UltrasoundTabComponent implements OnInit {
           ...this.reportSeed,
           ...this.stripEmpty(template as UltrasoundReportRequest),
           ...userChanged,
+          // A template must preserve explicit observations, including a return
+          // to "not assessed" and selections retained across template switches.
+          ...Object.fromEntries(TRI_STATE_FLAGS.map((flag) => [flag, this.reportForm[flag]])),
         } as UltrasoundReportForm;
         this.reportBaseline = { ...this.reportForm };
         this.templateLoading.set(false);
@@ -588,9 +600,19 @@ export class UltrasoundTabComponent implements OnInit {
     const order = this.reportTargetOrder();
     if (!order) return;
     const form = this.reportForm;
-    // QA D1150: the date and the finding are named where they are missing, and
-    // a report with no finding at all (no measurement, summary or
-    // interpretation) is refused — it must never read as "Normal".
+    // QA D1525: a report with no finding at all (an untouched template) is
+    // refused first, as the server does, before the date and the category.
+    if (!hasUltrasoundFinding(form)) {
+      refuseFields(
+        this.host.nativeElement,
+        ['rep-summary'],
+        REPORT_FIELD_IDS,
+        this.translate.instant('ULTRASOUND.REPORT_NO_FINDINGS'),
+      );
+      return;
+    }
+    // QA D1150: the date and the finding are named where they are missing —
+    // a report must never read as "Normal" by default.
     const missing = blankFields(
       { 'rep-date': form.scanDate, 'rep-category': form.findingCategory },
       ['rep-date', 'rep-category'],
@@ -606,20 +628,10 @@ export class UltrasoundTabComponent implements OnInit {
       );
       return;
     }
-    if (!hasUltrasoundFinding(form)) {
-      refuseFields(
-        this.host.nativeElement,
-        ['rep-summary'],
-        REPORT_FIELD_IDS,
-        this.translate.instant('ULTRASOUND.REPORT_NO_FINDINGS'),
-      );
-      return;
-    }
     refuseFields(this.host.nativeElement, [], REPORT_FIELD_IDS, '');
-    // QA D1182: the flags the form shows no control for are never sent (the
-    // stored "yes" defaults counted as findings on the server).
+    // QA D1525: the three observations are sent as stated (null = not
+    // assessed); the server no longer turns a missing one into "yes".
     const request = { ...form } as Partial<UltrasoundReportRequest>;
-    for (const flag of UNSHOWN_DEFAULT_FLAGS) delete request[flag];
     this.reportSaving.set(true);
     this.ultrasoundService.submitReport(order.id, request as UltrasoundReportRequest).subscribe({
       next: () => {

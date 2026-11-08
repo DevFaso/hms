@@ -10893,7 +10893,16 @@
     "NT_MM": "TN (mm)",
     "CRL_MM": "LCN (mm)",
     "FINDING_CHOOSE": "Elegir el hallazgo…",
-    "REPORT_NO_FINDINGS": "Registre al menos un hallazgo (una medida, el resumen o la interpretación) antes de guardar el informe."
+    "REPORT_NO_FINDINGS": "Registre al menos un hallazgo (una medida, el resumen o la interpretación) antes de guardar el informe.",
+    "FLAG_ABNORMAL": "Anormal",
+    "FLAG_ABSENT": "Ausente",
+    "FLAG_NORMAL": "Normal",
+    "FLAG_NOT_ASSESSED": "No evaluado",
+    "FLAG_PRESENT": "Presente",
+    "FLAG_fetalCardiacActivity": "Actividad cardíaca",
+    "FLAG_fetalMovementObserved": "Movimientos fetales",
+    "FLAG_fetalToneNormal": "Tono fetal",
+    "OBSERVATIONS": "Observaciones"
   },
   "BIRTH_PLAN": {
     "TITLE": "Plan de parto",

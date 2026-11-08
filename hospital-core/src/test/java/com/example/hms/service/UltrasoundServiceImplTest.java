@@ -227,6 +227,7 @@ class UltrasoundServiceImplTest {
             .findingsSummary("Grossesse évolutive")
             .scanDate(LocalDate.now())
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
+            .findingsSummary("Single live intrauterine pregnancy")
             .build();
 
         UltrasoundOrder order = new UltrasoundOrder();
@@ -273,6 +274,7 @@ class UltrasoundServiceImplTest {
             .findingsSummary("Grossesse évolutive")
             .scanDate(LocalDate.now())
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
+            .fetalHeartRate(150)
             .scanPerformedBy("Tech One")
             .build();
 
@@ -337,6 +339,7 @@ class UltrasoundServiceImplTest {
             .findingsSummary("Grossesse évolutive")
             .scanDate(LocalDate.now())
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
+            .findingsSummary("Single live intrauterine pregnancy")
             .build();
 
         UltrasoundOrder order = new UltrasoundOrder();
@@ -359,6 +362,7 @@ class UltrasoundServiceImplTest {
             .findingsSummary("Grossesse évolutive")
             .scanDate(LocalDate.now())
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
+            .findingsSummary("Single live intrauterine pregnancy")
             .build();
 
         UltrasoundOrder order = new UltrasoundOrder();
@@ -509,16 +513,59 @@ class UltrasoundServiceImplTest {
         verify(reportRepository, never()).save(any());
     }
 
+    /** QA D1525: a template carries the scan date only, never a finding. */
     @Test
-    void getTemplateMethodsReturnPresetValues() {
-        var ntTemplate = ultrasoundService.getNuchalTranslucencyTemplate();
-        var anatomyTemplate = ultrasoundService.getAnatomyScanTemplate();
+    void templatesStateNoFinding() {
+        for (UltrasoundReportRequestDTO template : List.of(
+                ultrasoundService.getNuchalTranslucencyTemplate(), ultrasoundService.getAnatomyScanTemplate())) {
+            assertThat(template.getScanDate()).isNotNull();
+            assertThat(template.getFetalCardiacActivity()).isNull();
+            assertThat(template.getFetalMovementObserved()).isNull();
+            assertThat(template.getFetalToneNormal()).isNull();
+            assertThat(template.getFindingCategory()).isNull();
+            assertThat(template.getGestationalAgeAtScan()).isNull();
+            assertThat(template.getNumberOfFetuses()).isNull();
+        }
+    }
 
-        assertThat(ntTemplate.getGestationalAgeAtScan()).isEqualTo(12);
-        assertThat(ntTemplate.getNumberOfFetuses()).isEqualTo(1);
-        assertThat(anatomyTemplate.getGestationalAgeAtScan()).isEqualTo(20);
-        assertThat(anatomyTemplate.getNumberOfFetuses()).isEqualTo(1);
-        assertThat(anatomyTemplate.getAnatomySurveyComplete()).isFalse();
+    /** QA D1525: the untouched template is refused as an empty report, named on the summary field. */
+    @Test
+    void createOrUpdateReport_refusesAnUntouchedTemplateAsAnEmptyReport() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.empty());
+
+        for (UltrasoundReportRequestDTO template : List.of(
+                ultrasoundService.getNuchalTranslucencyTemplate(), ultrasoundService.getAnatomyScanTemplate())) {
+            assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, template, null))
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                    assertThat(ex.getField()).isEqualTo("findingsSummary");
+                    assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.findingsRequired");
+                });
+        }
+        verify(reportRepository, never()).save(any());
+        assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.ORDERED);
+    }
+
+    /** QA D1525: with a finding but no category, the category is asked for, never assumed NORMAL. */
+    @Test
+    void createOrUpdateReport_refusesAMissingCategory() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.empty());
+        UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).fetalHeartRate(148).build();
+
+        assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, request, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("findingCategory"));
+        verify(reportRepository, never()).save(any());
     }
 
     @Test
