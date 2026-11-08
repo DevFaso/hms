@@ -182,7 +182,14 @@ public class PostpartumObservation extends BaseEntity {
     @Column(name = "uterotonic_given", nullable = false)
     private boolean uterotonicGiven = false;
 
+    /**
+     * CR-06 class: what the clinician attested at documentedAt, never what a rule found. Haemorrhage
+     * indicators are the HEMORRHAGE alert on this row. No setter: nothing can change the value after
+     * the clinician's is built in. A true saved before this rule may have been set by the indicators
+     * instead: those rows carry a HEMORRHAGE alert too, and cannot be told from a real attestation.
+     */
     @Builder.Default
+    @Setter(lombok.AccessLevel.NONE)
     @Column(name = "hemorrhage_protocol_activated", nullable = false)
     private boolean hemorrhageProtocolActivated = false;
 

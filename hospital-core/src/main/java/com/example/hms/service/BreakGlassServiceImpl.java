@@ -2,7 +2,6 @@ package com.example.hms.service;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.exception.UnauthorizedAccessException;
 import com.example.hms.model.BreakGlassSession;
@@ -359,12 +358,12 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             return DEFAULT_TTL_MINUTES;
         }
         if (requested < 15) {
-            throw new BusinessException("ttlMinutes must be at least 15.");
+            throw new com.example.hms.exception.FieldBusinessException("ttlMinutes", "breakGlass.ttl.tooShort", 15);
         }
         // QA D186: an out-of-range value is the caller's mistake, said as a 400,
         // never silently capped (the session would end earlier than they were told).
         if (requested > MAX_TTL_MINUTES) {
-            throw new BusinessException("ttlMinutes must be at most " + MAX_TTL_MINUTES + ".");
+            throw new com.example.hms.exception.FieldBusinessException("ttlMinutes", "breakGlass.ttl.tooLong", MAX_TTL_MINUTES);
         }
         return requested;
     }

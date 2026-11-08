@@ -439,6 +439,7 @@
     <string name="doc_type_prescription">Receta</string>
     <string name="doc_type_insurance_document">Documento de seguro</string>
     <string name="doc_type_invoice">Factura</string>
+    <string name="doc_type_medical_certificate">Certificado médico</string>
     <string name="doc_type_immunization_record">Registro de vacunas</string>
     <string name="document_request_busy">Todavía hay otra operación con sus documentos en curso. Espere un momento.</string>
     <string name="doc_type_other">Otro</string>

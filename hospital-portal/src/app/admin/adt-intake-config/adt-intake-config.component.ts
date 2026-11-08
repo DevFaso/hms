@@ -11,7 +11,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
-import { Subject, Subscription, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
+import { Subject, Subscription, debounceTime, of, switchMap } from 'rxjs';
 
 import {
   AcuityLevel,
@@ -28,6 +28,9 @@ import { ToastService } from '../../core/toast.service';
 import { EnumLabelService } from '../../core/enum-label.service';
 import { bareRole } from '../../core/role-token';
 import { refusalReason } from '../../shared/refusal-reason';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { ListEscapeDirective } from '../../shared/a11y/list-escape.directive';
 
 interface HospitalOption {
   id: string;
@@ -118,7 +121,7 @@ const EMPTY_FORM: IntakeFormState = {
 @Component({
   selector: 'app-adt-intake-config',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [FormsModule, TranslateModule, EnumLabelPipe, SubmitGuardDirective, ListEscapeDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="adt-intake" data-testid="adt-intake-admin">
@@ -216,18 +219,23 @@ const EMPTY_FORM: IntakeFormState = {
         </h2>
 
         <div class="form-row adt-intake__typeahead">
-          <label for="adt-hospital-search">{{
-            'ADT_INTAKE.FIELD.HOSPITAL_PICKER' | translate
-          }}</label>
+          <label for="adt-hospital-search"
+            >{{ 'ADT_INTAKE.FIELD.HOSPITAL_PICKER' | translate }} *</label
+          >
           <input
             id="adt-hospital-search"
             name="hospitalSearch"
             type="text"
             autocomplete="off"
+            required
+            data-server-field="hospitalId"
+            [attr.data-submit-blank]="form.hospitalId ? 'false' : 'true'"
             [attr.aria-label]="'ADT_INTAKE.FIELD.HOSPITAL_PICKER' | translate"
             [placeholder]="'ADT_INTAKE.PLACEHOLDER.HOSPITAL_SEARCH' | translate"
             [ngModel]="hospitalSearchTerm()"
             (ngModelChange)="onHospitalSearchInput($event)"
+            [appListEscape]="hospitalOptions().length > 0"
+            (listEscape)="hospitalOptions.set([])"
             [disabled]="!!editingId()"
             data-testid="adt-intake-hospital-search"
           />
@@ -277,7 +285,7 @@ const EMPTY_FORM: IntakeFormState = {
         </div>
 
         <div class="form-row">
-          <label for="adt-provider">{{ 'ADT_INTAKE.FIELD.PROVIDER' | translate }}</label>
+          <label for="adt-provider">{{ 'ADT_INTAKE.FIELD.PROVIDER' | translate }} *</label>
           <select
             id="adt-provider"
             name="admittingProviderId"
@@ -447,6 +455,9 @@ const EMPTY_FORM: IntakeFormState = {
             type="submit"
             class="btn-primary"
             [disabled]="saving()"
+            appSubmitGuard
+            submitGuardRequired
+            [submitGuardFields]="['adt-hospital-search', 'adt-provider']"
             data-testid="adt-intake-save"
           >
             {{ saving() ? ('ADT_INTAKE.SAVING' | translate) : ('ADT_INTAKE.SAVE' | translate) }}
@@ -578,6 +589,8 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
   private readonly referralService = inject(ReferralService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
   private readonly enumLabels = inject(EnumLabelService);
 
   private readonly hospitalSearchSubject = new Subject<string>();
@@ -588,7 +601,6 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
     this.hospitalSearchSub = this.hospitalSearchSubject
       .pipe(
         debounceTime(300),
-        distinctUntilChanged(),
         switchMap((term) => {
           // Below-threshold queries must clear stale suggestions
           // (user deletes back to 1 char and the prior list would
@@ -806,15 +818,14 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
     });
   }
 
-  protected remove(cfg: AdtIntakeConfig): void {
-    // ToastService and globalThis.confirm both render their input
-    // verbatim; resolve the i18n key via TranslateService first so the
-    // admin page stays localizable. Caught on PR #360 Copilot review
-    // (High + Medium).
-    const message = this.translate.instant('ADT_INTAKE.CONFIRM_DELETE', {
-      hospital: cfg.hospitalName || cfg.hospitalId,
+  protected async remove(cfg: AdtIntakeConfig): Promise<void> {
+    // QA D1229: the in-app confirmation (localized, keyboard contract), never
+    // the browser's own confirm.
+    const confirmed = await this.confirmService.ask({
+      titleKey: 'ADT_INTAKE.CONFIRM_DELETE',
+      params: { hospital: cfg.hospitalName || cfg.hospitalId },
+      confirmKey: 'COMMON.DELETE',
     });
-    const confirmed = globalThis.confirm(message);
     if (!confirmed) return;
     this.service.remove(cfg.id).subscribe({
       next: () => {

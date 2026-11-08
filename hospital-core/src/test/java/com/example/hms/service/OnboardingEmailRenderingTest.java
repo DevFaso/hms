@@ -125,7 +125,7 @@ class OnboardingEmailRenderingTest {
         assertThat(service.roleLabel(Locale.FRENCH, "ROLE_DOCTOR")).isEqualTo("Médecin");
         assertThat(service.roleLabel(Locale.ENGLISH, "ROLE_DOCTOR")).isEqualTo("Doctor");
         assertThat(service.roleLabel(Locale.of("es"), "ROLE_DOCTOR")).isEqualTo("Médico(a)");
-        assertThat(service.roleLabel(Locale.FRENCH, "Hospital Admin")).isEqualTo("Administrateur hôpital");
+        assertThat(service.roleLabel(Locale.FRENCH, "Hospital Admin")).isEqualTo("Administrateur(trice) d'hôpital");
         assertThat(service.roleLabel(Locale.FRENCH, "ROLE_SOMETHING_NEW")).isEqualTo("Something New");
     }
 

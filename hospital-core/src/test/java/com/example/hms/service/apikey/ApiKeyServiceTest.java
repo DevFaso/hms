@@ -128,7 +128,7 @@ class ApiKeyServiceTest {
 
         assertThatThrownBy(() -> service.issue(dto))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("future");
+            .extracting("messageKey").isEqualTo("apiKey.expiryInPast");
         verify(apiKeyRepository, never()).save(any());
     }
 

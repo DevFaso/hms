@@ -87,7 +87,8 @@
                 <!-- MVP-c2-frontend — lifecycle chip rendered only for non-ACTIVE
                      states so the visual stays calm for the common case. -->
                 @if (h.lifecycleState && h.lifecycleState !== 'ACTIVE') {
-                  <span class="lifecycle-chip" [attr.data-test]="'lifecycle-chip-' + h.id">
+                  {{ ' '
+                  }}<span class="lifecycle-chip" [attr.data-test]="'lifecycle-chip-' + h.id">
                     {{ 'HOSPITAL_LIFECYCLE.STATE.' + h.lifecycleState | translate }}
                   </span>
                 }
@@ -101,6 +102,7 @@
                     <a
                       class="action-link"
                       [title]="'HOSPITAL_LIFECYCLE.OPEN_DETAIL' | translate"
+                      [attr.aria-label]="'HOSPITAL_LIFECYCLE.OPEN_DETAIL' | translate"
                       [routerLink]="['/hospitals', h.id]"
                       [attr.data-test]="'hospital-detail-' + h.id"
                     >
@@ -109,6 +111,7 @@
                     <button
                       class="action-link"
                       [title]="'COMMON.EDIT' | translate"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                       [attr.data-test]="'hospital-edit-' + h.id"
                       (click)="openEdit(h)"
                     >
@@ -117,6 +120,7 @@
                     <button
                       class="action-link danger"
                       [title]="'COMMON.DELETE' | translate"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                       [attr.data-test]="'hospital-delete-' + h.id"
                       (click)="confirmDelete(h)"
                     >
@@ -155,15 +159,21 @@
       <dialog
         class="modal modal-lg"
         [open]="showModal()"
+        appModalDialog
+        aria-labelledby="hospital-list-dialog-1-title"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeModal()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="hospital-list-dialog-1-title">
             {{ editing() ? ('HOSPITALS.EDIT' | translate) : ('HOSPITALS.CREATE' | translate) }}
           </h2>
-          <button class="modal-close" (click)="closeModal()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeModal()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -190,6 +200,7 @@
                   [class.invalid]="isMissing('phoneNumber')"
                   [attr.aria-invalid]="isMissing('phoneNumber') || null"
                   type="tel"
+                  appPhoneField
                   [(ngModel)]="form.phoneNumber"
                   name="phoneNumber"
                   [placeholder]="'HOSPITALS.PHONE_PLACEHOLDER' | translate"
@@ -368,7 +379,13 @@
             <button type="button" class="btn-secondary" (click)="closeModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{
                 saving()
                   ? editing()
@@ -396,13 +413,19 @@
       <dialog
         class="modal"
         [open]="showDeleteConfirm()"
+        appModalDialog
+        aria-labelledby="hospital-list-dialog-2-title"
         (click)="$event.stopPropagation()"
         (keydown.escape)="cancelDelete()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ 'HOSPITALS.DELETE' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <h2 id="hospital-list-dialog-2-title">{{ 'HOSPITALS.DELETE' | translate }}</h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="cancelDelete()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -410,7 +433,7 @@
           <p class="delete-warning">
             {{ 'HOSPITALS.DELETE_CONFIRM' | translate }}
             <strong>{{ deletingHospital()?.name }}</strong
-            >? {{ 'COMMON.CANNOT_UNDO' | translate }}
+            >{{ 'COMMON.QUESTION_MARK' | translate }} {{ 'COMMON.CANNOT_UNDO' | translate }}
           </p>
         </div>
         <div class="modal-actions">

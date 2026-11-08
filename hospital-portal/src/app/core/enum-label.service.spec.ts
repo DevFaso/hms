@@ -29,6 +29,29 @@ describe('EnumLabelService', () => {
     expect(service.transform('DOCTOR', 'role')).toBe('Médecin');
   });
 
+  it('QA D1062: labels a comma-joined code list code by code, in the page language', () => {
+    translate.setTranslation(
+      'fr',
+      {
+        PORTAL: {
+          ENUM: {
+            PERMISSIONS: {
+              VIEW_APPOINTMENTS: 'Rendez-vous',
+              VIEW_LAB_RESULTS: 'Résultats de laboratoire',
+            },
+          },
+        },
+      },
+      true,
+    );
+    translate.use('fr');
+    expect(service.transform('VIEW_LAB_RESULTS,VIEW_APPOINTMENTS', 'permissions')).toBe(
+      'Résultats de laboratoire, Rendez-vous',
+    );
+    // Free text with a comma is not a code list, and is shown as typed.
+    expect(service.transform('Père, tuteur', 'relationship')).toBe('Père, tuteur');
+  });
+
   it('is the same instance the pipe delegates to', () => {
     translate.setTranslation('en', { PORTAL: { ENUM: { ROLE: { NURSE: 'Charge Nurse' } } } }, true);
     const pipe = TestBed.runInInjectionContext(() => new EnumLabelPipe());

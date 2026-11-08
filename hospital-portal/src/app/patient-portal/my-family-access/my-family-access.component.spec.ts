@@ -57,6 +57,19 @@ describe('MyFamilyAccessComponent', () => {
     component.grantAccess();
     expect(mockToast.error).toHaveBeenCalled();
   });
+
+  it('QA D1464: a typed past end date is refused on its field; nothing is sent', () => {
+    const grant = spyOn(mockPortalService, 'grantProxy').and.callThrough();
+    component.form = {
+      proxyUsername: 'marie',
+      relationship: 'PARENT',
+      permissions: 'ALL',
+    } as typeof component.form;
+    component.expiresOn = '2020-01-01';
+    component.grantAccess();
+    expect(grant).not.toHaveBeenCalled();
+    expect(mockToast.error).toHaveBeenCalled();
+  });
 });
 
 /* ── P1 #9: canonical VIEW_* scopes + drill-in to the proxy data viewer ── */
@@ -151,10 +164,10 @@ describe('MyFamilyAccessComponent — proxy scopes and drill-in', () => {
       relationship: 'CAREGIVER',
       permissions: 'VIEW_APPOINTMENTS',
     };
-    component.expiresOn = '2026-10-24';
+    component.expiresOn = '2099-10-24';
     component.grantAccess();
 
-    const endOfDay = new Date(2026, 9, 24, 23, 59, 59);
+    const endOfDay = new Date(2099, 9, 24, 23, 59, 59);
     const sent = portal.grantProxy.calls.mostRecent().args[0];
     expect(sent.expiresAt).toBe(endOfDay.toISOString().slice(0, 19));
     expect(new Date(`${sent.expiresAt}Z`).getTime()).toBe(endOfDay.getTime());
@@ -223,5 +236,39 @@ describe('MyFamilyAccessComponent — proxy scopes and drill-in', () => {
     portal.revokeProxy.and.returnValue(throwError(() => new Error('500')));
     component.revokeAccess('g-1');
     expect(toast.error).toHaveBeenCalled();
+  });
+
+  // QA D1197 (round 22): "Révoquer" acted on one click and dropped focus to BODY.
+  it('QA D1197: revoking asks for a confirmation; Cancel keeps the access, Confirm revokes', async () => {
+    const granted = { ...received, id: 'proxy-9', proxyDisplayName: 'Salif Ouédraogo' };
+    portal.getMyProxies.and.returnValue(of([granted]));
+    portal.revokeProxy.and.returnValue(of(undefined));
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    try {
+      fixture.detectChanges();
+      const revoke = host.querySelector<HTMLButtonElement>('[data-testid="revoke-proxy-proxy-9"]')!;
+      revoke.focus();
+      revoke.click();
+      fixture.detectChanges();
+      expect(portal.revokeProxy).withContext('one click no longer revokes').not.toHaveBeenCalled();
+      const dialog = host.querySelector<HTMLElement>('[data-testid="confirm-dialog"]')!;
+      expect(dialog.getAttribute('role')).toBe('dialog');
+      expect(dialog.textContent).toContain('Salif Ouédraogo');
+      host.querySelector<HTMLButtonElement>('[data-testid="confirm-dialog-cancel"]')!.click();
+      fixture.detectChanges();
+      expect(host.querySelector('[data-testid="confirm-dialog"]')).toBeNull();
+      expect(document.activeElement).toBe(revoke);
+      expect(portal.revokeProxy).not.toHaveBeenCalled();
+
+      revoke.click();
+      fixture.detectChanges();
+      host.querySelector<HTMLButtonElement>('[data-testid="confirm-dialog-confirm"]')!.click();
+      fixture.detectChanges();
+      expect(portal.revokeProxy).toHaveBeenCalledOnceWith('proxy-9');
+      expect(host.querySelector('[data-testid="confirm-dialog"]')).toBeNull();
+    } finally {
+      host.remove();
+    }
   });
 });

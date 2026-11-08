@@ -1,6 +1,7 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -17,6 +18,7 @@ import {
   SessionTemplateRequest,
   SessionTemplateResponse,
   SlotGenerationResult,
+  SLOT_PAGE_SIZE,
   SlotInventoryService,
   VisitTypeRequest,
   VisitTypeResponse,
@@ -27,8 +29,24 @@ import { RoleContextService } from '../core/role-context.service';
 import { finalize } from 'rxjs';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { RangePagerComponent } from '../shared/range-pager/range-pager.component';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 type AdminSection = 'visit-types' | 'templates' | 'slots';
+
+/** QA D1306 (round 28): the fields each form may refuse, so a fixed one loses its mark. */
+const VT_FIELD_IDS = ['vt-code', 'vt-duration', 'vt-name'] as const;
+const TPL_FIELD_IDS = [
+  'tpl-staff',
+  'tpl-department',
+  'tpl-start',
+  'tpl-end',
+  'tpl-effective-from',
+] as const;
 
 /**
  * Slot-inventory administration (P2 #11).
@@ -42,7 +60,17 @@ type AdminSection = 'visit-types' | 'templates' | 'slots';
 @Component({
   selector: 'app-slot-admin',
   standalone: true,
-  imports: [ClockTimePipe, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    DateTimePipe,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ClockTimePipe,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    RangePagerComponent,
+  ],
   templateUrl: './slot-admin.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './slot-admin.scss',
@@ -53,7 +81,9 @@ export class SlotAdminComponent implements OnInit {
   private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   section = signal<AdminSection>('visit-types');
 
@@ -88,6 +118,10 @@ export class SlotAdminComponent implements OnInit {
 
   slots = signal<AppointmentSlotResponse[]>([]);
   slotsLoading = signal(false);
+  /** QA D1390: the server's paging of the window's open slots. */
+  slotPage = signal(0);
+  slotPageSize = signal(SLOT_PAGE_SIZE);
+  slotTotal = signal(0);
   slotFilterStaffId = '';
   slotFilterDepartmentId = '';
   slotFrom = '';
@@ -188,14 +222,25 @@ export class SlotAdminComponent implements OnInit {
   }
 
   submitVisitType(): void {
+    // QA D1306 (round 28): the refused fields are marked, not only a toast.
+    const root = this.host.nativeElement;
     if (!this.vtForm.code.trim() || !this.vtForm.name.trim()) {
-      this.toast.error(this.translate.instant('SLOT_ADMIN.VT_REQUIRED'));
+      const message = this.translate.instant('SLOT_ADMIN.VT_REQUIRED');
+      const blank = [
+        this.vtForm.code.trim() ? null : 'vt-code',
+        this.vtForm.name.trim() ? null : 'vt-name',
+      ].filter((id): id is string => id !== null);
+      refuseFields(root, blank, VT_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
     if (!this.vtForm.durationMinutes || this.vtForm.durationMinutes < 1) {
-      this.toast.error(this.translate.instant('SLOT_ADMIN.VT_DURATION_INVALID'));
+      const message = this.translate.instant('SLOT_ADMIN.VT_DURATION_INVALID');
+      refuseFields(root, ['vt-duration'], VT_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(root, [], VT_FIELD_IDS, '');
     this.vtSaving.set(true);
     const id = this.vtEditingId();
     const request = { ...this.vtForm, departmentId: this.vtForm.departmentId || undefined };
@@ -217,7 +262,16 @@ export class SlotAdminComponent implements OnInit {
     });
   }
 
-  toggleVisitTypeActive(row: VisitTypeResponse): void {
+  async toggleVisitTypeActive(row: VisitTypeResponse): Promise<void> {
+    // QA CX-010: one click retired it; restoring asks nothing.
+    if (row.active) {
+      const confirmed = await this.confirm.ask({
+        titleKey: 'SLOT_ADMIN.VT_RETIRE_CONFIRM',
+        params: { name: row.name },
+        confirmKey: 'COMMON.CONFIRM',
+      });
+      if (!confirmed) return;
+    }
     const request$ = row.active
       ? this.slotService.deactivateVisitType(row.id)
       : this.slotService.reactivateVisitType(row.id);
@@ -294,20 +348,34 @@ export class SlotAdminComponent implements OnInit {
     this.tplForm = this.emptyTemplate();
   }
 
-  submitTemplate(): void {
-    const form = this.tplForm;
+  /** The first rule the template form breaks: its message key and the fields to mark. */
+  private templateRefusal(form: SessionTemplateRequest): { key: string; ids: string[] } | null {
     if (!form.staffId || !form.departmentId) {
-      this.toast.error(this.translate.instant('SLOT_ADMIN.TPL_REQUIRED'));
-      return;
+      const ids = [form.staffId ? null : 'tpl-staff', form.departmentId ? null : 'tpl-department'];
+      return { key: 'SLOT_ADMIN.TPL_REQUIRED', ids: ids.filter((id): id is string => !!id) };
     }
     if (!form.startTime || !form.endTime || form.endTime <= form.startTime) {
-      this.toast.error(this.translate.instant('SLOT_ADMIN.TPL_WINDOW_INVALID'));
-      return;
+      const ids = form.startTime ? ['tpl-end'] : ['tpl-start'];
+      if (!form.startTime && !form.endTime) ids.push('tpl-end');
+      return { key: 'SLOT_ADMIN.TPL_WINDOW_INVALID', ids };
     }
     if (!form.effectiveFrom) {
-      this.toast.error(this.translate.instant('SLOT_ADMIN.TPL_EFFECTIVE_REQUIRED'));
+      return { key: 'SLOT_ADMIN.TPL_EFFECTIVE_REQUIRED', ids: ['tpl-effective-from'] };
+    }
+    return null;
+  }
+
+  submitTemplate(): void {
+    const form = this.tplForm;
+    const refusal = this.templateRefusal(form);
+    if (refusal) {
+      // QA D1306 (round 28): the refused fields are marked, not only a toast.
+      const message = this.translate.instant(refusal.key);
+      refuseFields(this.host.nativeElement, refusal.ids, TPL_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], TPL_FIELD_IDS, '');
     this.tplSaving.set(true);
     const id = this.tplEditingId();
     const request = { ...form, visitTypeId: form.visitTypeId || undefined };
@@ -332,7 +400,14 @@ export class SlotAdminComponent implements OnInit {
     });
   }
 
-  toggleTemplateActive(row: SessionTemplateResponse): void {
+  async toggleTemplateActive(row: SessionTemplateResponse): Promise<void> {
+    if (row.active) {
+      const confirmed = await this.confirm.ask({
+        titleKey: 'SLOT_ADMIN.TPL_RETIRE_CONFIRM',
+        confirmKey: 'COMMON.CONFIRM',
+      });
+      if (!confirmed) return;
+    }
     const request$ = row.active
       ? this.slotService.deactivateTemplate(row.id)
       : this.slotService.reactivateTemplate(row.id);
@@ -382,23 +457,40 @@ export class SlotAdminComponent implements OnInit {
     });
   }
 
-  searchSlots(): void {
+  /**
+   * QA D1390 (D1347 class): one page of the window's open slots, with the
+   * server's total on screen; the search button reads the first page again.
+   */
+  searchSlots(page = 0): void {
     this.slotsLoading.set(true);
     this.slotService
-      .searchOpen({
-        staffId: this.slotFilterStaffId || undefined,
-        departmentId: this.slotFilterDepartmentId || undefined,
-        from: this.slotFrom || undefined,
-        to: this.slotTo || undefined,
-        limit: 200,
-      })
+      .searchOpenPage(
+        {
+          staffId: this.slotFilterStaffId || undefined,
+          departmentId: this.slotFilterDepartmentId || undefined,
+          from: this.slotFrom || undefined,
+          to: this.slotTo || undefined,
+        },
+        page,
+        this.slotPageSize(),
+      )
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.slotsLoading.set(false)),
       )
       .subscribe({
-        next: (rows) => {
+        next: (slice) => {
+          const rows = slice?.content ?? [];
+          const total = slice?.totalElements ?? rows.length;
+          if (rows.length === 0 && page > 0 && total > 0) {
+            // The last page emptied (a slot was blocked): read the new last page.
+            this.searchSlots(Math.max(0, Math.ceil(total / this.slotPageSize()) - 1));
+            return;
+          }
           this.slots.set(rows);
+          this.slotTotal.set(total);
+          this.slotPage.set(slice?.number ?? page);
+          this.slotPageSize.set(slice?.size ?? this.slotPageSize());
           this.loadedSections.add('slots');
           this.slotsLoading.set(false);
           this.ensureFormOptions();
@@ -432,7 +524,7 @@ export class SlotAdminComponent implements OnInit {
         this.toast.success(this.translate.instant('SLOT_ADMIN.BLOCKED'));
         this.blocking.set(false);
         this.blockTarget.set(null);
-        this.searchSlots();
+        this.searchSlots(this.slotPage());
       },
       error: (err) => {
         this.toast.error(err?.error?.message ?? this.translate.instant('SLOT_ADMIN.BLOCK_ERROR'));
@@ -450,7 +542,7 @@ export class SlotAdminComponent implements OnInit {
       next: () => {
         this.toast.success(this.translate.instant('SLOT_ADMIN.RELEASED'));
         this.releasingId.set(null);
-        this.searchSlots();
+        this.searchSlots(this.slotPage());
       },
       error: (err) => {
         this.toast.error(err?.error?.message ?? this.translate.instant('SLOT_ADMIN.RELEASE_ERROR'));

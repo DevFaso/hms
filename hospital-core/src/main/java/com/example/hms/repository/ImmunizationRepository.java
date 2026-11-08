@@ -142,8 +142,27 @@ public interface ImmunizationRepository extends JpaRepository<PatientImmunizatio
             "AND i.status = 'COMPLETED' " +
             "AND i.active = true " +
             "AND i.vaccineCode IS NOT NULL " +
+            "AND TRIM(i.vaccineCode) <> '' " +
             "GROUP BY i.vaccineCode")
     List<Object[]> countByVaccineCodeForHospitalInRange(
+            @Param("hospitalId") UUID hospitalId,
+            @Param("startInclusive") LocalDate startInclusive,
+            @Param("endInclusive") LocalDate endInclusive);
+
+    /**
+     * QA D1003: the completed, active doses in the same window that carry no
+     * CVX code (optional since round 17: MenAfriVac, malaria, or a code the
+     * clinician did not know). The ADX export cannot map them, so it reports
+     * them as skipped instead of dropping them silently.
+     */
+    @Query("SELECT COUNT(i) FROM PatientImmunization i " +
+            "WHERE i.hospital.id = :hospitalId " +
+            "AND i.administrationDate >= :startInclusive " +
+            "AND i.administrationDate <= :endInclusive " +
+            "AND i.status = 'COMPLETED' " +
+            "AND i.active = true " +
+            "AND (i.vaccineCode IS NULL OR TRIM(i.vaccineCode) = '')")
+    long countUncodedForHospitalInRange(
             @Param("hospitalId") UUID hospitalId,
             @Param("startInclusive") LocalDate startInclusive,
             @Param("endInclusive") LocalDate endInclusive);

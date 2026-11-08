@@ -259,7 +259,7 @@ class ProResponseServiceTest {
 
             assertThatThrownBy(() -> service.record(patientId, dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("cannot be in the future");
+                .extracting("messageKey").isEqualTo("pro.response.administeredInFuture");
             verify(responseRepository, never()).saveAndFlush(any());
         }
 
@@ -391,7 +391,7 @@ class ProResponseServiceTest {
 
             assertThatThrownBy(() -> service.acknowledge(patientId, response.getId(), null, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Only a safety-item-positive response");
+                .extracting("messageKey").isEqualTo("pro.response.notCritical");
         }
 
         @Test
@@ -403,7 +403,7 @@ class ProResponseServiceTest {
 
             assertThatThrownBy(() -> service.acknowledge(patientId, response.getId(), null, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("already acknowledged by Dr Zongo");
+                .extracting("messageKey").isEqualTo("pro.response.alreadyAcknowledged");
             verify(responseRepository, never()).saveAndFlush(any());
         }
 
@@ -419,7 +419,7 @@ class ProResponseServiceTest {
 
             assertThatThrownBy(() -> service.acknowledge(patientId, response.getId(), null, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("reload and retry");
+                .extracting("messageKey").isEqualTo("pro.response.acknowledgeConflict");
         }
 
         @Test
@@ -617,7 +617,7 @@ class ProResponseServiceTest {
 
             assertThatThrownBy(() -> service.recordForSelf(patient, dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("No screening is open for you");
+                .extracting("messageKey").isEqualTo("pro.response.noOpenScreening");
             verify(responseRepository, never()).saveAndFlush(any());
         }
 
@@ -628,7 +628,7 @@ class ProResponseServiceTest {
 
             assertThatThrownBy(() -> service.recordForSelf(patient, dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("No screening is open for you");
+                .extracting("messageKey").isEqualTo("pro.response.noOpenScreening");
             verify(responseRepository, never()).saveAndFlush(any());
         }
     }

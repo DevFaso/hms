@@ -47,6 +47,14 @@ import static org.mockito.Mockito.lenient;
 @ExtendWith(MockitoExtension.class)
 class PatientChartUpdateServiceImplTest {
 
+    // QA D1232 (round 24): the refusals are message keys now; the assertions
+    // read them in English through the real bundles (set up in setUp).
+    @org.junit.jupiter.api.AfterEach
+    void resetRefusalLocale() {
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
     @Mock private PatientRepository patientRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
@@ -67,6 +75,8 @@ class PatientChartUpdateServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         staffUserId = UUID.randomUUID();
@@ -196,14 +206,11 @@ class PatientChartUpdateServiceImplTest {
         DoctorPatientChartUpdateRequestDTO request = new DoctorPatientChartUpdateRequestDTO();
         request.setHospitalId(hospitalId);
 
-        when(patientRepository.existsById(patientId)).thenReturn(true);
-        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(staffRepository.findByUserIdAndHospitalId(staffUserId, hospitalId)).thenReturn(Optional.of(staff));
-
+        // QA D1355 class (round 30): the reason is refused with the hospital, before any lookup.
         assertThatThrownBy(() -> service.createPatientChartUpdate(patientId, hospitalId, staffUserId, assignment, request))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "updateReason");
+        org.mockito.Mockito.verifyNoInteractions(patientRepository, staffRepository);
     }
 
     @Test

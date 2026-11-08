@@ -1,8 +1,20 @@
 import { HttpClient } from '@angular/common/http';
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refuseFields } from '../shared/forms/invalid-fields';
+
+/** QA D1306 (round 28): the resend form's one field. */
+const EMAIL_FIELD_IDS = ['verify-email'];
 
 /** What the page shows: the link is being checked, worked, was refused, or was incomplete. */
 export type VerifyEmailState = 'verifying' | 'verified' | 'failed' | 'missing';
@@ -23,7 +35,7 @@ export type VerifyEmailState = 'verifying' | 'verified' | 'failed' | 'missing';
 @Component({
   selector: 'app-verify-email',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, FormsModule, TranslateModule],
   templateUrl: './verify-email.html',
   // The same public card as the password-reset landing page, on purpose: the
   // two links arrive in the same kind of e-mail and should land on the same
@@ -36,6 +48,7 @@ export class VerifyEmailComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly state = signal<VerifyEmailState>('verifying');
   /** Shown after a resend, whatever the backend answered (no enumeration). */
@@ -69,9 +82,13 @@ export class VerifyEmailComponent implements OnInit {
     this.resendError.set('');
     const email = this.resendEmail.trim();
     if (!email) {
-      this.resendError.set(this.translate.instant('LOGIN.ENTER_EMAIL'));
+      // QA D1306 (round 28): the field is marked, not only the banner.
+      const message = this.translate.instant('LOGIN.ENTER_EMAIL');
+      refuseFields(this.host.nativeElement, EMAIL_FIELD_IDS, EMAIL_FIELD_IDS, message);
+      this.resendError.set(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], EMAIL_FIELD_IDS, '');
     this.resendLoading = true;
     const done = (): void => {
       this.resendLoading = false;

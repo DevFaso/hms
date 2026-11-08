@@ -186,8 +186,9 @@ class LabOrderServiceImplTest {
             .build();
 
         assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("orderChannelOther must be provided");
+            // QA D1319 class (round 29, assertion changed): named on the field; the sentence shows no property.
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("orderChannelOther"));
 
         verify(labOrderRepository, never()).save(any());
     }
@@ -1067,5 +1068,23 @@ class LabOrderServiceImplTest {
 
         labOrderService.deleteLabOrder(orderId, java.util.Locale.ENGLISH);
         verify(labOrderRepository).deleteById(orderId);
+    }
+
+    /** QA D1428 class: a resulted or cancelled order's content is closed to an edit. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.LabOrderStatus.class,
+        names = {"VERIFIED", "COMPLETED", "CANCELLED"})
+    void qaD1428_aClosedLabOrderIsNotEdited(com.example.hms.enums.LabOrderStatus closed) {
+        UUID labOrderId = UUID.randomUUID();
+        LabOrder existing = existingLabOrder(labOrderId);
+        existing.setStatus(closed);
+        org.mockito.Mockito.lenient().when(labOrderRepository.findById(labOrderId)).thenReturn(java.util.Optional.of(existing));
+        LabOrderRequestDTO edit = new LabOrderRequestDTO();
+        edit.setClinicalIndication("rewritten");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> labOrderService.updateLabOrder(labOrderId, edit, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("lab.order.closed.readOnly");
+        verify(labOrderRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
     }
 }

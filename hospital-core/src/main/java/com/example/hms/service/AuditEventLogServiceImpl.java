@@ -10,6 +10,8 @@ import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.AuditEventLogRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -48,6 +50,8 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final ObjectMapper objectMapper;
     private final PatientRepository patientRepository;
+    private final PatientHospitalRegistrationRepository registrationRepository;
+    private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final org.springframework.transaction.PlatformTransactionManager transactionManager;
 
@@ -217,7 +221,7 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         String resourceId = requestDTO.getResourceId();
         String resourceName = requestDTO.getResourceName();
         if ("PATIENT".equalsIgnoreCase(requestDTO.getEntityType())) {
-            resourceId = resolvePatientResourceId(resourceId, resourceName);
+            resourceId = resolvePatientResourceId(requestDTO, resourceId, resourceName, assignment);
             resourceName = resolvePatientResourceName(resourceName, resourceId);
         }
         // QA D309/D429: rows written by the generic write audit (consents,
@@ -399,38 +403,94 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         return EffectiveRoles.codes(user, rows).stream().sorted().findFirst().orElse(null);
     }
 
-    private String resolvePatientResourceId(String resourceId, String resourceName) {
-        if ((resourceId != null && !resourceId.isBlank()) || resourceName == null || resourceName.isBlank()) {
+    /**
+     * The patient a PATIENT-typed row names only by its resource name (a full
+     * name, an email, a phone number, an MRN).
+     *
+     * <p>QA round 16 residual #13 (class: an audit row's patient taken as the
+     * first free-text match in the whole database). The desk records shared
+     * family numbers and a name or an email can belong to several people, so
+     * "the first holder" filed a disclosure row under somebody else, possibly
+     * at another hospital. The rule now: the request's own patient id wins;
+     * otherwise only patients actively registered at the event's hospital are
+     * candidates, and the name resolves only when exactly one of them matches.
+     * No hospital, or two holders, leaves the resource unresolved: an access
+     * row with no patient is honest, one under the wrong patient is not.
+     */
+    private String resolvePatientResourceId(AuditEventRequestDTO requestDTO, String resourceId, String resourceName,
+                                            UserRoleHospitalAssignment assignment) {
+        if (resourceId != null && !resourceId.isBlank()) {
             return resourceId;
         }
-        Patient patient = findPatientByName(resourceName);
-        if (patient == null && resourceName.contains("@")) {
-            patient = patientRepository.findByEmailContainingIgnoreCase(resourceName)
-                .stream().findFirst().orElse(null);
+        if (requestDTO.getPatientId() != null) {
+            return requestDTO.getPatientId().toString();
         }
-        if (patient == null && resourceName.matches("\\d{6,}")) {
-            patient = findPatientByPhone(resourceName);
+        if (resourceName == null || resourceName.isBlank()) {
+            return resourceId;
         }
-        return patient != null ? patient.getId().toString() : resourceId;
+        UUID hospitalId = eventHospitalId(requestDTO, assignment);
+        if (hospitalId == null) {
+            return resourceId;
+        }
+        String identifier = resourceName.trim();
+        java.util.Set<UUID> holders = new java.util.LinkedHashSet<>();
+        registrationRepository.findActiveByHospitalIdAndIdentifier(hospitalId, identifier).stream()
+            .map(r -> r.getPatient() != null ? r.getPatient().getId() : null)
+            .filter(Objects::nonNull)
+            .forEach(holders::add);
+        if (identifier.matches("\\+?\\d{6,}")) {
+            holders.addAll(phoneHoldersAt(identifier, hospitalId, assignment));
+        }
+        if (holders.size() != 1) {
+            if (holders.size() > 1) {
+                log.debug("[AUDIT] PATIENT resource name matches {} patients at the event's hospital; left unresolved",
+                    holders.size());
+            }
+            return resourceId;
+        }
+        return holders.iterator().next().toString();
     }
 
-    private Patient findPatientByName(String resourceName) {
-        String[] parts = resourceName.trim().split(" ");
-        if (parts.length < 2) {
-            return null;
+    /** The hospital the event happened at: the request's, else its assignment's. */
+    private static UUID eventHospitalId(AuditEventRequestDTO requestDTO, UserRoleHospitalAssignment assignment) {
+        if (requestDTO.getHospitalId() != null) {
+            return requestDTO.getHospitalId();
         }
-        String first = parts[0];
-        String last = parts[parts.length - 1];
-        return patientRepository.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(first, last)
-            .stream().findFirst().orElse(null);
+        return assignment != null && assignment.getHospital() != null ? assignment.getHospital().getId() : null;
     }
 
-    private Patient findPatientByPhone(String resourceName) {
-        Patient patient = patientRepository.findByPhoneNumberPrimary(resourceName).orElse(null);
-        if (patient == null) {
-            patient = patientRepository.findByPhoneNumberSecondary(resourceName).orElse(null);
+    /**
+     * Every patient registered at {@code hospitalId} whose primary or
+     * secondary number is {@code number}: as stored, or the same subscriber
+     * (QA D942, the hospital's calling code for a national number).
+     */
+    private java.util.Set<UUID> phoneHoldersAt(String number, UUID hospitalId, UserRoleHospitalAssignment assignment) {
+        java.util.Set<UUID> holders = new java.util.LinkedHashSet<>();
+        java.util.stream.Stream.concat(
+                patientRepository.findAllByPhoneNumberPrimary(number).stream(),
+                patientRepository.findAllByPhoneNumberSecondary(number).stream())
+            .map(Patient::getId)
+            .filter(Objects::nonNull)
+            .filter(id -> registrationRepository.isPatientRegisteredInHospitalFixed(id, hospitalId))
+            .forEach(holders::add);
+        String key = com.example.hms.utility.PatientMatchKeys.phoneKey(number);
+        if (com.example.hms.utility.PatientMatchKeys.isSubscriberKey(key)) {
+            String country = assignment != null && assignment.getHospital() != null
+                    && hospitalId.equals(assignment.getHospital().getId())
+                ? assignment.getHospital().getCountry()
+                : hospitalRepository.findById(hospitalId).map(com.example.hms.model.Hospital::getCountry).orElse(null);
+            String callingCode = com.example.hms.utility.PhoneNumbers.callingCodeForCountry(country);
+            patientRepository.findAllByPhoneSubscriberAtHospital("%" + key, hospitalId,
+                    org.springframework.data.domain.PageRequest.of(0, PatientRepository.PHONE_SUBSCRIBER_CAP)).stream()
+                .filter(p -> com.example.hms.utility.PatientMatchKeys.samePhone(
+                        p.getPhoneNumberPrimary(), number, callingCode)
+                    || com.example.hms.utility.PatientMatchKeys.samePhone(
+                        p.getPhoneNumberSecondary(), number, callingCode))
+                .map(Patient::getId)
+                .filter(Objects::nonNull)
+                .forEach(holders::add);
         }
-        return patient;
+        return holders;
     }
 
     private String resolvePatientResourceName(String resourceName, String resourceId) {

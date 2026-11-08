@@ -6,6 +6,7 @@ import { MyRecordsComponent } from './my-records.component';
 import {
   HealthSummaryDTO,
   ImmunizationSummary,
+  LabResultSummary,
   MedicationSummary,
   PatientPortalService,
 } from '../../services/patient-portal.service';
@@ -63,6 +64,7 @@ describe('MyRecordsComponent', () => {
     translate.setFallbackLang('fr');
     translate.use('fr');
     translate.setTranslation('fr', {
+      COMMON: { COLON: '\u00a0:' },
       PORTAL: {
         RECORDS: {
           TITLE: 'Mon dossier',
@@ -90,23 +92,49 @@ describe('MyRecordsComponent', () => {
     ]);
   });
 
-  it('asks for up to 50 lab results', () => {
+  it('reads only the lab results the card previews (QA D1362: the count is the server total)', () => {
     create();
-    expect(portal.getMyLabResults).toHaveBeenCalledWith(50);
+    expect(portal.getMyLabResults).toHaveBeenCalledWith(4);
   });
 
-  it('shows the first four medications and counts the rest', () => {
+  it('shows the first four medications and counts the rest from the server total', () => {
     const meds = ['a', 'b', 'c', 'd', 'e', 'f'].map(
       (n) => ({ id: n, medicationName: `med-${n}`, dosage: '' }) as MedicationSummary,
     );
     portal.getMyMedications.and.returnValue(of(meds));
+    // QA D1362: A2 has 444 medications; the list endpoint sent 6 of them.
+    portal.getHealthSummary.and.returnValue(of(summary({ medicationTotal: 444 })));
     create();
     const firstCard = host().querySelector('.dashboard-card')!;
     const names = Array.from(firstCard.querySelectorAll('.card-item-name')).map((el) =>
       el.textContent?.trim(),
     );
     expect(names).toEqual(['med-a', 'med-b', 'med-c', 'med-d']);
-    expect(firstCard.querySelector('.card-more')?.textContent?.trim()).toBe('+ 2 de plus');
+    expect(firstCard.querySelector('.card-more')?.textContent?.trim()).toBe('+ 440 de plus');
+  });
+
+  it('QA D1362: the lab card counts every result the server has, not the rows it loaded', () => {
+    const labs = ['a', 'b', 'c', 'd'].map(
+      (n) => ({ id: n, testName: `lab-${n}`, collectedDate: '2026-11-01' }) as LabResultSummary,
+    );
+    portal.getMyLabResults.and.returnValue(of(labs));
+    portal.getHealthSummary.and.returnValue(of(summary({ labResultTotal: 125 })));
+    create();
+    const labCard = host().querySelectorAll('.dashboard-card')[1];
+    expect(labCard.querySelectorAll('.card-item-name').length).toBe(4);
+    expect(labCard.querySelector('.card-more')?.textContent?.trim()).toBe('+ 121 de plus');
+  });
+
+  it('QA D1362: with no server total a card shows no count rather than one taken from its rows', () => {
+    const meds = ['a', 'b', 'c', 'd', 'e', 'f'].map(
+      (n) => ({ id: n, medicationName: `med-${n}`, dosage: '' }) as MedicationSummary,
+    );
+    portal.getMyMedications.and.returnValue(of(meds));
+    portal.getHealthSummary.and.returnValue(of(summary({ medicationTotal: null })));
+    create();
+    const firstCard = host().querySelector('.dashboard-card')!;
+    expect(firstCard.querySelector('.card-more')).toBeNull();
+    expect(firstCard.querySelector('.card-link')).not.toBeNull();
   });
 
   it('lists allergies and active conditions from the health summary', () => {
@@ -156,8 +184,9 @@ describe('MyRecordsComponent', () => {
     );
     create();
     expect(texts('[data-testid="my-record-numbers"] li')).toEqual([
-      'CHU Wend-Panga : CHW7848',
-      'Clinique Nabonswendé : CNK4035',
+      // QA D1079: the colon is COMMON.COLON (a no-break space before it in French).
+      'CHU Wend-Panga\u00a0: CHW7848',
+      'Clinique Nabonswendé\u00a0: CNK4035',
     ]);
   });
 

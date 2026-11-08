@@ -56,6 +56,10 @@ class AppointmentBookingOwnershipTest {
     @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private MessageSource messageSource;
 
+    /** QA D1060: the slot rules, stubbed to their 30-minute fallback (SlotPolicyStubs). */
+    @org.mockito.Mock
+    private com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
+
     @InjectMocks private AppointmentServiceImpl service;
 
     private final Locale locale = Locale.ENGLISH;
@@ -64,6 +68,7 @@ class AppointmentBookingOwnershipTest {
 
     @BeforeEach
     void setUp() {
+        com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
         patientUser = user("patient.self", "ROLE_PATIENT");
         receptionist = user("front.desk", "ROLE_RECEPTIONIST");
         when(userRepository.findByUsername(patientUser.getUsername())).thenReturn(Optional.of(patientUser));
@@ -130,6 +135,27 @@ class AppointmentBookingOwnershipTest {
         byUnknownEmail.setPatientEmail("nobody@y.test");
         assertThat(refusal(byEmail, patientUser).getMessage().replace("x@y.test", "<e>"))
             .isEqualTo(refusal(byUnknownEmail, patientUser).getMessage().replace("nobody@y.test", "<e>"));
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("residual #13: an email a relative also holds still finds the caller's own record, not the first match")
+    void sharedEmailFindsTheCallersOwnRecord() {
+        Patient relative = new Patient();
+        relative.setId(UUID.randomUUID());
+        relative.setUser(user("relative", "ROLE_PATIENT"));
+        Patient own = new Patient();
+        own.setId(UUID.randomUUID());
+        own.setUser(patientUser);
+        when(patientRepository.findByEmailContainingIgnoreCase("family@y.test")).thenReturn(List.of(relative, own));
+        AppointmentRequestDTO request = new AppointmentRequestDTO();
+        request.setPatientEmail("family@y.test");
+        request.setHospitalId(UUID.randomUUID());
+        when(hospitalRepository.findById(request.getHospitalId())).thenReturn(Optional.empty());
+
+        // Past the patient step: the booking stops only at the (missing) hospital.
+        assertThat(refusal(request, patientUser).getMessage())
+            .isEqualTo(new ResourceNotFoundException("hospital.notfound", request.getHospitalId()).getMessage());
         verify(appointmentRepository, never()).save(any());
     }
 

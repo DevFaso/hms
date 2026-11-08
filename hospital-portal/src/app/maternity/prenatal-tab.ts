@@ -1,4 +1,8 @@
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { refusesForOverbookReason } from '../appointments/published-slot';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import {
+  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -21,6 +25,7 @@ import {
 import { PatientResponse } from '../services/patient.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
+import { isFrontDeskOnly } from '../patients/patient-chart/chart-access';
 import { ToastService } from '../core/toast.service';
 import { refusalReason } from '../shared/refusal-reason';
 import { localDateString, serverLocalDate } from '../shared/date-utils';
@@ -29,10 +34,33 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { missingRequiredMessage } from '../shared/required-fields';
+/**
+ * QA D1273 (round 26): the statuses a prenatal visit can be moved from — the
+ * ones the server's state machine lets a reschedule leave
+ * (AppointmentServiceImpl.VALID_TRANSITIONS, through
+ * PrenatalSchedulingServiceImpl.rescheduledStatus: a missed visit leaves
+ * through RESCHEDULED). A completed, cancelled, checked-in or running visit
+ * cannot be moved.
+ */
+const RESCHEDULABLE = new Set([
+  'PENDING',
+  'SCHEDULED',
+  'CONFIRMED',
+  'RESCHEDULED',
+  'NO_SHOW',
+  'FAILED',
+]);
+/** A reminder is for a visit still to come (the server refuses a past date). */
+const REMINDABLE = new Set(['PENDING', 'SCHEDULED', 'CONFIRMED', 'RESCHEDULED']);
+
 @Component({
   selector: 'app-prenatal-tab',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
     ClockTimePipe,
     ServerTimePipe,
     CommonModule,
@@ -52,8 +80,14 @@ export class PrenatalTabComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   private hospitalId: string | null = null;
+
+  /** RCPT-CLIN: the desk books by the gestational week; the high-risk flag is not its to read or tick. */
+  frontDeskOnly(): boolean {
+    return isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
+  }
 
   patient = signal<PatientResponse | null>(null);
   lmpDate = '';
@@ -86,6 +120,9 @@ export class PrenatalTabComponent implements OnInit {
   rescheduleDate = '';
   rescheduleTime = '';
   rescheduleNotes = '';
+  /** QA D1429: the new time is off the published slots: the server asked why. */
+  rescheduleOverbook = signal(false);
+  rescheduleOverbookReason = '';
   rescheduleBusy = signal(false);
 
   /* ── Reminder modal ── */
@@ -107,7 +144,14 @@ export class PrenatalTabComponent implements OnInit {
   generate(): void {
     const patient = this.patient();
     if (!patient || !this.lmpDate || !this.hospitalId) {
-      this.toast.error(this.translate.instant('PRENATAL.REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list. With both filled,
+      // the refusal can only be the missing hospital context.
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'MATERNITY.PATIENT', value: patient },
+          { labelKey: 'MATERNITY.LMP', value: this.lmpDate },
+        ]) ?? this.translate.instant('COMMON.NO_HOSPITAL_ASSIGNED'),
+      );
       return;
     }
     const weeks = this.supplementalWeeks
@@ -149,16 +193,35 @@ export class PrenatalTabComponent implements OnInit {
     };
     const time = r.suggestedStartTime?.substring(0, 5);
     if (time && /^\d{2}:\d{2}$/.test(time)) params['time'] = time;
+    // QA D1055: the recommended length and the provider the calendar was planned with.
+    if (r.durationMinutes > 0) params['duration'] = String(r.durationMinutes);
+    const staffId = this.schedule()?.staffId;
+    if (staffId) params['staffId'] = staffId;
     return params;
   }
 
   /* ── Reschedule ── */
+
+  /**
+   * QA D1273: "Reprogrammer" and "Envoyer un rappel" were offered on a
+   * completed visit of last week; both dialogs opened and failed only after
+   * they were filled. An action is offered only where the server accepts it.
+   */
+  canReschedule(a: PrenatalAppointmentSummary): boolean {
+    return RESCHEDULABLE.has(a.status ?? '');
+  }
+
+  canRemind(a: PrenatalAppointmentSummary): boolean {
+    return REMINDABLE.has(a.status ?? '') && (a.appointmentDate ?? '') >= localDateString();
+  }
 
   openReschedule(appointment: PrenatalAppointmentSummary): void {
     this.rescheduleTarget.set(appointment);
     this.rescheduleDate = '';
     this.rescheduleTime = appointment.startTime?.substring(0, 5) ?? '';
     this.rescheduleNotes = '';
+    this.rescheduleOverbook.set(false);
+    this.rescheduleOverbookReason = '';
     this.showRescheduleModal.set(true);
   }
 
@@ -170,7 +233,16 @@ export class PrenatalTabComponent implements OnInit {
   submitReschedule(): void {
     const target = this.rescheduleTarget();
     if (!target || !this.rescheduleDate || !this.rescheduleTime) {
-      this.toast.error(this.translate.instant('PRENATAL.RESCHEDULE_REQUIRED'));
+      const message = this.translate.instant('PRENATAL.RESCHEDULE_REQUIRED');
+      refuseFields(
+        this.host.nativeElement,
+        [!this.rescheduleDate && 'pn-new-date', !this.rescheduleTime && 'pn-new-time'].filter(
+          (id): id is string => !!id,
+        ),
+        ['pn-new-date', 'pn-new-time'],
+        message,
+      );
+      this.toast.error(message);
       return;
     }
     this.rescheduleBusy.set(true);
@@ -180,6 +252,7 @@ export class PrenatalTabComponent implements OnInit {
         newAppointmentDate: this.rescheduleDate,
         newStartTime: this.rescheduleTime,
         notes: this.rescheduleNotes.trim() || undefined,
+        overbookReason: this.rescheduleOverbookReason.trim() || undefined,
       })
       .subscribe({
         next: () => {
@@ -207,6 +280,13 @@ export class PrenatalTabComponent implements OnInit {
           this.closeReschedule();
         },
         error: (err: unknown) => {
+          if (refusesForOverbookReason(err)) {
+            this.rescheduleOverbook.set(true);
+            const message = this.translate.instant('APPOINTMENTS.OVERBOOK_HINT');
+            setTimeout(() =>
+              refuseFields(this.host.nativeElement, ['pn-overbook'], ['pn-overbook'], message),
+            );
+          }
           this.toast.error(this.reasonOr(err, 'PRENATAL.RESCHEDULE_ERROR'));
           this.rescheduleBusy.set(false);
         },

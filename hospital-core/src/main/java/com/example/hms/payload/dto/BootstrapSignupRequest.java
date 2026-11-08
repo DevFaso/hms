@@ -12,7 +12,7 @@ public class BootstrapSignupRequest {
     private String username;
 
     @NotBlank
-    @Email
+    @Email(message = "{validation.email.invalid}")
     private String email;
 
     @NotBlank
@@ -26,5 +26,6 @@ public class BootstrapSignupRequest {
     private String lastName;
 
     @NotBlank
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
 }

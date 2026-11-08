@@ -1,3 +1,5 @@
+import { map } from 'rxjs';
+import { allRows } from '../../shared/all-pages';
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -42,9 +44,11 @@ export class MyPharmacyInvoicesComponent implements OnInit {
   private load(): void {
     // Backend resolves the patient from the JWT (/me/patient/pharmacy/payments),
     // so no patient UUID is sent from the client (prevents IDOR).
-    this.svc.listMyPharmacyPayments(0, 50).subscribe({
-      next: (res) => {
-        const items = res?.data?.content ?? [];
+    // QA D1347: every payment (all pages): the total paid summed the 50 newest.
+    allRows((page, size) =>
+      this.svc.listMyPharmacyPayments(page, size).pipe(map((r) => r?.data)),
+    ).subscribe({
+      next: (items) => {
         this.payments.set(items);
         // QA D404: a payment voided with its cancelled dispense is not counted.
         this.totalPaid.set(
@@ -55,9 +59,11 @@ export class MyPharmacyInvoicesComponent implements OnInit {
       error: () => this.loading.set(false),
     });
 
-    this.svc.listMyPharmacyClaims(0, 50).subscribe({
-      next: (res) => {
-        const items = res?.data?.content ?? [];
+    // QA D1347: every claim (all pages), not the 50 newest.
+    allRows((page, size) =>
+      this.svc.listMyPharmacyClaims(page, size).pipe(map((r) => r?.data)),
+    ).subscribe({
+      next: (items) => {
         this.claims.set(items);
         this.totalClaimed.set(items.reduce((sum, c) => sum + (c.amount ?? 0), 0));
       },

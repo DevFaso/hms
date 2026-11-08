@@ -34,6 +34,10 @@ public class PatientHospitalRegistrationRequestDTO {
     @Builder.Default
     private boolean active = true; // Used for update/patch; ignored during initial registration.
 
+    /** QA D1430: why the registration is deactivated; required on that change. */
+    @jakarta.validation.constraints.Size(max = 500)
+    private String deactivationReason;
+
     private String currentRoom;
     private String currentBed;
     private String attendingPhysicianName;

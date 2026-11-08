@@ -196,7 +196,22 @@ describe('MyEducationComponent', () => {
       isUrgent: true,
     });
     expect(component.questions().length).toBe(1);
-    expect(component.askOpen).toBeFalse();
+    expect(component.askOpen()).toBeFalse();
+  });
+
+  // QA D1130: "Poser une question" (no resource) did nothing: the dialog was
+  // open only while askTarget() was not null, and the general ask sets null.
+  it('the general "Poser une question" button opens the ask dialog, by a real click', () => {
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    host.querySelector<HTMLButtonElement>('[data-testid="ask-general"]')!.click();
+    fixture.detectChanges();
+    const overlay = host.querySelector('[data-testid="edu-ask-overlay"]');
+    expect(overlay).withContext('the ask dialog is on screen').not.toBeNull();
+    expect(overlay!.querySelector('.edu-ask-about')).withContext('no resource named').toBeNull();
+    component.closeAsk();
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="edu-ask-overlay"]')).toBeNull();
   });
 
   it('submits a general question with no resource attached', () => {

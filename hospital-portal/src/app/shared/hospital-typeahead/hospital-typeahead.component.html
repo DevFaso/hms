@@ -10,6 +10,7 @@
       #searchInput
       type="text"
       class="hospital-typeahead__input"
+      data-escape-discards
       data-testid="hospital-typeahead-input"
       [placeholder]="'HOSPITAL_SCOPE.FILTER_BY_HOSPITAL' | translate"
       [attr.aria-label]="'HOSPITAL_SCOPE.FILTER_BY_HOSPITAL' | translate"
@@ -52,7 +53,7 @@
         <span class="material-icons" aria-hidden="true">local_hospital</span>
         <span class="hospital-typeahead__item-label">{{ hospital.name }}</span>
         @if (hospital.city) {
-          <span class="hospital-typeahead__item-meta">{{ hospital.city }}</span>
+          {{ ' ' }}<span class="hospital-typeahead__item-meta">{{ hospital.city }}</span>
         }
       </li>
     }

@@ -75,6 +75,7 @@ class LabResultServiceImplLifecycleTest {
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private InBasketService inBasketService;
+    @Mock private com.example.hms.service.lab.LabResultReleaseNotifier releaseNotifier;
 
     @InjectMocks
     private LabResultServiceImpl service;
@@ -360,6 +361,74 @@ class LabResultServiceImplLifecycleTest {
         assertThat(released.getSupersededByResultId()).isEqualTo(correction.getId());
         assertThat(released.getResultValue()).isEqualTo("4.1");
         verify(labOrderRepository, atLeastOnce()).findWithLockById(order.getId());
+    }
+
+    @Test
+    @DisplayName("QA D931 — releasing a correction closes the superseded result's open in-basket items")
+    void releasingACorrectionClosesTheSupersededItems() {
+        LabResult released = resultOn(order, true);
+        LabResult correction = stubReleasableCorrectionOf(released);
+
+        service.releaseLabResult(correction.getId(), true, Locale.ENGLISH);
+
+        verify(inBasketService).removeOpenItemsForReference(released.getId(), "LAB_RESULT");
+    }
+
+    @Test
+    @DisplayName("QA D931 — a released correction is filed as a correction, at least URGENT, naming old and new")
+    void aReleasedCorrectionIsFiledAsACorrection() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        try {
+            com.example.hms.model.User doctor = new com.example.hms.model.User();
+            doctor.setId(UUID.randomUUID());
+            com.example.hms.model.Staff orderingStaff = new com.example.hms.model.Staff();
+            orderingStaff.setUser(doctor);
+            order.setOrderingStaff(orderingStaff);
+            LabResult released = resultOn(order, true);
+            released.setResultValue("Positif");
+            LabResult correction = stubReleasableCorrectionOf(released);
+            correction.setResultValue("Négatif");
+            when(labResultMapper.severityFlagOf(correction)).thenReturn("NORMAL");
+            ArgumentCaptor<com.example.hms.payload.dto.clinical.CreateInBasketItemRequest> filed =
+                ArgumentCaptor.forClass(com.example.hms.payload.dto.clinical.CreateInBasketItemRequest.class);
+
+            service.releaseLabResult(correction.getId(), true, Locale.ENGLISH);
+
+            verify(inBasketService).createItemInNewTransaction(filed.capture());
+            assertThat(filed.getValue().getPriority()).isEqualTo(com.example.hms.enums.InBasketPriority.URGENT);
+            assertThat(filed.getValue().getTitle()).isEqualTo("Correction : Potassium");
+            assertThat(filed.getValue().getBody()).isEqualTo("Ancienne valeur Positif, nouvelle valeur Négatif");
+            verify(releaseNotifier).correctionReleased(correction, released);
+        } finally {
+            com.example.hms.utility.MessageUtil.setMessageSource(null);
+        }
+    }
+
+    @Test
+    @DisplayName("QA D931 — a correction that paged as critical is not announced a second time")
+    void aCriticalCorrectionIsNotAnnouncedTwice() {
+        LabResult released = resultOn(order, true);
+        LabResult correction = stubReleasableCorrectionOf(released);
+        org.mockito.Mockito.doAnswer(inv -> {
+            correction.setCriticalNotifiedAt(LocalDateTime.now());
+            return null;
+        }).when(criticalValueNotificationService).notifyIfCritical(org.mockito.ArgumentMatchers.same(correction), any());
+
+        service.releaseLabResult(correction.getId(), true, Locale.ENGLISH);
+
+        verify(releaseNotifier, never()).correctionReleased(any(), any());
+        verify(releaseNotifier).patientResultReleased(correction);
+    }
+
+    @Test
+    @DisplayName("QA D938 — every release tells the patient")
+    void aReleaseTellsThePatient() {
+        LabResult released = resultOn(order, true);
+        LabResult correction = stubReleasableCorrectionOf(released);
+
+        service.releaseLabResult(correction.getId(), true, Locale.ENGLISH);
+
+        verify(releaseNotifier).patientResultReleased(correction);
     }
 
     @Test
@@ -899,6 +968,8 @@ class LabResultServiceImplLifecycleTest {
         verify(labResultRepository, atLeastOnce()).save(saved.capture());
         assertThat(saved.getAllValues()).anyMatch(r -> r.isReleased() && "Autoverification".equals(r.getReleasedByDisplay()));
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
+        // QA D938: an auto-verified release tells the patient like any other.
+        verify(releaseNotifier).patientResultReleased(any(LabResult.class));
     }
 
     @Test
@@ -961,6 +1032,24 @@ class LabResultServiceImplLifecycleTest {
         assertThat(saved.getValue().isReleased()).isFalse();
         assertThat(saved.getValue().getReleasedByDisplay()).isNull();
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+    }
+
+    /** QA D1394: the analyser's or anyone's NORMAL aside, a value no bound settled is not auto-released. */
+    @Test
+    @DisplayName("D1394 - auto-verification skips a value whose comparator settles no grade")
+    void autoVerificationSkipsAValueThatSettlesNoGrade() {
+        ReflectionTestUtils.setField(service, "autoVerificationEnabled", true);
+        stubEntryPath();
+        when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder()
+                .severityFlag(LabResultMapper.FLAG_UNSPECIFIED).gradeUnknown(true).build());
+        when(labResultMapper.isGradeUnknown(any(LabResult.class))).thenReturn(true);
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().isReleased()).isFalse();
     }
 
     @Test
@@ -1907,5 +1996,58 @@ class LabResultServiceImplLifecycleTest {
         assertThat(child.isDocumentationSharedWithLab()).isTrue();
         assertThat(child.getDocumentationReference()).isEqualTo("DOC-42");
         assertThat(child.getOrderChannel()).isEqualTo(LabOrderChannel.ELECTRONIC);
+    }
+
+    @Test
+    @DisplayName("QA D1392 class — a result is not typed onto a cancelled order, nothing saved")
+    void aCancelledOrderTakesNoTypedResult() {
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(com.example.hms.enums.LabOrderStatus.CANCELLED);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
+        org.mockito.Mockito.lenient().when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        LabResultRequestDTO request = entryRequest();
+
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((BusinessException) e).getMessageKey())
+                .isEqualTo("lab.order.cancelledNoResult"));
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    /** QA D1428 class: a signature covers the value it was given to: the amend withdraws it. */
+    @Test
+    void qaD1428_anAmendOfASignedResultWithdrawsTheSignature() {
+        org.mockito.Mockito.lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        stubEntryPath();
+        LabResult existing = resultOn(order, false);
+        existing.setSignedAt(java.time.LocalDateTime.now());
+        existing.setSignedByDisplay("Dr A");
+        existing.setAcknowledged(true);
+        when(labResultRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        LabResultRequestDTO request = entryRequest();
+        request.setResultValue("9.9");
+
+        service.updateLabResult(existing.getId(), request, Locale.ENGLISH);
+
+        assertThat(existing.getSignedAt()).isNull();
+        assertThat(existing.getSignedByDisplay()).isNull();
+        assertThat(existing.isAcknowledged()).isFalse();
+    }
+
+    @Test
+    void qaD1428_aSignedResultIsNotDeleted() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        LabResult existing = resultOn(order, false);
+        existing.setSignedAt(java.time.LocalDateTime.now());
+        when(labResultRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.deleteLabResult(existing.getId(), Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "labresult.signed.noDelete");
+        verify(labResultRepository, never()).deleteById(any());
     }
 }

@@ -48,7 +48,11 @@ public class ConditionFhirResourceProvider implements IResourceProvider {
     ) {
         UUID patientId = FhirIds.fromReference(patient != null ? patient : subject);
         if (patientId == null) return Collections.emptyList();
+        // QA D1240 (round 25): a problem removed as entered in error is not a
+        // condition of the patient; a read by id still answers, marked
+        // entered-in-error (ConditionFhirMapper).
         return repository.findByPatient_Id(patientId).stream()
+            .filter(problem -> !problem.isEnteredInError())
             .map(mapper::toFhir)
             .toList();
     }

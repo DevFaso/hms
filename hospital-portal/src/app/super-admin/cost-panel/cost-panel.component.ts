@@ -45,7 +45,14 @@ interface WindowState {
         </div>
         <div class="form-row">
           <label for="cost-to">{{ 'COST_PANEL.TO' | translate }}</label>
-          <input id="cost-to" name="to" type="date" [(ngModel)]="window.to" data-testid="cost-to" />
+          <input
+            id="cost-to"
+            name="to"
+            type="date"
+            [attr.min]="window.from || null"
+            [(ngModel)]="window.to"
+            data-testid="cost-to"
+          />
         </div>
         <button type="submit" class="btn-primary" [disabled]="loading()" data-testid="cost-reload">
           {{ loading() ? ('COST_PANEL.LOADING' | translate) : ('COST_PANEL.REFRESH' | translate) }}

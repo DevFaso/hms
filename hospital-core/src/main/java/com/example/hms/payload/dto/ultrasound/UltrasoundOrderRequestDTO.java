@@ -29,6 +29,10 @@ public class UltrasoundOrderRequestDTO {
     @NotNull(message = "{ultrasoundOrder.scanType.required}")
     private UltrasoundScanType scanType;
 
+    // QA D1481: the ceiling the labour admission and this order's form already hold, not a new number.
+    @jakarta.validation.constraints.Min(value = 0, message = "{ultrasoundOrder.gestationalAge.range}")
+    @jakarta.validation.constraints.Max(value = com.example.hms.utility.GestationalDating.MAX_RECORDED_WEEKS,
+        message = "{ultrasoundOrder.gestationalAge.range}")
     private Integer gestationalAgeAtOrder; // weeks
 
     private String clinicalIndication;
@@ -41,6 +45,10 @@ public class UltrasoundOrderRequestDTO {
     private String appointmentLocation;
 
     @Builder.Default
+    // QA D1373 class (round 31): one of ClinicalPriority, refused by name otherwise. Upper
+    // case only: the mapper stores the value as sent, and the worklists compare codes.
+    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.ClinicalPriority.CODES,
+        message = "{validation.priority.invalid}")
     private String priority = "ROUTINE"; // ROUTINE, URGENT, STAT
 
     @Builder.Default

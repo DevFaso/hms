@@ -514,3 +514,16 @@
     transform: rotate(360deg);
   }
 }
+
+/* QA D940: when online pre-check-in opens, for an appointment still too far away. */
+.precheckin-later {
+  color: var(--text-secondary, #4b5563);
+  font-size: 14px;
+}
+
+/* QA D1060: the note that the clinic's slot length sets the duration. */
+.booking-hint {
+  margin: 0.25rem 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}

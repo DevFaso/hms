@@ -38,7 +38,7 @@ public class EncounterRequestDTO {
     /** Staff resolution */
     private UUID staffId;
     private String staffIdentifier;        // username/license/code
-    @Email
+    @Email(message = "{validation.email.invalid}")
     private String staffEmail;             // optional; if present must be a valid email
 
     /** Hospital resolution (receptionist JWT overrides anyway) */
@@ -59,6 +59,14 @@ public class EncounterRequestDTO {
     /** Optional notes */
     @Size(max = 2000, message = "{encounter.notes.size}")
     private String notes;
+
+    /**
+     * QA D944: the reason for the visit typed at the desk ("Motif principal"
+     * of a walk-in). It used to travel as {@code notes}, so the queue showed
+     * "Walk-in" and triage started with an empty chief complaint.
+     */
+    @Size(max = 2000, message = "{encounter.chiefComplaint.size}")
+    private String chiefComplaint;
 
     /** Department is usually required for check-in/queueing */
     @NotNull

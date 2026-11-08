@@ -37,8 +37,11 @@ public class PatientRequestDTO {
     @NotNull(message = "{patient.dateOfBirth.required}")
     private LocalDate dateOfBirth;
 
+    /** QA D1373: one of {@link com.example.hms.enums.PatientGender}, refused by name otherwise. */
     @NotBlank(message = "{patient.gender.required}")
     @Size(max = 10, message = "{patient.gender.size}")
+    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.PatientGender.CODES,
+        flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE, message = "{patient.gender.invalid}")
     private String gender;
 
     @Size(max = 255, message = "{patient.address.size}")
@@ -57,9 +60,14 @@ public class PatientRequestDTO {
     private String ethnicity;
 
     @NotBlank(message = "{patient.phoneNumberPrimary.required}")
-    @Size(max = 15, message = "{patient.phoneNumberPrimary.size}")
+    // QA D1019: the number as the desk writes it ("+226 65 11 22 33", 16
+    // characters) is stored in E.164 after this check; 15 refused a normal
+    // written form. 30 leaves room for separators, the column holds 100.
+    @Size(max = 30, message = "{patient.phoneNumberPrimary.size}")
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumberPrimary;
 
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumberSecondary;
 
     // Optional since V107 — phone-first: most patients have no email address.
@@ -75,10 +83,14 @@ public class PatientRequestDTO {
 
     // Guardian/emergency contact info - optional here, validated manually if under 18
     private String emergencyContactName;
+    @com.example.hms.validation.PhoneNumber
     private String emergencyContactPhone;
     private String emergencyContactRelationship;
 
+    /** QA D1383: A, B, AB or O with its Rhesus sign, as PATCH requires (one vocabulary: AboGroup). */
     @Size(max = 5, message = "{patient.bloodType.size}")
+    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.AboGroup.BLOOD_TYPE_CODES,
+        flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE, message = "{patient.bloodType.invalid}")
     private String bloodType;
 
     @Size(max = 255, message = "{patient.allergies.size}")

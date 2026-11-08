@@ -1,6 +1,8 @@
+import { refusalReason } from '../shared/refusal-reason';
 import {
   Component,
   computed,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -9,6 +11,7 @@ import {
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -16,12 +19,28 @@ import {
   PharmacyService,
   MedicationCatalogItemRequest,
   MedicationCatalogItemResponse,
+  PediatricDosingRequest,
+  PediatricWeightBand,
 } from '../services/pharmacy.service';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { blankFields, focusFirstInvalid, refuseFields } from '../shared/forms/invalid-fields';
+import { DashPipe } from '../shared/pipes/dash.pipe';
+import { missingRequiredMessage } from '../shared/required-fields';
+
+/** The required fields of the medication form (QA D1306). */
+const MED_REQUIRED_IDS = ['nameFr', 'genericName'];
 
 @Component({
   selector: 'app-medication-catalog',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    DashPipe,
+    SubmitGuardDirective,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './medication-catalog.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './medication-catalog.scss',
@@ -30,6 +49,7 @@ export class MedicationCatalogComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly roleContext = inject(RoleContextService);
 
   /**
@@ -40,6 +60,15 @@ export class MedicationCatalogComponent implements OnInit {
    */
   readonly canManage = computed(() =>
     this.roleContext.hasAnyActiveRoleExactly(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']),
+  );
+
+  /**
+   * Round 18 (QA D935): the paediatric dose limits are the pharmacy's, as in a
+   * real formulary: the pharmacist (and the hospital admin) sets and approves
+   * them in their own dialog, audited server-side.
+   */
+  readonly canEditDosing = computed(() =>
+    this.roleContext.hasAnyActiveRoleExactly(['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN']),
   );
 
   /** The dosage forms the editor offers, each with a PHARMACY.FORM_OPTION key. */
@@ -85,6 +114,11 @@ export class MedicationCatalogComponent implements OnInit {
   editing = signal<MedicationCatalogItemResponse | null>(null);
   saving = signal(false);
   form: MedicationCatalogItemRequest = this.emptyForm();
+
+  // Paediatric dosing (round 18, QA D935)
+  dosingItem = signal<MedicationCatalogItemResponse | null>(null);
+  dosingSaving = signal(false);
+  dosingForm: PediatricDosingRequest = this.emptyDosing();
 
   // Delete
   showDeleteConfirm = signal(false);
@@ -190,15 +224,32 @@ export class MedicationCatalogComponent implements OnInit {
   }
 
   submitForm(): void {
-    if (!this.form.nameFr || !this.form.genericName) {
-      this.toast.error(this.translate.instant('PHARMACY.MED_REQUIRED_FIELDS'));
+    // QA D1306 (round 28): a refused field is marked and focused, not only a toast.
+    const root = this.host.nativeElement;
+    const blank = blankFields(
+      { nameFr: this.form.nameFr, genericName: this.form.genericName },
+      MED_REQUIRED_IDS,
+    );
+    if (blank.length > 0) {
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'PHARMACY.NAME_FR', value: this.form.nameFr },
+          { labelKey: 'PHARMACY.GENERIC_NAME', value: this.form.genericName },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
+      refuseFields(root, blank, MED_REQUIRED_IDS, this.translate.instant('COMMON.FIELD_REQUIRED'));
+      this.toast.error(message);
       return;
     }
+    refuseFields(root, [], MED_REQUIRED_IDS, '');
+    // The code fields bind their own aria-invalid and hint: focus the field.
     if (!this.isAtcValid()) {
+      focusFirstInvalid(root, ['atcCode']);
       this.toast.error(this.translate.instant('PHARMACY.ATC_FORMAT_HINT'));
       return;
     }
     if (!this.isRxNormValid()) {
+      focusFirstInvalid(root, ['rxnormCode']);
       this.toast.error(this.translate.instant('PHARMACY.RXNORM_FORMAT_HINT'));
       return;
     }
@@ -219,7 +270,7 @@ export class MedicationCatalogComponent implements OnInit {
       },
       error: (err) => {
         const msg =
-          err?.error?.message ??
+          refusalReason(err) ??
           this.translate.instant(
             existing ? 'PHARMACY.MED_UPDATE_FAILED' : 'PHARMACY.MED_CREATE_FAILED',
           );
@@ -252,7 +303,7 @@ export class MedicationCatalogComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PHARMACY.MED_DELETE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PHARMACY.MED_DELETE_FAILED'),
         );
         this.deleting.set(false);
       },
@@ -274,6 +325,87 @@ export class MedicationCatalogComponent implements OnInit {
       essentialList: false,
       controlled: false,
       description: '',
+    };
+  }
+
+  /** Whether an item has any paediatric limit on file. */
+  hasPediatricLimits(item: MedicationCatalogItemResponse): boolean {
+    return (
+      item.pediatricMaxDoseMgPerKg != null ||
+      item.pediatricMaxDailyMgPerKg != null ||
+      item.pediatricMaxSingleDoseMg != null ||
+      item.pediatricMaxDailyMg != null ||
+      (item.pediatricWeightBands?.length ?? 0) > 0
+    );
+  }
+
+  openDosing(item: MedicationCatalogItemResponse): void {
+    this.dosingForm = {
+      pediatricMaxDoseMgPerKg: item.pediatricMaxDoseMgPerKg ?? null,
+      pediatricMaxDailyMgPerKg: item.pediatricMaxDailyMgPerKg ?? null,
+      pediatricMaxSingleDoseMg: item.pediatricMaxSingleDoseMg ?? null,
+      pediatricMaxDailyMg: item.pediatricMaxDailyMg ?? null,
+      pediatricManualReviewUnderMonths: item.pediatricManualReviewUnderMonths ?? null,
+      pediatricWeightBands: (item.pediatricWeightBands ?? []).map((b) => ({ ...b })),
+      pediatricDoseSource: item.pediatricDoseSource ?? null,
+      pediatricDoseStatus: item.pediatricDoseStatus ?? 'DEFAULT_PENDING_APPROVAL',
+    };
+    this.dosingItem.set(item);
+  }
+
+  closeDosing(): void {
+    this.dosingItem.set(null);
+  }
+
+  addBand(): void {
+    this.dosingForm.pediatricWeightBands = [
+      ...this.dosingForm.pediatricWeightBands,
+      {
+        minWeightKg: null,
+        maxWeightKg: null,
+        dosePerAdministration: null,
+        doseUnit: '',
+        maxDosesPerDay: null,
+      } as PediatricWeightBand,
+    ];
+  }
+
+  removeBand(index: number): void {
+    this.dosingForm.pediatricWeightBands = this.dosingForm.pediatricWeightBands.filter(
+      (_, i) => i !== index,
+    );
+  }
+
+  saveDosing(): void {
+    const item = this.dosingItem();
+    if (!item) return;
+    this.dosingSaving.set(true);
+    this.svc.updatePediatricDosing(item.id, this.dosingForm).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('PHARMACY.DOSING.SAVED'));
+        this.dosingSaving.set(false);
+        this.closeDosing();
+        this.loadItems();
+      },
+      error: (err) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.DOSING.SAVE_FAILED'),
+        );
+        this.dosingSaving.set(false);
+      },
+    });
+  }
+
+  private emptyDosing(): PediatricDosingRequest {
+    return {
+      pediatricMaxDoseMgPerKg: null,
+      pediatricMaxDailyMgPerKg: null,
+      pediatricMaxSingleDoseMg: null,
+      pediatricMaxDailyMg: null,
+      pediatricManualReviewUnderMonths: null,
+      pediatricWeightBands: [],
+      pediatricDoseSource: null,
+      pediatricDoseStatus: 'DEFAULT_PENDING_APPROVAL',
     };
   }
 }

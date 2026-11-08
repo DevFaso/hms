@@ -37,10 +37,16 @@ export interface AppointmentResponse {
   hospitalName: string;
   hospitalAddress: string | null;
   departmentId?: string | null;
+  /** The department's name (the API has always sent it). */
+  departmentName?: string | null;
   createdById: string;
   createdByName: string;
   reason: string;
   notes?: string | null;
+  /** QA D1126 / D1132: why the visit was cancelled or marked a no-show. */
+  statusReason?: string | null;
+  /** QA D1429: why this visit was booked outside any published free slot. */
+  overbookReason?: string | null;
   appointmentDate: string;
   startTime: string;
   endTime: string;
@@ -63,6 +69,10 @@ export interface AppointmentUpsertRequest {
   departmentId?: string;
   reason?: string;
   notes?: string;
+  /** QA D985: the recall this booking answers (booked from the recall list). */
+  recallId?: string;
+  /** QA D1429: why the visit is booked outside any published free slot; required then. */
+  overbookReason?: string;
 }
 
 export interface AppointmentFilterRequest {
@@ -101,15 +111,32 @@ export class AppointmentService {
     return this.http.post<AppointmentResponse>(this.baseUrl, req);
   }
 
+  /**
+   * QA D1474: why a booking at this time would be refused (past, off the clinician's schedule,
+   * overlapping a held visit), in the reader's language; absent when it can be booked.
+   */
+  bookingTimeCheck(
+    staffId: string,
+    date: string,
+    time: string,
+    movedAppointmentId?: string,
+  ): Observable<{ refusal?: string }> {
+    let params = new HttpParams().set('staffId', staffId).set('date', date).set('time', time);
+    if (movedAppointmentId) params = params.set('movedAppointmentId', movedAppointmentId);
+    return this.http.get<{ refusal?: string }>(`${this.baseUrl}/booking-time-check`, { params });
+  }
+
   update(id: string, req: AppointmentUpsertRequest): Observable<AppointmentResponse> {
     return this.http.put<AppointmentResponse>(`${this.baseUrl}/${id}`, req);
   }
 
-  updateStatus(id: string, action: string): Observable<AppointmentResponse> {
-    // Backend exposes PUT /{id}/status?action=... (not PATCH, not a request body).
-    // Using http.patch() or sending action in the body caused 401/405 in production.
+  updateStatus(id: string, action: string, reason?: string): Observable<AppointmentResponse> {
+    // Backend exposes PUT /{id}/status?action=... (not PATCH). The action stays a
+    // query parameter (sending it in the body caused 401/405 in production).
+    // QA D1126 / D1132: a cancel or a no-show carries its reason in the body.
     const params = new HttpParams().set('action', action);
-    return this.http.put<AppointmentResponse>(`${this.baseUrl}/${id}/status`, null, { params });
+    const body = reason === undefined ? null : { reason };
+    return this.http.put<AppointmentResponse>(`${this.baseUrl}/${id}/status`, body, { params });
   }
 
   delete(id: string): Observable<void> {

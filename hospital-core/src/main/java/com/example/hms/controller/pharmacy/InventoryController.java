@@ -70,7 +70,8 @@ public class InventoryController {
     }
 
     @GetMapping("/items/pharmacy/{pharmacyId}")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    // QA D965: the dispensing page (pharmacy verifier) reads the items to know a controlled lot.
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "List inventory items by pharmacy", description = "Paginated list of active inventory items for a specific pharmacy")
     @ApiResponse(responseCode = "200", description = "Inventory items retrieved")
     public ResponseEntity<ApiResponseWrapper<Page<InventoryItemResponseDTO>>> listByPharmacy(

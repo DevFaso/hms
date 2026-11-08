@@ -15,6 +15,7 @@ import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { AuditDescriptionService } from './audit-description.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { toServerDateTime } from '../shared/date-utils';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 
 /** QA D794: how long the search box waits after the last keystroke before asking the server. */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -23,6 +24,7 @@ const SEARCH_DEBOUNCE_MS = 300;
   selector: 'app-audit-logs',
   standalone: true,
   imports: [
+    DateTimePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,

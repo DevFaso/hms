@@ -88,6 +88,16 @@ public interface PatientService {
      */
     List<RegistrationMatchDTO> findRegistrationMatches(String email, String phone, UUID hospitalId);
 
+    /**
+     * QA D1061 / D1064: the match with the form's name and date of birth: each
+     * phone or e-mail match says whether it is the same person, and the same
+     * name and date of birth at another hospital of the organisation is
+     * proposed even when the phone differs.
+     */
+    List<RegistrationMatchDTO> findRegistrationMatches(String email, String phone, String firstName,
+                                                       String lastName, java.time.LocalDate dateOfBirth,
+                                                       UUID hospitalId);
+
     PatientTimelineResponseDTO getDoctorTimeline(
         UUID patientId,
         UUID hospitalId,

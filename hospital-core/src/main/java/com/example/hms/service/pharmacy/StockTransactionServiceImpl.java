@@ -49,6 +49,9 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 @RequiredArgsConstructor
 @Slf4j
 public class StockTransactionServiceImpl implements StockTransactionService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_QUANTITY = "quantity";
+
 
     private final StockTransactionRepository stockTransactionRepository;
     private final InventoryItemRepository inventoryItemRepository;
@@ -68,6 +71,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private final ControlledStockWitness controlledStockWitness;
     /** Re-reads the lot and item after the atomic quantity UPDATEs (#825 round 5). */
     private final EntityManager entityManager;
+    /** QA D964: a transfer out follows first expired, first out. */
+    private final FefoLotPolicy fefoLotPolicy;
 
     @Override
     @Transactional
@@ -81,6 +86,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 : null;
 
         requireMovementIsAccountable(dto, item, lot);
+        requireFefoForTransfer(dto, lot);
         // QA D668 (returns), D779 (every movement): an item counted in whole
         // units never moves by a fraction, or its stock shows decimals.
         if (!correctsALegacyFraction(dto, item, lot)) {
@@ -184,6 +190,107 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 .toList();
     }
 
+    /** QA D932: the states a fill can be returned against (the same as requireReturnWithinDispense). */
+    private static final List<com.example.hms.enums.DispenseStatus> RETURNABLE_FILL_STATES = List.of(
+            com.example.hms.enums.DispenseStatus.COMPLETED, com.example.hms.enums.DispenseStatus.PARTIAL);
+    /** A row count for one IN list: PostgreSQL takes at most 32767 bind values. */
+    private static final int RETURNED_SUM_BATCH = 1000;
+
+    /**
+     * QA D932: a return of dispensed stock must name its dispense, and the
+     * form had no way to: it cleared the reference and the server refused
+     * every return ("Un retour de stock délivré doit indiquer sa délivrance").
+     * The fills listed are those {@link #requireReturnWithinDispense} accepts
+     * for this item and lot, with what each can still take back. Round 33
+     * (CX-003 class): every one of them. The form stopped at the newest 50 fills,
+     * fully returned ones included, so an older fill could not be returned at all.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO> listReturnableDispenses(
+            UUID inventoryItemId, UUID stockLotId) {
+        InventoryItem item = resolveInventoryItem(inventoryItemId);
+        enforceHospitalScope(item.getPharmacy());
+        List<com.example.hms.model.pharmacy.Dispense> fills = returnableFills(item, stockLotId);
+        if (fills == null || fills.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, BigDecimal> returned = returnedSoFar(fills);
+        // Review of #975 (minimum necessary): the patient's name is for the
+        // roles that dispense; an inventory clerk picks the fill by its date,
+        // quantity and lot.
+        boolean showsPatient = roleValidator.hasAnyAuthority(
+                "ROLE_PHARMACIST", "ROLE_STORE_MANAGER", "ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN");
+        List<com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO> out = new java.util.ArrayList<>();
+        for (com.example.hms.model.pharmacy.Dispense d : fills) {
+            BigDecimal returnable = nz(d.getQuantityDispensed()).subtract(nz(returned.get(d.getId())));
+            if (returnable.signum() <= 0) {
+                continue;
+            }
+            out.add(new com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO(
+                    d.getId(),
+                    d.getPrescription() != null ? d.getPrescription().getId() : null,
+                    showsPatient ? patientName(d.getPatient()) : null,
+                    d.getMedicationName(),
+                    d.getDispensedAt(),
+                    d.getQuantityDispensed(),
+                    returnable,
+                    d.getUnit(),
+                    d.getStockLot() != null ? d.getStockLot().getLotNumber() : null));
+        }
+        return out;
+    }
+
+    /** Every fill of the item (of the lot, when one is named) a return may be booked against, newest first. */
+    private List<com.example.hms.model.pharmacy.Dispense> returnableFills(InventoryItem item, UUID stockLotId) {
+        if (stockLotId != null) {
+            StockLot lot = stockLotRepository.findById(stockLotId)
+                    .orElseThrow(() -> new ResourceNotFoundException("stockLot.notFound", stockLotId));
+            if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
+                throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
+            }
+            return dispenseRepository.findReturnableFillsOfLot(stockLotId,
+                    RETURNABLE_FILL_STATES);
+        }
+        if (item.getMedicationCatalogItem() == null || item.getPharmacy() == null) {
+            return List.of();
+        }
+        return dispenseRepository
+                .findReturnableFillsOutOfLots(
+                        item.getPharmacy().getId(), item.getMedicationCatalogItem().getId(),
+                        RETURNABLE_FILL_STATES);
+    }
+
+    /** What has already been returned against each fill, in one query. */
+    private Map<UUID, BigDecimal> returnedSoFar(List<com.example.hms.model.pharmacy.Dispense> fills) {
+        Map<UUID, BigDecimal> returned = new java.util.HashMap<>();
+        List<UUID> ids = fills.stream().map(com.example.hms.model.pharmacy.Dispense::getId).toList();
+        for (int from = 0; from < ids.size(); from += RETURNED_SUM_BATCH) {
+            List<Object[]> rows = stockTransactionRepository.sumQuantityByReferences(
+                    ids.subList(from, Math.min(from + RETURNED_SUM_BATCH, ids.size())), RETURNED_TYPES);
+            collectReturned(rows, returned);
+        }
+        return returned;
+    }
+
+    private static void collectReturned(List<Object[]> rows, Map<UUID, BigDecimal> returned) {
+        if (rows == null) {
+            return;
+        }
+        for (Object[] row : rows) {
+            if (row != null && row.length == 2 && row[0] instanceof UUID id && row[1] instanceof BigDecimal sum) {
+                returned.put(id, sum);
+            }
+        }
+    }
+
+    private static String patientName(com.example.hms.model.Patient patient) {
+        if (patient == null) {
+            return null;
+        }
+        return patient.getFullName();
+    }
+
     // ── Private helpers ──────────────────────────────────────────────────
 
     /**
@@ -198,14 +305,15 @@ public class StockTransactionServiceImpl implements StockTransactionService {
      *   <li>Every movement other than a receipt carries a reason.</li>
      *   <li>An item that is tracked in lots moves through a lot, and the lot
      *       must be that item's own.</li>
-     *   <li>Quantities are positive; an adjustment is signed but not zero.</li>
+     *   <li>Quantities are positive; an adjustment is signed but not zero, and
+     *       negative when its reason writes stock off (QA D1243).</li>
      *   <li>Nothing is received into an expired lot (D108).</li>
      * </ul>
      */
     private void requireMovementIsAccountable(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
         StockTransactionType type = dto.getTransactionType();
         if (type == StockTransactionType.DISPENSE) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.dispense.viaWorkflow"));
+            throw new com.example.hms.exception.FieldBusinessException("transactionType", MessageUtil.resolve("stockTransaction.dispense.viaWorkflow"));
         }
         // QA D615: a receipt here created no lot row, so an expired lot, a
         // lot number re-used with another expiry and an item total above its
@@ -213,25 +321,55 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         // (POST /pharmacy/inventory/lots), which owns those rules; the portal
         // already uses it.
         if (type == StockTransactionType.RECEIPT) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.receipt.viaLots"));
+            throw new com.example.hms.exception.FieldBusinessException("transactionType", MessageUtil.resolve("stockTransaction.receipt.viaLots"));
         }
         BigDecimal quantity = dto.getQuantity();
         boolean quantityValid = quantity != null
                 && (type == StockTransactionType.ADJUSTMENT ? quantity.signum() != 0 : quantity.signum() > 0);
         if (!quantityValid) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.quantity.invalid"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY, MessageUtil.resolve("stockTransaction.quantity.invalid"));
         }
         if (dto.getReason() == null || dto.getReason().isBlank()) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.reason.required"));
+            throw new com.example.hms.exception.FieldBusinessException("reason", "stockTransaction.reason.required");
+        }
+        // QA D1243: a write-off reason (damage, expiry, loss) only removes stock.
+        if (type == StockTransactionType.ADJUSTMENT && quantity.signum() > 0
+                && StockWriteOffReason.isWriteOff(dto.getReason())) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY, StockWriteOffReason.MUST_REMOVE_KEY);
         }
         if (lot != null) {
             if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
-                throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
+                throw new com.example.hms.exception.FieldBusinessException("stockLotId", MessageUtil.resolve("stockTransaction.lot.wrongItem"));
             }
         } else if (stockLotRepository.existsByInventoryItemId(item.getId())) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.required"));
+            throw new com.example.hms.exception.FieldBusinessException("stockLotId", "stockTransaction.lot.required");
         }
     }
+
+    /**
+     * QA D964: a transfer sends the shortest-dated usable lot unless a reason
+     * says otherwise; the reason is kept on the ledger row after the movement's
+     * own reason ("... | FEFO: ..."). A write-off (negative adjustment) names
+     * its lot on purpose (that lot is damaged or expiring) and is not FEFO.
+     */
+    private void requireFefoForTransfer(StockTransactionRequestDTO dto, StockLot lot) {
+        if (dto.getTransactionType() != StockTransactionType.TRANSFER || lot == null) {
+            return;
+        }
+        String reason = fefoLotPolicy.requireFefoOrReason(lot, dto.getFefoOverrideReason());
+        if (reason != null) {
+            String combined = dto.getReason().trim() + FEFO_LEDGER_SEPARATOR + reason;
+            if (combined.length() > 500) {
+                throw new com.example.hms.exception.FieldBusinessException("reason", "pharmacy.fefo.reasonTooLong",
+                        String.valueOf(Math.max(0, 500 - dto.getReason().trim().length()
+                                - FEFO_LEDGER_SEPARATOR.length())));
+            }
+            dto.setReason(combined);
+        }
+    }
+
+    /** How a FEFO override follows a ledger reason; the ledger screen splits on it. */
+    static final String FEFO_LEDGER_SEPARATOR = " | FEFO: ";
 
     /** Movements that take stock off a lot or item, which a return may put back. */
     private static final Set<StockTransactionType> ISSUED_TYPES =
@@ -259,8 +397,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         }
         BigDecimal returnable = nz(issued).subtract(nz(returned));
         if (quantity.compareTo(returnable) > 0) {
-            throw new BusinessException("stockTransaction.return.exceedsIssued",
-                    returnable.max(BigDecimal.ZERO).stripTrailingZeros().toPlainString());
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY, "stockTransaction.return.exceedsIssued",
+                    com.example.hms.utility.DisplayNumbers.quantity(returnable.max(BigDecimal.ZERO)));
         }
     }
 
@@ -289,7 +427,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         }
         if (dispense.getStatus() != com.example.hms.enums.DispenseStatus.COMPLETED
                 && dispense.getStatus() != com.example.hms.enums.DispenseStatus.PARTIAL) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.return.dispenseNotReturnable"));
+            throw new com.example.hms.exception.FieldBusinessException("referenceId", MessageUtil.resolve("stockTransaction.return.dispenseNotReturnable"));
         }
         StockLot dispensedLot = dispense.getStockLot();
         boolean sameStock = dispensedLot != null
@@ -303,8 +441,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         BigDecimal returnable = nz(dispense.getQuantityDispensed()).subtract(nz(
                 stockTransactionRepository.sumQuantityForReference(dispense.getId(), RETURNED_TYPES)));
         if (dto.getQuantity().compareTo(returnable) > 0) {
-            throw new BusinessException("stockTransaction.return.exceedsDispensed",
-                    returnable.max(BigDecimal.ZERO).stripTrailingZeros().toPlainString());
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY, "stockTransaction.return.exceedsDispensed",
+                    com.example.hms.utility.DisplayNumbers.quantity(returnable.max(BigDecimal.ZERO)));
         }
     }
 
@@ -329,8 +467,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         BigDecimal returnable = nz(transfer.getQuantity()).subtract(nz(
                 stockTransactionRepository.sumQuantityForReference(transfer.getId(), RETURNED_TYPES)));
         if (dto.getQuantity().compareTo(returnable) > 0) {
-            throw new BusinessException("stockTransaction.return.exceedsDispensed",
-                    returnable.max(BigDecimal.ZERO).stripTrailingZeros().toPlainString());
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY, "stockTransaction.return.exceedsDispensed",
+                    com.example.hms.utility.DisplayNumbers.quantity(returnable.max(BigDecimal.ZERO)));
         }
     }
 
@@ -353,7 +491,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             returned = stockTransactionRepository.sumUnreferencedQuantityForItem(item.getId(), RETURNED_TYPES);
         }
         if (dto.getQuantity().compareTo(nz(transferred).subtract(nz(returned))) > 0) {
-            throw new BusinessException("stockTransaction.return.dispenseRequired");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY, "stockTransaction.return.dispenseRequired");
         }
     }
 
@@ -411,13 +549,13 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private User resolvePerformer(UUID performedBy) {
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
-            throw new BusinessException("stock.user.performingUnknown");
+            throw new com.example.hms.exception.FieldBusinessException("performedBy", "stock.user.performingUnknown");
         }
         // D82: the movement is recorded against the signed-in user. A
         // caller-supplied performer let one user book a movement in a
         // colleague's name.
         if (performedBy != null && !performedBy.equals(userId)) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.performer.notSelf"));
+            throw new com.example.hms.exception.FieldBusinessException("performedBy", MessageUtil.resolve("stockTransaction.performer.notSelf"));
         }
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
@@ -482,7 +620,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
      */
     private void putOnWithinReceived(InventoryItem item, StockLot lot, BigDecimal quantity, LocalDateTime now) {
         if (lot != null && stockLotRepository.incrementRemainingWithinReceived(lot.getId(), quantity, now) == 0) {
-            throw new BusinessException(MessageUtil.resolve("stockLot.quantity.aboveReceived"));
+            // QA D1354 (round 30): the adjustment's quantity is what the lot cannot take.
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY, MessageUtil.resolve("stockLot.quantity.aboveReceived"));
         }
         inventoryItemRepository.incrementOnHand(item.getId(), quantity, now);
     }

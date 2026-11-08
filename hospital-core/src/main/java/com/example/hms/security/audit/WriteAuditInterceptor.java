@@ -1,5 +1,6 @@
 package com.example.hms.security.audit;
 
+import com.example.hms.security.ReadsOnly;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.AuditEventType;
@@ -56,10 +57,11 @@ import java.util.UUID;
  * pattern. No request body, no query string: both can carry PHI and neither
  * is needed to know that the write happened.
  *
- * <p>POST is not always a write in this API — {@code /search},
- * {@code /filter}, {@code /candidates} and a few more are reads that carry
- * a body. Those route tails are recognised and skipped; anything else that
- * reads under POST opts out per method with a reason.
+ * <p>POST is not always a write in this API: a read that carries a body declares
+ * {@link ReadsOnly} on its handler, the one source {@code ReadOnlyModeFilter} also
+ * reads, and is not recorded. A route's name proves nothing either way
+ * ({@code /maternal-history/{id}/calculate-risk} writes, {@code /signatures/verify}
+ * reads). {@code ReadOnlyPostGuardTest} runs every POST through this interceptor.
  *
  * <p>What it does not do: replace the specific events services already emit
  * (PATIENT_UPDATE, PRESCRIPTION_CREATED, …). Those handlers opt out so an
@@ -74,13 +76,6 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
     private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
     /** Route roots that carry no entity meaning of their own. */
     private static final Set<String> NAMESPACE_SEGMENTS = Set.of("api", "super-admin", "admin", "me", "public");
-    /**
-     * Last literal segment of a POST route that is a read with a request
-     * body, not a write. Kept short and literal on purpose; a read under any
-     * other name opts out with {@code @WriteAudited(skip = true, reason = …)}.
-     */
-    static final Set<String> READ_ONLY_POST_TAILS = Set.of(
-        "search", "filter", "candidates", "check", "calculate-risk", "lookup", "query", "preview", "validate");
     private static final String PATIENT_ID_VAR = "patientId";
     static final String RESOURCE_ID_ATTRIBUTE = WriteAuditInterceptor.class.getName() + ".resourceId";
     static final String PATIENT_ID_ATTRIBUTE = WriteAuditInterceptor.class.getName() + ".patientId";
@@ -134,14 +129,14 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         if (!(handler instanceof HandlerMethod handlerMethod)) {
             return;
         }
+        if (handlerMethod.hasMethodAnnotation(ReadsOnly.class)) {
+            return;
+        }
         WriteAudited annotation = resolveAnnotation(handlerMethod);
         if (annotation != null && annotation.skip()) {
             return;
         }
         String pattern = matchedPattern(request);
-        if (isReadOnlyPost(request.getMethod(), pattern)) {
-            return;
-        }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         UUID actorId = resolveActorId(auth);
         if (auth == null || actorId == null) {
@@ -193,21 +188,6 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         }
         int status = response.getStatus();
         return status >= 200 && status < 300;
-    }
-
-    /** A POST whose route ends in a read verb ({@code /search}, {@code /filter}, …) reads; it is not recorded. */
-    static boolean isReadOnlyPost(String method, String pattern) {
-        if (!"POST".equalsIgnoreCase(method)) {
-            return false;
-        }
-        String[] segments = pattern.split("/");
-        for (int i = segments.length - 1; i >= 0; i--) {
-            if (segments[i].isBlank() || segments[i].startsWith("{")) {
-                continue;
-            }
-            return READ_ONLY_POST_TAILS.contains(segments[i]);
-        }
-        return false;
     }
 
     /** Method-level annotation wins over the class-level one. */

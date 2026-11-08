@@ -178,7 +178,7 @@ public class StaffServiceImpl implements StaffService {
     @Override
     @Transactional
     public StaffResponseDTO createStaff(StaffRequestDTO dto, Locale locale) {
-        validateBaseStaffRequirements(dto, locale);
+        validateBaseStaffRequirements(dto);
 
         User user = resolveStaffUser(dto.getUserEmail());
 
@@ -212,7 +212,7 @@ public class StaffServiceImpl implements StaffService {
                     getLocalizedMessage("staff.assignment.required", new Object[]{dto.getUserEmail(), dto.getHospitalName()}, locale)));
         }
 
-        validateLicenseNumber(dto, locale);
+        validateLicenseNumber(dto);
         validateRoleSpecificRequirements(dto, dto.getRoleName(), locale);
 
         Staff staff = staffMapper.toStaff(dto, user, hospital, department, assignment);
@@ -228,7 +228,7 @@ public class StaffServiceImpl implements StaffService {
     @Transactional
     public StaffResponseDTO updateStaff(UUID id, StaffRequestDTO dto, Locale locale) {
         Staff existingStaff = findStaffOrThrow(id, locale);
-        validateBaseStaffRequirements(dto, locale);
+        validateBaseStaffRequirements(dto);
 
         User user = resolveStaffUser(dto.getUserEmail());
 
@@ -270,7 +270,7 @@ public class StaffServiceImpl implements StaffService {
         boolean licenceChanged = (existingLic == null && newLic != null)
                 || (existingLic != null && !existingLic.equals(newLic));
         if (licenceChanged) {
-            validateLicenseNumber(dto, locale);
+            validateLicenseNumber(dto);
         }
 
         validateRoleSpecificRequirements(dto, dto.getRoleName(), locale);
@@ -407,22 +407,13 @@ public class StaffServiceImpl implements StaffService {
             .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", value));
     }
 
-    private void validateBaseStaffRequirements(StaffRequestDTO dto, Locale locale) {
-        if (dto.getUserEmail() == null || dto.getUserEmail().isBlank()) {
-            throw new BusinessRuleException(
-                messageSource.getMessage("staff.user.required", null, locale)
-            );
-        }
-        if (dto.getHospitalName() == null || dto.getHospitalName().isBlank()) {
-            throw new BusinessRuleException(
-                messageSource.getMessage("staff.hospital.required", null, locale)
-            );
-        }
-        if (dto.getJobTitle() == null || dto.getJobTitle().isBlank()) {
-            throw new BusinessRuleException(
-                messageSource.getMessage("staff.jobTitle.required", null, locale)
-            );
-        }
+    private void validateBaseStaffRequirements(StaffRequestDTO dto) {
+        // QA round 29 sweep (D1318 class): the three named in one answer, not one per request.
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(dto.getUserEmail(), "userEmail", "staff.user.required")
+            .requireValue(dto.getHospitalName(), "hospitalName", "staff.hospital.required")
+            .requireValue(dto.getJobTitle(), "jobTitle", "staff.jobTitle.required")
+            .orThrow();
     }
 
 
@@ -497,7 +488,7 @@ public class StaffServiceImpl implements StaffService {
         "LAB_TECHNICIAN", "LABORATORY_SCIENTIST"
     );
 
-    private void validateLicenseNumber(StaffRequestDTO dto, Locale locale) {
+    private void validateLicenseNumber(StaffRequestDTO dto) {
         String jobTitle = dto.getJobTitle();
         // Only clinical roles require a license number
         if (jobTitle == null || !CLINICAL_JOB_TITLES.contains(jobTitle.toUpperCase())) {
@@ -505,14 +496,13 @@ public class StaffServiceImpl implements StaffService {
         }
         String licenseNumber = dto.getLicenseNumber();
         if (licenseNumber == null || licenseNumber.isBlank()) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.license.required", null, locale)
-            );
+            // QA round 29 sweep: named, so the staff form marks the licence number.
+            throw new com.example.hms.exception.FieldBusinessException("licenseNumber", "staff.license.required");
         }
         if (staffRepository.existsByLicenseNumber(licenseNumber)) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.license.duplicate", new Object[]{licenseNumber}, locale)
-            );
+            // QA D1301 class (round 29): a licence number another record holds is marked on its field.
+            throw new com.example.hms.exception.FieldBusinessException("licenseNumber", "staff.license.duplicate",
+                licenseNumber);
         }
     }
 
@@ -537,23 +527,17 @@ public class StaffServiceImpl implements StaffService {
 
     private void validateDoctorFields(StaffRequestDTO dto, Locale locale) {
         if (dto.getSpecialization() == null) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.doctor.specializationRequired", null, locale)
-            );
+            throw new com.example.hms.exception.FieldBusinessException("specialization", getLocalizedMessage("staff.doctor.specializationRequired", null, locale));
         }
     }
 
     private void validateNurseFields(StaffRequestDTO dto, Locale locale) {
-        if (dto.getEmploymentType() == null) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.nurse.employmentTypeRequired", null, locale)
-            );
-        }
-        if (dto.getStartDate() == null) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.nurse.startDateRequired", null, locale)
-            );
-        }
+        // QA D1355 class (round 30): both named in one refusal.
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(dto.getEmploymentType(), "employmentType",
+                getLocalizedMessage("staff.nurse.employmentTypeRequired", null, locale))
+            .requireValue(dto.getStartDate(), "startDate", getLocalizedMessage("staff.nurse.startDateRequired", null, locale))
+            .orThrow();
         if (dto.getEndDate() != null && dto.getEndDate().isBefore(dto.getStartDate())) {
             throw new BusinessRuleException(
                 getLocalizedMessage("staff.nurse.endDateAfterStart", null, locale)
@@ -562,25 +546,20 @@ public class StaffServiceImpl implements StaffService {
     }
 
     private void validateRadiologistFields(StaffRequestDTO dto, Locale locale) {
-        if (dto.getLicenseNumber() == null || dto.getLicenseNumber().isBlank()) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.radiologist.licenseRequired", null, locale)
-            );
-        }
-        if (dto.getStartDate() == null) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.radiologist.startDateRequired", null, locale)
-            );
-        }
+        // QA D1355 class (round 30): the licence, the start date and the
+        // specialization named in one refusal (the specialization used to be
+        // named only after the dates passed).
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(dto.getLicenseNumber(), "licenseNumber",
+                getLocalizedMessage("staff.radiologist.licenseRequired", null, locale))
+            .requireValue(dto.getStartDate(), "startDate",
+                getLocalizedMessage("staff.radiologist.startDateRequired", null, locale))
+            .requireValue(dto.getSpecialization(), "specialization",
+                getLocalizedMessage("staff.radiologist.specializationRequired", null, locale))
+            .orThrow();
         if (dto.getEndDate() != null && dto.getEndDate().isBefore(dto.getStartDate())) {
             throw new BusinessRuleException(
                 getLocalizedMessage("staff.radiologist.endDateAfterStart", null, locale)
-            );
-        }
-
-        if (dto.getSpecialization() == null) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.radiologist.specializationRequired", null, locale)
             );
         }
     }

@@ -19,7 +19,11 @@ public class PrenatalScheduleResponseDTO {
     private UUID staffId;
     private LocalDate estimatedDueDate;
     private int currentGestationalWeek;
-    private boolean highRisk;
+    /** QA D1031: antenatal contacts already held in this pregnancy (completed visits since the LMP). */
+    private int completedContacts;
+    /** RCPT-CLIN: absent for a receptionist (a false would claim the pregnancy is not high risk). */
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private Boolean highRisk;
     private List<PrenatalVisitRecommendationDTO> recommendations;
     private List<PrenatalAppointmentSummaryDTO> existingAppointments;
     private List<String> alerts;

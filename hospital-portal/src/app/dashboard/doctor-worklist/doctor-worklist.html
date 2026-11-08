@@ -91,7 +91,8 @@
             </span>
             <span class="wl-patient-info">
               <span class="wl-name">{{ item.patientName }}</span>
-              <span class="wl-meta">
+              {{ ' '
+              }}<span class="wl-meta">
                 {{ item.age }}{{ item.sex ? '/' + item.sex.charAt(0) : '' }}
                 @if (item.mrn) {
                   <span class="wl-mrn">{{ item.mrn }}</span>
@@ -114,7 +115,7 @@
           @if (item.waitMinutes !== null) {
             <div class="wl-wait" [class.wait-long]="(item.waitMinutes ?? 0) > 30">
               <span class="material-symbols-outlined">hourglass_top</span>
-              {{ item.waitMinutes }}m
+              {{ item.waitMinutes | elapsed }}
             </div>
           }
           @if (item.alerts && item.alerts.length > 0) {
@@ -153,8 +154,8 @@
               </a>
             }
             <a
-              [routerLink]="['/lab/new']"
-              [queryParams]="{ patientId: item.patientId }"
+              [routerLink]="['/lab']"
+              [queryParams]="{ new: '1', patientId: item.patientId }"
               class="wl-action-btn"
               [title]="'DASHBOARD.ORDER_LABS' | translate"
               [attr.aria-label]="'DASHBOARD.ORDER_LABS' | translate"

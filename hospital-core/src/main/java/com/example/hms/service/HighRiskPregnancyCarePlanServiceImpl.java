@@ -61,8 +61,8 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
 
     private static final String MSG_PLAN_ID_REQUIRED = "Plan ID is required";
     private static final String MSG_PATIENT_ID_REQUIRED = "Patient ID is required";
-    private static final String MSG_LOG_ACCESS_DENIED = "You do not have permission to update monitoring logs";
-    private static final String MSG_PLAN_ACCESS_DENIED = "You do not have permission to access this care plan";
+    private static final String MSG_LOG_ACCESS_DENIED = "highRiskPregnancy.log.accessDenied";
+    private static final String MSG_PLAN_ACCESS_DENIED = "highRiskPregnancy.plan.accessDenied";
     private static final String MSG_PATIENT_ACCESS_DENIED = "highRiskPregnancy.access.denied";
 
     private static final EnumSet<HighRiskMilestoneType> REQUIRED_BASELINE_MILESTONES = EnumSet.of(
@@ -84,6 +84,9 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
     @Override
     public HighRiskPregnancyCarePlanResponseDTO createPlan(HighRiskPregnancyCarePlanRequestDTO request, String username) {
         Objects.requireNonNull(request, "High-risk pregnancy care plan request is required");
+        // QA D1148 class (round 21): a care plan plans something.
+        com.example.hms.service.support.ClinicalContent.requireAnyAnswer(request, java.util.Set.of("patientId", "hospitalId", "active"),
+            "riskProfile", "highRiskPlan.contentRequired");
         User user = getUserOrThrow(username);
         assertProviderAccess(user);
 
@@ -95,6 +98,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
 
         ensurePatientBelongsToHospital(patient, hospital.getId());
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         HighRiskPregnancyCarePlan plan = new HighRiskPregnancyCarePlan();
         plan.setPatient(patient);
         plan.setHospital(hospital);
@@ -116,6 +120,12 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
 
         HighRiskPregnancyCarePlan plan = findPlanInActingHospital(planId);
         ensurePatientBelongsToHospital(plan.getPatient(), plan.getHospital().getId());
+        // QA D1182 class (round 22), after the scope check (a plan elsewhere is
+        // not found, whatever the body): the edit of a recorded plan carries
+        // something to change (a null keeps the stored value; the active flag
+        // counts here, so a plan can still be closed by itself).
+        com.example.hms.service.support.ClinicalContent.requireAnyAnswer(request, java.util.Set.of("patientId", "hospitalId"),
+            "riskProfile", "highRiskPlan.contentRequired");
 
         mapper.updateEntityFromRequest(plan, request, false);
         plan.setMonitoringMilestones(mapper.ensureMilestonesContainTypes(plan.getMonitoringMilestones(),
@@ -196,6 +206,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
 
         HighRiskPregnancyCarePlan plan = findPlanInReach(user, planId, MSG_LOG_ACCESS_DENIED);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeathDay(plan.getPatient(), request.getReadingDate(), "readingDate");
         HighRiskBloodPressureLog logEntry = mapper.toEntityBloodPressureLog(request);
         List<HighRiskBloodPressureLog> logs = new ArrayList<>(plan.getBloodPressureLogs());
         logs.add(logEntry);
@@ -218,6 +229,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
 
         HighRiskPregnancyCarePlan plan = findPlanInReach(user, planId, MSG_LOG_ACCESS_DENIED);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(plan.getPatient(), request.getTakenAt(), "takenAt");
         HighRiskMedicationLog logEntry = mapper.toEntityMedicationLog(request);
         List<HighRiskMedicationLog> logs = new ArrayList<>(plan.getMedicationLogs());
         logs.add(logEntry);

@@ -64,7 +64,8 @@ import java.util.Objects;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString(exclude = {"patient", "staff", "encounter", "assignment", "hospital", "structuredInstructions", "alerts", "transmissions"})
+@ToString(exclude = {"patient", "staff", "encounter", "assignment", "hospital", "structuredInstructions", "alerts", "transmissions",
+    "pediatricDoseReviewedBy", "pediatricDoseReviewReason"})
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class Prescription extends BaseEntity {
 
@@ -128,6 +129,29 @@ public class Prescription extends BaseEntity {
     @Size(max = 100)
     @Column(name = "frequency", length = 100)
     private String frequency;
+
+    /**
+     * QA round 30 (user decision 2026-11-02): the minimum time, in hours,
+     * between two doses of an as-needed (PRN, "si besoin") order, as the
+     * prescriber wrote it (V261). Required on a new as-needed order, null on
+     * any other; never defaulted per drug. The MAR offers the next dose once
+     * it has passed since the last dose given ({@code MarNextDose}).
+     */
+    @Column(name = "prn_min_interval_hours")
+    private Integer prnMinIntervalHours;
+
+    /**
+     * QA D1378 / D1360 (round 32, coordinator decision 2026-11-03): an
+     * as-needed (PRN) order is the prescriber's explicit choice, ticked on the
+     * order (V260), never guessed from the frequency text. True requires
+     * {@link #prnMinIntervalHours}; false refuses one. The MAR, the nurse
+     * counts, the early-dose rule and order sets read this flag
+     * ({@code PrnMinInterval.isAsNeeded}); the frequency text only feeds the
+     * safety net that asks the prescriber to confirm.
+     */
+    @Builder.Default
+    @Column(name = "as_needed", nullable = false)
+    private boolean asNeeded = false;
 
     @Size(max = 100)
     @Column(name = "duration", length = 100)
@@ -291,6 +315,42 @@ public class Prescription extends BaseEntity {
 
     @Column(name = "cosigned_at")
     private LocalDateTime cosignedAt;
+
+    /* ── Paediatric manual dose review (round 19, QA D1096, V253) ──────── */
+
+    /**
+     * The paediatric dose check could not give an automatic verdict (a child
+     * under the item's manual-review age, or outside every weight band) and
+     * asked for a pharmacist or physician review. Set from the decision-support
+     * cards on every create, edit and signature; the order is not signed while
+     * it is set and no review is recorded.
+     */
+    @Builder.Default
+    @Column(name = "pediatric_dose_review_required", nullable = false)
+    private boolean pediatricDoseReviewRequired = false;
+
+    /** When the review was recorded; null while none is, and cleared by any edit of the order. */
+    @Column(name = "pediatric_dose_reviewed_at")
+    private LocalDateTime pediatricDoseReviewedAt;
+
+    /**
+     * CR-01 (provisional): when the prescriber signed this order as an urgent exception to the review
+     * (V279). The review stays due, after the fact; any edit of the order clears this.
+     */
+    @Column(name = "pediatric_dose_urgent_exception_at")
+    private LocalDateTime pediatricDoseUrgentExceptionAt;
+
+    /** The reviewing pharmacist or physician. Never the prescriber, nor later the signer. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pediatric_dose_reviewed_by",
+        foreignKey = @ForeignKey(name = "fk_rx_pediatric_dose_reviewed_by"))
+    private User pediatricDoseReviewedBy;
+
+    /** Why the reviewer accepts the dose. Clinical narrative, encrypted like {@code withdrawalReason}. */
+    @Size(max = 1000)
+    @Column(name = "pediatric_dose_review_reason", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
+    private String pediatricDoseReviewReason;
 
     /* ── Pharmacist clarification (pharmacy flow gap G5, V162) ──────────── */
 

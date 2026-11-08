@@ -1,5 +1,6 @@
 package com.example.hms.service.support;
 
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,25 @@ public class PatientRegistrationGuard {
         if (patientId == null || hospitalId == null
             || !registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)) {
             throw new ResourceNotFoundException(PATIENT_NOT_FOUND, patientId);
+        }
+    }
+
+    /** QA D1476: see {@link #refuseDeactivatedRegistration(PatientHospitalRegistrationRepository, UUID, UUID)}. */
+    public void refuseDeactivatedRegistration(UUID patientId, UUID hospitalId) {
+        refuseDeactivatedRegistration(registrationRepository, patientId, hospitalId);
+    }
+
+    /**
+     * QA D1476: a visit is not opened on a registration the desk deactivated (booking,
+     * walk-in, waitlist): the pickers hide the patient, the API did not refuse. Refused
+     * on the patient, naming why; the record itself and its history stay readable, and a
+     * visit already booked can still be changed or cancelled.
+     */
+    public static void refuseDeactivatedRegistration(PatientHospitalRegistrationRepository registrations,
+                                                     UUID patientId, UUID hospitalId) {
+        if (patientId != null && hospitalId != null
+            && registrations.existsByPatientIdAndHospitalIdAndActiveFalse(patientId, hospitalId)) {
+            throw new FieldBusinessException("patientId", "patient.registration.inactive");
         }
     }
 }

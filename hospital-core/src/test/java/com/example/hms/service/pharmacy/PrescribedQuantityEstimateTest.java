@@ -40,6 +40,12 @@ class PrescribedQuantityEstimateTest {
         "Paracétamol,500 mg,TID,3 days",
         "Artéméther 20 mg / Luméfantrine 120 mg,20 mg,BID,3 days",
         "Paracétamol 500 mg,,TID,3 days",
+        // Round 33: a range is no count: the fill waits for a recorded quantity, never its low end.
+        "Paracétamol 500 mg,1-2 cp,TID,3 days",
+        "Paracétamol 500 mg,1 à 2 comprimés,TID,3 days",
+        "Paracétamol 500 mg,de 1 a 2 comprimidos,TID,3 days",
+        "Paracétamol 500 mg,1 to 2 tablets,TID,3 days",
+        "Paracétamol 500 mg,500-1000 mg,TID,3 days",
     })
     void anythingAmbiguousIsUnknown(String name, String dosage, String frequency, String duration) {
         assertThat(PrescribedQuantityEstimate.perFill(rx(name, dosage, frequency, duration))).isNull();

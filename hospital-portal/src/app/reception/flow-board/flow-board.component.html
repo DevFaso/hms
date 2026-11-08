@@ -5,7 +5,12 @@
     @for (col of columns; track col.key) {
       <div class="flow-col" [ngClass]="col.colorClass">
         <div class="col-header">
-          <span class="col-title">{{ col.labelKey | translate }}</span>
+          <!-- QA D1297 (round 28): the column is titled for assistive technology,
+               so focus waits on "Arrivé" when a card leaves it (a visit closed
+               unseen), not on the anonymous card list. -->
+          <span class="col-title" role="heading" aria-level="2">{{
+            col.labelKey | translate
+          }}</span>
           <span class="col-count">{{ localBoard[col.key].length }}</span>
         </div>
         <div
@@ -31,6 +36,9 @@
               tabindex="0"
               (click)="patientClicked.emit(item.patientId)"
               (keydown.enter)="patientClicked.emit(item.patientId)"
+              aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
+              (keydown.alt.arrowright)="moveCard(item, col.key, 1, $event)"
+              (keydown.alt.arrowleft)="moveCard(item, col.key, -1, $event)"
             >
               <div
                 class="card-drag-handle"
@@ -48,7 +56,8 @@
               }
               @if (item.waitMinutes > 0) {
                 <div class="card-wait">
-                  {{ item.waitMinutes }}{{ 'RECEPTION.MIN_WAIT' | translate }}
+                  <!-- QA D1200 (round 22): "706Attente min." read as a minimum wait. -->
+                  {{ 'RECEPTION.WAIT_DURATION' | translate: { minutes: item.waitMinutes } }}
                 </div>
               }
               <div class="card-flags">
@@ -74,6 +83,22 @@
                 </div>
               }
             </div>
+            @if (canCloseUnseen(item)) {
+              <!-- QA D1023: the non-drag way to close a visit nobody has seen.
+                   Beside the card, not inside it: the card is itself a button. -->
+              <button
+                type="button"
+                class="card-action"
+                data-testid="flow-close-unseen"
+                [attr.aria-label]="
+                  ('RECEPTION.CLOSE_UNSEEN_TITLE' | translate) + ' — ' + item.patientName
+                "
+                (click)="requestCloseUnseen(item, $event)"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">directions_walk</span>
+                {{ 'RECEPTION.CLOSE_UNSEEN_TITLE' | translate }}
+              </button>
+            }
           }
         </div>
       </div>

@@ -24,11 +24,21 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class WorkQueuePrescriptionDTO {
 
+    /** Existing when a recorded death was disputed: a prescriber's review comes first. */
+    private boolean heldForReview;
+
     private UUID id;
     private String medicationName;
     private String dosage;
     private String frequency;
     private BigDecimal quantity;
+    /**
+     * QA D1001: what may still be dispensed on this order (every fill owed,
+     * refills included, minus the fills not cancelled) - the ceiling the
+     * dispense refuses above. The form pre-fills it instead of the prescribed
+     * quantity; null when the order carries no quantity at all.
+     */
+    private BigDecimal remainingQuantity;
     private String quantityUnit;
     private String status;
     private LocalDateTime createdAt;
@@ -75,6 +85,14 @@ public class WorkQueuePrescriptionDTO {
      * {@code GET /prescriptions/{id}} refuses.
      */
     private LocalDateTime clarificationResolvedAt;
+
+    /**
+     * QA D1101 (round 19): true when the prescriber passed an allergy or a
+     * critical decision-support alert with a reason. A cue only - like the
+     * clarification above, the reason is clinical narrative and is read on
+     * the order ({@code GET /prescriptions/{id}}), not in this projection.
+     */
+    private Boolean alertOverridden;
 
     /**
      * Refill context for the dispensing decision. Null on a prescription that
@@ -153,6 +171,8 @@ public class WorkQueuePrescriptionDTO {
     public static class Patient {
         private UUID id;
         private String firstName;
+        /** QA D1036: the middle name, so the work queue shows the patient's whole name. */
+        private String middleName;
         private String lastName;
     }
 

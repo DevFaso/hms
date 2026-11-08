@@ -1,17 +1,40 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { refusalReason } from '../shared/refusal-reason';
+import {
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { ToastService } from '../core/toast.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { RoleContextService } from '../core/role-context.service';
 import { PharmacyService, PharmacyRequest, PharmacyResponse } from '../services/pharmacy.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
+import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
+import { missingRequiredMessage } from '../shared/required-fields';
+
+/** The required fields of the pharmacy form (QA D1306). */
+const REG_IDS = ['pHospital', 'pName'];
 
 @Component({
   selector: 'app-pharmacy-registry',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    PhoneFieldDirective,
+    SubmitGuardDirective,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './pharmacy-registry.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-registry.scss',
@@ -22,6 +45,7 @@ export class PharmacyRegistryComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   pharmacies = signal<PharmacyResponse[]>([]);
   loading = signal(true);
@@ -150,10 +174,21 @@ export class PharmacyRegistryComponent implements OnInit {
   }
 
   submitForm(): void {
-    if (!this.form.name || !this.form.hospitalId) {
-      this.toast.error(this.translate.instant('PHARMACY.TOAST.REQUIRED_FIELDS'));
+    const root = this.host.nativeElement;
+    const blank = blankFields({ pHospital: this.form.hospitalId, pName: this.form.name }, REG_IDS);
+    if (blank.length > 0) {
+      // QA D1306 (round 28): every blank field is marked, not only a toast.
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'ENCOUNTERS.HOSPITAL', value: this.form.hospitalId },
+          { labelKey: 'PHARMACY.PHARMACY_NAME', value: this.form.name },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
+      refuseFields(root, blank, REG_IDS, this.translate.instant('COMMON.FIELD_REQUIRED'));
+      this.toast.error(message);
       return;
     }
+    refuseFields(root, [], REG_IDS, '');
     this.saving.set(true);
     const existing = this.editing();
     // QA D336: an unselected type or mode went out as "" and the server
@@ -174,7 +209,7 @@ export class PharmacyRegistryComponent implements OnInit {
       },
       error: (err) => {
         const msg =
-          err?.error?.message ??
+          refusalReason(err) ??
           this.translate.instant(
             existing ? 'PHARMACY.TOAST.UPDATE_FAILED' : 'PHARMACY.TOAST.CREATE_FAILED',
           );
@@ -207,7 +242,7 @@ export class PharmacyRegistryComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PHARMACY.TOAST.DELETE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PHARMACY.TOAST.DELETE_FAILED'),
         );
         this.deleting.set(false);
       },

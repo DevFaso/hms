@@ -10,6 +10,7 @@ import {
   RecordSharingOptOut,
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 
 /**
  * "Who accessed my record" (E9 #66). The access-log half of these specs
@@ -141,12 +142,16 @@ describe('MySharingComponent', () => {
     expect(portal.optOutOfSharing).toHaveBeenCalledOnceWith('p-1', null);
   });
 
-  it('reopens sharing from an opted-out state', () => {
+  it('reopens sharing from an opted-out state', async () => {
     optOutResponse = () => of(optOutState(true));
     fixture.detectChanges();
     expect(component.optedOut()).toBeTrue();
 
+    // QA CX-010: asks first, the record opens to other hospitals again.
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     el('opt-out-revoke')!.click();
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(ask).toHaveBeenCalledTimes(1);
     fixture.detectChanges();
 
     expect(portal.revokeOptOut).toHaveBeenCalledOnceWith('p-1');

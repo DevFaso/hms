@@ -37,6 +37,12 @@ public class MaternalHistoryResponseDTO {
     private MaternalHistoryRequestDTO.PsychosocialFactorsDTO psychosocialFactors;
 
     private String clinicalNotes;
+    /**
+     * QA D1067: when the pregnancy this history dates ended in a delivery
+     * (null while it is ongoing, or when no delivery is recorded). A reader
+     * shows no running gestational age once it is set.
+     */
+    private LocalDateTime deliveredAt;
     private Boolean dataComplete;
 
     // Provider review information

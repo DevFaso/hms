@@ -52,6 +52,47 @@ export const CDS_CLINICIAN_ROLES: readonly string[] = [
   'ROLE_SUPER_ADMIN',
 ];
 
+/*
+ * QA D1524 (class: a chart side panel shown to a role its endpoint refuses, whose 403 then
+ * sent the whole chart to /error/403). Each list below mirrors the @PreAuthorize of the one
+ * read its panel makes on chart load; the panel renders (and calls) only for these roles,
+ * and its read is a background request, so a future drift costs the panel, never the page.
+ * ChartSidePanelRoleGuardTest (hospital-core) compares every list with its endpoint.
+ */
+
+/** MortalityController READER: GET /mortality/patients/{id}/voided-closures (the voided-death banner). */
+export const VOIDED_CLOSURES_VIEW_ROLES: string[] = [
+  'ROLE_SUPER_ADMIN',
+  'ROLE_HOSPITAL_ADMIN',
+  'ROLE_ADMIN',
+  ...DOCTOR_ROLES,
+  'ROLE_MIDWIFE',
+  'ROLE_NURSE',
+  'ROLE_QUALITY_MANAGER',
+];
+
+/** PatientStoryboardController#getStoryboard: GET /patients/{id}/storyboard (the storyboard banner). */
+export const STORYBOARD_VIEW_ROLES: string[] = [
+  ...DOCTOR_ROLES,
+  'ROLE_NURSE',
+  'ROLE_MIDWIFE',
+  'ROLE_PHARMACIST',
+  'ROLE_LAB_SCIENTIST',
+  'ROLE_LAB_TECHNICIAN',
+  'ROLE_LAB_MANAGER',
+  'ROLE_LAB_DIRECTOR',
+  'ROLE_QUALITY_MANAGER',
+  'ROLE_SUPER_ADMIN',
+];
+
+/** OrderReviewHoldController (class gate): GET /order-review-holds/patient/{id} (the held-orders panel). */
+export const ORDER_REVIEW_VIEW_ROLES: string[] = [
+  ...DOCTOR_ROLES,
+  'ROLE_MIDWIFE',
+  'ROLE_NURSE',
+  'ROLE_PHARMACIST',
+];
+
 /**
  * True when the caller may invoke a CDS service. The single active role
  * decides when one is pinned (a multi-role user scoped to reception gets no
@@ -231,11 +272,22 @@ export const ENCOUNTER_VIEW_ROLES: string[] = [
  * /imaging, which are order-entry workbenches owned by the teams that work
  * those queues.
  */
+/**
+ * RCPT-CLIN (user decision 2026-11-06): the active roles hold the receptionist and
+ * nothing that reads clinical content. Mirrors ReceptionistResponseShaping on the
+ * server: a second clinical or administrative role lifts it.
+ */
+export function isFrontDeskOnly(hasAnyActiveRole: (roles: string[]) => boolean): boolean {
+  return (
+    hasAnyActiveRole(['ROLE_RECEPTIONIST']) &&
+    !hasAnyActiveRole([...CHART_REVIEW_VIEW_ROLES, 'ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN'])
+  );
+}
+
 export const CHART_REVIEW_VIEW_ROLES: string[] = [
   ...DOCTOR_ROLES,
   'ROLE_NURSE',
   'ROLE_MIDWIFE',
-  'ROLE_RECEPTIONIST',
   'ROLE_PHARMACIST',
   'ROLE_LAB_SCIENTIST',
   'ROLE_LAB_TECHNICIAN',

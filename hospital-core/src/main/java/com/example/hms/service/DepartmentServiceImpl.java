@@ -515,10 +515,11 @@ public class DepartmentServiceImpl implements DepartmentService {
         return roleValidator.requireActiveHospitalId();
     }
 
+    // QA D1367 class (round 31): a duplicate name or code is a 409 naming its field ("name:", "code:").
     private void ensureDepartmentUniqueness(DepartmentRequestDTO dto, Hospital hospital, Locale locale) {
         boolean exists = departmentRepository.existsByNameIgnoreCaseAndHospitalId(dto.getName(), hospital.getId());
         if (exists) {
-            throw new ConflictException(messageSource.getMessage(
+            throw new ConflictException("name:" + messageSource.getMessage(
                 "department.duplicate",
                 new Object[]{dto.getName(), hospital.getName()},
                 locale
@@ -527,7 +528,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         // QA D281: the code is unique per hospital too.
         if (StringUtils.hasText(dto.getCode())
                 && departmentRepository.existsByCodeIgnoreCaseAndHospitalId(dto.getCode(), hospital.getId())) {
-            throw new ConflictException(messageSource.getMessage(
+            throw new ConflictException("code:" + messageSource.getMessage(
                 "department.code.duplicate", new Object[]{dto.getCode(), hospital.getName()}, locale));
         }
     }
@@ -536,12 +537,12 @@ public class DepartmentServiceImpl implements DepartmentService {
     private void ensureRenameUniqueness(UUID id, DepartmentRequestDTO dto, Hospital hospital, Locale locale) {
         if (StringUtils.hasText(dto.getName())
                 && departmentRepository.existsByNameIgnoreCaseAndHospitalIdAndIdNot(dto.getName(), hospital.getId(), id)) {
-            throw new ConflictException(messageSource.getMessage(
+            throw new ConflictException("name:" + messageSource.getMessage(
                 "department.duplicate", new Object[]{dto.getName(), hospital.getName()}, locale));
         }
         if (StringUtils.hasText(dto.getCode())
                 && departmentRepository.existsByCodeIgnoreCaseAndHospitalIdAndIdNot(dto.getCode(), hospital.getId(), id)) {
-            throw new ConflictException(messageSource.getMessage(
+            throw new ConflictException("code:" + messageSource.getMessage(
                 "department.code.duplicate", new Object[]{dto.getCode(), hospital.getName()}, locale));
         }
     }
@@ -720,15 +721,11 @@ public class DepartmentServiceImpl implements DepartmentService {
         }
 
         if (dto.getHospitalId() == null && !StringUtils.hasText(dto.getHospitalName())) {
-            throw new IllegalArgumentException(
-                    messageSource.getMessage("department.hospital.required", null, locale)
-            );
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", messageSource.getMessage("department.hospital.required", null, locale));
         }
 
         if (!StringUtils.hasText(dto.getName())) {
-            throw new IllegalArgumentException(
-                    messageSource.getMessage("department.name.required", null, locale)
-            );
+            throw new com.example.hms.exception.FieldBusinessException("name", messageSource.getMessage("department.name.required", null, locale));
         }
     }
 

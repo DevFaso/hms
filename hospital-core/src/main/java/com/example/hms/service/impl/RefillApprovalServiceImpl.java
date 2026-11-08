@@ -116,6 +116,8 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     @Override
     @Transactional
     public MedicationRefillResponseDTO reject(Authentication auth, UUID refillId, RefillDecisionRequestDTO decision) {
+        // QA D1315 (round 29): a denial the patient cannot read is refused, as a hold is.
+        requireReason(decision);
         return decide(auth, refillId, decision, RefillStatus.DENIED);
     }
 
@@ -123,11 +125,15 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     @Transactional
     public MedicationRefillResponseDTO pause(Authentication auth, UUID refillId, RefillDecisionRequestDTO decision) {
         // A hold the patient can't interpret is worse than a denial, so the reason
-        // is mandatory here even though approve/reject leave it optional.
-        if (decision == null || decision.getProviderNotes() == null || decision.getProviderNotes().isBlank()) {
-            throw new BusinessException("patient.refill.decision.reasonRequired");
-        }
+        // is mandatory here, as for a denial (approval leaves it optional).
+        requireReason(decision);
         return decide(auth, refillId, decision, RefillStatus.PAUSED);
+    }
+
+    private static void requireReason(RefillDecisionRequestDTO decision) {
+        if (decision == null || decision.getProviderNotes() == null || decision.getProviderNotes().isBlank()) {
+            throw new com.example.hms.exception.FieldBusinessException("providerNotes", "patient.refill.decision.reasonRequired");
+        }
     }
 
     private MedicationRefillResponseDTO decide(Authentication auth,
@@ -155,6 +161,8 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         // REQUESTED rather than sitting at APPROVED with nothing dispensable
         // behind it — which is exactly the dead-end this endpoint used to be.
         if (newStatus == RefillStatus.APPROVED) {
+            com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(prescription.getPatient());
+            com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescription.getId(), "prescriptionId");
             releaseRefillToPharmacy(prescription);
         }
 
@@ -275,6 +283,19 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         return NotificationText.of("refill.decision.denied", medicationName);
     }
 
+    /**
+     * QA D1276: the MRN of the hospital the prescription was written at, the
+     * hospital whose queue lists the refill (tenant-safe: never the MRN of
+     * another hospital the patient is registered at).
+     */
+    static String mrnAtPrescribingHospital(RefillRequest r) {
+        Prescription prescription = r.getPrescription();
+        if (r.getPatient() == null || prescription == null || prescription.getHospital() == null) {
+            return null;
+        }
+        return r.getPatient().getMrnForHospital(prescription.getHospital().getId());
+    }
+
     private MedicationRefillResponseDTO toResponseDTO(RefillRequest r) {
         String medName = null;
         if (r.getPrescription() != null && r.getPrescription().getMedicationName() != null) {
@@ -285,6 +306,8 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
                 .prescriptionId(r.getPrescription() != null ? r.getPrescription().getId() : null)
                 .medicationName(medName)
                 .patientId(r.getPatient() != null ? r.getPatient().getId() : null)
+                .patientName(r.getPatient() != null ? r.getPatient().getFullName() : null)
+                .patientMrn(mrnAtPrescribingHospital(r))
                 .status(r.getStatus() != null ? r.getStatus().name() : null)
                 .preferredPharmacy(r.getPreferredPharmacy())
                 .notes(r.getPatientNotes())

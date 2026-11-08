@@ -11,4 +11,7 @@ import java.util.UUID;
 public interface BpaProtocolRepository extends JpaRepository<BpaProtocol, UUID> {
 
     Optional<BpaProtocol> findByProtocolCodeAndActiveTrue(String protocolCode);
+
+    /** Any row for the code, active or not: a rule with an optional row needs to tell "off" from "absent". */
+    Optional<BpaProtocol> findByProtocolCode(String protocolCode);
 }

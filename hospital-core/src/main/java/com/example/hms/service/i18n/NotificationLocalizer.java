@@ -29,6 +29,9 @@ public class NotificationLocalizer {
 
     private static final String KEY = "key";
     private static final String ARGS = "args";
+    /** QA D1207: a laboratory value, formatted in the reader's locale when read. */
+    private static final String LAB_VALUE = "labValue";
+    private static final String UNIT = "unit";
 
     private final MessageSource messageSource;
 
@@ -48,6 +51,33 @@ public class NotificationLocalizer {
         return Map.of(KEY, messageKey, ARGS, storable(args));
     }
 
+    /**
+     * QA D1207 (round 22): a laboratory value as an argument, kept raw and
+     * formatted in the READER's locale when the notification is read ("2.3" in
+     * English, "2,3" in French). It was formatted in the staff locale before
+     * the reader was known, so an English reader got "Kaliémie 2,3 mmol/L".
+     *
+     * @param raw  the value as the laboratory reported it ("2.3", "&lt;0.5", "Positif")
+     * @param unit its unit, or {@code null}
+     */
+    public static Map<String, String> labValue(String raw, String unit) {
+        Map<String, String> arg = new java.util.LinkedHashMap<>();
+        arg.put(LAB_VALUE, raw == null ? "" : raw);
+        if (unit != null && !unit.isBlank()) {
+            arg.put(UNIT, unit);
+        }
+        return java.util.Collections.unmodifiableMap(arg);
+    }
+
+    /** A {@link #labValue} argument rendered in {@code locale}; {@code null} when {@code arg} is not one. */
+    static String renderLabValue(Object arg, Locale locale) {
+        if (arg instanceof Map<?, ?> map && map.get(LAB_VALUE) instanceof String raw) {
+            String value = com.example.hms.utility.DisplayNumbers.labValue(raw, locale);
+            return map.get(UNIT) instanceof String unit && !unit.isBlank() ? value + " " + unit : value;
+        }
+        return null;
+    }
+
     /** The arguments as stored: numbers and booleans as is, keys as {@code {"key"}}, anything else as text. */
     public static List<Object> storable(Object[] args) {
         if (args == null || args.length == 0) {
@@ -55,17 +85,25 @@ public class NotificationLocalizer {
         }
         List<Object> out = new ArrayList<>(args.length);
         for (Object arg : args) {
-            if (arg == null) {
-                out.add("");
-            } else if (arg instanceof Number || arg instanceof Boolean) {
-                out.add(arg);
-            } else if (arg instanceof Map<?, ?> map && map.get(KEY) instanceof String k) {
-                out.add(map.get(ARGS) instanceof List<?> nested ? key(k, nested.toArray()) : key(k));
-            } else {
-                out.add(String.valueOf(arg));
-            }
+            out.add(storableArg(arg));
         }
         return out;
+    }
+
+    private static Object storableArg(Object arg) {
+        if (arg == null) {
+            return "";
+        }
+        if (arg instanceof Number || arg instanceof Boolean) {
+            return arg;
+        }
+        if (arg instanceof Map<?, ?> map && map.get(KEY) instanceof String k) {
+            return map.get(ARGS) instanceof List<?> nested ? key(k, nested.toArray()) : key(k);
+        }
+        if (arg instanceof Map<?, ?> map && map.get(LAB_VALUE) instanceof String raw) {
+            return labValue(raw, map.get(UNIT) instanceof String unit ? unit : null);
+        }
+        return String.valueOf(arg);
     }
 
     public String render(String messageKey, List<Object> args, Locale locale) {
@@ -84,7 +122,8 @@ public class NotificationLocalizer {
                         ? resolve(list, locale, depth + 1) : null;
                     return messageSource.getMessage(k, nested, k, locale);
                 }
-                return arg;
+                String labValue = renderLabValue(arg, locale);
+                return labValue != null ? labValue : arg;
             })
             .toArray();
     }

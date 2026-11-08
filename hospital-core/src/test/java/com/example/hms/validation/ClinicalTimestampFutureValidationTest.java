@@ -115,4 +115,21 @@ class ClinicalTimestampFutureValidationTest {
         assertThat(NotInClinicalFutureValidator.isAllowed(LocalDate.parse("2026-10-25"), clock)).isFalse();
         assertThat(NotInClinicalFutureValidator.isAllowed(LocalDate.parse("2026-10-24"), clock)).isTrue();
     }
+
+    @org.junit.jupiter.api.Test
+    void d1449_aDateOnlyFieldIsToldAboutADateAndATimeAboutATime() {
+        var dto = new com.example.hms.payload.dto.clinical.MaternalHistoryRequestDTO.MenstrualHistoryDTO();
+        dto.setLastMenstrualPeriod(java.time.LocalDate.now(java.time.ZoneOffset.UTC).plusDays(30));
+        var validator = jakarta.validation.Validation.buildDefaultValidatorFactory().getValidator();
+        org.assertj.core.api.Assertions.assertThat(validator.validate(dto))
+            .filteredOn(v -> v.getPropertyPath().toString().equals("lastMenstrualPeriod"))
+            .singleElement()
+            .satisfies(v -> org.assertj.core.api.Assertions.assertThat(v.getMessageTemplate()).isEqualTo("{clinical.date.future}"));
+
+        var entry = new com.example.hms.payload.dto.clinical.labor.PartographEntryRequestDTO();
+        entry.setObservationTime(java.time.LocalDateTime.now().plusDays(1));
+        org.assertj.core.api.Assertions.assertThat(validator.validate(entry))
+            .singleElement()
+            .satisfies(v -> org.assertj.core.api.Assertions.assertThat(v.getMessageTemplate()).isEqualTo("{clinical.timestamp.future}"));
+    }
 }

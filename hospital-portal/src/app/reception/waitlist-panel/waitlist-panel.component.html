@@ -42,7 +42,7 @@
       </thead>
       <tbody>
         @for (entry of entries(); track entry.id) {
-          <tr>
+          <tr [attr.data-entry-id]="entry.id">
             <td>
               <button class="patient-link" (click)="patientClicked.emit(entry.patientId)">
                 {{ entry.patientName }}
@@ -52,23 +52,36 @@
               }
             </td>
             <td>{{ entry.departmentName }}</td>
-            <td>{{ entry.preferredProviderName ?? '—' }}</td>
+            <td>{{ entry.preferredProviderName | dash }}</td>
             <td>
               <span [ngClass]="priorityClass(entry.priority)">{{
-                'RECEPTION.' + entry.priority | translate
+                entry.priority | keyLabel: 'RECEPTION.'
               }}</span>
             </td>
             <td>
-              @if (entry.requestedDateFrom || entry.requestedDateTo) {
-                {{ entry.requestedDateFrom ?? '?' }} → {{ entry.requestedDateTo ?? '?' }}
+              <!-- QA D1119: the reader's date format, as the recall list beside it.
+                   QA D1323 (round 29): an open end is said in words, never "→ ?". -->
+              @if (entry.requestedDateFrom && entry.requestedDateTo) {
+                {{ entry.requestedDateFrom | date: 'mediumDate' }} →
+                {{ entry.requestedDateTo | date: 'mediumDate' }}
+              } @else if (entry.requestedDateFrom) {
+                {{
+                  'RECEPTION.WINDOW_FROM'
+                    | translate: { date: (entry.requestedDateFrom | date: 'mediumDate') }
+                }}
+              } @else if (entry.requestedDateTo) {
+                {{
+                  'RECEPTION.WINDOW_UNTIL'
+                    | translate: { date: (entry.requestedDateTo | date: 'mediumDate') }
+                }}
               } @else {
                 —
               }
             </td>
-            <td class="reason-cell">{{ entry.reason ?? '—' }}</td>
+            <td class="reason-cell">{{ entry.reason | dash }}</td>
             <td>
               <span [ngClass]="statusClass(entry.status)">{{
-                'RECEPTION.' + entry.status | translate
+                entry.status | keyLabel: 'RECEPTION.'
               }}</span>
               @if (entry.status === 'OFFERED' && entry.offeredSlotStartAt) {
                 <div class="offer-info">
@@ -88,7 +101,7 @@
                 <button class="btn-sm btn-primary" (click)="openOfferModal(entry)">
                   {{ 'RECEPTION.OFFER_SLOT' | translate }}
                 </button>
-                <button class="btn-sm btn-ghost" (click)="closeEntry(entry.id)">
+                <button class="btn-sm btn-ghost" (click)="askCloseEntry(entry)">
                   {{ 'COMMON.CLOSE' | translate }}
                 </button>
               } @else if (entry.status === 'OFFERED') {
@@ -106,7 +119,7 @@
                 >
                   {{ 'RECEPTION.DECLINE_OFFER' | translate }}
                 </button>
-                <button class="btn-sm btn-ghost" (click)="closeEntry(entry.id)">
+                <button class="btn-sm btn-ghost" (click)="askCloseEntry(entry)">
                   {{ 'COMMON.CLOSE' | translate }}
                 </button>
               }
@@ -121,6 +134,7 @@
 <!-- Add to Waitlist Modal -->
 @if (showAddForm()) {
   <div
+    [attr.aria-label]="'COMMON.CLOSE' | translate"
     class="modal-backdrop"
     (click)="showAddForm.set(false)"
     (keydown.enter)="showAddForm.set(false)"
@@ -132,6 +146,8 @@
     role="dialog"
     aria-modal="true"
     [attr.aria-label]="'RECEPTION.ADD_TO_WAITLIST' | translate"
+    appDialogFocus
+    (dialogDismiss)="showAddForm.set(false)"
   >
     <div class="modal-header">
       <h2>{{ 'RECEPTION.ADD_TO_WAITLIST' | translate }}</h2>
@@ -149,24 +165,30 @@
         <label class="form-label" for="wl-patient">{{ 'PATIENTS.PATIENT' | translate }} *</label>
         <div class="autocomplete-wrap">
           <input
+            required
+            data-escape-discards
             id="wl-patient"
+            [attr.data-submit-blank]="selectedPatient() ? 'false' : 'true'"
             class="form-input"
             type="text"
             [placeholder]="'RECEPTION.SEARCH_PATIENT_NAME' | translate"
             [ngModel]="patientQuery()"
             (ngModelChange)="onPatientQueryChange($event)"
+            [appListEscape]="patientResults().length > 0"
+            (listEscape)="patientResults.set([])"
             autocomplete="off"
           />
           @if (patientResults().length > 0) {
             <ul class="autocomplete-list">
               @for (p of patientResults(); track p.id) {
                 <li (click)="selectPatient(p)" (keydown.enter)="selectPatient(p)" tabindex="0">
-                  {{ p.firstName }} {{ p.lastName }}
+                  {{ p | personName }}
                   @if (p | patientSubline; as sub) {
                     <span class="mrn-hint">· {{ sub }}</span>
                   }
                   @if (p.dateOfBirth) {
-                    <span class="dob-hint"
+                    {{ ' '
+                    }}<span class="dob-hint"
                       >({{ p.dateOfBirth | serverTime | date: 'mediumDate' }})</span
                     >
                   }
@@ -181,6 +203,7 @@
       <div class="form-group">
         <label class="form-label" for="wl-dept">{{ 'STAFF.DEPARTMENT' | translate }} *</label>
         <select
+          required
           id="wl-dept"
           class="form-select"
           [ngModel]="selectedDeptId()"
@@ -200,21 +223,37 @@
         }}</label>
         <div class="autocomplete-wrap">
           <input
+            data-escape-discards
             id="wl-staff"
             class="form-input"
             type="text"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="wl-staff-listbox"
+            [attr.aria-expanded]="staffListOpen()"
+            [attr.aria-activedescendant]="
+              staffListOpen() && staffActive() >= 0 ? 'wl-staff-option-' + staffActive() : null
+            "
             [placeholder]="'RECEPTION.SEARCH_PROVIDER' | translate"
             [ngModel]="staffQuery()"
-            (ngModelChange)="staffQuery.set($event)"
+            (ngModelChange)="onStaffQueryChange($event)"
+            (keydown)="onStaffKeydown($event)"
             autocomplete="off"
           />
-          @if (staffQuery().length > 0 && filteredStaff().length > 0) {
-            <ul class="autocomplete-list">
-              @for (s of filteredStaff(); track s.id) {
+          @if (staffListOpen()) {
+            <ul
+              id="wl-staff-listbox"
+              class="autocomplete-list"
+              role="listbox"
+              [attr.aria-label]="'RECEPTION.PREFERRED_PROVIDER' | translate"
+            >
+              @for (s of filteredStaff(); track s.id; let i = $index) {
                 <li
-                  (click)="selectedStaff.set(s); staffQuery.set(s.name)"
-                  (keydown.enter)="selectedStaff.set(s); staffQuery.set(s.name)"
-                  tabindex="0"
+                  role="option"
+                  [id]="'wl-staff-option-' + i"
+                  [class.active]="i === staffActive()"
+                  [attr.aria-selected]="i === staffActive()"
+                  (mousedown)="$event.preventDefault(); pickStaff(s)"
                 >
                   {{ s.name }}
                 </li>
@@ -234,6 +273,7 @@
             id="wl-from"
             class="form-input"
             type="date"
+            [attr.max]="dateTo() || null"
             [ngModel]="dateFrom()"
             (ngModelChange)="dateFrom.set($event)"
           />
@@ -244,6 +284,7 @@
             id="wl-to"
             class="form-input"
             type="date"
+            [attr.min]="dateToMin()"
             [ngModel]="dateTo()"
             (ngModelChange)="dateTo.set($event)"
           />
@@ -307,6 +348,8 @@
     role="dialog"
     aria-modal="true"
     [attr.aria-label]="'RECEPTION.OFFER_SLOT' | translate"
+    appDialogFocus
+    (dialogDismiss)="offerEntry.set(null)"
   >
     <div class="modal-header">
       <h2>{{ 'RECEPTION.OFFER_SLOT_TO' | translate: { name: entry.patientName } }}</h2>
@@ -327,8 +370,14 @@
       } @else if (offerSlots().length === 0) {
         <div class="empty-state">{{ 'RECEPTION.NO_OPEN_SLOTS' | translate }}</div>
       } @else {
-        <fieldset class="slot-picker">
-          <legend class="form-label">{{ 'RECEPTION.SELECT_SLOT' | translate }}</legend>
+        <fieldset
+          id="waitlist-offer-slots"
+          class="slot-picker"
+          role="radiogroup"
+          aria-required="true"
+          tabindex="-1"
+        >
+          <legend class="form-label">{{ 'RECEPTION.SELECT_SLOT' | translate }} *</legend>
           @for (slot of offerSlots(); track slot.id) {
             <label class="slot-option" [class.selected]="selectedSlotId() === slot.id">
               <input
@@ -338,8 +387,11 @@
                 [checked]="selectedSlotId() === slot.id"
                 (change)="selectedSlotId.set(slot.id)"
               />
-              <span class="slot-when">{{ slot.startAt | date: 'EEE d MMM, HH:mm' }}</span>
-              <span class="slot-who">{{ slot.staffName ?? '—' }}</span>
+              <!-- D1140 class: the locale orders day, month and time. -->
+              <span class="slot-when"
+                >{{ slot.startAt | date: 'EEEE' }} {{ slot.startAt | date: 'short' }}</span
+              >
+              <span class="slot-who">{{ slot.staffName | dash }}</span>
               @if (slot.visitTypeName) {
                 <span class="slot-type">{{ slot.visitTypeName }}</span>
               }
@@ -369,7 +421,9 @@
       </button>
       <button
         class="btn-primary"
-        [disabled]="offering() || !selectedSlotId()"
+        [disabled]="offering()"
+        [appSubmitGuard]="!selectedSlotId() && ('RECEPTION.SELECT_SLOT_FIRST' | translate)"
+        [submitGuardFields]="['waitlist-offer-slots']"
         (click)="submitOffer()"
       >
         @if (offering()) {
@@ -379,4 +433,16 @@
       </button>
     </div>
   </div>
+}
+
+<!-- QA D1157: a waitlist entry is closed with a reason, after a confirmation. -->
+@if (closing(); as entry) {
+  <app-reason-dialog
+    titleKey="RECEPTION.CLOSE_ENTRY_TITLE"
+    labelKey="RECEPTION.CLOSE_ENTRY_REASON"
+    confirmKey="RECEPTION.CLOSE_ENTRY_CONFIRM"
+    [busy]="closeBusy()"
+    (confirmed)="closeEntry(entry.id, $event)"
+    (cancelled)="closing.set(null)"
+  />
 }

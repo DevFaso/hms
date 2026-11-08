@@ -70,6 +70,27 @@ public class InBasketItem extends BaseEntity {
     @Column(name = "body", columnDefinition = "TEXT")
     private String body;
 
+    /**
+     * QA D1053: the message key of {@link #title}; null on rows written before
+     * V246 and on free text. The title is rendered from it in the reader's
+     * language; {@link #title} keeps the staff-language text as written.
+     */
+    @Column(name = "title_key", length = 150)
+    private String titleKey;
+
+    /** Arguments of {@link #titleKey}, stored as {@code NotificationLocalizer.storable}. */
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "title_args", columnDefinition = "jsonb")
+    private java.util.List<Object> titleArgs;
+
+    /** QA D1053: the message key of {@link #body}, as {@link #titleKey}. */
+    @Column(name = "body_key", length = 150)
+    private String bodyKey;
+
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "body_args", columnDefinition = "jsonb")
+    private java.util.List<Object> bodyArgs;
+
     @Column(name = "reference_id")
     private UUID referenceId;
 

@@ -10,11 +10,20 @@ import {
   SocialHistorySummary,
 } from '../../services/patient-portal.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { InlineSubFormDirective } from '../../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.component';
 
 @Component({
   selector: 'app-my-medical-history',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, DatePipe, TranslateModule],
+  imports: [
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    TranslateModule,
+  ],
   templateUrl: './my-medical-history.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-medical-history.component.scss', '../patient-portal-pages.scss'],
@@ -82,6 +91,22 @@ export class MyMedicalHistoryComponent implements OnInit {
     } else {
       this.editingSection.set(section);
     }
+  }
+
+  /**
+   * QA D1191 / D1195 class (round 22): Escape on a personal note closes it
+   * without saving (asking first over typed text) and shows the saved note
+   * again, not the discarded draft.
+   */
+  cancelNoteEdit(section: string): void {
+    if (this.editingSection() !== section) return;
+    this.editingSection.set(null);
+    void this.restoreNote(section);
+  }
+
+  private async restoreNote(section: string): Promise<void> {
+    const stored = localStorage.getItem(this.NOTES_PREFIX + section) || '';
+    this.onNoteChange(section, await this.decryptNote(stored));
   }
 
   onNoteChange(section: string, value: string): void {

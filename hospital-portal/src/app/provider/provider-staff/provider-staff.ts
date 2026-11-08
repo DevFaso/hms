@@ -17,6 +17,7 @@ import { deliveryWarningKeys, hasActivationSent } from '../../shared/delivery-wa
 import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
 import { ProviderStaffRegisterComponent } from '../provider-staff-register/provider-staff-register';
 import { followFacility } from '../follow-facility';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 /**
  * The facility's staff (provider plan P1-T13, AC-6), for its PROVIDER_ADMIN:
@@ -38,7 +39,7 @@ import { followFacility } from '../follow-facility';
 @Component({
   selector: 'app-provider-staff',
   standalone: true,
-  imports: [TranslateModule, RoleLabelPipe, ProviderStaffRegisterComponent],
+  imports: [TranslateModule, RoleLabelPipe, ProviderStaffRegisterComponent, ModalDialogDirective],
   templateUrl: './provider-staff.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: '../provider-pages.scss',

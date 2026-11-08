@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.clinical.newborn;
 
+import com.example.hms.enums.NewbornDangerSignObservation;
 import com.example.hms.enums.NewbornEducationTopic;
 import com.example.hms.enums.NewbornFollowUpAction;
 import lombok.AllArgsConstructor;
@@ -55,6 +56,12 @@ public class NewbornAssessmentResponseDTO {
     private String examNeurological;
     private String examMusculoskeletal;
     private String examNotes;
+
+    /** CR-05: NOT_ASSESSED is not absent. Rows saved before these signs existed read NOT_ASSESSED. */
+    private NewbornDangerSignObservation poorFeeding;
+    private NewbornDangerSignObservation convulsions;
+    private NewbornDangerSignObservation severeChestIndrawing;
+    private NewbornDangerSignObservation absentSpontaneousMovement;
 
     private boolean escalationRecommended;
     private boolean respiratorySupportInitiated;

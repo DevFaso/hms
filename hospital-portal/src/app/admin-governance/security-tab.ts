@@ -13,12 +13,21 @@ import {
 } from '../services/super-admin-governance.service';
 import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /** Security baselines, pending approvals, rule-set templates + simulation. */
 @Component({
   selector: 'app-gov-security-tab',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './security-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

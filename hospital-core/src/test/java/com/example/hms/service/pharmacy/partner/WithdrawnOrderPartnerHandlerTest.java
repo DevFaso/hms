@@ -240,4 +240,48 @@ class WithdrawnOrderPartnerHandlerTest {
                 .doesNotThrowAnyException();
         assertThat(accepted.getStatus()).isEqualTo(RoutingDecisionStatus.COMPLETED);
     }
+
+    @Test
+    @DisplayName("a hold recalls an unanswered offer: it closes, the order comes home, the partner is told after commit")
+    void aHoldRecallsAnUnansweredOffer() {
+        prescription.setStatus(PrescriptionStatus.SENT_TO_PARTNER);
+        PrescriptionRoutingDecision open = decision(RoutingType.PARTNER, RoutingDecisionStatus.PENDING);
+        when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescription.getId())).thenReturn(List.of(open));
+
+        handler.recallForReview(prescription);
+
+        assertThat(open.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_REJECTED);
+        verify(channel, never()).sendHeldForReview(any(), any());
+        commit();
+        verify(channel).sendHeldForReview(open, partner);
+    }
+
+    @Test
+    @DisplayName("a hold leaves an accepted offer open, so a hand-over still matches, and tells that partner too")
+    void aHoldTellsAnAcceptedPartner() {
+        prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
+        PrescriptionRoutingDecision accepted = decision(RoutingType.PARTNER, RoutingDecisionStatus.ACCEPTED);
+        when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescription.getId())).thenReturn(List.of(accepted));
+
+        handler.recallForReview(prescription);
+        commit();
+
+        assertThat(accepted.getStatus()).isEqualTo(RoutingDecisionStatus.ACCEPTED);
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_ACCEPTED);
+        verify(channel).sendHeldForReview(accepted, partner);
+    }
+
+    @Test
+    @DisplayName("a rolled-back hold tells no partner not to dispense")
+    void aRolledBackHoldTellsNobody() {
+        prescription.setStatus(PrescriptionStatus.SENT_TO_PARTNER);
+        when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescription.getId()))
+            .thenReturn(List.of(decision(RoutingType.PARTNER, RoutingDecisionStatus.PENDING)));
+
+        handler.recallForReview(prescription);
+        rollback();
+
+        verify(channel, never()).sendHeldForReview(any(), any());
+    }
 }

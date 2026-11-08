@@ -16,5 +16,17 @@ import java.util.UUID;
 public record ApplyOrderSetRequestDTO(
     UUID encounterId,
     @NotNull UUID orderingStaffId,
-    Boolean forceOverride
-) {}
+    Boolean forceOverride,
+    /*
+     * Round 18 (QA D935): why the prescriber overrides a critical alert on a
+     * medication of the set. Every override of a critical alert needs one;
+     * without it forceOverride passes nothing (the allergy override always
+     * required one, QA D83).
+     */
+    @jakarta.validation.constraints.Size(max = 1024) String overrideReason
+) {
+    /** The body before round 18: no override reason. */
+    public ApplyOrderSetRequestDTO(UUID encounterId, UUID orderingStaffId, Boolean forceOverride) {
+        this(encounterId, orderingStaffId, forceOverride, null);
+    }
+}

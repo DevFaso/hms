@@ -49,11 +49,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TreatmentPlanServiceImplTest {
+
+    // QA D1232 (round 24): the refusals are message keys now; the assertions
+    // read them in English through the real bundles (set up in setUp).
+    @org.junit.jupiter.api.AfterEach
+    void resetRefusalLocale() {
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        com.example.hms.security.CallerIdentityTestSupport.clear();
+    }
 
     @Mock
     private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
@@ -83,6 +93,8 @@ class TreatmentPlanServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         encounterId = UUID.randomUUID();
@@ -158,11 +170,6 @@ class TreatmentPlanServiceImplTest {
     }
 
     // ---- create ----
-
-    @org.junit.jupiter.api.AfterEach
-    void clearCallerIdentity() {
-        com.example.hms.security.CallerIdentityTestSupport.clear();
-    }
 
     @Test
     void create_success() {
@@ -305,8 +312,9 @@ class TreatmentPlanServiceImplTest {
         when(staffRepository.findById(signOffId)).thenReturn(Optional.of(signOff));
 
         assertThatThrownBy(() -> service.create(requestDTO))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Assignment hospital mismatch");
+                // QA D1232 (round 24): a keyed refusal, read through the bundles (was an English IllegalStateException).
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasMessageContaining("The assignment belongs to another hospital.");
     }
 
     @Test
@@ -343,8 +351,9 @@ class TreatmentPlanServiceImplTest {
         when(staffRepository.findById(signOffId)).thenReturn(Optional.of(signOff));
 
         assertThatThrownBy(() -> service.create(requestDTO))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Encounter hospital mismatch");
+                // QA D1232 (round 24): a keyed refusal, read through the bundles (was an English IllegalStateException).
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasMessageContaining("The encounter belongs to another hospital.");
     }
 
     @Test
@@ -362,7 +371,8 @@ class TreatmentPlanServiceImplTest {
         when(staffRepository.findById(signOffId)).thenReturn(Optional.of(signOff));
 
         assertThatThrownBy(() -> service.create(requestDTO))
-                .isInstanceOf(IllegalStateException.class)
+                // QA D1232 (round 24): a keyed refusal, read through the bundles (was an English IllegalStateException).
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
                 .hasMessageContaining("same patient");
     }
 
@@ -551,6 +561,7 @@ class TreatmentPlanServiceImplTest {
 
     @Test
     void updateFollowUp_success() {
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
         UUID followUpId = UUID.randomUUID();
         TreatmentPlanFollowUp followUp = TreatmentPlanFollowUp.builder()
                 .treatmentPlan(plan)
@@ -613,11 +624,166 @@ class TreatmentPlanServiceImplTest {
         when(staffRepository.findById(reviewerId)).thenReturn(Optional.of(reviewer));
         when(treatmentPlanReviewRepository.save(any(TreatmentPlanReview.class))).thenReturn(review);
         when(treatmentPlanMapper.toReviewDTO(review)).thenReturn(reviewDTO);
+        // QA D503 class: the reviewer is the signed-in clinician.
+        reviewer.setHospital(hospital);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(reviewer, hospital);
 
         TreatmentPlanReviewDTO result = service.addReview(planId, reviewReq);
 
         assertThat(result).isNotNull();
         verify(treatmentPlanReviewRepository).save(any(TreatmentPlanReview.class));
+    }
+
+    @Test
+    void qaD955_theAuthorCannotApproveHerOwnPlan() {
+        TreatmentPlanReviewRequestDTO reviewReq = TreatmentPlanReviewRequestDTO.builder()
+                .reviewerStaffId(authorId)
+                .action(TreatmentPlanReviewAction.APPROVED)
+                .build();
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
+        when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
+
+        assertThatThrownBy(() -> service.addReview(planId, reviewReq))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(treatmentPlanReviewRepository, never()).save(any());
+    }
+
+    /** Stubs every lookup create and update make before the status rule. */
+    private void stubWriteContext() {
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+        when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
+        when(staffRepository.findById(supervisingId)).thenReturn(Optional.of(supervising));
+        when(staffRepository.findById(signOffId)).thenReturn(Optional.of(signOff));
+    }
+
+    /** QA D1127: the author created plans 20c8ed12 and 15939396 straight as APPROVED. */
+    @Test
+    void qaD1127_aPlanIsNotCreatedApproved() {
+        stubWriteContext();
+        requestDTO.setStatus(com.example.hms.enums.TreatmentPlanStatus.APPROVED);
+
+        assertThatThrownBy(() -> service.create(requestDTO))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .extracting("messageKey").isEqualTo("treatmentPlan.approve.byReviewOnly");
+        verify(treatmentPlanRepository, never()).save(any());
+    }
+
+    /** QA D1127: the author moved plan f59dbc6c DRAFT to APPROVED with a PUT. */
+    @Test
+    void qaD1127_anEditCannotApproveThePlan() {
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
+        stubWriteContext();
+        plan.setStatus(com.example.hms.enums.TreatmentPlanStatus.DRAFT);
+        requestDTO.setStatus(com.example.hms.enums.TreatmentPlanStatus.APPROVED);
+
+        assertThatThrownBy(() -> service.update(planId, requestDTO))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .extracting("messageKey").isEqualTo("treatmentPlan.approve.byReviewOnly");
+        verify(treatmentPlanRepository, never()).save(any());
+        assertThat(plan.getStatus()).isEqualTo(com.example.hms.enums.TreatmentPlanStatus.DRAFT);
+    }
+
+    @Test
+    void qaD1127_theRuleOnlyRefusesAMoveIntoApproved() {
+        org.assertj.core.api.Assertions.assertThatCode(() -> TreatmentPlanServiceImpl.requireNotApprovedByWrite(
+                com.example.hms.enums.TreatmentPlanStatus.APPROVED, com.example.hms.enums.TreatmentPlanStatus.APPROVED))
+            .doesNotThrowAnyException();
+        org.assertj.core.api.Assertions.assertThatCode(() -> TreatmentPlanServiceImpl.requireNotApprovedByWrite(
+                null, com.example.hms.enums.TreatmentPlanStatus.IN_REVIEW))
+            .doesNotThrowAnyException();
+        assertThatThrownBy(() -> TreatmentPlanServiceImpl.requireNotApprovedByWrite(
+                com.example.hms.enums.TreatmentPlanStatus.REVISIONS_REQUIRED,
+                com.example.hms.enums.TreatmentPlanStatus.APPROVED))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+    }
+
+    /** QA D1127: the one road to APPROVED is another clinician's review, which now moves the status. */
+    @Test
+    void qaD1127_aColleaguesApprovalApprovesThePlan() {
+        UUID reviewerId = UUID.randomUUID();
+        Staff reviewer = new Staff();
+        reviewer.setId(reviewerId);
+        reviewer.setHospital(hospital);
+        plan.setStatus(com.example.hms.enums.TreatmentPlanStatus.IN_REVIEW);
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
+        when(staffRepository.findById(reviewerId)).thenReturn(Optional.of(reviewer));
+        when(treatmentPlanReviewRepository.save(any(TreatmentPlanReview.class))).thenAnswer(inv -> inv.getArgument(0));
+        com.example.hms.security.CallerIdentityTestSupport.actAs(reviewer, hospital);
+
+        service.addReview(planId, TreatmentPlanReviewRequestDTO.builder()
+                .reviewerStaffId(reviewerId).action(TreatmentPlanReviewAction.APPROVED).build());
+
+        assertThat(plan.getStatus()).isEqualTo(com.example.hms.enums.TreatmentPlanStatus.APPROVED);
+        verify(treatmentPlanRepository).save(plan);
+
+        service.addReview(planId, TreatmentPlanReviewRequestDTO.builder()
+                .reviewerStaffId(reviewerId).action(TreatmentPlanReviewAction.CHANGES_REQUESTED).build());
+        assertThat(plan.getStatus()).isEqualTo(com.example.hms.enums.TreatmentPlanStatus.REVISIONS_REQUIRED);
+    }
+
+    /** QA D1066 class: a review moves the status now, so a cancelled plan is never revived by one. */
+    @Test
+    void qaD1127_aCancelledPlanIsNotRevivedByAReview() {
+        UUID reviewerId = UUID.randomUUID();
+        Staff reviewer = new Staff();
+        reviewer.setId(reviewerId);
+        reviewer.setHospital(hospital);
+        plan.setStatus(com.example.hms.enums.TreatmentPlanStatus.CANCELLED);
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
+        when(staffRepository.findById(reviewerId)).thenReturn(Optional.of(reviewer));
+        com.example.hms.security.CallerIdentityTestSupport.actAs(reviewer, hospital);
+
+        assertThatThrownBy(() -> service.addReview(planId, TreatmentPlanReviewRequestDTO.builder()
+                .reviewerStaffId(reviewerId).action(TreatmentPlanReviewAction.APPROVED).build()))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .extracting("messageKey").isEqualTo("treatmentPlan.cancelled.locked");
+        verify(treatmentPlanReviewRepository, never()).save(any());
+        assertThat(plan.getStatus()).isEqualTo(com.example.hms.enums.TreatmentPlanStatus.CANCELLED);
+    }
+
+    @Test
+    void qaD503_aReviewCannotBeFiledInAColleaguesName() {
+        UUID colleagueId = UUID.randomUUID();
+        Staff colleague = new Staff();
+        colleague.setId(colleagueId);
+        colleague.setHospital(hospital);
+        colleague.setUser(new com.example.hms.model.User());
+        colleague.getUser().setId(UUID.randomUUID());
+        TreatmentPlanReviewRequestDTO reviewReq = TreatmentPlanReviewRequestDTO.builder()
+                .reviewerStaffId(colleagueId)
+                .action(TreatmentPlanReviewAction.CHANGES_REQUESTED)
+                .build();
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
+        when(staffRepository.findById(colleagueId)).thenReturn(Optional.of(colleague));
+
+        assertThatThrownBy(() -> service.addReview(planId, reviewReq))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+    }
+
+    @Test
+    void qaD930_aColleagueCannotRewriteThePlanBySendingBackItsAuthor() {
+        Staff colleague = new Staff();
+        colleague.setId(UUID.randomUUID());
+        colleague.setHospital(hospital);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(colleague, hospital);
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
+        org.mockito.Mockito.lenient().when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        org.mockito.Mockito.lenient().when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        org.mockito.Mockito.lenient().when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        org.mockito.Mockito.lenient().when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.lenient().when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
+        org.mockito.Mockito.lenient().when(staffRepository.findById(supervisingId)).thenReturn(Optional.of(supervising));
+        org.mockito.Mockito.lenient().when(staffRepository.findById(signOffId)).thenReturn(Optional.of(signOff));
+
+        assertThatThrownBy(() -> service.update(planId, requestDTO))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+                // QA D1112: the authorship rule, not "act in your own name" (identity.notCaller).
+                .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                    .containsAnyOf("treatmentPlan.authorOnly", "Only the clinician who wrote this treatment plan", "Seul le clinicien qui a rédigé ce plan"));
+        verify(treatmentPlanRepository, never()).save(any());
     }
 
     @Test
@@ -773,6 +939,7 @@ class TreatmentPlanServiceImplTest {
 
     @Test
     void updateFollowUp_withAssignedStaff_success() {
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
         UUID followUpId = UUID.randomUUID();
         UUID staffMemberId = UUID.randomUUID();
         Staff assignedStaff = new Staff();
@@ -888,5 +1055,19 @@ class TreatmentPlanServiceImplTest {
 
         Page<TreatmentPlanResponseDTO> result = service.listAll(null, pageable);
         assertThat(result.getContent()).hasSize(1);
+    }
+
+    /** QA D1428 class: a cancelled or archived plan takes no follow-up, new or edited. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.TreatmentPlanStatus.class,
+        names = {"CANCELLED", "ARCHIVED"})
+    void qaD1428_aClosedPlanTakesNoFollowUp(com.example.hms.enums.TreatmentPlanStatus closed) {
+        plan.setStatus(closed);
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
+        TreatmentPlanFollowUpRequestDTO request = new TreatmentPlanFollowUpRequestDTO();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.addFollowUp(planId, request))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        verify(treatmentPlanFollowUpRepository, org.mockito.Mockito.never()).save(any());
     }
 }

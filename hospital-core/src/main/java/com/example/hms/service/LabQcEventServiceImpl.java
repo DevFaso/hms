@@ -1,7 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.LabQcEventLevel;
-import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabQcEventMapper;
 import com.example.hms.model.LabQcEvent;
@@ -35,12 +35,13 @@ public class LabQcEventServiceImpl implements LabQcEventService {
     @Override
     @Transactional
     public LabQcEventResponseDTO recordQcEvent(LabQcEventRequestDTO request, Locale locale) {
-        if (request.getHospitalId() == null) {
-            throw new BusinessException("lab.qc.hospitalRequired");
-        }
-        if (request.getMeasuredValue() == null || request.getExpectedValue() == null) {
-            throw new BusinessException("lab.qc.valuesRequired");
-        }
+        // QA round 29 sweep (D1318 class): every missing value named in one answer.
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(request.getHospitalId(), "hospitalId", "lab.qc.hospital.required")
+            .requireValue(request.getQcLevel(), "qcLevel", "lab.qc.levelRequired")
+            .requireValue(request.getMeasuredValue(), "measuredValue", "lab.qc.measuredRequired")
+            .requireValue(request.getExpectedValue(), "expectedValue", "lab.qc.expectedRequired")
+            .orThrow();
 
         LabQcEventLevel level;
         // QA r5 tenancy sweep: a QC event is recorded at the caller's acting hospital; the body's id is a claim.
@@ -48,7 +49,7 @@ public class LabQcEventServiceImpl implements LabQcEventService {
         try {
             level = LabQcEventLevel.valueOf(request.getQcLevel().trim().toUpperCase(Locale.ROOT));
         } catch (Exception ex) {
-            throw new BusinessException("lab.qc.unknownLevel", String.valueOf(request.getQcLevel()));
+            throw new FieldBusinessException("qcLevel", "lab.qc.unknownLevel", String.valueOf(request.getQcLevel()));
         }
 
         LabTestDefinition testDef = null;

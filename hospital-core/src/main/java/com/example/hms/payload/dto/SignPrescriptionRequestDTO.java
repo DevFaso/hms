@@ -1,0 +1,58 @@
+package com.example.hms.payload.dto;
+
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+
+/**
+ * Round 18: the prescriber's re-authentication for signing a controlled-drug
+ * prescription ({@code POST /prescriptions/{id}/sign}). Optional for any
+ * other drug. The TOTP code when an authenticator is enrolled, else the
+ * password. Verified on that call only, for that one signature; never stored
+ * and never logged ({@code toString} excludes both).
+ */
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@ToString(exclude = {"password", "mfaCode", "allergyOverrideReason"})
+public class SignPrescriptionRequestDTO {
+
+    @Size(max = 256)
+    private String password;
+
+    /** A current six-digit TOTP code, or an unused backup code. */
+    @Size(max = 32)
+    private String mfaCode;
+
+    /**
+     * QA D1183 (round 23): the prescriber's reason for signing an order the
+     * allergy stop applies to (a documented allergy covers the drug, or the
+     * drug name could not be checked against a drug-class allergy) when no
+     * acknowledgement was recorded at creation or edit. Stored on the order
+     * and audited as a digest, like the creation override.
+     */
+    @Size(max = 1024)
+    private String allergyOverrideReason;
+
+    /**
+     * CR-02: the token a refused signature put on the cards it answered with. A reason alone passes
+     * no exception: this ties it to those findings of that version of the order, and a token that no
+     * longer matches them is refused with the current cards. Not stored.
+     */
+    @Size(max = 128)
+    private String doseExceptionToken;
+
+    /**
+     * CR-01 (provisional): the prescriber states this order cannot wait for the second-person dose
+     * review of a child's order the check could not assess. It passes nothing alone: it needs the
+     * reason and the token, and a review by age or by weight band has no such exception. Not stored:
+     * the signature records the time.
+     */
+    private Boolean urgentDoseException;
+}

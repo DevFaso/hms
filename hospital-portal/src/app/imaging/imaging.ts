@@ -1,6 +1,9 @@
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   computed,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -29,6 +32,20 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import {
+  labelledRefusalReason,
+  refusalReason,
+  refusedFieldReasons,
+} from '../shared/refusal-reason';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { AuthorshipService } from '../shared/authorship.service';
+import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+
+/** The cancellation reason's field (QA D1098), marked when it is refused. */
+const CANCEL_REASON_ID = 'imaging-cancel-reason';
 
 type ImagingForm = Omit<ImagingOrderRequest, 'laterality'> & {
   laterality?: ImagingLaterality | '';
@@ -63,10 +80,37 @@ interface ReportForm {
   reportStatus: AuthorableReportStatus;
 }
 
+/** The new-order form: each request field's element id (QA D1156). */
+const ORDER_FIELD_IDS: Readonly<Record<string, string>> = {
+  patientId: 'img-patientSearch',
+  hospitalId: 'img-hospitalId',
+  modality: 'img-modality',
+  priority: 'img-priority',
+  studyType: 'img-studyType',
+  bodyRegion: 'img-bodyRegion',
+  laterality: 'img-laterality',
+  clinicalQuestion: 'img-clinicalQ',
+};
+
+/** The new-order form: each request field's label key (QA D1156). */
+const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
+  patientId: 'PATIENTS.PATIENT_NAME',
+  hospitalId: 'ENCOUNTERS.HOSPITAL',
+  modality: 'IMAGING.MODALITY',
+  priority: 'IMAGING.PRIORITY',
+  studyType: 'IMAGING.STUDY_TYPE',
+  bodyRegion: 'IMAGING.BODY_REGION',
+  laterality: 'IMAGING.LATERALITY',
+  clinicalQuestion: 'IMAGING.CLINICAL_QUESTION',
+};
+
 @Component({
   selector: 'app-imaging',
   standalone: true,
   imports: [
+    DateTimePipe,
+    SubmitGuardDirective,
+    ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -80,12 +124,20 @@ interface ReportForm {
 })
 export class ImagingComponent implements OnInit {
   private readonly imagingService = inject(ImagingService);
+  private readonly authorship = inject(AuthorshipService);
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  /** QA D1098: the shared rule for which orders still offer edit and cancel. */
+  readonly isOrderCancellable = isOrderCancellable;
+  /** QA D1098: why the order is cancelled (required, kept on the order). */
+  readonly cancelReason = signal('');
 
   orders = signal<ImagingOrderResponse[]>([]);
   filtered = signal<ImagingOrderResponse[]>([]);
@@ -211,6 +263,19 @@ export class ImagingComponent implements OnInit {
   readonly canCancelOrder = computed(() =>
     this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderStatus')),
   );
+  /**
+   * QA D1081: cancelling an imaging order is its author's (the server refuses
+   * any other clinician after the confirm). Per row, through the shared rule.
+   */
+  canCancelThisOrder(o: ImagingOrderResponse): boolean {
+    return (
+      this.canCancelOrder() &&
+      // QA D1098: a resulted order (RESULTS_AVAILABLE) offered "Annuler la demande".
+      isOrderCancellable(o.status) &&
+      this.authorship.isAuthor({ authorUserId: o.authorUserId ?? o.orderingProviderUserId })
+    );
+  }
+
   /** RADIOLOGIST joins DOCTOR here — the endpoint has admitted the role since item 26. */
   readonly canAckCritical = this.roleContext.hasAnyActiveRole(actionRoles('imagingCriticalAck'));
 
@@ -352,9 +417,20 @@ export class ImagingComponent implements OnInit {
         this.saving.set(false);
         this.load();
       },
-      error: (err: { error?: { message?: string } } | null) => {
+      error: (err: unknown) => {
         // QA D611: the server's reason stays in the open modal; nothing typed is lost.
-        const reason = err?.error?.message ?? null;
+        // QA D1156: a validation refusal names its fields by their labels and
+        // marks them, never the bare "must not be null" text.
+        const reason = labelledRefusalReason(err, this.translate, ORDER_FIELD_LABELS);
+        const refused = refusedFieldReasons(err, ORDER_FIELD_IDS);
+        if (refused.length > 0) {
+          // Each field carries the server's own reason for it, not always "required".
+          refuseFields(this.host.nativeElement, [], Object.values(ORDER_FIELD_IDS), '');
+          // Reversed: each call focuses its field, so the first refused one ends up focused.
+          for (const [id, text] of [...refused].reverse()) {
+            refuseFields(this.host.nativeElement, [id], [id], text);
+          }
+        }
         this.formError.set(reason);
         this.toast.error(reason ?? this.translate.instant('IMAGING.ORDER_SAVE_ERROR'));
         this.saving.set(false);
@@ -364,6 +440,7 @@ export class ImagingComponent implements OnInit {
 
   confirmCancel(o: ImagingOrderResponse): void {
     this.deletingItem.set(o);
+    this.cancelReason.set('');
     this.showDeleteConfirm.set(true);
   }
   cancelDeleteAction(): void {
@@ -371,10 +448,18 @@ export class ImagingComponent implements OnInit {
     this.deletingItem.set(null);
   }
   executeCancel(): void {
+    const reason = this.cancelReason().trim();
+    if (!reason) {
+      // QA D1098: the server refuses a cancel without a reason; the field says so first.
+      const message = this.translate.instant(CANCEL_REASON_REQUIRED_KEY);
+      refuseFields(this.host.nativeElement, [CANCEL_REASON_ID], [CANCEL_REASON_ID], message);
+      return;
+    }
     this.deleting.set(true);
     this.imagingService
       .updateOrderStatus(this.deletingItem()!.id, {
         status: 'CANCELLED',
+        cancellationReason: reason,
         // Stored on the order and read back by everyone, so it stays canonical
         // English: translating it would bake the cancelling user's locale
         // into the record and give the same note three spellings.
@@ -387,8 +472,11 @@ export class ImagingComponent implements OnInit {
           this.deleting.set(false);
           this.load();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('IMAGING.ORDER_CANCEL_ERROR'));
+        error: (err: unknown) => {
+          // QA D930 class: "only the ordering provider or a radiologist" is the reason.
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('IMAGING.ORDER_CANCEL_ERROR'),
+          );
           this.deleting.set(false);
         },
       });
@@ -426,7 +514,7 @@ export class ImagingComponent implements OnInit {
     if (term) {
       list = list.filter(
         (o) =>
-          (o.patientDisplayName ?? '').toLowerCase().includes(term) ||
+          textMatches(o.patientDisplayName, term) ||
           (o.studyType ?? '').toLowerCase().includes(term) ||
           (o.bodyRegion ?? '').toLowerCase().includes(term) ||
           (o.modality ?? '').toLowerCase().includes(term),
@@ -590,8 +678,10 @@ export class ImagingComponent implements OnInit {
         this.selectedReport.set(updated);
         this.loadReports();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('IMAGING.CRITICAL_ACK_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('IMAGING.CRITICAL_ACK_ERROR'),
+        );
         this.acknowledging.set(false);
       },
     });
@@ -690,8 +780,8 @@ export class ImagingComponent implements OnInit {
         this.selectedReport.set(saved);
         this.loadReports();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('IMAGING.REPORT_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('IMAGING.REPORT_SAVE_ERROR'));
         this.reportSubmitting.set(false);
       },
     });
@@ -702,8 +792,14 @@ export class ImagingComponent implements OnInit {
    * edits, so it asks first — the backend refuses a re-sign outright and the
    * only way back is a corrected version.
    */
-  signReport(report: ImagingReportResponse): void {
-    if (!window.confirm(this.translate.instant('IMAGING.SIGN_CONFIRM'))) return;
+  async signReport(report: ImagingReportResponse): Promise<void> {
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'IMAGING.SIGN_CONFIRM',
+        confirmKey: 'IMAGING.SIGN_REPORT',
+      }))
+    )
+      return;
     this.signing.set(true);
     this.imagingService.signReport(report.id).subscribe({
       next: (signed) => {
@@ -712,8 +808,8 @@ export class ImagingComponent implements OnInit {
         this.selectedReport.set(signed);
         this.loadReports();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('IMAGING.REPORT_SIGN_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('IMAGING.REPORT_SIGN_ERROR'));
         this.signing.set(false);
       },
     });
@@ -769,8 +865,10 @@ export class ImagingComponent implements OnInit {
           }
           this.loadReports();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('IMAGING.STATUS_UPDATE_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('IMAGING.STATUS_UPDATE_ERROR'),
+          );
           this.statusSubmitting.set(false);
         },
       });
@@ -792,6 +890,14 @@ export class ImagingComponent implements OnInit {
       criticalFinding: false,
       reportStatus: 'PRELIMINARY',
     };
+  }
+
+  /**
+   * QA D1098: a draft read on a cancelled order is neither revised nor signed
+   * (the server refuses both); the order is looked up in the loaded list.
+   */
+  reportOrderCancelled(report: ImagingReportResponse): boolean {
+    return this.orders().some((o) => o.id === report.imagingOrderId && o.status === 'CANCELLED');
   }
 
   /** An order can only be read once the study has actually been acquired. */

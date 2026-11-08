@@ -3,8 +3,6 @@ package com.example.hms.repository;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.model.LabOrder;
 import jakarta.validation.constraints.NotNull;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -124,25 +122,17 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     List<LabOrder> findByStatusAndHospital_Id(LabOrderStatus status, UUID hospitalId);
     List<LabOrder> findByHospital_IdAndStatusIn(UUID hospitalId, java.util.Collection<LabOrderStatus> statuses);
 
-    @Query(value = """
-    SELECT * FROM lab_orders l
-    WHERE (:patientId IS NULL OR l.patient_id = CAST(:patientId AS uuid))
-      AND (CAST(:startDate AS LocalDateTime) IS NULL OR l.order_datetime >= CAST(:startDate AS timestamp))
-      AND (CAST(:endDate AS LocalDateTime) IS NULL OR l.order_datetime <= CAST(:endDate AS timestamp))
-    """,
-            countQuery = "SELECT count(*) FROM lab_orders l WHERE (:patientId IS NULL OR l.patient_id = CAST(:patientId AS uuid)) AND (CAST(:startDate AS LocalDateTime) IS NULL OR l.order_datetime >= CAST(:startDate AS timestamp)) AND (CAST(:endDate AS LocalDateTime) IS NULL OR l.order_datetime <= CAST(:endDate AS timestamp))",
-            nativeQuery = true)
-    Page<LabOrder> searchNative(
-            @Param("patientId") UUID patientId,
-            @Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate,
-            Pageable pageable
-    );
-
     boolean existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(UUID id, UUID id1, @NotNull LocalDateTime orderDatetime);
 
     /** True when the encounter has at least one lab order whose status is NOT in the given terminal set. */
     boolean existsByEncounter_IdAndStatusNotIn(UUID encounterId, java.util.Collection<LabOrderStatus> terminalStatuses);
+
+    /** QA D972 hand-off: the ids of a visit's lab orders, for the checkout event billing consumes. */
+    @org.springframework.data.jpa.repository.Query(
+        "select o.id from LabOrder o where o.encounter.id = :encounterId and o.status not in :excluded")
+    java.util.List<UUID> findIdsByEncounterIdAndStatusNotIn(
+        @org.springframework.data.repository.query.Param("encounterId") UUID encounterId,
+        @org.springframework.data.repository.query.Param("excluded") java.util.Collection<LabOrderStatus> excluded);
 
     // Count lab orders placed by a specific ordering staff with a given status
     long countByOrderingStaff_IdAndStatus(UUID staffId, LabOrderStatus status);

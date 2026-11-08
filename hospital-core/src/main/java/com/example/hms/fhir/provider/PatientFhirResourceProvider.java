@@ -154,8 +154,9 @@ public class PatientFhirResourceProvider implements IResourceProvider {
         String dob = (birthdate != null && birthdate.getValue() != null)
             ? birthdate.getValueAsString()
             : null;
-        String phonePattern = phone != null && phone.getValue() != null
-            ? "%" + phone.getValue() + "%"
+        // QA D942/D943: the same folds as every other patient search.
+        String phonePattern = phone != null
+            ? com.example.hms.utility.PatientMatchKeys.phoneContainsPattern(phone.getValue())
             : null;
         String emailPattern = email != null && email.getValue() != null
             ? "%" + email.getValue().toLowerCase() + "%"
@@ -340,8 +341,8 @@ public class PatientFhirResourceProvider implements IResourceProvider {
     }
 
     private static String stringPattern(StringParam param) {
-        if (param == null || param.getValue() == null || param.getValue().isBlank()) return null;
-        return "%" + param.getValue().trim().toLowerCase() + "%";
+        if (param == null) return null;
+        return com.example.hms.utility.PatientMatchKeys.nameContainsPattern(param.getValue());
     }
 
     private static String normalizeDob(String raw) {

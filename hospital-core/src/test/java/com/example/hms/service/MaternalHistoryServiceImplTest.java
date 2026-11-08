@@ -80,6 +80,9 @@ class MaternalHistoryServiceImplTest {
     @Mock
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
+    @Mock
+    private com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
+
     @InjectMocks
     private MaternalHistoryServiceImpl maternalHistoryService;
 
@@ -341,13 +344,58 @@ class MaternalHistoryServiceImplTest {
         assertThat(result).isNotNull().isEqualTo(responseDTO);
     }
 
+    /**
+     * QA D1082 (round 18): this used to expect a ResourceNotFoundException
+     * (404 on every chart of a woman with no history). None is an answer now:
+     * null, which the controller sends as 204.
+     */
     @Test
-    void getCurrentMaternalHistoryByPatientId_shouldThrowExceptionWhenNotFound() {
+    void getCurrentMaternalHistoryByPatientId_returnsNullWhenThereIsNone() {
         when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("No maternal history found");
+        assertThat(maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username)).isNull();
+    }
+
+    /** QA D1067: a delivery at or after the pregnancy's LMP ends it, on every read. */
+    @Test
+    void d1067_aDeliveryAfterTheLmpMarksThePregnancyOver() {
+        maternalHistory.setLastMenstrualPeriod(java.time.LocalDate.now().minusWeeks(40));
+        LocalDateTime birth = LocalDateTime.now().minusDays(1);
+        com.example.hms.model.labor.DeliveryRecord delivery = new com.example.hms.model.labor.DeliveryRecord();
+        delivery.setBirthDateTime(birth);
+        MaternalHistoryResponseDTO dto = new MaternalHistoryResponseDTO();
+        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(maternalHistory));
+        when(maternalHistoryMapper.toResponseDTO(maternalHistory)).thenReturn(dto);
+        when(deliveryRecordRepository.findFirstByPatient_IdAndHospital_IdAndBirthDateTimeGreaterThanEqualOrderByBirthDateTimeDesc(
+            patientId, hospitalId, maternalHistory.getLastMenstrualPeriod().atStartOfDay())).thenReturn(Optional.of(delivery));
+
+        assertThat(maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username).getDeliveredAt())
+            .isEqualTo(birth);
+    }
+
+    @Test
+    void d1067_noDeliveryLeavesThePregnancyOngoing() {
+        maternalHistory.setLastMenstrualPeriod(java.time.LocalDate.now().minusWeeks(20));
+        MaternalHistoryResponseDTO dto = new MaternalHistoryResponseDTO();
+        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(maternalHistory));
+        when(maternalHistoryMapper.toResponseDTO(maternalHistory)).thenReturn(dto);
+
+        assertThat(maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username).getDeliveredAt())
+            .isNull();
+    }
+
+    @Test
+    void d1067_withoutAnLmpThePregnancyStartsATermBeforeTheDueDate() {
+        maternalHistory.setLastMenstrualPeriod(null);
+        java.time.LocalDate due = java.time.LocalDate.now().plusDays(3);
+        maternalHistory.setEstimatedDueDate(due);
+        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(maternalHistory));
+        when(maternalHistoryMapper.toResponseDTO(maternalHistory)).thenReturn(new MaternalHistoryResponseDTO());
+
+        maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username);
+
+        verify(deliveryRecordRepository).findFirstByPatient_IdAndHospital_IdAndBirthDateTimeGreaterThanEqualOrderByBirthDateTimeDesc(
+            patientId, hospitalId, due.minusDays(280).atStartOfDay());
     }
 
     @Test
@@ -482,10 +530,29 @@ class MaternalHistoryServiceImplTest {
     void deleteMaternalHistory_shouldDeleteSuccessfully() {
         UUID historyId = UUID.randomUUID();
         when(maternalHistoryRepository.findById(historyId)).thenReturn(Optional.of(maternalHistory));
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, hospital);
 
         maternalHistoryService.deleteMaternalHistory(historyId, username);
 
         verify(maternalHistoryRepository).delete(maternalHistory);
+    }
+
+    @Test
+    void qaD930_aColleagueCannotDeleteTheRecordersHistory() {
+        UUID historyId = UUID.randomUUID();
+        when(maternalHistoryRepository.findById(historyId)).thenReturn(Optional.of(maternalHistory));
+        Staff colleague = new Staff();
+        colleague.setId(UUID.randomUUID());
+        colleague.setHospital(hospital);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(colleague, hospital);
+
+        assertThatThrownBy(() -> maternalHistoryService.deleteMaternalHistory(historyId, "colleague"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+                // QA D1112: the authorship rule, not "act in your own name" (identity.notCaller).
+                .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage()).containsAnyOf(
+                    "maternalHistory.delete.recorderOnly", "Only the clinician who recorded", "Seul le clinicien qui a enregistré"));
+        verify(maternalHistoryRepository, never()).delete(any());
+        com.example.hms.security.CallerIdentityTestSupport.clear();
     }
 
     @Test
@@ -498,6 +565,48 @@ class MaternalHistoryServiceImplTest {
                 .hasMessageContaining("Maternal history not found");
 
         verify(maternalHistoryRepository, never()).delete(any());
+    }
+
+    /** A score equal to the old one is still a new assessment, and a review is not one. */
+    @Test
+    void theAssessmentDateMovesWithAScoreAndNotWithAReview() {
+        UUID historyId = UUID.randomUUID();
+        java.time.LocalDateTime longAgo = java.time.LocalDateTime.of(2020, 1, 1, 9, 0);
+        maternalHistory.setRiskCategory("HIGH");
+        maternalHistory.setRiskAssessedAt(longAgo);
+        maternalHistory.setHospital(hospital);
+        maternalHistory.setPreeclampsiaHistory(true);
+        maternalHistory.setEclampsiaHistory(true);
+        maternalHistory.setHellpSyndromeHistory(true);
+        when(maternalHistoryRepository.findById(historyId)).thenReturn(Optional.of(maternalHistory));
+        when(maternalHistoryRepository.save(any(MaternalHistory.class))).thenReturn(maternalHistory);
+        when(maternalHistoryMapper.toResponseDTO(maternalHistory)).thenReturn(responseDTO);
+
+        maternalHistoryService.markAsReviewed(historyId, username);
+        assertThat(maternalHistory.getRiskAssessedAt()).isEqualTo(longAgo);
+
+        maternalHistoryService.calculateRiskScore(historyId, username);
+        assertThat(maternalHistory.getRiskCategory()).isEqualTo("HIGH");
+        assertThat(maternalHistory.getRiskAssessedAt()).isAfter(longAgo);
+    }
+
+    /** The score sets the cadence the prenatal planner gives the owning hospital, so it is written only from there. */
+    @Test
+    void calculateRiskScore_isRefusedAtAnotherHospital() {
+        UUID historyId = UUID.randomUUID();
+        UUID elsewhere = UUID.randomUUID();
+        maternalHistory.setHospital(hospital);
+        when(maternalHistoryRepository.findById(historyId)).thenReturn(Optional.of(maternalHistory));
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(userId)
+            .activeHospitalId(elsewhere)
+            .permittedHospitalIds(Set.of(elsewhere))
+            .superAdmin(false)
+            .build());
+
+        assertThatThrownBy(() -> maternalHistoryService.calculateRiskScore(historyId, username))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(maternalHistoryRepository, never()).save(any());
     }
 
     @Test
@@ -734,5 +843,36 @@ class MaternalHistoryServiceImplTest {
         verify(maternalHistoryRepository).save(captor.capture());
         assertThat(captor.getValue().getGravida()).isEqualTo(3);
         assertThat(captor.getValue().getPara()).isEqualTo(2);
+    }
+
+    /** QA D1465, through the service: the three the round reported, on their fields. */
+    @Test
+    void impossibleValuesAreRefusedOnTheField() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(user));
+        when(staffRepository.findByUserIdAndHospitalId(userId, hospitalId)).thenReturn(Optional.of(staff));
+        when(maternalHistoryRepository.existsByPatient_Id(patientId)).thenReturn(false);
+
+        org.mockito.Mockito.doAnswer(call -> {
+            com.example.hms.model.MaternalHistory h = call.getArgument(0);
+            h.setLastMenstrualPeriod(java.time.LocalDate.of(2026, 6, 10));
+            h.setEstimatedDueDate(java.time.LocalDate.of(2026, 1, 10));
+            return null;
+        }).when(maternalHistoryMapper).updateEntityFromRequest(any(), any());
+        assertThatThrownBy(() -> maternalHistoryService.createMaternalHistory(requestDTO, username))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> org.assertj.core.api.Assertions.assertThat(ex.getField()).isEqualTo("menstrualHistory.estimatedDueDate"));
+
+        org.mockito.Mockito.doAnswer(call -> {
+            com.example.hms.model.MaternalHistory h = call.getArgument(0);
+            h.setGravida(2);
+            h.setPara(1);
+            h.setLivingChildren(7);
+            return null;
+        }).when(maternalHistoryMapper).updateEntityFromRequest(any(), any());
+        assertThatThrownBy(() -> maternalHistoryService.createMaternalHistory(requestDTO, username))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> org.assertj.core.api.Assertions.assertThat(ex.getField()).isEqualTo("obstetricHistory.livingChildren"));
     }
 }

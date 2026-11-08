@@ -40,7 +40,9 @@ public class LabReflexRuleController {
                description = "Creates a new reflex/add-on rule. Condition JSON examples: {\"severityFlag\":\"ABNORMAL\"} or {\"thresholdOperator\":\"GT\",\"thresholdValue\":11.0}")
     @ApiResponse(responseCode = "201", description = "Rule created")
     public ResponseEntity<ApiResponseWrapper<LabReflexRuleResponseDTO>> createRule(
-        @RequestBody LabReflexRuleRequestDTO request,
+        // QA D1349 (round 30): the required values of a new rule are named at the edge.
+        @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+            com.example.hms.validation.OnCreate.class}) @RequestBody LabReflexRuleRequestDTO request,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
         LabReflexRuleResponseDTO created = labReflexRuleService.createRule(request, locale);
@@ -65,7 +67,8 @@ public class LabReflexRuleController {
     @ApiResponse(responseCode = "404", description = "Rule not found")
     public ResponseEntity<ApiResponseWrapper<LabReflexRuleResponseDTO>> updateRule(
         @PathVariable UUID id,
-        @RequestBody LabReflexRuleRequestDTO request,
+        // A partial edit: the Default group only (the OnCreate requirements are the create's).
+        @jakarta.validation.Valid @RequestBody LabReflexRuleRequestDTO request,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
         LabReflexRuleResponseDTO updated = labReflexRuleService.updateRule(id, request, locale);

@@ -59,19 +59,28 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
                                               TreatmentConsentSource source,
                                               TreatmentConsentRequestDTO request) {
         if (hospitalId == null) {
-            throw new BusinessException("An active hospital is required to record a consent.");
+            throw new BusinessException("consent.hospitalRequired");
         }
         if (request == null || request.getMethod() == null) {
-            throw new BusinessException("A consent capture method is required.");
+            throw new com.example.hms.exception.FieldBusinessException("method", "consent.captureMethodRequired");
+        }
+        // QA D1148 (round 21, user decision): a consent recorded in the chart
+        // names who gave it; one was stored with no signer. The pre-check-in
+        // signs with the patient's own name; the check-in desk records it
+        // best effort with what the desk typed (its dialog asks for the name).
+        if (source == null || source == TreatmentConsentSource.MANUAL) {
+            com.example.hms.service.support.ClinicalContent.requirePresent(request.getSignedName(), "signedName",
+                "treatmentConsent.signedName.required");
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("Patient is not registered at this hospital.");
+            throw new BusinessException("consent.patientNotRegistered");
         }
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         Appointment appointment = resolveAppointment(request.getAppointmentId(), patientId, hospitalId);
         Encounter encounter = resolveEncounter(request.getEncounterId(), patientId, hospitalId);
 
@@ -85,7 +94,7 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
             .source(source != null ? source : TreatmentConsentSource.MANUAL)
             .signedName(trimToNull(request.getSignedName()))
             .consentedAt(consentedAt)
-            .expiresAt(request.getExpiresAt())
+            .expiresAt(com.example.hms.utility.ExpiryRules.requireFuture("expiresAt", request.getExpiresAt(), "consent.expiryInPast"))
             .notes(trimToNull(request.getNotes()))
             .build();
 
@@ -126,11 +135,10 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
             throw new ResourceNotFoundException("treatmentConsent.notFound", consentId);
         }
         if (consent.getStatus() == TreatmentConsentStatus.REVOKED) {
-            throw new BusinessException("This consent has already been revoked.");
+            throw new BusinessException("consent.alreadyRevoked");
         }
         if (reason == null || reason.isBlank()) {
-            throw new BusinessException("A revocation reason is required — the patient withdrew "
-                + "consent for a reason worth recording.");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "consent.revocationReasonRequired");
         }
         consent.setStatus(TreatmentConsentStatus.REVOKED);
         consent.setRevokedAt(LocalDateTime.now());
@@ -159,11 +167,11 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
             .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", appointmentId));
         if (appointment.getPatient() == null
             || !Objects.equals(appointment.getPatient().getId(), patientId)) {
-            throw new BusinessException("The appointment belongs to a different patient.");
+            throw new com.example.hms.exception.FieldBusinessException("appointmentId", "consent.appointmentOtherPatient");
         }
         if (appointment.getHospital() != null
             && !Objects.equals(appointment.getHospital().getId(), hospitalId)) {
-            throw new BusinessException("The appointment belongs to a different hospital.");
+            throw new com.example.hms.exception.FieldBusinessException("appointmentId", "consent.appointmentOtherHospital");
         }
         return appointment;
     }
@@ -176,11 +184,11 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
             .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", encounterId));
         if (encounter.getPatient() == null
             || !Objects.equals(encounter.getPatient().getId(), patientId)) {
-            throw new BusinessException("The encounter belongs to a different patient.");
+            throw new com.example.hms.exception.FieldBusinessException("encounterId", "consent.encounterOtherPatient");
         }
         if (encounter.getHospital() != null
             && !Objects.equals(encounter.getHospital().getId(), hospitalId)) {
-            throw new BusinessException("The encounter belongs to a different hospital.");
+            throw new com.example.hms.exception.FieldBusinessException("encounterId", "consent.encounterOtherHospital");
         }
         return encounter;
     }

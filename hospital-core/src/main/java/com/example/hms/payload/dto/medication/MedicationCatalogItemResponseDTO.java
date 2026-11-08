@@ -33,6 +33,18 @@ public class MedicationCatalogItemResponseDTO {
     private String category;
     private boolean essentialList;
     private boolean controlled;
+    /** QA D935: mg per kg per dose, or null when the catalogue holds no ceiling. */
+    private java.math.BigDecimal pediatricMaxDoseMgPerKg;
+    /** Round 18 (QA D935): the rest of the paediatric limits, their source and approval. */
+    private java.math.BigDecimal pediatricMaxDailyMgPerKg;
+    private java.math.BigDecimal pediatricMaxSingleDoseMg;
+    private java.math.BigDecimal pediatricMaxDailyMg;
+    private Integer pediatricManualReviewUnderMonths;
+    private java.util.List<PediatricWeightBandDTO> pediatricWeightBands;
+    private String pediatricDoseSource;
+    private com.example.hms.enums.PediatricDoseLimitStatus pediatricDoseStatus;
+    private UUID pediatricDoseReviewedBy;
+    private LocalDateTime pediatricDoseReviewedAt;
     private boolean active;
     private String description;
     private UUID hospitalId;

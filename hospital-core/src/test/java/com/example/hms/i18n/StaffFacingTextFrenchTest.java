@@ -85,6 +85,8 @@ class StaffFacingTextFrenchTest {
         assertThat(meta.getInterpretation()).isEqualTo(
             "Valeur en hausse de 1,50 mmol/L (30,0 %) sur 10 jours. "
                 + "Précédente : 5,00 mmol/L, actuelle : 6,50 mmol/L");
+        // QA D1106 (D1002 class): the change shown beside it was String.format("%.2f") in the JVM locale.
+        assertThat(meta.getAbsoluteChange()).isEqualTo("1,50 mmol/L");
     }
 
     @Test

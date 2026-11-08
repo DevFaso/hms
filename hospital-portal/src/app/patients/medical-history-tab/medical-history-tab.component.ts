@@ -1,4 +1,5 @@
 import {
+  ElementRef,
   Component,
   Input,
   OnInit,
@@ -25,7 +26,45 @@ import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { PEV_VACCINES, pevCvx } from './pev-cvx';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+import { hasClinicalContent } from '../../shared/forms/clinical-content';
+import { refusalReason } from '../../shared/refusal-reason';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
+import { DashPipe } from '../../shared/pipes/dash.pipe';
+import { missingRequiredMessage } from '../../shared/required-fields';
+
+/** QA D1425: the vaccination form's fields checked before sending. */
+const IMMUNIZATION_CHECKED_IDS = ['im-display', 'im-date', 'im-dose', 'im-total', 'im-next-due'];
+
+/** QA D1148: what a social-history version records; one of them is required. */
+const SOCIAL_CONTENT_FIELDS = [
+  'tobaccoUse',
+  'tobaccoType',
+  'tobaccoPacksPerDay',
+  'alcoholUse',
+  'alcoholFrequency',
+  'alcoholDrinksPerWeek',
+  'recreationalDrugUse',
+  'drugTypesUsed',
+  'exerciseFrequency',
+  'dietType',
+  'occupation',
+  'employmentStatus',
+  'livingArrangement',
+  'housingStability',
+  'preferredLanguage',
+  'interpreterNeeded',
+  'feelsSafeAtHome',
+  'abuseHistory',
+  'socialIsolationRisk',
+  'stressLevel',
+  'mentalHealthSupport',
+  'additionalNotes',
+] as const;
 type HistorySection = 'social' | 'family' | 'immunizations';
 type FamilyFilter = 'all' | 'genetic' | 'screening-needed';
 
@@ -38,7 +77,17 @@ type FamilyFilter = 'all' | 'genetic' | 'screening-needed';
 @Component({
   selector: 'app-medical-history-tab',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    DashPipe,
+    KeyLabelPipe,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './medical-history-tab.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './medical-history-tab.component.scss',
@@ -51,6 +100,7 @@ export class MedicalHistoryTabComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject(ElementRef<HTMLElement>);
 
   /** Social/family writes; immunization writes additionally allow PHARMACIST. */
   readonly canEditSocialFamily = this.roleContext.hasAnyActiveRole([
@@ -154,7 +204,7 @@ export class MedicalHistoryTabComponent implements OnInit {
     this.socialLoading.set(true);
     this.historyService.currentSocialHistory(this.patientId).subscribe({
       next: (current) => {
-        // Backend returns 200 with an empty body when none exists.
+        // None: an empty body (QA D1082 class: 204 No Content), read as null.
         this.currentSocial.set(current && current.id ? current : null);
         this.socialLoading.set(false);
       },
@@ -198,6 +248,17 @@ export class MedicalHistoryTabComponent implements OnInit {
 
   submitSocial(): void {
     if (!this.socialForm.patientId || !this.socialForm.recordedDate) return;
+    if (!hasClinicalContent(this.socialForm, SOCIAL_CONTENT_FIELDS)) {
+      // QA D1148: an empty version was stored and superseded the record.
+      refuseFields(
+        this.host.nativeElement,
+        ['sh-occupation'],
+        ['sh-occupation'],
+        this.translate.instant('MED_HISTORY.SOCIAL_EMPTY'),
+      );
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], ['sh-occupation'], '');
     this.socialForm.recordedByStaffId = this.auth.getUserProfile()?.staffId ?? undefined;
     this.socialSaving.set(true);
     this.historyService.createSocialHistory(this.socialForm).subscribe({
@@ -207,8 +268,10 @@ export class MedicalHistoryTabComponent implements OnInit {
         this.closeSocialModal();
         this.loadSocial();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MED_HISTORY.SOCIAL_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MED_HISTORY.SOCIAL_SAVE_ERROR'),
+        );
         this.socialSaving.set(false);
       },
     });
@@ -283,7 +346,13 @@ export class MedicalHistoryTabComponent implements OnInit {
   submitFamily(): void {
     const form = this.familyForm;
     if (!form.relationship.trim() || !form.conditionDisplay.trim()) {
-      this.toast.error(this.translate.instant('MED_HISTORY.FAMILY_REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list.
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'MED_HISTORY.RELATIONSHIP', value: form.relationship },
+          { labelKey: 'MED_HISTORY.CONDITION', value: form.conditionDisplay },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
       return;
     }
     form.recordedByStaffId = this.auth.getUserProfile()?.staffId ?? form.recordedByStaffId;
@@ -303,8 +372,10 @@ export class MedicalHistoryTabComponent implements OnInit {
         this.closeFamilyModal();
         this.loadFamily();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MED_HISTORY.FAMILY_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MED_HISTORY.FAMILY_SAVE_ERROR'),
+        );
         this.familySaving.set(false);
       },
     });
@@ -332,6 +403,40 @@ export class MedicalHistoryTabComponent implements OnInit {
     return immunization.nextDoseDueDate < this.todayIso();
   }
 
+  /**
+   * QA D1003: the Burkina Faso EPI (PEV) vaccines, offered by name so the
+   * vaccine is chosen rather than typed. Choosing one fills its verified CVX
+   * code (pev-cvx.ts); the code stays optional and editable.
+   */
+  readonly pevVaccines = PEV_VACCINES;
+  readonly immunizationSources = [
+    'GIVEN_HERE',
+    'VACCINATION_CARD',
+    'EXTERNAL_RECORD',
+    'PATIENT_REPORT',
+  ];
+
+  /** A source this form writes, which has a label; a legacy free-text source is shown as typed. */
+  isKnownSource(source: string | null | undefined): boolean {
+    return !!source && this.immunizationSources.includes(source);
+  }
+
+  /** A dose dated before today is a transcription unless the clinician says otherwise. */
+  onImmunizationDateChange(date: string): void {
+    this.immunizationForm.administrationDate = date;
+    if (!this.immunizationSourceTouched) {
+      this.immunizationForm.sourceOfRecord =
+        date && date < this.todayIso() ? 'VACCINATION_CARD' : 'GIVEN_HERE';
+    }
+  }
+
+  onImmunizationSourceChange(source: string): void {
+    this.immunizationSourceTouched = true;
+    this.immunizationForm.sourceOfRecord = source;
+  }
+
+  private immunizationSourceTouched = false;
+
   emptyImmunizationForm(): ImmunizationRequest {
     return {
       patientId: '',
@@ -341,20 +446,80 @@ export class MedicalHistoryTabComponent implements OnInit {
       administrationDate: this.todayIso(),
       // Uppercase COMPLETED is load-bearing for backend reminders/exports.
       status: 'COMPLETED',
+      sourceOfRecord: 'GIVEN_HERE',
     };
   }
 
   openCreateImmunization(): void {
+    this.editedImmunization = null;
     this.immunizationForm = {
       ...this.emptyImmunizationForm(),
       patientId: this.patientId,
       hospitalId: this.hospitalId(),
     };
+    this.immunizationSourceTouched = false;
+    this.autoFilledCvx = null;
     this.editingImmunizationId.set(null);
     this.showImmunizationModal.set(true);
   }
 
+  /** QA D1425: the row an edit echoes; a value it does not change is not judged. */
+  private editedImmunization: ImmunizationResponse | null = null;
+
+  /**
+   * QA D1425: a dose records a day that happened. A row stored with a later date
+   * keeps it when edited on its other fields, so that date stays selectable.
+   */
+  immunizationDateMax(): string {
+    const today = this.todayIso();
+    const stored = this.editedImmunization?.administrationDate;
+    return stored && stored > today ? stored : today;
+  }
+
+  /** QA D1425: the field to refuse before sending, as the server would (the birth date is the server's). */
+  private immunizationProblem(): { id: string; messageKey: string } | null {
+    const form = this.immunizationForm;
+    const stored = this.editedImmunization;
+    const date = form.administrationDate;
+    const becomesCompleted =
+      !!stored?.status && form.status === 'COMPLETED' && stored.status !== 'COMPLETED';
+    if (
+      (date !== stored?.administrationDate || becomesCompleted) &&
+      date > this.todayIso() &&
+      form.status !== 'DEFERRED'
+    ) {
+      return { id: 'im-date', messageKey: 'MED_HISTORY.IMM_DATE_FUTURE' };
+    }
+    const dose = this.filledNumber(form.doseNumber);
+    const series = this.filledNumber(form.totalDosesInSeries);
+    const doseChanged = !stored || dose !== this.filledNumber(stored.doseNumber);
+    const seriesChanged = !stored || series !== this.filledNumber(stored.totalDosesInSeries);
+    if (dose !== null && dose < 1 && doseChanged) {
+      return { id: 'im-dose', messageKey: 'MED_HISTORY.IMM_DOSE_BELOW_ONE' };
+    }
+    if (series !== null && series < 1 && seriesChanged) {
+      return { id: 'im-total', messageKey: 'MED_HISTORY.IMM_SERIES_BELOW_ONE' };
+    }
+    if (dose !== null && series !== null && dose > series && (doseChanged || seriesChanged)) {
+      return { id: 'im-dose', messageKey: 'MED_HISTORY.IMM_DOSE_ABOVE_SERIES' };
+    }
+    const next = form.nextDoseDueDate;
+    if (
+      next &&
+      next < date &&
+      (date !== stored?.administrationDate || next !== stored?.nextDoseDueDate)
+    ) {
+      return { id: 'im-next-due', messageKey: 'MED_HISTORY.IMM_NEXT_BEFORE_DOSE' };
+    }
+    return null;
+  }
+
+  private filledNumber(value: number | string | null | undefined): number | null {
+    return value === null || value === undefined || value === '' ? null : Number(value);
+  }
+
   openEditImmunization(immunization: ImmunizationResponse): void {
+    this.editedImmunization = immunization;
     // PUT is a full replace — round-trip the complete record.
     this.immunizationForm = {
       ...immunization,
@@ -364,9 +529,58 @@ export class MedicalHistoryTabComponent implements OnInit {
       vaccineDisplay: immunization.vaccineDisplay ?? '',
       administrationDate: immunization.administrationDate ?? this.todayIso(),
       status: immunization.status ?? 'COMPLETED',
+      // Review of #971: a dose recorded with no source stays without one (the
+      // server then keeps what is stored); it is never presumed given here.
+      sourceOfRecord: immunization.sourceOfRecord ?? '',
     };
+    this.immunizationSourceTouched = true;
+    this.autoFilledCvx = null;
     this.editingImmunizationId.set(immunization.id);
     this.showImmunizationModal.set(true);
+  }
+
+  /**
+   * QA D1003 (round 17): a PEV vaccine chosen by name fills its CVX code from
+   * the verified table (pev-cvx.ts). Any other vaccine takes the code an
+   * earlier dose of the same vaccine in this chart carries, when there is
+   * one. A code the clinician typed is never overwritten; one this method
+   * filled is replaced when the vaccine changes, and cleared when the new
+   * vaccine has no code, so a stale code never travels with another vaccine.
+   */
+  onVaccineChosen(display: string): void {
+    this.immunizationForm.vaccineDisplay = display;
+    const current = this.immunizationForm.vaccineCode?.trim() ?? '';
+    if (current && current !== this.autoFilledCvx) return;
+    const filled = pevCvx(this.pevVaccineNamed(display)) ?? this.earlierDoseCode(display);
+    this.immunizationForm.vaccineCode = filled ?? '';
+    this.autoFilledCvx = filled ?? null;
+  }
+
+  /** The CVX code the form filled itself, or null when the clinician typed it (or none). */
+  private autoFilledCvx: string | null = null;
+
+  /** The PEV vaccine whose label (in the reader's language) or key the text names. */
+  private pevVaccineNamed(display: string): string | undefined {
+    const name = (display ?? '').trim().toLocaleLowerCase();
+    if (!name) return undefined;
+    return this.pevVaccines.find(
+      (v) =>
+        v.toLocaleLowerCase() === name ||
+        String(this.translate.instant('MED_HISTORY.PEV.' + v))
+          .trim()
+          .toLocaleLowerCase() === name,
+    );
+  }
+
+  /** The code an earlier dose of the same vaccine in this chart carries. */
+  private earlierDoseCode(display: string): string | undefined {
+    const name = (display ?? '').trim().toLocaleLowerCase();
+    if (!name) return undefined;
+    const earlier = this.immunizations().find(
+      (i) =>
+        (i.vaccineDisplay ?? '').trim().toLocaleLowerCase() === name && !!i.vaccineCode?.trim(),
+    );
+    return earlier?.vaccineCode?.trim() || undefined;
   }
 
   closeImmunizationModal(): void {
@@ -375,11 +589,40 @@ export class MedicalHistoryTabComponent implements OnInit {
 
   submitImmunization(): void {
     const form = this.immunizationForm;
-    if (!form.vaccineCode.trim() || !form.vaccineDisplay.trim() || !form.administrationDate) {
-      this.toast.error(this.translate.instant('MED_HISTORY.IMMUNIZATION_REQUIRED_FIELDS'));
+    // QA D1003: the CVX code is optional (a PEV vaccine may have none).
+    if (!form.vaccineDisplay.trim() || !form.administrationDate) {
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'MED_HISTORY.VACCINE', value: form.vaccineDisplay },
+          { labelKey: 'MED_HISTORY.ADMINISTERED', value: form.administrationDate },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
+      const blank = [
+        ...(form.vaccineDisplay.trim() ? [] : ['im-display']),
+        ...(form.administrationDate ? [] : ['im-date']),
+      ];
+      refuseFields(this.host.nativeElement, blank, IMMUNIZATION_CHECKED_IDS, message);
+      this.toast.error(message);
       return;
     }
-    form.administeredByStaffId = this.auth.getUserProfile()?.staffId ?? form.administeredByStaffId;
+    const problem = this.immunizationProblem();
+    if (problem) {
+      const message = this.translate.instant(problem.messageKey);
+      refuseFields(this.host.nativeElement, [problem.id], IMMUNIZATION_CHECKED_IDS, message);
+      this.toast.error(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], IMMUNIZATION_CHECKED_IDS, '');
+    // QA D1003: only a dose given here is credited to the clinician recording
+    // it, and only when it is recorded: an edit keeps the dose's vaccinator.
+    if (form.sourceOfRecord && form.sourceOfRecord !== 'GIVEN_HERE') {
+      form.administeredByStaffId = undefined;
+    } else if (!this.editingImmunizationId() && form.sourceOfRecord === 'GIVEN_HERE') {
+      form.administeredByStaffId = this.auth.getUserProfile()?.staffId ?? undefined;
+    }
+    if (!form.sourceOfRecord) {
+      form.sourceOfRecord = undefined;
+    }
     this.immunizationSaving.set(true);
     const editingId = this.editingImmunizationId();
     const op = editingId
@@ -396,8 +639,10 @@ export class MedicalHistoryTabComponent implements OnInit {
         this.closeImmunizationModal();
         this.loadImmunizations();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MED_HISTORY.IMMUNIZATION_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MED_HISTORY.IMMUNIZATION_SAVE_ERROR'),
+        );
         this.immunizationSaving.set(false);
       },
     });
@@ -412,8 +657,10 @@ export class MedicalHistoryTabComponent implements OnInit {
         // Endpoint returns an empty body — refetch for the updated flags.
         this.loadImmunizations();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MED_HISTORY.REMINDER_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MED_HISTORY.REMINDER_ERROR'),
+        );
         this.reminderBusyId.set(null);
       },
     });

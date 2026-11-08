@@ -57,6 +57,10 @@ public class LabTestDefinitionResponseDTO {
     private Boolean reviewerMayApprove;
     private LocalDateTime reviewedAt;
     private String rejectionReason;
+    /** QA D1120: the ACTIVE definition this version replaces on activation (null for a first version). */
+    private UUID supersedesDefinitionId;
+    /** QA D1120: the version number (1 for a first definition). */
+    private Integer versionNumber;
 
     @Default
     private List<LabTestReferenceRangeDTO> referenceRanges = Collections.emptyList();

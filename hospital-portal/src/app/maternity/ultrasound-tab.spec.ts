@@ -1,4 +1,5 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { expectKeyboardModal } from '../testing/modal-dialog-keyboard';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -60,8 +61,11 @@ describe('UltrasoundTabComponent', () => {
       'highRiskOrders',
       'followUpRequired',
       'anomalies',
-      'template',
+      'cancelOrder',
+      'createOrder',
+      'updateOrder',
       'submitReport',
+      'template',
     ]);
     service.pendingOrders.and.returnValue(of([]));
     service.anomalies.and.returnValue(of([]));
@@ -93,66 +97,284 @@ describe('UltrasoundTabComponent', () => {
         NO_ORDERS: 'Aucune demande',
         NO_REPORTS: 'Aucun compte rendu',
         LOAD_ERROR: 'Chargement impossible',
-        REPORT_NO_FINDINGS: 'Aucun résultat constaté',
-        REPORT_REQUIRED_FIELDS: 'Champs obligatoires',
+      },
+      PORTAL: {
+        ENUM: {
+          IMAGING_ORDER_PRIORITY: {
+            ROUTINE: 'Routine',
+            URGENT: 'Urgente',
+            STAT: 'Immédiat (STAT)',
+          },
+        },
       },
     });
   });
 
-  it('lists the hospital’s orders with a translated scan type and status', () => {
-    create(['ROLE_MIDWIFE']);
-    expect(service.ordersByHospital).toHaveBeenCalledWith('h-1');
-    const cells = texts('tbody td');
-    expect(cells[0]).toBe('Awa Traoré');
-    expect(cells[1]).toBe('Échographie morphologique');
-    expect(texts('tbody .status-badge')).toEqual(['Prescrite']);
-  });
+  it('QA D1117: the priority reads in French in the list, the view and the order form', () => {
+    create(['ROLE_MIDWIFE'], [order({ priority: 'STAT' })]);
+    expect(texts('tbody td')).toContain('Immédiat (STAT)');
+    expect(host().textContent).not.toContain('STAT ');
 
-  it('renders the worklist tabs translated', () => {
-    create(['ROLE_MIDWIFE']);
-    const tabs = texts('.tab-btn');
-    expect(tabs[0]).toBe('Toutes');
-    expect(tabs[1]).toBe('En attente');
-    expect(tabs[4]).toBe('Anomalies');
-  });
-
-  it('gives the ordering roles edit and report, and nobody writes a cancelled order', () => {
-    create(['ROLE_MIDWIFE'], [order(), order({ id: 'us-2', status: 'CANCELLED' })]);
-    expect(host().querySelector('.filter-bar .btn-primary')).not.toBeNull();
-    expect(actionTitles()).toEqual([
-      'COMMON.VIEW',
-      'COMMON.EDIT',
-      'ULTRASOUND.RECORD_REPORT',
-      'COMMON.VIEW',
-    ]);
-  });
-
-  it('offers a nurse the list but no write control', () => {
-    create(['ROLE_NURSE']);
-    expect(host().querySelector('.filter-bar .btn-primary')).toBeNull();
-    expect(actionTitles()).toEqual(['COMMON.VIEW']);
-  });
-
-  it('switches to a report worklist and shows its translated empty state', () => {
-    create(['ROLE_DOCTOR']);
-    const anomalies = Array.from(host().querySelectorAll('.tab-btn'))[4] as HTMLElement;
-    anomalies.click();
+    fixture.componentInstance.openOrder(order({ priority: 'URGENT' }));
     fixture.detectChanges();
-    expect(service.anomalies).toHaveBeenCalledWith('h-1');
-    expect(texts('.empty-state h3')).toEqual(['Aucun compte rendu']);
-  });
+    expect(host().textContent).toContain('Urgente');
 
-  it('shows the translated empty state for an empty order list', () => {
-    create(['ROLE_DOCTOR'], []);
-    expect(texts('.empty-state h3')).toEqual(['Aucune demande']);
-  });
-
-  it('toasts the translated error when the list cannot load', () => {
-    service.ordersByHospital.and.returnValue(throwError(() => new Error('500')));
-    fixture = TestBed.createComponent(UltrasoundTabComponent);
+    fixture.componentInstance.openCreateOrder();
     fixture.detectChanges();
-    expect(toast.error).toHaveBeenCalledWith('Chargement impossible');
-    expect(host().querySelector('.loading-state')).toBeNull();
+    const options = Array.from(host().querySelectorAll('#us-priority option')).map((o) =>
+      o.textContent?.trim(),
+    );
+    expect(options).toEqual(['Routine', 'Urgente', 'Immédiat (STAT)']);
+  });
+
+  it('QA D1447: a past date and a scan count below 1 are refused on the field, and the time is a time input', () => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    const sent = service.createOrder.and.returnValue(of(order()) as never);
+    (cmp as unknown as { hospitalId: string }).hospitalId = 'h1';
+    cmp.openCreateOrder();
+    fixture.detectChanges();
+    expect(host().querySelector<HTMLInputElement>('#us-time')?.type).toBe('time');
+    expect(host().querySelector<HTMLInputElement>('#us-date')?.min).toBe(cmp.orderDateMin());
+
+    cmp.orderForm.patientId = 'p1';
+    cmp.orderForm.scheduledDate = '2026-09-01';
+    cmp.submitOrder();
+    expect(sent).not.toHaveBeenCalled();
+    expect(host().querySelector('#us-date')?.getAttribute('aria-invalid')).toBe('true');
+
+    cmp.orderForm.scheduledDate = undefined;
+    cmp.orderForm.scanCountForPregnancy = -1;
+    cmp.submitOrder();
+    expect(sent).not.toHaveBeenCalled();
+    expect(host().querySelector('#us-scan-count')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host().querySelector('#us-date')?.getAttribute('aria-invalid')).not.toBe('true');
+
+    cmp.orderForm.scanCountForPregnancy = 2;
+    cmp.submitOrder();
+    expect(sent).toHaveBeenCalledTimes(1);
+  });
+
+  it('QA D1447: an order whose date has passed stays editable on its other fields', () => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    const sent = service.updateOrder.and.returnValue(of(order()) as never);
+    (cmp as unknown as { hospitalId: string }).hospitalId = 'h1';
+    cmp.openEditOrder(
+      order({
+        scheduledDate: '2026-09-01',
+        scanCountForPregnancy: -1,
+        scheduledTime: '99:99 demain',
+      }),
+    );
+    fixture.detectChanges();
+    expect(cmp.orderDateMin()).toBe('2026-09-01');
+    cmp.orderForm.clinicalIndication = 'contrôle';
+    cmp.submitOrder();
+    expect(sent).toHaveBeenCalledTimes(1);
+    expect(sent.calls.mostRecent().args[1].scheduledTime).toBe('99:99 demain');
+  });
+
+  it('QA D1144: the cancel prompt takes the keyboard, and gives it back to "Cancel the order"', fakeAsync(() => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    spyOn(cmp, 'canCancelThisOrder').and.returnValue(true);
+    document.body.appendChild(host());
+    try {
+      cmp.openOrder(order());
+      fixture.detectChanges();
+      host().querySelector<HTMLButtonElement>('[data-testid="us-cancel-order"]')!.click();
+      fixture.detectChanges();
+      tick();
+      expect(document.activeElement?.id).toBe('us-cancel-reason');
+
+      cmp.closeCancelPrompt();
+      fixture.detectChanges();
+      tick();
+      expect(document.activeElement).toBe(host().querySelector('[data-testid="us-cancel-order"]'));
+
+      // Once cancelled there is no "Cancel" to return to: the dialog's Close takes the keyboard.
+      service.cancelOrder.and.returnValue(of(order({ status: 'CANCELLED' })));
+      cmp.openCancelPrompt();
+      fixture.detectChanges();
+      tick();
+      cmp.cancelReason = 'Doublon';
+      cmp.submitCancel();
+      fixture.detectChanges();
+      tick();
+      expect(document.activeElement).toBe(host().querySelector('[data-testid="us-order-close"]'));
+    } finally {
+      host().remove();
+    }
+  }));
+
+  it('QA D1155: Escape in the cancel prompt closes only the prompt, and asks before dropping a typed reason', fakeAsync(() => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    spyOn(cmp, 'canCancelThisOrder').and.returnValue(true);
+    document.body.appendChild(host());
+    const escape = (target: Element) => {
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      tick();
+    };
+    const reason = () => host().querySelector<HTMLTextAreaElement>('#us-cancel-reason');
+    try {
+      cmp.openOrder(order());
+      fixture.detectChanges();
+      host().querySelector<HTMLButtonElement>('[data-testid="us-cancel-order"]')!.click();
+      fixture.detectChanges();
+      tick();
+      expect(document.activeElement).toBe(reason());
+
+      reason()!.value = 'Doublon';
+      reason()!.dispatchEvent(new Event('input'));
+      escape(reason()!);
+      // The view dialog is still open, the text is still there, and the prompt asks.
+      expect(cmp.viewedOrder()).not.toBeNull();
+      expect(reason()!.value).toBe('Doublon');
+      expect(host().querySelector('[data-testid="inline-discard-ask"]')).not.toBeNull();
+      expect(document.activeElement).toBe(host().querySelector('[data-testid="inline-keep"]'));
+
+      // Escape on the question goes back to the text.
+      escape(document.activeElement!);
+      expect(host().querySelector('[data-testid="inline-discard-ask"]')).toBeNull();
+      expect(document.activeElement).toBe(reason());
+
+      // Discarding closes only the prompt; the keyboard goes back to "Cancel the order".
+      escape(reason()!);
+      host().querySelector<HTMLButtonElement>('[data-testid="inline-discard"]')!.click();
+      fixture.detectChanges();
+      tick();
+      expect(cmp.showCancelPrompt()).toBeFalse();
+      expect(cmp.viewedOrder()).not.toBeNull();
+      expect(document.activeElement).toBe(host().querySelector('[data-testid="us-cancel-order"]'));
+
+      // An empty prompt closes on Escape at once, still leaving the dialog open.
+      host().querySelector<HTMLButtonElement>('[data-testid="us-cancel-order"]')!.click();
+      fixture.detectChanges();
+      tick();
+      escape(reason()!);
+      expect(cmp.showCancelPrompt()).toBeFalse();
+      expect(cmp.viewedOrder()).not.toBeNull();
+      expect(document.activeElement).toBe(host().querySelector('[data-testid="us-cancel-order"]'));
+    } finally {
+      host().remove();
+    }
+  }));
+
+  it('QA D1150: the finding is never preselected and a report with no finding is refused, field by field', () => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    cmp.openReport(order());
+    fixture.detectChanges();
+    expect(cmp.reportForm.findingCategory).toBe('');
+    const save = () => {
+      const buttons = Array.from(
+        host().querySelectorAll<HTMLButtonElement>('.modal-actions .btn-primary'),
+      );
+      buttons[buttons.length - 1].click();
+      fixture.detectChanges();
+    };
+    // QA D1525: an empty report is refused first, as on the server.
+    save();
+    expect(service.submitReport).not.toHaveBeenCalled();
+    expect(host().querySelector('#rep-summary')?.getAttribute('aria-invalid')).toBe('true');
+
+    // A finding category alone is not a report: nothing was measured or written.
+    cmp.reportForm.findingCategory = 'NORMAL';
+    save();
+    expect(service.submitReport).not.toHaveBeenCalled();
+    expect(host().querySelector('#rep-summary')?.getAttribute('aria-invalid')).toBe('true');
+
+    // A finding without a category: the category is named, never assumed.
+    cmp.reportForm.findingCategory = '';
+    cmp.reportForm.fetalHeartRate = 142;
+    save();
+    expect(service.submitReport).not.toHaveBeenCalled();
+    expect(host().querySelector('#rep-category')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host().querySelector('#rep-summary')?.getAttribute('aria-invalid')).toBeNull();
+
+    service.submitReport.and.returnValue(of({}) as never);
+    cmp.reportForm.findingCategory = 'NORMAL';
+    save();
+    expect(service.submitReport).toHaveBeenCalledWith(
+      'us-1',
+      jasmine.objectContaining({ findingCategory: 'NORMAL', fetalHeartRate: 142 }),
+    );
+  });
+
+  // QA D1182 (round 22): editing a blank stored report re-sent the server's
+  // defaults (cardiac activity yes, one fetus) and saved a blank "Normal".
+  // QA D1525: the flags are now shown, so the edit sends what the form shows.
+  it('QA D1182: editing a blank stored report is refused, and the flags are sent only as shown', () => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    const stored = {
+      id: 'rep-1',
+      ultrasoundOrderId: 'us-1',
+      scanDate: '2026-11-01',
+      findingCategory: 'NORMAL',
+      numberOfFetuses: 1,
+      fetalCardiacActivity: true,
+      fetalMovementObserved: true,
+      fetalToneNormal: true,
+    };
+    cmp.openReport({ ...order(), report: stored } as never);
+    fixture.detectChanges();
+    const save = () => {
+      const buttons = Array.from(
+        host().querySelectorAll<HTMLButtonElement>('.modal-actions .btn-primary'),
+      );
+      buttons[buttons.length - 1].click();
+      fixture.detectChanges();
+    };
+    save();
+    expect(service.submitReport).not.toHaveBeenCalled();
+    expect(host().querySelector('#rep-summary')?.getAttribute('aria-invalid')).toBe('true');
+
+    service.submitReport.and.returnValue(of({}) as never);
+    cmp.reportForm.findingsSummary = 'Grossesse évolutive, activité cardiaque visible';
+    save();
+    const sent = service.submitReport.calls.mostRecent().args[1] as unknown as Record<
+      string,
+      unknown
+    >;
+    expect(sent['findingsSummary']).toContain('activité cardiaque');
+    // The stored values are on screen in the tri-state selects and sent as shown.
+    expect(sent['fetalCardiacActivity']).toBeTrue();
+    expect(sent['fetalToneNormal']).toBeTrue();
+  });
+
+  it('QA D1525: a stored observation is shown, and "not assessed" is sent as null', () => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    cmp.openReport({
+      ...order(),
+      report: {
+        id: 'rep-1',
+        scanDate: '2026-11-01',
+        findingCategory: 'NORMAL',
+        findingsSummary: 'Grossesse évolutive',
+        fetalCardiacActivity: true,
+        fetalMovementObserved: true,
+      },
+    } as never);
+    fixture.detectChanges();
+    expect(cmp.reportForm.fetalCardiacActivity).toBeTrue();
+    expect(cmp.reportForm.fetalToneNormal).toBeNull();
+    service.submitReport.and.returnValue(of({}) as never);
+    cmp.reportForm.fetalMovementObserved = null;
+    cmp.submitReport();
+    const sent = service.submitReport.calls.mostRecent().args[1];
+    expect(sent.fetalMovementObserved).toBeNull();
+    expect(sent.fetalToneNormal).toBeNull();
+  });
+
+  it('QA D1182: twins are a finding; one fetus alone is not', () => {
+    expect(hasUltrasoundFinding({ numberOfFetuses: 1 })).toBeFalse();
+    expect(hasUltrasoundFinding({ numberOfFetuses: 2 })).toBeTrue();
+    expect(hasUltrasoundFinding({ fetalCardiacActivity: true } as never)).toBeFalse();
   });
 
   describe('QA D1525: a finding is charted only when the clinician states it', () => {
@@ -170,23 +392,23 @@ describe('UltrasoundTabComponent', () => {
       const cmp = fixture.componentInstance;
       service.template.and.returnValue(of({ scanDate: '2026-11-08' } as UltrasoundReportRequest));
       cmp.openReport(order());
+      fixture.detectChanges();
       cmp.applyTemplate('nuchal-translucency');
+      fixture.detectChanges();
       cmp.submitReport();
-      expect(toast.error).toHaveBeenCalledWith('Aucun résultat constaté');
+      fixture.detectChanges();
       expect(service.submitReport).not.toHaveBeenCalled();
+      expect(host().querySelector('#rep-summary')?.getAttribute('aria-invalid')).toBe('true');
+      expect(host().querySelector('#rep-category')?.getAttribute('aria-invalid')).toBeNull();
     });
 
-    it('asks for the category once a finding is stated, and sends a stated "absent" as false', () => {
+    it('sends a stated "absent" as false and an unstated observation as null', () => {
       create(['ROLE_MIDWIFE']);
       const cmp = fixture.componentInstance;
       service.submitReport.and.returnValue(of({ id: 'r-1' } as UltrasoundReportResponse));
       cmp.openReport(order());
       cmp.reportForm.interpretation = 'Pas d’activité cardiaque';
       cmp.reportForm.fetalCardiacActivity = false;
-      cmp.submitReport();
-      expect(toast.error).toHaveBeenCalledWith('Champs obligatoires');
-      expect(service.submitReport).not.toHaveBeenCalled();
-
       cmp.reportForm.findingCategory = 'URGENT';
       cmp.submitReport();
       const sent = service.submitReport.calls.mostRecent().args[1];
@@ -257,6 +479,80 @@ describe('UltrasoundTabComponent', () => {
       expect(hasUltrasoundFinding({ numberOfFetuses: 2 })).toBeTrue();
       expect(hasUltrasoundFinding({ fetalHeartRate: 150 })).toBeTrue();
       expect(hasUltrasoundFinding({ findingsSummary: 'Grossesse évolutive' })).toBeTrue();
+    });
+  });
+
+  it('lists the hospital’s orders with a translated scan type and status', () => {
+    create(['ROLE_MIDWIFE']);
+    expect(service.ordersByHospital).toHaveBeenCalledWith('h-1');
+    const cells = texts('tbody td');
+    expect(cells[0]).toBe('Awa Traoré');
+    expect(cells[1]).toBe('Échographie morphologique');
+    expect(texts('tbody .status-badge')).toEqual(['Prescrite']);
+  });
+
+  it('renders the worklist tabs translated', () => {
+    create(['ROLE_MIDWIFE']);
+    const tabs = texts('.tab-btn');
+    expect(tabs[0]).toBe('Toutes');
+    expect(tabs[1]).toBe('En attente');
+    expect(tabs[4]).toBe('Anomalies');
+  });
+
+  it('gives the ordering roles edit and report, and nobody writes a cancelled order', () => {
+    create(['ROLE_MIDWIFE'], [order(), order({ id: 'us-2', status: 'CANCELLED' })]);
+    expect(host().querySelector('.filter-bar .btn-primary')).not.toBeNull();
+    expect(actionTitles()).toEqual([
+      'COMMON.VIEW',
+      'COMMON.EDIT',
+      'ULTRASOUND.RECORD_REPORT',
+      'COMMON.VIEW',
+    ]);
+  });
+
+  it('offers a nurse the list but no write control', () => {
+    create(['ROLE_NURSE']);
+    expect(host().querySelector('.filter-bar .btn-primary')).toBeNull();
+    expect(actionTitles()).toEqual(['COMMON.VIEW']);
+  });
+
+  it('switches to a report worklist and shows its translated empty state', () => {
+    create(['ROLE_DOCTOR']);
+    const anomalies = Array.from(host().querySelectorAll('.tab-btn'))[4] as HTMLElement;
+    anomalies.click();
+    fixture.detectChanges();
+    expect(service.anomalies).toHaveBeenCalledWith('h-1');
+    expect(texts('.empty-state h3')).toEqual(['Aucun compte rendu']);
+  });
+
+  it('shows the translated empty state for an empty order list', () => {
+    create(['ROLE_DOCTOR'], []);
+    expect(texts('.empty-state h3')).toEqual(['Aucune demande']);
+  });
+
+  it('toasts the translated error when the list cannot load', () => {
+    service.ordersByHospital.and.returnValue(throwError(() => new Error('500')));
+    fixture = TestBed.createComponent(UltrasoundTabComponent);
+    fixture.detectChanges();
+    expect(toast.error).toHaveBeenCalledWith('Chargement impossible');
+    expect(host().querySelector('.loading-state')).toBeNull();
+  });
+
+  describe('keyboard modals (QA D1004)', () => {
+    afterEach(() => (fixture.nativeElement as HTMLElement).remove());
+
+    it('"Nouvelle demande d’échographie": focus moves in, Escape closes, focus returns', () => {
+      create(['ROLE_MIDWIFE']);
+      document.body.appendChild(fixture.nativeElement);
+      const opener = host().querySelector<HTMLElement>('.btn-primary')!;
+      expectKeyboardModal(fixture, opener);
+    });
+
+    it('the view-échographie dialog: focus moves in, Escape closes, focus returns', () => {
+      create(['ROLE_DOCTOR']);
+      document.body.appendChild(fixture.nativeElement);
+      const opener = host().querySelector<HTMLElement>('.actions-cell button')!;
+      expectKeyboardModal(fixture, opener);
     });
   });
 });

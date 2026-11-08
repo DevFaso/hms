@@ -20,6 +20,8 @@ import java.util.UUID;
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @OneOf(fields = {"patientId", "patientIdentifier"}, message = "{prescription.patientId.required}")
+@com.example.hms.validation.PrnMinIntervalRequired(groups = com.example.hms.validation.OnCreate.class)
+@com.example.hms.validation.PrnMinIntervalOnlyWhenAsNeeded
 public class PrescriptionRequestDTO {
 
     private UUID id; // ignored on create
@@ -60,11 +62,52 @@ public class PrescriptionRequestDTO {
     private String frequency;
 
     /**
+     * QA round 30 (user decision 2026-11-02): the minimum hours between two
+     * doses of an as-needed (PRN, "si besoin") order, written by the
+     * prescriber. Required to create an as-needed order
+     * ({@link com.example.hms.validation.PrnMinIntervalRequired}), refused on
+     * any other ({@link com.example.hms.validation.PrnMinIntervalOnlyWhenAsNeeded});
+     * on update, null keeps the stored value.
+     */
+    @jakarta.validation.constraints.Min(value = 1, message = "{prescription.prnMinInterval.range}")
+    @jakarta.validation.constraints.Max(value = com.example.hms.service.impl.PrnMinInterval.MAX_HOURS,
+        message = "{prescription.prnMinInterval.range}")
+    @tools.jackson.databind.annotation.JsonDeserialize(using = com.example.hms.validation.WholeHoursDeserializer.class)
+    private Integer prnMinIntervalHours;
+
+    /**
+     * QA D1378 / D1360 (round 32): the prescriber's explicit "as needed (PRN)"
+     * tick. True requires {@link #prnMinIntervalHours}; false (or absent on
+     * create) refuses one, and a frequency that reads as "as needed" is then
+     * refused on this field so the prescriber confirms. On update, null keeps
+     * the stored value.
+     */
+    private Boolean asNeeded;
+
+    /**
+     * QA D1419 / D1426 / D1434 (round 34): the prescriber's answer to "this
+     * wording cannot be scheduled; nurses will be asked a reason at each dose
+     * after the first". The first submit of such a frequency is refused on this
+     * field; the same order with {@code true} is created, and its row reads
+     * {@code frequencyUnread} on the MAR. It answers that question only: a
+     * condition stays refused on {@link #asNeeded}, and an edit that leaves the
+     * frequency as it was is never asked. Not stored.
+     */
+    private Boolean frequencyConfirmed;
+
+    /**
      * Administration route (PO, IV, IM, SC, ...). The MAR five-rights route
      * check compares the bedside scan with this value; without it every
      * order looked oral and an IV dose always failed the route right.
+     * QA D1359 (round 30): a route the shared reading
+     * ({@link com.example.hms.service.emar.MedicationRoutes}) does not know is
+     * refused by name; it was stored as typed ("BOGUS"). On create here, with
+     * every other refusal; on an edit of the order's content in the service
+     * ({@code PrescriptionServiceImpl}), so a withdrawal that echoes an older
+     * order's stored route is never refused for it.
      */
     @Size(max = 80)
+    @com.example.hms.validation.MedicationRoute(groups = com.example.hms.validation.OnCreate.class)
     private String route;
 
     @Size(max = 100)
@@ -79,6 +122,10 @@ public class PrescriptionRequestDTO {
      * prescription from the prescribing form and on any controlled
      * substance; on update, null leaves the stored value unchanged.
      */
+    // QA D1318 (round 29): required to create, declared here so {} names it with
+    // the patient and the drug (it was refused after them, with no field).
+    @jakarta.validation.constraints.NotNull(groups = com.example.hms.validation.OnCreate.class,
+        message = "{prescription.quantity.required}")
     @jakarta.validation.constraints.DecimalMin(value = "0", inclusive = false,
         message = "{prescription.quantity.positive}")
     @jakarta.validation.constraints.DecimalMax(value = "100000", message = "{prescription.quantity.tooLarge}")

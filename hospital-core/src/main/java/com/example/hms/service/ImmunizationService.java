@@ -25,6 +25,15 @@ public interface ImmunizationService {
     List<ImmunizationResponseDTO> getImmunizationsByPatientId(UUID patientId);
 
     /**
+     * The patient-facing read: the patient (or a proxy the portal already
+     * authorised on the patient's own grant) reading their own immunizations,
+     * from every hospital (design Q1). No hospital scope and no staff
+     * record-access policy: ownership, established by the caller, is the
+     * bound. QA D1212 (round 24).
+     */
+    List<ImmunizationResponseDTO> getImmunizationsForPatientPortal(UUID patientId);
+
+    /**
      * Get immunizations by vaccine type
      */
     List<ImmunizationResponseDTO> getImmunizationsByVaccineCode(UUID patientId, String vaccineCode);

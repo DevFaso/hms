@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -13,7 +14,11 @@ import {
 import { OrganizationService, OrganizationResponse } from '../services/organization.service';
 import { ToastService } from '../core/toast.service';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /**
  * Org security policies + rules via the flat CRUD controllers
  * (/security-policies, /security-rules) — the only pair supporting true field
@@ -23,7 +28,7 @@ import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
 @Component({
   selector: 'app-gov-policies-tab',
   standalone: true,
-  imports: [FormsModule, TranslateModule, OrgTextPipe],
+  imports: [SubmitGuardDirective, ModalDialogDirective, FormsModule, TranslateModule, OrgTextPipe],
   templateUrl: './policies-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -33,6 +38,8 @@ export class PoliciesTabComponent implements OnInit {
   private readonly orgService = inject(OrganizationService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
 
   readonly policyTypes = SECURITY_POLICY_TYPES;
   readonly ruleTypes = SECURITY_RULE_TYPES;
@@ -70,8 +77,9 @@ export class PoliciesTabComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
-    this.orgService.list(0, 100).subscribe({
-      next: (page) => this.organizations.set(page.content ?? []),
+    // QA D1347: every organization (all pages), not the first 100.
+    allRows((page, size) => this.orgService.list(page, size)).subscribe({
+      next: (list) => this.organizations.set(list),
       error: () => this.toast.error(this.translate.instant('ADMIN_GOV.ORGS_LOAD_ERROR')),
     });
   }
@@ -176,14 +184,23 @@ export class PoliciesTabComponent implements OnInit {
     });
   }
 
-  deletePolicy(policy: SecurityPolicyResponse): void {
-    if (!confirm(this.translate.instant('ADMIN_GOV.POLICY_DELETE_CONFIRM'))) return;
+  async deletePolicy(policy: SecurityPolicyResponse): Promise<void> {
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'ADMIN_GOV.POLICY_DELETE_CONFIRM',
+        confirmKey: 'COMMON.DELETE',
+      }))
+    )
+      return;
     this.service.deletePolicy(policy.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ADMIN_GOV.POLICY_DELETED'));
         this.policies.update((list) => list.filter((p) => p.id !== policy.id));
       },
-      error: () => this.toast.error(this.translate.instant('ADMIN_GOV.POLICY_DELETE_ERROR')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ADMIN_GOV.POLICY_DELETE_ERROR'),
+        ),
     });
   }
 
@@ -265,8 +282,14 @@ export class PoliciesTabComponent implements OnInit {
     });
   }
 
-  deleteRule(policy: SecurityPolicyResponse, rule: SecurityRuleResponse): void {
-    if (!confirm(this.translate.instant('ADMIN_GOV.RULE_DELETE_CONFIRM'))) return;
+  async deleteRule(policy: SecurityPolicyResponse, rule: SecurityRuleResponse): Promise<void> {
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'ADMIN_GOV.RULE_DELETE_CONFIRM',
+        confirmKey: 'COMMON.DELETE',
+      }))
+    )
+      return;
     this.service.deleteRule(rule.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ADMIN_GOV.RULE_DELETED'));
@@ -276,7 +299,8 @@ export class PoliciesTabComponent implements OnInit {
           ),
         );
       },
-      error: () => this.toast.error(this.translate.instant('ADMIN_GOV.SAVE_ERROR')),
+      error: (err: unknown) =>
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ADMIN_GOV.SAVE_ERROR')),
     });
   }
 }

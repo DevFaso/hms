@@ -629,7 +629,7 @@ tr.foreign-row td:first-child,
 }
 
 .lab-unit {
-  margin-left: 4px;
+  white-space: pre;
   color: #5c5c74;
   font-size: 0.85rem;
 }
@@ -686,4 +686,12 @@ tr.pending-row.foreign-row td:first-child {
 .lab-pending-cell {
   color: #5c5c74;
   font-style: italic;
+}
+
+/* QA D1242: the deactivation date and reason under the "Inactive" status. */
+.deactivation-note {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }

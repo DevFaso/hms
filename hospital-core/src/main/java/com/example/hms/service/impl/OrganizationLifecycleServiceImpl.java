@@ -100,9 +100,10 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
 
     @Override
     public TenantLifecycleResponseDTO suspend(UUID organizationId, TenantLifecycleActionRequestDTO request, String mfaToken) {
+        // QA round 29: the body before the state, so a missing reason is always named.
+        String reason = requireReason(request);
         Organization org = loadOrThrow(organizationId);
         requireTransition(org, SUSPENDABLE);
-        String reason = requireReason(request);
         requireStepUp(ACTION_SUSPEND, mfaToken);
 
         org.setLifecycleState(OrganizationLifecycleState.SUSPENDED);
@@ -144,9 +145,10 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
 
     @Override
     public TenantLifecycleResponseDTO archive(UUID organizationId, TenantLifecycleActionRequestDTO request, String mfaToken) {
+        // QA round 29: the body before the state, so a missing reason is always named.
+        String reason = requireReason(request);
         Organization org = loadOrThrow(organizationId);
         requireTransition(org, ARCHIVABLE);
-        String reason = requireReason(request);
         requireStepUp(ACTION_ARCHIVE, mfaToken);
 
         org.setLifecycleState(OrganizationLifecycleState.ARCHIVED);
@@ -165,9 +167,10 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
 
     @Override
     public TenantLifecycleResponseDTO schedulePurge(UUID organizationId, TenantLifecycleActionRequestDTO request, String mfaToken) {
+        // QA round 29: the body before the state, so a missing reason is always named.
+        String reason = requireReason(request);
         Organization org = loadOrThrow(organizationId);
         requireTransition(org, PURGE_SCHEDULABLE);
-        String reason = requireReason(request);
 
         // `request` is guaranteed non-null here — requireReason() above throws
         // otherwise. Only the per-call override on getPurgeScheduledFor() is optional.
@@ -228,7 +231,7 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
     private String requireReason(TenantLifecycleActionRequestDTO request) {
         String reason = request != null ? request.getReason() : null;
         if (reason == null || reason.trim().isEmpty()) {
-            throw BusinessRuleException.ofKey("organization.r7.reasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "organization.r7.reasonRequired");
         }
         return reason.trim();
     }

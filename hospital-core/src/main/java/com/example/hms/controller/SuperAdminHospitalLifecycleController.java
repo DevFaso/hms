@@ -53,7 +53,9 @@ public class SuperAdminHospitalLifecycleController {
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<HospitalLifecycleResponseDTO> suspend(
         @PathVariable UUID hospitalId,
-        @Valid @RequestBody TenantLifecycleActionRequestDTO request,
+        // QA D1349 (round 30): the reason of a destructive transition is required at the edge.
+        @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+            com.example.hms.validation.OnRefusal.class}) @RequestBody TenantLifecycleActionRequestDTO request,
         @RequestHeader(value = "X-Mfa-Token", required = false) String mfaToken
     ) {
         return ResponseEntity.ok(lifecycleService.suspend(hospitalId, request, mfaToken));
@@ -76,7 +78,9 @@ public class SuperAdminHospitalLifecycleController {
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<HospitalLifecycleResponseDTO> archive(
         @PathVariable UUID hospitalId,
-        @Valid @RequestBody TenantLifecycleActionRequestDTO request,
+        // QA D1349 (round 30): the reason of a destructive transition is required at the edge.
+        @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+            com.example.hms.validation.OnRefusal.class}) @RequestBody TenantLifecycleActionRequestDTO request,
         @RequestHeader(value = "X-Mfa-Token", required = false) String mfaToken
     ) {
         return ResponseEntity.ok(lifecycleService.archive(hospitalId, request, mfaToken));
@@ -88,7 +92,9 @@ public class SuperAdminHospitalLifecycleController {
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<HospitalLifecycleResponseDTO> schedulePurge(
         @PathVariable UUID hospitalId,
-        @Valid @RequestBody TenantLifecycleActionRequestDTO request,
+        // QA D1349 (round 30): the reason of a destructive transition is required at the edge.
+        @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+            com.example.hms.validation.OnRefusal.class}) @RequestBody TenantLifecycleActionRequestDTO request,
         @RequestHeader(value = "X-Mfa-Token", required = false) String mfaToken
     ) {
         return ResponseEntity.ok(lifecycleService.schedulePurge(hospitalId, request, mfaToken));

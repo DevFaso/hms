@@ -6,8 +6,11 @@ import { Observable } from 'rxjs';
  * Procedure orders — /procedure-orders (bare DTOs, List only, no pagination).
  * Effective roles (permission authorities are never granted): create/update =
  * DOCTOR/NURSE/SUPER_ADMIN; hospital lists = + HOSPITAL_ADMIN; cancel =
- * DOCTOR/SUPER_ADMIN only. HOSPITAL_ADMIN cannot GET a single order — the UI
- * renders detail from the list row instead of fetching by id.
+ * DOCTOR/SUPER_ADMIN only, and (decision 2026-10-28) only the ordering
+ * clinician, a physician for a nurse's or midwife's order, or a super-admin in
+ * global view; a refusal is a 403 the page reports. HOSPITAL_ADMIN cannot GET
+ * a single order — the UI renders detail from the list row instead of fetching
+ * by id.
  * Lifecycle: create forces ORDERED; PUT {scheduledDatetime} auto-promotes
  * ORDERED→SCHEDULED; consent is recorded via PUT and does NOT change status
  * (pending-consent = SCHEDULED && !consentObtained); COMPLETED via
@@ -64,6 +67,11 @@ export interface ProcedureOrderRequest extends ProcedureOrderBase {
 }
 
 export interface ProcedureOrderResponse extends ProcedureOrderBase {
+  /** QA D1081: the user the server's author check compares with (shared/authorship.service). */
+  authorUserId?: string | null;
+  /** QA D1081: false when a nurse or a midwife placed it (a physician may end it). */
+  authorIsPhysician?: boolean | null;
+
   id: string;
   patientId: string;
   hospitalId: string;

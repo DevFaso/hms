@@ -1,3 +1,5 @@
+import { PersonNamePipe, personName } from '../shared/pipes/person-name.pipe';
+import { exactIdentifierFirst, patientMatchesTerm } from '../shared/person-search';
 import {
   Component,
   inject,
@@ -15,16 +17,26 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
+import { isFrontDeskOnly } from './patient-chart/chart-access';
 import { TranslateModule } from '@ngx-translate/core';
 
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { DashPipe } from '../shared/pipes/dash.pipe';
 type SortField = 'name' | 'mrn' | 'gender' | 'status' | 'createdAt';
 type SortDir = 'asc' | 'desc';
 
 @Component({
   selector: 'app-patient-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    DashPipe,
+    PersonNamePipe,
+    CommonModule,
+    RouterLink,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './patient-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-list.scss',
@@ -47,6 +59,10 @@ export class PatientListComponent implements OnInit, OnDestroy {
   genderFilter = '';
   statusFilter = '';
   bloodTypeFilter = '';
+  /** RCPT-CLIN: the desk neither reads the blood type nor filters on it. */
+  frontDeskOnly(): boolean {
+    return isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
+  }
   private readonly selectedHospital = signal('');
   get hospitalFilter(): string {
     return this.selectedHospital();
@@ -243,23 +259,12 @@ export class PatientListComponent implements OnInit, OnDestroy {
   applyFilter(): void {
     let result = this.patients();
 
-    const term = this.searchTerm.toLowerCase().trim();
+    // QA D1019 / D1020: accents, the full name and every written phone
+    // format are folded, like the server's patient search.
+    const term = this.searchTerm.trim();
     if (term) {
-      const tokens = term.split(/\s+/);
-      result = result.filter(
-        (p) =>
-          tokens.every((token) =>
-            [p.firstName, p.middleName, p.lastName]
-              .filter(Boolean)
-              .join(' ')
-              .toLowerCase()
-              .includes(token),
-          ) ||
-          (p.email?.toLowerCase().includes(term) ?? false) ||
-          (p.mrn?.toLowerCase().includes(term) ?? false) ||
-          (p.phoneNumberPrimary?.includes(term) ?? false) ||
-          (p.phoneNumberSecondary?.includes(term) ?? false),
-      );
+      // QA D1274: and the birth date, in any format the desk types it.
+      result = result.filter((p) => patientMatchesTerm(p, term));
     }
     if (this.genderFilter) {
       result = result.filter((p) => (p.gender ?? '').toUpperCase() === this.genderFilter);
@@ -282,7 +287,7 @@ export class PatientListComponent implements OnInit, OnDestroy {
     result = [...result].sort((a, b) => {
       switch (field) {
         case 'name':
-          return dir * `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+          return dir * personName(a).localeCompare(personName(b));
         case 'mrn':
           return dir * (a.mrn ?? '').localeCompare(b.mrn ?? '');
         case 'gender':
@@ -295,6 +300,8 @@ export class PatientListComponent implements OnInit, OnDestroy {
           return 0;
       }
     });
+    // QA D1218: the patient whose MRN is exactly what was typed comes first.
+    if (term) result = exactIdentifierFirst(result, term, (p) => p.mrn);
 
     this.filtered.set(result);
     this.currentPage.set(Math.max(0, Math.min(this.currentPage(), this.totalPages - 1)));

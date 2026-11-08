@@ -1,4 +1,12 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { allPages } from '../../shared/all-pages';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -11,6 +19,11 @@ import { ToastService } from '../../core/toast.service';
 import { currentLocale } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { blobRefusalReason } from '../../shared/blob-refusal';
+import { refusalReason } from '../../shared/refusal-reason';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { refuseFields } from '../../shared/forms/invalid-fields';
 /**
  * The largest file the upload endpoint accepts: spring.servlet.multipart
  * max-file-size is 10MB (the backend is being aligned on this one number).
@@ -19,22 +32,50 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
  */
 export const MAX_PATIENT_DOCUMENT_BYTES = 10 * 1024 * 1024;
 
-const DOCUMENT_TYPES: { value: PatientDocumentType; labelKey: string }[] = [
-  { value: 'LAB_RESULT', labelKey: 'PORTAL.DOCUMENTS.TYPE_LAB_RESULT' },
-  { value: 'IMAGING_REPORT', labelKey: 'PORTAL.DOCUMENTS.TYPE_IMAGING_REPORT' },
-  { value: 'DISCHARGE_SUMMARY', labelKey: 'PORTAL.DOCUMENTS.TYPE_DISCHARGE_SUMMARY' },
-  { value: 'REFERRAL_LETTER', labelKey: 'PORTAL.DOCUMENTS.TYPE_REFERRAL_LETTER' },
-  { value: 'PRESCRIPTION', labelKey: 'PORTAL.DOCUMENTS.TYPE_PRESCRIPTION' },
-  { value: 'INSURANCE_DOCUMENT', labelKey: 'PORTAL.DOCUMENTS.TYPE_INSURANCE_DOCUMENT' },
-  { value: 'INVOICE', labelKey: 'PORTAL.DOCUMENTS.TYPE_INVOICE' },
-  { value: 'IMMUNIZATION_RECORD', labelKey: 'PORTAL.DOCUMENTS.TYPE_IMMUNIZATION_RECORD' },
-  { value: 'OTHER', labelKey: 'PORTAL.DOCUMENTS.TYPE_OTHER' },
-];
+/** QA D1281: the upload form's required file input. */
+const DOCUMENT_FILE_ID = 'portal-document-file';
+
+/**
+ * QA D1252: the label of EVERY document type the server can list. A Record
+ * over the union, so a type added to PatientDocumentType without a label
+ * does not compile; `scripts/lib/document-type-filter.test.mjs` checks the
+ * union against the server's enum.
+ */
+const DOCUMENT_TYPE_LABELS: Readonly<Record<PatientDocumentType, string>> = {
+  LAB_RESULT: 'PORTAL.DOCUMENTS.TYPE_LAB_RESULT',
+  IMAGING_REPORT: 'PORTAL.DOCUMENTS.TYPE_IMAGING_REPORT',
+  DISCHARGE_SUMMARY: 'PORTAL.DOCUMENTS.TYPE_DISCHARGE_SUMMARY',
+  REFERRAL_LETTER: 'PORTAL.DOCUMENTS.TYPE_REFERRAL_LETTER',
+  PRESCRIPTION: 'PORTAL.DOCUMENTS.TYPE_PRESCRIPTION',
+  INSURANCE_DOCUMENT: 'PORTAL.DOCUMENTS.TYPE_INSURANCE_DOCUMENT',
+  INVOICE: 'PORTAL.DOCUMENTS.TYPE_INVOICE',
+  IMMUNIZATION_RECORD: 'PORTAL.DOCUMENTS.TYPE_IMMUNIZATION_RECORD',
+  MEDICAL_CERTIFICATE: 'PORTAL.DOCUMENTS.TYPE_MEDICAL_CERTIFICATE',
+  OTHER: 'PORTAL.DOCUMENTS.TYPE_OTHER',
+};
+
+/** Types a doctor issues and a patient never uploads (QA D961). */
+const ISSUED_ONLY: ReadonlySet<PatientDocumentType> = new Set(['MEDICAL_CERTIFICATE']);
+
+const ALL_TYPES = (Object.keys(DOCUMENT_TYPE_LABELS) as PatientDocumentType[]).map((value) => ({
+  value,
+  labelKey: DOCUMENT_TYPE_LABELS[value],
+}));
+
+/** What a patient may upload. */
+const DOCUMENT_TYPES = ALL_TYPES.filter((t) => !ISSUED_ONLY.has(t.value));
 
 @Component({
   selector: 'app-my-documents',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, DatePipe, FormsModule, TranslateModule],
+  imports: [
+    SubmitGuardDirective,
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './my-documents.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-documents.component.scss', '../patient-portal-pages.scss'],
@@ -43,12 +84,22 @@ export class MyDocumentsComponent implements OnInit {
   private readonly portalService = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
 
+  /** The upload form's choices. */
   readonly documentTypes = DOCUMENT_TYPES;
+  /**
+   * QA D1252: the "Filtrer par type" choices are every type the list can
+   * hold; it reused the upload list, so a doctor's certificate vanished under
+   * every filter.
+   */
+  readonly filterTypes = ALL_TYPES;
 
   /** The translation key of a document type; the raw enum is never shown (QA D344/D434). */
   typeLabelKey(type: PatientDocumentType): string {
-    return DOCUMENT_TYPES.find((t) => t.value === type)?.labelKey ?? 'PORTAL.DOCUMENTS.TYPE_OTHER';
+    return DOCUMENT_TYPE_LABELS[type] ?? DOCUMENT_TYPE_LABELS.OTHER;
   }
 
   documents = signal<PatientDocumentResponse[]>([]);
@@ -73,14 +124,19 @@ export class MyDocumentsComponent implements OnInit {
   loadDocuments(): void {
     this.loading.set(true);
     const filter = this.filterType() || undefined;
-    this.portalService.listDocuments(filter as PatientDocumentType | undefined, 0, 50).subscribe({
+    // QA D1347: every document (all pages), not the 50 newest.
+    allPages((page, size) =>
+      this.portalService.listDocuments(filter as PatientDocumentType | undefined, page, size),
+    ).subscribe({
       next: (result) => {
-        this.documents.set(result.content);
-        this.totalElements.set(result.totalElements);
+        this.documents.set(result.rows);
+        this.totalElements.set(result.total);
         this.loading.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.LOAD_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.DOCUMENTS.LOAD_FAILED'),
+        );
         this.loading.set(false);
       },
     });
@@ -108,7 +164,10 @@ export class MyDocumentsComponent implements OnInit {
   uploadDocument(): void {
     const file = this.selectedFile();
     if (!file) {
-      this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.FILE_REQUIRED'));
+      // QA D1281: the missing file is marked where it is chosen.
+      const message = this.translate.instant('PORTAL.DOCUMENTS.FILE_REQUIRED');
+      refuseFields(this.host.nativeElement, [DOCUMENT_FILE_ID], [DOCUMENT_FILE_ID], message);
+      this.toast.error(message);
       return;
     }
     if (file.size > MAX_PATIENT_DOCUMENT_BYTES) {
@@ -131,9 +190,11 @@ export class MyDocumentsComponent implements OnInit {
           this.uploading.set(false);
           this.toast.success(this.translate.instant('PORTAL.DOCUMENTS.UPLOAD_SUCCESS'));
         },
-        error: () => {
+        error: (err: unknown) => {
           this.uploading.set(false);
-          this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.UPLOAD_FAILED'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('PORTAL.DOCUMENTS.UPLOAD_FAILED'),
+          );
         },
       });
   }
@@ -158,15 +219,24 @@ export class MyDocumentsComponent implements OnInit {
         anchor.click();
         URL.revokeObjectURL(url);
       },
-      error: () => {
+      error: (err: unknown) => {
         this.downloading.set(null);
-        this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.DOWNLOAD_FAILED'));
+        // QA D1184: a file the disk no longer holds says so, in the reader's language.
+        void blobRefusalReason(err).then((reason) =>
+          this.toast.error(reason ?? this.translate.instant('PORTAL.DOCUMENTS.DOWNLOAD_FAILED')),
+        );
       },
     });
   }
 
-  deleteDocument(docId: string): void {
-    if (!confirm(this.translate.instant('PORTAL.DOCUMENTS.DELETE_CONFIRM'))) return;
+  async deleteDocument(docId: string): Promise<void> {
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'PORTAL.DOCUMENTS.DELETE_CONFIRM',
+        confirmKey: 'COMMON.DELETE',
+      }))
+    )
+      return;
     this.deleting.set(docId);
     this.portalService.deleteDocument(docId).subscribe({
       next: () => {
@@ -175,9 +245,11 @@ export class MyDocumentsComponent implements OnInit {
         this.deleting.set(null);
         this.toast.success(this.translate.instant('PORTAL.DOCUMENTS.DELETE_SUCCESS'));
       },
-      error: () => {
+      error: (err: unknown) => {
         this.deleting.set(null);
-        this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.DELETE_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.DOCUMENTS.DELETE_FAILED'),
+        );
       },
     });
   }

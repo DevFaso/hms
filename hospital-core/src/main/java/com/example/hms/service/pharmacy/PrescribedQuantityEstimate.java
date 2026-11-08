@@ -31,8 +31,13 @@ public final class PrescribedQuantityEstimate {
 
     /** Units owed per fill, or null when the regimen cannot be read safely. */
     public static BigDecimal perFill(Prescription prescription) {
-        Integer interval = MarDoseSchedule.intervalHours(prescription.getFrequency());
-        if (interval == null || 24 % interval != 0) {
+        // QA D1378: an order ticked as needed (PRN) has no fixed daily count, whatever its frequency says.
+        if (com.example.hms.service.impl.PrnMinInterval.isAsNeeded(prescription)) {
+            return null;
+        }
+        // QA D1514: a whole-hour repeat that divides the day, or the times of day stated ("8 h et 20 h" is two).
+        Integer dosesPerDay = MarDoseSchedule.wholeDosesPerDay(prescription.getFrequency());
+        if (dosesPerDay == null) {
             return null;
         }
         Integer days = days(prescription.getDuration());
@@ -40,7 +45,7 @@ public final class PrescribedQuantityEstimate {
         if (days == null || unitsPerDose == null) {
             return null;
         }
-        return unitsPerDose.multiply(BigDecimal.valueOf((24L / interval) * days));
+        return unitsPerDose.multiply(BigDecimal.valueOf((long) dosesPerDay * days));
     }
 
     static Integer days(String duration) {

@@ -12,7 +12,7 @@ import java.util.UUID;
  */
 public interface ChartReviewService {
 
-    /** Hard cap on the per-section row count, regardless of caller-supplied limit. */
+    /** Largest page of a section, regardless of caller-supplied limit (QA D1380: a page, never the whole). */
     int MAX_LIMIT = 100;
     /** Default when the caller does not supply a limit. */
     int DEFAULT_LIMIT = 20;
@@ -30,5 +30,27 @@ public interface ChartReviewService {
      *                   {@link #DEFAULT_LIMIT}
      * @return populated DTO; never {@code null}
      */
-    ChartReviewDTO getChartReview(UUID patientId, UUID hospitalId, Integer limit);
+    default ChartReviewDTO getChartReview(UUID patientId, UUID hospitalId, Integer limit) {
+        return getChartReview(patientId, hospitalId, limit, null, 0);
+    }
+
+    /**
+     * QA D1380 (D1347 class): one page of the chart review. Every section is
+     * read whole and counted ({@link ChartReviewDTO#getTotals()}); the page
+     * returned is rows {@code [page × limit, page × limit + limit)} of each
+     * section, or of {@code section} alone when given (the other lists are
+     * then empty). The order is total (date, then id), so paging neither
+     * repeats nor skips a row.
+     */
+    ChartReviewDTO getChartReview(UUID patientId, UUID hospitalId, Integer limit, ChartReviewSection section, int page);
+
+    /**
+     * QA D1380: every row of every section, for the printed record
+     * ({@code PatientRecordPdfService}), which asked for 200 per section and
+     * was silently cut at {@link #MAX_LIMIT}.
+     */
+    ChartReviewDTO getCompleteChartReview(UUID patientId, UUID hospitalId);
+
+    /** QA D1380: the tab a page is asked for. */
+    enum ChartReviewSection { TIMELINE, ENCOUNTERS, NOTES, RESULTS, MEDICATIONS, IMAGING, PROCEDURES }
 }

@@ -39,6 +39,7 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
           AND (:hospitalId IS NULL
                OR m.hospital IS NULL
                OR m.hospital.id = :hospitalId)
+        ORDER BY LOWER(m.nameFr)
         """, countQuery = """
         SELECT COUNT(m) FROM MedicationCatalogItem m
         WHERE m.active = true
@@ -49,22 +50,44 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
     Page<MedicationCatalogItem> findActivePage(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 
     @Query("SELECT m FROM MedicationCatalogItem m WHERE m.hospital.id = :hospitalId AND m.active = true " +
-           "AND (LOWER(m.nameFr) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "OR LOWER(m.genericName) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "OR LOWER(m.brandName) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "OR LOWER(m.atcCode) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "AND (LOWER(m.nameFr) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
+           "OR LOWER(m.genericName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
+           "OR LOWER(m.brandName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
+           "OR LOWER(m.atcCode) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))) ORDER BY LOWER(m.nameFr)")
     Page<MedicationCatalogItem> searchByHospital(
             @Param("hospitalId") UUID hospitalId,
             @Param("search") String search,
             Pageable pageable);
 
+    /** Review of #975: the super-admin's global-view search, every tenant's active items. */
+    @Query("SELECT m FROM MedicationCatalogItem m WHERE m.active = true " +
+           "AND (LOWER(m.nameFr) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
+           "OR LOWER(m.genericName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
+           "OR LOWER(m.brandName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
+           "OR LOWER(m.atcCode) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))) ORDER BY LOWER(m.nameFr)")
+    Page<MedicationCatalogItem> searchAllActive(@Param("search") String search, Pageable pageable);
+
     Page<MedicationCatalogItem> findByHospital_IdAndCategoryAndActiveTrue(UUID hospitalId, String category, Pageable pageable);
+
+    /** Review of #975: the category list in the super-admin's global view, every tenant's active items. */
+    Page<MedicationCatalogItem> findByCategoryAndActiveTrue(String category, Pageable pageable);
 
     Optional<MedicationCatalogItem> findByIdAndHospital_Id(UUID id, UUID hospitalId);
 
     boolean existsByAtcCodeAndHospital_Id(String atcCode, UUID hospitalId);
 
     Optional<MedicationCatalogItem> findByHospitalIdAndCode(UUID hospitalId, String code);
+
+    /**
+     * QA D1314: which of these catalogue lines are controlled, for a page of
+     * orders in one statement. Each row is {@code [item id, hospital id, code]}.
+     * The prescription list read the catalogue once per row of the page.
+     */
+    @Query("SELECT m.id, m.hospital.id, m.code FROM MedicationCatalogItem m WHERE m.controlled = true"
+        + " AND m.hospital.id IN :hospitalIds AND (m.id IN :itemIds OR m.code IN :codes)")
+    java.util.List<Object[]> findControlledAmong(@Param("hospitalIds") java.util.Collection<UUID> hospitalIds,
+                                                 @Param("itemIds") java.util.Collection<UUID> itemIds,
+                                                 @Param("codes") java.util.Collection<String> codes);
 
     /**
      * Batch lookup used by {@link com.example.hms.cdshooks.rules.CdsRuleEngine}

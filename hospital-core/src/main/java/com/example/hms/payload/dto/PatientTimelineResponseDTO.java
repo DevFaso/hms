@@ -55,8 +55,18 @@ public class PatientTimelineResponseDTO {
      */
     private boolean recordsWithheld;
 
-    @Schema(description = "Total number of entries after applying filters and limits.")
+    /**
+     * QA D1380 (D1347 class): every entry the filters keep, never the page's
+     * length (the chart read "50 evenements" for the newest 50 of many more).
+     */
+    @Schema(description = "Total number of entries after applying the filters, across every page.")
     private int totalEntries;
+
+    @Schema(description = "QA D1380: the 0-based page of entries returned.")
+    private int page;
+
+    @Schema(description = "QA D1380: entries per page (maxEvents after clamping).")
+    private int pageSize;
 
     /**
      * E9 #64 — rows this read withheld under decision D3 (foreign, in a

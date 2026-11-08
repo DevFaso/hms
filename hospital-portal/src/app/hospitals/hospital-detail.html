@@ -57,7 +57,7 @@
           <div>
             <dt>{{ 'HOSPITAL_LIFECYCLE.META.SUSPENDED_AT' | translate }}</dt>
             <dd>
-              {{ lc.suspendedAt | serverTime | date: 'medium' }}
+              {{ lc.suspendedAt | serverTime | dateTime }}
               @if (lc.suspendedByName) {
                 — {{ lc.suspendedByName }}
               }
@@ -74,7 +74,7 @@
           <div>
             <dt>{{ 'HOSPITAL_LIFECYCLE.META.ARCHIVED_AT' | translate }}</dt>
             <dd>
-              {{ lc.archivedAt | serverTime | date: 'medium' }}
+              {{ lc.archivedAt | serverTime | dateTime }}
               @if (lc.archivedByName) {
                 — {{ lc.archivedByName }}
               }
@@ -84,13 +84,13 @@
         @if (lc.purgeScheduledFor) {
           <div>
             <dt>{{ 'HOSPITAL_LIFECYCLE.META.PURGE_SCHEDULED_FOR' | translate }}</dt>
-            <dd>{{ lc.purgeScheduledFor | serverTime | date: 'medium' }}</dd>
+            <dd>{{ lc.purgeScheduledFor | serverTime | dateTime }}</dd>
           </div>
         }
         @if (lc.purgedAt) {
           <div>
             <dt>{{ 'HOSPITAL_LIFECYCLE.META.PURGED_AT' | translate }}</dt>
-            <dd>{{ lc.purgedAt | serverTime | date: 'medium' }}</dd>
+            <dd>{{ lc.purgedAt | serverTime | dateTime }}</dd>
           </div>
         }
       </dl>
@@ -151,12 +151,19 @@
 
     @if (dialog(); as state) {
       <div class="dialog-backdrop" data-test="dialog-backdrop">
-        <div class="dialog">
-          <h2>{{ 'HOSPITAL_LIFECYCLE.DIALOG.' + state.kind.toUpperCase() | translate }}</h2>
+        <div
+          class="dialog"
+          appModalDialog
+          aria-labelledby="hospital-detail-dialog-1-title"
+          (escaped)="!state.busy && closeDialog()"
+        >
+          <h2 id="hospital-detail-dialog-1-title">
+            {{ 'HOSPITAL_LIFECYCLE.DIALOG.' + state.kind.toUpperCase() | translate }}
+          </h2>
           <p class="dialog-confirm">
             {{ 'HOSPITAL_LIFECYCLE.DIALOG.CONFIRM_PREFIX' | translate }}
             <strong>{{ hospital()?.name }}</strong
-            >?
+            >{{ 'COMMON.QUESTION_MARK' | translate }}
           </p>
 
           @if (needsReason(state.kind)) {
@@ -218,7 +225,8 @@
               type="button"
               class="confirm-btn"
               data-test="dialog-confirm"
-              [disabled]="state.busy || !isReasonValid(state) || !isPurgeDateValid(state)"
+              [disabled]="state.busy"
+              [appSubmitGuard]="!isReasonValid(state) || !isPurgeDateValid(state)"
               (click)="submitDialog()"
             >
               @if (state.busy) {

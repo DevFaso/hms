@@ -30,6 +30,7 @@ public class PermissionMapper {
 
         return Permission.builder()
             .name(dto.getName())
+            .code(dto.getCode())
             .build();
     }
 

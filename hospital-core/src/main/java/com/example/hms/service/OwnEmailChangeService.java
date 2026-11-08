@@ -97,6 +97,8 @@ public class OwnEmailChangeService {
     static final int MAX_SENDS_PER_ADDRESS = 3;
 
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final String NEW_EMAIL = "newEmail";
+    private static final String REFUSED_AUDIT = "Own email change refused: ";
 
     private final UserRepository userRepository;
     private final EmailChangeRequestRepository requestRepository;
@@ -122,7 +124,7 @@ public class OwnEmailChangeService {
         }
         if (!passwordMatches(user, currentPassword)) {
             countPasswordFailure(state, now);
-            throw refused(userId, "the current password did not match", "user.email.change.password");
+            throw refusedOn("currentPassword", userId, "the current password did not match", "user.email.change.password");
         }
         state.setPasswordFailures(0);
         state.setPasswordWindowStartedAt(null);
@@ -136,15 +138,15 @@ public class OwnEmailChangeService {
 
         String email = EmailAddresses.normalize(newEmail);
         if (email == null || email.length() > EmailAddresses.MAX_LENGTH || !EmailAddresses.isDeliverable(email)) {
-            throw refused(userId, "the new address is not a valid email address", "user.update.email.invalid");
+            throw refusedOn(NEW_EMAIL, userId, "the new address is not a valid email address", "user.update.email.invalid");
         }
         if (email.equalsIgnoreCase(user.getEmail())) {
-            throw refused(userId, "the new address is the current one", "user.email.change.same");
+            throw refusedOn(NEW_EMAIL, userId, "the new address is the current one", "user.email.change.same");
         }
         String addressHash = EmailAddresses.hash(email);
         LocalDateTime windowStart = now.minusMinutes(WINDOW_MINUTES);
         if (sendRepository.countByAddressHashAndSentAtAfter(addressHash, windowStart) >= MAX_SENDS_PER_ADDRESS) {
-            throw refused(userId, "too many recent mails to this address", "user.email.change.ratelimited");
+            throw refusedOn(NEW_EMAIL, userId, "too many recent mails to this address", "user.email.change.ratelimited");
         }
 
         boolean taken = userRepository.existsEmailOnOtherAccount(email, userId);
@@ -207,7 +209,7 @@ public class OwnEmailChangeService {
                     "user.email.change.code.exhausted");
             }
             requestRepository.save(state);
-            throw refused(userId, "the code did not match", "user.email.change.code.invalid");
+            throw refusedOn("code", userId, "the code did not match", "user.email.change.code.invalid");
         }
 
         String newEmail = state.getPendingEmail();
@@ -215,13 +217,13 @@ public class OwnEmailChangeService {
         requestRepository.save(state);
         // Checked again: another account may have taken the address since the request.
         if (userRepository.existsEmailOnOtherAccount(newEmail, userId)) {
-            throw refused(userId, "the new address belongs to another account", "user.update.email.taken");
+            throw refusedOn(NEW_EMAIL, userId, "the new address belongs to another account", "user.update.email.taken");
         }
         try {
             writes.applyEmail(userId, newEmail);
         } catch (DataIntegrityViolationException raced) {
             // Taken between the check above and the write: the same answer.
-            throw refused(userId, "the new address belongs to another account", "user.update.email.taken");
+            throw refusedOn(NEW_EMAIL, userId, "the new address belongs to another account", "user.update.email.taken");
         }
 
         String oldEmail = user.getEmail();
@@ -313,12 +315,18 @@ public class OwnEmailChangeService {
 
     /** One FAILURE row, the account id only, then the refusal to throw. */
     private BusinessException refused(UUID userId, String reason, String messageKey) {
-        audit(userId, "Own email change refused: " + reason, AuditStatus.FAILURE);
+        audit(userId, REFUSED_AUDIT + reason, AuditStatus.FAILURE);
         return new BusinessException(MessageUtil.resolve(messageKey));
     }
 
+    /** QA round 29 sweep: a refusal of one typed value is named on its field, so the form marks it. */
+    private BusinessException refusedOn(String field, UUID userId, String reason, String messageKey) {
+        audit(userId, REFUSED_AUDIT + reason, AuditStatus.FAILURE);
+        return new com.example.hms.exception.FieldBusinessException(field, MessageUtil.resolve(messageKey));
+    }
+
     private PendingChangeGoneException gone(UUID userId, String reason, String messageKey) {
-        audit(userId, "Own email change refused: " + reason, AuditStatus.FAILURE);
+        audit(userId, REFUSED_AUDIT + reason, AuditStatus.FAILURE);
         return new PendingChangeGoneException(MessageUtil.resolve(messageKey));
     }
 

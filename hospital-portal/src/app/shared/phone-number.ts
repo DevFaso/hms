@@ -58,6 +58,26 @@ export function toE164(
   return candidate;
 }
 
+/** A national number the facility rule keeps as typed when it is no Burkina Faso number: 6 to 15 digits. */
+const NATIONAL_DIGITS = /^\d{6,15}$/;
+
+/**
+ * QA D1211 (round 23, portal half): the rule every phone field of every write
+ * request now carries on the server (`@PhoneNumber`, `PhoneNumberValidator`:
+ * `PhoneNumbers.normalizeFacilityPhone(value, null)`). Blank is allowed (whether
+ * the field is required is the form's own rule); otherwise the value must be a
+ * number `toE164` accepts, or 6 to 15 national digits that are not international
+ * (`+` / `00`). "12ab", "xyz", "appeler le voisin" are refused, as the server
+ * refuses them with `validation.phone.invalid`.
+ */
+export function isFacilityPhone(raw: string | null | undefined): boolean {
+  if (raw == null || raw.trim() === '') return true;
+  if (toE164(raw) !== null) return true;
+  const compact = javaTrim(raw).replace(FORMATTING, '');
+  const international = compact.startsWith('+') || compact.startsWith('00');
+  return !international && NATIONAL_DIGITS.test(compact);
+}
+
 /**
  * Java's `String.trim()`: drops every code unit up to U+0020 at both ends
  * (the C0 controls included, which `\s` and JavaScript's `trim()` do not

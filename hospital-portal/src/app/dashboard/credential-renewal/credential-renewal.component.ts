@@ -14,6 +14,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CredentialRenewal, CredentialingService } from '../../services/credentialing.service';
 import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 /** The subset of a licence alert this dialog needs. */
 export interface CredentialRenewalTarget {
@@ -39,7 +40,7 @@ export interface CredentialRenewalTarget {
 @Component({
   selector: 'app-credential-renewal',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [ModalDialogDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './credential-renewal.component.html',
   styleUrl: './credential-renewal.component.scss',

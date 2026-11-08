@@ -116,7 +116,7 @@ class SmartPhraseServiceImplTest {
 
             assertThatThrownBy(() -> service.create(req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("GLOBAL");
+                .extracting("messageKey").isEqualTo("smartPhrase.globalNoOwner");
             verify(repository, never()).save(any());
         }
 
@@ -129,7 +129,7 @@ class SmartPhraseServiceImplTest {
 
             assertThatThrownBy(() -> service.create(req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("hospitalId");
+                .extracting("messageKey").isEqualTo("smartPhrase.hospitalRequired");
         }
 
         @Test
@@ -141,7 +141,7 @@ class SmartPhraseServiceImplTest {
 
             assertThatThrownBy(() -> service.create(req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("ownerUserId");
+                .extracting("messageKey").isEqualTo("smartPhrase.ownerRequired");
         }
 
         @Test
@@ -464,7 +464,7 @@ class SmartPhraseServiceImplTest {
                 .scope(SmartPhraseScope.HOSPITAL).build();
             assertThatThrownBy(() -> service.create(req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("hospitalId");
+                .extracting("messageKey").isEqualTo("smartPhrase.hospitalRequired");
         }
 
         @Test

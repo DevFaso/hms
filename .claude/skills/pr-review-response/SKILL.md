@@ -24,6 +24,13 @@ included. Not "CI is green and there are no comments, so it is ready". What
 the gate has caught that CI, Sonar and the unit suite did not is under
 [Anti-patterns surfaced by self-review](#anti-patterns-surfaced-by-self-review).
 
+0. **If the PR fixes a QA defect (a D-number) or a regression**, the
+   `defect-fix-mandate` skill applies in full before step 1: the class is
+   hunted across the whole repo, fixed at a choke point, guarded by a
+   codebase-wide test, falsified, and re-run on the running app, and the PR
+   body carries the **class table** (one row per defect id). A missing or
+   thin row is a blocking finding at step 2, and the PR is never readied
+   without it. "Fixed on the reported path" is NOT_FIXED.
 1. **Before every push** run the
    [Mandatory branch CI gate](#mandatory-branch-ci-gate-run-before-pushing)
    for each side the diff touches. Push. First push:

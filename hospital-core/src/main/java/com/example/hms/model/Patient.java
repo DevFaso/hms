@@ -119,7 +119,9 @@ public class Patient extends BaseEntity implements TenantScoped {
     private String ethnicity;
 
     @NotBlank @Size(max = 100)
-    @Column(name = "phone_number_primary", length = 100, nullable = false, unique = true)
+    // Not unique (QA D926): a child carries the mother's number. The database
+    // never had the constraint (V1); only the H2 test schema did.
+    @Column(name = "phone_number_primary", length = 100, nullable = false)
     private String phoneNumberPrimary;
 
     @Size(max = 100)
@@ -127,7 +129,7 @@ public class Patient extends BaseEntity implements TenantScoped {
     private String phoneNumberSecondary;
 
     // Nullable since V107: phone-first patients have no email address.
-    @Email @Size(max = 150)
+    @Email(message = "{validation.email.invalid}") @Size(max = 150)
     @Column(name = "email", length = 150, unique = true)
     private String email;
 

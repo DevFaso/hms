@@ -41,6 +41,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientChartUpdateServiceImpl implements PatientChartUpdateService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_HOSPITAL_ID = "hospitalId";
+
 
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
@@ -91,20 +94,22 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
         DoctorPatientChartUpdateRequestDTO request
     ) {
         if (request == null) {
-            throw new BusinessException("Chart update payload is required.");
-        }
-        if (request.getHospitalId() == null && hospitalId == null) {
-            throw new BusinessException("Hospital context is required for chart updates.");
+            throw new BusinessException("chartUpdate.payloadRequired");
         }
         UUID effectiveHospitalId = hospitalId != null ? hospitalId : request.getHospitalId();
-        if (effectiveHospitalId == null) {
-            throw new BusinessException("Hospital context could not be resolved for chart update request.");
-        }
+        // QA D1355 class (round 30): the hospital and the reason are named in one
+        // refusal; the reason used to be refused only after every lookup passed.
+        String updateReason = trim(request.getUpdateReason());
+        com.example.hms.exception.RequiredFields.check()
+            .require(request.getHospitalId() != null || hospitalId != null, FIELD_HOSPITAL_ID, "chartUpdate.hospitalRequired")
+            .requireValue(effectiveHospitalId, FIELD_HOSPITAL_ID, "chartUpdate.hospitalUnresolved")
+            .requireValue(updateReason, "updateReason", "chartUpdate.reasonRequired")
+            .orThrow();
         validatePatientHospitalContext(patientId, effectiveHospitalId);
 
         if (assignment == null || assignment.getHospital() == null
             || !Objects.equals(assignment.getHospital().getId(), effectiveHospitalId)) {
-            throw new BusinessException("Hospital assignment does not match requested context.");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "chartUpdate.assignmentMismatch");
         }
 
         Patient patient = patientRepository.findById(patientId)
@@ -113,12 +118,8 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", effectiveHospitalId));
 
         Staff staff = staffRepository.findByUserIdAndHospitalId(requesterUserId, effectiveHospitalId)
-            .orElseThrow(() -> new BusinessException("Staff profile not found for authenticated user in hospital."));
+            .orElseThrow(() -> new BusinessException("chartUpdate.staffNotFound"));
 
-        String updateReason = trim(request.getUpdateReason());
-        if (updateReason == null) {
-            throw new BusinessException("Update reason is required for chart updates.");
-        }
 
         int nextVersion = patientChartUpdateRepository
             .findTopByPatient_IdAndHospital_IdOrderByVersionNumberDesc(patientId, effectiveHospitalId)
@@ -147,16 +148,16 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
 
     private void validatePatientHospitalContext(UUID patientId, UUID hospitalId) {
         if (patientId == null) {
-            throw new BusinessException("Patient identifier is required.");
+            throw new BusinessException("chartUpdate.patientRequired");
         }
         if (hospitalId == null) {
-            throw new BusinessException("Hospital identifier is required for chart updates.");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "chartUpdate.hospitalIdRequired");
         }
         if (!patientRepository.existsById(patientId)) {
             throw new ResourceNotFoundException("patient.notFound", patientId);
         }
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
-            throw new BusinessException("Patient is not registered in the specified hospital.");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "chartUpdate.patientNotRegistered");
         }
     }
 
@@ -217,7 +218,7 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
             return objectMapper.writeValueAsString(details);
         } catch (JacksonException e) {
             log.warn("Failed to serialize chart section details", e);
-            throw new BusinessException("Unable to process structured chart details.");
+            throw new BusinessException("chartUpdate.detailsUnreadable");
         }
     }
 }

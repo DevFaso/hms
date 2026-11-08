@@ -1,7 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.AbnormalFlag;
-import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.LabTestReferenceRange;
 
@@ -40,7 +40,44 @@ public final class LabResultValueRules {
     /** The comparator of a censored value, "<", ">", "<=", ">=" or their single-character forms, and the spaces after it. */
     private static final Pattern CENSOR_PREFIX = Pattern.compile("^(<=|>=|<|>|\u2264|\u2265)\\s*");
 
+    /** The request field both callers read the value from (LabResultRequestDTO#resultValue). */
+    private static final String RESULT_VALUE = "resultValue";
+
     private LabResultValueRules() {
+    }
+
+    /** Which side of its number a censored value lies on; {@link #EXACT} when it is a plain number. */
+    public enum Bound { EXACT, BELOW, ABOVE }
+
+    /** A lab value read as a number: the number, and which side of it the true value lies on. */
+    public record NumericValue(Bound bound, double number) {}
+
+    /**
+     * QA D1394: the ONE reading of a lab value as a number, for everything that
+     * compares it (grading, reflex thresholds). A plain or censored number, with
+     * a decimal point or a decimal comma ("6.5", "6,5", "&gt; 6,5", "&lt;=1.5"). Empty when
+     * it is not a finite number: "Positif", "abc", "NaN".
+     */
+    public static java.util.Optional<NumericValue> numericValue(String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        String trimmed = normalizeDecimalComma(rawValue).trim();
+        java.util.regex.Matcher censor = CENSOR_PREFIX.matcher(trimmed);
+        Bound bound = Bound.EXACT;
+        String number = trimmed;
+        if (censor.find()) {
+            bound = censor.group(1).startsWith("<") || "\u2264".equals(censor.group(1)) ? Bound.BELOW : Bound.ABOVE;
+            number = trimmed.substring(censor.end());
+        }
+        try {
+            double value = Double.parseDouble(number);
+            return Double.isNaN(value) || Double.isInfinite(value)
+                ? java.util.Optional.empty()
+                : java.util.Optional.of(new NumericValue(bound, value));
+        } catch (NumberFormatException notANumber) {
+            return java.util.Optional.empty();
+        }
     }
 
     /** A plain or censored number written with a decimal comma: "7,9", "-0,5", "<0,5". */
@@ -63,7 +100,11 @@ public final class LabResultValueRules {
         return prefix + m.group(2) + "." + m.group(3);
     }
 
-    /** Refuses a value a numeric test cannot hold; does nothing for a test with no numeric limits. */
+    /**
+     * Refuses a value a numeric test cannot hold; does nothing for a test with no numeric limits.
+     * QA D1386 (round 32): the refusal names {@code resultValue}, so the dialog marks the field
+     * instead of showing only a toast.
+     */
     static void requireValidValue(String rawValue, LabTestDefinition definition) {
         if (rawValue == null || rawValue.isBlank() || definition == null) {
             return;
@@ -78,13 +119,13 @@ public final class LabResultValueRules {
             // comparator: the analyzer's or the method's limit of detection.
             value = Double.parseDouble(CENSOR_PREFIX.matcher(rawValue.trim()).replaceFirst(""));
         } catch (NumberFormatException ex) {
-            throw new BusinessException("lab.result.value.notNumeric");
+            throw new FieldBusinessException(RESULT_VALUE, "lab.result.value.notNumeric");
         }
         if (Double.isNaN(value) || Double.isInfinite(value)) {
-            throw new BusinessException("lab.result.value.notNumeric");
+            throw new FieldBusinessException(RESULT_VALUE, "lab.result.value.notNumeric");
         }
         if (value < 0 && ranges.stream().noneMatch(LabResultValueRules::hasNegativeLimit)) {
-            throw new BusinessException("lab.result.value.negative");
+            throw new FieldBusinessException(RESULT_VALUE, "lab.result.value.negative");
         }
     }
 

@@ -1,3 +1,5 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches, rankPeopleByName } from '../shared/person-search';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
@@ -7,7 +9,7 @@ import {
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { Subject, of } from 'rxjs';
@@ -31,7 +33,11 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { OrderSetPickerComponent } from './order-set-picker/order-set-picker.component';
 import { AuthService } from '../auth/auth.service';
 import { ActionKey, actionRoles } from '../core/action-permissions';
-import { AppliedOrderSetSummary } from '../services/order-set.service';
+import {
+  appliedOrderCount,
+  appliedResultKey,
+  AppliedOrderSetSummary,
+} from '../services/order-set.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import {
@@ -42,6 +48,17 @@ import {
 } from '../shared/date-utils';
 import { BedService, BedResponse } from '../services/bed.service';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { BackdropCloseDirective } from '../shared/a11y/backdrop-close.directive';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
+
+/** The bed-release reason's field (QA D1100), marked when it is refused. */
+const UNASSIGN_REASON_ID = 'admission-unassign-bed-reason';
+/** QA D1381: the stay's cancellation reason (server key `reason`). */
+const CANCEL_REASON_ID = 'admission-cancel-reason';
 
 interface OrderSetPickerCtx {
   hospitalId: string;
@@ -53,10 +70,23 @@ interface OrderSetPickerCtx {
 /** QA D603: the stay statuses that may still be cancelled (mirrors AdmissionServiceImpl). */
 const CANCELLABLE_STATUSES = new Set<string>(['PENDING', 'ACTIVE', 'ON_LEAVE']);
 
+/** QA D1428: a stay still open (AdmissionStatus.OPEN on the server). */
+const OPEN_STATUSES: ReadonlySet<string> = new Set([
+  'PENDING',
+  'ACTIVE',
+  'ON_LEAVE',
+  'AWAITING_DISCHARGE',
+]);
+
 @Component({
   selector: 'app-admissions',
   standalone: true,
   imports: [
+    ListEscapeDirective,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    BackdropCloseDirective,
+    PersonNamePipe,
     PatientSublinePipe,
     CommonModule,
     FormsModule,
@@ -81,6 +111,8 @@ export class AdmissionsComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
   private readonly translate = inject(TranslateService);
+  /** The page's document: the bed-release dialog's field is marked in it (QA D1100). */
+  private readonly doc = inject(DOCUMENT);
   private readonly auth = inject(AuthService);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly bedService = inject(BedService);
@@ -128,6 +160,7 @@ export class AdmissionsComponent implements OnInit {
     'CANCELLED',
     'TRANSFERRED',
     'DECEASED',
+    'CLOSED_IN_ERROR',
   ];
   readonly summaryMetrics = computed(() => [
     {
@@ -181,10 +214,10 @@ export class AdmissionsComponent implements OnInit {
       )[this.statusFilter() as AdmissionStatus] ?? ''
     );
   });
-  readonly pageCount = computed(() =>
+  readonly totalPages = computed(() =>
     Math.max(1, Math.ceil(this.filtered().length / this.pageSize())),
   );
-  readonly currentPage = computed(() => Math.min(this.pageIndex(), this.pageCount() - 1));
+  readonly currentPage = computed(() => Math.min(this.pageIndex(), this.totalPages() - 1));
   readonly pagedAdmissions = computed(() =>
     this.filtered().slice(
       this.currentPage() * this.pageSize(),
@@ -238,7 +271,7 @@ export class AdmissionsComponent implements OnInit {
   }
 
   setPage(index: number): void {
-    this.pageIndex.set(Math.max(0, Math.min(index, this.pageCount() - 1)));
+    this.pageIndex.set(Math.max(0, Math.min(index, this.totalPages() - 1)));
   }
 
   /**
@@ -461,7 +494,6 @@ export class AdmissionsComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
           // ── TENANT ISOLATION: scope patient search to the form's hospital ──
@@ -470,7 +502,8 @@ export class AdmissionsComponent implements OnInit {
       )
       .subscribe({
         next: (list) => {
-          this.patientSuggestions.set(list.slice(0, 8));
+          // QA D1239: ranked by how the name answers the query, then cut.
+          this.patientSuggestions.set(rankPeopleByName(list, this.patientQuery()).slice(0, 8));
           this.patientDropdownOpen.set(list.length > 0);
           this.patientSearchLoading.set(false);
         },
@@ -608,10 +641,10 @@ export class AdmissionsComponent implements OnInit {
   onOrderSetApplied(summary: AppliedOrderSetSummary): void {
     // Compute the real created/skipped counts from the backend summary
     // so the toast shows accurate numbers instead of empty placeholders.
-    const count =
-      summary.prescriptionIds.length + summary.labOrderIds.length + summary.imagingOrderIds.length;
+    const count = appliedOrderCount(summary);
+    // QA D1439: the panel's own sentence, singular for one.
     this.toast.success(
-      this.translate.instant('ORDER_SETS.APPLIED_RESULT', {
+      this.translate.instant(appliedResultKey(count), {
         count,
         skipped: summary.skippedItemCount,
       }),
@@ -619,6 +652,8 @@ export class AdmissionsComponent implements OnInit {
   }
 
   openEdit(a: AdmissionResponse): void {
+    // QA D1428: the room of a stay that holds a bed is that bed; it moves by assignment or transfer.
+    this.editingHoldsBed.set(!!a.bedId);
     this.form = {
       patientId: a.patientId ?? '',
       hospitalId: a.hospitalId ?? '',
@@ -681,6 +716,14 @@ export class AdmissionsComponent implements OnInit {
     });
   }
 
+  /** QA D1428: a closed stay's record is protected: the row offers no edit, as the server refuses it. */
+  isEditable(a: AdmissionResponse): boolean {
+    return OPEN_STATUSES.has(a.status);
+  }
+
+  /** QA D1428: the stay being edited holds a structured bed. */
+  readonly editingHoldsBed = signal(false);
+
   /**
    * QA D603: only a stay still in progress can be cancelled. A discharged,
    * transferred or deceased stay carries a finalized summary and an invoice;
@@ -690,7 +733,11 @@ export class AdmissionsComponent implements OnInit {
     return CANCELLABLE_STATUSES.has(a.status);
   }
 
+  /** QA D1381 (round 32): why the stay is cancelled (required; kept on the admission). */
+  readonly deleteReason = signal('');
+
   confirmDelete(a: AdmissionResponse): void {
+    this.deleteReason.set('');
     this.deletingAdm.set(a);
     this.showDeleteConfirm.set(true);
   }
@@ -699,16 +746,24 @@ export class AdmissionsComponent implements OnInit {
     this.deletingAdm.set(null);
   }
   executeDelete(): void {
+    const reason = this.deleteReason().trim();
+    if (!reason) {
+      // QA D1381: the blank reason is marked where it is, as the server refuses it.
+      const message = this.translate.instant('ORDER_LIFECYCLE.CANCEL_REASON_REQUIRED');
+      refuseFields(this.doc, [CANCEL_REASON_ID], [CANCEL_REASON_ID], message);
+      return;
+    }
+    refuseFields(this.doc, [], [CANCEL_REASON_ID], '');
     this.deleting.set(true);
-    this.admissionService.delete(this.deletingAdm()!.id).subscribe({
+    this.admissionService.delete(this.deletingAdm()!.id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ADMISSIONS.DELETED'));
         this.cancelDelete();
         this.deleting.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ADMISSIONS.DELETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ADMISSIONS.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });
@@ -799,20 +854,52 @@ export class AdmissionsComponent implements OnInit {
         this.closeBedAssign();
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ADMISSIONS.BED_ASSIGN_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ADMISSIONS.BED_ASSIGN_FAILED'),
+        );
         this.bedAssigning.set(false);
       },
     });
   }
 
-  unassignBed(adm: AdmissionResponse): void {
-    this.admissionService.unassignBed(adm.id).subscribe({
+  /* ── Free the bed (QA D1100: confirmed, with a reason; the server audits it) ── */
+  readonly unassigningAdm = signal<AdmissionResponse | null>(null);
+  readonly unassignReason = signal('');
+  readonly unassigning = signal(false);
+
+  openUnassignBed(adm: AdmissionResponse): void {
+    this.unassignReason.set('');
+    this.unassigningAdm.set(adm);
+  }
+
+  closeUnassignBed(): void {
+    this.unassigningAdm.set(null);
+  }
+
+  confirmUnassignBed(): void {
+    const adm = this.unassigningAdm();
+    if (!adm) return;
+    const reason = this.unassignReason().trim();
+    if (!reason) {
+      const message = this.translate.instant('ADMISSION_BED.RELEASE_REASON_REQUIRED');
+      refuseFields(this.doc, [UNASSIGN_REASON_ID], [UNASSIGN_REASON_ID], message);
+      return;
+    }
+    this.unassigning.set(true);
+    this.admissionService.unassignBed(adm.id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ADMISSIONS.BED_UNASSIGNED'));
+        this.unassigning.set(false);
+        this.closeUnassignBed();
         this.load();
       },
-      error: () => this.toast.error(this.translate.instant('ADMISSIONS.BED_ASSIGN_FAILED')),
+      error: (err: unknown) => {
+        this.unassigning.set(false);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ADMISSIONS.BED_ASSIGN_FAILED'),
+        );
+      },
     });
   }
 
@@ -869,7 +956,7 @@ export class AdmissionsComponent implements OnInit {
     if (term) {
       list = list.filter(
         (a) =>
-          (a.patientName ?? '').toLowerCase().includes(term) ||
+          textMatches(a.patientName, term) ||
           (a.chiefComplaint ?? '').toLowerCase().includes(term) ||
           (a.roomBed ?? '').toLowerCase().includes(term) ||
           (a.encounterCode ?? '').toLowerCase().includes(term) ||
@@ -903,6 +990,8 @@ export class AdmissionsComponent implements OnInit {
         return 'status-transferred';
       case 'DECEASED':
         return 'status-deceased';
+      case 'CLOSED_IN_ERROR':
+        return 'status-cancelled';
       case 'CANCELLED':
         return 'status-cancelled';
       case 'ON_LEAVE':

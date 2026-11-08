@@ -7,6 +7,9 @@ import com.example.hms.model.postpartum.PostpartumObservationAlert;
 import com.example.hms.payload.dto.clinical.postpartum.PostpartumAlertDTO;
 import com.example.hms.payload.dto.clinical.postpartum.PostpartumObservationResponseDTO;
 import com.example.hms.payload.dto.clinical.postpartum.PostpartumScheduleDTO;
+import com.example.hms.service.i18n.NotificationLocalizer;
+import com.example.hms.service.maternity.ObstetricAlertText;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -15,6 +18,21 @@ import java.util.Set;
 
 @Component
 public class PostpartumObservationMapper {
+
+    private static final String ALERT_MSG_PREFIX = "postpartum.alert.msg.";
+    private static final String ALERT_TRIGGER_PREFIX = "postpartum.alert.trigger.";
+
+    private final NotificationLocalizer localizer;
+
+    /** Without a localizer every alert shows its stored text. */
+    public PostpartumObservationMapper() {
+        this(null);
+    }
+
+    @Autowired
+    public PostpartumObservationMapper(NotificationLocalizer localizer) {
+        this.localizer = localizer;
+    }
 
     public PostpartumObservationResponseDTO toResponse(PostpartumObservation observation, PostpartumCarePlan plan) {
         if (observation == null) {
@@ -98,8 +116,9 @@ public class PostpartumObservationMapper {
                 .type(alert.getType())
                 .severity(alert.getSeverity())
                 .code(alert.getCode())
-                .message(alert.getMessage())
-                .triggeredBy(alert.getTriggeredBy())
+                // QA D1427: the stored copy is in the staff language; the reader reads hers.
+                .message(ObstetricAlertText.render(localizer, ALERT_MSG_PREFIX, alert.getCode(), List.of(), alert.getMessage()))
+                .triggeredBy(ObstetricAlertText.render(localizer, ALERT_TRIGGER_PREFIX, alert.getCode(), List.of(), alert.getTriggeredBy()))
                 .createdAt(alert.getCreatedAt())
                 .build())
             .toList();

@@ -129,7 +129,17 @@
     }
 
     @if (selected(); as culture) {
-      <div class="detail-panel" data-testid="culture-detail">
+      <!-- QA D1230 class (round 24): the detail closes on Escape as on its
+           close button, asks before dropping a typed edit, and gives the
+           keyboard back to the culture that opened it. -->
+      <div
+        class="detail-panel"
+        data-testid="culture-detail"
+        appInlineSubForm
+        #detailForm="inlineSubForm"
+        (dismissed)="closeDetail()"
+      >
+        <app-inline-discard-ask [form]="detailForm" />
         <div class="detail-header">
           <div>
             <h2>{{ culture.labTestName || ('MICRO.CULTURE' | translate) }}</h2>
@@ -170,16 +180,43 @@
         @if (culture.status === 'CORRECTED' && culture.correctionReason) {
           <div class="correction-banner" data-testid="correction-banner">
             <span class="material-symbols-outlined">history_edu</span>
-            <span>
+            {{ ' '
+            }}<span>
               {{ 'MICRO.CORRECTED_AT' | translate }}
               {{ culture.correctedAt | serverTime | date: 'short' }} —
-              {{ culture.correctionReason }}
+              {{ 'COMMON.REASON_VALUE' | translate: { reason: culture.correctionReason } }}
             </span>
           </div>
         }
+        @if (culture.corrections?.length) {
+          <!-- QA CX-009: what the report said before each correction, organisms included. -->
+          <details class="correction-history" data-testid="correction-history">
+            <summary>
+              {{ 'MICRO.CORRECTION_HISTORY' | translate }} ({{ culture.corrections.length }})
+            </summary>
+            @for (c of culture.corrections; track c.id) {
+              <div class="correction-entry" data-testid="correction-entry">
+                <p>
+                  {{ c.correctedAt | serverTime | date: 'short' }}
+                  @if (c.correctedByName) {
+                    ({{ c.correctedByName }})
+                  }
+                  — {{ 'COMMON.REASON_VALUE' | translate: { reason: c.reason } }}
+                </p>
+                <p>
+                  {{ 'MICRO.CORRECTION_BEFORE' | translate }}{{ 'COMMON.COLON' | translate }}
+                  {{ statusLabel(c.statusBefore) }} · {{ growthLabel(c.growthBefore) }}
+                </p>
+                @if (c.isolatesBefore) {
+                  <p class="correction-isolates">{{ c.isolatesBefore }}</p>
+                }
+              </div>
+            }
+          </details>
+        }
         @if (culture.finalizedAt) {
           <p class="finalized-line">
-            {{ 'MICRO.FINALIZED_AT' | translate }}:
+            {{ 'MICRO.FINALIZED_AT' | translate }}{{ 'COMMON.COLON' | translate }}
             {{ culture.finalizedAt | serverTime | date: 'short' }}
             @if (culture.finalizedByName) {
               ({{ culture.finalizedByName }})
@@ -189,8 +226,10 @@
 
         @if (canResult() && selectedLocked()) {
           <div class="form-field correction-field">
-            <label for="correction-reason">{{ 'MICRO.CORRECTION_REASON' | translate }}</label>
+            <!-- QA D1305: shown only on a locked report, where it is required. -->
+            <label for="correction-reason">{{ 'MICRO.CORRECTION_REASON' | translate }} *</label>
             <input
+              required
               id="correction-reason"
               data-testid="correction-reason"
               type="text"
@@ -368,17 +407,20 @@
     >
       <div
         class="modal"
+        appModalDialog
+        aria-labelledby="microbiology-dialog-3-title"
         role="dialog"
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeCreateModal()"
       >
-        <h3>{{ 'MICRO.CREATE_TITLE' | translate }}</h3>
+        <h3 id="microbiology-dialog-3-title">{{ 'MICRO.CREATE_TITLE' | translate }}</h3>
 
         <div class="form-field">
-          <label for="create-order">{{ 'MICRO.FIELD_ORDER' | translate }}</label>
+          <label for="create-order">{{ 'MICRO.FIELD_ORDER' | translate }} *</label>
           <select
+            required
             id="create-order"
             data-testid="create-order"
             [ngModel]="formOrderId()"
@@ -475,17 +517,20 @@
     >
       <div
         class="modal"
+        appModalDialog
+        aria-labelledby="microbiology-dialog-2-title"
         role="dialog"
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeIsolateModal()"
       >
-        <h3>{{ 'MICRO.ISOLATE_TITLE' | translate }}</h3>
+        <h3 id="microbiology-dialog-2-title">{{ 'MICRO.ISOLATE_TITLE' | translate }}</h3>
 
         <div class="form-field">
-          <label for="iso-organism">{{ 'MICRO.FIELD_ORGANISM' | translate }}</label>
+          <label for="iso-organism">{{ 'MICRO.FIELD_ORGANISM' | translate }} *</label>
           <input
+            required
             id="iso-organism"
             data-testid="iso-organism"
             type="text"
@@ -565,18 +610,21 @@
     >
       <div
         class="modal"
+        appModalDialog
+        aria-labelledby="microbiology-dialog-1-title"
         role="dialog"
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeSuscModal()"
       >
-        <h3>{{ 'MICRO.SUSC_TITLE' | translate }}</h3>
+        <h3 id="microbiology-dialog-1-title">{{ 'MICRO.SUSC_TITLE' | translate }}</h3>
 
         <div class="form-field">
-          <label for="susc-antibiotic">{{ 'MICRO.FIELD_ANTIBIOTIC' | translate }}</label>
+          <label for="susc-antibiotic">{{ 'MICRO.FIELD_ANTIBIOTIC' | translate }} *</label>
           <input
             id="susc-antibiotic"
+            required
             data-testid="susc-antibiotic"
             type="text"
             maxlength="150"
@@ -614,9 +662,10 @@
         </div>
 
         <div class="form-field">
-          <label for="susc-interp">{{ 'MICRO.COL_INTERPRETATION' | translate }}</label>
+          <label for="susc-interp">{{ 'MICRO.COL_INTERPRETATION' | translate }} *</label>
           <select
             id="susc-interp"
+            required
             data-testid="susc-interp"
             [ngModel]="suscInterpretation()"
             (ngModelChange)="suscInterpretation.set($event)"
@@ -653,6 +702,8 @@
             type="button"
             class="btn-primary"
             data-testid="susc-save"
+            appSubmitGuard
+            submitGuardRequired
             (click)="submitSusc()"
             [disabled]="savingSusc()"
           >
@@ -663,3 +714,15 @@
     </div>
   }
 </div>
+
+@if (confirmingNoGrowth()) {
+  <app-confirm-dialog
+    titleKey="MICRO.NO_GROWTH_CONFIRM_TITLE"
+    messageKey="MICRO.NO_GROWTH_CONFIRM_MESSAGE"
+    confirmKey="MICRO.NO_GROWTH_CONFIRM"
+    [params]="{ count: selected()?.isolates.length ?? 0 }"
+    [busy]="savingCulture()"
+    (confirmed)="confirmNoGrowth()"
+    (cancelled)="confirmingNoGrowth.set(false)"
+  />
+}

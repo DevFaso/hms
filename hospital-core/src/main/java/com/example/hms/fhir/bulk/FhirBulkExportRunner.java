@@ -296,6 +296,8 @@ public class FhirBulkExportRunner {
         }
         if (types.contains(TYPE_CONDITION)) {
             patientProblemRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+                // QA D1240 (round 25): a problem removed as entered in error is not exported.
+                .filter(c -> !c.isEnteredInError())
                 .filter(c -> passesSince(c.getUpdatedAt(), since))
                 .forEach(c -> sink.write(TYPE_CONDITION, conditionMapper.toFhir(c)));
         }

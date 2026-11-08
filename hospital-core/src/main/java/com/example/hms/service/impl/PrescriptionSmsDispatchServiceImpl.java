@@ -65,6 +65,9 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispatchService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_PHARMACY_ID = "pharmacyId";
+
 
     private static final String CHANNEL_SMS = "SMS";
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
@@ -152,6 +155,8 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
         Prescription rx = prescriptionRepository.findByIdForUpdate(prescriptionId)
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notFound", prescriptionId));
         requireCallerHospital(auth, rx);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(rx.getPatient());
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(rx.getId(), "prescriptionId");
         // G15 AC-10: not while a fill is prepared at the counter (checked
         // under the lock above, so a preparation cannot slip in beside it).
         if (dispenseRepository.existsByPrescription_IdAndStatus(rx.getId(),
@@ -244,18 +249,16 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
      */
     private void refuseWhileAwaitingClarification(Prescription rx) {
         if (rx.getStatus() == PrescriptionStatus.PENDING_CLARIFICATION) {
-            throw new BusinessException("This prescription is awaiting the prescriber's clarification "
-                + "and cannot be dispatched until it is resolved.");
+            throw new BusinessException("prescription.dispatch.awaitingClarification");
         }
     }
 
     private void validateScope(Prescription rx, Pharmacy pharmacy) {
         if (pharmacy.getPharmacyType() == PharmacyType.HOSPITAL_DISPENSARY) {
-            throw new BusinessException(
-                "Hospital-dispensary pharmacies are dispensed in-house and cannot be dispatched by SMS.");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_PHARMACY_ID, "prescription.dispatch.inHouseDispensary");
         }
         if (!pharmacy.isActive()) {
-            throw new BusinessException("Selected pharmacy is inactive and cannot accept new dispatches.");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_PHARMACY_ID, "prescription.dispatch.pharmacyInactive");
         }
         UUID rxHospitalId = rx.getHospital() != null ? rx.getHospital().getId() : null;
         UUID pharmHospitalId = pharmacy.getHospital() != null ? pharmacy.getHospital().getId() : null;
@@ -268,9 +271,7 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
 
     private void requireDispatchable(Prescription rx) {
         if (!DISPATCHABLE_STATUSES.contains(rx.getStatus())) {
-            throw new BusinessException(
-                "Only a signed prescription, or one a pharmacy has been offered, refused or placed on "
-                    + "back order, can be dispatched by SMS; this one is " + rx.getStatus() + ".");
+            throw new BusinessException("prescription.dispatch.wrongStatus", rx.getStatus().localizedLabel());
         }
         // QA D792: nor a ward order of an ended stay (the rule the counter applies).
         if (endedStayOrders.endedWithAStay(rx)) {
@@ -363,14 +364,14 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
     private String requirePharmacyPhone(Pharmacy pharmacy) {
         String phone = pharmacy.getPhoneNumber();
         if (phone == null || phone.isBlank()) {
-            throw new BusinessException("Selected pharmacy has no phone number on file.");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_PHARMACY_ID, "prescription.dispatch.pharmacyNoPhone");
         }
         return phone;
     }
 
     private User resolveCurrentUser(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to determine current user"));
+                .orElseThrow(() -> new BusinessException("prescription.dispatch.currentUserUnknown"));
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
     }

@@ -131,6 +131,28 @@ describe('PatientChartComponent — allergy actions (QA D527)', () => {
     expect(el.querySelectorAll('tbody .action-link').length).toBe(2);
   });
 
+  it('QA D1242: an inactive allergy shows when and why it was deactivated', () => {
+    const inactive = {
+      ...allergy(HOSPITAL_A),
+      active: false,
+      deactivationReason: 'Saisie en double',
+      deactivatedAt: '2026-11-02T04:03:00',
+    } as PatientAllergy;
+    const { fixture } = setup({
+      role: 'ROLE_DOCTOR',
+      hospitalId: HOSPITAL_A,
+      registrations: [{ id: 'r1', hospitalId: HOSPITAL_A, active: true }],
+      allergies: [inactive, allergy(HOSPITAL_B)],
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    const note = el.querySelector(`[data-testid="allergy-deactivation-${inactive.id}"]`);
+    expect(note?.textContent).toContain('CHART.DEACTIVATION_REASON');
+    expect(note?.textContent).toContain('Saisie en double');
+    // QA D1288: the time and the reason are not glued ("04:03Motif").
+    expect(note?.textContent?.replaceAll(/\s+/g, ' ')).toContain(' · CHART.DEACTIVATION_REASON');
+    expect(el.querySelector('[data-testid="allergy-deactivation-al-hosp-b"]')).toBeNull();
+  });
+
   it('a pharmacist (who cannot read registrations) keeps the role gate alone', () => {
     const { fixture, registrationService } = setup({
       role: 'ROLE_PHARMACIST',
@@ -143,7 +165,9 @@ describe('PatientChartComponent — allergy actions (QA D527)', () => {
     expect(fixture.componentInstance.canAddAllergy()).toBeTrue();
   });
 
-  it('a midwife reads allergies but is offered no write (the API refuses her)', () => {
+  // QA D1224 (round 24): the API now admits the midwife on the three allergy
+  // writes (as in real hospitals), so the chart offers them to her.
+  it('a midwife records, edits and deactivates an allergy (QA D1224)', () => {
     const { fixture } = setup({
       role: 'ROLE_MIDWIFE',
       hospitalId: HOSPITAL_A,
@@ -151,8 +175,10 @@ describe('PatientChartComponent — allergy actions (QA D527)', () => {
       allergies: [allergy(HOSPITAL_A)],
     });
 
-    expect(fixture.componentInstance.canAddAllergy()).toBeFalse();
-    expect((fixture.nativeElement as HTMLElement).querySelector('tbody .action-link')).toBeNull();
+    expect(fixture.componentInstance.canAddAllergy()).toBeTrue();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('tbody .action-link').length,
+    ).toBe(2);
   });
   it('asks about the acting hospital only, not the first page of every registration', () => {
     const { registrationService } = setup({
@@ -211,5 +237,34 @@ describe('PatientChartComponent — allergy actions (QA D527)', () => {
       active: true,
     });
     expect(fixture.componentInstance.canAddAllergy()).toBeFalse();
+  });
+  // QA D1224 (round 24): who removes a chart entry is the endpoint's own rule.
+  it('a nurse or a midwife removes a diagnosis but does not record or recode one (QA D1224)', () => {
+    for (const role of ['ROLE_NURSE', 'ROLE_MIDWIFE']) {
+      TestBed.resetTestingModule();
+      const { fixture } = setup({ role, hospitalId: HOSPITAL_A, registrations: [], allergies: [] });
+      expect(fixture.componentInstance.canRemoveProblems()).withContext(role).toBeTrue();
+      expect(fixture.componentInstance.canEditProblems()).withContext(role).toBeFalse();
+      expect(fixture.componentInstance.showProblemActions()).withContext(role).toBeTrue();
+    }
+  });
+
+  it('a doctor both edits and removes a diagnosis; a receptionist neither (QA D1224)', () => {
+    const { fixture } = setup({
+      role: 'ROLE_DOCTOR',
+      hospitalId: HOSPITAL_A,
+      registrations: [],
+      allergies: [],
+    });
+    expect(fixture.componentInstance.canEditProblems()).toBeTrue();
+    expect(fixture.componentInstance.canRemoveProblems()).toBeTrue();
+    TestBed.resetTestingModule();
+    const desk = setup({
+      role: 'ROLE_RECEPTIONIST',
+      hospitalId: HOSPITAL_A,
+      registrations: [],
+      allergies: [],
+    });
+    expect(desk.fixture.componentInstance.showProblemActions()).toBeFalse();
   });
 });

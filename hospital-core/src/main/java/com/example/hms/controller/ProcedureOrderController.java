@@ -122,7 +122,9 @@ public class ProcedureOrderController {
     }
 
     @PostMapping("/{orderId}/cancel")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR')")
+    // QA D1026 class: a nurse who placed the order ends it here as through the
+    // update (which already admits her); the service keeps the author rule.
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Cancel procedure order",
                description = "Cancel procedure with reason (patient declined, condition improved, etc.)")
     public ResponseEntity<ProcedureOrderResponseDTO> cancelProcedureOrder(

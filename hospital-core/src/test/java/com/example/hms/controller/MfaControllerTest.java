@@ -129,6 +129,99 @@ class MfaControllerTest {
         SecurityContextHolder.getContext().setAuthentication(auth);
 
         when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(testUser));
+        when(downtimeStateService.snapshot()).thenReturn(
+            com.example.hms.security.DowntimeStateService.DowntimeSnapshot.NORMAL);
+    }
+
+    // ── Read-only mode (user decision 2026-11-06) ──
+
+    @MockitoBean
+    private com.example.hms.security.DowntimeStateService downtimeStateService;
+
+    @MockitoBean
+    private com.example.hms.security.provider.ProviderMfaGate providerMfaGate;
+
+    private void readOnly() {
+        when(downtimeStateService.snapshot()).thenReturn(
+            new com.example.hms.security.DowntimeStateService.DowntimeSnapshot(true, null, null));
+    }
+
+    private void challengeSession() {
+        UserDetails principal = org.springframework.security.core.userdetails.User
+                .withUsername(USERNAME).password("ignored")
+                .authorities(com.example.hms.security.MfaChallengeScope.AUTHORITY).build();
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(principal, null,
+            AuthorityUtils.createAuthorityList(com.example.hms.security.MfaChallengeScope.AUTHORITY)));
+    }
+
+    @Test
+    void readOnly_anOptionalEnrolmentIsRefusedWithTheReadOnlyAnswer() throws Exception {
+        readOnly();
+        mockMvc.perform(post("/auth/mfa/enroll").header("Accept-Language", "fr"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("X-Readonly-Mode", "true"))
+                .andExpect(jsonPath("$.error").value("READ_ONLY_MODE"))
+                .andExpect(jsonPath("$.customMessage").value(false))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("lecture seule")));
+        mockMvc.perform(post("/auth/mfa/verify-enrollment").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"code\":\"123456\"}"))
+                .andExpect(status().isServiceUnavailable());
+        verifyNoInteractions(mfaService);
+    }
+
+    @Test
+    void readOnly_theAdministratorsOwnWordsAreSaidAsTheirs() throws Exception {
+        when(downtimeStateService.snapshot()).thenReturn(
+            new com.example.hms.security.DowntimeStateService.DowntimeSnapshot(true, "Maintenance 14h", null));
+        mockMvc.perform(post("/auth/mfa/enroll"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message").value("Maintenance 14h"))
+                .andExpect(jsonPath("$.customMessage").value(true));
+    }
+
+    @Test
+    void readOnly_theLoginChallengesRequiredEnrolmentGoesThrough() throws Exception {
+        readOnly();
+        challengeSession();
+        var result = new MfaService.MfaEnrollmentResult(UUID.randomUUID(), "S", "otpauth://x", "data:x", List.of("A"), false);
+        when(mfaService.enrollTotp(any(User.class), any(), org.mockito.ArgumentMatchers.isNull())).thenReturn(result);
+        when(mfaService.verifyEnrollment(any(), any(), any())).thenReturn(true);
+
+        var session = SecurityContextHolder.getContext().getAuthentication();
+        mockMvc.perform(post("/auth/mfa/enroll").principal(session)).andExpect(status().isOk());
+        mockMvc.perform(post("/auth/mfa/verify-enrollment").principal(session).contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"code\":\"123456\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void readOnly_aProviderTheSecondFactorGateRefusesCanEnrol() throws Exception {
+        readOnly();
+        when(providerMfaGate.isProviderUser(USER_ID, USERNAME)).thenReturn(true);
+        when(providerMfaGate.secondFactorPresented(any())).thenReturn(false);
+        var result = new MfaService.MfaEnrollmentResult(UUID.randomUUID(), "S", "otpauth://x", "data:x", List.of("A"), false);
+        when(mfaService.enrollTotp(any(User.class), any(), org.mockito.ArgumentMatchers.isNull())).thenReturn(result);
+
+        mockMvc.perform(post("/auth/mfa/enroll")).andExpect(status().isOk());
+    }
+
+    @Test
+    void readOnly_aProviderWithTheFactorAlreadyIsNotBlocked_soItsChangeIsOptional() throws Exception {
+        readOnly();
+        when(providerMfaGate.isProviderUser(USER_ID, USERNAME)).thenReturn(true);
+        when(providerMfaGate.secondFactorPresented(any())).thenReturn(true);
+
+        mockMvc.perform(post("/auth/mfa/enroll")).andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    void outsideReadOnly_nothingChanges() throws Exception {
+        when(downtimeStateService.snapshot()).thenReturn(
+            com.example.hms.security.DowntimeStateService.DowntimeSnapshot.NORMAL);
+        var result = new MfaService.MfaEnrollmentResult(UUID.randomUUID(), "S", "otpauth://x", "data:x", List.of("A"), false);
+        when(mfaService.enrollTotp(any(User.class), any(), org.mockito.ArgumentMatchers.isNull())).thenReturn(result);
+
+        mockMvc.perform(post("/auth/mfa/enroll")).andExpect(status().isOk());
     }
 
     // ── Enroll ──

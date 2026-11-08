@@ -68,17 +68,21 @@
                     type="button"
                     class="btn-secondary btn-sm"
                     [title]="'COMMON.EDIT' | translate"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
                     (click)="openEdit(i)"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
                   >
-                    <span class="material-symbols-outlined">edit</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                   </button>
                   <button
                     type="button"
                     class="btn-secondary btn-sm danger"
                     [title]="'COMMON.DELETE' | translate"
+                    [attr.aria-label]="'COMMON.DELETE' | translate"
                     (click)="confirmDelete(i)"
+                    [attr.aria-label]="'COMMON.DELETE' | translate"
                   >
-                    <span class="material-symbols-outlined">delete</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">delete</span>
                   </button>
                 }
               </td>
@@ -175,7 +179,7 @@
         </thead>
         <tbody>
           @for (g of guarantors(); track g.id) {
-            <tr>
+            <tr [attr.data-guarantor-id]="g.id">
               <td>
                 {{ g.fullName }}
                 @if (g.primary) {
@@ -198,6 +202,24 @@
                   <span class="status-badge status-cancelled">
                     {{ 'COMMON.INACTIVE' | translate }}
                   </span>
+                  <!-- QA D1247: the reason the server requires is shown where the row is read. -->
+                  @if (g.deactivationReason || g.deactivatedAt) {
+                    <div class="muted" [attr.data-testid]="'guarantor-deactivation-' + g.id">
+                      @if (g.deactivatedAt) {
+                        <span>{{ g.deactivatedAt | serverTime | date: 'short' }}</span>
+                      }
+                      @if (g.deactivationReason) {
+                        <!-- QA D1288: the time and the reason are two spans; the whitespace
+                             between elements is dropped, so they are spaced and joined by a dot. -->
+                        {{ ' '
+                        }}<span
+                          >{{ g.deactivatedAt ? '· ' : ''
+                          }}{{ 'COVERAGE.DEACTIVATION_REASON' | translate
+                          }}{{ 'COMMON.COLON' | translate }} {{ g.deactivationReason }}</span
+                        >
+                      }
+                    </div>
+                  }
                 }
               </td>
               @if (canEdit) {
@@ -271,7 +293,7 @@
         <tbody>
           @for (c of consents(); track c.id) {
             <tr>
-              <td>{{ c.consentedAt | serverTime | date: 'medium' }}</td>
+              <td>{{ c.consentedAt | serverTime | dateTime }}</td>
               <td>{{ 'COVERAGE.CONSENT_METHOD_' + c.method | translate }}</td>
               <td>{{ 'COVERAGE.CONSENT_SOURCE_' + c.source | translate }}</td>
               <td>{{ c.signedName || '—' }}</td>
@@ -314,14 +336,17 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeLink()" (keydown.escape)="closeLink()">
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-6-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeLink()"
     >
       <div class="modal-header">
-        <h2>{{ 'COVERAGE.LINK_INSURANCE' | translate }}</h2>
+        <h2 id="coverage-tab-dialog-6-title">{{ 'COVERAGE.LINK_INSURANCE' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -336,11 +361,24 @@
         <div class="form-row">
           <div class="field">
             <label for="cov-payer">{{ 'COVERAGE.PAYER_CODE' | translate }} *</label>
-            <input id="cov-payer" type="text" [(ngModel)]="linkForm.payerCode" />
+            <input required id="cov-payer" type="text" [(ngModel)]="linkForm.payerCode" />
           </div>
           <div class="field">
             <label for="cov-policy">{{ 'COVERAGE.POLICY' | translate }} *</label>
-            <input id="cov-policy" type="text" [(ngModel)]="linkForm.policyNumber" />
+            <input required id="cov-policy" type="text" [(ngModel)]="linkForm.policyNumber" />
+          </div>
+        </div>
+        <!-- QA D925: the insurer's name; the payer code stands in when left blank. -->
+        <div class="form-row">
+          <div class="field">
+            <label for="cov-link-provider">{{ 'COVERAGE.PROVIDER' | translate }}</label>
+            <input
+              id="cov-link-provider"
+              type="text"
+              maxlength="150"
+              [(ngModel)]="linkForm.providerName"
+              [placeholder]="'COVERAGE.PROVIDER_DEFAULTS_TO_PAYER' | translate"
+            />
           </div>
         </div>
         <div class="checkbox-row">
@@ -357,7 +395,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="linkSaving() || !linkForm.payerCode || !linkForm.policyNumber"
+          [disabled]="linkSaving()"
+          [appSubmitGuard]="!linkForm.payerCode || !linkForm.policyNumber"
+          [submitGuardFields]="['cov-payer', 'cov-policy']"
           (click)="submitLink()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -372,14 +412,17 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeEdit()" (keydown.escape)="closeEdit()">
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-5-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeEdit()"
     >
       <div class="modal-header">
-        <h2>{{ 'COVERAGE.EDIT_INSURANCE' | translate }}</h2>
+        <h2 id="coverage-tab-dialog-5-title">{{ 'COVERAGE.EDIT_INSURANCE' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -393,11 +436,11 @@
         <div class="form-row">
           <div class="field">
             <label for="cov-provider">{{ 'COVERAGE.PROVIDER' | translate }} *</label>
-            <input id="cov-provider" type="text" [(ngModel)]="editForm.providerName" />
+            <input required id="cov-provider" type="text" [(ngModel)]="editForm.providerName" />
           </div>
           <div class="field">
             <label for="cov-edit-policy">{{ 'COVERAGE.POLICY' | translate }} *</label>
-            <input id="cov-edit-policy" type="text" [(ngModel)]="editForm.policyNumber" />
+            <input required id="cov-edit-policy" type="text" [(ngModel)]="editForm.policyNumber" />
           </div>
         </div>
         <div class="form-row">
@@ -440,7 +483,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="editSaving() || !editForm.providerName || !editForm.policyNumber"
+          [disabled]="editSaving()"
+          [appSubmitGuard]="!editForm.providerName || !editForm.policyNumber"
+          [submitGuardFields]="['cov-provider', 'cov-edit-policy']"
           (click)="submitEdit()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -460,14 +505,17 @@
   >
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-4-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeDelete()"
     >
       <div class="modal-header">
-        <h2>{{ 'COVERAGE.DELETE_TITLE' | translate }}</h2>
+        <h2 id="coverage-tab-dialog-4-title">{{ 'COVERAGE.DELETE_TITLE' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -480,7 +528,7 @@
       <div class="modal-body">
         <p>
           {{ 'COVERAGE.DELETE_CONFIRM' | translate }} <strong>{{ target.providerName }}</strong> —
-          {{ target.policyNumber }}?
+          {{ target.policyNumber }}{{ 'COMMON.QUESTION_MARK' | translate }}
         </p>
       </div>
       <div class="modal-actions">
@@ -505,14 +553,17 @@
   >
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-3-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeGuarantor()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="coverage-tab-dialog-3-title">
           {{
             (editingGuarantor() ? 'COVERAGE.EDIT_GUARANTOR' : 'COVERAGE.ADD_GUARANTOR') | translate
           }}
@@ -531,6 +582,7 @@
           <div class="field">
             <label for="gua-name">{{ 'COVERAGE.GUARANTOR_NAME' | translate }} *</label>
             <input
+              required
               id="gua-name"
               type="text"
               maxlength="200"
@@ -551,7 +603,13 @@
         <div class="form-row">
           <div class="field">
             <label for="gua-phone">{{ 'COVERAGE.GUARANTOR_PHONE' | translate }}</label>
-            <input id="gua-phone" type="text" maxlength="20" [(ngModel)]="guarantorForm.phone" />
+            <input
+              id="gua-phone"
+              type="tel"
+              appPhoneField
+              maxlength="20"
+              [(ngModel)]="guarantorForm.phone"
+            />
           </div>
           <div class="field">
             <label for="gua-email">{{ 'COVERAGE.GUARANTOR_EMAIL' | translate }}</label>
@@ -595,7 +653,9 @@
           type="button"
           class="btn-primary"
           data-testid="guarantor-save"
-          [disabled]="guarantorSaving() || !guarantorForm.fullName"
+          [disabled]="guarantorSaving()"
+          [appSubmitGuard]="!guarantorForm.fullName"
+          [submitGuardFields]="['gua-name']"
           (click)="submitGuarantor()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -606,6 +666,20 @@
 }
 
 <!-- ══ Record consent modal (P3 #21) ══ -->
+<!-- QA D1247: switching a guarantor off asks why; the server keeps the reason. -->
+@if (deactivatingGuarantor(); as g) {
+  <app-reason-dialog
+    titleKey="COVERAGE.DEACTIVATE_GUARANTOR_TITLE"
+    messageKey="COVERAGE.DEACTIVATE_GUARANTOR_MESSAGE"
+    confirmKey="COVERAGE.DEACTIVATE"
+    [busy]="guarantorToggleBusy()"
+    (confirmed)="confirmDeactivateGuarantor(g, $event)"
+    (cancelled)="deactivatingGuarantor.set(null)"
+  >
+    <p class="reason-dialog-subject" data-testid="deactivate-guarantor-name">{{ g.fullName }}</p>
+  </app-reason-dialog>
+}
+
 @if (showConsentModal()) {
   <div
     class="modal-backdrop"
@@ -615,14 +689,17 @@
   >
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeConsent()"
     >
       <div class="modal-header">
-        <h2>{{ 'COVERAGE.RECORD_CONSENT' | translate }}</h2>
+        <h2 id="coverage-tab-dialog-2-title">{{ 'COVERAGE.RECORD_CONSENT' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -637,7 +714,12 @@
         <div class="form-row">
           <div class="field">
             <label for="con-method">{{ 'COVERAGE.CONSENT_METHOD' | translate }} *</label>
-            <select id="con-method" data-testid="consent-method" [(ngModel)]="consentForm.method">
+            <select
+              required
+              id="con-method"
+              data-testid="consent-method"
+              [(ngModel)]="consentForm.method"
+            >
               <option value="ELECTRONIC">
                 {{ 'COVERAGE.CONSENT_METHOD_ELECTRONIC' | translate }}
               </option>
@@ -646,8 +728,10 @@
             </select>
           </div>
           <div class="field">
-            <label for="con-name">{{ 'COVERAGE.CONSENT_SIGNED_BY' | translate }}</label>
+            <!-- QA D1148: a consent names who gave it; it is never stored unsigned. -->
+            <label for="con-name">{{ 'COVERAGE.CONSENT_SIGNED_BY' | translate }} *</label>
             <input
+              required
               id="con-name"
               type="text"
               maxlength="200"
@@ -673,10 +757,13 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          submitGuardRequired
           type="button"
           class="btn-primary"
           data-testid="consent-save"
           [disabled]="consentSaving()"
+          [appSubmitGuard]="!consentForm.signedName.trim()"
+          [submitGuardFields]="['con-name']"
           (click)="submitConsent()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -696,14 +783,17 @@
   >
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeRevoke()"
     >
       <div class="modal-header">
-        <h2>{{ 'COVERAGE.REVOKE_CONSENT' | translate }}</h2>
+        <h2 id="coverage-tab-dialog-1-title">{{ 'COVERAGE.REVOKE_CONSENT' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -719,6 +809,7 @@
           <div class="field">
             <label for="rev-reason">{{ 'COVERAGE.CONSENT_REVOKE_REASON' | translate }} *</label>
             <textarea
+              required
               id="rev-reason"
               rows="2"
               maxlength="500"
@@ -734,6 +825,8 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          appSubmitGuard
+          submitGuardRequired
           type="button"
           class="btn-danger"
           data-testid="consent-revoke-confirm"

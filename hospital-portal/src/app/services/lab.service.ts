@@ -2,6 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 
+import { allPages, allRows, AllRows } from '../shared/all-pages';
+
 export interface LabOrderResponse {
   id: string;
   labOrderCode: string;
@@ -18,6 +20,8 @@ export interface LabOrderResponse {
   labTestCode: string;
   /** QA D645/D648: the test definition was deleted; labTestName is the "deleted test" label. */
   labTestDefinitionMissing?: boolean;
+  /** QA D1095: the test definition's unit, prefilled when a result is entered. */
+  labTestUnit?: string | null;
   orderDatetime: string;
   status: string;
   clinicalIndication: string;
@@ -25,6 +29,8 @@ export interface LabOrderResponse {
   notes: string;
   primaryDiagnosisCode: string;
   additionalDiagnosisCodes: string[];
+  /** QA D963: ROUTINE, URGENT or STAT (LabOrderResponseDTO.priority). */
+  priority?: string | null;
   orderChannel: string;
   /**
    * Why the order was cancelled, or (QA D820) why it was voided as entered in
@@ -39,6 +45,8 @@ export interface LabResultResponse {
   id: string;
   labOrderId: string | null;
   labOrderCode: string;
+  /** QA D963: the order's priority, so the release queue flags STAT and URGENT. */
+  orderPriority?: string | null;
   patientId: string | null;
   patientFullName: string;
   /** QA D527: no longer sent (always null); kept so older payloads still type. */
@@ -57,6 +65,8 @@ export interface LabResultResponse {
   resultDate: string;
   notes: string;
   referenceRanges: LabResultReferenceRange[];
+  /** Round 18: the range this result was graded against (the patient's sex and age band). */
+  gradedReferenceRange?: LabResultReferenceRange | null;
   /** QA D834: the expected answer of a qualitative test, shown where it has no range. */
   expectedResult?: string | null;
   trendHistory?: LabResultTrendPoint[];
@@ -67,6 +77,11 @@ export interface LabResultResponse {
    * and is never auto-released. Shown as "not graded: units differ".
    */
   unitMismatch?: boolean;
+  /**
+   * QA D1394: a range applies but the value does not settle a grade against it
+   * (">1" on a range ending at 6.5): UNSPECIFIED, no alert, reviewed before release.
+   */
+  gradeUnknown?: boolean;
   acknowledged: boolean;
   acknowledgedAt: string | null;
   acknowledgedBy: string | null;
@@ -114,12 +129,20 @@ export interface LabResultReferenceRange {
   ageMax: number | null;
   gender: string | null;
   notes: string | null;
+  criticalLow?: number | null;
+  criticalHigh?: number | null;
+  /** Round 18: unit of ageMin/ageMax; YEARS when absent. */
+  ageUnit?: 'YEARS' | 'MONTHS' | 'DAYS' | null;
+  /** Round 18: where the limits come from. */
+  source?: string | null;
 }
 
 export interface LabResultTrendPoint {
   resultDate: string;
   resultValue: string;
   resultUnit: string;
+  /** QA D1016/D931 (round 18): the value replaces a released one. */
+  corrected?: boolean;
 }
 
 export interface LabTestDefinition {
@@ -147,6 +170,10 @@ export interface LabTestDefinition {
   reviewerMayApprove?: boolean | null;
   reviewedAt: string | null;
   rejectionReason: string | null;
+  /** QA D1120: the ACTIVE definition this version replaces on activation (null for a first version). */
+  supersedesDefinitionId?: string | null;
+  /** QA D1120: 1 for a first definition. */
+  versionNumber?: number | null;
   unit: string | null;
   loincCode: string | null;
   loincDisplay: string | null;
@@ -168,6 +195,10 @@ export interface LabTestReferenceRange {
   /** D107: panic limits; a value beyond them grades CRITICAL. */
   criticalLow?: number | null;
   criticalHigh?: number | null;
+  /** Round 18: unit of ageMin/ageMax (inclusive bounds); YEARS when absent. */
+  ageUnit?: 'YEARS' | 'MONTHS' | 'DAYS' | null;
+  /** Round 18: where the limits come from, shown to the approving lab director. */
+  source?: string | null;
 }
 
 export interface LabTestDefinitionApprovalRequest {
@@ -329,6 +360,9 @@ export interface LabSpecimen {
   currentLocation: string | null;
   status: LabSpecimenStatus;
   notes: string | null;
+  /** QA D962: why the laboratory rejected it (status REJECTED). */
+  rejectionReason?: string | null;
+  rejectedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -350,6 +384,8 @@ export interface LabResultComparisonPoint {
   resultValue: string;
   resultUnit: string;
   severityFlag: string | null;
+  /** QA D1016/D931 (round 18): the value replaces a released one. */
+  corrected?: boolean;
 }
 
 export interface LabResultComparison {
@@ -415,18 +451,40 @@ export type LabResultPage = PageResponse<LabResultResponse>;
 export class LabService {
   private readonly http = inject(HttpClient);
 
+  /**
+   * The lab orders in scope. QA D1347: without `page` this is EVERY order the
+   * request matches (all pages read, `size` is only the transfer size); with
+   * `page` it is that one page, for a caller that says so on screen.
+   */
   listOrders(params?: {
     patientId?: string;
     page?: number;
     size?: number;
   }): Observable<LabOrderResponse[]> {
-    let httpParams = new HttpParams();
-    if (params?.patientId) httpParams = httpParams.set('patientId', params.patientId);
-    if (params?.page !== undefined) httpParams = httpParams.set('page', String(params.page));
-    if (params?.size !== undefined) httpParams = httpParams.set('size', String(params.size));
+    if (params?.page !== undefined) {
+      return this.listOrdersPage(params.page, params.size, params.patientId).pipe(
+        map((page) => page?.content ?? []),
+      );
+    }
+    return this.listAllOrders(params?.patientId).pipe(map((all) => all.rows));
+  }
+
+  /** Every order in scope and the server's own count of them (QA D1347). */
+  listAllOrders(patientId?: string): Observable<AllRows<LabOrderResponse>> {
+    return allPages((page, size) => this.listOrdersPage(page, size, patientId));
+  }
+
+  private listOrdersPage(
+    page: number,
+    size: number | undefined,
+    patientId?: string,
+  ): Observable<PageResponse<LabOrderResponse> | undefined> {
+    let httpParams = new HttpParams().set('page', String(page));
+    if (patientId) httpParams = httpParams.set('patientId', patientId);
+    if (size !== undefined) httpParams = httpParams.set('size', String(size));
     return this.http
       .get<ApiWrapper<PageResponse<LabOrderResponse>>>('/lab-orders', { params: httpParams })
-      .pipe(map((res) => res?.data?.content ?? []));
+      .pipe(map((res) => res?.data));
   }
 
   getOrder(id: string): Observable<LabOrderResponse> {
@@ -435,13 +493,25 @@ export class LabService {
       .pipe(map((res) => res.data));
   }
 
-  listResults(params?: { page?: number; size?: number }): Observable<LabResultResponse[]> {
-    let httpParams = new HttpParams();
-    if (params?.page !== undefined) httpParams = httpParams.set('page', String(params.page));
-    if (params?.size !== undefined) httpParams = httpParams.set('size', String(params.size));
-    return this.http
-      .get<ApiWrapper<PageResponse<LabResultResponse>>>('/lab-results', { params: httpParams })
-      .pipe(map((res) => res?.data?.content ?? []));
+  /**
+   * Every lab result in scope and the server's own count (QA D1347: was one page of 200).
+   * QA D1361: read page by page, so the pages must share one total order -
+   * newest result first, then the id, which no two results share. (The
+   * server closes any order with the id too; the sort is sent so the order
+   * does not hang on the endpoint's default.)
+   */
+  listAllResults(): Observable<AllRows<LabResultResponse>> {
+    return allPages((page, size) =>
+      this.http
+        .get<ApiWrapper<PageResponse<LabResultResponse>>>('/lab-results', {
+          params: new HttpParams()
+            .set('page', String(page))
+            .set('size', String(size))
+            .append('sort', 'resultDate,desc')
+            .append('sort', 'id,desc'),
+        })
+        .pipe(map((res) => res?.data)),
+    );
   }
 
   getResult(id: string): Observable<LabResultResponse> {
@@ -454,7 +524,7 @@ export class LabService {
    * B14 — the release worklist: every result of the acting hospital that
    * nobody has released yet, oldest first (the endpoint's own default sort).
    *
-   * <p>Unlike {@link listResults} this keeps the whole page rather than its
+   * <p>Unlike {@link listAllResults} this keeps the whole page rather than its
    * content: the worklist counts what is waiting and pages through it, and a
    * total that has been thrown away cannot be shown.
    */
@@ -489,7 +559,7 @@ export class LabService {
     approvalStatus?: LabTestDefinition['approvalStatus'];
     page?: number;
     size?: number;
-  }): Observable<{ content: LabTestDefinition[]; totalElements: number }> {
+  }): Observable<{ content: LabTestDefinition[]; totalElements: number; totalPages?: number }> {
     let httpParams = new HttpParams();
     if (params.keyword) httpParams = httpParams.set('keyword', params.keyword);
     if (params.approvalStatus) httpParams = httpParams.set('approvalStatus', params.approvalStatus);
@@ -503,6 +573,7 @@ export class LabService {
         map((res) => ({
           content: res?.data?.content ?? [],
           totalElements: res?.data?.totalElements ?? 0,
+          totalPages: res?.data?.totalPages ?? 0,
         })),
       );
   }
@@ -547,9 +618,20 @@ export class LabService {
    * releases it without a second reviewer. Without it the API answers 409 for
    * a self-release.
    */
-  releaseResult(id: string, selfRelease = false): Observable<LabResultResponse> {
-    const params = selfRelease ? new HttpParams().set('selfRelease', 'true') : undefined;
-    return this.http.post<LabResultResponse>(`/lab-results/${id}/release`, {}, { params });
+  releaseResult(
+    id: string,
+    selfRelease = false,
+    ungradedConfirmed = false,
+  ): Observable<LabResultResponse> {
+    let params = new HttpParams();
+    if (selfRelease) params = params.set('selfRelease', 'true');
+    // QA D1092: the releaser confirms they reviewed a value no range could grade.
+    if (ungradedConfirmed) params = params.set('ungradedConfirmed', 'true');
+    return this.http.post<LabResultResponse>(
+      `/lab-results/${id}/release`,
+      {},
+      params.keys().length ? { params } : {},
+    );
   }
 
   // ── Lab Test Definition CRUD ─────────────────────────────────────────
@@ -563,6 +645,16 @@ export class LabService {
   updateTestDefinition(id: string, req: LabTestDefinitionRequest): Observable<LabTestDefinition> {
     return this.http
       .put<ApiWrapper<LabTestDefinition>>(`/lab-test-definitions/${id}`, req)
+      .pipe(map((res) => res.data));
+  }
+
+  /**
+   * QA D1120: a new DRAFT version of an ACTIVE definition, linked to it. It is
+   * approved like any definition and replaces the active one on activation.
+   */
+  createTestDefinitionVersion(id: string): Observable<LabTestDefinition> {
+    return this.http
+      .post<ApiWrapper<LabTestDefinition>>(`/lab-test-definitions/${id}/new-version`, {})
       .pipe(map((res) => res.data));
   }
 
@@ -614,14 +706,22 @@ export class LabService {
     return this.http.delete<void>(`/lab-test-validation-studies/${id}`);
   }
 
-  getQcEventsByDefinition(definitionId: string, size = 150): Observable<LabQcEvent[]> {
-    const params = new HttpParams()
-      .set('testDefinitionId', definitionId)
-      .set('size', String(size))
-      .set('sort', 'recordedAt,asc');
-    return this.http
-      .get<ApiWrapper<PageResponse<LabQcEvent>>>('/lab-qc-events', { params })
-      .pipe(map((res) => res?.data?.content ?? []));
+  /**
+   * Every QC event of the definition, oldest first. QA D1347: this read the
+   * 150 OLDEST once, so a definition with more lost its recent runs.
+   */
+  getQcEventsByDefinition(definitionId: string): Observable<LabQcEvent[]> {
+    return allRows((page, size) =>
+      this.http
+        .get<ApiWrapper<PageResponse<LabQcEvent>>>('/lab-qc-events', {
+          params: new HttpParams()
+            .set('testDefinitionId', definitionId)
+            .set('page', String(page))
+            .set('size', String(size))
+            .set('sort', 'recordedAt,asc'),
+        })
+        .pipe(map((res) => res?.data)),
+    );
   }
 
   getQcSummary(): Observable<LabQcSummary[]> {
@@ -670,6 +770,13 @@ export class LabService {
   receiveSpecimen(specimenId: string): Observable<LabSpecimen> {
     return this.http
       .post<ApiWrapper<LabSpecimen>>(`/lab-specimens/${specimenId}/receive`, null)
+      .pipe(map((res) => res.data));
+  }
+
+  /** QA D962: reject a specimen with a reason; the order goes back to awaiting collection. */
+  rejectSpecimen(specimenId: string, reason: string): Observable<LabSpecimen> {
+    return this.http
+      .post<ApiWrapper<LabSpecimen>>(`/lab-specimens/${specimenId}/reject`, { reason })
       .pipe(map((res) => res.data));
   }
 

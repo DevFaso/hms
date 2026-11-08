@@ -4,7 +4,6 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.platform.PlatformRegistryEventType;
 import com.example.hms.enums.platform.PlatformServiceStatus;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -84,7 +83,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
                                                                   Locale locale) {
         Objects.requireNonNull(organizationId, ORGANIZATION_ID_REQUIRED);
         if (request == null || request.getServiceType() == null) {
-            throw new IllegalArgumentException("Platform service type is required");
+            throw new com.example.hms.exception.FieldBusinessException("serviceType", "platform.serviceTypeRequired");
         }
 
         Organization organization = organizationRepository.findById(organizationId)
@@ -103,7 +102,8 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
         boolean exists = organizationPlatformServiceRepository
             .existsByOrganizationIdAndServiceType(organizationId, request.getServiceType());
         if (exists) {
-            throw new ConflictException(MessageUtil.resolve(locale,
+            // QA CX-005: marked on the field that conflicts.
+            throw new ConflictException("serviceType:" + MessageUtil.resolve(locale,
                 "platform.service.alreadyRegistered", request.getServiceType().name()));
         }
 
@@ -129,7 +129,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
                                                                 Locale locale) {
         if (request != null && Boolean.TRUE.equals(request.getClearApiKeyReference())
             && request.getApiKeyReference() != null && !request.getApiKeyReference().isBlank()) {
-            throw new BusinessException("platform.service.apiKey.setAndClear");
+            throw new com.example.hms.exception.FieldBusinessException("clearApiKeyReference", "platform.service.apiKey.setAndClear");
         }
         OrganizationPlatformService service = loadServiceForOrganization(organizationId, serviceId);
         platformServiceMapper.updateOrganizationServiceFromDto(request, service);
@@ -210,7 +210,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
         Objects.requireNonNull(hospitalId, HOSPITAL_ID_REQUIRED);
         Objects.requireNonNull(organizationServiceId, ORGANIZATION_SERVICE_ID_REQUIRED);
         if (request == null || request.getEnabled() == null) {
-            throw new IllegalArgumentException("enabled is required");
+            throw new com.example.hms.exception.FieldBusinessException("enabled", "platform.enabledRequired");
         }
 
         HospitalPlatformServiceLink link = hospitalPlatformServiceLinkRepository

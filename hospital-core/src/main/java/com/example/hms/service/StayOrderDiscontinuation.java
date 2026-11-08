@@ -125,6 +125,52 @@ public class StayOrderDiscontinuation {
     }
 
     /**
+     * QA D1393: the stay was cancelled, so the orders filed on its own encounter
+     * have no stay to belong to. Left live, they were refused on every action
+     * and sat in the work queue for ever. Each is withdrawn as a prescriber's
+     * withdrawal would be (prepared fill voided, partner told, queue claim
+     * released, back order closed), with the cancel's own reason and an audit
+     * row, never the discharge's: no summary, no bill. Only orders filed on
+     * this stay's encounter: an emergency order the discharge rule carries on
+     * to the ward stays the department's, since the stay never happened. A
+     * take-home order is the patient's to collect; doses already given stay
+     * on the chart.
+     */
+    @Transactional
+    public List<Prescription> discontinueOrdersOfCancelledStay(Admission stay, UUID actorUserId) {
+        if (stay == null || stay.getId() == null || stay.getPatient() == null || stay.getHospital() == null) {
+            return List.of();
+        }
+        String reason = messageSource.getMessage("prescription.discontinuedStayCancelled", null,
+            "Discontinued: the admission was cancelled", LocaleContextHolder.getLocale());
+        List<Prescription> ended = new ArrayList<>();
+        for (Prescription rx : prescriptionRepository.findByPatient_IdAndHospital_Id(
+                stay.getPatient().getId(), stay.getHospital().getId())) {
+            if (ENDABLE_STATUSES.contains(rx.getStatus()) && filedOnCancelledStay(rx, stay)) {
+                PrescriptionStatus previous = rx.getStatus();
+                rx.setStatus(PrescriptionStatus.DISCONTINUED);
+                rx.setWithdrawalReason(reason);
+                withdrawnOrders.withdrawPartnerOffers(rx);
+                closeOpenBackOrders(rx);
+                preparedFills.voidPreparedFill(rx, ReadyCancelReason.PRESCRIPTION_WITHDRAWN);
+                queueClaims.releaseOnExit(rx, QueueClaimReleaseReason.WITHDRAWN, actorUserId, QueueClaimExitActor.OTHER);
+                audit(rx, actorUserId, previous, "Admission cancelled");
+                ended.add(rx);
+            }
+        }
+        if (!ended.isEmpty()) {
+            prescriptionRepository.saveAll(ended);
+            log.info("Discontinued {} order(s) of cancelled admission {}", ended.size(), stay.getId());
+        }
+        return ended;
+    }
+
+    private static boolean filedOnCancelledStay(Prescription rx, Admission stay) {
+        return !rx.isTakeHome()
+            && rx.getEncounter() != null && stay.getId().equals(rx.getEncounter().getAdmissionId());
+    }
+
+    /**
      * QA D792 (#953 review, round 2): an order that ended with a stay but was
      * left live because something held it (migration V233 leaves an order
      * with a prepared fill at the counter or an open partner offer; a partner

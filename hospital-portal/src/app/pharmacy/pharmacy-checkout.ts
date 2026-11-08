@@ -1,4 +1,14 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { map } from 'rxjs';
+import { allRows } from '../shared/all-pages';
+import { refusalReason } from '../shared/refusal-reason';
+import {
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -14,6 +24,11 @@ import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { cfaAmountMessageKey, cfaAmountProblem } from '../shared/cfa-amount';
+import { FieldRefusal, refuseFields } from '../shared/forms/invalid-fields';
+
+/** The payment fields the checkout may refuse. */
+const CHECKOUT_FIELDS = ['amount', 'ref'];
 
 /**
  * T-43 / T-44: pharmacy checkout and French printable receipt.
@@ -24,6 +39,9 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
  * is in French and is hardcoded in the template for now; moving copy to
  * ngx-translate keys is a follow-up task.
  */
+/** The fill picker, refused when blank (QA D1306). */
+const DISPENSE_PICK_IDS = ['dispenseId'];
+
 @Component({
   selector: 'app-pharmacy-checkout',
   standalone: true,
@@ -37,6 +55,7 @@ export class PharmacyCheckoutComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   dispenseId = '';
   amount: number | null = null;
@@ -64,9 +83,9 @@ export class PharmacyCheckoutComponent implements OnInit {
   }
 
   private loadPharmacies(): void {
-    this.svc.listPharmacies(0, 100).subscribe({
-      next: (page) => {
-        const list = page?.content ?? [];
+    // QA D1347: every pharmacy (all pages), not the first 100.
+    allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
+      next: (list) => {
         this.pharmacies.set(list);
         if (list.length > 0) {
           this.selectPharmacy(list[0].id);
@@ -95,9 +114,12 @@ export class PharmacyCheckoutComponent implements OnInit {
       return;
     }
     this.dispensesLoading.set(true);
-    this.svc.listDispensesByPharmacy(pharmacyId, 0, 50).subscribe({
-      next: (res) => {
-        const rows = res?.data?.content ?? [];
+    // QA D1347: every dispense of the pharmacy (all pages), not the 50 newest:
+    // an older unpaid dispense was never offered at the till.
+    allRows((page, size) =>
+      this.svc.listDispensesByPharmacy(pharmacyId, page, size).pipe(map((r) => r?.data)),
+    ).subscribe({
+      next: (rows) => {
         this.dispenses.set(rows.filter((d) => d.status !== 'CANCELLED' && d.paid !== true));
         this.dispensesLoading.set(false);
       },
@@ -133,9 +155,13 @@ export class PharmacyCheckoutComponent implements OnInit {
 
   loadDispense(): void {
     if (!this.dispenseId) {
-      this.toast.error(this.translate.instant('PHARMACY.CHECKOUT_DISPENSE_ID_REQUIRED'));
+      // QA D1306 (round 28): the fill picker is marked, not only a toast.
+      const message = this.translate.instant('PHARMACY.CHECKOUT_DISPENSE_ID_REQUIRED');
+      refuseFields(this.host.nativeElement, DISPENSE_PICK_IDS, DISPENSE_PICK_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], DISPENSE_PICK_IDS, '');
     this.loading.set(true);
     this.svc.getDispense(this.dispenseId).subscribe({
       next: (res) => {
@@ -147,7 +173,7 @@ export class PharmacyCheckoutComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PHARMACY.CHECKOUT_DISPENSE_NOT_FOUND'),
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CHECKOUT_DISPENSE_NOT_FOUND'),
         );
         this.dispense.set(null);
         this.loading.set(false);
@@ -165,15 +191,35 @@ export class PharmacyCheckoutComponent implements OnInit {
       this.toast.error(this.translate.instant('PHARMACY_CHECKOUT.ALREADY_PAID'));
       return;
     }
-    if (!this.amount || this.amount <= 0) {
-      this.toast.error(this.translate.instant('PHARMACY.CHECKOUT_INVALID_AMOUNT'));
+    // QA D204 / D1089: an amount first, then whole francs (the franc CFA has no minor unit).
+    const amount = this.amount;
+    const amountProblem = cfaAmountProblem(amount);
+    // QA D1306 (round 28): every refused field is marked (aria-invalid, its
+    // own reason under it, focus on the first) in one press; a toast alone
+    // named none of them.
+    const refusals: FieldRefusal[] = [];
+    if (amountProblem || amount === null) {
+      refusals.push({
+        id: 'amount',
+        message: this.translate.instant(
+          cfaAmountMessageKey(amountProblem ?? 'required', 'PHARMACY.CHECKOUT_INVALID_AMOUNT'),
+        ),
+      });
+    }
+    // QA D1033: a mobile-money payment is recorded with the transaction
+    // reference the patient's phone shows; the server refuses one without it.
+    if (this.paymentMethod === 'MOBILE_MONEY' && !this.referenceNumber.trim()) {
+      refusals.push({
+        id: 'ref',
+        message: this.translate.instant('PHARMACY_CHECKOUT.REFERENCE_REQUIRED'),
+      });
+    }
+    if (refusals.length > 0 || amount === null) {
+      refuseFields(this.host.nativeElement, refusals, CHECKOUT_FIELDS);
+      this.toast.error(refusals.map((r) => r.message).join(' '));
       return;
     }
-    // QA D204: the franc CFA has no minor unit.
-    if (!Number.isInteger(this.amount)) {
-      this.toast.error(this.translate.instant('BILLING.PAYMENT_WHOLE_AMOUNT'));
-      return;
-    }
+    refuseFields(this.host.nativeElement, [], CHECKOUT_FIELDS);
     const hospitalId = this.auth.getHospitalId();
     const userId = this.auth.getUserId();
     if (!hospitalId || !userId) {
@@ -186,9 +232,9 @@ export class PharmacyCheckoutComponent implements OnInit {
       patientId: d.patientId,
       hospitalId,
       paymentMethod: this.paymentMethod,
-      amount: this.amount,
+      amount,
       currency: 'XOF',
-      referenceNumber: this.referenceNumber || undefined,
+      referenceNumber: this.referenceNumber.trim() || undefined,
       receivedBy: userId,
       notes: this.notes || undefined,
     };
@@ -201,7 +247,7 @@ export class PharmacyCheckoutComponent implements OnInit {
         this.loading.set(false);
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.PAYMENT_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.PAYMENT_FAILED'));
         this.loading.set(false);
       },
     });
@@ -220,11 +266,6 @@ export class PharmacyCheckoutComponent implements OnInit {
     this.notes = '';
     this.dispense.set(null);
     this.receipt.set(null);
-  }
-
-  /** A short receipt reference instead of the raw payment UUID (QA D102). */
-  receiptNumber(id: string | null | undefined): string {
-    return (id ?? '').replace(/-/g, '').substring(0, 10).toUpperCase();
   }
 
   methodLabel(m: PharmacyPaymentMethod): string {

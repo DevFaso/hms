@@ -43,6 +43,8 @@ public class EncounterAutoCompletionService {
     private final EncounterRepository encounterRepository;
     private final PatientTrackerEventPublisher trackerEventPublisher;
     private final AuditEventLogService auditEventLogService;
+    /** QA D972: a closed stay and the visit that led to it are handed to billing like a checkout. */
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public void completeAdmissionEncounters(UUID admissionId) {
@@ -67,8 +69,33 @@ public class EncounterAutoCompletionService {
             trackerEventPublisher.publishStatusTransition(active.get(i),
                     previousStatuses.get(i), EncounterStatus.COMPLETED.name());
             emitAudit(active.get(i), previousStatuses.get(i), admissionId);
+            publishCompleted(active.get(i), now);
         }
         log.info("Completed {} encounter(s) of admission {} on discharge", active.size(), admissionId);
+    }
+
+    /**
+     * QA D1393: a cancelled admission's own open encounters end with it, as
+     * CANCELLED: the stay never happened, so unlike a discharge this hands
+     * nothing to billing and writes no summary. The cancel closed nothing, so
+     * the encounter stayed IN_PROGRESS for ever and took every later order of
+     * the patient (the D414 lookup), each then refused at the pharmacy.
+     */
+    @Transactional
+    public void cancelAdmissionEncounters(UUID admissionId) {
+        if (admissionId == null) {
+            return;
+        }
+        List<Encounter> active = encounterRepository.findByAdmissionIdAndStatusNotIn(admissionId, TERMINAL_STATUSES);
+        LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
+        for (Encounter enc : active) {
+            String previous = enc.getStatus() != null ? enc.getStatus().name() : null;
+            enc.setStatus(EncounterStatus.CANCELLED);
+            enc.setCheckoutTimestamp(now);
+            encounterRepository.save(enc);
+            trackerEventPublisher.publishStatusTransition(enc, previous, EncounterStatus.CANCELLED.name());
+            emitAudit(enc, previous, "Encounter cancelled with admission " + admissionId);
+        }
     }
 
     /**
@@ -118,6 +145,19 @@ public class EncounterAutoCompletionService {
                     previousStatuses.get(i), EncounterStatus.COMPLETED.name());
             emitAudit(open.get(i), previousStatuses.get(i),
                 "Encounter completed on admission " + admission.getId());
+            publishCompleted(open.get(i), open.get(i).getCheckoutTimestamp());
+        }
+    }
+
+    /**
+     * QA D972 (round 18): a visit closed here was never billed: only the
+     * clinic checkout published the hand-off. The stay's encounter (bed days,
+     * the orders of the stay) and the visit that led to the admission are
+     * billed like any checked-out visit.
+     */
+    private void publishCompleted(Encounter encounter, LocalDateTime at) {
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(com.example.hms.event.EncounterCheckedOutEvent.of(encounter, at));
         }
     }
 

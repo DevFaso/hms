@@ -70,6 +70,9 @@ import com.example.hms.utility.ObstetricEligibility;
 @RequiredArgsConstructor
 @Transactional
 public class LaborServiceImpl implements LaborService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_HOSPITAL_ID = "hospitalId";
+
 
     /** QA D714: tolerated clock skew between the charting device and the server. */
     static final long PARTOGRAPH_FUTURE_SKEW_MINUTES = 10;
@@ -79,9 +82,10 @@ public class LaborServiceImpl implements LaborService {
 
     /* ── Clinical thresholds ─────────────────────────────────────────── */
 
-    static final int FHR_BRADYCARDIA_BPM = 110;
-    static final int FHR_TACHYCARDIA_BPM = 160;
-    static final int ACTIVE_PHASE_DILATION_CM = 4;
+    static final int FHR_BRADYCARDIA_BPM = com.example.hms.service.maternity.LaborAlertArgs.FHR_BRADYCARDIA_BPM;
+    private static final String FETAL_HEART_RATE_FIELD = "fetalHeartRateBpm";
+    static final int FHR_TACHYCARDIA_BPM = com.example.hms.service.maternity.LaborAlertArgs.FHR_TACHYCARDIA_BPM;
+    static final int ACTIVE_PHASE_DILATION_CM = com.example.hms.service.maternity.LaborAlertArgs.ACTIVE_PHASE_DILATION_CM;
     static final double ACTION_LINE_LAG_HOURS = 4.0;
     static final double MATERNAL_FEVER_C = 38.0;
     static final int MATERNAL_TACHYCARDIA_BPM = 120;
@@ -152,7 +156,8 @@ public class LaborServiceImpl implements LaborService {
      * pregnancy reaching labour (20 weeks is the floor of a birth). It is a
      * charting error unless the clinician states why (e.g. a retained twin).
      */
-    static final int MIN_DAYS_BETWEEN_DELIVERIES = 140;
+    static final int MIN_DAYS_BETWEEN_DELIVERIES =
+        com.example.hms.validation.RecentDeliveryOverrideGivenValidator.MIN_DAYS_BETWEEN_DELIVERIES;
 
     private final LaborEpisodeRepository episodeRepository;
     private final LaborPartographEntryRepository entryRepository;
@@ -185,10 +190,10 @@ public class LaborServiceImpl implements LaborService {
         }
         // QA D295: an episode with no onset time has no partograph clock.
         if (request.getLaborOnsetAt() == null) {
-            throw new BusinessException("maternity.labor.onset.required");
+            throw new com.example.hms.exception.FieldBusinessException("laborOnsetAt", "maternity.labor.onset.required");
         }
         if (request.getLaborOnsetAt().isAfter(LocalDateTime.now(java.time.ZoneId.systemDefault()).plusMinutes(5))) {
-            throw new BusinessException("maternity.labor.onset.future");
+            throw new com.example.hms.exception.FieldBusinessException("laborOnsetAt", "maternity.labor.onset.future");
         }
         // QA D809: the typed counts are checked before an unbooked labour
         // opens a pregnancy record from them.
@@ -203,8 +208,9 @@ public class LaborServiceImpl implements LaborService {
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", hospital.getId());
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         if (episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospital.getId(), LaborStatus.ACTIVE)) {
-            throw new BusinessException("maternity.labor.alreadyActive");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.labor.alreadyActive");
         }
 
         String riskNotes = resolveRecentDeliveryOverride(patientId, request);
@@ -318,10 +324,10 @@ public class LaborServiceImpl implements LaborService {
                                                            LaborEpisodeRequestDTO request, MaternalHistory previous) {
         Integer weeks = request.getGestationalAgeWeeks();
         if (weeks == null) {
-            throw new BusinessException("maternity.labor.pregnancyRequired");
+            throw new com.example.hms.exception.FieldBusinessException("gestationalAgeWeeks", "maternity.labor.pregnancyRequired");
         }
         if (weeks < MIN_LABOUR_GESTATIONAL_WEEKS || weeks > MAX_LABOUR_GESTATIONAL_WEEKS) {
-            throw new BusinessException("maternity.labor.gestationalAgeRange",
+            throw new com.example.hms.exception.FieldBusinessException("gestationalAgeWeeks", "maternity.labor.gestationalAgeRange",
                 MIN_LABOUR_GESTATIONAL_WEEKS, MAX_LABOUR_GESTATIONAL_WEEKS);
         }
         LocalDate today = LocalDate.now(java.time.ZoneId.systemDefault());
@@ -362,7 +368,8 @@ public class LaborServiceImpl implements LaborService {
         }
         String reason = request.getRecentDeliveryOverrideReason();
         if (reason == null || reason.isBlank()) {
-            throw new BusinessException("labor.episode.recentDelivery");
+            // QA D1339 (round 29): marked on the override field the form shows.
+            throw new com.example.hms.exception.FieldBusinessException("recentDeliveryOverrideReason", "labor.episode.recentDelivery");
         }
         String note = messageSource.getMessage("labor.episode.recentDeliveryOverrideNote",
             new Object[]{reason.trim()}, NotificationLocales.STAFF);
@@ -407,21 +414,30 @@ public class LaborServiceImpl implements LaborService {
         }
         LaborEpisode episode = loadEpisode(patientId, episodeId, request.getHospitalId());
         if (episode.getStatus() != LaborStatus.ACTIVE) {
-            throw new BusinessException("maternity.partograph.laborNotActive");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.partograph.laborNotActive");
         }
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(episode.getPatient(), request.getObservationTime(), "observationTime");
         // QA D714: an observation cannot be charted in the future. A small
         // allowance covers device clock skew; anything beyond it is rejected
         // before it can raise an alert or be drawn on the partograph.
         if (request.getObservationTime() != null
                 && request.getObservationTime().isAfter(LocalDateTime.now(java.time.ZoneId.systemDefault()).plusMinutes(PARTOGRAPH_FUTURE_SKEW_MINUTES))) {
-            throw new BusinessException("maternity.partograph.futureTime");
+            throw new com.example.hms.exception.FieldBusinessException("observationTime", "maternity.partograph.futureTime");
         }
         // QA D745: nor before the labour it charts began.
         if (request.getObservationTime() != null && episode.getLaborOnsetAt() != null
                 && request.getObservationTime().isBefore(episode.getLaborOnsetAt())) {
-            throw new BusinessException("maternity.partograph.beforeOnset");
+            throw new com.example.hms.exception.FieldBusinessException("observationTime", "maternity.partograph.beforeOnset");
         }
+        // QA D1151 class (round 21): a partograph entry charts an observation.
+        com.example.hms.service.support.ClinicalContent.requireAny(FETAL_HEART_RATE_FIELD, "maternity.partograph.findingsRequired",
+            request.getFetalHeartRateBpm(), request.getLiquorColour(), request.getMouldingDegree(),
+            request.getCervicalDilationCm(), request.getDescentFifths(), request.getContractionsPerTenMinutes(),
+            request.getContractionDurationSeconds(), request.getOxytocinDropsPerMinute(), request.getDrugsGiven(),
+            request.getIvFluids(), request.getPulseBpm(), request.getSystolicBpMmHg(), request.getDiastolicBpMmHg(),
+            request.getTemperatureCelsius(), request.getUrineOutputMl(), request.getUrineProtein(),
+            request.getUrineAcetone(), request.getNotes());
 
         Staff recordedBy = resolveStaff(request.getRecordedByStaffId(), episode.getHospital());
         if (recordedBy != null) {
@@ -494,10 +510,10 @@ public class LaborServiceImpl implements LaborService {
         }
         LaborEpisode episode = loadEpisode(patientId, episodeId, request.getHospitalId());
         if (episode.getStatus() != LaborStatus.ACTIVE) {
-            throw new BusinessException("maternity.delivery.laborNotActive");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.delivery.laborNotActive");
         }
         if (deliveryRecordRepository.existsByEpisode_Id(episode.getId())) {
-            throw new BusinessException("maternity.delivery.alreadyRecorded");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.delivery.alreadyRecorded");
         }
 
         LocalDateTime birthAt = request.getBirthDateTime() != null ? request.getBirthDateTime() : LocalDateTime.now();
@@ -513,6 +529,7 @@ public class LaborServiceImpl implements LaborService {
             .deliveredByStaff(deliveredBy)
             .documentedBy(documentedBy)
             .birthDateTime(birthAt)
+            .birthTimeStated(request.getBirthDateTime() != null)
             .deliveryMode(request.getDeliveryMode())
             .liveBirth(request.getLiveBirth() == null || request.getLiveBirth())
             .numberOfInfants(request.getNumberOfInfants() != null ? request.getNumberOfInfants() : 1)
@@ -587,7 +604,8 @@ public class LaborServiceImpl implements LaborService {
         }
         String reason = request.getRecentDeliveryOverrideReason();
         if (reason == null || reason.isBlank()) {
-            throw new BusinessException("labor.delivery.recentDelivery");
+            // QA D1339 (round 29): marked on the override field the form shows.
+            throw new com.example.hms.exception.FieldBusinessException("recentDeliveryOverrideReason", "labor.delivery.recentDelivery");
         }
         String note = messageSource.getMessage("labor.episode.recentDeliveryOverrideNote",
             new Object[]{reason.trim()}, NotificationLocales.STAFF);
@@ -622,12 +640,12 @@ public class LaborServiceImpl implements LaborService {
             entry.addAlert(LaborAlertType.FETAL_HEART_RATE, LaborAlertSeverity.URGENT,
                 "labor-fetal-bradycardia",
                 alertText("labor-fetal-bradycardia", fhr, FHR_BRADYCARDIA_BPM),
-                "fetalHeartRateBpm", new Object[]{fhr, FHR_BRADYCARDIA_BPM});
+                FETAL_HEART_RATE_FIELD, new Object[]{fhr, FHR_BRADYCARDIA_BPM});
         } else if (fhr != null && fhr > FHR_TACHYCARDIA_BPM) {
             entry.addAlert(LaborAlertType.FETAL_HEART_RATE, LaborAlertSeverity.URGENT,
                 "labor-fetal-tachycardia",
                 alertText("labor-fetal-tachycardia", fhr, FHR_TACHYCARDIA_BPM),
-                "fetalHeartRateBpm", new Object[]{fhr, FHR_TACHYCARDIA_BPM});
+                FETAL_HEART_RATE_FIELD, new Object[]{fhr, FHR_TACHYCARDIA_BPM});
         }
         if (entry.getLiquorColour() == LiquorColour.MECONIUM_STAINED
             || entry.getLiquorColour() == LiquorColour.BLOOD_STAINED) {
@@ -652,9 +670,7 @@ public class LaborServiceImpl implements LaborService {
             || entry.getObservationTime().isBefore(anchor)) {
             return;
         }
-        double hours = ElapsedTime.minutesBetween(anchor, entry.getObservationTime()) / 60.0;
-        double expected = Math.min(10.0, ACTIVE_PHASE_DILATION_CM + hours);
-        double lagHours = expected - dilation;
+        double lagHours = com.example.hms.service.maternity.LaborAlertArgs.lagHours(anchor, entry.getObservationTime(), dilation);
         if (lagHours >= ACTION_LINE_LAG_HOURS) {
             entry.addAlert(LaborAlertType.LABOR_PROGRESS, LaborAlertSeverity.URGENT,
                 "labor-action-line",
@@ -688,13 +704,13 @@ public class LaborServiceImpl implements LaborService {
         if (severe) {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.URGENT,
                 "labor-severe-hypertension",
-                alertText("labor-severe-hypertension", sys, dia),
-                "bloodPressure", new Object[]{sys, dia});
+                alertText("labor-severe-hypertension", com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia)),
+                "bloodPressure", com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia));
         } else if (mild) {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION,
                 "labor-hypertension",
-                alertText("labor-hypertension", sys, dia),
-                "bloodPressure", new Object[]{sys, dia});
+                alertText("labor-hypertension", com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia)),
+                "bloodPressure", com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia));
         }
     }
 
@@ -869,7 +885,7 @@ public class LaborServiceImpl implements LaborService {
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
         if (hospital != null && staff.getHospital() != null
             && !hospital.getId().equals(staff.getHospital().getId())) {
-            throw new BusinessException("maternity.recorder.hospitalMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("recordedByStaffId", "maternity.recorder.hospitalMismatch");
         }
         return staff;
     }
@@ -911,8 +927,9 @@ public class LaborServiceImpl implements LaborService {
 
     /**
      * QA D172 (D61/D121): alert text is rendered from the message bundle in the
-     * staff locale (it is stored, shown on the chart and sent as a notification),
-     * not composed in English in code.
+     * staff locale, not composed in English in code. It is what the notices and
+     * the in-basket title store. QA D1427: a reader of the alert never reads this
+     * copy; LaborMapper renders the sentence in the reader's language.
      */
     private String alertText(String code, Object... args) {
         return messageSource.getMessage("labor.alert.msg." + code, args, NotificationLocales.STAFF);
@@ -950,7 +967,7 @@ public class LaborServiceImpl implements LaborService {
             notificationService.createNotification("labor.alert.notification",
                 new Object[]{typeKey, patientArg,
                     com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
-                        messageKey, messageArgs, alert.getMessage())}, documentedBy.getUsername(), null);
+                        messageKey, messageArgs, alert.getMessage())}, documentedBy.getUsername(), "MATERNITY_ALERT");
         } catch (RuntimeException ex) {
             log.warn("Failed to create labor alert notification: {}", ex.getMessage());
         }

@@ -241,6 +241,7 @@
 @if (showAssign()) {
   <div class="modal-backdrop" (click)="closeAssign()" aria-hidden="true"></div>
   <div
+    appModalDialog
     #assignDialog
     class="modal"
     role="dialog"
@@ -258,6 +259,7 @@
       <span>{{ 'PANEL.PATIENT' | translate }} *</span>
     </label>
     <app-patient-picker
+      required
       inputId="panel-patient-picker"
       [hospitalId]="pickerHospitalId()"
       [selected]="selectedPatient()"
@@ -267,6 +269,7 @@
     <label class="field">
       <span>{{ 'PANEL.STAFF_FILTER' | translate }}</span>
       <input
+        data-escape-discards
         type="text"
         name="panelStaffFilter"
         [ngModel]="staffFilter()"
@@ -277,7 +280,13 @@
 
     <label class="field">
       <span>{{ 'PANEL.PROVIDER' | translate }} *</span>
-      <select name="panelStaff" [ngModel]="formStaffId()" (ngModelChange)="formStaffId.set($event)">
+      <select
+        required
+        id="panel-staff"
+        name="panelStaff"
+        [ngModel]="formStaffId()"
+        (ngModelChange)="formStaffId.set($event)"
+      >
         <option value="">{{ 'PANEL.PROVIDER_PLACEHOLDER' | translate }}</option>
         @for (s of filteredStaff(); track s.id) {
           <option [value]="s.id">{{ s.name }}</option>
@@ -287,7 +296,12 @@
 
     <label class="field">
       <span>{{ 'PANEL.ROLE' | translate }} *</span>
-      <select name="panelRole" [ngModel]="formRole()" (ngModelChange)="formRole.set($event)">
+      <select
+        required
+        name="panelRole"
+        [ngModel]="formRole()"
+        (ngModelChange)="formRole.set($event)"
+      >
         @for (r of roles; track r) {
           <option [value]="r">{{ roleKey(r) | translate }}</option>
         }
@@ -309,10 +323,13 @@
         {{ 'COMMON.CANCEL' | translate }}
       </button>
       <button
+        submitGuardRequired
         type="button"
         class="btn-primary"
         data-testid="submit-assign"
-        [disabled]="!selectedPatient() || !formStaffId() || saving()"
+        [disabled]="saving()"
+        [appSubmitGuard]="!selectedPatient() || !formStaffId()"
+        [submitGuardFields]="['panel-patient-picker', 'panel-staff']"
         (click)="submitAssign()"
       >
         {{ 'PANEL.ASSIGN_CONFIRM' | translate }}
@@ -325,6 +342,7 @@
 @if (ending(); as row) {
   <div class="modal-backdrop" (click)="closeEnd()" aria-hidden="true"></div>
   <div
+    appModalDialog
     #endDialog
     class="modal"
     role="dialog"
@@ -340,6 +358,8 @@
     <label class="field">
       <span>{{ 'PANEL.END_REASON' | translate }} *</span>
       <textarea
+        required
+        id="panel-end-reason"
         name="panelEndReason"
         rows="3"
         maxlength="500"
@@ -354,7 +374,9 @@
       <button
         type="button"
         class="btn-primary danger"
-        [disabled]="!endReason().trim() || saving()"
+        [disabled]="saving()"
+        [appSubmitGuard]="!endReason().trim()"
+        [submitGuardFields]="['panel-end-reason']"
         (click)="submitEnd()"
       >
         {{ 'PANEL.END_CONFIRM' | translate }}

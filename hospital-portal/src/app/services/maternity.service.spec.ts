@@ -37,8 +37,20 @@ describe('MaternityService', () => {
   });
 
   it('GETs the current history for a patient', () => {
-    service.currentForPatient('p1').subscribe((h) => expect(h.id).toBe('mh1'));
+    service.currentForPatient('p1').subscribe((h) => expect(h?.id).toBe('mh1'));
     httpMock.expectOne('/maternal-history/patient/p1/current').flush({ id: 'mh1' });
+  });
+
+  it('QA D1082: no history (204 No Content) is a null, not an error', () => {
+    let result: unknown = 'unset';
+    service.currentForPatient('p2').subscribe({
+      next: (h) => (result = h),
+      error: () => fail('a patient with no history is not an error'),
+    });
+    httpMock
+      .expectOne('/maternal-history/patient/p2/current')
+      .flush(null, { status: 204, statusText: 'No Content' });
+    expect(result).toBeNull();
   });
 
   it('GETs the high-risk worklist with paging params', () => {

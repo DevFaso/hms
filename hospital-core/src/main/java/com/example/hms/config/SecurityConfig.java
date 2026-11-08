@@ -117,6 +117,18 @@ public class SecurityConfig {
     };
 
     /**
+     * QA D1224 (round 24): the roles that pass the edge on a WRITE (PUT, PATCH,
+     * DELETE) of a chart sub-resource. The clinicians who chart; each
+     * controller's {@code @PreAuthorize} is the precise gate.
+     */
+    static final String[] CHART_WRITE_AUTHORITIES = {
+        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_PHARMACIST
+    };
+
+    /** QA D1224: the patient photo (its own WRITE_ROLES, not the whole-patient delete). */
+    static final String API_PATIENT_PHOTO = "/patients/*/photo";
+
+    /**
      * E8 #52 — the patient's own sharing opt-out: the one /patients/* surface a
      * PATIENT reaches. Matched per verb ahead of the chart patterns and the
      * /patients/** blanket, which lists no patient role (see the block below and
@@ -404,7 +416,8 @@ public class SecurityConfig {
         // TRACE is intentionally excluded (should be denied/disabled)
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
         cfg.setAllowedHeaders(List.of("*"));
-        cfg.setExposedHeaders(List.of("Authorization", "Content-Type", "X-Records-Withheld"));
+        // QA D1009: the browser keeps the document name the server gives.
+        cfg.setExposedHeaders(List.of("Authorization", "Content-Type", "Content-Disposition", "X-Records-Withheld"));
         cfg.setAllowCredentials(true);
         cfg.setMaxAge(3600L);
 
@@ -657,10 +670,32 @@ public class SecurityConfig {
                 // /patients/** blanket below, which HOSPITAL_ADMIN and ADMIN keep
                 // for demographics. Same list as the blanket minus those two.
                 .requestMatchers(HttpMethod.GET, API_PATIENT_CHART_PATTERNS)
-                .hasAnyAuthority(ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
                         ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN)
+
+                // QA D1224 (round 24): the WRITES on a chart sub-resource reach
+                // their own @PreAuthorize. The blanket DELETE /patients/** below
+                // (HOSPITAL_ADMIN, SUPER_ADMIN - deleting a whole patient) refused
+                // every clinician deactivating an allergy or removing a diagnosis
+                // with a reason, and PUT /patients/** refused the pharmacist the
+                // allergy edit its annotation admits. The clinical roles pass the
+                // edge; the controller annotation decides per surface, and
+                // PreAuthorizeMatcherPairingTest holds every pair. Whole-patient
+                // deletion is not a chart sub-resource and stays admin-only.
+                .requestMatchers(HttpMethod.DELETE, API_PATIENT_CHART_PATTERNS)
+                .hasAnyAuthority(CHART_WRITE_AUTHORITIES)
+                .requestMatchers(HttpMethod.PUT, API_PATIENT_CHART_PATTERNS)
+                .hasAnyAuthority(CHART_WRITE_AUTHORITIES)
+                .requestMatchers(HttpMethod.PATCH, API_PATIENT_CHART_PATTERNS)
+                .hasAnyAuthority(CHART_WRITE_AUTHORITIES)
+                // QA D1224 class: removing the photo is the photo controller's
+                // WRITE_ROLES (who uploads a photo also replaces or removes it),
+                // not the whole-patient delete rule.
+                .requestMatchers(HttpMethod.DELETE, API_PATIENT_PHOTO)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR,
+                        ROLE_SUPER_ADMIN)
 
                 // -------------------- Patients --------------------
                 // PHARMACIST: the shared patient picker (/patients/search, /patients/lookup)
@@ -881,8 +916,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
+                // QA D973: the receptionist who opens an invoice reads its lines.
                 .requestMatchers(HttpMethod.GET, API_INVOICE_ITEMS_PATTERN)
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT, ROLE_RECEPTIONIST)
 
                 .requestMatchers(HttpMethod.POST, API_INVOICE_ITEMS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
@@ -1065,6 +1101,17 @@ public class SecurityConfig {
                 // endpoints (/me/patient/documents/{id}/download,
                 // /chat/attachments/{id}/download).
                 .requestMatchers(HttpMethod.GET, "/uploads/profile-images/**").permitAll()
+
+                // QA round 33: a caller who may not prescribe is answered 403 at the
+                // edge. Spring validates a @Valid body BEFORE a method's @PreAuthorize,
+                // so a receptionist's refused body read a 400 about the frequency: the
+                // answer told her why the order was wrong, not that it is not hers to
+                // write. The same roles as the two handlers' annotations
+                // (PreAuthorizeMatcherPairingTest holds the pair).
+                .requestMatchers(HttpMethod.POST, "/prescriptions")
+                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                .requestMatchers(HttpMethod.PUT, "/prescriptions/*")
+                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
 
                 .anyRequest().authenticated()
             )

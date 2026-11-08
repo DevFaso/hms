@@ -3,6 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   OnInit,
   computed,
   inject,
@@ -37,7 +38,11 @@ import { ProviderStaffRegisterComponent } from '../../../provider/provider-staff
 import { ProviderEvidenceFormComponent } from '../provider-evidence-form/provider-evidence-form';
 import { lifecycleBadgeClass, verificationBadgeClass } from '../provider-status';
 import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../../../shared/a11y/modal-dialog.directive';
+import { refuseFields } from '../../../shared/forms/invalid-fields';
 
+import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directive';
+import { DateTimePipe } from '../../../shared/pipes/date-time.pipe';
 /** A verification decision taken with a reason. */
 type DecisionKind = 'reject' | 'revoke';
 
@@ -55,6 +60,10 @@ interface VerifyDialog {
 /** The minimum reason length the hospital lifecycle service accepts. */
 const LIFECYCLE_REASON_MIN = 5;
 
+/** QA D1306 (round 28): the step-up code field, and the refusal that is about what was typed. */
+const MFA_CODE_FIELD = 'lifecycle-mfa-code';
+const STEP_UP_FAILED_KEY = 'HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED';
+
 /**
  * One provider facility for the super-admin (provider plan P1-T12, AC-1 to
  * AC-4, AC-16): its captured evidence, its verification history, and every
@@ -65,6 +74,8 @@ const LIFECYCLE_REASON_MIN = 5;
   selector: 'app-provider-detail',
   standalone: true,
   imports: [
+    DateTimePipe,
+    SubmitGuardDirective,
     ServerTimePipe,
     DatePipe,
     FormsModule,
@@ -73,6 +84,7 @@ const LIFECYCLE_REASON_MIN = 5;
     EnumLabelPipe,
     ProviderEvidenceFormComponent,
     ProviderStaffRegisterComponent,
+    ModalDialogDirective,
   ],
   templateUrl: './provider-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -84,6 +96,7 @@ export class ProviderDetailComponent implements OnInit {
   private readonly lifecycleService = inject(HospitalLifecycleService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly verificationBadge = verificationBadgeClass;
   readonly lifecycleBadge = lifecycleBadgeClass;
@@ -343,6 +356,7 @@ export class ProviderDetailComponent implements OnInit {
   private run(request: Observable<unknown>, doneKey: string, stepUp = false): void {
     this.busy.set(true);
     this.dialogError.set(null);
+    if (stepUp) refuseFields(this.host.nativeElement, [], [MFA_CODE_FIELD], '');
     request.subscribe({
       next: () => {
         this.busy.set(false);
@@ -357,7 +371,13 @@ export class ProviderDetailComponent implements OnInit {
         // leaves the session alone for it. Only a step-up action's refusal
         // is one: a 403 on verify, reject or revoke is an ordinary refusal.
         if (stepUp && err instanceof HttpErrorResponse && isStepUpRefusal(err)) {
-          this.dialogError.set(this.translate.instant(stepUpRefusalKey(err)));
+          const key = stepUpRefusalKey(err);
+          const message = this.translate.instant(key);
+          // QA D1306 (round 28): a missing or wrong code marks the code field;
+          // "not enrolled" / "unavailable" are not about what was typed.
+          const refused = key === STEP_UP_FAILED_KEY ? [MFA_CODE_FIELD] : [];
+          refuseFields(this.host.nativeElement, refused, [MFA_CODE_FIELD], message);
+          this.dialogError.set(message);
           return;
         }
         this.dialogError.set(

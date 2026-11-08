@@ -177,7 +177,7 @@
                       [class.empi-panel__score--medium]="match.score >= 0.7 && match.score < 0.85"
                       [class.empi-panel__score--low]="match.score < 0.7"
                     >
-                      {{ (match.score * 100 | number: '1.0-1') + '%' }}
+                      {{ match.score * 100 | measure: '%' }}
                     </span>
                   </td>
                   <td>
@@ -194,7 +194,7 @@
                             ? 'EMPI.WORKSPACE.AGREES'
                             : 'EMPI.WORKSPACE.NOT_AGREED'
                           ) | translate
-                        }}:
+                        }}{{ 'COMMON.COLON' | translate }}
                       </span>
                       {{ 'EMPI.BREAKDOWN.NAME' | translate }}
                     </span>
@@ -209,7 +209,7 @@
                         >{{
                           (match.dobMatched ? 'EMPI.WORKSPACE.AGREES' : 'EMPI.WORKSPACE.NOT_AGREED')
                             | translate
-                        }}:
+                        }}{{ 'COMMON.COLON' | translate }}
                       </span>
                       {{ 'EMPI.BREAKDOWN.DOB' | translate }}
                     </span>
@@ -224,7 +224,7 @@
                         >{{
                           (match.sexMatched ? 'EMPI.WORKSPACE.AGREES' : 'EMPI.WORKSPACE.NOT_AGREED')
                             | translate
-                        }}:
+                        }}{{ 'COMMON.COLON' | translate }}
                       </span>
                       {{ 'EMPI.BREAKDOWN.SEX' | translate }}
                     </span>
@@ -241,7 +241,7 @@
                             ? 'EMPI.WORKSPACE.AGREES'
                             : 'EMPI.WORKSPACE.NOT_AGREED'
                           ) | translate
-                        }}:
+                        }}{{ 'COMMON.COLON' | translate }}
                       </span>
                       {{ 'EMPI.BREAKDOWN.NATIONAL_ID' | translate }}
                     </span>
@@ -284,9 +284,9 @@
         <div class="empi-panel__merge-bar" data-testid="empi-merge-bar">
           <h3>{{ 'EMPI.WORKSPACE.MERGE_TITLE' | translate }}</h3>
           <p>
-            {{ 'EMPI.MERGE_PRIMARY_LABEL' | translate }}:
+            {{ 'EMPI.MERGE_PRIMARY_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
             <strong>{{ mergeSelection()[0].displayName }}</strong>
-            · {{ 'EMPI.MERGE_SECONDARY_LABEL' | translate }}:
+            · {{ 'EMPI.MERGE_SECONDARY_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
             {{ mergeSelection()[1].displayName }}
           </p>
           <div class="actions">

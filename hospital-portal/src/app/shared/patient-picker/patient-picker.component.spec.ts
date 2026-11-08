@@ -39,12 +39,44 @@ describe('PatientPickerComponent', () => {
       expect(patientSpy.search).toHaveBeenCalledWith({
         name: 'do',
         hospitalId: 'h1',
-        size: 8,
+        size: 20,
         includeInactive: true,
       });
       expect(patientSpy.lookup).not.toHaveBeenCalled();
       expect(component.suggestions().map((p) => p.id)).toEqual(['p1', 'p2']);
       expect(component.dropdownOpen()).toBeTrue();
+      done();
+    }, 400);
+  });
+
+  // QA D1274 (D1253 sibling, round 27): a birth date found nobody, in any format.
+  it('QA D1274: a typed birth date is searched by birth date, never as a name or a phone', (done) => {
+    component.hospitalId = 'h1';
+    patientSpy.search.and.returnValue(of([mockPatient('p1', 'Awa')]));
+    component.ngOnInit();
+    component.onQueryChange('15/03/2020');
+    setTimeout(() => {
+      expect(patientSpy.search).toHaveBeenCalledOnceWith({
+        hospitalId: 'h1',
+        size: 20,
+        includeInactive: true,
+        dob: '2020-03-15',
+        email: undefined,
+      });
+      expect(patientSpy.lookup).not.toHaveBeenCalled();
+      expect(component.suggestions().map((p) => p.id)).toEqual(['p1']);
+      done();
+    }, 400);
+  });
+
+  it('QA D1274: a piece of an e-mail is searched by e-mail within the hospital', (done) => {
+    component.hospitalId = 'h1';
+    component.ngOnInit();
+    component.onQueryChange('awa.kabore');
+    setTimeout(() => {
+      expect(patientSpy.search).toHaveBeenCalledWith(
+        jasmine.objectContaining({ email: 'awa.kabore', hospitalId: 'h1' }),
+      );
       done();
     }, 400);
   });
@@ -207,5 +239,43 @@ describe('PatientPickerComponent', () => {
     component.onQueryChange('a');
     expect(component.suggestions()).toEqual([]);
     expect(component.dropdownOpen()).toBeFalse();
+  });
+  it('ranks a name that starts with the query before eight that only contain it (QA D1239)', (done) => {
+    const sawadogos = Array.from({ length: 12 }, (_, i) => ({
+      id: `s${i}`,
+      firstName: `Prénom${i}`,
+      lastName: 'Sawadogo',
+      active: true,
+    })) as PatientResponse[];
+    const awa = {
+      id: 'awa',
+      firstName: 'Awa',
+      lastName: 'Kaboré',
+      active: true,
+    } as PatientResponse;
+    patientSpy.search.and.returnValue(of([...sawadogos, awa]));
+    component.ngOnInit();
+    component.onQueryChange('Awa');
+    setTimeout(() => {
+      expect(component.suggestions().length).toBe(8);
+      expect(component.suggestions()[0].id).toBe('awa');
+      done();
+    }, 400);
+  });
+
+  it('a required picker marks its input required and blank while no patient is picked (QA D1245)', () => {
+    const fixture = TestBed.createComponent(PatientPickerComponent);
+    fixture.componentRef.setInput('required', true);
+    fixture.componentRef.setInput('inputId', 'rx-patient');
+    fixture.detectChanges();
+    const input = (fixture.nativeElement as HTMLElement).querySelector(
+      '#rx-patient',
+    ) as HTMLInputElement;
+    expect(input.required).toBeTrue();
+    expect(input.getAttribute('aria-required')).toBe('true');
+    expect(input.getAttribute('data-submit-blank')).toBe('true');
+    fixture.componentRef.setInput('selected', mockPatient('p1', 'Anna'));
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('#rx-patient')).toBeNull();
   });
 });

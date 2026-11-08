@@ -27,6 +27,7 @@ public class PreCheckInRequestDTO {
     private UUID appointmentId;
 
     // ── Demographics updates (optional — only override if provided) ──────
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
     private String email;
     private String addressLine1;
@@ -38,6 +39,7 @@ public class PreCheckInRequestDTO {
 
     // ── Emergency contact (optional) ─────────────────────────────────────
     private String emergencyContactName;
+    @com.example.hms.validation.PhoneNumber
     private String emergencyContactPhone;
     private String emergencyContactRelationship;
 

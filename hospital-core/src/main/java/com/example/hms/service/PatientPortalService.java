@@ -84,14 +84,23 @@ public interface PatientPortalService {
     // ── Lab results ──────────────────────────────────────────────────────
     List<PatientLabResultResponseDTO> getMyLabResults(Authentication auth, int limit);
 
+    /** QA D1213: the patient's current lab results from {@code offset}, at most {@code limit}, newest first. */
+    List<PatientLabResultResponseDTO> getMyLabResults(Authentication auth, int offset, int limit);
+
     // ── Medications ──────────────────────────────────────────────────────
     List<PatientMedicationResponseDTO> getMyMedications(Authentication auth, int limit);
+
+    /** QA D1399: one page of every medication of mine, with the server's total. */
+    Page<PatientMedicationResponseDTO> getMyMedicationsPage(Authentication auth, Pageable pageable);
 
     // ── Prescriptions ────────────────────────────────────────────────────
     List<PrescriptionResponseDTO> getMyPrescriptions(Authentication auth, Locale locale);
 
     // ── Vital signs ──────────────────────────────────────────────────────
     List<PatientVitalSignResponseDTO> getMyVitals(Authentication auth, int limit);
+
+    /** QA D1379: every vital-sign record of mine, one page at a time with the total. */
+    org.springframework.data.domain.Page<PatientVitalSignResponseDTO> getMyVitalsPage(Authentication auth, int page, int size);
 
     // ── Encounters / visit history ───────────────────────────────────────
     List<EncounterResponseDTO> getMyEncounters(Authentication auth, Locale locale);
@@ -101,6 +110,16 @@ public interface PatientPortalService {
 
     // ── Billing / invoices ───────────────────────────────────────────────
     Page<BillingInvoiceResponseDTO> getMyInvoices(Authentication auth, Pageable pageable, Locale locale);
+
+    /** QA D982: one of my invoices with its lines and payments. */
+    com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO getMyInvoiceDetail(Authentication auth, UUID invoiceId);
+
+    /** QA D982: my invoice as a PDF. */
+    com.example.hms.payload.dto.InvoicePdfResponseDTO getMyInvoicePdf(Authentication auth, UUID invoiceId, Locale locale);
+
+    /** QA D982: the receipt of one of my confirmed payments. */
+    com.example.hms.payload.dto.InvoicePdfResponseDTO getMyReceiptPdf(Authentication auth, UUID invoiceId, UUID paymentId,
+                                                                      Locale locale);
 
     // ── Pay an invoice ───────────────────────────────────────────────────
     BillingInvoiceResponseDTO recordMyPayment(Authentication auth, UUID invoiceId,
@@ -137,6 +156,17 @@ public interface PatientPortalService {
 
     /** Return active providers (doctors/nurses) in a given hospital + department. */
     List<Map<String, Object>> getProvidersForDepartment(Authentication auth, UUID hospitalId, UUID departmentId);
+
+    /**
+     * QA D1093: the published, free slots a patient may book on {@code date}
+     * at a hospital they are registered at (narrowed to a clinician when
+     * {@code staffId} is given). A self-booking takes exactly one of these.
+     */
+    List<Map<String, Object>> getOpenSlots(Authentication auth, UUID hospitalId, UUID departmentId,
+                                           UUID staffId, java.time.LocalDate date);
+
+    /** QA D1093: the published, free slots of the clinician of the patient's own appointment on {@code date}. */
+    List<Map<String, Object>> getRescheduleSlots(Authentication auth, UUID appointmentId, java.time.LocalDate date);
 
     // ── Cancel own appointment ───────────────────────────────────────────
     AppointmentResponseDTO cancelMyAppointment(Authentication auth, CancelAppointmentRequestDTO dto, Locale locale);
@@ -202,8 +232,20 @@ public interface PatientPortalService {
     /** View grantor's medications as proxy. */
     List<PatientMedicationResponseDTO> getProxyMedications(Authentication auth, UUID patientId, int limit);
 
+    /** QA D1399: one page of every medication of the grantor, with the server's total. */
+    Page<PatientMedicationResponseDTO> getProxyMedicationsPage(Authentication auth, UUID patientId, Pageable pageable);
+
+    /** QA D1399: how many lab results the grantor's list holds, the total its pages read. */
+    long countProxyLabResults(Authentication auth, UUID patientId);
+
+    /** QA D1399: how many lab results my list holds, the total its pages read. */
+    long countMyLabResults(Authentication auth);
+
     /** View grantor's lab results as proxy. */
     List<PatientLabResultResponseDTO> getProxyLabResults(Authentication auth, UUID patientId, int limit);
+
+    /** QA D1213: the grantor's current lab results from {@code offset}, at most {@code limit}. */
+    List<PatientLabResultResponseDTO> getProxyLabResults(Authentication auth, UUID patientId, int offset, int limit);
 
     /** View grantor's billing invoices as proxy. */
     Page<BillingInvoiceResponseDTO> getProxyBilling(Authentication auth, UUID patientId, Pageable pageable, java.util.Locale locale);

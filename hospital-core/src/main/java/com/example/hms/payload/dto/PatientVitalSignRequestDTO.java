@@ -90,6 +90,7 @@ public class PatientVitalSignRequestDTO {
     @PastOrPresent
     private LocalDateTime recordedAt;
 
+    @com.example.hms.validation.ReportedOn("diastolicBpMmHg")
     @AssertTrue(message = "{vitals.bloodPressure.invalid}")
     @JsonIgnore
     public boolean isBloodPressureOrdered() {
@@ -97,6 +98,7 @@ public class PatientVitalSignRequestDTO {
     }
 
     /** D111: a submission with no measurement at all is not a reading. */
+    @com.example.hms.validation.ReportedOn("temperatureCelsius")
     @AssertTrue(message = "{vitals.empty}")
     @JsonIgnore
     public boolean isAnyMeasurementPresent() {

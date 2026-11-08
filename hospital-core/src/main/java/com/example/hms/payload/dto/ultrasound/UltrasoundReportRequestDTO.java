@@ -27,7 +27,7 @@ public class UltrasoundReportRequestDTO extends UltrasoundReportBaseDTO {
 
     /**
      * Required, but checked by the service after the findings
-     * ({@code UltrasoundReportFindings}, QA D1525): an untouched template, which
+     * ({@code UltrasoundServiceImpl.requireFindingCategory}, QA D1525): an untouched template, which
      * no longer pre-selects NORMAL, is refused as an empty report first.
      */
     private UltrasoundFindingCategory findingCategory;

@@ -82,6 +82,7 @@
             <label for="grQty">{{ 'PHARMACY.QUANTITY_RECEIVED' | translate }} *</label>
             <input
               id="grQty"
+              data-server-field="initialQuantity remainingQuantity"
               type="number"
               [(ngModel)]="form.initialQuantity"
               name="initialQuantity"
@@ -95,7 +96,13 @@
           <div class="form-row">
             <div class="field">
               <label for="grWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
-              <select id="grWitness" [(ngModel)]="form.witnessedBy" name="grWitness" required>
+              <select
+                id="grWitness"
+                data-server-field="witnessedBy"
+                [(ngModel)]="form.witnessedBy"
+                name="grWitness"
+                required
+              >
                 <option [ngValue]="undefined">
                   {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
                 </option>
@@ -136,7 +143,13 @@
           <button type="button" class="btn-secondary" (click)="closeForm()">
             {{ 'COMMON.CANCEL' | translate }}
           </button>
-          <button type="submit" class="btn-primary" [disabled]="saving()">
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="submit"
+            class="btn-primary"
+            [disabled]="saving()"
+          >
             <span class="material-symbols-outlined">check</span>
             {{
               saving() ? ('COMMON.SAVING' | translate) : ('PHARMACY.CONFIRM_RECEIPT' | translate)
@@ -182,7 +195,7 @@
                   lot.remainingQuantity
                 }}</span>
               </td>
-              <td>{{ lot.supplier ?? '—' }}</td>
+              <td>{{ lot.supplier | dash }}</td>
               <td>
                 {{ lot.unitCost ? (lot.unitCost | cfa) : '—' }}
               </td>
