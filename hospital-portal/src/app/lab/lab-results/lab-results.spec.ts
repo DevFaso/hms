@@ -203,6 +203,19 @@ describe('LabResultsComponent', () => {
     expect(component.pageEnd()).toBe(11);
   });
 
+  it('keeps the current page after a result reload following an action', () => {
+    fixture.detectChanges();
+    const rows = Array.from({ length: 21 }, (_, i) => mockResult({ id: `result-${i}` }));
+    flushInit(rows);
+    component.page.set(2);
+    component.loadResults();
+    httpMock
+      .expectOne((r) => r.url === '/lab-results')
+      .flush({ data: { content: rows, totalElements: rows.length, totalPages: 1, number: 0 } });
+    expect(component.currentPage()).toBe(2);
+    expect(component.pagedResults()[0].id).toBe('result-10');
+  });
+
   it('should create the component', () => {
     expect(component).toBeTruthy();
     fixture.detectChanges();

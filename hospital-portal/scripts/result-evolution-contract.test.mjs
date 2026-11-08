@@ -31,4 +31,5 @@ test('the shared evolution view retains observation deltas and sorted rows', () 
   );
   assert.match(component, /LAB_RESULTS\.DELTA/);
   assert.match(component, /of observations\(\)/);
+  assert.match(component, /@if\s*\(!hasCorrections\(\)\)\s*\{\s*<polyline/);
 });

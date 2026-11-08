@@ -13269,6 +13269,8 @@
     "ROWS": "Lignes par page",
     "PREVIOUS": "Page précédente",
     "PAGE": "Page {{page}} sur {{pages}}",
-    "NEXT": "Page suivante"
+    "NEXT": "Page suivante",
+    "AUDIT_TITLE": "Versions enregistrées des résultats",
+    "CORRECTION_NOTE": "Cet historique contient des corrections. Les versions remplacées ne peuvent pas y être identifiées. Les points montrent uniquement les valeurs enregistrées ; les lignes et variations ne sont pas affichées. Consultez les observations et les corrections avant d’interpréter les changements."
   }
 }

@@ -361,6 +361,7 @@ export class LabResultsComponent implements OnInit {
   /** Re-fetch under the new scope when the chip emits. */
   onScopeChange(_hospitalId: string | null): void {
     this.closeDetail();
+    this.page.set(1);
     this.loadResults();
   }
 
@@ -636,7 +637,7 @@ export class LabResultsComponent implements OnInit {
       next: ({ rows: list }) => {
         this.results.set(list);
         this.computeStats(list);
-        this.applyFilter();
+        this.applyFilter(false);
         this.loading.set(false);
       },
       error: () => {
@@ -670,7 +671,7 @@ export class LabResultsComponent implements OnInit {
       next: (list) => {
         this.criticalList.set(list ?? []);
         this.criticalLoading.set(false);
-        this.applyFilter();
+        this.applyFilter(false);
       },
       error: () => {
         this.toast.error(this.translate.instant('LAB_RESULTS.CRITICAL_LOAD_ERROR'));
@@ -679,7 +680,7 @@ export class LabResultsComponent implements OnInit {
     });
   }
 
-  applyFilter(): void {
+  applyFilter(resetPage = true): void {
     const tab = this.activeTab();
     let list = tab === 'critical' ? this.criticalList() : this.results();
     if (tab === 'released') {
@@ -698,7 +699,7 @@ export class LabResultsComponent implements OnInit {
       );
     }
     this.filtered.set(list);
-    this.page.set(1);
+    if (resetPage) this.page.set(1);
   }
 
   viewResult(r: LabResultResponse): void {
@@ -892,7 +893,7 @@ export class LabResultsComponent implements OnInit {
           list.map((row) => (row.id === target.id ? { ...row, ...updated } : row));
         this.results.update(patch);
         this.criticalList.update((list) => list.filter((row) => row.id !== target.id));
-        this.applyFilter();
+        this.applyFilter(false);
         this.closeReadBack();
       },
       error: (err: { error?: { message?: string } }) => {
@@ -915,7 +916,7 @@ export class LabResultsComponent implements OnInit {
           list.map((row) => (row.id === r.id ? { ...row, acknowledged: true } : row));
         this.results.update(patch);
         this.criticalList.update((list) => list.filter((row) => row.id !== r.id));
-        this.applyFilter();
+        this.applyFilter(false);
       },
       error: (err: unknown) =>
         this.toast.error(

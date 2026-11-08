@@ -239,8 +239,7 @@
     "src/app/transfusion/transfusion.html::g.correctionReason",
     "src/app/transfusion/transfusion.html::r.reason",
     "src/app/transfusion/transfusion.html::u.source",
-    "src/app/transfusion/transfusion.html::xm.incompatibilityReason",
-    "src/app/lab/shared/result-evolution.component.ts::<option>u"
+    "src/app/transfusion/transfusion.html::xm.incompatibilityReason"
   ],
   "reasons": {
     "src/app/lab/shared/result-evolution.component.ts::<option>u": "LabResultTrendPointDTO.resultUnit is a String mapped from LabResult.resultUnit (varchar 50), falling back to the test unit. LabResultRequestDTO.resultUnit is a size-bounded String entered in lab-results.html input#lr-resultUnit and submitted by LabResultsComponent.submitForm; units are free text, not enum tokens, and must retain their measurement notation.",

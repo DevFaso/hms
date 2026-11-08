@@ -25,7 +25,9 @@ import { serverInstant } from '../../shared/date-utils';
   template: `
     <section class="evolution" aria-labelledby="result-evolution-title">
       <div class="heading">
-        <h3 id="result-evolution-title">{{ 'LAB_EVOLUTION.TITLE' | translate }}</h3>
+        <h3 id="result-evolution-title">
+          {{ (hasCorrections() ? 'LAB_EVOLUTION.AUDIT_TITLE' : 'LAB_EVOLUTION.TITLE') | translate }}
+        </h3>
         @if (units().length > 1) {
           <label
             >{{ 'LAB_EVOLUTION.UNIT' | translate }}
@@ -42,7 +44,11 @@ import { serverInstant } from '../../shared/date-utils';
       } @else if (failed()) {
         <p role="alert">{{ 'LAB_EVOLUTION.ERROR' | translate }}</p>
       } @else {
-        <p class="hint">{{ 'LAB_EVOLUTION.NOTE' | translate }}</p>
+        <p class="hint">
+          {{
+            (hasCorrections() ? 'LAB_EVOLUTION.CORRECTION_NOTE' : 'LAB_EVOLUTION.NOTE') | translate
+          }}
+        </p>
         @if (points().length > 1) {
           <figure>
             <figcaption>{{ unit() }} · {{ 'LAB_EVOLUTION.TIME_AXIS' | translate }}</figcaption>
@@ -55,7 +61,9 @@ import { serverInstant } from '../../shared/date-utils';
               <line x1="55" y1="205" x2="580" y2="205" />
               <text x="48" y="28" text-anchor="end">{{ formatAxis(bounds().max) }}</text>
               <text x="48" y="205" text-anchor="end">{{ formatAxis(bounds().min) }}</text>
-              <polyline [attr.points]="linePoints()" />
+              @if (!hasCorrections()) {
+                <polyline [attr.points]="linePoints()" />
+              }
               @for (p of points(); track $index) {
                 <circle
                   [attr.cx]="x(p.time)"
@@ -209,7 +217,10 @@ export class ResultEvolutionComponent {
   loading = input(false);
   failed = input(false);
   resultId = input('');
-  chosenUnit = linkedSignal({ source: () => ({ id: this.resultId(), history: this.history(), unit: this.preferredUnit() }), computation: () => '' });
+  chosenUnit = linkedSignal({
+    source: () => ({ id: this.resultId(), history: this.history(), unit: this.preferredUnit() }),
+    computation: () => '',
+  });
   preferredUnit = input('');
   units = computed(() => [
     ...new Set(
@@ -226,6 +237,7 @@ export class ResultEvolutionComponent {
         : (this.units()[0] ?? ''),
   );
   points = computed(() => evolutionSeries(this.history(), this.unit()));
+  hasCorrections = computed(() => this.history().some((point) => point.corrected));
   observations = computed(() =>
     [...this.history()].sort((a, b) => {
       const left = serverInstant(a.resultDate).getTime();
@@ -236,11 +248,18 @@ export class ResultEvolutionComponent {
     }),
   );
   deltaAt(index: number): string {
+    if (this.hasCorrections()) return '—';
     const current = this.observations()[index];
     const delta = observationDelta(current, this.observations()[index + 1]);
-    return delta === null
-      ? '—'
-      : `${delta > 0 ? '+' : ''}${formatDecimal(delta, 2)} ${current.resultUnit.trim()}`;
+    if (delta === null) return '—';
+    const previous = this.observations()[index + 1];
+    const precision = Math.min(
+      20,
+      Math.max(
+        ...[current, previous].map((p) => (p.resultValue?.trim().split(/[.,]/)[1] ?? '').length),
+      ),
+    );
+    return `${delta > 0 ? '+' : ''}${formatDecimal(delta, precision)} ${current.resultUnit.trim()}`;
   }
   linePoints = computed(() =>
     this.points()

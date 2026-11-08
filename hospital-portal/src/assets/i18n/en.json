@@ -13269,6 +13269,8 @@
     "ROWS": "Rows per page",
     "PREVIOUS": "Previous page",
     "PAGE": "Page {{page}} of {{pages}}",
-    "NEXT": "Next page"
+    "NEXT": "Next page",
+    "AUDIT_TITLE": "Recorded result versions",
+    "CORRECTION_NOTE": "This history includes corrections. Superseded versions cannot be identified in this history. Points show recorded values only; connecting lines and deltas are withheld. Consult the observations and correction records before interpreting changes."
   }
 }

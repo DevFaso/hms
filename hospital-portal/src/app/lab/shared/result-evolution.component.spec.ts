@@ -78,7 +78,38 @@ describe('ResultEvolutionComponent', () => {
       { resultValue: '0.9', resultUnit: 'g/L', resultDate: '2026-11-01T09:00:00Z' },
     ]);
     fixture.detectChanges();
-    expect(fixture.componentInstance.deltaAt(0)).toMatch(/\+0[.,]30 g\/L/);
+    expect(fixture.componentInstance.deltaAt(0)).toMatch(/\+0[.,]3 g\/L/);
     expect(fixture.componentInstance.deltaAt(1)).toBe('—');
+  });
+
+  it('never connects correction versions or presents their differences as patient changes', () => {
+    const fixture = setup();
+    expect(fixture.nativeElement.querySelector('polyline')).toBeNull();
+    expect(fixture.nativeElement.querySelector('h3')?.textContent).toContain(
+      'LAB_EVOLUTION.AUDIT_TITLE',
+    );
+    expect(fixture.nativeElement.querySelector('.hint')?.textContent).toContain(
+      'LAB_EVOLUTION.CORRECTION_NOTE',
+    );
+    expect(fixture.componentInstance.deltaAt(0)).toBe('—');
+    expect(fixture.nativeElement.querySelectorAll('tbody tr').length).toBe(3);
+  });
+
+  it('preserves sub-centesimal changes and puts invalid dates last', () => {
+    const fixture = setup();
+    fixture.componentRef.setInput('history', [
+      { resultValue: '0.0011', resultUnit: 'g/L', resultDate: '2026-11-08T09:00:00Z' },
+      { resultValue: '9', resultUnit: 'g/L', resultDate: 'invalid' },
+      { resultValue: '0.0010', resultUnit: 'g/L', resultDate: '2026-11-01T09:00:00Z' },
+    ]);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.observations().map((p) => p.resultValue)).toEqual([
+      '0.0011',
+      '0.0010',
+      '9',
+    ]);
+    expect(fixture.componentInstance.deltaAt(0)).toMatch(/\+0[.,]0001 g\/L/);
+    expect(fixture.componentInstance.deltaAt(1)).toBe('—');
+    expect(fixture.nativeElement.querySelector('polyline')).toBeTruthy();
   });
 });

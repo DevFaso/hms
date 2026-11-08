@@ -31,3 +31,13 @@ Review comments verified without a production change:
 - `apiPrefixInterceptor` uses `effectiveHospitalIdForRequest` and omits hospital headers in global view. `LabResultController` detail/list roles match through `RoleExpansion` (verified super-admin inherits doctor and lab scientist); `readLabResultById` authorizes the result before querying readable patient/test history. No permission expansion was needed.
 
 Behaviour changes: observations regain their previous newest-first order and delta column. Deltas across different units, censored values, empty observations or coincident/invalid dates display a dash rather than a misleading subtraction. Unit selection resets when another result is opened. Corrected observations gain a hollow marker. Clinical grading, release, signing and data visibility are unchanged.
+
+### Follow-up on the published watcher revision
+
+The scheduled watcher independently published `90e486059` while the interactive review was running. Its unit reset, delta restoration, hollow markers and exact free-text exceptions were integrated before the follow-up; no force push was used.
+
+The detail history DTO supplies only date/value/unit and a correction flag, not a reliable identity for the superseded original. Histories containing corrections therefore use an explicitly labelled recorded-version diagram: discrete points, no connecting line and no deltas. Audit observations and correction badges remain readable. This does not claim to reconstruct a canonical clinical trajectory from version records; canonical version filtering would require additional backend metadata.
+
+Reloads after actions retain the selected page, while user filters, tabs, page size and hospital scope still reset it. Displayed deltas retain the operands' decimal precision (up to 20 decimal places) rather than imposing two decimals. Invalid dates sort after valid observations and cannot produce a delta. Component and pager regression tests cover these paths.
+
+Final follow-up validation: `npm run test:coverage` passed 4,989 tests; `npm run test:scripts` passed 537; build, lint, formatting, i18n/RBAC/repository guards and coverage floors passed. Fourteen local screenshot/accessibility checks passed without page errors. Backend `:hospital-core:test -PtestForks=1` passed with six tasks up to date in 29 seconds; backend sources are identical to the previously verified backend revision.
