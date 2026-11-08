@@ -22,7 +22,6 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.support.HospitalScopeUtils;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.data.domain.Page;
@@ -38,7 +37,6 @@ import java.util.Set;
 import java.util.UUID;
 
 @Service
-@Slf4j
 @RequiredArgsConstructor
 public class StaffServiceImpl implements StaffService {
     private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
@@ -210,12 +208,12 @@ public class StaffServiceImpl implements StaffService {
         } else {
             // No role specified — resolve the user's active assignment at this hospital
             assignment = activeStaffAssignmentAt(user.getId(), hospital.getId())
-                .orElseThrow(() -> new BusinessRuleException(
-                    getLocalizedMessage("staff.assignment.required", new Object[]{dto.getUserEmail(), dto.getHospitalName()}, locale)));
+                .orElseThrow(() -> BusinessRuleException.ofKey("staff.assignment.required", dto.getUserEmail(), dto.getHospitalName()));
         }
 
         validateLicenseNumber(dto);
         validateRoleSpecificRequirements(dto, dto.getRoleName());
+        requireEndNotBeforeStart(dto, null);
 
         Staff staff = staffMapper.toStaff(dto, user, hospital, department, assignment);
         Staff savedStaff = staffRepository.save(staff);
@@ -262,8 +260,7 @@ public class StaffServiceImpl implements StaffService {
             assignment = activeStaffAssignmentAt(user.getId(), hospital.getId())
                 .orElseGet(existingStaff::getAssignment); // fall back to existing if nothing active found yet
             if (assignment == null) {
-                throw new BusinessRuleException(
-                    getLocalizedMessage("staff.assignment.required", new Object[]{dto.getUserEmail(), dto.getHospitalName()}, locale));
+                throw BusinessRuleException.ofKey("staff.assignment.required", dto.getUserEmail(), dto.getHospitalName());
             }
         }
 
@@ -276,6 +273,7 @@ public class StaffServiceImpl implements StaffService {
         }
 
         validateRoleSpecificRequirements(dto, dto.getRoleName());
+        requireEndNotBeforeStart(dto, existingStaff.getStartDate());
 
         boolean wasActive = existingStaff.isActive();
         staffMapper.updateStaffFromDto(dto, existingStaff, user, hospital, department, assignment);
@@ -321,7 +319,7 @@ public class StaffServiceImpl implements StaffService {
             .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, departmentName));
 
         if (!staff.getHospital().getId().equals(department.getHospital().getId())) {
-            throw new BusinessRuleException(messageSource.getMessage("staff.department.wrongHospital", null, locale));
+            throw BusinessRuleException.ofKey("staff.department.wrongHospital");
         }
 
         staff.setDepartment(department);
@@ -340,9 +338,7 @@ public class StaffServiceImpl implements StaffService {
         Staff staff = findStaffOrThrow(id, locale);
 
         if (departmentRepository.existsByHeadOfDepartmentId(id)) {
-            throw new BusinessRuleException(
-                messageSource.getMessage("staff.delete.isHead", new Object[]{id}, locale)
-            );
+            throw BusinessRuleException.ofKey("staff.delete.isHead", id);
         }
 
         // QA D907: the dialog promises the person loses access here, and only
@@ -423,9 +419,7 @@ public class StaffServiceImpl implements StaffService {
         if (dto.getHeadOfDepartment() != null) {
             if (Boolean.TRUE.equals(dto.getHeadOfDepartment())) {
                 if (department == null) {
-                    throw new BusinessRuleException(
-                        messageSource.getMessage("staff.head.requiresDepartment", null, locale)
-                    );
+                    throw BusinessRuleException.ofKey("staff.head.requiresDepartment");
                 }
                 departmentRepository.updateHeadOfDepartment(department.getId(), existingStaff.getId());
             } else {
@@ -436,9 +430,7 @@ public class StaffServiceImpl implements StaffService {
 
     private void validateDepartmentHospitalConsistency(Department department, Hospital hospital, Locale locale) {
         if (department != null && !department.getHospital().getId().equals(hospital.getId())) {
-            throw new BusinessRuleException(
-                messageSource.getMessage("staff.department.wrongHospital", null, locale)
-            );
+            throw BusinessRuleException.ofKey("staff.department.wrongHospital");
         }
     }
 
@@ -482,7 +474,12 @@ public class StaffServiceImpl implements StaffService {
     }
 
 
-    private static final Set<String> CLINICAL_JOB_TITLES = Set.of(
+    /**
+     * The job titles that take a licence number: the same list as the staff form's
+     * {@code licencedTitles} (staff-list.ts), which sends a licence only for these.
+     * {@code StaffFormRuleParityTest} holds the two lists equal.
+     */
+    public static final Set<String> CLINICAL_JOB_TITLES = Set.of(
         "DOCTOR", "PHYSICIAN", "SURGEON", "ANESTHESIOLOGIST", "RADIOLOGIST",
         "PHYSIOTHERAPIST", "PSYCHOLOGIST",
         "NURSE", "NURSE_PRACTITIONER", "MIDWIFE",
@@ -490,10 +487,22 @@ public class StaffServiceImpl implements StaffService {
         "LAB_TECHNICIAN", "LABORATORY_SCIENTIST"
     );
 
+    /**
+     * The job titles that take a medical specialization: the same list as the staff
+     * form's {@code specialtyTitles}, which sends a specialization only for these
+     * (QA D195). A specialization is required only where the form collects it.
+     */
+    public static final Set<String> SPECIALTY_JOB_TITLES = Set.of(
+        "DOCTOR", "PHYSICIAN", "SURGEON", "ANESTHESIOLOGIST", "RADIOLOGIST"
+    );
+
+    private static boolean titleIn(StaffRequestDTO dto, Set<String> titles) {
+        return dto.getJobTitle() != null && titles.contains(dto.getJobTitle().trim().toUpperCase(java.util.Locale.ROOT));
+    }
+
     private void validateLicenseNumber(StaffRequestDTO dto) {
-        String jobTitle = dto.getJobTitle();
         // Only clinical roles require a license number
-        if (jobTitle == null || !CLINICAL_JOB_TITLES.contains(jobTitle.toUpperCase())) {
+        if (!titleIn(dto, CLINICAL_JOB_TITLES)) {
             return;
         }
         String licenseNumber = dto.getLicenseNumber();
@@ -508,25 +517,6 @@ public class StaffServiceImpl implements StaffService {
         }
     }
 
-    private void validateRoleSpecificRequirements(StaffRequestDTO dto, String roleName) {
-        if (roleName == null || roleName.isBlank()) {
-            return; // no role-specific validation needed when no role is assigned
-        }
-        switch (roleName.toUpperCase()) {
-            case "ROLE_DOCTOR":
-                validateDoctorFields(dto);
-                break;
-            case "ROLE_NURSE":
-                validateNurseFields(dto);
-                break;
-            case "ROLE_RADIOLOGIST":
-                validateRadiologistFields(dto);
-                break;
-            default:
-                break;
-        }
-    }
-
     /*
      * QA D1536 (round 40): RequiredFields and FieldBusinessException take the
      * message KEY and resolve it only when the field is refused. The round-30
@@ -536,55 +526,58 @@ public class StaffServiceImpl implements StaffService {
      * radiologist save answered 500 (NoSuchMessageException). The key is now
      * passed as is, and MessageKeyResolutionGuardTest holds every key the
      * code hands to the message source against every bundle.
+     *
+     * A role asks only for what the staff form collects for the job title: a
+     * specialization for a physician title, a licence for a licensed title. A
+     * doctor or radiologist role on another title could never be saved from the
+     * form, which drops both (#1096 review).
      */
-    private void validateDoctorFields(StaffRequestDTO dto) {
-        if (dto.getSpecialization() == null) {
-            throw new com.example.hms.exception.FieldBusinessException("specialization",
-                "staff.doctor.specializationRequired");
+    private void validateRoleSpecificRequirements(StaffRequestDTO dto, String roleName) {
+        if (roleName == null || roleName.isBlank()) {
+            return; // no role-specific validation needed when no role is assigned
         }
-    }
-
-    private void validateNurseFields(StaffRequestDTO dto) {
-        // QA D1355 class (round 30): both named in one refusal.
-        com.example.hms.exception.RequiredFields.check()
-            .requireValue(dto.getEmploymentType(), "employmentType", "staff.nurse.employmentTypeRequired")
-            .requireValue(dto.getStartDate(), "startDate", "staff.nurse.startDateRequired")
-            .orThrow();
-        requireEndNotBeforeStart(dto, "staff.nurse.endDateAfterStart");
-    }
-
-    private void validateRadiologistFields(StaffRequestDTO dto) {
-        // QA D1355 class (round 30): the licence, the start date and the
-        // specialization named in one refusal (the specialization used to be
-        // named only after the dates passed).
-        com.example.hms.exception.RequiredFields.check()
-            .requireValue(dto.getLicenseNumber(), "licenseNumber", "staff.radiologist.licenseRequired")
-            .requireValue(dto.getStartDate(), "startDate", "staff.radiologist.startDateRequired")
-            .requireValue(dto.getSpecialization(), "specialization", "staff.radiologist.specializationRequired")
-            .orThrow();
-        requireEndNotBeforeStart(dto, "staff.radiologist.endDateAfterStart");
-    }
-
-    /** An end date before the start date is refused on the end date, so the form marks it. */
-    private static void requireEndNotBeforeStart(StaffRequestDTO dto, String messageKey) {
-        if (dto.getEndDate() != null && dto.getStartDate() != null
-                && dto.getEndDate().isBefore(dto.getStartDate())) {
-            throw new com.example.hms.exception.FieldBusinessException("endDate", messageKey);
+        switch (roleName.toUpperCase(java.util.Locale.ROOT)) {
+            case "ROLE_DOCTOR":
+                if (titleIn(dto, SPECIALTY_JOB_TITLES) && dto.getSpecialization() == null) {
+                    throw new com.example.hms.exception.FieldBusinessException("specialization",
+                        "staff.doctor.specializationRequired");
+                }
+                break;
+            case "ROLE_NURSE":
+                // QA D1355 class (round 30): both named in one refusal.
+                com.example.hms.exception.RequiredFields.check()
+                    .requireValue(dto.getEmploymentType(), "employmentType", "staff.nurse.employmentTypeRequired")
+                    .requireValue(dto.getStartDate(), "startDate", "staff.nurse.startDateRequired")
+                    .orThrow();
+                break;
+            case "ROLE_RADIOLOGIST":
+                // QA D1355 class (round 30): the licence, the start date and the
+                // specialization named in one refusal.
+                com.example.hms.exception.RequiredFields radiologist = com.example.hms.exception.RequiredFields.check();
+                if (titleIn(dto, CLINICAL_JOB_TITLES)) {
+                    radiologist.requireValue(dto.getLicenseNumber(), "licenseNumber", "staff.radiologist.licenseRequired");
+                }
+                radiologist.requireValue(dto.getStartDate(), "startDate", "staff.radiologist.startDateRequired");
+                if (titleIn(dto, SPECIALTY_JOB_TITLES)) {
+                    radiologist.requireValue(dto.getSpecialization(), "specialization",
+                        "staff.radiologist.specializationRequired");
+                }
+                radiologist.orThrow();
+                break;
+            default:
+                break;
         }
     }
 
     /**
-     * The message for {@code code} in {@code locale}. A key no bundle carries
-     * is logged and answered as the key itself, never as a 500: the refusal
-     * the caller is building still reaches the user (QA D1536). The guard
-     * test keeps that fallback from being reached.
+     * Every staff record, whatever its role: an end date before the start date is
+     * refused on the end date. The start is the one sent, else the one stored (an
+     * edit that leaves the start out still keeps the rule).
      */
-    private String getLocalizedMessage(String code, Object[] args, Locale locale) {
-        try {
-            return messageSource.getMessage(code, args, locale);
-        } catch (org.springframework.context.NoSuchMessageException e) {
-            log.warn("Missing message key '{}' for locale '{}'", code, locale);
-            return code;
+    private static void requireEndNotBeforeStart(StaffRequestDTO dto, java.time.LocalDate storedStart) {
+        java.time.LocalDate start = dto.getStartDate() != null ? dto.getStartDate() : storedStart;
+        if (dto.getEndDate() != null && start != null && dto.getEndDate().isBefore(start)) {
+            throw new com.example.hms.exception.FieldBusinessException("endDate", "staff.endDate.beforeStart");
         }
     }
 
@@ -639,9 +632,7 @@ public class StaffServiceImpl implements StaffService {
     @Transactional
     public StaffResponseDTO updateStaffLabRole(UUID staffId, String newRoleCode, Locale locale) {
         if (!ASSIGNABLE_LAB_ROLES.contains(newRoleCode)) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.lab.role.invalid",
-                    new Object[]{String.join(", ", ASSIGNABLE_LAB_ROLES)}, locale));
+            throw BusinessRuleException.ofKey("staff.lab.role.invalid", String.join(", ", ASSIGNABLE_LAB_ROLES));
         }
 
         Staff staff = staffRepository.findById(staffId)
@@ -658,15 +649,12 @@ public class StaffServiceImpl implements StaffService {
         UserRoleHospitalAssignment assignment = staff.getAssignment();
         String currentCode = assignment.getRole().getCode();
         if (!LAB_ROLE_CODES.contains(currentCode)) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.lab.role.nonLabStaff",
-                    new Object[]{currentCode}, locale));
+            throw BusinessRuleException.ofKey("staff.lab.role.nonLabStaff", currentCode);
         }
 
         // Don't allow changing LAB_DIRECTOR role via this endpoint
         if (ROLE_LAB_DIRECTOR.equals(currentCode)) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.lab.role.directorProtected", null, locale));
+            throw BusinessRuleException.ofKey("staff.lab.role.directorProtected");
         }
 
         if (newRoleCode.equals(currentCode)) {

@@ -75,6 +75,30 @@ class StaffServiceImplTest {
     private Locale locale;
     private StaffResponseDTO staffDto;
 
+    /**
+     * Refusals now carry their key and resolve it through MessageUtil (#1096): route
+     * MessageUtil to this test's message source, and give the JVM's back afterwards.
+     */
+    private Object previousMessageUtilSource;
+
+    @BeforeEach
+    void routeMessageUtilToTheMock() {
+        previousMessageUtilSource = org.springframework.test.util.ReflectionTestUtils.getField(
+            com.example.hms.utility.MessageUtil.class, "messageSource");
+        com.example.hms.utility.MessageUtil.setMessageSource(messageSource);
+        // A real source never answers null: an unstubbed key reads as itself.
+        org.mockito.Mockito.lenient().when(messageSource.getMessage(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(java.util.Locale.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @AfterEach
+    void restoreMessageUtil() {
+        com.example.hms.utility.MessageUtil.setMessageSource(
+            (org.springframework.context.MessageSource) previousMessageUtilSource);
+    }
+
     @BeforeEach
     void setUp() {
         staffId = UUID.randomUUID();
@@ -288,7 +312,6 @@ class StaffServiceImplTest {
     void deleteStaff_throwsWhenIsHead() {
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.existsByHeadOfDepartmentId(staffId)).thenReturn(true);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Is head");
 
         assertThatThrownBy(() -> staffService.deleteStaff(staffId, locale))
                 .isInstanceOf(BusinessRuleException.class);
@@ -442,7 +465,6 @@ class StaffServiceImplTest {
         when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(user.getId())).thenReturn(Optional.of(staff));
         when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
         when(departmentRepository.findByHospitalIdAndNameIgnoreCase(hospitalId, "Cardiology")).thenReturn(Optional.of(dept));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Wrong hospital");
 
         assertThatThrownBy(() -> staffService.updateStaffDepartment("doctor@test.com", "Cardiology", "Test Hospital", locale))
                 .isInstanceOf(BusinessRuleException.class);
@@ -682,7 +704,6 @@ class StaffServiceImplTest {
         when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
         when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
         when(departmentRepository.findByHospitalIdAndNameIgnoreCase(hospital.getId(), "Cardiology")).thenReturn(Optional.of(dept));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Wrong hospital");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(BusinessRuleException.class);
@@ -809,7 +830,7 @@ class StaffServiceImplTest {
                 // QA D1536: refused on the end date, by its key (no message source lookup).
                 .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
                     assertThat(ex.getField()).isEqualTo("endDate");
-                    assertThat(ex.getMessageKey()).isEqualTo("staff.nurse.endDateAfterStart");
+                    assertThat(ex.getMessageKey()).isEqualTo("staff.endDate.beforeStart");
                 });
     }
 
@@ -976,7 +997,7 @@ class StaffServiceImplTest {
                 // QA D1536: refused on the end date, by its key (no message source lookup).
                 .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
                     assertThat(ex.getField()).isEqualTo("endDate");
-                    assertThat(ex.getMessageKey()).isEqualTo("staff.radiologist.endDateAfterStart");
+                    assertThat(ex.getMessageKey()).isEqualTo("staff.endDate.beforeStart");
                 });
     }
 
@@ -1081,8 +1102,10 @@ class StaffServiceImplTest {
 
         assertThatThrownBy(() -> staffService.updateStaff(staffId, dto, Locale.FRENCH))
             .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex ->
-                assertThat(ex.getFieldErrors()).containsOnlyKeys("employmentType", "startDate"));
-        org.mockito.Mockito.verifyNoInteractions(messageSource);
+                assertThat(ex.getFieldErrors())
+                    .containsEntry("employmentType", "staff.nurse.employmentTypeRequired")
+                    .containsEntry("startDate", "staff.nurse.startDateRequired")
+                    .hasSize(2));
     }
 
     @Test
@@ -1096,21 +1119,6 @@ class StaffServiceImplTest {
                 assertThat(ex.getField()).isEqualTo("startDate");
                 assertThat(ex.getMessageKey()).isEqualTo("staff.radiologist.startDateRequired");
             });
-    }
-
-    @Test
-    void aMissingKeyIsAnsweredAsTheKeyNeverAsA500() {
-        // QA D1536: the service's own lookup falls back to the key (and logs) instead of throwing.
-        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        Role lab = new Role();
-        lab.setCode("ROLE_LAB_DIRECTOR");
-        staff.setAssignment(UserRoleHospitalAssignment.builder().role(lab).hospital(hospital).build());
-        when(messageSource.getMessage(eq("staff.lab.role.directorProtected"), any(), any(Locale.class)))
-            .thenThrow(new org.springframework.context.NoSuchMessageException("staff.lab.role.directorProtected"));
-
-        assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_MANAGER", Locale.FRENCH))
-            .isInstanceOf(BusinessRuleException.class)
-            .hasMessage("staff.lab.role.directorProtected");
     }
 
     // ── MVP 3: Lab Staff Management Tests ──────────────────────

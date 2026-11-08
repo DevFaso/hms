@@ -61,13 +61,11 @@ public class LabInventoryServiceImpl implements LabInventoryService {
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", hospitalId));
 
         if (inventoryRepository.existsByHospitalIdAndItemCode(hospitalId, dto.getItemCode())) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("inventory.duplicate.code", new Object[]{dto.getItemCode()}, locale));
+            throw BusinessRuleException.ofKey("inventory.duplicate.code", dto.getItemCode());
         }
 
         if (dto.getQuantity() != null && dto.getQuantity() < 0) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("inventory.quantity.negative", null, locale));
+            throw BusinessRuleException.ofKey("inventory.quantity.negative");
         }
 
         LabInventoryItem item = mapper.toEntity(dto, hospital);
@@ -87,13 +85,11 @@ public class LabInventoryServiceImpl implements LabInventoryService {
                 && !dto.getItemCode().equals(item.getItemCode())
                 && inventoryRepository.existsByHospitalIdAndItemCode(
                     item.getHospital().getId(), dto.getItemCode())) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("inventory.duplicate.code", new Object[]{dto.getItemCode()}, locale));
+            throw BusinessRuleException.ofKey("inventory.duplicate.code", dto.getItemCode());
         }
 
         if (dto.getQuantity() != null && dto.getQuantity() < 0) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("inventory.quantity.negative", null, locale));
+            throw BusinessRuleException.ofKey("inventory.quantity.negative");
         }
 
         mapper.updateEntity(item, dto);
@@ -135,7 +131,4 @@ public class LabInventoryServiceImpl implements LabInventoryService {
         }
     }
 
-    private String getLocalizedMessage(String key, Object[] args, Locale locale) {
-        return messageSource.getMessage(key, args, key, locale != null ? locale : LocaleContextHolder.getLocale());
-    }
 }

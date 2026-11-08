@@ -152,7 +152,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         Staff newHead = staffService.getStaffEntityById(staffId, locale);
 
         if (!newHead.getHospital().getId().equals(department.getHospital().getId())) {
-            throw new BusinessRuleException(messageSource.getMessage("department.head.wrongHospital", null, locale));
+            throw BusinessRuleException.ofKey("department.head.wrongHospital");
         }
 
         department.setHeadOfDepartment(newHead);
@@ -382,16 +382,13 @@ public class DepartmentServiceImpl implements DepartmentService {
         enforceHospitalScopeOnEntity(department);
 
         if (departmentRepository.hasStaffMembers(id)) {
-            throw new BusinessRuleException(
-                    messageSource.getMessage("department.delete.withStaff", new Object[]{id}, locale)
-            );
+            throw BusinessRuleException.ofKey("department.delete.withStaff", id);
         }
 
         // QA D601: refuse before the delete whenever anything points at the
         // department; the FK catch below only helps where a constraint exists.
         if (departmentRepository.existsByClinicalReference(id)) {
-            throw new BusinessRuleException(
-                    messageSource.getMessage("department.r7.deleteInUse", null, locale));
+            throw BusinessRuleException.ofKey("department.r7.deleteInUse");
         }
 
         // QA D435: a department still referenced elsewhere (wards, beds,
@@ -401,8 +398,7 @@ public class DepartmentServiceImpl implements DepartmentService {
             departmentRepository.delete(department);
             departmentRepository.flush();
         } catch (org.springframework.dao.DataIntegrityViolationException inUse) {
-            throw new BusinessRuleException(
-                    messageSource.getMessage("department.r7.deleteInUse", null, locale));
+            throw BusinessRuleException.ofKey("department.r7.deleteInUse");
         }
     }
 
@@ -721,11 +717,11 @@ public class DepartmentServiceImpl implements DepartmentService {
         }
 
         if (dto.getHospitalId() == null && !StringUtils.hasText(dto.getHospitalName())) {
-            throw new com.example.hms.exception.FieldBusinessException("hospitalId", messageSource.getMessage("department.hospital.required", null, locale));
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "department.hospital.required");
         }
 
         if (!StringUtils.hasText(dto.getName())) {
-            throw new com.example.hms.exception.FieldBusinessException("name", messageSource.getMessage("department.name.required", null, locale));
+            throw new com.example.hms.exception.FieldBusinessException("name", "department.name.required");
         }
     }
 

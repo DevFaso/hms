@@ -152,7 +152,6 @@ class StaffAvailabilityServiceImplTest {
         StaffAvailabilityRequestDTO dto = buildDto(false);
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("inactive");
 
         assertThatThrownBy(() -> service.create(dto, locale))
             .isInstanceOf(BusinessRuleException.class);
@@ -167,7 +166,6 @@ class StaffAvailabilityServiceImplTest {
         StaffAvailabilityRequestDTO dto = buildDto(false);
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("mismatch");
 
         assertThatThrownBy(() -> service.create(dto, locale))
             .isInstanceOf(BusinessRuleException.class);
@@ -199,7 +197,6 @@ class StaffAvailabilityServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(otherDept));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("mismatch");
 
         assertThatThrownBy(() -> service.create(dto, locale))
             .isInstanceOf(BusinessRuleException.class);
@@ -216,7 +213,6 @@ class StaffAvailabilityServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("mismatch");
 
         assertThatThrownBy(() -> service.create(dto, locale))
             .isInstanceOf(BusinessRuleException.class);
@@ -229,7 +225,6 @@ class StaffAvailabilityServiceImplTest {
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
         when(availabilityRepository.existsByStaff_IdAndDate(staffId, dto.date())).thenReturn(true);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("exists");
 
         assertThatThrownBy(() -> service.create(dto, locale))
             .isInstanceOf(BusinessRuleException.class);
@@ -277,7 +272,6 @@ class StaffAvailabilityServiceImplTest {
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
         when(availabilityRepository.existsByStaff_IdAndDate(staffId, dto.date())).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("past");
 
         assertThatThrownBy(() -> service.create(dto, locale))
             .isInstanceOf(BusinessRuleException.class);

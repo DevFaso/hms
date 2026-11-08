@@ -36,7 +36,6 @@ import com.example.hms.service.NursingNoteService;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,7 +69,6 @@ public class NursingNoteServiceImpl implements NursingNoteService {
     private final StaffRepository staffRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final UserRepository userRepository;
-    private final MessageSource messageSource;
     private final RoleValidator roleValidator;
     private final AuditEventLogService auditEventLogService;
     private final NursingNoteMapper nursingNoteMapper;
@@ -303,12 +301,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
             .findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId)
             .isPresent();
         if (!registered) {
-            throw new BusinessException(messageSource.getMessage(
-                "patient.notRegisteredInHospital",
-                new Object[]{patientId, hospitalId},
-                "Patient is not registered in the specified hospital.",
-                locale
-            ));
+            throw new BusinessException("patient.notRegisteredInHospital");
         }
     }
 
@@ -319,12 +312,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
             || roleValidator.isDoctor(userId, hospitalId)
             || roleValidator.isSuperAdminFromAuth();
         if (!allowed) {
-            throw new BusinessException(messageSource.getMessage(
-                "nursing.note.permission.denied",
-                null,
-                "You do not have permission to document nursing notes in this hospital.",
-                locale
-            ));
+            throw new BusinessException("nursing.note.permission.denied");
         }
     }
 
@@ -335,12 +323,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
             || roleValidator.isHospitalAdmin(userId, hospitalId)
             || roleValidator.isSuperAdminFromAuth();
         if (!allowed) {
-            throw new BusinessException(messageSource.getMessage(
-                "nursing.note.view.denied",
-                null,
-                "You do not have permission to view nursing notes in this hospital.",
-                locale
-            ));
+            throw new BusinessException("nursing.note.view.denied");
         }
     }
 

@@ -275,8 +275,7 @@ public class RoleValidator {
 
     public void validateRoleOrThrow(UUID userId, UUID hospitalId, String roleCode, Locale locale, MessageSource messageSource) {
         if (!hasAnyCode(userId, hospitalId, roleCode)) {
-            throw new BusinessException(
-                messageSource.getMessage("role.notfound", new Object[]{userId, hospitalId}, "Role not found", locale));
+            throw new BusinessException("role.notfound", roleCode);
         }
     }
 
@@ -339,13 +338,13 @@ public class RoleValidator {
 
     public void requireLabScientistOrAdmin(UUID userId, UUID hospitalId, Locale locale, MessageSource messageSource) {
         if (!(isLabScientist(userId, hospitalId) || isHospitalAdmin(userId, hospitalId))) {
-            throw new BusinessException(messageSource.getMessage("auth.lab.required", null, "Only Lab Scientist or Hospital Admin allowed", locale));
+            throw new BusinessException("auth.lab.required");
         }
     }
 
     public void requireLabStaffOrAdmin(UUID userId, UUID hospitalId, Locale locale, MessageSource messageSource) {
         if (!(isLabStaff(userId, hospitalId) || isHospitalAdmin(userId, hospitalId))) {
-            throw new BusinessException(messageSource.getMessage("auth.lab.staff.required", null, "Only Lab staff or Hospital Admin allowed", locale));
+            throw new BusinessException("auth.lab.staff.required");
         }
     }
 

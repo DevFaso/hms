@@ -75,8 +75,14 @@ class ActivationSmsD1123Test {
     private UserRoleHospitalAssignment assignment;
     private User patient;
 
+    /** The refusals carry their key and resolve it through MessageUtil (#1096): give it the bundles. */
+    private Object previousMessageUtilSource;
+
     @BeforeEach
     void setUp() {
+        previousMessageUtilSource = org.springframework.test.util.ReflectionTestUtils.getField(
+            com.example.hms.utility.MessageUtil.class, "messageSource");
+        com.example.hms.utility.MessageUtil.setMessageSource(messageSource);
         patient = new User();
         patient.setId(UUID.randomUUID());
         patient.setUsername("70003201");
@@ -114,6 +120,7 @@ class ActivationSmsD1123Test {
     @AfterEach
     void resetLocale() {
         LocaleContextHolder.resetLocaleContext();
+        com.example.hms.utility.MessageUtil.setMessageSource((MessageSource) previousMessageUtilSource);
     }
 
     private static Role role(String code) {
@@ -216,7 +223,7 @@ class ActivationSmsD1123Test {
             .as("the sixth try is refused even with the right code")
             .isInstanceOf(BusinessException.class)
             // QA D1152: the lock ends after its window; no "request a new code".
-            .hasMessage("assignment.phoneActivation.tooManyAttempts");
+            .extracting("messageKey").isEqualTo("assignment.phoneActivation.tooManyAttempts");
         assertThat(assignment.getActive()).isFalse();
     }
 

@@ -36,9 +36,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -52,7 +49,6 @@ import java.util.TreeSet;
 import java.util.function.UnaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 /**
  * QA D1536 (round 40): the inputs of every computed message key, so
@@ -83,7 +79,7 @@ final class ComputedKeys {
         Set<String> keys() throws IOException;
     }
 
-    /** A site whose input no list can bound; the reason says why its lookup is safe. */
+    /** A site whose input no list can bound; the reason says why its lookup is safe or where its keys are checked. */
     record Open(String reason) implements Domain {
         @Override
         public Set<String> keys() {
@@ -96,7 +92,297 @@ final class ComputedKeys {
     private ComputedKeys() {
     }
 
+    /**
+     * Every computed and unresolved site, by its id ({@code <path>|<expression>[ #n]}), with
+     * the inputs it can take. Two sites never share an id; sites built from the same inputs
+     * share a domain from {@link #domains()}.
+     */
     private static Map<String, Domain> registry() {
+        Map<String, Domain> d = domains();
+        Map<String, Domain> r = new LinkedHashMap<>();
+        site(r, d, "com/example/hms/cdshooks/CdsCardText.java|\"cds.severity.\" + value.name()",
+            "CdsCardText.java|cds.severity.");
+        site(r, d, "com/example/hms/cdshooks/CdsCardText.java|\"cds.enum.\" + value.name()",
+            "CdsCardText.java|cds.enum.");
+        site(r, d, "com/example/hms/cdshooks/bpa/BpaCardText.java|\"cds.bpa.\" + protocol.getProtocolCode() + \".name\"",
+            "BpaCardText.java|cds.bpa.");
+        site(r, d, "com/example/hms/cdshooks/bpa/BpaCardText.java|\"cds.bpa.\" + protocol.getProtocolCode() + \".summary\"",
+            "BpaCardText.java|cds.bpa.");
+        site(r, d, "com/example/hms/cdshooks/bpa/NewsScoreProtocolRule.java|\"cds.bpa.news2.band.\" + score.riskBand().name()",
+            "NewsScoreProtocolRule.java|cds.bpa.news2.band.");
+        site(r, d, "com/example/hms/cdshooks/bpa/NewsScoreProtocolRule.java|\"cds.bpa.news2.param.\" + m",
+            "NewsScoreProtocolRule.java|cds.bpa.news2.param.");
+        site(r, d, "com/example/hms/enums/AppointmentStatus.java|String key = \"appointment.statusLabel.\" + name()",
+            "AppointmentStatus.java|appointment.statusLabel.");
+        site(r, d, "com/example/hms/enums/EncounterStatus.java|String key = \"encounter.statusLabel.\" + name()",
+            "EncounterStatus.java|encounter.statusLabel.");
+        site(r, d, "com/example/hms/enums/InvoiceStatus.java|\"pdf.invoice.statusValue.\" + name()",
+            "InvoiceStatus.java|pdf.invoice.statusValue.");
+        site(r, d, "com/example/hms/enums/PrescriptionStatus.java|String key = \"cds.enum.\" + name()",
+            "PrescriptionStatus.java|cds.enum.");
+        site(r, d, "com/example/hms/enums/RoutingDecisionStatus.java|\"stock.routing.statusLabel.\" + name()",
+            "RoutingDecisionStatus.java|stock.routing.statusLabel.");
+        r.put("com/example/hms/exception/GlobalExceptionHandler.java|reason",
+            new Open("an exception message passed through: a key a thrower chose, resolved if it is one, else shown as written"));
+        r.put("com/example/hms/exception/GlobalExceptionHandler.java|message",
+            new Open("an exception message passed through: a key a thrower chose, resolved if it is one, else shown as written"));
+        r.put("com/example/hms/exception/GlobalExceptionHandler.java|message #2",
+            new Open("an exception message passed through: a key a thrower chose, resolved if it is one, else shown as written"));
+        site(r, d, "com/example/hms/exception/GlobalExceptionHandler.java|\"field.label.\" + leaf",
+            "GlobalExceptionHandler.java|field.label.");
+        site(r, d, "com/example/hms/exception/GlobalExceptionHandler.java|PARAMETER_LABEL_PREFIX + name",
+            "GlobalExceptionHandler.java|field.label.param.");
+        r.put("com/example/hms/exception/MfaStepUpRefusedException.java|reason.code()", mfaStepUpReasons());
+        r.put("com/example/hms/exception/RequiredFields.java|(String) keyAndArgs[0]",
+            new Open("the key a RequiredFields check was given; each check is a literal site at its caller"));
+        r.put("com/example/hms/mapper/InBasketMapper.java|item.getTitleKey()",
+            new Open("the title and body keys stored on an in-basket row; rendered with the stored text as fallback"));
+        r.put("com/example/hms/mapper/InBasketMapper.java|item.getBodyKey()",
+            new Open("the title and body keys stored on an in-basket row; rendered with the stored text as fallback"));
+        r.put("com/example/hms/mapper/PatientMapper.java|com.example.hms.utility.PatientAddressText.display( patient.getAddress(), patient.getAddressLine1(), patient.getAddressLine2())",
+            new Open("stored free text (address, allergies, history) translated only when it is a key; resolveMessage keeps it as written"));
+        r.put("com/example/hms/mapper/PatientMapper.java|patient.getAllergies()",
+            new Open("stored free text (address, allergies, history) translated only when it is a key; resolveMessage keeps it as written"));
+        r.put("com/example/hms/mapper/PatientMapper.java|patient.getMedicalHistorySummary()",
+            new Open("stored free text (address, allergies, history) translated only when it is a key; resolveMessage keeps it as written"));
+        r.put("com/example/hms/mapper/pharmacy/PrescriptionRoutingMapper.java|entity.getReason()",
+            new Open("a stored routing reason sentence; translated only when it matches a known shape"));
+        r.put("com/example/hms/mapper/pharmacy/RoutingReasonText.java|legacy[1]",
+            new Open("a stored routing reason sentence; translated only when it matches a known shape"));
+        site(r, d, "com/example/hms/mapper/pharmacy/RoutingReasonText.java|\"stock.routing.pharmacyType.\" + type",
+            "RoutingReasonText.java|stock.routing.pharmacyType.");
+        site(r, d, "com/example/hms/security/tenant/ActingScopeResolver.java|String key = \"hospitalScope.refused.\" + reasonName",
+            "ActingScopeResolver.java|hospitalScope.refused.");
+        r.put("com/example/hms/service/CriticalValueNotificationService.java|text.key()",
+            new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
+        r.put("com/example/hms/service/CriticalValueNotificationService.java|text.key() #2",
+            new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
+        site(r, d, "com/example/hms/service/EmailServiceImpl.java|\"email.role.label.\" + code",
+            "EmailServiceImpl.java|email.role.label.");
+        r.put("com/example/hms/service/ImagingCriticalNotificationService.java|message.key()",
+            new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
+        r.put("com/example/hms/service/ImagingCriticalNotificationService.java|message.key() #2",
+            new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
+        r.put("com/example/hms/service/LabTestDefinitionServiceImpl.java|first.messageKey()",
+            new Open("the first finding of the definition validator; each finding is built with a literal key"));
+        site(r, d, "com/example/hms/service/LabTestDefinitionServiceImpl.java|\"lab.definition.status.\" + status.name()",
+            "LabTestDefinitionServiceImpl.java|lab.definition.status.");
+        site(r, d, "com/example/hms/service/MedicalCertificateServiceImpl.java|\"medicalCertificate.title.\" + certificate.type().name()",
+            "MedicalCertificateServiceImpl.java|medicalCertificate.title.");
+        site(r, d, "com/example/hms/service/MedicalCertificateServiceImpl.java|\"medicalCertificate.title.\" + c.type().name()",
+            "MedicalCertificateServiceImpl.java|medicalCertificate.title.");
+        site(r, d, "com/example/hms/service/PatientRecordPdfService.java|\"cds.severity.\" + code",
+            "PatientRecordPdfService.java|cds.severity.");
+        site(r, d, "com/example/hms/service/PatientRecordPdfService.java|\"cds.enum.\" + code",
+            "PatientRecordPdfService.java|cds.enum.");
+        site(r, d, "com/example/hms/service/PatientRecordPdfService.java|\"pdf.record.enum.\" + code",
+            "PatientRecordPdfService.java|pdf.record.enum.");
+        site(r, d, "com/example/hms/service/PatientServiceImpl.java|\"cds.severity.\" + (allergy.getSeverity() != null ? allergy.getSeverity().name() : LOG_UNKNOWN)",
+            "PatientServiceImpl.java|cds.severity.");
+        site(r, d, "com/example/hms/service/PdfInvoiceService.java|\"pdf.invoice.adjustment.\" + adjustment.getType().name()",
+            "PdfInvoiceService.java|pdf.invoice.adjustment.");
+        site(r, d, "com/example/hms/service/PdfInvoiceService.java|\"pdf.invoice.statusValue.\" + code",
+            "PdfInvoiceService.java|pdf.invoice.statusValue.");
+        site(r, d, "com/example/hms/service/PdfInvoiceService.java|\"pdf.payment.method.\" + code",
+            "PdfInvoiceService.java|pdf.payment.method.");
+        site(r, d, "com/example/hms/service/PdfInvoiceService.java|\"pdf.invoice.category.\" + category.name()",
+            "PdfInvoiceService.java|pdf.invoice.category.");
+        site(r, d, "com/example/hms/service/PrenatalSchedulingServiceImpl.java|\"prenatal.schedule.recommendation.\" + recommendationKey(type)",
+            "PrenatalSchedulingServiceImpl.java|prenatal.schedule.recommendation.");
+        site(r, d, "com/example/hms/service/PrenatalSchedulingServiceImpl.java|\"prenatal.schedule.notes.\" + recommendationKey(type)",
+            "PrenatalSchedulingServiceImpl.java|prenatal.schedule.notes.");
+        r.put("com/example/hms/service/PrescriptionServiceImpl.java|message",
+            new Open("a CDS block message already rendered by the rule that raised it; CdsCriticalBlockException shows it as written"));
+        r.put("com/example/hms/service/PrescriptionServiceImpl.java|item.getBodyKey()",
+            new Open("a stored in-basket title/body key; written by the order-review and transfusion writers with literal keys"));
+        r.put("com/example/hms/service/PrescriptionServiceImpl.java|message #2",
+            new Open("a CDS block message already rendered by the rule that raised it; CdsCriticalBlockException shows it as written"));
+        site(r, d, "com/example/hms/service/PrescriptionServiceImpl.java|\"cds.severity.\" + severityStr",
+            "PrescriptionServiceImpl.java|cds.severity.");
+        site(r, d, "com/example/hms/service/ResultReviewServiceImpl.java|\"signature.type.\" + type.name()",
+            "ResultReviewServiceImpl.java|signature.type.");
+        site(r, d, "com/example/hms/service/SecurityRuleGovernanceServiceImpl.java|\"security.template.\" + code + \".\" + field",
+            "SecurityRuleGovernanceServiceImpl.java|security.template.");
+        site(r, d, "com/example/hms/service/UserRoleHospitalAssignmentServiceImpl.java|\"users.assignment.reference.\" + entity",
+            "UserRoleHospitalAssignmentServiceImpl.java|users.assignment.reference.");
+        site(r, d, "com/example/hms/service/UserRoleHospitalAssignmentServiceImpl.java|\"email.role.label.\" + bare",
+            "UserRoleHospitalAssignmentServiceImpl.java|email.role.label.");
+        site(r, d, "com/example/hms/service/UserRoleHospitalAssignmentServiceImpl.java|\"onboarding.checklist.\" + owner + \".\" + (i + 1)",
+            "UserRoleHospitalAssignmentServiceImpl.java|onboarding.checklist.");
+        site(r, d, "com/example/hms/service/UserRoleHospitalAssignmentServiceImpl.java|String key = \"role.description.\" + (normalized.startsWith(ROLE_PREFIX) ? normalized : ROLE_PREFIX + normalized)",
+            "UserRoleHospitalAssignmentServiceImpl.java|role.description.");
+        site(r, d, "com/example/hms/service/UserServiceImpl.java|\"users.identifier.deletedAccount.\" + field",
+            "UserServiceImpl.java|users.identifier.deletedAccount.");
+        site(r, d, "com/example/hms/service/UserServiceImpl.java|\"users.identifier.taken.\" + field",
+            "UserServiceImpl.java|users.identifier.taken.");
+        site(r, d, "com/example/hms/service/billing/TransfusionChargeSource.java|\"transfusion.productType.\" + request.getProductType().name()",
+            "TransfusionChargeSource.java|transfusion.productType.");
+        r.put("com/example/hms/service/credentialing/LicenseExpirySweepService.java|message.key()",
+            new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
+        site(r, d, "com/example/hms/service/emar/MedicationRoutes.java|\"medication.route.\" + code",
+            "MedicationRoutes.java|medication.route.");
+        r.put("com/example/hms/service/i18n/NotificationLocalizer.java|k",
+            new Open("a stored notification key re-rendered for its reader; written with literal keys"));
+        r.put("com/example/hms/service/i18n/NotificationLocalizer.java|notification.getMessageKey()",
+            new Open("a stored notification key re-rendered for its reader; written with literal keys"));
+        r.put("com/example/hms/service/i18n/NotificationText.java|k",
+            new Open("a stored notification key re-rendered for its reader; written with literal keys"));
+        r.put("com/example/hms/service/i18n/NotificationText.java|key",
+            new Open("a stored notification key re-rendered for its reader; written with literal keys"));
+        site(r, d, "com/example/hms/service/impl/HospitalLifecycleServiceImpl.java|\"hospital.lifecycle.action.\" + action.replace(' ', '-')",
+            "HospitalLifecycleServiceImpl.java|hospital.lifecycle.action.");
+        site(r, d, "com/example/hms/service/impl/IsolationServiceImpl.java|\"isolation.type.\" + request.getPrecautionType().name()",
+            "IsolationServiceImpl.java|isolation.type.");
+        site(r, d, "com/example/hms/service/impl/LaborServiceImpl.java|\"labor.liquor.\" + entry.getLiquorColour().name()",
+            "LaborServiceImpl.java|labor.liquor.");
+        site(r, d, "com/example/hms/service/impl/LaborServiceImpl.java|\"labor.alert.msg.\" + code",
+            "LaborServiceImpl.java|labor.alert.msg.");
+        site(r, d, "com/example/hms/service/impl/LaborServiceImpl.java|\"labor.alert.type.\" + alert.getType().name()",
+            "LaborServiceImpl.java|labor.alert.type.");
+        r.put("com/example/hms/service/impl/LaborServiceImpl.java|messageKey",
+            new Open("an obstetric alert or notice key built from a registered alert code, or stored on the row"));
+        site(r, d, "com/example/hms/service/impl/LaborServiceImpl.java|\"labor.alert.type.\" + alert.getType().name() #2",
+            "LaborServiceImpl.java|labor.alert.type.");
+        site(r, d, "com/example/hms/service/impl/LaborServiceImpl.java|String messageKey = alert.getCode() == null || alert.getMessageArgs() == null ? null : \"labor.alert.msg.\" + alert.getCode()",
+            "LaborServiceImpl.java|labor.alert.msg.");
+        site(r, d, "com/example/hms/service/impl/NewbornAssessmentServiceImpl.java|ALERT_MSG_PREFIX + code",
+            "NewbornAssessmentServiceImpl.java|newborn.alert.msg.");
+        site(r, d, "com/example/hms/service/impl/NewbornAssessmentServiceImpl.java|ALERT_MSG_PREFIX + code #2",
+            "NewbornAssessmentServiceImpl.java|newborn.alert.msg.");
+        site(r, d, "com/example/hms/service/impl/NewbornAssessmentServiceImpl.java|\"newborn.alert.trigger.\" + code",
+            "NewbornAssessmentServiceImpl.java|newborn.alert.trigger.");
+        site(r, d, "com/example/hms/service/impl/NewbornAssessmentServiceImpl.java|\"newborn.alert.type.\" + alert.getType().name()",
+            "NewbornAssessmentServiceImpl.java|newborn.alert.type.");
+        r.put("com/example/hms/service/impl/NewbornAssessmentServiceImpl.java|messageKey",
+            new Open("an obstetric alert or notice key built from a registered alert code, or stored on the row"));
+        site(r, d, "com/example/hms/service/impl/NewbornAssessmentServiceImpl.java|\"newborn.alert.type.\" + alert.getType().name() #2",
+            "NewbornAssessmentServiceImpl.java|newborn.alert.type.");
+        site(r, d, "com/example/hms/service/impl/NewbornAssessmentServiceImpl.java|String messageKey = alert.getCode() == null ? null : ALERT_MSG_PREFIX + alert.getCode()",
+            "NewbornAssessmentServiceImpl.java|newborn.alert.msg.");
+        r.put("com/example/hms/service/impl/OrderReviewAfterCommit.java|notice.titleKey()",
+            new Open("a stored in-basket title/body key; written by the order-review and transfusion writers with literal keys"));
+        r.put("com/example/hms/service/impl/OrderReviewAfterCommit.java|notice.bodyKey()",
+            new Open("a stored in-basket title/body key; written by the order-review and transfusion writers with literal keys"));
+        site(r, d, "com/example/hms/service/impl/PostpartumCareServiceImpl.java|ALERT_MSG_PREFIX + code",
+            "PostpartumCareServiceImpl.java|postpartum.alert.msg.");
+        site(r, d, "com/example/hms/service/impl/PostpartumCareServiceImpl.java|ALERT_MSG_PREFIX + code #2",
+            "PostpartumCareServiceImpl.java|postpartum.alert.msg.");
+        site(r, d, "com/example/hms/service/impl/PostpartumCareServiceImpl.java|\"postpartum.alert.trigger.\" + code",
+            "PostpartumCareServiceImpl.java|postpartum.alert.trigger.");
+        site(r, d, "com/example/hms/service/impl/PostpartumCareServiceImpl.java|\"postpartum.alert.type.\" + alert.getType().name()",
+            "PostpartumCareServiceImpl.java|postpartum.alert.type.");
+        r.put("com/example/hms/service/impl/PostpartumCareServiceImpl.java|messageKey",
+            new Open("an obstetric alert or notice key built from a registered alert code, or stored on the row"));
+        site(r, d, "com/example/hms/service/impl/PostpartumCareServiceImpl.java|\"postpartum.alert.type.\" + alert.getType().name() #2",
+            "PostpartumCareServiceImpl.java|postpartum.alert.type.");
+        site(r, d, "com/example/hms/service/impl/PostpartumCareServiceImpl.java|String messageKey = alert.getCode() == null ? null : ALERT_MSG_PREFIX + alert.getCode()",
+            "PostpartumCareServiceImpl.java|postpartum.alert.msg.");
+        r.put("com/example/hms/service/impl/PrnMinInterval.java|refusal.key()",
+            new Open("a PRN interval refusal key chosen from a fixed set in PrnMinInterval / OrderSetItemPrnRules"));
+        r.put("com/example/hms/service/impl/RefillApprovalServiceImpl.java|message.key()",
+            new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
+        site(r, d, "com/example/hms/service/impl/SuperAdminLabOrderServiceImpl.java|\"field.label.\" + field",
+            "SuperAdminLabOrderServiceImpl.java|field.label.");
+        site(r, d, "com/example/hms/service/impl/SuperAdminPlatformRegistryServiceImpl.java|moduleKey + \".title\"",
+            "SuperAdminPlatformRegistryServiceImpl.java|.title");
+        site(r, d, "com/example/hms/service/impl/SuperAdminPlatformRegistryServiceImpl.java|moduleKey + \".description\"",
+            "SuperAdminPlatformRegistryServiceImpl.java|.description");
+        site(r, d, "com/example/hms/service/impl/SuperAdminPlatformRegistryServiceImpl.java|\"platform.automation.status.\" + status.name()",
+            "SuperAdminPlatformRegistryServiceImpl.java|platform.automation.status.");
+        r.put("com/example/hms/service/impl/TransfusionServiceImpl.java|item.getTitleKey()",
+            new Open("a stored in-basket title/body key; written by the order-review and transfusion writers with literal keys"));
+        r.put("com/example/hms/service/impl/TransfusionServiceImpl.java|item.getBodyKey()",
+            new Open("a stored in-basket title/body key; written by the order-review and transfusion writers with literal keys"));
+        site(r, d, "com/example/hms/service/impl/TransfusionServiceImpl.java|\"transfusion.productType.\" + type.name()",
+            "TransfusionServiceImpl.java|transfusion.productType.");
+        site(r, d, "com/example/hms/service/maternity/LaborAlertArgs.java|\"labor.liquor.\" + entry.getLiquorColour().name()",
+            "LaborAlertArgs.java|labor.liquor.");
+        r.put("com/example/hms/service/maternity/ObstetricAlertEscalationWorker.java|alert.alertMessageKey()",
+            new Open("an obstetric alert message key stored on the escalation row (labor/newborn/postpartum alert codes, registered)"));
+        r.put("com/example/hms/service/maternity/ObstetricAlertEscalationWorker.java|row.getAlertMessageKey()",
+            new Open("an obstetric alert message key stored on the escalation row (labor/newborn/postpartum alert codes, registered)"));
+        site(r, d, "com/example/hms/service/maternity/ObstetricAlertEscalationWorker.java|typePrefix(sourceType) + \"type.\" + alertType",
+            "ObstetricAlertEscalationWorker.java|type.");
+        r.put("com/example/hms/service/maternity/ObstetricAlertText.java|keyPrefix + code",
+            new Open("prefix + code: the *.alert.msg. and *.alert.trigger. keys, enumerated at the services' entries"));
+        r.put("com/example/hms/service/orderset/OrderSetItemPrnRules.java|refusal.key()",
+            new Open("a PRN interval refusal key chosen from a fixed set in PrnMinInterval / OrderSetItemPrnRules"));
+        site(r, d, "com/example/hms/service/pharmacy/CdsCheckServiceImpl.java|\"cds.severity.\" + interaction.getSeverity().name()",
+            "CdsCheckServiceImpl.java|cds.severity.");
+        site(r, d, "com/example/hms/service/pharmacy/ControlledDrugRegisterService.java|\"pharmacy.register.adjustment.\" + ADJUSTMENT_CODES.get(m.group(1))",
+            "ControlledDrugRegisterService.java|pharmacy.register.adjustment.");
+        site(r, d, "com/example/hms/service/pharmacy/ControlledDrugRegisterService.java|\"pharmacy.register.movement.\" + type",
+            "ControlledDrugRegisterService.java|pharmacy.register.movement.");
+        site(r, d, "com/example/hms/service/pharmacy/PharmacyClaimServiceImpl.java|\"pharmacy.claim.status.\" + target.name()",
+            "PharmacyClaimServiceImpl.java|pharmacy.claim.status.");
+        site(r, d, "com/example/hms/service/pharmacy/PharmacyClaimServiceImpl.java|\"pharmacy.claim.status.\" + claim.getClaimStatus().name()",
+            "PharmacyClaimServiceImpl.java|pharmacy.claim.status.");
+        site(r, d, "com/example/hms/service/pharmacy/PrescriberPharmacyNotificationWriter.java|KEY_PREFIX + event.name()",
+            "PrescriberPharmacyNotificationWriter.java|prescription.pharmacy.event.");
+        r.put("com/example/hms/service/pharmacy/PrescriberPharmacyNotificationWriter.java|text.key()",
+            new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
+        site(r, d, "com/example/hms/service/pharmacy/PrescriberPharmacyNotificationWriter.java|static final String PARTNER_TIMED_OUT_KEY = KEY_PREFIX + \"PARTNER_TIMED_OUT\"",
+            "PrescriberPharmacyNotificationWriter.java|prescription.pharmacy.event.");
+        site(r, d, "com/example/hms/service/pharmacy/PrescriberPharmacyNotificationWriter.java|static final String PARTNER_DISPENSED_WITHDRAWN_KEY = KEY_PREFIX + \"PARTNER_DISPENSED_WITHDRAWN\"",
+            "PrescriberPharmacyNotificationWriter.java|prescription.pharmacy.event.");
+        r.put("com/example/hms/service/pro/ProScreeningEscalationService.java|text.key()",
+            new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
+        r.put("com/example/hms/service/pro/ProScreeningEscalationService.java|text.key() #2",
+            new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
+        r.put("com/example/hms/service/pro/ProScreeningEscalationService.java|text.key() #3",
+            new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
+        site(r, d, "com/example/hms/service/registry/CareGapTraceService.java|\"care.gap.program.\" + enrollment.getProgram().name()",
+            "CareGapTraceService.java|care.gap.program.");
+        r.put("com/example/hms/service/reporting/ReportRunReason.java|key",
+            new Open("a report failure key stored with the run; written from a BusinessException key"));
+        site(r, d, "com/example/hms/service/roi/RoiRequestService.java|\"roi.request.status.\" + request.getStatus().name()",
+            "RoiRequestService.java|roi.request.status.");
+        r.put("com/example/hms/service/scheduling/PatientOutreachNotifier.java|text.key()",
+            new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
+        site(r, d, "com/example/hms/service/support/DrugInteractionText.java|String key = PREFIX + (a.compareTo(b) <= 0 ? a + \".\" + b : b + \".\" + a) + \".\" + field",
+            "DrugInteractionText.java|ddi.seed.");
+        site(r, d, "com/example/hms/service/support/OutboundUrlGuard.java|keyPrefix + \".\" + reason",
+            "OutboundUrlGuard.java|.");
+        site(r, d, "com/example/hms/service/timeline/TimelineStatus.java|\"timeline.status.\" + status.getDeclaringClass().getSimpleName() + \".\" + status.name()",
+            "TimelineStatus.java|timeline.status.");
+        site(r, d, "com/example/hms/service/timeline/VisitTimelineRows.java|\"timeline.immunization.source.\" + code",
+            "VisitTimelineRows.java|timeline.immunization.source.");
+        site(r, d, "com/example/hms/service/timeline/VisitTimelineRows.java|\"timeline.status.Immunization.\" + status.trim().toUpperCase(Locale.ROOT)",
+            "VisitTimelineRows.java|timeline.status.Immunization.");
+        site(r, d, "com/example/hms/service/timeline/VisitTimelineRows.java|\"timeline.enum.\" + value.name()",
+            "VisitTimelineRows.java|timeline.enum.");
+        site(r, d, "com/example/hms/service/timeline/VisitTimelineRows.java|\"pdf.record.enum.\" + value.name()",
+            "VisitTimelineRows.java|pdf.record.enum.");
+        site(r, d, "com/example/hms/service/timeline/VisitTimelineRows.java|\"pdf.record.enum.\" + status.trim().toUpperCase(Locale.ROOT)",
+            "VisitTimelineRows.java|pdf.record.enum.");
+        site(r, d, "com/example/hms/utility/EnumQueryParam.java|\"field.label.\" + param",
+            "EnumQueryParam.java|field.label.");
+        return r;
+    }
+
+    /** {@code MessageUtil.resolve(reason.code())}: the code of every step-up refusal reason. */
+    private static Domain mfaStepUpReasons() {
+        return () -> {
+            Set<String> keys = new TreeSet<>();
+            for (com.example.hms.exception.MfaStepUpRefusedException.Reason reason
+                    : com.example.hms.exception.MfaStepUpRefusedException.Reason.values()) {
+                keys.add(reason.code());
+            }
+            return keys;
+        };
+    }
+
+    /** Registers the site {@code id} with the domain {@code domain} of {@link #domains()}. */
+    private static void site(Map<String, Domain> r, Map<String, Domain> d, String id, String domain) {
+        Domain value = d.get(domain);
+        if (value == null) {
+            throw new IllegalStateException("no domain " + domain + " for " + id);
+        }
+        r.put(id, value);
+    }
+
+    /** The domains, by the file and the key fragment of the sites that use them. */
+    private static Map<String, Domain> domains() {
         Map<String, Domain> r = new LinkedHashMap<>();
 
         // ---- per enum value ----------------------------------------------------------------
@@ -328,7 +614,7 @@ final class ComputedKeys {
     private static Domain callers(String file, String method, String template) {
         return () -> {
             Set<String> keys = new TreeSet<>();
-            List<List<String>> calls = MessageKeyScanner.literalCallArguments(source(file), method, null);
+            List<List<String>> calls = MessageKeyScanner.literalCallArguments(source(file), method);
             if (calls.isEmpty()) {
                 throw new IllegalStateException(file + " has no call of " + method + " any more");
             }
@@ -510,22 +796,23 @@ final class ComputedKeys {
 
     private static synchronized Map<String, String> sources() throws IOException {
         if (sources == null) {
-            Map<String, String> out = new LinkedHashMap<>();
-            try (Stream<Path> files = Files.walk(MessageKeyScanner.MAIN_JAVA)) {
-                for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
-                    out.putIfAbsent(file.getFileName().toString(), Files.readString(file, StandardCharsets.UTF_8));
-                }
-            }
-            sources = out;
+            // By path under src/main/java, as the scanner keys them: two classes with one simple
+            // name are both kept.
+            sources = MessageKeyScanner.mainSources();
         }
         return sources;
     }
 
+    /** The source of {@code file}: a path, or a simple file name that exactly one path ends with. */
     private static String source(String file) throws IOException {
-        String text = sources().get(file);
-        if (text == null) {
-            throw new IllegalStateException("no source file " + file);
+        if (sources().containsKey(file)) {
+            return sources().get(file);
         }
-        return text;
+        List<String> matches = sources().keySet().stream().filter(p -> p.endsWith("/" + file)).toList();
+        if (matches.size() != 1) {
+            throw new IllegalStateException(matches.isEmpty() ? "no source file " + file
+                : file + " names several sources, give its path: " + matches);
+        }
+        return sources().get(matches.get(0));
     }
 }

@@ -63,8 +63,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", hospitalId));
 
         if (instrumentRepository.existsByHospitalIdAndSerialNumber(hospitalId, dto.getSerialNumber())) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("instrument.duplicate.serial", new Object[]{dto.getSerialNumber()}, locale));
+            throw BusinessRuleException.ofKey("instrument.duplicate.serial", dto.getSerialNumber());
         }
 
         Department department = resolveDepartment(dto.getDepartmentId());
@@ -85,8 +84,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
                 && !dto.getSerialNumber().equals(instrument.getSerialNumber())
                 && instrumentRepository.existsByHospitalIdAndSerialNumber(
                     instrument.getHospital().getId(), dto.getSerialNumber())) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("instrument.duplicate.serial", new Object[]{dto.getSerialNumber()}, locale));
+            throw BusinessRuleException.ofKey("instrument.duplicate.serial", dto.getSerialNumber());
         }
 
         Department department = resolveDepartment(dto.getDepartmentId());
@@ -130,7 +128,4 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
         }
     }
 
-    private String getLocalizedMessage(String key, Object[] args, Locale locale) {
-        return messageSource.getMessage(key, args, key, locale != null ? locale : LocaleContextHolder.getLocale());
-    }
 }

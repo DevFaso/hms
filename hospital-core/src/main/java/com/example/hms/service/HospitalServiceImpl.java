@@ -440,12 +440,10 @@ public class HospitalServiceImpl implements HospitalService {
 
         if (country.equals("US") || country.equals("USA")) {
             if (dto.getState() == null || dto.getState().isBlank()) {
-                throw new com.example.hms.exception.FieldBusinessException("state", messageSource.getMessage("hospital.state.required", null,
-                                "State is required for hospitals in the United States.", locale));
+                throw new com.example.hms.exception.FieldBusinessException("state", "hospital.state.required");
             }
             if (dto.getZipCode() == null || dto.getZipCode().isBlank()) {
-                throw new com.example.hms.exception.FieldBusinessException("zipCode", messageSource.getMessage("hospital.zipCode.required", null,
-                                "Zip Code is required for hospitals in the United States.", locale));
+                throw new com.example.hms.exception.FieldBusinessException("zipCode", "hospital.zipCode.required");
             }
         }
     }
