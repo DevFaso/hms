@@ -324,16 +324,6 @@ GET {{baseUrl}}/ultrasound/reports/hospital/{{hospitalId}}/anomalies
 Authorization: Bearer {{accessToken}}
 Accept: application/json
 
-### Get nuchal translucency template
-GET {{baseUrl}}/ultrasound/templates/nuchal-translucency
-Authorization: Bearer {{accessToken}}
-Accept: application/json
-
-### Get anatomy scan template
-GET {{baseUrl}}/ultrasound/templates/anatomy-scan
-Authorization: Bearer {{accessToken}}
-Accept: application/json
-
 ### ----------------------------------------
 ### HIGH-RISK PREGNANCY CARE PLANS
 ### ----------------------------------------

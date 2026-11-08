@@ -97,8 +97,13 @@ class ClinicalTemplatePrefillGuardTest {
             "private\\s++(\\w++)\\s++(\\w++)\\s*+=\\s*+\\1\\.([A-Z_]++)\\s*+;");
     private static final Pattern NULL_AS_TRUE = Pattern.compile(
             "(\\w++)\\.((?:get|is)\\w++)\\(\\)\\s*+==\\s*+null\\s*+\\|\\|\\s*+\\1\\.\\2\\(\\)(?=\\s*+[),;?:])");
-    private static final Pattern TEMPLATE_METHOD = Pattern.compile(
-            "public\\s++(\\w*+RequestDTO)\\s++(\\w*?[Tt]emplate\\w*+)\\s*+\\(");
+    /**
+     * Any public method: its return type and name are judged in code
+     * ({@link #templateMethodsIn}), so the pattern stays linear (Sonar S8786)
+     * and cannot go dead the way a possessive {@code \\w*+RequestDTO} did.
+     */
+    private static final Pattern PUBLIC_METHOD = Pattern.compile(
+            "public\\s++(?:static\\s++)?([A-Z]\\w*+)\\s++(\\w++)\\s*+\\(");
 
     /**
      * QA D1525: the ultrasound templates were removed (without the findings they
@@ -148,14 +153,56 @@ class ClinicalTemplatePrefillGuardTest {
     void noMethodReturnsAPrefilledClinicalRequest() {
         Set<String> found = new TreeSet<>();
         for (Path f : javaFiles(MAIN)) {
-            Matcher m = TEMPLATE_METHOD.matcher(read(f));
-            while (m.find()) {
-                found.add(f.getFileName() + "#" + m.group(2));
+            for (String method : templateMethodsIn(read(f))) {
+                found.add(f.getFileName() + "#" + method);
             }
         }
         assertThat(found)
                 .as("a template endpoint returning a pre-filled clinical request (QA D1525)")
                 .isEqualTo(new TreeSet<>(KNOWN_TEMPLATES));
+    }
+
+    /** The public methods of {@code source} that return a {@code *RequestDTO} and are named like a template. */
+    static List<String> templateMethodsIn(String source) {
+        List<String> methods = new java.util.ArrayList<>();
+        Matcher m = PUBLIC_METHOD.matcher(source);
+        while (m.find()) {
+            if (m.group(1).endsWith("RequestDTO") && m.group(2).toLowerCase(java.util.Locale.ROOT).contains("template")) {
+                methods.add(m.group(2));
+            }
+        }
+        return methods;
+    }
+
+    /**
+     * Each scan must still catch the shape it exists for (QA D1525 review: a
+     * possessive quantifier once made the template scan match nothing).
+     */
+    @Test
+    void everyScanCatchesItsSampleSite() {
+        assertThat(templateMethodsIn("""
+                    @Override
+                    @Transactional(readOnly = true)
+                    public UltrasoundReportRequestDTO getNuchalTranslucencyTemplate() {
+                    public UltrasoundReportResponseDTO getReportById(UUID id) {
+                    public static ImagingReportRequestDTO anatomyTemplate(int weeks) {
+                """)).containsExactly("getNuchalTranslucencyTemplate", "anatomyTemplate");
+        assertThat(TRUE_FIELD.matcher("    private Boolean fetalCardiacActivity = true;").find()).isTrue();
+        assertThat(TRUE_FIELD.matcher("    private boolean liveBirth = Boolean.TRUE;").find()).isTrue();
+        assertThat(ENUM_FIELD.matcher(
+                "    private UltrasoundFindingCategory findingCategory = UltrasoundFindingCategory.NORMAL;").find()).isTrue();
+        assertThat(NULL_AS_TRUE.matcher(".fetalToneNormal(dto.getFetalToneNormal() == null || dto.getFetalToneNormal())")
+                .find()).isTrue();
+        assertThat(NULL_AS_TRUE.matcher("if (r.getVolumeMl() == null || r.getVolumeMl() <= 0) {").find()).isFalse();
+        Matcher f = FALSE_FIELD.matcher("    private Boolean anomaliesDetected = false;");
+        assertThat(f.find() && NEGATIVE_FINDING_NAME.matcher(f.group(1)).find()).isTrue();
+        Matcher w = NULL_AS_FALSE_WRITE.matcher(".anomaliesDetected(Boolean.TRUE.equals(dto.getAnomaliesDetected()))");
+        assertThat(w.find()).isTrue();
+        assertThat(w.group(1)).isEqualTo("anomaliesDetected");
+        assertThat(w.group(2)).isEqualTo("AnomaliesDetected");
+        Matcher set = NULL_AS_FALSE_WRITE.matcher("report.setExcessiveBleeding(Boolean.TRUE.equals(request.getExcessiveBleeding()));");
+        assertThat(set.find()).isTrue();
+        assertThat(set.group(1)).isEqualTo("setExcessiveBleeding");
     }
 
     @Test

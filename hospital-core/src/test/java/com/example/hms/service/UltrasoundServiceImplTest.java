@@ -543,6 +543,7 @@ class UltrasoundServiceImplTest {
             .scanDate(LocalDate.now())
             .fetalCardiacActivity(Boolean.FALSE)
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.URGENT)
+            .observationsStated(Boolean.TRUE)
             .build();
         UltrasoundReport mapped = new UltrasoundReport();
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
@@ -554,6 +555,47 @@ class UltrasoundServiceImplTest {
 
         verify(reportRepository).save(mapped);
         assertThat(mapped.getObservationsStated()).as("saved from now on: not legacy").isTrue();
+    }
+
+    /**
+     * QA D1525 review: a stale client (no observationsStated) editing a legacy
+     * row and echoing its defaults leaves the row legacy, so the echoed true
+     * flags, "no anomalies", one fetus and NORMAL keep reading as unknown.
+     */
+    @Test
+    void createOrUpdateReport_aStaleClientEchoingLegacyDefaultsDoesNotStampThemAsStated() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.IN_PROGRESS);
+        UltrasoundReport legacy = new UltrasoundReport();
+        legacy.setUltrasoundOrder(order);
+        legacy.setHospital(hospital);
+        legacy.setReportReviewedByProvider(false);
+        UltrasoundReportRequestDTO echo = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now())
+            .fetalCardiacActivity(true).fetalMovementObserved(true).fetalToneNormal(true)
+            .anomaliesDetected(false).numberOfFetuses(1)
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
+            .findingsSummary("Revu")
+            .build();
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.of(legacy));
+        when(reportRepository.save(legacy)).thenReturn(legacy);
+
+        ultrasoundService.createOrUpdateReport(orderId, echo, null);
+
+        assertThat(legacy.getObservationsStated()).as("still legacy: the echo is not a statement").isNull();
+
+        // The D1525 portal says it states them: the row becomes stated.
+        echo.setObservationsStated(Boolean.TRUE);
+        ultrasoundService.createOrUpdateReport(orderId, echo, null);
+        assertThat(legacy.getObservationsStated()).isTrue();
+
+        // ...and is never downgraded by a stale client afterwards.
+        echo.setObservationsStated(null);
+        ultrasoundService.createOrUpdateReport(orderId, echo, null);
+        assertThat(legacy.getObservationsStated()).isTrue();
     }
 
     /** QA D1525: NORMAL cannot be saved with absent cardiac activity, abnormal tone or anomalies. */

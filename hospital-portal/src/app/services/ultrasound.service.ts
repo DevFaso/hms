@@ -65,6 +65,8 @@ export interface UltrasoundReportFields {
 }
 
 export interface UltrasoundReportRequest extends UltrasoundReportFields {
+  /** QA D1525: this client states the observations (tri-state, nothing defaulted). */
+  observationsStated?: boolean;
   /** Required by the backend on submit. */
   scanDate: string;
   findingCategory: UltrasoundFindingCategory;

@@ -10897,7 +10897,7 @@
     "FLAG_FETAL_TONE": "Tonus fœtal",
     "ANOMALIES_YES": "Anomalies détectées",
     "ANOMALIES_NO": "Aucune anomalie vue",
-    "NORMAL_CONTRADICTS_OBSERVATION": "Un résultat NORMAL contredit ce que ce compte rendu constate (activité cardiaque absente, tonus fœtal anormal ou anomalies détectées) : choisissez la catégorie qui correspond.",
+    "NORMAL_CONTRADICTS_OBSERVATION": "Un résultat NORMAL contredit ce que ce compte rendu constate (activité cardiaque absente, tonus fœtal anormal, anomalies détectées ou os propres du nez absents) : choisissez la catégorie qui correspond.",
     "FLAG_CARDIAC_PRESENT": "Présente",
     "FLAG_CARDIAC_ABSENT": "Absente",
     "FLAG_CARDIAC_NOT_ASSESSED": "Non évaluée",
@@ -10909,7 +10909,9 @@
     "FLAG_TONE_NOT_ASSESSED": "Non évalué",
     "FLAG_NOT_STATED_LEGACY": "Pas de réponse (enregistré avant que la question soit posée)",
     "ANOMALIES_NOT_ASSESSED": "Non recherchées",
-    "FETUSES_NOT_COUNTED": "Non compté"
+    "FETUSES_NOT_COUNTED": "Non compté",
+    "FETUSES_RANGE": "Le nombre de fœtus est compris entre 0 (aucun fœtus vu) et 8.",
+    "FETUSES_HINT": "0 = aucun fœtus vu"
   },
   "BIRTH_PLAN": {
     "TITLE": "Plan de naissance",

@@ -151,7 +151,8 @@ public class UltrasoundMapper {
             .scanDate(report.getScanDate())
             .scanPerformedBy(report.getScanPerformedBy())
             .scanPerformedByCredentials(report.getScanPerformedByCredentials())
-            .gestationalAgeAtScan(report.getGestationalAgeAtScan())
+            // QA D1525: a row not marked as stated reads its old defaults as unknown
+            .gestationalAgeAtScan(com.example.hms.service.maternity.LegacyUltrasoundDefaults.gestationalAgeAtScan(report))
             .gestationalAgeDays(report.getGestationalAgeDays())
             // First trimester measurements
             .nuchalTranslucencyMm(report.getNuchalTranslucencyMm())
@@ -161,7 +162,7 @@ public class UltrasoundMapper {
             .estimatedDueDate(report.getEstimatedDueDate())
             .dueDateConfirmed(report.getDueDateConfirmed())
             // Fetal count and position
-            .numberOfFetuses(report.getNumberOfFetuses())
+            .numberOfFetuses(com.example.hms.service.maternity.LegacyUltrasoundDefaults.numberOfFetuses(report))
             .fetalPosition(report.getFetalPosition())
             // Second trimester measurements
             .biparietalDiameterMm(report.getBiparietalDiameterMm())
@@ -181,17 +182,17 @@ public class UltrasoundMapper {
             .uterineArteryDoppler(report.getUterineArteryDoppler())
             // Fetal well-being
             .fetalHeartRate(report.getFetalHeartRate())
-            .fetalCardiacActivity(report.getFetalCardiacActivity())
-            .fetalMovementObserved(report.getFetalMovementObserved())
-            .fetalToneNormal(report.getFetalToneNormal())
+            .fetalCardiacActivity(com.example.hms.service.maternity.LegacyUltrasoundDefaults.flag(report, report.getFetalCardiacActivity()))
+            .fetalMovementObserved(com.example.hms.service.maternity.LegacyUltrasoundDefaults.flag(report, report.getFetalMovementObserved()))
+            .fetalToneNormal(com.example.hms.service.maternity.LegacyUltrasoundDefaults.flag(report, report.getFetalToneNormal()))
             // Anatomy
             .anatomySurveyComplete(report.getAnatomySurveyComplete())
             .anatomyFindings(report.getAnatomyFindings())
             // Findings
-            .findingCategory(report.getFindingCategory())
+            .findingCategory(com.example.hms.service.maternity.LegacyUltrasoundDefaults.findingCategory(report))
             .findingsSummary(report.getFindingsSummary())
             .interpretation(report.getInterpretation())
-            .anomaliesDetected(report.getAnomaliesDetected())
+            .anomaliesDetected(com.example.hms.service.maternity.LegacyUltrasoundDefaults.anomaliesDetected(report))
             .anomalyDescription(report.getAnomalyDescription())
             // Genetic screening
             .geneticScreeningRecommended(report.getGeneticScreeningRecommended())

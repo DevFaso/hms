@@ -200,4 +200,84 @@ class UltrasoundReportFindingsTest {
         assertThat(java.util.ResourceBundle.getBundle("i18n/messages-lab", java.util.Locale.FRENCH)
                 .getString("ultrasound.report.normalContradictsObservation")).contains("NORMAL").contains("catégorie");
     }
+
+    /** QA D1525 review: on a legacy row only the values the old code could default read as unknown. */
+    @Test
+    void aLegacyRowReadsOnlyItsPossibleDefaultsAsUnknown() {
+        UltrasoundMapper mapper = new UltrasoundMapper();
+        UltrasoundReport defaults = new UltrasoundReport();
+        defaults.setFetalCardiacActivity(true);
+        defaults.setFetalMovementObserved(true);
+        defaults.setFetalToneNormal(true);
+        defaults.setAnomaliesDetected(false);
+        defaults.setNumberOfFetuses(1);
+        defaults.setFindingCategory(UltrasoundFindingCategory.NORMAL);
+        defaults.setGestationalAgeAtScan(12);
+        var read = mapper.toReportResponseDTO(defaults);
+        assertThat(read.getFetalCardiacActivity()).isNull();
+        assertThat(read.getFetalMovementObserved()).isNull();
+        assertThat(read.getFetalToneNormal()).isNull();
+        assertThat(read.getAnomaliesDetected()).isNull();
+        assertThat(read.getNumberOfFetuses()).isNull();
+        assertThat(read.getFindingCategory()).isNull();
+        assertThat(read.getGestationalAgeAtScan()).as("the template's signature").isNull();
+        assertThat(read.getObservationsStated()).isFalse();
+
+        UltrasoundReport typed = new UltrasoundReport();
+        typed.setFetalCardiacActivity(false);
+        typed.setFetalMovementObserved(false);
+        typed.setFetalToneNormal(false);
+        typed.setAnomaliesDetected(true);
+        typed.setNumberOfFetuses(2);
+        typed.setFindingCategory(UltrasoundFindingCategory.URGENT);
+        typed.setGestationalAgeAtScan(12);
+        typed.setInterpretation("No cardiac activity");
+        var kept = mapper.toReportResponseDTO(typed);
+        assertThat(kept.getFetalCardiacActivity()).as("a typed FALSE is kept").isFalse();
+        assertThat(kept.getFetalMovementObserved()).isFalse();
+        assertThat(kept.getFetalToneNormal()).isFalse();
+        assertThat(kept.getAnomaliesDetected()).isTrue();
+        assertThat(kept.getNumberOfFetuses()).isEqualTo(2);
+        assertThat(kept.getFindingCategory()).isEqualTo(UltrasoundFindingCategory.URGENT);
+        assertThat(kept.getGestationalAgeAtScan()).as("not the template's signature: text present").isEqualTo(12);
+
+        defaults.setObservationsStated(true);
+        var stated = mapper.toReportResponseDTO(defaults);
+        assertThat(stated.getFetalCardiacActivity()).as("a stated row is read as written").isTrue();
+        assertThat(stated.getAnomaliesDetected()).isFalse();
+        assertThat(stated.getNumberOfFetuses()).isEqualTo(1);
+        assertThat(stated.getFindingCategory()).isEqualTo(UltrasoundFindingCategory.NORMAL);
+        assertThat(stated.getGestationalAgeAtScan()).isEqualTo(12);
+    }
+
+    /** QA D1525 review: 0 fetuses is a finding; negatives and implausible counts are refused on the field. */
+    @Test
+    void theFetusCountIsBounded() {
+        try (jakarta.validation.ValidatorFactory factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            jakarta.validation.Validator validator = factory.getValidator();
+            for (int bad : new int[] {-1, 9}) {
+                assertThat(validator.validate(base().numberOfFetuses(bad).findingCategory(UltrasoundFindingCategory.NORMAL).build()))
+                        .as("fetuses " + bad)
+                        .anySatisfy(v -> assertThat(v.getPropertyPath().toString()).isEqualTo("numberOfFetuses"));
+            }
+            for (int ok : new int[] {0, 1, 2, 8}) {
+                assertThat(validator.validate(base().numberOfFetuses(ok).findingCategory(UltrasoundFindingCategory.NORMAL).build()))
+                        .as("fetuses " + ok)
+                        .noneSatisfy(v -> assertThat(v.getPropertyPath().toString()).isEqualTo("numberOfFetuses"));
+            }
+        }
+        assertThat(java.util.ResourceBundle.getBundle("i18n/messages-lab", java.util.Locale.FRENCH)
+                .getString("ultrasoundReport.numberOfFetuses.range")).contains("0");
+    }
+
+    /** QA D1525 review: an absent nasal bone contradicts NORMAL; absent movement deliberately does not. */
+    @Test
+    void anAbsentNasalBoneContradictsNormalButAbsentMovementDoesNot() {
+        assertThatThrownBy(() -> UltrasoundServiceImpl.requireCategoryMatchesObservations(
+                base().nasalBonePresent(false).findingCategory(UltrasoundFindingCategory.NORMAL).build()))
+                .isInstanceOf(FieldBusinessException.class);
+        assertThatCode(() -> UltrasoundServiceImpl.requireCategoryMatchesObservations(
+                base().fetalMovementObserved(false).findingCategory(UltrasoundFindingCategory.NORMAL).build()))
+                .doesNotThrowAnyException();
+    }
 }

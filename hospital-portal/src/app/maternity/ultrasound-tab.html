@@ -267,6 +267,10 @@
                 </li>
               }
               <li>
+                {{ 'ULTRASOUND.ANOMALIES' | translate }}{{ 'COMMON.COLON' | translate }}
+                {{ anomaliesKey(rep) | translate }}
+              </li>
+              <li>
                 {{ 'ULTRASOUND.FETUSES' | translate }}{{ 'COMMON.COLON' | translate }}
                 @if (fetusCount(rep); as fetuses) {
                   {{ fetuses.key ? (fetuses.key | translate) : fetuses.count }}
@@ -590,9 +594,15 @@
             <input
               id="rep-fetuses"
               type="number"
-              min="1"
+              min="0"
+              [max]="maxFetuses"
+              step="1"
+              aria-describedby="rep-fetuses-hint"
               [(ngModel)]="reportForm.numberOfFetuses"
             />
+            <small id="rep-fetuses-hint" class="muted">{{
+              'ULTRASOUND.FETUSES_HINT' | translate
+            }}</small>
           </div>
           <div class="field">
             <label for="rep-efw">{{ 'ULTRASOUND.EFW' | translate }}</label>

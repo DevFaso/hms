@@ -2588,7 +2588,8 @@ public class PatientServiceImpl implements PatientService {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, "scanPerformedBy", report.getScanPerformedBy());
                 putIfNotNull(metadata, "reportFinalizedBy", report.getReportFinalizedBy());
-                putIfNotNull(metadata, "anomaliesDetected", report.getAnomaliesDetected());
+                // QA D1525: a legacy "no anomalies" was a default, not a finding
+                putIfNotNull(metadata, "anomaliesDetected", com.example.hms.service.maternity.LegacyUltrasoundDefaults.anomaliesDetected(report));
                 putIfNotNull(metadata, "followUpRecommendations", truncate(report.getFollowUpRecommendations()));
                 return PatientTimelineEntryDTO.builder()
                     .entryId(report.getId() != null ? report.getId().toString() : null)

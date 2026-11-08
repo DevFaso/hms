@@ -390,8 +390,10 @@ public class UltrasoundServiceImpl implements UltrasoundService {
 
     /**
      * QA D1525: a report cannot read NORMAL while it states absent cardiac
-     * activity, an abnormal fetal tone or detected anomalies. Refused on the
-     * category, which the clinician corrects.
+     * activity, an abnormal fetal tone, detected anomalies or an absent nasal
+     * bone (a recognised soft marker). Refused on the category, which the
+     * clinician corrects. Absent fetal movement is deliberately NOT a
+     * contradiction: on a single scan it can be normal (a resting fetus).
      */
     static void requireCategoryMatchesObservations(UltrasoundReportRequestDTO request) {
         if (request.getFindingCategory() != com.example.hms.enums.UltrasoundFindingCategory.NORMAL) {
@@ -399,7 +401,8 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         }
         if (Boolean.FALSE.equals(request.getFetalCardiacActivity())
                 || Boolean.FALSE.equals(request.getFetalToneNormal())
-                || Boolean.TRUE.equals(request.getAnomaliesDetected())) {
+                || Boolean.TRUE.equals(request.getAnomaliesDetected())
+                || Boolean.FALSE.equals(request.getNasalBonePresent())) {
             throw new com.example.hms.exception.FieldBusinessException("findingCategory",
                 "ultrasound.report.normalContradictsObservation");
         }
@@ -439,9 +442,15 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             ultrasoundMapper.updateReportFromRequest(report, request);
         }
 
-        // QA D1525: whatever this save carries is what the clinician stated
-        // (null = not assessed); from now on the row is no longer legacy.
-        report.setObservationsStated(Boolean.TRUE);
+        // QA D1525: the row is marked as stated only when the client says it
+        // states its observations (tri-state controls, no defaults: the
+        // D1525 portal). A stale client that echoes a legacy row's defaults
+        // (true flags, "no anomalies", one fetus, NORMAL) leaves it legacy, so
+        // those values keep reading as unknown. A stated row is never
+        // downgraded.
+        if (Boolean.TRUE.equals(request.getObservationsStated())) {
+            report.setObservationsStated(Boolean.TRUE);
+        }
 
         // Update order status
         if (order.getStatus() == UltrasoundOrderStatus.ORDERED || order.getStatus() == UltrasoundOrderStatus.SCHEDULED) {
