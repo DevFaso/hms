@@ -1602,6 +1602,8 @@
       "ORDER_REVIEW_DOSE_BEFORE_HOLD": "Dose charted as given before the hold: {{type}} {{order}} at {{at}}, dispute {{dispute}}, by {{actor}}",
       "ORDER_REVIEW_HELD_AGAIN": "Order held again after a change: {{type}} {{order}} changed after its reconfirmation, dispute {{dispute}}",
       "DEATH_RECORD_ENTERED_IN_ERROR": "Death record {{record}} marked entered in error; the patient is no longer recorded as deceased. What the death closed was not reopened. Reason: {{reason}}",
+      "DEATH_RECORD_ENTERED_IN_ERROR_NOTHING_CLOSED": "Death record {{record}} marked entered in error; the patient is no longer recorded as deceased. It had closed nothing to review ({{stays}} stay(s), {{visits}} visit(s), {{appointments}} appointment(s)). Reason: {{reason}}",
+      "DEATH_RECORD_ENTERED_IN_ERROR_REVIEW_FILED": "Death record {{record}} marked entered in error; the patient is no longer recorded as deceased. Nothing it closed was reopened: {{stays}} stay(s) marked closed in error, {{visits}} visit(s), {{appointments}} appointment(s); an urgent review was filed. Reason: {{reason}}",
       "DEATH_DISPUTED": "Death status disputed at hospital {{hospital}} by doctor {{doctor}}, death record {{record}} version {{version}}: assessed alive and identity verified. Care permitted pending review. Reason: {{reason}}",
       "DEATH_UPHELD": "Death upheld: dispute {{dispute}} closed by {{actor}}, the block on care is back at hospital {{hospital}}. Reason: {{reason}}",
       "ORDER_REVIEW_CONTINUED": "Order reconfirmed unchanged: {{type}} {{order}} version {{version}}, dispute {{dispute}}, by {{actor}}",

@@ -988,6 +988,17 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Death record (\S+) marked entered in error; the patient is no longer recorded as deceased\. Stays, visits and appointments the death closed were not reopened\. Reason: ([\s\S]*)$/,
     params: ['record', 'reason'],
   },
+  // QA D1516: the entered-in-error description now counts what the death had closed.
+  {
+    key: 'AUDIT.DESC.DEATH_RECORD_ENTERED_IN_ERROR_REVIEW_FILED',
+    re: /^Death record (\S+) marked entered in error; the patient is no longer recorded as deceased\. Stays, visits and appointments the death closed were not reopened: (\d+) stay\(s\) marked closed in error, (\d+) visit\(s\), (\d+) appointment\(s\); an urgent review was filed\. Reason: ([\s\S]*)$/,
+    params: ['record', 'stays', 'visits', 'appointments', 'reason'],
+  },
+  {
+    key: 'AUDIT.DESC.DEATH_RECORD_ENTERED_IN_ERROR_NOTHING_CLOSED',
+    re: /^Death record (\S+) marked entered in error; the patient is no longer recorded as deceased\. Stays, visits and appointments the death closed were not reopened: (\d+) stay\(s\) marked closed in error, (\d+) visit\(s\), (\d+) appointment\(s\); nothing to review\. Reason: ([\s\S]*)$/,
+    params: ['record', 'stays', 'visits', 'appointments', 'reason'],
+  },
   {
     key: 'AUDIT.DESC.DEATH_DISPUTED',
     re: /^Death status disputed at hospital (\S+) by doctor (\S+), death record (\S+) version (\S+): assessed alive and identity verified\. Care permitted pending review\. Reason: ([\s\S]*)$/,

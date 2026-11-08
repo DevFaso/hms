@@ -94,6 +94,7 @@ class DeathEnteredInErrorClosuresIT extends BaseIT {
     @Autowired private AdmissionRepository admissionRepository;
     @Autowired private DeathRecordRepository deathRecordRepository;
     @Autowired private InBasketItemRepository inBasketItemRepository;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     private Organization organization;
     private Hospital hospital;
@@ -103,6 +104,7 @@ class DeathEnteredInErrorClosuresIT extends BaseIT {
     private Patient patient;
     private Admission stay;
     private Encounter visit;
+    private final List<User> users = new java.util.ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -118,6 +120,7 @@ class DeathEnteredInErrorClosuresIT extends BaseIT {
         doctor = staffAt(doctorUser, role(ROLE_DOCTOR, "Doctor"), JobTitle.PHYSICIAN);
         adminUser = userRepository.save(buildUser("admin"));
         User patientUser = userRepository.save(buildUser("patient"));
+        users.addAll(List.of(doctorUser, adminUser, patientUser));
         staffAt(adminUser, role(ROLE_HOSPITAL_ADMIN, "Hospital admin"), JobTitle.PHYSICIAN);
 
         patient = patientRepository.save(Patient.builder()
@@ -156,9 +159,33 @@ class DeathEnteredInErrorClosuresIT extends BaseIT {
     void tearDown() {
         SecurityContextHolder.clearContext();
         HospitalContextHolder.clear();
-        // Best effort: the visit's checkout bills it, and those rows are this test's, uniquely named.
-        quietly(() -> inBasketItemRepository.deleteAllInBatch(inBasketItemRepository.findAll().stream()
-            .filter(item -> item.getPatient() != null && patient.getId().equals(item.getPatient().getId())).toList()));
+        // Every row this test made, children first: this H2 database is shared, and a row left here (the death
+        // record, the invoice the visit's checkout bills) fails the next class's wipe on its foreign key.
+        UUID patientId = patient.getId();
+        UUID hospitalId = hospital.getId();
+        jdbc.update("DELETE FROM clinical.in_basket_items WHERE patient_id = ? OR hospital_id = ?", patientId, hospitalId);
+        jdbc.update("DELETE FROM clinical.order_review_holds WHERE patient_id = ?", patientId);
+        jdbc.update("DELETE FROM billing.invoice_items WHERE billing_invoice_id IN "
+            + "(SELECT id FROM billing.billing_invoices WHERE patient_id = ? OR hospital_id = ?)", patientId, hospitalId);
+        jdbc.update("DELETE FROM billing.billing_invoices WHERE patient_id = ? OR hospital_id = ?", patientId, hospitalId);
+        jdbc.update("DELETE FROM clinical.death_records WHERE patient_id = ?", patientId);
+        jdbc.update("DELETE FROM clinical.encounter_history WHERE encounter_id IN "
+            + "(SELECT id FROM clinical.encounters WHERE patient_id = ?)", patientId);
+        jdbc.update("DELETE FROM support.audit_event_logs WHERE patient_id = ? OR hospital_id = ? OR assignment_id IN "
+            + "(SELECT id FROM \"security\".user_role_hospital_assignment WHERE hospital_id = ?)", patientId, hospitalId, hospitalId);
+        users.forEach(u -> jdbc.update("DELETE FROM support.audit_event_logs WHERE user_id = ?", u.getId()));
+        encounterRepository.deleteAll(encounterRepository.findByPatient_Id(patientId));
+        admissionRepository.deleteAll(admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId));
+        registrationRepository.deleteAll(registrationRepository.findAll().stream()
+            .filter(r -> r.getPatient() != null && patientId.equals(r.getPatient().getId())).toList());
+        patientRepository.deleteById(patientId);
+        staffRepository.deleteAll(staffRepository.findAll().stream()
+            .filter(s -> s.getHospital() != null && hospitalId.equals(s.getHospital().getId())).toList());
+        assignmentRepository.deleteAll(assignmentRepository.findAll().stream()
+            .filter(a -> a.getHospital() != null && hospitalId.equals(a.getHospital().getId())).toList());
+        users.forEach(u -> userRepository.deleteById(u.getId()));
+        hospitalRepository.deleteById(hospitalId);
+        organizationRepository.deleteById(organization.getId());
     }
 
     @Test
@@ -250,14 +277,6 @@ class DeathEnteredInErrorClosuresIT extends BaseIT {
             request.setUserPrincipal(auth);
             return authentication(auth).postProcessRequest(request);
         };
-    }
-
-    private static void quietly(Runnable cleanup) {
-        try {
-            cleanup.run();
-        } catch (RuntimeException ignored) {
-            // Leftover rows are this test's own, uniquely named.
-        }
     }
 
     private String nextId() {
