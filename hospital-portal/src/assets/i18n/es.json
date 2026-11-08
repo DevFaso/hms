@@ -10897,7 +10897,7 @@
     "FLAG_FETAL_TONE": "Tono fetal",
     "ANOMALIES_YES": "Anomalías detectadas",
     "ANOMALIES_NO": "Ninguna anomalía vista",
-    "NORMAL_CONTRADICTS_OBSERVATION": "Un hallazgo NORMAL contradice lo que constata este informe (actividad cardíaca ausente, tono fetal anormal, anomalías detectadas o ningún feto visto): elija la categoría que corresponda.",
+    "NORMAL_CONTRADICTS_OBSERVATION": "Una categoría NORMAL o VARIANTE (ningún hallazgo clínicamente significativo) contradice lo que constata este informe (actividad cardíaca ausente, tono fetal anormal o anomalías detectadas): elija la categoría que corresponda.",
     "FLAG_CARDIAC_PRESENT": "Presente",
     "FLAG_CARDIAC_ABSENT": "Ausente",
     "FLAG_CARDIAC_NOT_ASSESSED": "No evaluada",
@@ -10916,7 +10916,8 @@
     "NASAL_BONE_PRESENT": "Presente",
     "NASAL_BONE_ABSENT": "Ausente",
     "NASAL_BONE_NOT_ASSESSED": "No evaluado",
-    "NO_FETUS_CONTRADICTS_OBSERVATION": "Ningún feto visto contradice lo que constata este informe (actividad cardíaca o movimientos fetales presentes, una frecuencia cardíaca fetal, una medida fetal o un peso fetal estimado): corrija el número o las observaciones."
+    "NO_FETUS_CONTRADICTS_OBSERVATION": "Ningún feto visto contradice lo que constata este informe (actividad cardíaca o movimientos fetales presentes, una frecuencia cardíaca fetal, una medida fetal o un peso fetal estimado): corrija el número o las observaciones.",
+    "ANOMALY_DESCRIPTION_WITHOUT_ANOMALY": "Se describe una anomalía mientras el informe indica que no se vio ninguna: responda «anomalías detectadas» o borre la descripción."
   },
   "BIRTH_PLAN": {
     "TITLE": "Plan de parto",

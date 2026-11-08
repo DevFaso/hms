@@ -1,4 +1,5 @@
 import { expectKeyboardModal } from '../testing/modal-dialog-keyboard';
+import { ChangeDetectorRef } from '@angular/core';
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -10,6 +11,7 @@ import {
   hasUltrasoundFinding,
   normalContradictsObservation,
   noFetusContradictsObservation,
+  anomalyDescriptionContradictsAnswer,
 } from './ultrasound-tab';
 import {
   UltrasoundOrderResponse,
@@ -483,7 +485,7 @@ describe('UltrasoundTabComponent', () => {
         'fetalCardiacActivity',
         'fetalMovementObserved',
         'fetalToneNormal',
-        'nasal-bone',
+        'nasalBonePresent',
         'anomalies',
       ]) {
         const select = host().querySelector<HTMLSelectElement>(`#rep-${id}`);
@@ -622,7 +624,7 @@ describe('UltrasoundTabComponent', () => {
       expect(hasUltrasoundFinding({ findingsSummary: 'Grossesse évolutive' })).toBeTrue();
     });
 
-    it('refuses no fetus seen with any sign of a fetus on the fetus count, and with NORMAL on the category', () => {
+    it('refuses no fetus seen with any sign of a fetus on the fetus count, but not with NORMAL', () => {
       create(['ROLE_MIDWIFE']);
       const cmp = fixture.componentInstance;
       cmp.openReport(order());
@@ -651,11 +653,12 @@ describe('UltrasoundTabComponent', () => {
           .withContext(JSON.stringify(present))
           .toBe('true');
       }
+      // A very early sac with no fetal pole can be normal: 0 with NORMAL is not refused.
+      service.submitReport.and.returnValue(of({ id: 'r-1' } as UltrasoundReportResponse));
       cmp.reportForm = { ...cmp.emptyReportForm(), findingCategory: 'NORMAL', numberOfFetuses: 0 };
       fixture.detectChanges();
       save();
-      expect(service.submitReport).not.toHaveBeenCalled();
-      expect(host().querySelector('#rep-category')?.getAttribute('aria-invalid')).toBe('true');
+      expect(service.submitReport).toHaveBeenCalled();
       expect(
         noFetusContradictsObservation({ numberOfFetuses: 0, fetalCardiacActivity: false }),
       ).toBeFalse();
@@ -675,7 +678,8 @@ describe('UltrasoundTabComponent', () => {
       cmp.reportForm = {
         ...cmp.emptyReportForm(),
         numberOfFetuses: 0,
-        fetalCardiacActivity: true,
+        fetalHeartRate: 140,
+        anomaliesDetected: true,
         findingCategory: 'NORMAL',
       };
       fixture.detectChanges();
@@ -697,10 +701,73 @@ describe('UltrasoundTabComponent', () => {
       expect(service.submitReport).not.toHaveBeenCalled();
     });
 
-    it('NORMAL contradicts only a stated absent heart, abnormal tone, anomaly or no fetus', () => {
+    it('refuses "no anomaly" with a written description on the description, server message', () => {
+      create(['ROLE_MIDWIFE']);
+      const cmp = fixture.componentInstance;
+      cmp.openReport(order());
+      fixture.detectChanges();
+      cmp.reportForm = {
+        ...cmp.emptyReportForm(),
+        anomaliesDetected: false,
+        anomalyDescription: 'Hygroma',
+        findingCategory: 'URGENT',
+      };
+      // OnPush: the plain form object changed outside a template event.
+      fixture.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+      fixture.detectChanges();
+      expect(host().querySelector('#rep-anomaly'))
+        .withContext('the description stays visible while it has text')
+        .not.toBeNull();
+      save();
+      expect(service.submitReport).not.toHaveBeenCalled();
+      expect(host().querySelector('#rep-anomaly')?.getAttribute('aria-invalid')).toBe('true');
       expect(
-        normalContradictsObservation({ findingCategory: 'NORMAL', numberOfFetuses: 0 }),
+        anomalyDescriptionContradictsAnswer({ anomaliesDetected: true, anomalyDescription: 'x' }),
+      ).toBeFalse();
+      expect(
+        anomalyDescriptionContradictsAnswer({ anomaliesDetected: false, anomalyDescription: ' ' }),
+      ).toBeFalse();
+    });
+
+    it('shows the red anomalies badge and the labelled description on the report card', () => {
+      create(['ROLE_DOCTOR']);
+      fixture.componentInstance.openOrder(
+        order({
+          status: 'IN_PROGRESS',
+          report: {
+            id: 'r-1',
+            observationsStated: true,
+            anomaliesDetected: true,
+            anomalyDescription: 'Hygroma kystique',
+          } as UltrasoundReportResponse,
+        }),
+      );
+      fixture.detectChanges();
+      expect(host().querySelector('.view-section .risk-badge.risk-high')).not.toBeNull();
+      expect(texts('.view-section p').join(' ')).toContain('ULTRASOUND.ANOMALY_DESCRIPTION');
+      expect(texts('[data-testid="ultrasound-observations"] li')[4]).toContain(
+        'ULTRASOUND.ANOMALIES_YES',
+      );
+    });
+
+    it('NORMAL contradicts only a stated absent heart, abnormal tone, anomaly or no fetus', () => {
+      expect(normalContradictsObservation({ findingCategory: 'NORMAL', numberOfFetuses: 0 }))
+        .withContext('a very early sac with no fetal pole can be normal')
+        .toBeFalse();
+      expect(
+        normalContradictsObservation({ findingCategory: 'VARIANT', fetalCardiacActivity: false }),
+      )
+        .withContext('VARIANT also claims no significant finding')
+        .toBeTrue();
+      expect(
+        normalContradictsObservation({ findingCategory: 'VARIANT', anomaliesDetected: true }),
       ).toBeTrue();
+      expect(
+        normalContradictsObservation({
+          findingCategory: 'MONITORING_REQUIRED',
+          fetalCardiacActivity: false,
+        }),
+      ).toBeFalse();
       expect(normalContradictsObservation({ findingCategory: 'NORMAL', nasalBonePresent: false }))
         .withContext('an isolated absent nasal bone is not a hard contradiction')
         .toBeFalse();

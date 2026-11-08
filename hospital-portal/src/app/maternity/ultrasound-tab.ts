@@ -47,7 +47,7 @@ export type UltrasoundReportForm = Omit<UltrasoundReportRequest, 'findingCategor
 };
 
 /** The fields the report form may refuse. */
-const REPORT_FIELD_IDS = ['rep-date', 'rep-category', 'rep-summary', 'rep-fetuses'];
+const REPORT_FIELD_IDS = ['rep-date', 'rep-category', 'rep-summary', 'rep-fetuses', 'rep-anomaly'];
 /** QA D1525 review: 0 is "no fetus seen" (a finding); the server refuses outside 0..8. */
 export const MAX_FETUSES = 8;
 /** QA D1447: the order form's fields checked before sending. */
@@ -85,6 +85,7 @@ export const TRI_STATE_FLAGS = [
   'fetalCardiacActivity',
   'fetalMovementObserved',
   'fetalToneNormal',
+  'nasalBonePresent',
 ] as const;
 export type TriStateFlag = (typeof TRI_STATE_FLAGS)[number];
 
@@ -116,16 +117,16 @@ const FLAG_KEYS: Record<
     falseKey: 'ULTRASOUND.FLAG_TONE_ABNORMAL',
     notAssessedKey: 'ULTRASOUND.FLAG_TONE_NOT_ASSESSED',
   },
+  nasalBonePresent: {
+    labelKey: 'ULTRASOUND.NASAL_BONE',
+    trueKey: 'ULTRASOUND.NASAL_BONE_PRESENT',
+    falseKey: 'ULTRASOUND.NASAL_BONE_ABSENT',
+    notAssessedKey: 'ULTRASOUND.NASAL_BONE_NOT_ASSESSED',
+  },
 };
 /** Noun-neutral: a report saved before D1525 answered nothing. */
 const LEGACY_KEYS = {
   legacyKey: 'ULTRASOUND.FLAG_NOT_STATED_LEGACY',
-};
-const NASAL_BONE_KEYS = {
-  labelKey: 'ULTRASOUND.NASAL_BONE',
-  trueKey: 'ULTRASOUND.NASAL_BONE_PRESENT',
-  falseKey: 'ULTRASOUND.NASAL_BONE_ABSENT',
-  notAssessedKey: 'ULTRASOUND.NASAL_BONE_NOT_ASSESSED',
 };
 const ANOMALY_KEYS = {
   trueKey: 'ULTRASOUND.ANOMALIES_YES',
@@ -139,7 +140,6 @@ const FETUS_KEYS = {
 /** The tri-state answers counted as findings when stated (QA D1525). */
 const STATED_ANSWERS: readonly (keyof UltrasoundReportRequest)[] = [
   ...TRI_STATE_FLAGS,
-  'nasalBonePresent',
   'anomaliesDetected',
 ];
 
@@ -158,23 +158,31 @@ export function hasUltrasoundFinding(
   );
 }
 
+/** The categories that claim no clinically significant finding (the server's NO_SIGNIFICANT_FINDING). */
+const NO_SIGNIFICANT_FINDING: readonly string[] = ['NORMAL', 'VARIANT'];
+
 /**
- * QA D1525: NORMAL contradicts absent cardiac activity, an abnormal tone,
- * detected anomalies or no fetus seen (the server refuses the same, on the
- * category). Deliberately not: absent fetal movement (it can be normal on a
- * single scan) and an absent nasal bone (an isolated absent or hypoplastic
- * nasal bone occurs in euploid fetuses; no clinician approved a hard rule).
+ * QA D1525: a category that claims no significant finding (NORMAL, VARIANT)
+ * contradicts absent cardiac activity, an abnormal tone or detected anomalies
+ * (the server refuses the same, on the category). Deliberately not, pending a
+ * clinician: absent fetal movement, an absent nasal bone, no fetus seen.
  */
 export function normalContradictsObservation(
   form: UltrasoundReportForm | Partial<UltrasoundReportRequest>,
 ): boolean {
   return (
-    form.findingCategory === 'NORMAL' &&
+    NO_SIGNIFICANT_FINDING.includes(form.findingCategory ?? '') &&
     (form.fetalCardiacActivity === false ||
       form.fetalToneNormal === false ||
-      form.anomaliesDetected === true ||
-      form.numberOfFetuses === 0)
+      form.anomaliesDetected === true)
   );
+}
+
+/** QA D1525 review: "no anomaly" with a written description contradicts itself (refused on the description). */
+export function anomalyDescriptionContradictsAnswer(
+  form: UltrasoundReportForm | Partial<UltrasoundReportRequest>,
+): boolean {
+  return form.anomaliesDetected === false && (form.anomalyDescription ?? '').trim() !== '';
 }
 
 /**
@@ -311,7 +319,6 @@ export class UltrasoundTabComponent implements OnInit {
   reportForm: UltrasoundReportForm = this.emptyReportForm();
   readonly triStateFlags = TRI_STATE_FLAGS;
   readonly maxFetuses = MAX_FETUSES;
-  readonly nasalBoneKeys = NASAL_BONE_KEYS;
   reportActionBusy = signal(false);
 
   ngOnInit(): void {
@@ -611,40 +618,40 @@ export class UltrasoundTabComponent implements OnInit {
     return answer ? FLAG_KEYS[flag].trueKey : FLAG_KEYS[flag].falseKey;
   }
 
-  /**
-   * How a stored report reads one observation (QA D1525). The server already
-   * reads a legacy row's possible defaults as unknown (null) and keeps every
-   * typed value, so: a value is its answer; an unknown on a legacy row is "no
-   * answer (legacy)"; on a stated row it is "not assessed".
-   */
-  observationKey(report: UltrasoundReportResponse, flag: TriStateFlag): string {
-    const answer = report[flag];
-    if (answer === true || answer === false) return this.flagAnswer(flag, answer);
-    return report.observationsStated ? FLAG_KEYS[flag].notAssessedKey : LEGACY_KEYS.legacyKey;
-  }
-
-  /** The nasal bone answer as read, by the same rule. */
-  nasalBoneKey(report: UltrasoundReportResponse): string {
-    if (report.nasalBonePresent === true) return NASAL_BONE_KEYS.trueKey;
-    if (report.nasalBonePresent === false) return NASAL_BONE_KEYS.falseKey;
-    return report.observationsStated ? NASAL_BONE_KEYS.notAssessedKey : LEGACY_KEYS.legacyKey;
-  }
-
-  /** The anomalies answer as read, by the same rule. */
-  anomaliesKey(report: UltrasoundReportResponse): string {
-    if (report.anomaliesDetected === true) return ANOMALY_KEYS.trueKey;
-    if (report.anomaliesDetected === false) return ANOMALY_KEYS.falseKey;
-    return report.observationsStated ? ANOMALY_KEYS.notAssessedKey : LEGACY_KEYS.legacyKey;
-  }
-
   /** The not-assessed option of one observation, worded for its noun. */
   flagNotAssessed(flag: TriStateFlag): string {
     return FLAG_KEYS[flag].notAssessedKey;
   }
 
   /**
-   * The stored fetus count as read (QA D1525): a number, "not counted" when
-   * null, and "no answer (legacy)" for the default 1 of a pre-D1525 report.
+   * How a stored tri-state answer reads (QA D1525): a value is its answer; a
+   * null on a report that existed before D1525 is "no answer (recorded before
+   * this was asked)"; on a stated report it is "not assessed".
+   */
+  private answerKey(
+    value: boolean | null | undefined,
+    keys: { trueKey: string; falseKey: string; notAssessedKey: string },
+    stated: boolean | undefined,
+  ): string {
+    if (value === true) return keys.trueKey;
+    if (value === false) return keys.falseKey;
+    return stated ? keys.notAssessedKey : LEGACY_KEYS.legacyKey;
+  }
+
+  /** One observation as read. */
+  observationKey(report: UltrasoundReportResponse, flag: TriStateFlag): string {
+    return this.answerKey(report[flag], FLAG_KEYS[flag], report.observationsStated);
+  }
+
+  /** The anomalies answer as read. */
+  anomaliesKey(report: UltrasoundReportResponse): string {
+    return this.answerKey(report.anomaliesDetected, ANOMALY_KEYS, report.observationsStated);
+  }
+
+  /**
+   * The stored fetus count as read (QA D1525): the number (0 = no fetus seen);
+   * a null is "not counted" on a stated report and "no answer (recorded before
+   * this was asked)" on one that existed before D1525 (V282 cleared its default 1).
    */
   fetusCount(report: UltrasoundReportResponse): { count?: number; key?: string } {
     const count = report.numberOfFetuses;
@@ -738,7 +745,8 @@ export class UltrasoundTabComponent implements OnInit {
     // QA D1525 review: the same checks in the server's order, each refused on
     // the same field with the same message for the same input: the request's
     // own constraints (fetus count 0..8, the scan date), then the empty
-    // report, the category, NORMAL's contradictions, the fetus count's.
+    // report, the category, the category's contradictions, the fetus
+    // count's, the anomaly description's.
     const fetuses = form.numberOfFetuses;
     if (
       typeof fetuses === 'number' &&
@@ -767,6 +775,10 @@ export class UltrasoundTabComponent implements OnInit {
     }
     if (noFetusContradictsObservation(form)) {
       this.refuseReport('rep-fetuses', 'ULTRASOUND.NO_FETUS_CONTRADICTS_OBSERVATION');
+      return;
+    }
+    if (anomalyDescriptionContradictsAnswer(form)) {
+      this.refuseReport('rep-anomaly', 'ULTRASOUND.ANOMALY_DESCRIPTION_WITHOUT_ANOMALY');
       return;
     }
     refuseFields(this.host.nativeElement, [], REPORT_FIELD_IDS, '');

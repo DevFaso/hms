@@ -49,6 +49,8 @@ class V282UltrasoundLegacyDataIT {
     private static final UUID TYPED = UUID.randomUUID();
     private static final UUID TEMPLATE_GA_WITH_TEXT = UUID.randomUUID();
     private static final UUID STATED = UUID.randomUUID();
+    private static final UUID REVIEWED = UUID.randomUUID();
+    private static final UUID PLACENTA_TYPED = UUID.randomUUID();
 
     @Test
     void theDataStepClearsExactlyTheOldDefaultsOfLegacyRows() throws Exception {
@@ -70,6 +72,14 @@ class V282UltrasoundLegacyDataIT {
             insert(st, TEMPLATE_GA_WITH_TEXT, "NULL", "TRUE", "NULL", "NULL", "NULL", "NULL", "20", "'Morphologie normale'", "NULL");
             // A report saved after D1525: never touched, even with the same values.
             insert(st, STATED, "TRUE", "TRUE", "TRUE", "TRUE", "FALSE", "1", "12", "NULL", "NULL");
+            // A legacy report already reviewed and signed: left exactly as signed.
+            insert(st, REVIEWED, "NULL", "TRUE", "TRUE", "TRUE", "FALSE", "1", "12", "NULL", "NULL");
+            st.execute("UPDATE clinical.ultrasound_reports SET report_reviewed_by_provider = TRUE WHERE id = '"
+                + REVIEWED + "'");
+            // The template age with only the placenta typed: not the signature, the age is kept.
+            insert(st, PLACENTA_TYPED, "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "20", "NULL", "NULL");
+            st.execute("UPDATE clinical.ultrasound_reports SET placental_location = 'Antérieur' WHERE id = '"
+                + PLACENTA_TYPED + "'");
             st.execute("SET session_replication_role = origin");
         }
 
@@ -89,6 +99,17 @@ class V282UltrasoundLegacyDataIT {
                 .containsExactly("false", null, null, null, null, null, "20");
             assertThat(row(st, STATED)).as("a stated row is never touched")
                 .containsExactly("true", "t", "t", "t", "f", "1", "12");
+            assertThat(row(st, REVIEWED)).as("a reviewed legacy row stays as signed, marked legacy")
+                .containsExactly("false", "t", "t", "t", "f", "1", "12");
+            assertThat(row(st, PLACENTA_TYPED)).as("any typed column breaks the template signature")
+                .containsExactly("false", null, null, null, null, null, "20");
+            // The backup holds the original values of exactly the rows the step changed.
+            assertThat(backup(st, DEFAULTS)).containsExactly("t", "t", "t", "f", "1", "12");
+            assertThat(backup(st, TEMPLATE_GA_WITH_TEXT)).containsExactly("t", null, null, null, null, "20");
+            assertThat(backup(st, TYPED)).as("nothing changed, nothing copied").isNull();
+            assertThat(backup(st, STATED)).isNull();
+            assertThat(backup(st, REVIEWED)).isNull();
+            assertThat(backup(st, PLACENTA_TYPED)).isNull();
             try (ResultSet rs = st.executeQuery("SELECT column_default, is_nullable FROM information_schema.columns "
                     + "WHERE table_schema = 'clinical' AND table_name = 'ultrasound_reports' "
                     + "AND column_name = 'observations_stated'")) {
@@ -109,6 +130,20 @@ class V282UltrasoundLegacyDataIT {
             return Arrays.asList(marker == null ? null : (marker.startsWith("t") ? "true" : "false"),
                 bool(rs.getString(2)), bool(rs.getString(3)), bool(rs.getString(4)), bool(rs.getString(5)),
                 rs.getString(6), rs.getString(7));
+        }
+    }
+
+    private static List<String> backup(Statement st, UUID id) throws Exception {
+        try (ResultSet rs = st.executeQuery("SELECT fetal_cardiac_activity::text, fetal_movement_observed::text, "
+                + "fetal_tone_normal::text, anomalies_detected::text, number_of_fetuses::text, "
+                + "gestational_age_at_scan::text, migrated_at FROM clinical.ultrasound_report_legacy_backup WHERE id = '"
+                + id + "'")) {
+            if (!rs.next()) {
+                return null;
+            }
+            assertThat(rs.getTimestamp(7)).isNotNull();
+            return Arrays.asList(bool(rs.getString(1)), bool(rs.getString(2)), bool(rs.getString(3)),
+                bool(rs.getString(4)), rs.getString(5), rs.getString(6));
         }
     }
 

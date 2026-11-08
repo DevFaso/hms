@@ -267,10 +267,6 @@
                 </li>
               }
               <li>
-                {{ nasalBoneKeys.labelKey | translate }}{{ 'COMMON.COLON' | translate }}
-                {{ nasalBoneKey(rep) | translate }}
-              </li>
-              <li>
                 {{ 'ULTRASOUND.ANOMALIES' | translate }}{{ 'COMMON.COLON' | translate }}
                 {{ anomaliesKey(rep) | translate }}
               </li>
@@ -281,8 +277,16 @@
                 }
               </li>
             </ul>
+            @if (rep.anomaliesDetected === true) {
+              <p>
+                <span class="risk-badge risk-high">{{ 'ULTRASOUND.ANOMALIES' | translate }}</span>
+              </p>
+            }
             @if (rep.anomalyDescription) {
-              <p>{{ rep.anomalyDescription }}</p>
+              <p>
+                {{ 'ULTRASOUND.ANOMALY_DESCRIPTION' | translate }}{{ 'COMMON.COLON' | translate }}
+                {{ rep.anomalyDescription }}
+              </p>
             }
             @if (rep.followUpRequired) {
               <p class="muted">
@@ -629,14 +633,6 @@
             </div>
           }
           <div class="field">
-            <label for="rep-nasal-bone">{{ nasalBoneKeys.labelKey | translate }}</label>
-            <select id="rep-nasal-bone" [(ngModel)]="reportForm.nasalBonePresent">
-              <option [ngValue]="null">{{ nasalBoneKeys.notAssessedKey | translate }}</option>
-              <option [ngValue]="true">{{ nasalBoneKeys.trueKey | translate }}</option>
-              <option [ngValue]="false">{{ nasalBoneKeys.falseKey | translate }}</option>
-            </select>
-          </div>
-          <div class="field">
             <label for="rep-anomalies">{{ 'ULTRASOUND.ANOMALIES' | translate }}</label>
             <select id="rep-anomalies" [(ngModel)]="reportForm.anomaliesDetected">
               <option [ngValue]="null">
@@ -732,7 +728,8 @@
             {{ 'ULTRASOUND.FINALIZE' | translate }}
           </label>
         </div>
-        @if (reportForm.anomaliesDetected) {
+        <!-- QA D1525: shown while there is a description, so a refusal on it is always visible -->
+        @if (reportForm.anomaliesDetected || reportForm.anomalyDescription) {
           <div class="field">
             <label for="rep-anomaly">{{ 'ULTRASOUND.ANOMALY_DESCRIPTION' | translate }}</label>
             <textarea id="rep-anomaly" rows="2" [(ngModel)]="reportForm.anomalyDescription">

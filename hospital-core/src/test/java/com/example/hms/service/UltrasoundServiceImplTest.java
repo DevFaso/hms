@@ -592,9 +592,9 @@ class UltrasoundServiceImplTest {
     /**
      * QA D1525 review: one input, the same refusal as the portal's spec
      * ("the same input refuses on the same field on both sides"): no fetus seen,
-     * cardiac activity present and NORMAL is refused on the category first (the
-     * NORMAL contradiction runs before the fetus-count one); with URGENT and a
-     * heart rate it is refused on the fetus count.
+     * a heart rate, anomalies detected and NORMAL is refused on the category
+     * first (the category contradiction runs before the fetus-count one); with
+     * URGENT and a heart rate it is refused on the fetus count.
      */
     @Test
     void createOrUpdateReport_runsTheContradictionsInThePortalsOrder() {
@@ -605,7 +605,7 @@ class UltrasoundServiceImplTest {
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
         when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.empty());
         UltrasoundReportRequestDTO both = UltrasoundReportRequestDTO.builder()
-            .scanDate(LocalDate.now()).numberOfFetuses(0).fetalCardiacActivity(true)
+            .scanDate(LocalDate.now()).numberOfFetuses(0).fetalHeartRate(140).anomaliesDetected(true)
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL).build();
         assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, both, null))
             .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
@@ -621,6 +621,30 @@ class UltrasoundServiceImplTest {
                 assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.noFetusContradictsObservation");
             });
         verify(reportRepository, never()).save(any());
+    }
+
+    /** QA D1525 review: a summary-only edit of a legacy report leaves "not asked" as it was. */
+    @Test
+    void createOrUpdateReport_aSummaryOnlyEditKeepsALegacyReportLegacy() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.IN_PROGRESS);
+        UltrasoundReport legacy = new UltrasoundReport();
+        legacy.setUltrasoundOrder(order);
+        legacy.setHospital(hospital);
+        legacy.setReportReviewedByProvider(false);
+        legacy.setObservationsStated(false);
+        UltrasoundReportRequestDTO typoFix = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).findingsSummary("Grossesse évolutive (typo corrigé)")
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL).build();
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.of(legacy));
+        when(reportRepository.save(legacy)).thenReturn(legacy);
+
+        ultrasoundService.createOrUpdateReport(orderId, typoFix, null);
+
+        assertThat(legacy.getObservationsStated()).as("still legacy: no observation answered").isFalse();
     }
 
     /** QA D1525 review: a new report is stated whatever the client sends; the client flag plays no part. */

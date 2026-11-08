@@ -240,16 +240,16 @@ class UltrasoundReportFindingsTest {
     }
 
     /**
-     * QA D1525 review: no fetus seen contradicts NORMAL (on the category) and
-     * every sign of a fetus (on the count): cardiac activity or movement present,
-     * a heart rate, any fetal biometry, an estimated fetal weight.
+     * QA D1525 review: no fetus seen contradicts every sign of a fetus (on the
+     * count): cardiac activity or movement present, a heart rate, any fetal
+     * biometry, an estimated fetal weight. It does NOT contradict NORMAL.
      */
     @Test
-    void noFetusSeenContradictsNormalAndEverySignOfAFetus() {
+    void noFetusSeenContradictsEverySignOfAFetusButNotNormal() {
         UltrasoundReportRequestDTO normal = base().numberOfFetuses(0).findingCategory(UltrasoundFindingCategory.NORMAL).build();
-        assertThatThrownBy(() -> UltrasoundServiceImpl.requireCategoryMatchesObservations(normal))
-                .isInstanceOfSatisfying(FieldBusinessException.class,
-                        ex -> assertThat(ex.getField()).isEqualTo("findingCategory"));
+        assertThatCode(() -> UltrasoundServiceImpl.requireCategoryMatchesObservations(normal))
+                .as("a very early sac with no fetal pole can be normal: no hard rule without a clinician")
+                .doesNotThrowAnyException();
         UltrasoundReportRequestDTO[] signs = {
             base().fetalCardiacActivity(true).build(),
             base().fetalMovementObserved(true).build(),
@@ -280,5 +280,55 @@ class UltrasoundReportFindingsTest {
             assertThat(java.util.ResourceBundle.getBundle("i18n/messages-lab", locale)
                     .getString("ultrasound.report.noFetusContradictsObservation")).isNotBlank();
         }
+    }
+
+    /** QA D1525 review: VARIANT also claims no significant finding, so it is refused like NORMAL. */
+    @Test
+    void variantClaimsNoSignificantFindingLikeNormal() {
+        for (UltrasoundReportRequestDTO r : new UltrasoundReportRequestDTO[] {
+                base().fetalCardiacActivity(false).findingCategory(UltrasoundFindingCategory.VARIANT).build(),
+                base().fetalToneNormal(false).findingCategory(UltrasoundFindingCategory.VARIANT).build(),
+                base().anomaliesDetected(true).findingCategory(UltrasoundFindingCategory.VARIANT).build()}) {
+            assertThatThrownBy(() -> UltrasoundServiceImpl.requireCategoryMatchesObservations(r))
+                    .isInstanceOfSatisfying(FieldBusinessException.class,
+                            ex -> assertThat(ex.getField()).isEqualTo("findingCategory"));
+        }
+        UltrasoundReportRequestDTO monitoring = base().fetalCardiacActivity(false)
+                .findingCategory(UltrasoundFindingCategory.MONITORING_REQUIRED).build();
+        assertThatCode(() -> UltrasoundServiceImpl.requireCategoryMatchesObservations(monitoring))
+                .doesNotThrowAnyException();
+    }
+
+    /** QA D1525 review: "no anomaly" with a written anomaly description is refused on the description. */
+    @Test
+    void noAnomalyWithADescriptionIsRefusedOnTheDescription() {
+        UltrasoundReportRequestDTO contradiction = base().anomaliesDetected(false).anomalyDescription("Hygroma")
+                .findingCategory(UltrasoundFindingCategory.URGENT).build();
+        assertThatThrownBy(() -> UltrasoundServiceImpl.requireAnomalyDescriptionMatchesAnswer(contradiction))
+                .isInstanceOfSatisfying(FieldBusinessException.class, ex -> {
+                    assertThat(ex.getField()).isEqualTo("anomalyDescription");
+                    assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.anomalyDescriptionWithoutAnomaly");
+                });
+        for (UltrasoundReportRequestDTO ok : new UltrasoundReportRequestDTO[] {
+                base().anomaliesDetected(true).anomalyDescription("Hygroma").build(),
+                base().anomaliesDetected(null).anomalyDescription("Hygroma").build(),
+                base().anomaliesDetected(false).anomalyDescription("  ").build()}) {
+            assertThatCode(() -> UltrasoundServiceImpl.requireAnomalyDescriptionMatchesAnswer(ok)).doesNotThrowAnyException();
+        }
+        for (java.util.Locale locale : new java.util.Locale[] {
+                java.util.Locale.ENGLISH, java.util.Locale.FRENCH, java.util.Locale.forLanguageTag("es")}) {
+            assertThat(java.util.ResourceBundle.getBundle("i18n/messages-lab", locale)
+                    .getString("ultrasound.report.anomalyDescriptionWithoutAnomaly")).isNotBlank();
+        }
+    }
+
+    /** QA D1525 review: a save states the observations only when it answers at least one. */
+    @Test
+    void onlyAnAnsweredObservationStatesTheReport() {
+        assertThat(UltrasoundServiceImpl.statesAnObservation(base().findingsSummary("Typo corrigé").build())).isFalse();
+        assertThat(UltrasoundServiceImpl.statesAnObservation(base().fetalCardiacActivity(false).build())).isTrue();
+        assertThat(UltrasoundServiceImpl.statesAnObservation(base().nasalBonePresent(true).build())).isTrue();
+        assertThat(UltrasoundServiceImpl.statesAnObservation(base().anomaliesDetected(false).build())).isTrue();
+        assertThat(UltrasoundServiceImpl.statesAnObservation(base().numberOfFetuses(0).build())).isTrue();
     }
 }

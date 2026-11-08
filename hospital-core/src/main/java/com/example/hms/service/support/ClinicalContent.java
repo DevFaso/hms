@@ -89,8 +89,28 @@ public final class ClinicalContent {
         return false;
     }
 
-    private static boolean isAnswer(Object value) {
+    /**
+     * Whether one answer was given: a Boolean either way (a deliberate "no" is
+     * an answer), or any value {@link #isPresent} counts.
+     */
+    public static boolean isAnswer(Object value) {
         return value instanceof Boolean || isPresent(value);
+    }
+
+    /**
+     * Refuses the write when none of {@code answers} was given ({@link #isAnswer}):
+     * for findings where a stated {@code FALSE} ("cardiac activity absent") is
+     * itself a finding, unlike an unticked box.
+     */
+    public static void requireAnyAnswered(String field, String messageKey, Object... answers) {
+        if (answers != null) {
+            for (Object answer : answers) {
+                if (isAnswer(answer)) {
+                    return;
+                }
+            }
+        }
+        throw new FieldBusinessException(field, messageKey);
     }
 
     /** Refuses a required single field that is absent or blank (a consent's signer, a directive's type). */

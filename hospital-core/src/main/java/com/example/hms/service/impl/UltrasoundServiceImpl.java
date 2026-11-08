@@ -364,11 +364,11 @@ public class UltrasoundServiceImpl implements UltrasoundService {
      * {@code ClinicalTemplatePrefillGuardTest} pin it.
      */
     static void requireReportFindings(UltrasoundReportRequestDTO request) {
-        com.example.hms.service.support.ClinicalContent.requireAny("findingsSummary",
+        com.example.hms.service.support.ClinicalContent.requireAnyAnswered("findingsSummary",
             "ultrasound.report.findingsRequired",
-            stated(request.getFetalCardiacActivity()), stated(request.getFetalMovementObserved()),
-            stated(request.getFetalToneNormal()), stated(request.getNasalBonePresent()),
-            stated(request.getAnomaliesDetected()), request.getNumberOfFetuses(),
+            request.getFetalCardiacActivity(), request.getFetalMovementObserved(),
+            request.getFetalToneNormal(), request.getNasalBonePresent(),
+            request.getAnomaliesDetected(), request.getNumberOfFetuses(),
             request.getGestationalAgeAtScan(), request.getGestationalAgeDays(), request.getNuchalTranslucencyMm(),
             request.getCrownRumpLengthMm(), request.getEstimatedDueDate(),
             request.getFetalPosition(), request.getBiparietalDiameterMm(), request.getHeadCircumferenceMm(),
@@ -389,22 +389,30 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     }
 
     /**
-     * QA D1525: a report cannot read NORMAL while it states absent cardiac
-     * activity, an abnormal fetal tone, detected anomalies or no fetus seen.
-     * Refused on the category, which the clinician corrects. Deliberately NOT
-     * contradictions: absent fetal movement (it can be normal on a single scan,
-     * a resting fetus) and an absent nasal bone (an isolated absent or
-     * hypoplastic nasal bone occurs in euploid fetuses, more often in
-     * African-descent populations; no clinician approved a hard rule).
+     * The categories that claim no clinically significant finding: NORMAL and
+     * VARIANT ("not clinically significant").
+     */
+    static final java.util.Set<com.example.hms.enums.UltrasoundFindingCategory> NO_SIGNIFICANT_FINDING =
+        java.util.EnumSet.of(com.example.hms.enums.UltrasoundFindingCategory.NORMAL,
+            com.example.hms.enums.UltrasoundFindingCategory.VARIANT);
+
+    /**
+     * QA D1525: a category that claims no significant finding (NORMAL,
+     * VARIANT) cannot stand with absent cardiac activity, an abnormal fetal
+     * tone or detected anomalies. Refused on the category, which the clinician
+     * corrects. Deliberately NOT contradictions, pending a clinician: absent
+     * fetal movement (it can be normal on a single scan), an absent nasal bone
+     * (an isolated absent or hypoplastic nasal bone occurs in euploid fetuses,
+     * more often in African-descent populations) and no fetus seen (a very
+     * early scan with a sac and no fetal pole can be normal).
      */
     static void requireCategoryMatchesObservations(UltrasoundReportRequestDTO request) {
-        if (request.getFindingCategory() != com.example.hms.enums.UltrasoundFindingCategory.NORMAL) {
+        if (!NO_SIGNIFICANT_FINDING.contains(request.getFindingCategory())) {
             return;
         }
         if (Boolean.FALSE.equals(request.getFetalCardiacActivity())
                 || Boolean.FALSE.equals(request.getFetalToneNormal())
-                || Boolean.TRUE.equals(request.getAnomaliesDetected())
-                || Integer.valueOf(0).equals(request.getNumberOfFetuses())) {
+                || Boolean.TRUE.equals(request.getAnomaliesDetected())) {
             throw new com.example.hms.exception.FieldBusinessException("findingCategory",
                 "ultrasound.report.normalContradictsObservation");
         }
@@ -432,9 +440,28 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         }
     }
 
-    /** A tri-state answer as a finding: stated (true or false) or not (null). */
-    private static Boolean stated(Boolean answer) {
-        return answer != null ? Boolean.TRUE : null;
+    /**
+     * QA D1525 review: "no anomaly" with a written anomaly description
+     * contradicts itself. Refused on the description.
+     */
+    static void requireAnomalyDescriptionMatchesAnswer(UltrasoundReportRequestDTO request) {
+        String description = request.getAnomalyDescription();
+        if (Boolean.FALSE.equals(request.getAnomaliesDetected()) && description != null && !description.isBlank()) {
+            throw new com.example.hms.exception.FieldBusinessException("anomalyDescription",
+                "ultrasound.report.anomalyDescriptionWithoutAnomaly");
+        }
+    }
+
+    /**
+     * QA D1525 review: whether the request answers at least one observation
+     * (a flag, the nasal bone, the anomalies answer or the fetus count). Only
+     * such a save turns a legacy report ("not asked") into a stated one ("not
+     * assessed" for what is left null); a summary-only edit does not.
+     */
+    static boolean statesAnObservation(UltrasoundReportRequestDTO request) {
+        return java.util.stream.Stream.of(request.getFetalCardiacActivity(), request.getFetalMovementObserved(),
+                request.getFetalToneNormal(), request.getNasalBonePresent(), request.getAnomaliesDetected(),
+                request.getNumberOfFetuses()).anyMatch(com.example.hms.service.support.ClinicalContent::isAnswer);
     }
 
     @Override
@@ -457,6 +484,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         requireFindingCategory(request);
         requireCategoryMatchesObservations(request);
         requireFetusCountMatchesObservations(request);
+        requireAnomalyDescriptionMatchesAnswer(request);
 
         if (report == null) {
             report = ultrasoundMapper.toReportEntity(request, order, order.getHospital());
@@ -467,9 +495,13 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             ultrasoundMapper.updateReportFromRequest(report, request);
         }
 
-        // QA D1525: any save states the observations. V282 already removed a
-        // legacy row's old defaults, so nothing ambiguous can be echoed back.
-        report.setObservationsStated(Boolean.TRUE);
+        // QA D1525: a new report is stated (entity default). A legacy one
+        // becomes stated when this save answers at least one observation; a
+        // summary-only edit leaves "not asked" as it was. V282 already removed
+        // its old defaults, so nothing ambiguous can be echoed back.
+        if (statesAnObservation(request)) {
+            report.setObservationsStated(Boolean.TRUE);
+        }
 
         // Update order status
         if (order.getStatus() == UltrasoundOrderStatus.ORDERED || order.getStatus() == UltrasoundOrderStatus.SCHEDULED) {
