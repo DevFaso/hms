@@ -156,6 +156,54 @@ describe('LabResultsComponent', () => {
     expect(component.detailHistory()).toEqual([]);
   });
 
+  it('rejects a detail response for another patient', () => {
+    fixture.detectChanges();
+    flushInit();
+    component.viewResult(component.results()[0]);
+    httpMock
+      .expectOne('/lab-results/result-1')
+      .flush({ data: mockResult({ patientId: 'other-patient' }) });
+    expect(component.detailHistoryError()).toBeTrue();
+    expect(component.detailHistory()).toEqual([]);
+  });
+
+  it('closes the detail and ignores pending history on hospital scope changes', () => {
+    fixture.detectChanges();
+    flushInit();
+    component.viewResult(component.results()[0]);
+    const detail = httpMock.expectOne('/lab-results/result-1');
+    component.onScopeChange('new-hospital');
+    expect(component.selectedResult()).toBeNull();
+    httpMock
+      .expectOne((r) => r.url === '/lab-results')
+      .flush({ data: { content: [], totalElements: 0, totalPages: 0, number: 0 } });
+    detail.flush({
+      data: mockResult({
+        trendHistory: [
+          { resultDate: '2026-11-08T09:00:00Z', resultUnit: 'g/L', resultValue: '999' },
+        ],
+      }),
+    });
+    expect(component.detailHistory()).toEqual([]);
+  });
+
+  it('disables pager controls only at the first and last pages', () => {
+    fixture.detectChanges();
+    flushInit(Array.from({ length: 11 }, (_, i) => mockResult({ id: `result-${i}` })));
+    fixture.detectChanges();
+    const buttons = fixture.nativeElement.querySelectorAll(
+      '.results-pagination button',
+    ) as NodeListOf<HTMLButtonElement>;
+    expect(buttons[0].disabled).toBeTrue();
+    expect(buttons[1].disabled).toBeFalse();
+    buttons[1].click();
+    fixture.detectChanges();
+    expect(buttons[0].disabled).toBeFalse();
+    expect(buttons[1].disabled).toBeTrue();
+    expect(component.pageStart()).toBe(10);
+    expect(component.pageEnd()).toBe(11);
+  });
+
   it('should create the component', () => {
     expect(component).toBeTruthy();
     fixture.detectChanges();

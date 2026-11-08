@@ -7,7 +7,8 @@
     "Pinning one is a claim that a person looked and decided it is free text a",
     "human typed, or that its domain is not yet traced — not a way to make the",
     "build green.",
-    "Tracker department options are Department.name free text, traced through PatientTrackerMapper.departmentName; not an enum."
+    "Tracker department options are Department.name free text, traced through PatientTrackerMapper.departmentName; not an enum.",
+    "Result evolution unit options are LabResult.resultUnit / LabResultTrendPointDTO.resultUnit: free-text measurement-unit String fields, not enum codes. Preserve the exact recorded unit for series separation."
   ],
   "pinned": [
     "src/app/encounters/encounters.html::<option>department",
@@ -237,7 +238,8 @@
     "src/app/transfusion/transfusion.html::g.correctionReason",
     "src/app/transfusion/transfusion.html::r.reason",
     "src/app/transfusion/transfusion.html::u.source",
-    "src/app/transfusion/transfusion.html::xm.incompatibilityReason"
+    "src/app/transfusion/transfusion.html::xm.incompatibilityReason",
+    "src/app/lab/shared/result-evolution.component.ts::<option>u"
   ],
   "reasons": {
     "src/app/transfusion/transfusion.html::xm.incompatibilityReason": "the laboratory's own free text: why this crossmatch came back incompatible",

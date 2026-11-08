@@ -513,6 +513,7 @@
           </div>
 
           <app-result-evolution
+            [resultId]="r.id"
             [history]="detailHistory()"
             [preferredUnit]="r.resultUnit || ''"
             [loading]="detailHistoryLoading()"

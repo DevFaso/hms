@@ -31,14 +31,8 @@ import { AuthService } from '../../auth/auth.service';
 import { HospitalScopeUrlService } from '../../core/hospital-scope-url.service';
 import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
-import { currentLocale } from '../../shared/i18n/app-locale';
 import { shortOrderCode } from '../../shared/lab/order-code';
-import {
-  nowLocalDatetime,
-  toLocalInputValue,
-  toServerDateTime,
-  serverInstant,
-} from '../../shared/date-utils';
+import { nowLocalDatetime, toLocalInputValue, toServerDateTime } from '../../shared/date-utils';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { labSeverityFlag, labSeverityTone, labReleaseNeedsReview } from '../shared/lab-severity';
 import { LabValuePipe, formatLabNumber } from '../shared/lab-value.pipe';
@@ -752,13 +746,6 @@ export class LabResultsComponent implements OnInit {
     return actor || this.translate.instant('LAB_RESULTS.AUTOVERIFICATION');
   }
 
-  sortedTrendHistory(r: LabResultResponse): LabResultTrendPoint[] {
-    const history = r.trendHistory ?? [];
-    return [...history].sort(
-      (a, b) => serverInstant(b.resultDate).getTime() - serverInstant(a.resultDate).getTime(),
-    );
-  }
-
   formatReferenceRange(range: {
     minValue: number | null;
     maxValue: number | null;
@@ -816,15 +803,6 @@ export class LabResultsComponent implements OnInit {
       (graded.ageMax ?? null) === (range.ageMax ?? null) &&
       (graded.ageUnit ?? null) === (range.ageUnit ?? null)
     );
-  }
-
-  formatTrendDelta(sortedHistory: LabResultTrendPoint[], index: number): string {
-    const current = Number(sortedHistory[index]?.resultValue);
-    const previous = Number(sortedHistory[index + 1]?.resultValue);
-    if (!Number.isFinite(current) || !Number.isFinite(previous)) return '—';
-    const delta = current - previous;
-    const sign = delta > 0 ? '+' : '';
-    return `${sign}${new Intl.NumberFormat(currentLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(delta)}`;
   }
 
   /* ── Sign / acknowledge / compare ── */
