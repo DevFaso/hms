@@ -81,6 +81,25 @@ describe('LabResultsComponent', () => {
 
   afterEach(() => httpMock.verify());
 
+  it('renders evolution from the actual unwrapped detail response', () => {
+    fixture.detectChanges();
+    flushInit();
+    const row = component.results()[0];
+    component.viewResult(row);
+    httpMock.expectOne('/lab-results/result-1').flush({
+      ...row,
+      trendHistory: [
+        { resultDate: '2026-11-01T09:00:00Z', resultValue: '1.0', resultUnit: 'g/L' },
+        { resultDate: '2026-11-08T09:00:00Z', resultValue: '1.2', resultUnit: 'g/L' },
+      ],
+    });
+    fixture.detectChanges();
+    expect(component.detailHistoryError()).toBeFalse();
+    expect(component.detailHistory().length).toBe(2);
+    expect(fixture.nativeElement.querySelector('app-result-evolution svg')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('app-result-evolution [role="alert"]')).toBeNull();
+  });
+
   function flushInit(results: Record<string, unknown>[] = [mockResult()]): void {
     // listResults
     const resultsReq = httpMock.expectOne((r) => r.url === '/lab-results' && r.method === 'GET');
@@ -132,12 +151,10 @@ describe('LabResultsComponent', () => {
     component.viewResult({ ...first, id: 'result-2', patientId: 'patient-2' });
     httpMock
       .expectOne('/lab-results/result-2')
-      .flush({ data: { ...first, id: 'result-2', patientId: 'patient-2', trendHistory: [] } });
+      .flush({ ...first, id: 'result-2', patientId: 'patient-2', trendHistory: [] });
     pending.flush({
-      data: {
-        ...first,
-        trendHistory: [{ resultValue: '999', resultUnit: 'mg/dL', resultDate: first.resultDate }],
-      },
+      ...first,
+      trendHistory: [{ resultValue: '999', resultUnit: 'mg/dL', resultDate: first.resultDate }],
     });
     expect(component.detailHistory()[0].resultValue).toBe(first.resultValue);
     expect(component.selectedResult()?.patientId).toBe('patient-2');
@@ -159,9 +176,7 @@ describe('LabResultsComponent', () => {
     fixture.detectChanges();
     flushInit();
     component.viewResult(component.results()[0]);
-    httpMock
-      .expectOne('/lab-results/result-1')
-      .flush({ data: mockResult({ patientId: 'other-patient' }) });
+    httpMock.expectOne('/lab-results/result-1').flush(mockResult({ patientId: 'other-patient' }));
     expect(component.detailHistoryError()).toBeTrue();
     expect(component.detailHistory()).toEqual([]);
   });
@@ -179,13 +194,13 @@ describe('LabResultsComponent', () => {
     httpMock
       .expectOne((r) => r.url === '/lab-results')
       .flush({ data: { content: [], totalElements: 0, totalPages: 0, number: 0 } });
-    detail.flush({
-      data: mockResult({
+    detail.flush(
+      mockResult({
         trendHistory: [
           { resultDate: '2026-11-08T09:00:00Z', resultUnit: 'g/L', resultValue: '999' },
         ],
       }),
-    });
+    );
     expect(component.detailHistory()).toEqual([]);
   });
 
@@ -276,7 +291,7 @@ describe('LabResultsComponent', () => {
     const row = mockResult({ severityFlag: 'CRITICAL' }) as unknown as LabResultResponse;
     component.criticalList.set([row]);
     component.viewResult(component.criticalList()[0]);
-    httpMock.expectOne('/lab-results/result-1').flush({ data: row });
+    httpMock.expectOne('/lab-results/result-1').flush(row);
     expect(component.detailHistoryError()).toBeFalse();
     expect(component.detailHistory()[0].resultValue).toBe(row.resultValue);
   });
@@ -402,7 +417,7 @@ describe('LabResultsComponent', () => {
     const trigger = host.querySelector<HTMLButtonElement>('.view-link')!;
     trigger.focus();
     trigger.click();
-    httpMock.expectOne('/lab-results/result-1').flush({ data: component.results()[0] });
+    httpMock.expectOne('/lab-results/result-1').flush(component.results()[0]);
     fixture.detectChanges();
     await fixture.whenStable();
     await new Promise((resolve) => setTimeout(resolve));
@@ -489,7 +504,7 @@ describe('LabResultsComponent', () => {
         'LAB_RESULTS.CORRECTED',
       );
       component.viewResult(component.results()[0]);
-      httpMock.expectOne('/lab-results/result-1').flush({ data: component.results()[0] });
+      httpMock.expectOne('/lab-results/result-1').flush(component.results()[0]);
       fixture.detectChanges();
       expect(host.querySelector('[data-testid="detail-corrected"]')).not.toBeNull();
     });
@@ -645,7 +660,7 @@ describe('LabResultsComponent', () => {
 
     const result = component.results()[0];
     component.viewResult(result);
-    httpMock.expectOne('/lab-results/result-1').flush({ data: result });
+    httpMock.expectOne('/lab-results/result-1').flush(result);
     expect(component.selectedResult()).toBe(result);
 
     component.closeDetail();
