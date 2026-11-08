@@ -747,6 +747,51 @@ describe('UltrasoundTabComponent', () => {
       expect(host().querySelector('#rep-category')?.getAttribute('aria-invalid')).toBe('true');
     });
 
+    it('refuses to review or notify a report that records no finding', () => {
+      service.reviewReport = jasmine.createSpy('reviewReport');
+      service.notifyPatient = jasmine.createSpy('notifyPatient');
+      create(['ROLE_DOCTOR']);
+      const cmp = fixture.componentInstance;
+      const emptied = {
+        id: 'r-1',
+        findingCategory: 'NORMAL',
+        observationsStated: false,
+      } as UltrasoundReportResponse;
+      cmp.reviewReport(emptied);
+      cmp.notifyPatient(emptied);
+      expect(service.reviewReport).not.toHaveBeenCalled();
+      expect(service.notifyPatient).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not count free-text anatomy findings as a sign of a fetus', () => {
+      expect(
+        noFetusContradictsObservation({
+          numberOfFetuses: 0,
+          anatomyFindings: 'Sac gestationnel 25 mm, pas d’embryon visible',
+        }),
+      ).toBeFalse();
+    });
+
+    it('never reads a response without observationsStated as legacy', () => {
+      create(['ROLE_DOCTOR']);
+      fixture.componentInstance.openOrder(
+        order({
+          status: 'IN_PROGRESS',
+          report: {
+            id: 'r-1',
+            fetalCardiacActivity: true,
+            numberOfFetuses: 1,
+          } as UltrasoundReportResponse,
+        }),
+      );
+      fixture.detectChanges();
+      const items = texts('[data-testid="ultrasound-observations"] li');
+      expect(items[0]).toContain('ULTRASOUND.FLAG_CARDIAC_PRESENT');
+      expect(items[5]).toContain('1');
+      expect(items.join(' ')).not.toContain('ULTRASOUND.FLAG_NOT_STATED_LEGACY');
+    });
+
     it('shows the labelled anatomy findings in the report view', () => {
       create(['ROLE_DOCTOR']);
       fixture.componentInstance.openOrder(
@@ -791,7 +836,6 @@ describe('UltrasoundTabComponent', () => {
         { nasalBonePresent: false },
         { fetalToneNormal: true },
         { anomaliesDetected: true },
-        { anatomyFindings: 'Quatre cavités' },
       ]) {
         cmp.reportForm = {
           ...cmp.emptyReportForm(),

@@ -39,7 +39,7 @@ class UltrasoundObservationFieldsTest {
         assertThat(portal).as("portal TRI_STATE_FLAGS + OBSERVATION_FIELDS").isEqualTo(server);
 
         Set<String> serverFindings = UltrasoundObservations.FINDINGS.stream()
-            .map(UltrasoundObservations.Finding::name).collect(Collectors.toCollection(TreeSet::new));
+            .map(UltrasoundObservations.Field::name).collect(Collectors.toCollection(TreeSet::new));
         assertThat(new TreeSet<>(quoted(arrayLiteral(ts, "FINDING_FIELDS"))))
             .as("portal FINDING_FIELDS (the empty-report rule's other findings)").isEqualTo(serverFindings);
 

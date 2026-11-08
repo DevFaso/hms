@@ -357,6 +357,18 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             UltrasoundObservations.allFindings(request));
     }
 
+    /**
+     * QA D1525 review (the D1150 class): a stored report that states no finding
+     * - an untouched template V282 emptied, category NORMAL and nothing else -
+     * is neither reviewed nor notified to the patient: a signed "Normal" that
+     * records nothing. The same empty-report rule as a save, on the stored
+     * values.
+     */
+    static void requireStoredFindings(UltrasoundReport report) {
+        ClinicalContent.requireAnyAnswered("findingsSummary", "ultrasound.report.emptyNotReviewable",
+            UltrasoundObservations.allFindings(report));
+    }
+
     /** QA D1525 review: 0 (no fetus seen) to 8 fetuses. */
     static final int MAX_FETUSES = 8;
 
@@ -418,8 +430,8 @@ public class UltrasoundServiceImpl implements UltrasoundService {
      * QA D1525 review: no fetus seen contradicts a sign of a fetus: cardiac
      * activity or fetal movement present, a fetal heart rate, any fetal
      * biometry (BPD, HC, AC, FL, CRL), an estimated fetal weight, a nuchal
-     * translucency, any nasal-bone or fetal-tone answer, anomalies detected or
-     * written anatomy findings ({@link UltrasoundObservations#SIGNS_OF_A_FETUS},
+     * translucency, any nasal-bone or fetal-tone answer or anomalies detected
+     * ({@link UltrasoundObservations#SIGNS_OF_A_FETUS},
      * which the portal mirrors). Refused on the fetus count.
      */
     static void requireFetusCountMatchesObservations(UltrasoundReportRequestDTO request) {
@@ -523,6 +535,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         if (report.getReportReviewedByProvider() != null && report.getReportReviewedByProvider()) {
             throw new BusinessException("ultrasound.report.alreadyReviewed");
         }
+        requireStoredFindings(report);
 
         UUID hospitalId = report.getUltrasoundOrder().getHospital().getId();
         String reviewerName = resolveStaffName(reviewedByUserId, hospitalId);
@@ -550,6 +563,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         if (report.getPatientNotifiedAt() != null) {
             throw new BusinessException("ultrasound.report.patientAlreadyNotified");
         }
+        requireStoredFindings(report);
 
         report.setPatientNotifiedAt(LocalDateTime.now());
 

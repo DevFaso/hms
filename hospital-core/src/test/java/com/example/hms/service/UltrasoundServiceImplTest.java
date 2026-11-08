@@ -398,6 +398,7 @@ class UltrasoundServiceImplTest {
         report.setUltrasoundOrder(order);
         report.setHospital(hospital);
         report.setReportReviewedByProvider(null);
+        report.setFindingsSummary("Grossesse évolutive");
 
         UltrasoundReportResponseDTO responseDTO = UltrasoundReportResponseDTO.builder()
             .id(reportId)
@@ -438,6 +439,7 @@ class UltrasoundServiceImplTest {
         report.setUltrasoundOrder(order);
         report.setHospital(hospital);
         report.setReportReviewedByProvider(null);
+        report.setFindingsSummary("Grossesse évolutive");
 
         UltrasoundReportResponseDTO responseDTO = UltrasoundReportResponseDTO.builder().id(reportId).build();
 
@@ -453,6 +455,43 @@ class UltrasoundServiceImplTest {
         assertThat(report.getReportFinalizedBy()).isNull();
         assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.COMPLETED);
         assertThat(result).isSameAs(responseDTO);
+    }
+
+    /**
+     * QA D1525 review (the D1150 class): an untouched-template report V282
+     * emptied - category NORMAL, legacy, nothing else - is neither reviewed nor
+     * notified: a signed "Normal" that records nothing.
+     */
+    @Test
+    void anEmptiedLegacyReportIsNeitherReviewedNorNotified() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.IN_PROGRESS);
+        UltrasoundReport emptied = new UltrasoundReport();
+        emptied.setId(reportId);
+        emptied.setUltrasoundOrder(order);
+        emptied.setHospital(hospital);
+        emptied.setReportReviewedByProvider(false);
+        emptied.setObservationsStated(false);
+        emptied.setFindingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL);
+        emptied.setFindingsSummary("  ");
+        when(reportRepository.findById(reportId)).thenReturn(Optional.of(emptied));
+
+        assertThatThrownBy(() -> ultrasoundService.markReportReviewed(reportId, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.emptyNotReviewable"));
+        assertThatThrownBy(() -> ultrasoundService.markPatientNotified(reportId))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.emptyNotReviewable"));
+        verify(reportRepository, never()).save(any());
+        assertThat(emptied.getReportReviewedByProvider()).isFalse();
+        assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.IN_PROGRESS);
+        for (java.util.Locale locale : new java.util.Locale[] {
+                java.util.Locale.ENGLISH, java.util.Locale.FRENCH, java.util.Locale.forLanguageTag("es")}) {
+            assertThat(java.util.ResourceBundle.getBundle("i18n/messages-lab", locale)
+                .getString("ultrasound.report.emptyNotReviewable")).isNotBlank();
+        }
     }
 
     @Test
@@ -481,6 +520,7 @@ class UltrasoundServiceImplTest {
         UltrasoundReport report = new UltrasoundReport();
         report.setId(reportId);
         report.setPatientNotifiedAt(null);
+        report.setFetalHeartRate(148);
 
         UltrasoundReportResponseDTO responseDTO = UltrasoundReportResponseDTO.builder()
             .id(reportId)
@@ -1084,6 +1124,7 @@ class UltrasoundServiceImplTest {
     void reportWritesAtTheActingHospitalStillWork() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         UltrasoundReport own = reportAt(hospitalId);
+        own.setFindingsSummary("Grossesse évolutive"); // QA D1525: an empty report is neither reviewed nor notified
         when(reportRepository.findById(reportId)).thenReturn(Optional.of(own));
         when(reportRepository.save(own)).thenReturn(own);
         UltrasoundReportResponseDTO dto = UltrasoundReportResponseDTO.builder().id(reportId).build();

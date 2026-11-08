@@ -176,7 +176,7 @@ export const LEGACY_DEFAULTS: Partial<Record<keyof UltrasoundReportRequest, bool
  * D1182 exclusion only existed because those were defaults).
  */
 export function hasUltrasoundFinding(
-  form: UltrasoundReportForm | Partial<UltrasoundReportRequest>,
+  form: UltrasoundReportForm | Partial<UltrasoundReportRequest> | UltrasoundReportResponse,
 ): boolean {
   const record = form as Record<string, unknown>;
   return (
@@ -223,9 +223,10 @@ export function anomalyDescriptionContradictsAnswer(
  * QA D1525 review: no fetus seen contradicts every sign of a fetus: cardiac
  * activity or movement present, a heart rate, any fetal biometry (BPD, HC, AC,
  * FL, CRL), an estimated fetal weight, a nuchal translucency, any nasal-bone
- * or fetal-tone answer, anomalies detected or written anatomy findings (the
- * server's UltrasoundObservations.SIGNS_OF_A_FETUS, on the fetus count). Each is
- * shown and editable on the form, so the refusal names something visible.
+ * or fetal-tone answer or anomalies detected (the server's
+ * UltrasoundObservations.SIGNS_OF_A_FETUS, on the fetus count). Each is shown
+ * and editable on the form. Free text (anatomy findings) is not a sign: "sac
+ * 25 mm, no embryo seen" supports a count of 0.
  */
 export const SIGNS_OF_A_FETUS: readonly (keyof UltrasoundReportRequest)[] = [
   'fetalCardiacActivity',
@@ -241,7 +242,6 @@ export const SIGNS_OF_A_FETUS: readonly (keyof UltrasoundReportRequest)[] = [
   'nuchalTranslucencyMm',
   'nasalBonePresent',
   'fetalToneNormal',
-  'anatomyFindings',
 ];
 /** Signs that count only when TRUE (no heart, no movement, no anomaly fit an empty sac). */
 export const SIGNS_ONLY_WHEN_TRUE: readonly (keyof UltrasoundReportRequest)[] = [
@@ -726,7 +726,9 @@ export class UltrasoundTabComponent implements OnInit {
   ): string {
     // A legacy report's value equal to what the old code filled was not
     // necessarily stated (a reviewed report keeps it): no answer.
-    if (!stated && (value === null || value === undefined || value === legacyDefault)) {
+    // Legacy means exactly observationsStated === false: a response without
+    // the field is never read as legacy.
+    if (stated === false && (value === null || value === undefined || value === legacyDefault)) {
       return LEGACY_KEYS.legacyKey;
     }
     if (value === true) return keys.trueKey;
@@ -763,7 +765,7 @@ export class UltrasoundTabComponent implements OnInit {
   fetusCount(report: UltrasoundReportResponse): { count?: number; key?: string } {
     const count = report.numberOfFetuses;
     if (
-      !report.observationsStated &&
+      report.observationsStated === false &&
       (count == null || count === LEGACY_DEFAULTS.numberOfFetuses)
     ) {
       return { key: LEGACY_KEYS.legacyKey };
@@ -925,7 +927,19 @@ export class UltrasoundTabComponent implements OnInit {
     });
   }
 
+  /**
+   * QA D1525 review (the D1150 class): a report that records no finding (an
+   * untouched template V282 emptied, category NORMAL and nothing else) is
+   * neither reviewed nor notified; the server refuses the same.
+   */
+  private refuseEmptyReport(report: UltrasoundReportResponse): boolean {
+    if (hasUltrasoundFinding(report)) return false;
+    this.toast.error(this.translate.instant('ULTRASOUND.REPORT_EMPTY_NOT_REVIEWABLE'));
+    return true;
+  }
+
   reviewReport(report: UltrasoundReportResponse): void {
+    if (this.refuseEmptyReport(report)) return;
     this.reportActionBusy.set(true);
     this.ultrasoundService.reviewReport(report.id).subscribe({
       next: () => {
@@ -944,6 +958,7 @@ export class UltrasoundTabComponent implements OnInit {
   }
 
   notifyPatient(report: UltrasoundReportResponse): void {
+    if (this.refuseEmptyReport(report)) return;
     this.reportActionBusy.set(true);
     this.ultrasoundService.notifyPatient(report.id).subscribe({
       next: () => {

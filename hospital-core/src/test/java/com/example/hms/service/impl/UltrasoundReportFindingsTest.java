@@ -267,7 +267,6 @@ class UltrasoundReportFindingsTest {
             base().nasalBonePresent(false).build(),
             base().fetalToneNormal(false).build(),
             base().anomaliesDetected(true).build(),
-            base().anatomyFindings("Quatre cavités").build(),
             base().fetalCardiacActivity(true).build(),
             base().fetalMovementObserved(true).build(),
             base().fetalHeartRate(140).build(),
@@ -360,5 +359,39 @@ class UltrasoundReportFindingsTest {
         assertThat(UltrasoundServiceImpl.statesAnObservation(
                 base().numberOfFetuses(3).fetalToneNormal(false).build(), legacy)).isTrue();
         assertThat(UltrasoundServiceImpl.statesAnObservation(base().build(), null)).as("a new report").isTrue();
+    }
+
+    /** QA D1525 review: free-text anatomy findings are a finding, never a sign of a fetus. */
+    @Test
+    void anatomyTextDoesNotContradictNoFetusSeen() {
+        UltrasoundReportRequestDTO emptySac = base().numberOfFetuses(0)
+                .anatomyFindings("Sac gestationnel 25 mm, pas d'embryon visible")
+                .findingCategory(UltrasoundFindingCategory.URGENT).build();
+        assertThatCode(() -> UltrasoundServiceImpl.requireFetusCountMatchesObservations(emptySac))
+                .doesNotThrowAnyException();
+        assertThat(stated(base().anatomyFindings("Quatre cavités").build())).as("still a finding").isTrue();
+    }
+
+    /** QA D1525 review: a cleared text (blank) equals a stored null, as on the portal. */
+    @Test
+    void aBlankTextEqualsAStoredNull() {
+        UltrasoundReport stored = new UltrasoundReport();
+        stored.setObservationsStated(false);
+        UltrasoundReportRequestDTO cleared = base().anomalyDescription("   ").build();
+        assertThat(com.example.hms.service.maternity.UltrasoundObservations.differ(
+                com.example.hms.service.maternity.UltrasoundObservations.CONTRADICTION_INPUTS, cleared, stored))
+                .as("\"   \" vs null").isFalse();
+        UltrasoundReportRequestDTO typed = base().anomalyDescription("Kyste").build();
+        assertThat(com.example.hms.service.maternity.UltrasoundObservations.differ(
+                com.example.hms.service.maternity.UltrasoundObservations.CONTRADICTION_INPUTS, typed, stored))
+                .isTrue();
+    }
+
+    /** QA D1525 review: the contradiction inputs name each field once. */
+    @Test
+    void theContradictionInputsNameEachFieldOnce() {
+        java.util.List<String> names = com.example.hms.service.maternity.UltrasoundObservations.CONTRADICTION_INPUTS
+                .stream().map(com.example.hms.service.maternity.UltrasoundObservations.Field::name).toList();
+        assertThat(names).doesNotHaveDuplicates().contains("findingCategory", "anomalyDescription", "numberOfFetuses");
     }
 }
