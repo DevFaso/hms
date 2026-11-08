@@ -1,6 +1,7 @@
-<div class="page-container">
+<div class="page-container pharmacy-workspace">
   <div class="page-header">
     <div>
+      <p class="workspace-eyebrow">{{ 'PHARMACY_DASH.WORKSPACE' | translate }}</p>
       <h1 class="page-title">{{ 'PHARMACY.INVENTORY_TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'PHARMACY.INVENTORY_SUBTITLE' | translate }}</p>
     </div>
@@ -28,20 +29,44 @@
     </div>
   </div>
 
+  @if (pharmacyFailed()) {
+    <div class="workspace-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+      <button class="btn-secondary" (click)="loadPharmacies()">
+        {{ 'PHARMACY_DASH.RETRY' | translate }}
+      </button>
+    </div>
+  }
   <!-- Tabs -->
   <div class="tab-bar">
-    <button class="tab-btn" [class.active]="activeTab() === 'stock'" (click)="setTab('stock')">
+    <button
+      class="tab-btn"
+      [class.active]="activeTab() === 'stock'"
+      [attr.aria-pressed]="activeTab() === 'stock'"
+      (click)="setTab('stock')"
+    >
       <span class="material-symbols-outlined">inventory_2</span>
       {{ 'PHARMACY.STOCK_LEVELS' | translate }}
     </button>
-    <button class="tab-btn" [class.active]="activeTab() === 'alerts'" (click)="setTab('alerts')">
+    <button
+      class="tab-btn"
+      [class.active]="activeTab() === 'alerts'"
+      [attr.aria-pressed]="activeTab() === 'alerts'"
+      (click)="setTab('alerts')"
+    >
       <span class="material-symbols-outlined">warning</span>
       {{ 'PHARMACY.REORDER_ALERTS' | translate }}
       @if (alertItems().length > 0) {
         <span class="alert-count">{{ alertItems().length }}</span>
       }
     </button>
-    <button class="tab-btn" [class.active]="activeTab() === 'expiry'" (click)="setTab('expiry')">
+    <button
+      class="tab-btn"
+      [class.active]="activeTab() === 'expiry'"
+      [attr.aria-pressed]="activeTab() === 'expiry'"
+      (click)="setTab('expiry')"
+    >
       <span class="material-symbols-outlined">event_busy</span>
       {{ 'PHARMACY.EXPIRY_REPORT' | translate }}
     </button>
@@ -49,13 +74,70 @@
 
   <!-- Stock Levels Tab -->
   @if (activeTab() === 'stock') {
-    @if (stockLoading()) {
+    @if (!stockLoading() && !stockFailed() && selectedPharmacyId) {
+      <section class="workspace-stats" [attr.aria-label]="'PHARMACY_DASH.SUMMARY' | translate">
+        <div class="workspace-stat stat-lead">
+          <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>
+          <div>
+            <strong>{{ inventoryItems().length }}</strong
+            ><span>{{ 'PHARMACY_DASH.LOADED' | translate }}</span>
+          </div>
+        </div>
+        <div class="workspace-stat">
+          <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
+          <div>
+            <strong>{{ stockCount('stock-ok') }}</strong
+            ><span>{{ 'PHARMACY.IN_STOCK' | translate }}</span>
+          </div>
+        </div>
+        <div class="workspace-stat">
+          <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+          <div>
+            <strong>{{ stockCount('stock-low') }}</strong
+            ><span>{{ 'PHARMACY_DASH.LOW' | translate }}</span>
+          </div>
+        </div>
+        <div class="workspace-stat">
+          <span class="material-symbols-outlined" aria-hidden="true">block</span>
+          <div>
+            <strong>{{ stockCount('stock-out') }}</strong
+            ><span>{{ 'PHARMACY_DASH.OUT' | translate }}</span>
+          </div>
+        </div>
+      </section>
+      <div class="workspace-toolbar">
+        <label class="workspace-search"
+          ><span class="material-symbols-outlined" aria-hidden="true">search</span
+          ><input
+            [(ngModel)]="searchTerm"
+            [attr.aria-label]="'PHARMACY_DASH.SEARCH_STOCK' | translate"
+            [placeholder]="'PHARMACY_DASH.SEARCH_STOCK' | translate" /></label
+        ><span class="workspace-note">{{ 'PHARMACY_DASH.PAGE_SCOPE' | translate }}</span>
+      </div>
+    }
+    @if (stockFailed()) {
+      <div class="workspace-error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+        <button class="btn-secondary" (click)="loadStockLevels()">
+          {{ 'PHARMACY_DASH.RETRY' | translate }}
+        </button>
+      </div>
+    } @else if (stockLoading()) {
       <div class="loading-state">
         <div class="spinner"></div>
         <p>{{ 'COMMON.LOADING' | translate }}</p>
       </div>
     } @else if (inventoryItems().length > 0) {
-      <div class="table-wrapper">
+      @if (visibleStock().length === 0) {
+        <p class="workspace-note" role="status">{{ 'PHARMACY_DASH.NO_MATCHES' | translate }}</p>
+      }
+      <div
+        class="table-wrapper"
+        tabindex="0"
+        role="region"
+        [attr.aria-label]="'PHARMACY.INVENTORY_TITLE' | translate"
+      >
         <table class="data-table">
           <thead>
             <tr>
@@ -69,7 +151,7 @@
             </tr>
           </thead>
           <tbody>
-            @for (item of inventoryItems(); track item.id) {
+            @for (item of visibleStock(); track item.id) {
               <tr>
                 <td class="med-name">{{ item.medicationName || item.medicationCode | dash }}</td>
                 <td>
@@ -191,7 +273,15 @@
         </button>
       </div>
     }
-    @if (alertsLoading()) {
+    @if (alertsFailed()) {
+      <div class="workspace-error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+        <button class="btn-secondary" (click)="loadReorderAlerts()">
+          {{ 'PHARMACY_DASH.RETRY' | translate }}
+        </button>
+      </div>
+    } @else if (alertsLoading()) {
       <div class="loading-state">
         <div class="spinner"></div>
         <p>{{ 'COMMON.LOADING' | translate }}</p>
@@ -248,13 +338,26 @@
         <option [ngValue]="365">365</option>
       </select>
     </div>
-    @if (expiryLoading()) {
+    @if (expiryFailed()) {
+      <div class="workspace-error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+        <button class="btn-secondary" (click)="loadExpiringLots()">
+          {{ 'PHARMACY_DASH.RETRY' | translate }}
+        </button>
+      </div>
+    } @else if (expiryLoading()) {
       <div class="loading-state">
         <div class="spinner"></div>
         <p>{{ 'COMMON.LOADING' | translate }}</p>
       </div>
     } @else if (expiringLots().length > 0) {
-      <div class="table-wrapper">
+      <div
+        class="table-wrapper"
+        tabindex="0"
+        role="region"
+        [attr.aria-label]="'PHARMACY.EXPIRY_REPORT' | translate"
+      >
         <table class="data-table">
           <thead>
             <tr>

@@ -64,6 +64,28 @@ export class GoodsReceiptComponent implements OnInit {
   selectedPharmacyId = '';
   inventoryItems = signal<InventoryItemResponse[]>([]);
 
+  private scopeVersion = 0;
+  private lotsVersion = 0;
+  private itemsVersion = 0;
+  pharmacyFailed = signal(false);
+  lotsFailed = signal(false);
+  itemsFailed = signal(false);
+  readonly recentLotsLimit = RECENT_LOTS;
+  searchTerm = '';
+  visibleLots(): StockLotResponse[] {
+    const query = this.searchTerm.trim().toLocaleLowerCase();
+    return this.recentLots().filter(
+      (lot) =>
+        !query ||
+        [lot.lotNumber, lot.supplier, this.lotMedication(lot)].some((value) =>
+          value?.toLocaleLowerCase().includes(query),
+        ),
+    );
+  }
+  lotMedication(lot: StockLotResponse): string {
+    const item = this.inventoryItems().find((entry) => entry.id === lot.inventoryItemId);
+    return item ? this.getItemName(item) : this.translate.instant('PHARMACY.UNKNOWN_ITEM');
+  }
   // Recent lots
   recentLots = signal<StockLotResponse[]>([]);
   lotsLoading = signal(false);
@@ -89,8 +111,9 @@ export class GoodsReceiptComponent implements OnInit {
     return !!this.inventoryItems().find((i) => i.id === this.selectedInventoryItemId)?.controlled;
   }
 
-  private loadPharmacies(): void {
-    // QA D1347: every pharmacy (all pages), not the first 100.
+  loadPharmacies(): void {
+    this.pharmacyFailed.set(false);
+    // Keep the upstream complete pharmacy selector (QA D1347).
     allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
       next: (list) => {
         this.pharmacies.set(list);
@@ -100,45 +123,59 @@ export class GoodsReceiptComponent implements OnInit {
           this.onPharmacyChange();
         }
       },
+      error: () => this.pharmacyFailed.set(true),
     });
   }
 
   onPharmacyChange(): void {
+    this.scopeVersion++;
+    this.inventoryItems.set([]);
+    this.itemsFailed.set(false);
+    this.recentLots.set([]);
+    this.searchTerm = '';
+    this.closeForm();
     if (!this.selectedPharmacyId) return;
     this.loadInventoryItems();
     this.loadRecentLots();
   }
 
-  private loadInventoryItems(): void {
-    // QA D1347: every inventory item of the pharmacy (all pages), not the first 200.
+  loadInventoryItems(): void {
+    const scope = this.scopeVersion;
+    const version = ++this.itemsVersion;
+    const pharmacyId = this.selectedPharmacyId;
+    this.itemsFailed.set(false);
     allRows((page, size) =>
-      this.svc
-        .listInventoryByPharmacy(this.selectedPharmacyId, page, size)
-        .pipe(map((r) => r?.data)),
+      this.svc.listInventoryByPharmacy(pharmacyId, page, size).pipe(map((r) => r?.data)),
     ).subscribe({
       next: (items) => {
+        if (scope !== this.scopeVersion || version !== this.itemsVersion) return;
         this.inventoryItems.set(items);
+      },
+      error: () => {
+        if (scope !== this.scopeVersion || version !== this.itemsVersion) return;
+        this.itemsFailed.set(true);
       },
     });
   }
 
-  /**
-   * QA D1233 (round 24): the newest lots received at the pharmacy, across
-   * every item, in one read sorted by the server. This used to read the
-   * first ten inventory items and the lots of the first FIVE of them, so a
-   * lot of the sixth item (Artéméther-luméfantrine, just received) never
-   * appeared.
-   */
-  private loadRecentLots(): void {
+  /** Keep QA D1233: newest lots across every pharmacy item in one server-sorted read. */
+  loadRecentLots(): void {
+    const scope = this.scopeVersion;
+    const version = ++this.lotsVersion;
     this.lotsLoading.set(true);
+    this.lotsFailed.set(false);
+    this.recentLots.set([]);
     this.svc
       .listLotsByPharmacy(this.selectedPharmacyId, 0, RECENT_LOTS, RECENT_LOTS_SORT)
       .subscribe({
         next: (res) => {
+          if (scope !== this.scopeVersion || version !== this.lotsVersion) return;
           this.recentLots.set(res?.data?.content ?? []);
           this.lotsLoading.set(false);
         },
         error: () => {
+          if (scope !== this.scopeVersion || version !== this.lotsVersion) return;
+          this.lotsFailed.set(true);
           this.lotsLoading.set(false);
         },
       });

@@ -2,11 +2,12 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import fr from '../../assets/i18n/fr.json';
 import es from '../../assets/i18n/es.json';
-import { of } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { MedicationCatalogComponent } from './medication-catalog';
 import { PharmacyService, MedicationCatalogItemResponse } from '../services/pharmacy.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ToastService } from '../core/toast.service';
 
 const item = {
   id: 'm-1',
@@ -163,5 +164,64 @@ describe('MedicationCatalogComponent — the category column is labelled (QA D52
     const cells = renderIn('es');
     expect(cells).toContain('Analgésico');
     expect(cells).not.toContain('ANALGESIC');
+  });
+});
+
+describe('Medication catalogue search ordering', () => {
+  it('announces a failed list inline once and recovers through Retry', () => {
+    const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', ['listMedications']);
+    svc.listMedications.and.returnValues(
+      throwError(() => new Error('offline')),
+      of({ content: [item], totalElements: 1, totalPages: 1, size: 20, number: 0 }),
+    );
+    const toast = jasmine.createSpyObj<ToastService>('ToastService', ['error']);
+    TestBed.configureTestingModule({
+      imports: [MedicationCatalogComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: PharmacyService, useValue: svc },
+        { provide: ToastService, useValue: toast },
+        { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => false } },
+      ],
+    });
+    const fixture = TestBed.createComponent(MedicationCatalogComponent);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelectorAll('[role="alert"]').length).toBe(1);
+    expect(el.querySelector('table')).toBeNull();
+    expect(el.querySelector('.empty-state')).toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
+    el.querySelector<HTMLButtonElement>('[role="alert"] button')!.click();
+    fixture.detectChanges();
+    expect(svc.listMedications).toHaveBeenCalledTimes(2);
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+    expect(el.querySelector('table')).not.toBeNull();
+  });
+
+  it('keeps the latest search when the earlier request finishes last', () => {
+    const old = new Subject<any>();
+    const latest = new Subject<any>();
+    const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', ['searchMedications']);
+    svc.searchMedications.and.returnValues(old, latest);
+    TestBed.configureTestingModule({
+      imports: [MedicationCatalogComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: PharmacyService, useValue: svc },
+        { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => true } },
+      ],
+    });
+    const c = TestBed.createComponent(MedicationCatalogComponent).componentInstance;
+    c.searchTerm = 'old';
+    c.onSearch();
+    c.searchTerm = 'latest';
+    c.onSearch();
+    latest.next({
+      content: [{ ...item, id: 'latest', essentialList: true }],
+      totalElements: 1,
+      totalPages: 1,
+    });
+    old.next({ content: [{ ...item, id: 'old' }], totalElements: 5, totalPages: 1 });
+    expect(c.filtered()[0].id).toBe('latest');
+    expect(c.totalElements).toBe(1);
+    expect(c.pageCount('essentialList')).toBe(1);
   });
 });

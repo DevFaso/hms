@@ -64,6 +64,28 @@ export class InventoryDashboardComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
+  searchTerm = '';
+  private scopeVersion = 0;
+  private stockVersion = 0;
+  private alertsVersion = 0;
+  private expiryVersion = 0;
+  pharmacyFailed = signal(false);
+  stockFailed = signal(false);
+  alertsFailed = signal(false);
+  expiryFailed = signal(false);
+  visibleStock(): InventoryItemResponse[] {
+    const query = this.searchTerm.trim().toLocaleLowerCase();
+    return this.inventoryItems().filter(
+      (item) =>
+        !query ||
+        [item.medicationName, item.medicationCode].some((value) =>
+          value?.toLocaleLowerCase().includes(query),
+        ),
+    );
+  }
+  stockCount(status: string): number {
+    return this.inventoryItems().filter((item) => this.getStockStatusClass(item) === status).length;
+  }
   activeTab = signal<'stock' | 'alerts' | 'expiry'>('stock');
 
   /**
@@ -109,8 +131,9 @@ export class InventoryDashboardComponent implements OnInit {
     this.loadPharmacies();
   }
 
-  private loadPharmacies(): void {
-    // QA D1347: every pharmacy (all pages), not the first 100.
+  loadPharmacies(): void {
+    this.pharmacyFailed.set(false);
+    // Keep the upstream complete pharmacy selector (QA D1347).
     allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
       next: (list) => {
         this.pharmacies.set(list);
@@ -120,10 +143,18 @@ export class InventoryDashboardComponent implements OnInit {
           this.loadTabData();
         }
       },
+      error: () => this.pharmacyFailed.set(true),
     });
   }
 
   onPharmacyChange(): void {
+    this.scopeVersion++;
+    this.inventoryItems.set([]);
+    this.alertItems.set([]);
+    this.expiringLots.set([]);
+    this.editingPriceId.set(null);
+    this.searchTerm = '';
+    this.totalPages = 0;
     this.currentPage = 0;
     this.loadTabData();
   }
@@ -142,46 +173,61 @@ export class InventoryDashboardComponent implements OnInit {
   }
 
   loadStockLevels(): void {
+    const scope = this.scopeVersion;
+    const version = ++this.stockVersion;
+    this.stockFailed.set(false);
     this.stockLoading.set(true);
     this.svc
       .listInventoryByPharmacy(this.selectedPharmacyId, this.currentPage, this.pageSize)
       .subscribe({
         next: (res) => {
+          if (scope !== this.scopeVersion || version !== this.stockVersion) return;
           const page = res?.data;
           this.inventoryItems.set(page?.content ?? []);
           this.totalPages = page?.totalPages ?? 0;
           this.stockLoading.set(false);
         },
         error: () => {
-          this.toast.error(this.translate.instant('PHARMACY.INVENTORY_LOAD_FAILED'));
+          if (scope !== this.scopeVersion || version !== this.stockVersion) return;
+          this.stockFailed.set(true);
           this.stockLoading.set(false);
         },
       });
   }
 
   loadReorderAlerts(): void {
+    const scope = this.scopeVersion;
+    const version = ++this.alertsVersion;
+    this.alertsFailed.set(false);
     this.alertsLoading.set(true);
     this.svc.getReorderAlertsByPharmacy(this.selectedPharmacyId).subscribe({
       next: (res) => {
+        if (scope !== this.scopeVersion || version !== this.alertsVersion) return;
         this.alertItems.set(res?.data ?? []);
         this.alertsLoading.set(false);
       },
       error: () => {
-        this.toast.error(this.translate.instant('PHARMACY.ALERTS_LOAD_FAILED'));
+        if (scope !== this.scopeVersion || version !== this.alertsVersion) return;
+        this.alertsFailed.set(true);
         this.alertsLoading.set(false);
       },
     });
   }
 
   loadExpiringLots(): void {
+    const scope = this.scopeVersion;
+    const version = ++this.expiryVersion;
+    this.expiryFailed.set(false);
     this.expiryLoading.set(true);
     this.svc.getExpiringSoon(this.selectedPharmacyId, this.daysAhead).subscribe({
       next: (res) => {
+        if (scope !== this.scopeVersion || version !== this.expiryVersion) return;
         this.expiringLots.set(res?.data ?? []);
         this.expiryLoading.set(false);
       },
       error: () => {
-        this.toast.error(this.translate.instant('PHARMACY.EXPIRING_LOAD_FAILED'));
+        if (scope !== this.scopeVersion || version !== this.expiryVersion) return;
+        this.expiryFailed.set(true);
         this.expiryLoading.set(false);
       },
     });

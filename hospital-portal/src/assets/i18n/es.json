@@ -13178,5 +13178,25 @@
     "PROVIDER": "Profesional sanitario",
     "DEPARTMENT": "Servicio",
     "NO_SECTIONS": "No se recibieron secciones adicionales en este resumen de la visita."
+  },
+  "PHARMACY_DASH": {
+    "WORKSPACE": "Espacio de farmacia",
+    "SUMMARY": "Resumen del panel",
+    "RESULTS": "Resultados del catálogo",
+    "LOADED": "Filas de esta página",
+    "ESSENTIAL": "Esenciales · esta página",
+    "CONTROLLED": "Controlados · esta página",
+    "LOW": "Existencias bajas · esta página",
+    "OUT": "Agotados · esta página",
+    "SEARCH_STOCK": "Buscar medicamentos en esta página",
+    "PAGE_SCOPE": "Los contadores cubren solo la página cargada.",
+    "NO_MATCHES": "Ninguna fila cargada coincide. Borre la búsqueda para volver a verlas.",
+    "LOT_SCOPE": "Los {{count}} últimos lotes recibidos de todos los artículos de la farmacia seleccionada. Esta vista no es un historial completo de entregas.",
+    "SEARCH_LOTS": "Buscar lotes, medicamentos o proveedores cargados",
+    "LOTS_LOADED": "{{count}} lotes cargados",
+    "LOT_LOADED": "{{count}} lote cargado",
+    "LOAD_FAILED": "No se pudo cargar esta lista. Inténtelo de nuevo.",
+    "RETRY": "Reintentar",
+    "RX_SCOPE": "Resumen de recetas cargadas. Use las pestañas de estado para encontrar órdenes que requieren atención."
   }
 }

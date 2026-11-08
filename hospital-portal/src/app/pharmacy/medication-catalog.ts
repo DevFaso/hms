@@ -101,6 +101,11 @@ export class MedicationCatalogComponent implements OnInit {
   items = signal<MedicationCatalogItemResponse[]>([]);
   filtered = signal<MedicationCatalogItemResponse[]>([]);
   loading = signal(true);
+  loadFailed = signal(false);
+  private readVersion = 0;
+  pageCount(flag: 'essentialList' | 'controlled'): number {
+    return this.filtered().filter((item) => item[flag]).length;
+  }
   searchTerm = '';
 
   // Pagination
@@ -130,6 +135,8 @@ export class MedicationCatalogComponent implements OnInit {
   }
 
   loadItems(): void {
+    const version = ++this.readVersion;
+    this.loadFailed.set(false);
     this.loading.set(true);
     const obs = this.searchTerm.trim()
       ? this.svc.searchMedications(this.searchTerm.trim(), this.currentPage, this.pageSize)
@@ -137,6 +144,7 @@ export class MedicationCatalogComponent implements OnInit {
 
     obs.subscribe({
       next: (page) => {
+        if (version !== this.readVersion) return;
         const list = page?.content ?? [];
         this.items.set(list);
         this.filtered.set(list);
@@ -145,7 +153,8 @@ export class MedicationCatalogComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error(this.translate.instant('PHARMACY.CATALOG_LOAD_FAILED'));
+        if (version !== this.readVersion) return;
+        this.loadFailed.set(true);
         this.loading.set(false);
       },
     });

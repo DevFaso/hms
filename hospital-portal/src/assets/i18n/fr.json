@@ -13178,5 +13178,25 @@
     "PROVIDER": "Professionnel de santé",
     "DEPARTMENT": "Service",
     "NO_SECTIONS": "Aucune section supplémentaire n’a été transmise dans ce résumé de visite."
+  },
+  "PHARMACY_DASH": {
+    "WORKSPACE": "Espace pharmacie",
+    "SUMMARY": "Synthèse du tableau de bord",
+    "RESULTS": "Résultats du catalogue",
+    "LOADED": "Lignes de cette page",
+    "ESSENTIAL": "Essentiels · cette page",
+    "CONTROLLED": "Contrôlés · cette page",
+    "LOW": "Stock faible · cette page",
+    "OUT": "En rupture · cette page",
+    "SEARCH_STOCK": "Rechercher un médicament sur cette page",
+    "PAGE_SCOPE": "Les compteurs concernent uniquement la page chargée.",
+    "NO_MATCHES": "Aucune ligne chargée ne correspond. Effacez la recherche pour les retrouver.",
+    "LOT_SCOPE": "Les {{count}} derniers lots reçus, tous articles confondus, dans la pharmacie sélectionnée. Cette vue ne constitue pas un historique complet des livraisons.",
+    "SEARCH_LOTS": "Rechercher un lot, médicament ou fournisseur chargé",
+    "LOTS_LOADED": "{{count}} lots chargés",
+    "LOT_LOADED": "{{count}} lot chargé",
+    "LOAD_FAILED": "Impossible de charger cette liste. Réessayez.",
+    "RETRY": "Réessayer",
+    "RX_SCOPE": "Aperçu des ordonnances chargées. Utilisez les onglets de statut pour retrouver les ordonnances nécessitant une attention."
   }
 }
