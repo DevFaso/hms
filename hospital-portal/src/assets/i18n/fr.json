@@ -12135,6 +12135,15 @@
     "DRAFT_REVIEW": "Brouillon / revue",
     "NO_MATCHES": "Aucun dossier chargé ne correspond aux filtres actuels."
   },
+  "VISIT_SUMMARY": {
+    "EYEBROW": "DOCUMENT DE CONSULTATION",
+    "PATIENT": "Nom du patient",
+    "READ_ONLY": "Document de visite en lecture seule",
+    "NOT_PROVIDED": "Non renseigné",
+    "PROVIDER": "Professionnel de santé",
+    "DEPARTMENT": "Service",
+    "NO_SECTIONS": "Aucune section supplémentaire n’a été transmise dans ce résumé de visite."
+  },
   "PHARMACY_DASH": {
     "WORKSPACE": "Espace pharmacie",
     "SUMMARY": "Synthèse du tableau de bord",

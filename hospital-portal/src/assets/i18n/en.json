@@ -12135,6 +12135,15 @@
     "DRAFT_REVIEW": "Draft / review",
     "NO_MATCHES": "No loaded records match the current filters."
   },
+  "VISIT_SUMMARY": {
+    "EYEBROW": "VISIT DOCUMENT",
+    "PATIENT": "Patient name",
+    "READ_ONLY": "Read-only visit document",
+    "NOT_PROVIDED": "Not provided",
+    "PROVIDER": "Clinician",
+    "DEPARTMENT": "Department",
+    "NO_SECTIONS": "No additional visit-summary sections were returned."
+  },
   "PHARMACY_DASH": {
     "WORKSPACE": "Pharmacy workspace",
     "SUMMARY": "Dashboard summary",

@@ -1,5 +1,10 @@
+import { VisitSummaryDialogComponent } from './visit-summary-dialog/visit-summary-dialog.component';
 import {
   Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  viewChild,
   computed,
   inject,
   OnInit,
@@ -48,6 +53,7 @@ import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
   imports: [
     PatientSublinePipe,
     ServerTimePipe,
+    VisitSummaryDialogComponent,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -257,6 +263,8 @@ export class EncountersComponent implements OnInit {
   transitioning = signal(false);
   avs = signal<AfterVisitSummary | null>(null);
   avsLoading = signal(false);
+  private readonly avsTrigger = viewChild<ElementRef<HTMLButtonElement>>('avsTrigger');
+  private readonly viewInjector = inject(Injector);
 
   // Dropdowns
   hospitals = signal<HospitalResponse[]>([]);
@@ -1081,6 +1089,10 @@ export class EncountersComponent implements OnInit {
 
   closeAvs(): void {
     this.avs.set(null);
+    // Loading disables the opener before CDK can capture it; restore after the dialog is removed.
+    afterNextRender(() => this.avsTrigger()?.nativeElement.focus(), {
+      injector: this.viewInjector,
+    });
   }
 
   getStatusClass(status: string): string {
