@@ -163,6 +163,7 @@ export class PanelComponent implements OnInit {
 
   loadOverview(): void {
     this.overviewLoading.set(true);
+    this.overviewFailed.set(false);
     this.panelService.overview().subscribe({
       next: (rows) => {
         this.overviewLoading.set(false);

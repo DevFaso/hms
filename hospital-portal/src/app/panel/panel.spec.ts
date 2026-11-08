@@ -138,6 +138,36 @@ describe('PanelComponent', () => {
     expect(fixture.nativeElement.textContent).not.toContain('PANEL.OVERVIEW_EMPTY');
   });
 
+  it('replaces an overview outage with loading during an action-triggered retry', () => {
+    const retry = new Subject<PanelOverviewRow[]>();
+    panelService.overview.and.returnValues(
+      throwError(() => new HttpErrorResponse({ status: 503 })),
+      retry,
+    );
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.textContent).toContain('PANEL.OVERVIEW_UNAVAILABLE');
+
+    component.openAssign();
+    component.onPatientSelected({ id: 'cdx-patient' } as never);
+    component.formStaffId.set('s1');
+    component.submitAssign();
+    fixture.detectChanges();
+    expect(root.textContent).toContain('COMMON.LOADING');
+    expect(root.textContent).not.toContain('PANEL.OVERVIEW_UNAVAILABLE');
+    expect(root.textContent).not.toContain('PANEL.OVERVIEW_EMPTY');
+
+    retry.next([
+      { providerStaffId: 's1', providerName: 'Cdx Recovery', panelRole: 'CHW', activeCount: 3 },
+    ]);
+    retry.complete();
+    fixture.detectChanges();
+    expect(root.textContent).toContain('Cdx Recovery');
+    expect(root.textContent).not.toContain('COMMON.LOADING');
+    expect(component.overviewLoading()).toBeFalse();
+    expect(component.overviewFailed()).toBeFalse();
+  });
+
   it('carries no scope chip or hint of its own: the route gate owns them', () => {
     // The route is flagged requiresHospitalScope: the shell shows the one
     // chip and builds this page only with a hospital pinned.
