@@ -94,7 +94,8 @@ class ObstetricEntryPointGuardTest {
         // never silent: each creating path keeps what the rule returned and records it.
         String create = SourceScan.methodBody(ultrasound, "createOrder");
         assertThat(create).contains("judgeOnCreate(").contains("setObstetricRuleSkipped(ruleSkipped)").contains("skipRecorder.record(");
-        assertThat(update).contains("setObstetricRuleSkipped(true)").contains("skipRecorder.record(");
+        assertThat(update).contains("setObstetricRuleSkipped(flagged)").contains("skipRecorder.record(")
+            .as("a flag whose reason is gone is cleared, and the clearing audited").contains("skipRecorder.recordCleared(");
         String referral = SourceScan.methodBody(read("service/impl/ObgynReferralServiceImpl.java"), "createReferral");
         assertThat(referral).contains("boolean ruleSkipped = ").contains(".obstetricRuleSkipped(ruleSkipped)")
             .contains("skipRecorder.record(");

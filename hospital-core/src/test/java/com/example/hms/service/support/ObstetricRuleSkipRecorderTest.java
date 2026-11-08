@@ -55,6 +55,23 @@ class ObstetricRuleSkipRecorderTest {
             .containsEntry("recordedChild", false);
     }
 
+    /** QA D1538 review: a flag cleared by an edit is audited too, under the same event. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void theClearingIsAudited() {
+        AuditEventLogService audit = mock(AuditEventLogService.class);
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        patient.setGender("F");
+        new ObstetricRuleSkipRecorder(audit).recordCleared(patient, "STAT", "ULTRASOUND_ORDER", UUID.randomUUID(), null);
+
+        ArgumentCaptor<AuditEventRequestDTO> written = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(audit).logEvent(written.capture());
+        assertThat(written.getValue().getEventType()).isEqualTo(AuditEventType.OBSTETRIC_RULE_SKIPPED_EMERGENCY);
+        assertThat(written.getValue().getEventDescription()).isEqualTo("Obstetric rule skip cleared on an ultrasound order");
+        assertThat((Map<String, Object>) written.getValue().getDetails()).containsEntry("cleared", true);
+    }
+
     @Test
     void aChildsAgeIsRecorded() {
         Patient child = new Patient();

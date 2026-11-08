@@ -24,6 +24,14 @@ public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
     boolean existsByBed_Id(UUID bedId);
 
     /**
+     * QA D1537 review (round 40): the patient's discharged stays as lean rows (no entity graph), for the
+     * course status of the orders a FHIR export maps.
+     */
+    @Query("SELECT new com.example.hms.repository.ClosedStayRow(a.id, a.admissionDateTime, a.actualDischargeDateTime,"
+        + " a.hospital.id, a.status) FROM Admission a WHERE a.patient.id = :patientId AND a.actualDischargeDateTime IS NOT NULL")
+    List<ClosedStayRow> findClosedStayRows(@Param("patientId") java.util.UUID patientId);
+
+    /**
      * Find admissions by patient
      */
     @EntityGraph(attributePaths = {"patient", "hospital", "admittingProvider", "admittingProvider.user", "admittingProvider.user.staffProfile", "admittingProvider.user.patientProfile", "department", "attendingPhysician", "attendingPhysician.user", "attendingPhysician.user.staffProfile", "attendingPhysician.user.patientProfile", "dischargingProvider", "dischargingProvider.user", "dischargingProvider.user.staffProfile", "dischargingProvider.user.patientProfile"})

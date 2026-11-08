@@ -74,7 +74,9 @@ class CrossHospitalListByIdAgreementTest {
             + " (ObgynReferralStatus has no DRAFT)",
         // QA D1537 review: the query is the single source; an issued order is a sent one (NeverSentRule.sent).
         "PatientEverythingService.java", "its prescription section reads issued orders only, chosen in the query"
-            + " (findIssuedByPatientIdAndHospitalIdIn); it reads no imaging order or referral");
+            + " (findIssuedByPatientIdAndHospitalIdIn); it reads no imaging order or referral",
+        "FhirBulkExportRunner.java", "the bulk export reads one hospital's own orders (Set.of(hospitalId)), issued"
+            + " orders only, chosen in the query: no other hospital's row");
 
     private static final Pattern NEVER_SENT_CALL = Pattern.compile("\\bNeverSentRule\\s*+\\.\\s*+\\w++\\s*+\\(");
 

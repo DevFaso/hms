@@ -182,6 +182,18 @@ class PrescriptionSentAcrossHospitalsRepositoryTest {
     }
 
     @Test
+    @DisplayName("QA D1537 review: a builder-made CANCELLED draft is flagged when it is inserted")
+    void aBuilderMadeWithdrawnDraftIsFlaggedOnInsert() {
+        Prescription built = em.persist(Prescription.builder()
+                .patient(patient).staff(doctorStaff).encounter(encounter).hospital(hospital).assignment(doctorAssignment)
+                .medicationName("Paracetamol").quantity(BigDecimal.TEN).status(PrescriptionStatus.CANCELLED).build());
+        em.flush();
+        em.clear();
+        assertThat(prescriptionRepository.findById(built.getId())).get()
+            .extracting(Prescription::isWithdrawnBeforeSigning).isEqualTo(true);
+    }
+
+    @Test
     @DisplayName("QA D1537: acting at B, A's draft withdrawn before signing is left out; A's signed order stopped stays")
     void aForeignDiscardedDraftIsLeftOut() {
         Prescription discardedAtA = withdrawn(PrescriptionStatus.DRAFT, PrescriptionStatus.CANCELLED, hospital);

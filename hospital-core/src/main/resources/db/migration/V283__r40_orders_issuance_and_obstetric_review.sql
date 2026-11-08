@@ -40,3 +40,11 @@ ALTER TABLE clinical.ultrasound_orders
 
 ALTER TABLE clinical.obgyn_referrals
     ADD COLUMN IF NOT EXISTS obstetric_rule_skipped BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- QA D1538 review: the priority is stored in one form (ROUTINE, URGENT, STAT) so the emergency exemption, the worklists
+-- and the row agree; rows written before in another case or with padding are normalised. Unknown values are left.
+UPDATE clinical.ultrasound_orders
+   SET priority = upper(btrim(priority))
+ WHERE priority IS NOT NULL
+   AND upper(btrim(priority)) IN ('ROUTINE', 'URGENT', 'STAT')
+   AND priority <> upper(btrim(priority));

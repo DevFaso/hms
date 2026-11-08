@@ -52,14 +52,31 @@ public class ObstetricRuleSkipRecorder {
 
     /** Audits the skip after the order or referral is committed. */
     public void record(Patient patient, String priority, String entityType, UUID resourceId, UUID hospitalId) {
-        UUID patientId = patient == null ? null : patient.getId();
-        UUID actorUserId = com.example.hms.security.CallerIdentity.currentUserId();
-        Map<String, Object> details = details(patient, priority);
         // One fixed sentence per record kind (the portal reads each, AuditDescriptionCoverageTest);
         // the priority, sex and age are in the details.
         String description = ENTITY_REFERRAL.equals(entityType)
             ? "Obstetric rule skipped for an emergency OB/GYN referral"
             : "Obstetric rule skipped for an emergency ultrasound order";
+        write(patient, priority, entityType, resourceId, hospitalId, description, details(patient, priority));
+    }
+
+    /**
+     * QA D1538 review: an edit removed the reason the order was flagged (type OTHER, a patient record
+     * now eligible, or no longer an emergency and judged and passing): the flag is cleared and the
+     * clearing audited, under the same event, so the review trail shows both.
+     */
+    public void recordCleared(Patient patient, String priority, String entityType, UUID resourceId, UUID hospitalId) {
+        Map<String, Object> details = details(patient, priority);
+        details.put("skippedBecause", null);
+        details.put("cleared", true);
+        write(patient, priority, entityType, resourceId, hospitalId,
+            "Obstetric rule skip cleared on an ultrasound order", details);
+    }
+
+    private void write(Patient patient, String priority, String entityType, UUID resourceId, UUID hospitalId,
+                       String description, Map<String, Object> details) {
+        UUID patientId = patient == null ? null : patient.getId();
+        UUID actorUserId = com.example.hms.security.CallerIdentity.currentUserId();
         TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
@@ -74,7 +91,8 @@ public class ObstetricRuleSkipRecorder {
                     .resourceId(resourceId == null ? null : resourceId.toString())
                     .build());
             } catch (RuntimeException ex) {
-                log.warn("Obstetric rule skip not audited for {} {}: {}", entityType, resourceId, ex.getClass().getSimpleName());
+                log.warn("Obstetric rule skip not audited for {} {} ({}): {}", entityType, resourceId, priority,
+                    ex.getClass().getSimpleName());
             }
         });
     }

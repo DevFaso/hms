@@ -93,6 +93,23 @@ class PrescriptionIssuanceTest {
         assertThat(PrescriptionIssuance.wasIssued(refilled)).isTrue();
     }
 
+    /**
+     * QA D1537 review: the builder and the all-args constructor write the status without the setter; an
+     * order inserted already withdrawn derives the fact on insert (the entity's insert hook).
+     */
+    @Test
+    void aBuilderMadeWithdrawnDraftIsFlaggedOnInsert() {
+        Prescription discarded = Prescription.builder().status(PrescriptionStatus.CANCELLED).build();
+        discarded.deriveWithdrawalFactOnInsert();
+        assertThat(discarded.isWithdrawnBeforeSigning()).isTrue();
+        assertThat(PrescriptionIssuance.wasIssued(discarded)).isFalse();
+
+        Prescription signedThenStopped = Prescription.builder().status(PrescriptionStatus.DISCONTINUED)
+            .signedAt(java.time.LocalDateTime.now().minusDays(1)).build();
+        signedThenStopped.deriveWithdrawalFactOnInsert();
+        assertThat(signedThenStopped.isWithdrawnBeforeSigning()).as("it carries a signature").isFalse();
+    }
+
     /** A row read from the database keeps what its withdrawal recorded (the builder writes the field, no setter). */
     @Test
     void aRowWithoutTheFactIsShown() {

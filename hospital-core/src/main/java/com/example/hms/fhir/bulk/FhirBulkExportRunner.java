@@ -302,14 +302,19 @@ public class FhirBulkExportRunner {
                 .forEach(c -> sink.write(TYPE_CONDITION, conditionMapper.toFhir(c)));
         }
         if (types.contains(TYPE_MEDICATION_REQUEST)) {
-            // The patient's discharged stays, read once (the course status the portal shows).
-            List<com.example.hms.model.Admission> closedStays = medicationRequestMapper.closedStaysOf(patientId);
-            pageThrough(p -> prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId, p),
+            // QA D1537: an export carries the orders that were issued, never a draft or a discarded one,
+            // chosen in the query. The patient's discharged stays are read once, on the first order (the
+            // course status the portal shows), never for a patient with none.
+            java.util.concurrent.atomic.AtomicReference<List<com.example.hms.model.Admission>> closedStays =
+                new java.util.concurrent.atomic.AtomicReference<>();
+            pageThrough(p -> prescriptionRepository.findIssuedByPatientIdAndHospitalIdIn(patientId, java.util.Set.of(hospitalId),
+                    com.example.hms.service.support.PrescriptionIssuance.PROPOSALS, p),
                 rx -> {
-                    // QA D1537: an export carries the orders that were issued, never a draft or a discarded one.
-                    if (com.example.hms.service.support.PrescriptionIssuance.wasIssued(rx)
-                        && passesSince(rx.getUpdatedAt(), since)) {
-                        sink.write(TYPE_MEDICATION_REQUEST, medicationRequestMapper.toFhir(rx, closedStays));
+                    if (passesSince(rx.getUpdatedAt(), since)) {
+                        if (closedStays.get() == null) {
+                            closedStays.set(medicationRequestMapper.closedStaysOf(patientId));
+                        }
+                        sink.write(TYPE_MEDICATION_REQUEST, medicationRequestMapper.toFhir(rx, closedStays.get()));
                     }
                 });
         }

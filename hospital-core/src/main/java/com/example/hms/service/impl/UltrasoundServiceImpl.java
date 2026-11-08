@@ -76,6 +76,8 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        // QA D1538 review: one form of the priority everywhere (the exemption, the worklists, the row).
+        request.setPriority(normalisedPriority(request.getPriority(), "ROUTINE"));
         // QA D1538 (round 40): every scan type of this module but OTHER is a pregnancy scan, so the
         // maternity rule applies, refused on patientId; an URGENT or STAT scan is an emergency, which
         // the rule never refuses, but an emergency for a patient it would refuse is flagged and audited.
@@ -142,8 +144,12 @@ public class UltrasoundServiceImpl implements UltrasoundService {
      * turned into a prenatal one (refused on {@code scanType}). An edit that keeps the order exempt, or
      * one that was judged when it was ordered (or ordered before the rule), is not judged again.
      *
-     * @return true when the edit leaves a prenatal emergency scan for a patient the rule would refuse
-     *     that was not flagged yet: the caller flags it and audits the skip.
+     * <p>QA D1538 review: the review flag ({@code obstetricRuleSkipped}) is re-evaluated on every edit
+     * against the order as it will stand: set when it is a prenatal emergency scan for a patient the rule
+     * would refuse, cleared when the reason is gone (type OTHER, a patient record now eligible, or no
+     * longer an emergency and judged and passing).
+     *
+     * @return the review flag the order carries after the edit; the caller audits a change of it.
      */
     static boolean requireObstetricPatientOnEdit(UltrasoundOrder order, UltrasoundOrderRequestDTO request) {
         String resultingPriority = request.getPriority() != null ? request.getPriority() : order.getPriority();
@@ -157,8 +163,24 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             String field = isObstetricScan(order.getScanType()) ? "priority" : "scanType";
             com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(order.getPatient(), field, false);
         }
-        return obstetricAfter && emergencyAfter && !order.isObstetricRuleSkipped()
+        return obstetricAfter && emergencyAfter
             && com.example.hms.utility.ObstetricEligibility.isIneligible(order.getPatient());
+    }
+
+    /**
+     * QA D1538 review: the priority as it is stored and read (ROUTINE, URGENT, STAT), whatever case or
+     * padding the request used. A blank one is {@code whenBlank} (ROUTINE on a new order, the order's
+     * own on an edit); a value that names no priority is refused on {@code priority}.
+     */
+    static String normalisedPriority(String requested, String whenBlank) {
+        if (requested == null || requested.isBlank()) {
+            return whenBlank;
+        }
+        com.example.hms.enums.ClinicalPriority parsed = com.example.hms.enums.ClinicalPriority.parse(requested);
+        if (parsed == null) {
+            throw new com.example.hms.exception.FieldBusinessException("priority", "validation.priority.invalid");
+        }
+        return parsed.name();
     }
 
     /**
@@ -221,16 +243,21 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         }
 
         requirePlausibleSchedule(request, order);
-        boolean ruleSkipped = requireObstetricPatientOnEdit(order, request);
+        // QA D1538 review: an absent priority keeps the order's own; a present one is stored normalised.
+        request.setPriority(normalisedPriority(request.getPriority(), null));
+        boolean wasFlagged = order.isObstetricRuleSkipped();
+        boolean flagged = requireObstetricPatientOnEdit(order, request);
         ultrasoundMapper.updateOrderFromRequest(order, request);
-        if (ruleSkipped) {
-            order.setObstetricRuleSkipped(true);
-        }
+        order.setObstetricRuleSkipped(flagged);
 
         UltrasoundOrder saved = orderRepository.save(order);
-        if (ruleSkipped) {
+        UUID savedHospitalId = saved.getHospital() != null ? saved.getHospital().getId() : null;
+        if (flagged && !wasFlagged) {
             skipRecorder.record(saved.getPatient(), saved.getPriority(), AUDIT_ENTITY_ULTRASOUND_ORDER, saved.getId(),
-                saved.getHospital() != null ? saved.getHospital().getId() : null);
+                savedHospitalId);
+        } else if (!flagged && wasFlagged) {
+            skipRecorder.recordCleared(saved.getPatient(), saved.getPriority(), AUDIT_ENTITY_ULTRASOUND_ORDER, saved.getId(),
+                savedHospitalId);
         }
         return ultrasoundMapper.toOrderResponseDTO(saved);
     }

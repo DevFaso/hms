@@ -1421,6 +1421,11 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: [],
   },
   {
+    key: 'AUDIT.DESC.OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND',
+    re: /^Obstetric rule skip cleared on an ultrasound order$/,
+    params: [],
+  },
+  {
     key: 'AUDIT.DESC.STATUS_WAS',
     re: /^(.+) \(was ([A-Z_]+)\)$/,
     params: ['what', 'previous'],

@@ -451,6 +451,17 @@ public class Prescription extends BaseEntity {
     private boolean withdrawnBeforeSigning = false;
 
     /**
+     * QA D1537 review: whether the status went through {@link #setStatus}, which derived the fact from
+     * the status before. Only a row built otherwise (the builder, the all-args constructor) derives it
+     * on insert. Not a column.
+     */
+    @jakarta.persistence.Transient
+    @Builder.Default
+    @Setter(lombok.AccessLevel.NONE)
+    @lombok.Getter(lombok.AccessLevel.NONE)
+    private boolean statusSetThroughSetter = false;
+
+    /**
      * QA D1537 review: evidence that the order was issued whatever status it holds now: a signature
      * (time, signer or digest), a dispatch to a pharmacy, or a refill used. A signed order put back to a
      * proposal (the hole PrescriptionServiceImpl now refuses) and then withdrawn is never read as one
@@ -470,6 +481,7 @@ public class Prescription extends BaseEntity {
      * (a signed or re-proposed order is not a withdrawn one).
      */
     public void setStatus(PrescriptionStatus status) {
+        this.statusSetThroughSetter = true;
         PrescriptionStatus before = this.status;
         if (status != null && status.isWithdrawn()) {
             if (before == null || !before.isWithdrawn()) {
@@ -531,8 +543,31 @@ public class Prescription extends BaseEntity {
         transmission.setPrescription(this);
     }
 
+    /**
+     * QA D1537 review: the builder and the all-args constructor write the status without
+     * {@link #setStatus}. An order inserted already withdrawn had no status before it, so it was never
+     * issued, unless it carries the evidence it was ({@link #carriesIssueEvidence}): the same rule as
+     * the setter, applied on insert.
+     */
     @PrePersist
+    void onInsert() {
+        deriveWithdrawalFactOnInsert();
+        validate();
+    }
+
+    /** The insert half of the rule, on its own so it can be read and tested without the row's context checks. */
+    public void deriveWithdrawalFactOnInsert() {
+        if (!statusSetThroughSetter && status != null && status.isWithdrawn() && !withdrawnBeforeSigning
+                && !carriesIssueEvidence()) {
+            this.withdrawnBeforeSigning = true;
+        }
+    }
+
     @PreUpdate
+    void onUpdate() {
+        validate();
+    }
+
     private void validate() {
         normalizeQuantities();
         normalizeStrings();

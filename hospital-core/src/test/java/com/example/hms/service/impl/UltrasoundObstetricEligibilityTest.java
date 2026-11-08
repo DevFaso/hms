@@ -140,16 +140,54 @@ class UltrasoundObstetricEligibilityTest {
             .isInstanceOfSatisfying(FieldBusinessException.class, e -> assertThat(e.getField()).isEqualTo("scanType"));
     }
 
-    /** QA D1538 review: an edit that makes an unflagged order an emergency prenatal scan for a man reports it. */
+    /** QA D1538 review: an edit that makes an order an emergency prenatal scan for a man flags it. */
     @Test
-    void anEditIntoAnEmergencyForAManIsReportedOnce() {
+    void anEditIntoAnEmergencyForAManFlagsIt() {
         UltrasoundOrder scan = order(patient("MALE", 40), "STAT");
         scan.setScanType(com.example.hms.enums.UltrasoundScanType.OTHER);
         UltrasoundOrderRequestDTO request = edit("STAT");
         request.setScanType(com.example.hms.enums.UltrasoundScanType.GROWTH_SCAN);
         assertThat(UltrasoundServiceImpl.requireObstetricPatientOnEdit(scan, request)).isTrue();
         scan.setObstetricRuleSkipped(true);
-        assertThat(UltrasoundServiceImpl.requireObstetricPatientOnEdit(scan, request)).as("already flagged").isFalse();
+        assertThat(UltrasoundServiceImpl.requireObstetricPatientOnEdit(scan, request)).as("the reason stands").isTrue();
+    }
+
+    /** QA D1538 review: the flag is cleared when its reason is gone. */
+    @Test
+    void theFlagIsClearedWhenTheReasonIsGone() {
+        // The scan becomes OTHER.
+        UltrasoundOrder other = order(patient("MALE", 40), "STAT");
+        other.setScanType(com.example.hms.enums.UltrasoundScanType.GROWTH_SCAN);
+        other.setObstetricRuleSkipped(true);
+        UltrasoundOrderRequestDTO toOther = edit("STAT");
+        toOther.setScanType(com.example.hms.enums.UltrasoundScanType.OTHER);
+        assertThat(UltrasoundServiceImpl.requireObstetricPatientOnEdit(other, toOther)).isFalse();
+
+        // The patient record was corrected: now eligible.
+        UltrasoundOrder corrected = order(patient("FEMALE", 30), "STAT");
+        corrected.setScanType(com.example.hms.enums.UltrasoundScanType.GROWTH_SCAN);
+        corrected.setObstetricRuleSkipped(true);
+        assertThat(UltrasoundServiceImpl.requireObstetricPatientOnEdit(corrected, edit("STAT"))).isFalse();
+
+        // No longer an emergency, judged and passing.
+        UltrasoundOrder lowered = order(patient("FEMALE", 30), "URGENT");
+        lowered.setScanType(com.example.hms.enums.UltrasoundScanType.GROWTH_SCAN);
+        lowered.setObstetricRuleSkipped(true);
+        assertThat(UltrasoundServiceImpl.requireObstetricPatientOnEdit(lowered, edit("ROUTINE"))).isFalse();
+    }
+
+    /** QA D1538 review: the priority is stored normalised; a value that names none is refused on priority. */
+    @Test
+    void thePriorityIsStoredNormalised() {
+        assertThat(UltrasoundServiceImpl.normalisedPriority(" stat ", "ROUTINE")).isEqualTo("STAT");
+        assertThat(UltrasoundServiceImpl.normalisedPriority("urgent", null)).isEqualTo("URGENT");
+        assertThat(UltrasoundServiceImpl.normalisedPriority("  ", "ROUTINE")).isEqualTo("ROUTINE");
+        assertThat(UltrasoundServiceImpl.normalisedPriority(null, null)).isNull();
+        assertThatThrownBy(() -> UltrasoundServiceImpl.normalisedPriority("ASAP", "ROUTINE"))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("priority");
+                assertThat(e.getMessageKey()).isEqualTo("validation.priority.invalid");
+            });
     }
 
     @Test

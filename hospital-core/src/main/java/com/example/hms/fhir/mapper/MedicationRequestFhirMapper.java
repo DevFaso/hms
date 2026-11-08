@@ -50,8 +50,9 @@ public class MedicationRequestFhirMapper {
         if (patientId == null || admissionRepository == null) {
             return List.of();
         }
-        return admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId).stream()
-            .filter(a -> a.getActualDischargeDateTime() != null)
+        // QA D1537 review: lean rows, not every admission through its entity graph.
+        return admissionRepository.findClosedStayRows(patientId).stream()
+            .map(com.example.hms.repository.ClosedStayRow::toAdmission)
             .toList();
     }
 
@@ -98,33 +99,34 @@ public class MedicationRequestFhirMapper {
     }
 
     /**
-     * QA D1537 review (round 40): the order's own status, never "active" for all, read from the course
-     * status the patient's portal shows ({@code MedicationCourseStatus.of}, with the discharged stays an
-     * inpatient order ends with), so FHIR and the portal agree:
+     * QA D1537 review (round 40): the order's own status, never "active" for all. The switch names
+     * every PrescriptionStatus and has no default, so a new status does not compile until it is decided:
      * <ul>
-     *   <li>ACTIVE: active (a dispensed order runs until its stated duration ends, as on the portal);</li>
-     *   <li>COMPLETED (its duration passed, or it ended with its stay): completed;</li>
-     *   <li>ON_HOLD: draft for a proposal (DRAFT, PENDING_SIGNATURE), on-hold otherwise
-     *       (TRANSMISSION_FAILED);</li>
-     *   <li>DISCONTINUED: cancelled when withdrawn before anyone signed it or CANCELLED (FHIR: withdrawn
-     *       before any administration), stopped when a signed order was DISCONTINUED.</li>
+     *   <li>draft: DRAFT, PENDING_SIGNATURE. Never exported (every reader chooses issued orders only);
+     *       named because the switch is exhaustive;</li>
+     *   <li>cancelled: CANCELLED (FHIR: withdrawn before any administration). A proposal withdrawn
+     *       before signing is never exported either, for the same reason;</li>
+     *   <li>stopped: DISCONTINUED;</li>
+     *   <li>on-hold: not in force, waiting on the pharmacy or the prescriber (TRANSMISSION_FAILED,
+     *       PENDING_CLARIFICATION, PARTNER_REJECTED);</li>
+     *   <li>every other signed order: active, or completed when the course status the patient's portal
+     *       shows says so ({@code MedicationCourseStatus.of}, with the discharged stays it ends with): its
+     *       stated duration passed, or it ended with its stay.</li>
      * </ul>
      */
     static MedicationRequest.MedicationRequestStatus statusOf(Prescription src, List<Admission> closedStays) {
-        PrescriptionStatus status = src.getStatus();
-        if (status == null) {
-            return MedicationRequest.MedicationRequestStatus.UNKNOWN;
-        }
-        String course = MedicationCourseStatus.of(src, closedStays == null ? List.of() : closedStays);
-        return switch (course) {
-            case MedicationCourseStatus.ACTIVE -> MedicationRequest.MedicationRequestStatus.ACTIVE;
-            case MedicationCourseStatus.COMPLETED -> MedicationRequest.MedicationRequestStatus.COMPLETED;
-            case MedicationCourseStatus.ON_HOLD -> status.isProposal()
-                ? MedicationRequest.MedicationRequestStatus.DRAFT : MedicationRequest.MedicationRequestStatus.ONHOLD;
-            case MedicationCourseStatus.DISCONTINUED ->
-                src.isWithdrawnBeforeSigning() || status == PrescriptionStatus.CANCELLED
-                    ? MedicationRequest.MedicationRequestStatus.CANCELLED : MedicationRequest.MedicationRequestStatus.STOPPED;
-            default -> MedicationRequest.MedicationRequestStatus.UNKNOWN;
+        return switch (src.getStatus()) {
+            case DRAFT, PENDING_SIGNATURE -> MedicationRequest.MedicationRequestStatus.DRAFT;
+            case CANCELLED -> MedicationRequest.MedicationRequestStatus.CANCELLED;
+            case DISCONTINUED -> MedicationRequest.MedicationRequestStatus.STOPPED;
+            case TRANSMISSION_FAILED, PENDING_CLARIFICATION, PARTNER_REJECTED ->
+                MedicationRequest.MedicationRequestStatus.ONHOLD;
+            case SIGNED, TRANSMITTED, PARTIALLY_FILLED, PENDING_STOCK, SENT_TO_PARTNER, PARTNER_ACCEPTED,
+                 PRINTED_FOR_PATIENT, DISPENSED, PARTNER_DISPENSED ->
+                MedicationCourseStatus.COMPLETED.equals(
+                    MedicationCourseStatus.of(src, closedStays == null ? List.of() : closedStays))
+                    ? MedicationRequest.MedicationRequestStatus.COMPLETED
+                    : MedicationRequest.MedicationRequestStatus.ACTIVE;
         };
     }
 

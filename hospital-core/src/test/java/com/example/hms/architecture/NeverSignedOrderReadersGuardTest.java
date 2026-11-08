@@ -54,8 +54,8 @@ class NeverSignedOrderReadersGuardTest {
         // Exports.
         Map.entry("fhir/everything/PatientEverythingService.java", new Reader("findIssuedByPatientIdAndHospitalIdIn(",
             "$everything and the patient record export: issued orders only, chosen in the query")),
-        Map.entry("fhir/bulk/FhirBulkExportRunner.java", new Reader("PrescriptionIssuance.wasIssued(",
-            "bulk export: issued orders only")),
+        Map.entry("fhir/bulk/FhirBulkExportRunner.java", new Reader("findIssuedByPatientIdAndHospitalIdIn(",
+            "bulk export: issued orders only, chosen in the query")),
         Map.entry("fhir/provider/MedicationRequestFhirResourceProvider.java", new Reader("findIssuedByPatientId(",
             "FHIR MedicationRequest search: issued orders only, chosen in the query (the read applies wasIssued)")),
         // The clinician's medication history, presented as courses.
@@ -190,13 +190,18 @@ class NeverSignedOrderReadersGuardTest {
      * rule reads it, not the signature columns, which an order signed before V118 lacks.
      */
     @Test
-    @DisplayName("the withdrawal fact is written only by the status setter, and the rule reads it")
+    @DisplayName("the withdrawal fact is written only by the entity (status setter, insert hook), and the rule reads it")
     void theWithdrawalFactHasOneWriter() throws IOException {
         String entity = read("model/Prescription.java");
         assertThat(SourceScan.methodBody(entity, "setStatus"))
             .contains("before.isProposal()")
             .contains("this.withdrawnBeforeSigning =");
         assertThat(entity).containsPattern("@Setter\\(lombok\\.AccessLevel\\.NONE\\)\\s++private boolean withdrawnBeforeSigning");
+        // QA D1537 review: the builder and the all-args constructor skip the setter; the insert hook
+        // derives the fact by the same rule.
+        assertThat(SourceScan.methodBody(entity, "deriveWithdrawalFactOnInsert")).contains("carriesIssueEvidence()");
+        assertThat(SourceScan.methodBody(entity, "onInsert")).contains("deriveWithdrawalFactOnInsert()");
+        assertThat(SourceScan.methodBody(entity, "setStatus")).contains("carriesIssueEvidence()");
         List<String> writers = new ArrayList<>();
         try (Stream<Path> files = Files.walk(ROOT)) {
             for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {

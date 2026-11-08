@@ -59,11 +59,13 @@ public class MedicationRequestFhirResourceProvider implements IResourceProvider 
         if (patientId == null) return Collections.emptyList();
         // QA D1537: the orders that were issued, never a draft or a discarded one, chosen in the query
         // so the capped page is never thinned after it was fetched.
-        // The patient's discharged stays, read once for the page (the course status the portal shows).
-        List<com.example.hms.model.Admission> closedStays = mapper.closedStaysOf(patientId);
-        return repository.findIssuedByPatientId(patientId, com.example.hms.service.support.PrescriptionIssuance.PROPOSALS,
-                PageRequest.of(0, MAX_RESULTS, NEWEST_FIRST))
-            .stream()
+        List<com.example.hms.model.Prescription> issued = repository.findIssuedByPatientId(patientId,
+                com.example.hms.service.support.PrescriptionIssuance.PROPOSALS, PageRequest.of(0, MAX_RESULTS, NEWEST_FIRST))
+            .getContent();
+        // The patient's discharged stays, read once for the page and only when it holds an order (the
+        // course status the portal shows).
+        List<com.example.hms.model.Admission> closedStays = issued.isEmpty() ? List.of() : mapper.closedStaysOf(patientId);
+        return issued.stream()
             .map(rx -> mapper.toFhir(rx, closedStays))
             .toList();
     }
