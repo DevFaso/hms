@@ -93,7 +93,30 @@ const FIVE_RIGHTS_LABEL_KEYS: Record<FiveRightsCheck, string> = {
 export class EmarComponent implements OnInit, OnDestroy {
   protected readonly state = signal<LoadState>('loading');
   protected readonly tasks = signal<NurseMedicationTask[]>([]);
+  protected readonly taskSearch = signal('');
+  protected readonly visibleTasks = computed(() => {
+    const term = this.taskSearch().trim().toLocaleLowerCase();
+    return this.tasks().filter(
+      (task) =>
+        !term ||
+        [task.patientName, task.medication].some((value) =>
+          value?.toLocaleLowerCase().includes(term),
+        ),
+    );
+  });
+  protected readonly pendingPharmacyCount = computed(
+    () =>
+      this.tasks().filter((task) => task.requiresPharmacistVerification && !task.pharmacistVerified)
+        .length,
+  );
+  protected readonly patientCount = computed(
+    () => new Set(this.tasks().map((task) => task.patientId)).size,
+  );
   protected readonly activeTask = signal<NurseMedicationTask | null>(null);
+  protected readonly selectedTaskHidden = computed(() => {
+    const selected = this.activeTask();
+    return !!selected && !this.visibleTasks().some((task) => task.id === selected.id);
+  });
 
   protected readonly patientScan = signal('');
   protected readonly medicationScan = signal('');

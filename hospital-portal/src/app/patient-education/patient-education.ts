@@ -129,6 +129,8 @@ export class PatientEducationComponent implements OnInit {
     );
   });
 
+  readonly loadedCategories = computed(() => new Set(this.resources().map((r) => r.category)).size);
+
   /** id → title join for the progress table. */
   private readonly resourceTitles = computed(
     () => new Map(this.resources().map((r) => [r.id, r.title])),

@@ -1,3 +1,4 @@
+@use '../shared/styles/care-workspace' as care;
 .page-container {
   padding: 1.5rem;
   max-width: 1200px;
@@ -430,3 +431,5 @@
   flex-wrap: wrap;
   gap: 0.75rem;
 }
+
+@include care.workspace;

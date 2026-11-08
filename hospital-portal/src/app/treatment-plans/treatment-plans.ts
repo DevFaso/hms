@@ -1,7 +1,9 @@
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { textMatches, rankPeopleByName } from '../shared/person-search';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   Component,
+  DestroyRef,
   ElementRef,
   inject,
   OnInit,
@@ -79,6 +81,9 @@ export class TreatmentPlansComponent implements OnInit {
   plans = signal<TreatmentPlanResponse[]>([]);
   filtered = signal<TreatmentPlanResponse[]>([]);
   loading = signal(true);
+  readonly loadFailed = signal(false);
+  private readonly destroyRef = inject(DestroyRef);
+  private listRequest = 0;
   searchTerm = '';
   activeTab = signal<'all' | 'active' | 'draft' | 'completed'>('all');
   selectedPlan = signal<TreatmentPlanResponse | null>(null);
@@ -122,6 +127,10 @@ export class TreatmentPlansComponent implements OnInit {
 
   /** Re-fetch under the new cross-tenant scope when the chip emits. */
   onScopeChange(_hospitalId: string | null): void {
+    this.selectedPlan.set(null);
+    this.searchTerm = '';
+    this.plans.set([]);
+    this.filtered.set([]);
     this.load();
   }
 
@@ -406,19 +415,27 @@ export class TreatmentPlansComponent implements OnInit {
   }
 
   load(): void {
+    const request = ++this.listRequest;
+    this.loadFailed.set(false);
     this.loading.set(true);
     // QA D1347: every plan (all pages), not the 200 newest.
-    this.tpService.getAll().subscribe({
-      next: (list) => {
-        this.plans.set(list ?? []);
-        this.applyFilter();
-        this.loading.set(false);
-      },
-      error: () => {
-        this.toast.error(this.translate.instant('TREATMENT.LOAD_FAILED'));
-        this.loading.set(false);
-      },
-    });
+    this.tpService
+      .getAll()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (list) => {
+          if (request !== this.listRequest) return;
+          this.plans.set(list ?? []);
+          this.applyFilter();
+          this.loading.set(false);
+        },
+        error: () => {
+          if (request !== this.listRequest) return;
+          this.loadFailed.set(true);
+          this.toast.error(this.translate.instant('TREATMENT.LOAD_FAILED'));
+          this.loading.set(false);
+        },
+      });
   }
 
   setTab(tab: 'all' | 'active' | 'draft' | 'completed'): void {

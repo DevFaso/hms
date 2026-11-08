@@ -2,6 +2,8 @@ import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { textMatches, rankPeopleByName } from '../shared/person-search';
+import { DestroyRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   Component,
   ElementRef,
@@ -163,6 +165,9 @@ export class ReferralsComponent implements OnInit {
   referrals = signal<ReferralResponse[]>([]);
   filtered = signal<ReferralResponse[]>([]);
   loading = signal(true);
+  readonly loadFailed = signal(false);
+  private readonly destroyRef = inject(DestroyRef);
+  private listRequest = 0;
   searchTerm = '';
   activeTab = signal<'all' | 'pending' | 'active' | 'completed'>('all');
   selectedReferral = signal<ReferralResponse | null>(null);
@@ -312,6 +317,10 @@ export class ReferralsComponent implements OnInit {
 
   /** Re-fetch under the new cross-tenant scope when the chip emits. */
   onScopeChange(_hospitalId: string | null): void {
+    this.selectedReferral.set(null);
+    this.searchTerm = '';
+    this.referrals.set([]);
+    this.filtered.set([]);
     this.load();
   }
 
@@ -778,18 +787,26 @@ export class ReferralsComponent implements OnInit {
   }
 
   load(): void {
+    const request = ++this.listRequest;
+    this.loadFailed.set(false);
     this.loading.set(true);
-    this.referralService.getAll().subscribe({
-      next: (list) => {
-        this.referrals.set(Array.isArray(list) ? list : []);
-        this.applyFilter();
-        this.loading.set(false);
-      },
-      error: () => {
-        this.toast.error(this.translate.instant('REFERRALS.LOAD_FAILED'));
-        this.loading.set(false);
-      },
-    });
+    this.referralService
+      .getAll()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (list) => {
+          if (request !== this.listRequest) return;
+          this.referrals.set(Array.isArray(list) ? list : []);
+          this.applyFilter();
+          this.loading.set(false);
+        },
+        error: () => {
+          if (request !== this.listRequest) return;
+          this.loadFailed.set(true);
+          this.toast.error(this.translate.instant('REFERRALS.LOAD_FAILED'));
+          this.loading.set(false);
+        },
+      });
   }
 
   setTab(tab: 'all' | 'pending' | 'active' | 'completed'): void {

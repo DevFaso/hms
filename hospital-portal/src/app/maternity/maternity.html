@@ -1,6 +1,7 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <span class="care-eyebrow">{{ 'CARE_DASH.MATERNITY_EYEBROW' | translate }}</span>
       <h1 class="page-title">{{ 'MATERNITY.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'MATERNITY.SUBTITLE' | translate }}</p>
     </div>
@@ -20,10 +21,22 @@
     </div>
   </div>
 
+  <aside class="care-maternity-guide">
+    <span class="material-symbols-outlined" aria-hidden="true">pregnancy</span>
+    <div>
+      <h2>{{ 'CARE_DASH.MATERNITY_GUIDE' | translate }}</h2>
+      <p>{{ 'CARE_DASH.MATERNITY_HINT' | translate }}</p>
+    </div>
+  </aside>
   <div class="filter-bar">
     <div class="tabs">
       @if (canManageHistory) {
-        <button class="tab-btn" [class.active]="activeTab() === 'board'" (click)="setTab('board')">
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'board'"
+          [attr.aria-pressed]="activeTab() === 'board'"
+          (click)="setTab('board')"
+        >
           {{ 'MATERNITY.BOARD_TAB' | translate }}
         </button>
       }
@@ -31,6 +44,7 @@
         <button
           class="tab-btn"
           [class.active]="activeTab() === 'referrals'"
+          [attr.aria-pressed]="activeTab() === 'referrals'"
           (click)="setTab('referrals')"
         >
           {{ 'MATERNITY.REFERRALS_TAB' | translate }}
@@ -40,6 +54,7 @@
         <button
           class="tab-btn"
           [class.active]="activeTab() === 'ultrasound'"
+          [attr.aria-pressed]="activeTab() === 'ultrasound'"
           (click)="setTab('ultrasound')"
         >
           {{ 'MATERNITY.ULTRASOUND_TAB' | translate }}
@@ -49,6 +64,7 @@
         <button
           class="tab-btn"
           [class.active]="activeTab() === 'birth-plans'"
+          [attr.aria-pressed]="activeTab() === 'birth-plans'"
           (click)="setTab('birth-plans')"
         >
           {{ 'MATERNITY.BIRTH_PLANS_TAB' | translate }}
@@ -58,13 +74,19 @@
         <button
           class="tab-btn"
           [class.active]="activeTab() === 'prenatal'"
+          [attr.aria-pressed]="activeTab() === 'prenatal'"
           (click)="setTab('prenatal')"
         >
           {{ 'MATERNITY.PRENATAL_TAB' | translate }}
         </button>
       }
       @if (canSeeLabor) {
-        <button class="tab-btn" [class.active]="activeTab() === 'labor'" (click)="setTab('labor')">
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'labor'"
+          [attr.aria-pressed]="activeTab() === 'labor'"
+          (click)="setTab('labor')"
+        >
           {{ 'MATERNITY.LABOR_TAB' | translate }}
         </button>
       }
@@ -72,6 +94,7 @@
         <button
           class="tab-btn"
           [class.active]="activeTab() === 'postpartum'"
+          [attr.aria-pressed]="activeTab() === 'postpartum'"
           (click)="setTab('postpartum')"
         >
           {{ 'MATERNITY.POSTPARTUM_TAB' | translate }}
@@ -101,7 +124,12 @@
     <div class="filter-bar">
       <div class="tabs">
         @for (w of visibleWorklists(); track w) {
-          <button class="tab-btn" [class.active]="worklist() === w" (click)="setWorklist(w)">
+          <button
+            class="tab-btn"
+            [class.active]="worklist() === w"
+            [attr.aria-pressed]="worklist() === w"
+            (click)="setWorklist(w)"
+          >
             {{ 'MATERNITY.WORKLIST_' + w.toUpperCase().replaceAll('-', '_') | translate }}
           </button>
         }
@@ -123,7 +151,12 @@
       </div>
     }
     @if (!historiesLoading() && histories().length > 0) {
-      <div class="data-table">
+      <div
+        class="data-table"
+        tabindex="0"
+        role="region"
+        [attr.aria-label]="'MATERNITY.BOARD_TAB' | translate"
+      >
         <table>
           <thead>
             <tr>
@@ -312,6 +345,7 @@
           <button
             class="tab-btn"
             [class.active]="referralMode() === 'hospital'"
+            [attr.aria-pressed]="referralMode() === 'hospital'"
             (click)="setReferralMode('hospital')"
           >
             {{ 'MATERNITY.MODE_HOSPITAL' | translate }}
@@ -321,6 +355,7 @@
           <button
             class="tab-btn"
             [class.active]="referralMode() === 'assigned'"
+            [attr.aria-pressed]="referralMode() === 'assigned'"
             (click)="setReferralMode('assigned')"
           >
             {{ 'MATERNITY.MODE_ASSIGNED' | translate }}
@@ -329,6 +364,7 @@
         <button
           class="tab-btn"
           [class.active]="referralMode() === 'patient'"
+          [attr.aria-pressed]="referralMode() === 'patient'"
           (click)="setReferralMode('patient')"
         >
           {{ 'MATERNITY.MODE_PATIENT' | translate }}
@@ -366,7 +402,12 @@
       </div>
     }
     @if (!referralsLoading() && referrals().length > 0) {
-      <div class="data-table">
+      <div
+        class="data-table"
+        tabindex="0"
+        role="region"
+        [attr.aria-label]="'MATERNITY.REFERRALS_TAB' | translate"
+      >
         <table>
           <thead>
             <tr>
