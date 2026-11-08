@@ -12120,5 +12120,19 @@
     "MATERNITY_GUIDE": "Une vue claire du parcours de soins maternels",
     "CLEAR_SEARCH": "Effacer la recherche",
     "MATERNITY_HINT": "Choisissez un domaine de soins, puis une liste de travail. Les indicateurs de risque et les exigences de revue sont affichés dans chaque dossier."
+  },
+  "SPECIALIST_DASH": {
+    "CONSULT_EYEBROW": "SOINS SPÉCIALISÉS",
+    "PLAN_EYEBROW": "TRAITEMENT COORDONNÉ",
+    "REFERRAL_EYEBROW": "COORDINATION DES ORIENTATIONS",
+    "OVERVIEW": "Vue d’ensemble du travail",
+    "LOADED_SCOPE": "Les indicateurs décrivent les plans ou orientations chargés. La recherche filtre uniquement cette liste.",
+    "CONSULT_SCOPE": "Les indicateurs utilisent le résumé disponible pour le périmètre ; la recherche filtre la liste chargée.",
+    "STATS_FALLBACK": "Le résumé du périmètre est indisponible. Les indicateurs utilisent la liste de consultations chargée.",
+    "UNAVAILABLE": "Impossible de charger cet espace",
+    "VISIBLE": "Affichés : {{shown}} / {{loaded}} chargés",
+    "CLEAR_SEARCH": "Effacer la recherche",
+    "DRAFT_REVIEW": "Brouillon / revue",
+    "NO_MATCHES": "Aucun dossier chargé ne correspond aux filtres actuels."
   }
 }
