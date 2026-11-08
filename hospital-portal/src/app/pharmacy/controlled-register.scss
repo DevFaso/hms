@@ -1,3 +1,4 @@
+@use './operations-workspace' as operations;
 @use '../shared/styles/page-common';
 
 .header-actions {
@@ -80,3 +81,5 @@
 .muted {
   color: #4b5563;
 }
+
+@include operations.workspace;

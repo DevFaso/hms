@@ -1,0 +1,471 @@
+// Shared presentation only. Clinical, financial and tenancy rules stay in each module.
+@mixin workspace {
+  .tx-type.tx-in,
+  .tx-qty.tx-in {
+    color: #07654d;
+  }
+  .tx-type.tx-out,
+  .tx-qty.tx-out {
+    color: #b42332;
+  }
+  .badge.badge-success {
+    color: #07654d;
+    background: #e4f6ed;
+  }
+  .badge.badge-muted {
+    color: #475569;
+    background: #eef2f6;
+  }
+  .pair-cell .code {
+    color: #52677a;
+  }
+  .drug-interactions-container .page-subtitle {
+    color: #52677a;
+  }
+  .btn.btn-primary {
+    background: #08796c;
+    color: white;
+  }
+  :host {
+    display: block;
+    min-width: 0;
+    color: #19334b;
+  }
+  .page-container,
+  .drug-interactions-container,
+  .claims,
+  .pharmacy-checkout {
+    width: 100%;
+    max-width: 1480px;
+    box-sizing: border-box;
+    margin: 0 auto;
+    padding: 28px;
+  }
+  .page-header,
+  .claims__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid #dce5ec;
+  }
+  .page-title,
+  .claims__header h1,
+  .pharmacy-checkout .page-header h1 {
+    font-size: clamp(23px, 2vw, 30px);
+    line-height: 1.25;
+    letter-spacing: -0.6px;
+    margin: 0;
+    color: #152e43;
+  }
+  .page-subtitle,
+  .subtitle {
+    margin: 8px 0 0;
+    color: #52677a;
+    font-size: 14px;
+    line-height: 1.6;
+    max-width: 760px;
+  }
+  .workspace-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #086b61;
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    margin: 0 0 10px;
+  }
+  .workspace-eyebrow .material-symbols-outlined {
+    font-size: 18px;
+  }
+  .workspace-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    background: #103f3c;
+    color: white;
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin: 0 0 24px;
+  }
+  .workspace-strip p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .workspace-strip strong {
+    font-size: 26px;
+    font-variant-numeric: tabular-nums;
+    margin-right: 10px;
+  }
+  .workspace-strip .material-symbols-outlined {
+    font-size: 24px;
+  }
+  .header-actions,
+  .header-right,
+  .claims__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+  button {
+    font: inherit;
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  .btn-primary,
+  .btn-secondary,
+  .claims button,
+  .btn-refresh {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 42px;
+    padding: 10px 16px;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 650;
+    border: 1px solid #cdd9e2;
+  }
+  .btn-primary {
+    background: #08796c;
+    border-color: #08796c;
+    color: white;
+  }
+  .btn-secondary,
+  .claims button,
+  .btn-refresh {
+    background: white;
+    color: #244259;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #075e55;
+  }
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 3px solid #0c8679;
+    outline-offset: 3px;
+  }
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    min-height: 42px;
+    box-sizing: border-box;
+    border: 1px solid #c7d4df;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font: inherit;
+    font-size: 13px;
+    background: white;
+    color: #19334b;
+    max-width: 100%;
+  }
+  .filter-bar,
+  .register-filters {
+    background: white;
+    border: 1px solid #dce5ec;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .register-filters {
+    align-items: flex-end;
+  }
+  .register-filters .field {
+    flex: 1 1 160px;
+    min-width: 0;
+    gap: 7px;
+  }
+  .register-filters .field:first-child {
+    flex-grow: 2;
+  }
+  .filter-bar label,
+  .register-filters label {
+    color: #40596f;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .filter-bar .search-input {
+    flex: 1 1 280px;
+  }
+  .section-card,
+  .drug-card,
+  .form-card,
+  .pharmacy-checkout .card {
+    background: white;
+    border: 1px solid #dce5ec;
+    border-radius: 14px;
+    padding: 22px;
+    box-shadow: 0 3px 12px #17334b04;
+    margin-bottom: 22px;
+  }
+  .form-card-accent {
+    border-top: 3px solid #08796c;
+  }
+  .section-title,
+  .drug-card h2,
+  .form-card h2,
+  .pharmacy-checkout h3 {
+    font-size: 16px;
+    color: #19334b;
+    margin: 0 0 20px;
+  }
+  .table-wrapper,
+  .table-wrap,
+  .table-scroll,
+  .claims-table-scroll,
+  .table-responsive {
+    overflow-x: auto;
+    border: 1px solid #dce5ec;
+    border-radius: 12px;
+    background: white;
+  }
+  .data-table,
+  .ddi-table,
+  .claims__table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .data-table th,
+  .ddi-table th,
+  .claims__table th {
+    background: #f5f8fa;
+    color: #516578;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.55px;
+    padding: 15px 16px;
+    white-space: nowrap;
+  }
+  .data-table td,
+  .ddi-table td,
+  .claims__table td {
+    padding: 17px 16px;
+    font-size: 13px;
+    line-height: 1.55;
+    border-bottom: 1px solid #edf1f5;
+    vertical-align: middle;
+  }
+  tbody tr:hover {
+    background: #f8fbfb;
+  }
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  .code-chip,
+  .code {
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    background: #f0f4f7;
+    padding: 3px 6px;
+    border-radius: 5px;
+  }
+  .empty-state,
+  .state-block,
+  .claims-empty {
+    padding: 48px 24px;
+    border: 1px dashed #c8d9df;
+    border-radius: 12px;
+    background: #fbfdfd;
+    text-align: center;
+    color: #50697c;
+  }
+  .empty-icon,
+  .claims-empty > .material-symbols-outlined {
+    color: #138175;
+    font-size: 36px;
+    margin-bottom: 10px;
+  }
+  .empty-state h3 {
+    font-size: 16px;
+    color: #244259;
+  }
+  .balances {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin: 20px 0;
+  }
+  .balances > span {
+    background: #f4f8fa;
+    border: 1px solid #e4ebf0;
+    border-radius: 10px;
+    padding: 16px;
+    font-size: 12px;
+  }
+  .balances strong {
+    display: block;
+    font-size: 28px;
+    color: #1c4153;
+    margin-top: 8px;
+  }
+  .balances .discrepancy {
+    background: #fff3f1;
+    border-color: #f2b6b0;
+  }
+  .claim-filter {
+    padding: 14px;
+    border-radius: 10px;
+    background: #f5f8fa;
+    border: 0;
+  }
+  .claim-filter__option {
+    padding: 8px 12px;
+  }
+  .pair-cell {
+    gap: 5px;
+  }
+  .pair-cell > span:not(.pair-plus) {
+    font-weight: 650;
+  }
+  .pair-plus {
+    color: #64788a;
+  }
+  .recommendation-cell {
+    max-width: 400px;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  .workspace-steps {
+    display: flex;
+    gap: 12px;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 24px;
+  }
+  .workspace-steps li {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: white;
+    border: 1px solid #dce5ec;
+    border-radius: 12px;
+    font-size: 13px;
+    color: #52677a;
+  }
+  .workspace-steps b {
+    display: grid;
+    place-items: center;
+    flex: 0 0 30px;
+    height: 30px;
+    background: #e5f3ef;
+    color: #076c60;
+    border-radius: 50%;
+  }
+  .workspace-steps .current {
+    border-color: #138175;
+    color: #076c60;
+  }
+  .lookup-row {
+    display: flex;
+    gap: 10px;
+  }
+  .lookup-row input {
+    flex: 1;
+    min-width: 0;
+  }
+  .pharmacy-checkout .form-row {
+    grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .pharmacy-checkout .form-row select {
+    width: 100%;
+  }
+  .pharmacy-checkout .field-hint {
+    grid-column: 2;
+    margin: 0;
+  }
+  .pharmacy-checkout .radio-group {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .pharmacy-checkout .dispense-summary {
+    border-top: 1px solid #e2eaef;
+    padding-top: 20px;
+    margin-top: 24px;
+  }
+  @media (max-width: 720px) {
+    .page-container,
+    .drug-interactions-container,
+    .claims,
+    .pharmacy-checkout {
+      padding: 16px 12px;
+    }
+    .page-header,
+    .claims__header {
+      align-items: flex-start;
+      gap: 16px;
+    }
+    .header-actions,
+    .header-right,
+    .claims__actions {
+      width: 100%;
+    }
+    .pharmacy-select {
+      min-width: 0;
+      width: 100%;
+    }
+    .section-card,
+    .drug-card,
+    .form-card,
+    .pharmacy-checkout .card {
+      padding: 16px;
+    }
+    .balances {
+      grid-template-columns: 1fr;
+    }
+    .balances > span {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .balances strong {
+      font-size: 23px;
+      margin: 0;
+    }
+    .workspace-steps {
+      flex-direction: column;
+    }
+    .pharmacy-checkout .form-row {
+      grid-template-columns: 1fr;
+    }
+    .pharmacy-checkout .form-row > *,
+    .pharmacy-checkout .field-hint,
+    .pharmacy-checkout .radio-group {
+      grid-column: 1;
+    }
+    .claims .filter {
+      flex-wrap: wrap;
+    }
+  }
+  @media print {
+    .workspace-eyebrow,
+    .workspace-strip,
+    .workspace-steps {
+      display: none;
+    }
+  }
+}

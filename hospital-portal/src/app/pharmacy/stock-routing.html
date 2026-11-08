@@ -1,6 +1,10 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <p class="workspace-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">alt_route</span
+        ><span>{{ 'PHARMACY_WORKSPACE.LABEL' | translate }}</span>
+      </p>
       <h1 class="page-title">{{ 'PHARMACY.STOCK_ROUTING' | translate }}</h1>
       <p class="page-subtitle">{{ 'PHARMACY.STOCK_ROUTING_DESC' | translate }}</p>
     </div>
@@ -11,6 +15,17 @@
        disabled rather than offered and refused. -->
   <app-hospital-scope-hint />
 
+  <ol class="workspace-steps" [attr.aria-label]="'PHARMACY.STOCK_ROUTING' | translate">
+    <li [class.current]="!selected()">
+      <b>1</b><span>{{ 'PHARMACY.ROUTING_RX_SEARCH' | translate }}</span>
+    </li>
+    <li [class.current]="selected() && !stockResult()">
+      <b>2</b><span>{{ 'PHARMACY.CHECK_STOCK' | translate }}</span>
+    </li>
+    <li [class.current]="stockResult()">
+      <b>3</b><span>{{ 'PHARMACY_WORKSPACE.ROUTING_DECISION' | translate }}</span>
+    </li>
+  </ol>
   <!-- Prescription lookup: QA D888, picked from a search, never typed as an id -->
   <div class="form-card form-card-accent">
     <h2>{{ 'PHARMACY.CHECK_STOCK' | translate }}</h2>

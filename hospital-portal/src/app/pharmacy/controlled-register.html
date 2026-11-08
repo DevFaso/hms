@@ -1,6 +1,10 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <p class="workspace-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">lock</span
+        ><span>{{ 'PHARMACY_WORKSPACE.LABEL' | translate }}</span>
+      </p>
       <h1 class="page-title">{{ 'PHARMACY.REGISTER_TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'PHARMACY.REGISTER_SUBTITLE' | translate }}</p>
     </div>
@@ -128,7 +132,12 @@
           @if (drug.entries.length === 0) {
             <p class="muted">{{ 'PHARMACY.REGISTER_NO_MOVEMENT' | translate }}</p>
           } @else {
-            <div class="table-scroll">
+            <div
+              class="table-scroll"
+              tabindex="0"
+              role="region"
+              [attr.aria-label]="'PHARMACY.REGISTER_TITLE' | translate"
+            >
               <table class="data-table">
                 <thead>
                   <tr>
