@@ -103,7 +103,8 @@ class CdsRuleEngineRound16Test {
         Patient adult = patientAged(30);
         Prescription edited = Prescription.builder()
             .medicationName("Sulfadoxine-pyriméthamine")
-            .status(PrescriptionStatus.DRAFT)
+            // QA D1515 (changed fixture: was DRAFT, no longer an order in force): the exclusion is by id.
+            .status(PrescriptionStatus.SIGNED)
             .build();
         edited.setId(UUID.randomUUID());
         edited.setCreatedAt(LocalDateTime.now().minusHours(1));

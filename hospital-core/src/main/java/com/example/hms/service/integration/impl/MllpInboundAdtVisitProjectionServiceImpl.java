@@ -235,7 +235,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             : LocalDateTime.now();
 
         boolean firstTransition = row.getStatus() != AdmissionStatus.DISCHARGED
-            && row.getStatus() != AdmissionStatus.DECEASED;
+            && row.getStatus() != AdmissionStatus.DECEASED
+            // QA D1516: its bed was released when the voided death closed it.
+            && row.getStatus() != AdmissionStatus.CLOSED_IN_ERROR;
 
         row.setStatus(AdmissionStatus.DISCHARGED);
         row.setActualDischargeDateTime(dischargeAt);

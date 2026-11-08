@@ -184,6 +184,8 @@
     <!-- Best-Practice Advisories — runs the patient-view CDS hook on chart load (clinicians only) -->
     @if (canSeeBpaPanel()) {
       <app-bpa-panel [patientId]="p.id" [hideWhenEmpty]="true" />
+      <!-- QA D1516: what a death entered in error had closed, so the next clinician readmits or rebooks. -->
+      <app-voided-death-closures-banner [patientId]="p.id" />
     }
 
     <nav class="patient-navigation" [attr.aria-label]="'PATIENTS.RECORD_SECTIONS' | translate">

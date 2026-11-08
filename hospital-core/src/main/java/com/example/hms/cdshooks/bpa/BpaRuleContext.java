@@ -28,7 +28,7 @@ import java.util.UUID;
  *                                suppress advisories (e.g. don't suggest
  *                                a malaria workup if malaria is already
  *                                an active problem and being treated)
- * @param activePrescriptions     non-terminal prescriptions, used by the
+ * @param activePrescriptions     orders in force (QA D1515), used by the
  *                                malaria rule to avoid double-dispatching
  *                                an anti-malarial workup
  * @param estimatedDueDate        the due date of the patient's current

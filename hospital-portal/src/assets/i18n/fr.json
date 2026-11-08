@@ -6331,6 +6331,7 @@
         "ACTIVE": "Actif",
         "AWAITING_DISCHARGE": "En attente de sortie",
         "CANCELLED": "Annulé",
+        "CLOSED_IN_ERROR": "Clôturé par un décès saisi par erreur",
         "DECEASED": "Décédé",
         "DISCHARGED": "Sorti",
         "ON_LEAVE": "En permission",
@@ -12268,7 +12269,15 @@
     "ELIGIBILITY_UNKNOWN": "Éligibilité périnatale non confirmée",
     "PERINATAL_STILLBIRTH": "Mortinaissance",
     "PERINATAL_EARLY_NEONATAL": "Néonatal précoce (moins de 7 jours révolus)",
-    "PERINATAL_LATE_NEONATAL": "Néonatal tardif (de 7 à moins de 28 jours révolus)"
+    "PERINATAL_LATE_NEONATAL": "Néonatal tardif (de 7 à moins de 28 jours révolus)",
+    "VOIDED_CLOSURES": {
+      "TITLE": "Un décès enregistré le {{date}} a été saisi par erreur, et il avait clôturé des soins ici",
+      "NOT_REOPENED": "Rien de ce qu’il a clôturé n’a été rouvert. Si les soins continuent, réadmettez le patient ou reprogrammez.",
+      "STAYS": "Séjours clôturés :",
+      "STAY_LINE": "admis le {{admitted}}, clôturé le {{closed}}",
+      "VISITS": "Consultations clôturées :",
+      "APPOINTMENTS": "Rendez-vous annulés :"
+    }
   },
   "BED_BOARD": {
     "TITLE": "Tableau des lits",

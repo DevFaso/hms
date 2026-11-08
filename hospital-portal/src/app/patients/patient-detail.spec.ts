@@ -233,6 +233,21 @@ describe('PatientDetailComponent', () => {
       expect(bpaServiceSpy.evaluate).toHaveBeenCalledOnceWith('p1', undefined);
     });
 
+    // QA D1516: what a death entered in error had closed is on a clinician's chart, beside the advisories.
+    it("a doctor's chart carries the notice of what a voided death closed", () => {
+      holdRoles(['ROLE_DOCTOR']);
+      fixture.detectChanges();
+      expect(
+        fixture.nativeElement.querySelector('app-voided-death-closures-banner'),
+      ).not.toBeNull();
+    });
+
+    it('reception gets no notice of what a voided death closed', () => {
+      holdRoles(['ROLE_RECEPTIONIST']);
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('app-voided-death-closures-banner')).toBeNull();
+    });
+
     it('a multi-role user pinned to reception gets no panel', () => {
       (
         Object.getOwnPropertyDescriptor(roleContextSpy, 'activeRoles')!.get as jasmine.Spy

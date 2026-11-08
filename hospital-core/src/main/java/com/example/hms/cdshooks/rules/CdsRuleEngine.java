@@ -17,7 +17,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -39,26 +38,16 @@ import java.util.regex.Pattern;
  * keeps the rules trivially unit-testable with a hand-built context and
  * avoids hidden N+1 lookups inside individual rules.
  *
- * <p>Active-prescription scope: we exclude terminal statuses
- * (CANCELLED / DISCONTINUED / PARTNER_REJECTED). The remaining set is
- * the patient's "current medication list" for interaction and
- * duplicate purposes.
+ * <p>Active-prescription scope (QA D1515): only orders in force
+ * ({@link PrescriptionStatus#isInForce()}): signed, and not withdrawn or
+ * rejected. A draft is a proposal, judged when it is itself proposed or
+ * signed. The remaining set is the patient's "current medication list"
+ * for interaction and duplicate purposes.
  */
 @Service
 public class CdsRuleEngine {
 
     private static final Logger logger = LoggerFactory.getLogger(CdsRuleEngine.class);
-
-    /**
-     * Statuses considered terminal for active-medication checks. Anything
-     * else (DRAFT, SIGNED, TRANSMITTED, DISPENSED, etc.) counts as a
-     * prescription the patient could currently be on or about to take.
-     */
-    private static final Set<PrescriptionStatus> TERMINAL_STATUSES = EnumSet.of(
-        PrescriptionStatus.CANCELLED,
-        PrescriptionStatus.DISCONTINUED,
-        PrescriptionStatus.PARTNER_REJECTED
-    );
 
     /**
      * Numeric prefix in a freetext dosage string: "500", "12.5", "0,25".
@@ -135,9 +124,13 @@ public class CdsRuleEngine {
         return resolveCatalogItem(hospitalId, order.getMedicationCode());
     }
 
-    /** Whether a status ends an order for the active-medication checks. */
-    static boolean isTerminal(PrescriptionStatus status) {
-        return TERMINAL_STATUSES.contains(status);
+    /**
+     * QA D1515: whether a saved order is one the patient is on, for every rule: in force by its status
+     * ({@link PrescriptionStatus#isInForce()}). A draft or an unsigned order is not, so one abandoned
+     * after a refused signature never adds to a later total.
+     */
+    public static boolean inForce(Prescription order) {
+        return order != null && order.getStatus() != null && order.getStatus().isInForce();
     }
 
     /**
@@ -390,7 +383,7 @@ public class CdsRuleEngine {
             ? prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)
             : prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged()).getContent();
         return all.stream()
-            .filter(p -> p.getStatus() != null && !TERMINAL_STATUSES.contains(p.getStatus()))
+            .filter(CdsRuleEngine::inForce)
             .toList();
     }
 

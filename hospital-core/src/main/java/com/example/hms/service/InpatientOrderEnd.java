@@ -32,7 +32,9 @@ public final class InpatientOrderEnd {
      * no bill, and the patient simply is not an inpatient any more.
      */
     public static final Set<AdmissionStatus> ENDED_STAY_STATUSES = Collections.unmodifiableSet(
-        EnumSet.of(AdmissionStatus.DISCHARGED, AdmissionStatus.CANCELLED));
+        EnumSet.of(AdmissionStatus.DISCHARGED, AdmissionStatus.CANCELLED,
+            // QA D1516: a stay a voided death closed ended then; a readmission is a new stay.
+            AdmissionStatus.CLOSED_IN_ERROR));
 
     private InpatientOrderEnd() {
     }

@@ -198,6 +198,19 @@ public class DeathRecord extends BaseEntity {
     @Column(name = "entered_in_error_reason", length = 500)
     private String enteredInErrorReason;
 
+    /**
+     * QA D1516 (V281): what this death closed at its hospital, by kind ({@link #CLOSED_ADMISSIONS},
+     * {@link #CLOSED_ENCOUNTERS}, {@link #CLOSED_APPOINTMENTS}), as ids, so marking it entered in error can flag
+     * and name them. Null on a row written before V281.
+     */
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "closed_records", columnDefinition = "jsonb")
+    private java.util.Map<String, java.util.List<String>> closedRecords;
+
+    public static final String CLOSED_ADMISSIONS = "admissions";
+    public static final String CLOSED_ENCOUNTERS = "encounters";
+    public static final String CLOSED_APPOINTMENTS = "appointments";
+
     public boolean isEnteredInError() {
         return enteredInErrorAt != null;
     }

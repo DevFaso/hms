@@ -145,6 +145,38 @@ class DeathRecordEnteredInErrorPostgresIT {
             repository.findRegister(hospital, FROM, TO).stream().filter(DeathRecord::isInWhoPerinatalNumerator).toList()));
     }
 
+    /**
+     * QA D1516 on PostgreSQL: the chart's query, for each combination its one caller uses (the patient's voided rows
+     * at this hospital; a live row, another hospital and another patient left out), and V281's column read back
+     * through the JSON type.
+     */
+    @Test
+    @DisplayName("D1516: a patient's voided deaths at a hospital, with what each closed")
+    void thePatientsVoidedDeathsAtAHospitalWithWhatEachClosed() {
+        UUID patient = UUID.randomUUID();
+        UUID hospital = UUID.randomUUID();
+        insert(patient, hospital, DIED.plusDays(1));
+        insert(patient, hospital, DIED.plusDays(3));
+        insert(patient, hospital, null);
+        insert(patient, UUID.randomUUID(), DIED.plusDays(2));
+        insert(UUID.randomUUID(), hospital, DIED.plusDays(2));
+
+        List<DeathRecord> voided = repository.findEnteredInErrorForPatient(patient, hospital);
+
+        assertThat(voided).hasSize(2).allMatch(DeathRecord::isEnteredInError);
+        assertThat(voided.get(0).getEnteredInErrorAt()).as("most recent first").isAfter(voided.get(1).getEnteredInErrorAt());
+        assertThat(repository.findEnteredInErrorForPatient(UUID.randomUUID(), hospital)).isEmpty();
+        assertThat(voided.get(0).getClosedRecords()).as("a row from before V281 holds none").isNull();
+
+        UUID stay = UUID.randomUUID();
+        UUID row = voided.get(1).getId();
+        jdbc.update("UPDATE clinical.death_records SET closed_records = ?::jsonb WHERE id = ?",
+            "{\"admissions\":[\"" + stay + "\"],\"appointments\":[]}", row);
+        DeathRecord read = repository.findById(row).orElseThrow();
+        assertThat(read.getClosedRecords()).containsEntry(DeathRecord.CLOSED_ADMISSIONS, List.of(stay.toString()))
+            .containsEntry(DeathRecord.CLOSED_APPOINTMENTS, List.of());
+    }
+
     @Test
     @DisplayName("after a row entered in error the patient can have a real record, but only one")
     void thePartialIndexAllowsOneLiveRow() {

@@ -6365,6 +6365,7 @@
         "ACTIVE": "Active",
         "AWAITING_DISCHARGE": "Awaiting Discharge",
         "CANCELLED": "Cancelled",
+        "CLOSED_IN_ERROR": "Closed by a death entered in error",
         "DECEASED": "Deceased",
         "DISCHARGED": "Discharged",
         "ON_LEAVE": "On Leave",
@@ -12268,7 +12269,15 @@
     "ELIGIBILITY_UNKNOWN": "Perinatal eligibility unconfirmed",
     "PERINATAL_STILLBIRTH": "Stillbirth",
     "PERINATAL_EARLY_NEONATAL": "Early neonatal (under 7 completed days)",
-    "PERINATAL_LATE_NEONATAL": "Late neonatal (7 to under 28 completed days)"
+    "PERINATAL_LATE_NEONATAL": "Late neonatal (7 to under 28 completed days)",
+    "VOIDED_CLOSURES": {
+      "TITLE": "A death recorded on {{date}} was entered in error, and it had closed care here",
+      "NOT_REOPENED": "Nothing it closed was reopened. If care continues, readmit the patient or rebook.",
+      "STAYS": "Stays it closed:",
+      "STAY_LINE": "admitted {{admitted}}, closed {{closed}}",
+      "VISITS": "Visits it closed:",
+      "APPOINTMENTS": "Appointments it cancelled:"
+    }
   },
   "BED_BOARD": {
     "TITLE": "Ward board",
