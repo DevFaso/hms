@@ -510,7 +510,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private User requireCallerAccount() {
         return accountAccess.currentUserId()
             .flatMap(userRepository::findById)
-            .orElseThrow(() -> new BusinessException(MSG_ASSIGNMENT_ACTOR_MISMATCH));
+            .orElseThrow(() -> new BusinessException("assignment.actor.unresolved"));
     }
 
     /**
@@ -562,7 +562,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private Hospital resolveHospitalForUpdate(UserRoleHospitalAssignmentRequestDTO dto,
                                               UserRoleHospitalAssignment target, Role newRole, Locale locale) {
         if (dto.getHospitalId() != null) {
-            return resolveHospital(dto, newRole, locale);
+            return resolveHospital(dto, newRole);
         }
         return target.getHospital();
     }
@@ -894,7 +894,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public UserRoleHospitalAssignmentResponseDTO confirmAssignment(UUID assignmentId, String confirmationCode) {
-        Locale locale = LocaleContextHolder.getLocale();
         String sanitizedCode = confirmationCode != null ? confirmationCode.trim() : null;
         if (sanitizedCode == null || sanitizedCode.isBlank()) {
             throw new BusinessException(MSG_ASSIGNMENT_INVALID_CODE);
@@ -1756,7 +1755,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     /**
      * Hospital is required unless role is global (ROLE_SUPER_ADMIN).
      */
-    private Hospital resolveHospital(UserRoleHospitalAssignmentRequestDTO dto, Role role, Locale locale) {
+    private Hospital resolveHospital(UserRoleHospitalAssignmentRequestDTO dto, Role role) {
         return resolveHospitalHumanAware(dto, role);
     }
 

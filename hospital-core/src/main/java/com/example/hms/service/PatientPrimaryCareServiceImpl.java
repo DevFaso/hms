@@ -59,8 +59,9 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
             throw new com.example.hms.exception.FieldBusinessException("hospitalId", "primaryCare.assignmentHospitalMismatch");
         }
 
-        // Validate role: must be a doctor (or allowed set)
-        roleValidator.validateRoleOrThrow(assignment.getId(), hospital.getId(), "ROLE_DOCTOR");
+        // Validate role: the assignment's USER must hold ROLE_DOCTOR at the hospital. #1096 review:
+        // the assignment id was passed as the user id, so every assignment was refused.
+        roleValidator.validateRoleOrThrow(doctorUserId(assignment), hospital.getId(), "ROLE_DOCTOR");
 
         // End current PCP for this patient at this hospital, if exists
         pcpRepo.findCurrentByPatientAndHospital(patient.getId(), hospital.getId())
@@ -99,7 +100,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
             if (!a.getHospital().getId().equals(entity.getHospital().getId())) {
                 throw new com.example.hms.exception.FieldBusinessException("assignmentId", "primaryCare.assignmentHospitalMismatch");
             }
-            roleValidator.validateRoleOrThrow(a.getId(), entity.getHospital().getId(), "ROLE_DOCTOR");
+            roleValidator.validateRoleOrThrow(doctorUserId(a), entity.getHospital().getId(), "ROLE_DOCTOR");
             entity.setAssignment(a);
         }
 
@@ -145,5 +146,10 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
             .orElseThrow(() -> new ResourceNotFoundException(PRIMARY_CARE_LINK_NOT_FOUND_KEY, pcpId));
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(entity.getHospital(), PRIMARY_CARE_LINK_NOT_FOUND_KEY, pcpId);
         pcpRepo.delete(entity);
+    }
+
+    /** The user an assignment belongs to: the doctor whose role is checked. */
+    private static UUID doctorUserId(UserRoleHospitalAssignment assignment) {
+        return assignment.getUser() != null ? assignment.getUser().getId() : null;
     }
 }

@@ -274,8 +274,19 @@ public class RoleValidator {
 
     public void validateRoleOrThrow(UUID userId, UUID hospitalId, String roleCode) {
         if (!hasAnyCode(userId, hospitalId, roleCode)) {
-            throw new BusinessException("role.notfound", roleCode);
+            // #1096 review: the user does not hold the role (role.notfound is a role that does not
+            // exist); the role is named by its label in the reader's language, never by its code.
+            throw new BusinessException("role.notHeld", roleLabel(roleCode));
         }
+    }
+
+    /** "ROLE_DOCTOR" read as the role's label in the reader's language ("Médecin"). */
+    private static String roleLabel(String roleCode) {
+        String bare = roleCode == null ? "" : roleCode.trim().toUpperCase(Locale.ROOT);
+        if (bare.startsWith("ROLE_")) {
+            bare = bare.substring("ROLE_".length());
+        }
+        return MessageUtil.resolveOrRaw("email.role.label." + bare);
     }
 
     public boolean isAnyActiveRole(UUID userId) { return assignmentRepository.existsByUserIdAndActiveTrue(userId); }

@@ -211,9 +211,8 @@ public class StaffServiceImpl implements StaffService {
                 .orElseThrow(() -> BusinessRuleException.ofKey("staff.assignment.required", dto.getUserEmail(), dto.getHospitalName()));
         }
 
-        validateLicenseNumber(dto);
-        validateRoleSpecificRequirements(dto, dto.getRoleName());
-        requireEndNotBeforeStart(dto, null);
+        validateStaffFields(dto, true);
+        requireEndNotBeforeStart(dto);
 
         Staff staff = staffMapper.toStaff(dto, user, hospital, department, assignment);
         Staff savedStaff = staffRepository.save(staff);
@@ -268,12 +267,8 @@ public class StaffServiceImpl implements StaffService {
         String newLic = dto.getLicenseNumber();
         boolean licenceChanged = (existingLic == null && newLic != null)
                 || (existingLic != null && !existingLic.equals(newLic));
-        if (licenceChanged) {
-            validateLicenseNumber(dto);
-        }
-
-        validateRoleSpecificRequirements(dto, dto.getRoleName());
-        requireEndNotBeforeStart(dto, existingStaff.getStartDate());
+        validateStaffFields(dto, licenceChanged);
+        requireEndNotBeforeStart(dto);
 
         boolean wasActive = existingStaff.isActive();
         staffMapper.updateStaffFromDto(dto, existingStaff, user, hospital, department, assignment);
@@ -411,6 +406,12 @@ public class StaffServiceImpl implements StaffService {
             .requireValue(dto.getUserEmail(), "userEmail", "staff.user.required")
             .requireValue(dto.getHospitalName(), "hospitalName", "staff.hospital.required")
             .requireValue(dto.getJobTitle(), "jobTitle", "staff.jobTitle.required")
+            // #1096 review: a title the staff form does not offer was refused by JobTitle.valueOf in the
+            // mapper, with Java's own English text and no field. It is named on its field, in the same
+            // answer as the missing values (D1371).
+            .require(dto.getJobTitle() == null || dto.getJobTitle().isBlank()
+                    || com.example.hms.mapper.StaffMapper.jobTitle(dto.getJobTitle()) != null,
+                "jobTitle", "staff.jobTitle.invalid")
             .orThrow();
     }
 
@@ -500,23 +501,6 @@ public class StaffServiceImpl implements StaffService {
         return dto.getJobTitle() != null && titles.contains(dto.getJobTitle().trim().toUpperCase(java.util.Locale.ROOT));
     }
 
-    private void validateLicenseNumber(StaffRequestDTO dto) {
-        // Only clinical roles require a license number
-        if (!titleIn(dto, CLINICAL_JOB_TITLES)) {
-            return;
-        }
-        String licenseNumber = dto.getLicenseNumber();
-        if (licenseNumber == null || licenseNumber.isBlank()) {
-            // QA round 29 sweep: named, so the staff form marks the licence number.
-            throw new com.example.hms.exception.FieldBusinessException("licenseNumber", "staff.license.required");
-        }
-        if (staffRepository.existsByLicenseNumber(licenseNumber)) {
-            // QA D1301 class (round 29): a licence number another record holds is marked on its field.
-            throw new com.example.hms.exception.FieldBusinessException("licenseNumber", "staff.license.duplicate",
-                licenseNumber);
-        }
-    }
-
     /*
      * QA D1536 (round 40): RequiredFields and FieldBusinessException take the
      * message KEY and resolve it only when the field is refused. The round-30
@@ -530,53 +514,58 @@ public class StaffServiceImpl implements StaffService {
      * A role asks only for what the staff form collects for the job title: a
      * specialization for a physician title, a licence for a licensed title. A
      * doctor or radiologist role on another title could never be saved from the
-     * form, which drops both (#1096 review).
+     * form, which drops both (#1096 review). And every missing value is named in
+     * ONE refusal (QA D1355): the licence of a licensed title, then the role's own
+     * fields, before the duplicate-licence check.
+     *
+     * @param checkLicence whether the licence is judged: always on create, on an
+     *                     update only when the licence number changes
      */
-    private void validateRoleSpecificRequirements(StaffRequestDTO dto, String roleName) {
-        if (roleName == null || roleName.isBlank()) {
-            return; // no role-specific validation needed when no role is assigned
+    private void validateStaffFields(StaffRequestDTO dto, boolean checkLicence) {
+        boolean licensed = checkLicence && titleIn(dto, CLINICAL_JOB_TITLES);
+        com.example.hms.exception.RequiredFields required = com.example.hms.exception.RequiredFields.check();
+        if (licensed) {
+            required.requireValue(dto.getLicenseNumber(), "licenseNumber", "staff.license.required");
         }
-        switch (roleName.toUpperCase(java.util.Locale.ROOT)) {
+        String roleName = dto.getRoleName() == null ? "" : dto.getRoleName().trim().toUpperCase(java.util.Locale.ROOT);
+        switch (roleName) {
             case "ROLE_DOCTOR":
-                if (titleIn(dto, SPECIALTY_JOB_TITLES) && dto.getSpecialization() == null) {
-                    throw new com.example.hms.exception.FieldBusinessException("specialization",
+                if (titleIn(dto, SPECIALTY_JOB_TITLES)) {
+                    required.requireValue(dto.getSpecialization(), "specialization",
                         "staff.doctor.specializationRequired");
                 }
                 break;
             case "ROLE_NURSE":
-                // QA D1355 class (round 30): both named in one refusal.
-                com.example.hms.exception.RequiredFields.check()
-                    .requireValue(dto.getEmploymentType(), "employmentType", "staff.nurse.employmentTypeRequired")
-                    .requireValue(dto.getStartDate(), "startDate", "staff.nurse.startDateRequired")
-                    .orThrow();
+                required.requireValue(dto.getEmploymentType(), "employmentType", "staff.nurse.employmentTypeRequired")
+                    .requireValue(dto.getStartDate(), "startDate", "staff.nurse.startDateRequired");
                 break;
             case "ROLE_RADIOLOGIST":
-                // QA D1355 class (round 30): the licence, the start date and the
-                // specialization named in one refusal.
-                com.example.hms.exception.RequiredFields radiologist = com.example.hms.exception.RequiredFields.check();
-                if (titleIn(dto, CLINICAL_JOB_TITLES)) {
-                    radiologist.requireValue(dto.getLicenseNumber(), "licenseNumber", "staff.radiologist.licenseRequired");
-                }
-                radiologist.requireValue(dto.getStartDate(), "startDate", "staff.radiologist.startDateRequired");
+                required.requireValue(dto.getStartDate(), "startDate", "staff.radiologist.startDateRequired");
                 if (titleIn(dto, SPECIALTY_JOB_TITLES)) {
-                    radiologist.requireValue(dto.getSpecialization(), "specialization",
+                    required.requireValue(dto.getSpecialization(), "specialization",
                         "staff.radiologist.specializationRequired");
                 }
-                radiologist.orThrow();
                 break;
             default:
                 break;
+        }
+        required.orThrow();
+        if (licensed && staffRepository.existsByLicenseNumber(dto.getLicenseNumber())) {
+            // QA D1301 class (round 29): a licence number another record holds is marked on its field.
+            throw new com.example.hms.exception.FieldBusinessException("licenseNumber", "staff.license.duplicate",
+                dto.getLicenseNumber());
         }
     }
 
     /**
      * Every staff record, whatever its role: an end date before the start date is
-     * refused on the end date. The start is the one sent, else the one stored (an
-     * edit that leaves the start out still keeps the rule).
+     * refused on the end date. The request is authoritative (#1096 review): the
+     * mapper writes both dates as sent, so the rule judges the dates sent, and an
+     * edit that leaves the start out clears it (a nurse or a radiologist cannot:
+     * their start date is required).
      */
-    private static void requireEndNotBeforeStart(StaffRequestDTO dto, java.time.LocalDate storedStart) {
-        java.time.LocalDate start = dto.getStartDate() != null ? dto.getStartDate() : storedStart;
-        if (dto.getEndDate() != null && start != null && dto.getEndDate().isBefore(start)) {
+    private static void requireEndNotBeforeStart(StaffRequestDTO dto) {
+        if (dto.getEndDate() != null && dto.getStartDate() != null && dto.getEndDate().isBefore(dto.getStartDate())) {
             throw new com.example.hms.exception.FieldBusinessException("endDate", "staff.endDate.beforeStart");
         }
     }

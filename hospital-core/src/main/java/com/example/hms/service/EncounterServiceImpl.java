@@ -448,7 +448,7 @@ public class EncounterServiceImpl implements EncounterService {
         // Anything later is reached through its workflow step.
         if (request.getStatus() != null && !INITIAL_STATUSES.contains(request.getStatus())) {
             throw new com.example.hms.exception.FieldBusinessException("status", "encounter.status.initialInvalid",
-                request.getStatus().localizedLabel(locale));
+                request.getStatus().localizedLabel(org.springframework.context.i18n.LocaleContextHolder.getLocale()));
         }
 
         assertNoDuplicateEncounter(ctx, encounterDate);

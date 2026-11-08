@@ -80,7 +80,6 @@ public class NursingNoteServiceImpl implements NursingNoteService {
     @Override
     @Transactional
     public NursingNoteResponseDTO createNote(NursingNoteCreateRequestDTO request, Locale locale) {
-        Locale effectiveLocale = locale != null ? locale : Locale.getDefault();
         UUID actorUserId = requireCurrentUser();
         UUID hospitalId = resolveHospitalId(request.getHospitalId());
         ensureCanDocument(actorUserId, hospitalId);
@@ -126,7 +125,6 @@ public class NursingNoteServiceImpl implements NursingNoteService {
     @Override
     @Transactional
     public NursingNoteResponseDTO appendAddendum(UUID noteId, UUID hospitalId, NursingNoteAddendumRequestDTO request, Locale locale) {
-        Locale effectiveLocale = locale != null ? locale : Locale.getDefault();
         UUID actorUserId = requireCurrentUser();
         UUID resolvedHospitalId = resolveHospitalId(hospitalId);
         ensureCanDocument(actorUserId, resolvedHospitalId);

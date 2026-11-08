@@ -15,6 +15,7 @@ import com.example.hms.repository.StaffAvailabilityRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.utility.DisplayDates;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.i18n.LocaleContextHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -83,7 +84,7 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
         }
 
         if (availabilityRepository.existsByStaff_IdAndDate(dto.staffId(), dto.date())) {
-            throw BusinessRuleException.ofKey("availability.exists", DisplayDates.date(dto.date(), locale));
+            throw BusinessRuleException.ofKey("availability.exists", DisplayDates.date(dto.date(), LocaleContextHolder.getLocale()));
         }
 
         requireWorkingHours(dto);

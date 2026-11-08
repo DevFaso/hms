@@ -159,6 +159,9 @@ final class ComputedKeys {
             new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
         site(r, d, "com/example/hms/service/EmailServiceImpl.java|\"email.role.label.\" + code",
             "EmailServiceImpl.java|email.role.label.");
+        // role.notHeld names the role by its label (#1096 review), for any role a check asks for.
+        site(r, d, "com/example/hms/utility/RoleValidator.java|\"email.role.label.\" + bare",
+            "EmailServiceImpl.java|email.role.label.");
         r.put("com/example/hms/service/ImagingCriticalNotificationService.java|message.key()",
             new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
         r.put("com/example/hms/service/ImagingCriticalNotificationService.java|message.key() #2",

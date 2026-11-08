@@ -314,7 +314,8 @@ class StaffServiceImplTest {
         when(departmentRepository.existsByHeadOfDepartmentId(staffId)).thenReturn(true);
 
         assertThatThrownBy(() -> staffService.deleteStaff(staffId, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.delete.isHead"));
     }
 
     @Test
@@ -350,7 +351,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = new StaffRequestDTO();
         dto.setUserEmail("");
         dto.setHospitalName("H");
-        dto.setJobTitle("Doctor");
+        dto.setJobTitle("DOCTOR");
         // QA round 29 (stub removed): the required fields go through RequiredFields, not the service's messageSource.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
@@ -363,7 +364,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = new StaffRequestDTO();
         dto.setUserEmail("user@test.com");
         dto.setHospitalName("");
-        dto.setJobTitle("Doctor");
+        dto.setJobTitle("DOCTOR");
         // QA round 29 (stub removed): the required fields go through RequiredFields, not the service's messageSource.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
@@ -467,7 +468,8 @@ class StaffServiceImplTest {
         when(departmentRepository.findByHospitalIdAndNameIgnoreCase(hospitalId, "Cardiology")).thenReturn(Optional.of(dept));
 
         assertThatThrownBy(() -> staffService.updateStaffDepartment("doctor@test.com", "Cardiology", "Test Hospital", locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.department.wrongHospital"));
     }
 
     @Test
@@ -507,7 +509,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .licenseNumber("NEW-LIC-001")
             .roleName("ROLE_DOCTOR")
             .specialization(com.example.hms.enums.Specialization.CARDIOLOGY)
@@ -546,7 +548,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .departmentName("Cardiology")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_DOCTOR")
@@ -581,7 +583,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("unknown@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .build();
 
         when(userRepository.findByEmail("unknown@test.com")).thenReturn(Optional.empty());
@@ -595,7 +597,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail(" phone-user ")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .build();
 
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
@@ -612,7 +614,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Unknown")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .build();
 
         when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
@@ -627,7 +629,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .licenseNumber("LIC-EXISTING")
             .roleName("ROLE_DOCTOR")
             .specialization(com.example.hms.enums.Specialization.CARDIOLOGY)
@@ -658,7 +660,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .licenseNumber(null)
             .roleName("ROLE_DOCTOR")
             .specialization(com.example.hms.enums.Specialization.CARDIOLOGY)
@@ -694,7 +696,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .departmentName("Cardiology")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_DOCTOR")
@@ -706,7 +708,8 @@ class StaffServiceImplTest {
         when(departmentRepository.findByHospitalIdAndNameIgnoreCase(hospital.getId(), "Cardiology")).thenReturn(Optional.of(dept));
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.department.wrongHospital"));
     }
 
     @Test
@@ -715,7 +718,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Nurse")
+            .jobTitle("NURSE")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_NURSE")
             .employmentType(null)
@@ -733,7 +736,6 @@ class StaffServiceImplTest {
         when(roleRepository.findByCode("ROLE_NURSE")).thenReturn(Optional.of(role));
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
-        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
@@ -745,7 +747,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_DOCTOR")
             .specialization(null)
@@ -763,7 +765,6 @@ class StaffServiceImplTest {
         when(roleRepository.findByCode("ROLE_DOCTOR")).thenReturn(Optional.of(role));
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
-        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
@@ -775,7 +776,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Radiologist")
+            .jobTitle("RADIOLOGIST")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_RADIOLOGIST")
             .startDate(null)
@@ -793,7 +794,6 @@ class StaffServiceImplTest {
         when(roleRepository.findByCode("ROLE_RADIOLOGIST")).thenReturn(Optional.of(role));
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
-        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
@@ -804,7 +804,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Nurse")
+            .jobTitle("NURSE")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_NURSE")
             .employmentType(com.example.hms.enums.EmploymentType.FULL_TIME)
@@ -843,7 +843,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .departmentName("Cardiology")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_DOCTOR")
@@ -879,7 +879,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .licenseNumber("LIC-NEW")
             .roleName(null)
             .build();
@@ -971,7 +971,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Radiologist")
+            .jobTitle("RADIOLOGIST")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_RADIOLOGIST")
             .specialization(com.example.hms.enums.Specialization.RADIOLOGY)
@@ -1007,7 +1007,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Radiologist")
+            .jobTitle("RADIOLOGIST")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_RADIOLOGIST")
             .specialization(null)
@@ -1026,7 +1026,6 @@ class StaffServiceImplTest {
         when(roleRepository.findByCode("ROLE_RADIOLOGIST")).thenReturn(Optional.of(role));
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
-        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
@@ -1062,7 +1061,7 @@ class StaffServiceImplTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.CsvSource({"ROLE_NURSE,Nurse", "ROLE_RADIOLOGIST,Radiologist", "ROLE_DOCTOR,Doctor"})
+    @org.junit.jupiter.params.provider.CsvSource({"ROLE_NURSE,NURSE", "ROLE_RADIOLOGIST,RADIOLOGIST", "ROLE_DOCTOR,DOCTOR"})
     void updateStaff_validRoleFields_neverResolvesAMessage(String roleCode, String jobTitle) {
         // The round-30 refactor resolved the refusal text before checking the value, and the
         // nurse and radiologist keys were in no bundle: NoSuchMessageException, a 500, on
@@ -1081,7 +1080,7 @@ class StaffServiceImplTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.CsvSource({"ROLE_NURSE,Nurse", "ROLE_RADIOLOGIST,Radiologist", "ROLE_DOCTOR,Doctor"})
+    @org.junit.jupiter.params.provider.CsvSource({"ROLE_NURSE,NURSE", "ROLE_RADIOLOGIST,RADIOLOGIST", "ROLE_DOCTOR,DOCTOR"})
     void createStaff_validRoleFields_neverResolvesAMessage(String roleCode, String jobTitle) {
         StaffRequestDTO dto = validFor(roleCode, jobTitle).licenseNumber("LIC-NEW").build();
         UserRoleHospitalAssignment assignment = stubRoleAssignment(roleCode);
@@ -1096,7 +1095,7 @@ class StaffServiceImplTest {
 
     @Test
     void nurse_missingEmploymentTypeAndStartDate_namesBothFieldsByKey() {
-        StaffRequestDTO dto = validFor("ROLE_NURSE", "Nurse").employmentType(null).startDate(null).build();
+        StaffRequestDTO dto = validFor("ROLE_NURSE", "NURSE").employmentType(null).startDate(null).build();
         stubRoleAssignment("ROLE_NURSE");
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
 
@@ -1109,8 +1108,53 @@ class StaffServiceImplTest {
     }
 
     @Test
+    void radiologist_everyMissingValueIsNamedInOneRefusal_D1355() {
+        // #1096 review: the licence of a licensed title was refused alone first, before the role's own
+        // fields; one press names them all.
+        StaffRequestDTO dto = validFor("ROLE_RADIOLOGIST", "RADIOLOGIST").licenseNumber(null).startDate(null)
+            .specialization(null).build();
+        stubRoleAssignment("ROLE_RADIOLOGIST");
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex ->
+                assertThat(ex.getFieldErrors()).containsOnlyKeys("licenseNumber", "startDate", "specialization"));
+    }
+
+    @Test
+    void doctor_missingLicenceAndSpecializationAreNamedTogether() {
+        StaffRequestDTO dto = validFor("ROLE_DOCTOR", "DOCTOR").licenseNumber(" ").specialization(null).build();
+        stubRoleAssignment("ROLE_DOCTOR");
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex ->
+                assertThat(ex.getFieldErrors()).containsOnlyKeys("licenseNumber", "specialization"));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"Brain surgeon", "NURSE PRACTITIONER", "chief"})
+    void aJobTitleTheFormDoesNotOfferIsRefusedOnItsField(String jobTitle) {
+        // #1096 review: JobTitle.valueOf in the mapper answered with Java's own English text and no field.
+        StaffRequestDTO dto = validFor("ROLE_NURSE", jobTitle).build();
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("jobTitle");
+                assertThat(ex.getMessageKey()).isEqualTo("staff.jobTitle.invalid");
+            });
+    }
+
+    @Test
+    void aJobTitleInAnyCaseIsTheTitle() {
+        assertThat(com.example.hms.mapper.StaffMapper.jobTitle(" nurse "))
+            .isEqualTo(com.example.hms.enums.JobTitle.NURSE);
+        assertThat(com.example.hms.mapper.StaffMapper.jobTitle("Radiologist"))
+            .isEqualTo(com.example.hms.enums.JobTitle.RADIOLOGIST);
+        assertThat(com.example.hms.mapper.StaffMapper.jobTitle("unknown")).isNull();
+    }
+
+    @Test
     void radiologist_missingStartDate_isRefusedWithItsKey() {
-        StaffRequestDTO dto = validFor("ROLE_RADIOLOGIST", "Radiologist").startDate(null).build();
+        StaffRequestDTO dto = validFor("ROLE_RADIOLOGIST", "RADIOLOGIST").startDate(null).build();
         stubRoleAssignment("ROLE_RADIOLOGIST");
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
 
@@ -1213,6 +1257,7 @@ class StaffServiceImplTest {
 
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_DOCTOR", locale))
                 .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.lab.role.invalid"))
                 .hasMessageContaining("roleCode must be one of");
     }
 
@@ -1223,6 +1268,7 @@ class StaffServiceImplTest {
 
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_DIRECTOR", locale))
                 .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.lab.role.invalid"))
                 .hasMessageContaining("roleCode must be one of");
     }
 
@@ -1251,6 +1297,7 @@ class StaffServiceImplTest {
 
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
                 .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.lab.role.nonLabStaff"))
                 .hasMessageContaining("non-lab staff");
     }
 
@@ -1271,6 +1318,7 @@ class StaffServiceImplTest {
 
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
                 .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.lab.role.directorProtected"))
                 .hasMessageContaining("Lab Director");
     }
 

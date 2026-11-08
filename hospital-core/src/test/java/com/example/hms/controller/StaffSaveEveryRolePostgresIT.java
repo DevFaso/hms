@@ -243,17 +243,48 @@ class StaffSaveEveryRolePostgresIT {
     }
 
     @Test
-    @DisplayName("an edit that leaves the start date out keeps the stored one for the end-date rule")
-    void theStoredStartIsTheFallback() throws Exception {
+    @DisplayName("the request is authoritative: an edit that leaves the start date out clears it, and the end date is judged alone")
+    void anEditWithoutAStartDateClearsIt() throws Exception {
         Map<String, Object> body = formBody(userWithRole("ROLE_RECEPTIONIST"), "ROLE_RECEPTIONIST", "RECEPTIONIST");
         String id = create(body, EN);
 
+        // Stored start: today. An end date of yesterday is before it, but the request carries no start.
         body.remove("startDate");
-        body.put("endDate", LocalDate.now().minusDays(3).toString());
-        JsonNode refusal = putExpecting(id, body, EN);
+        body.put("endDate", LocalDate.now().minusDays(1).toString());
+        MvcResult edited = send(put(API + "/staff/" + id), body, EN);
 
-        assertThat(refusal.path("fieldErrors").path("endDate").asText())
-            .isEqualTo("The end date cannot be before the start date");
+        String content = edited.getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertThat(edited.getResponse().getStatus()).as(content).isEqualTo(200);
+        JsonNode saved = objectMapper.readTree(content);
+        assertThat(saved.path("startDate").isNull() || saved.path("startDate").isMissingNode()).as(content).isTrue();
+        assertThat(saved.path("endDate").asText()).isEqualTo(LocalDate.now().minusDays(1).toString());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {FR, "es", EN})
+    @DisplayName("a nurse or a radiologist cannot clear the start date")
+    void aNurseOrRadiologistKeepsAStartDate(String language) throws Exception {
+        for (String[] role : new String[][] {{"ROLE_NURSE", "NURSE"}, {"ROLE_RADIOLOGIST", "RADIOLOGIST"}}) {
+            Map<String, Object> body = formBody(userWithRole(role[0]), role[0], role[1]);
+            String id = create(body, language);
+            body.remove("startDate");
+            JsonNode refusal = putExpecting(id, body, language);
+            assertThat(refusal.path("fieldErrors").has("startDate")).as(refusal.toString()).isTrue();
+        }
+    }
+
+    @Test
+    @DisplayName("a job title in another case is the title; one the form does not offer is a 400 on jobTitle")
+    void theJobTitleIsReadOrRefusedOnItsField() throws Exception {
+        assertThat(createThenEdit("ROLE_NURSE", "nurse", department("Pédiatrie"), FR)).isEmpty();
+
+        Map<String, Object> body = formBody(userWithRole("ROLE_NURSE"), "ROLE_NURSE", "NURSE");
+        body.put("jobTitle", "Brain surgeon");
+        MvcResult refused = send(post(API + "/staff"), body, FR);
+        String content = refused.getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertThat(refused.getResponse().getStatus()).as(content).isEqualTo(400);
+        assertThat(objectMapper.readTree(content).path("fieldErrors").path("jobTitle").asText())
+            .isEqualTo("Cet intitulé de poste ne fait pas partie des intitulés proposés.");
     }
 
     // ---- helpers ------------------------------------------------------------------------------
@@ -318,10 +349,10 @@ class StaffSaveEveryRolePostgresIT {
         body.put("roleName", roleCode);
         body.put("employmentType", "FULL_TIME");
         body.put("startDate", LocalDate.now().toString());
-        if (StaffServiceImpl.SPECIALTY_JOB_TITLES.contains(jobTitle)) {
+        if (StaffServiceImpl.SPECIALTY_JOB_TITLES.contains(jobTitle.toUpperCase(Locale.ROOT))) {
             body.put("specialization", "RADIOLOGY");
         }
-        if (StaffServiceImpl.CLINICAL_JOB_TITLES.contains(jobTitle)) {
+        if (StaffServiceImpl.CLINICAL_JOB_TITLES.contains(jobTitle.toUpperCase(Locale.ROOT))) {
             body.put("licenseNumber", "LIC-" + UUID.randomUUID().toString().substring(0, 8));
         }
         return body;

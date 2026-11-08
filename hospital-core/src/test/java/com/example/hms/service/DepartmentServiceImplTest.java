@@ -234,7 +234,8 @@ class DepartmentServiceImplTest {
         when(staffService.getStaffEntityById(staffId, locale)).thenReturn(staff);
 
         assertThatThrownBy(() -> departmentService.updateDepartmentHead(deptId, staffId, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("department.head.wrongHospital"));
     }
 
     @Test
@@ -356,6 +357,7 @@ class DepartmentServiceImplTest {
 
         assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
                 .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("department.r7.deleteInUse"))
                 .hasMessage("still used");
         verify(departmentRepository, never()).delete(any(Department.class));
     }
@@ -371,6 +373,7 @@ class DepartmentServiceImplTest {
 
         assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
                 .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("department.r7.deleteInUse"))
                 .hasMessage("still used");
     }
 
@@ -380,7 +383,8 @@ class DepartmentServiceImplTest {
         when(departmentRepository.hasStaffMembers(deptId)).thenReturn(true);
 
         assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("department.delete.withStaff"));
     }
 
     @Test

@@ -61,6 +61,7 @@ class PatientPrimaryCareServiceImplTest {
     private UUID patientId;
     private UUID hospitalId;
     private UUID assignmentId;
+    private UUID doctorUserId;
     private UUID pcpId;
 
     // shared entities
@@ -84,8 +85,12 @@ class PatientPrimaryCareServiceImplTest {
         hospital = new Hospital();
         hospital.setId(hospitalId);
 
+        doctorUserId = UUID.randomUUID();
+        com.example.hms.model.User doctor = new com.example.hms.model.User();
+        doctor.setId(doctorUserId);
         assignment = new UserRoleHospitalAssignment();
         assignment.setId(assignmentId);
+        assignment.setUser(doctor);
         assignment.setHospital(hospital);
 
         pcpEntity = PatientPrimaryCare.builder()
@@ -172,7 +177,7 @@ class PatientPrimaryCareServiceImplTest {
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.of(assignment));
-            doNothing().when(roleValidator).validateRoleOrThrow(eq(assignmentId), eq(hospitalId),
+            doNothing().when(roleValidator).validateRoleOrThrow(eq(doctorUserId), eq(hospitalId),
                     eq("ROLE_DOCTOR"));
             when(pcpRepo.findCurrentByPatientAndHospital(patientId, hospitalId))
                     .thenReturn(Optional.of(existing));
@@ -196,7 +201,7 @@ class PatientPrimaryCareServiceImplTest {
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.of(assignment));
-            doNothing().when(roleValidator).validateRoleOrThrow(eq(assignmentId), eq(hospitalId),
+            doNothing().when(roleValidator).validateRoleOrThrow(eq(doctorUserId), eq(hospitalId),
                     eq("ROLE_DOCTOR"));
             when(pcpRepo.findCurrentByPatientAndHospital(patientId, hospitalId))
                     .thenReturn(Optional.empty());
@@ -330,6 +335,10 @@ class PatientPrimaryCareServiceImplTest {
             UUID newAssignmentId = UUID.randomUUID();
             UserRoleHospitalAssignment newAssignment = new UserRoleHospitalAssignment();
             newAssignment.setId(newAssignmentId);
+            UUID newDoctorId = UUID.randomUUID();
+            com.example.hms.model.User newDoctor = new com.example.hms.model.User();
+            newDoctor.setId(newDoctorId);
+            newAssignment.setUser(newDoctor);
             newAssignment.setHospital(hospital); // same hospital
 
             PatientPrimaryCareRequestDTO req = PatientPrimaryCareRequestDTO.builder()
@@ -339,7 +348,7 @@ class PatientPrimaryCareServiceImplTest {
 
             when(pcpRepo.findById(pcpId)).thenReturn(Optional.of(pcpEntity));
             when(assignmentRepo.findById(newAssignmentId)).thenReturn(Optional.of(newAssignment));
-            doNothing().when(roleValidator).validateRoleOrThrow(eq(newAssignmentId), eq(hospitalId),
+            doNothing().when(roleValidator).validateRoleOrThrow(eq(newDoctorId), eq(hospitalId),
                     eq("ROLE_DOCTOR"));
             when(pcpRepo.save(pcpEntity)).thenReturn(pcpEntity);
             when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);

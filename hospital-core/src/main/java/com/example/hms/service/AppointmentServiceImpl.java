@@ -1000,7 +1000,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         // schedule check
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
             throw new com.example.hms.exception.FieldBusinessException("appointmentDate", "appointment.staff.unavailable.schedule",
-                staff.getId(), DisplayDates.date(request.getAppointmentDate(), locale), DisplayDates.time(request.getStartTime(), locale));
+                staff.getId(), DisplayDates.date(request.getAppointmentDate(), LocaleContextHolder.getLocale()), DisplayDates.time(request.getStartTime(), LocaleContextHolder.getLocale()));
         }
 
         // overlap check
@@ -1011,7 +1011,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (hasConflict) {
             // QA D1367 (round 31): the time the slot is held at is named, so the form marks it.
             throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, "appointment.staff.unavailable",
-                staff.getId(), DisplayDates.date(request.getAppointmentDate(), locale), DisplayDates.time(request.getStartTime(), locale), DisplayDates.time(requestedEnd.toLocalTime(), locale));
+                staff.getId(), DisplayDates.date(request.getAppointmentDate(), LocaleContextHolder.getLocale()), DisplayDates.time(request.getStartTime(), LocaleContextHolder.getLocale()), DisplayDates.time(requestedEnd.toLocalTime(), LocaleContextHolder.getLocale()));
         }
     }
 
@@ -1116,7 +1116,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                                               LocalDateTime requestedStart, Locale locale) {
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_STAFF_ID, "appointment.staff.unavailable.schedule",
-                staff.getId(), DisplayDates.date(request.getAppointmentDate(), locale), DisplayDates.time(request.getStartTime(), locale));
+                staff.getId(), DisplayDates.date(request.getAppointmentDate(), LocaleContextHolder.getLocale()), DisplayDates.time(request.getStartTime(), LocaleContextHolder.getLocale()));
         }
     }
 
@@ -1136,7 +1136,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (hasConflict) {
             // QA D1367 (round 31): the time the slot is held at is named, so the form marks it.
             throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, "appointment.staff.unavailable",
-                staff.getId(), DisplayDates.date(request.getAppointmentDate(), locale), DisplayDates.time(request.getStartTime(), locale), DisplayDates.time(request.getEndTime(), locale));
+                staff.getId(), DisplayDates.date(request.getAppointmentDate(), LocaleContextHolder.getLocale()), DisplayDates.time(request.getStartTime(), LocaleContextHolder.getLocale()), DisplayDates.time(request.getEndTime(), LocaleContextHolder.getLocale()));
         }
     }
 
