@@ -23,7 +23,11 @@
     }
   </div>
 
-  <ul class="hospital-typeahead__list" role="listbox">
+  <ul
+    class="hospital-typeahead__list"
+    role="listbox"
+    [attr.aria-label]="'HOSPITAL_SCOPE.FILTER_BY_HOSPITAL' | translate"
+  >
     @if (!hideAllOption()) {
       <li
         class="hospital-typeahead__item hospital-typeahead__item--all"

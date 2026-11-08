@@ -3,7 +3,9 @@
     <div>
       <p class="dashboard-eyebrow">{{ 'BEDS.WORKSPACE' | translate }}</p>
       <h1 class="page-title">{{ 'BEDS.TITLE' | translate }}</h1>
-      <p class="page-subtitle">{{ 'BEDS.SUBTITLE' | translate }}</p>
+      <p class="page-subtitle">
+        {{ (isNetworkView() ? 'BEDS_NETWORK.SUBTITLE' : 'BEDS.SUBTITLE') | translate }}
+      </p>
     </div>
     <div class="header-actions">
       <button type="button" class="btn-secondary" (click)="loadWards()" [disabled]="loading()">
@@ -21,6 +23,23 @@
     </div>
   </div>
 
+  @if (isNetworkView()) {
+    <section class="network-context" data-testid="global-bed-management">
+      <span class="material-symbols-outlined" aria-hidden="true">public</span>
+      <div>
+        <strong>{{ 'HOSPITAL_SCOPE.ALL_HOSPITALS' | translate }}</strong>
+        <p>{{ 'BEDS_NETWORK.HELP' | translate }}</p>
+      </div>
+    </section>
+    @if (hospitalNamesFailed()) {
+      <div class="dashboard-error" role="status">
+        <p>{{ 'BEDS_NETWORK.NAMES_FAILED' | translate }}</p>
+        <button class="btn-secondary" (click)="loadHospitalNames()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </div>
+    }
+  }
   <section class="dashboard-overview">
     <div class="panel-heading">
       <div>
@@ -70,8 +89,12 @@
       <label class="dashboard-search"
         ><span class="material-symbols-outlined" aria-hidden="true">search</span
         ><input
-          [attr.aria-label]="'BEDS.SEARCH_WARDS' | translate"
-          [placeholder]="'BEDS.SEARCH_WARDS' | translate"
+          [attr.aria-label]="
+            (isNetworkView() ? 'BEDS_NETWORK.SEARCH' : 'BEDS.SEARCH_WARDS') | translate
+          "
+          [placeholder]="
+            (isNetworkView() ? 'BEDS_NETWORK.SEARCH' : 'BEDS.SEARCH_WARDS') | translate
+          "
           [ngModel]="wardSearch()"
           (ngModelChange)="wardSearch.set($event)" /></label
       ><label
@@ -129,6 +152,9 @@
         <table>
           <thead>
             <tr>
+              @if (isNetworkView()) {
+                <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
+              }
               <th scope="col">{{ 'BEDS.WARD_CODE' | translate }}</th>
               <th scope="col">{{ 'BEDS.WARD_NAME' | translate }}</th>
               <th scope="col">{{ 'BEDS.WARD_TYPE' | translate }}</th>
@@ -143,6 +169,12 @@
           <tbody>
             @for (w of filteredWards(); track w.id) {
               <tr class="data-row ward-row" [class.selected]="selectedWardId() === w.id">
+                @if (isNetworkView()) {
+                  <td class="hospital-cell">
+                    <span class="material-symbols-outlined" aria-hidden="true">local_hospital</span
+                    ><span>{{ hospitalName(w.hospitalId) }}</span>
+                  </td>
+                }
                 <td class="cell-primary">{{ w.code }}</td>
                 <td>
                   <button
@@ -170,11 +202,30 @@
                 </td>
                 <td>
                   <div class="action-group">
+                    @if (isNetworkView()) {
+                      <button
+                        type="button"
+                        class="unit-action"
+                        (click)="selectWard(w)"
+                        [attr.aria-label]="
+                          'BEDS_NETWORK.VIEW_CONTEXT'
+                            | translate: { ward: w.name, hospital: hospitalName(w.hospitalId) }
+                        "
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">bed</span
+                        >{{ 'BEDS_NETWORK.VIEW_BEDS' | translate }}
+                      </button>
+                    }
                     <button
                       class="icon-btn"
                       (click)="openEditWard(w); $event.stopPropagation()"
                       [title]="'COMMON.EDIT' | translate"
-                      [attr.aria-label]="'COMMON.EDIT' | translate"
+                      [attr.aria-label]="
+                        isNetworkView()
+                          ? ('BEDS_NETWORK.EDIT_CONTEXT'
+                            | translate: { ward: w.name, hospital: hospitalName(w.hospitalId) })
+                          : ('COMMON.EDIT' | translate)
+                      "
                     >
                       <span class="material-symbols-outlined">edit</span>
                     </button>
@@ -183,7 +234,12 @@
                         class="icon-btn icon-danger"
                         (click)="deleteWard(w); $event.stopPropagation()"
                         [title]="'COMMON.DELETE' | translate"
-                        [attr.aria-label]="'COMMON.DELETE' | translate"
+                        [attr.aria-label]="
+                          isNetworkView()
+                            ? ('BEDS_NETWORK.DELETE_CONTEXT'
+                              | translate: { ward: w.name, hospital: hospitalName(w.hospitalId) })
+                            : ('COMMON.DELETE' | translate)
+                        "
                       >
                         <span class="material-symbols-outlined">delete</span>
                       </button>
@@ -202,7 +258,12 @@
   @if (selectedWard(); as ward) {
     <section class="beds-section" data-testid="selected-ward-panel">
       <div class="beds-header">
-        <h2>{{ 'BEDS.BEDS_IN' | translate: { ward: ward.name } }}</h2>
+        <div>
+          <p class="selected-hospital">
+            {{ isNetworkView() ? hospitalName(ward.hospitalId) : '' }}
+          </p>
+          <h2>{{ 'BEDS.BEDS_IN' | translate: { ward: ward.name } }}</h2>
+        </div>
         <button class="btn-primary" (click)="openCreateBed()">
           <span class="material-symbols-outlined">add</span>
           {{ 'BEDS.NEW_BED' | translate }}
@@ -342,8 +403,8 @@
     class="modal-backdrop"
     (click)="closeWardModal()"
     (keydown.escape)="closeWardModal()"
-    tabindex="0"
-    role="button"
+    tabindex="-1"
+    role="presentation"
   >
     <div
       class="modal-card"
@@ -368,6 +429,28 @@
         </button>
       </div>
       <div class="modal-body">
+        @if (isNetworkView()) {
+          <section class="operation-target" data-testid="ward-hospital-target">
+            <strong>{{ 'BEDS_NETWORK.TARGET_LABEL' | translate }} *</strong>
+            @if (formHospitalId()) {
+              <p>
+                <span class="material-symbols-outlined" aria-hidden="true">local_hospital</span
+                >{{ formHospitalName() }}
+              </p>
+              @if (!editingWardId()) {
+                <button type="button" class="btn-secondary" (click)="clearWardHospital()">
+                  {{ 'BEDS_NETWORK.CHANGE_TARGET' | translate }}
+                </button>
+              }
+            } @else {
+              <p>{{ 'BEDS_NETWORK.CREATE_HELP' | translate }}</p>
+              <app-hospital-typeahead
+                [hideAllOption]="true"
+                (selectHospital)="chooseWardHospital($event)"
+              />
+            }
+          </section>
+        }
         <div class="form-row">
           <label for="ward-name">{{ 'BEDS.WARD_NAME' | translate }} *</label>
           <input required id="ward-name" type="text" [(ngModel)]="wardForm.name" />
@@ -443,8 +526,8 @@
     class="modal-backdrop"
     (click)="closeBedModal()"
     (keydown.escape)="closeBedModal()"
-    tabindex="0"
-    role="button"
+    tabindex="-1"
+    role="presentation"
   >
     <div
       class="modal-card"
@@ -469,6 +552,12 @@
         </button>
       </div>
       <div class="modal-body">
+        @if (isNetworkView()) {
+          <p class="operation-target" data-testid="bed-hospital-target">
+            <span class="material-symbols-outlined" aria-hidden="true">local_hospital</span
+            >{{ bedTargetHospitalName() }}
+          </p>
+        }
         <div class="form-row-inline">
           <div class="form-row">
             <label for="bed-number">{{ 'BEDS.BED_NUMBER' | translate }} *</label>

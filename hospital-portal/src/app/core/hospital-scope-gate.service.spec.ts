@@ -1,3 +1,5 @@
+import { Subject } from 'rxjs';
+import { NavigationStart, NavigationEnd, Event as RouterEvent } from '@angular/router';
 import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRouteSnapshot, Router, provideRouter } from '@angular/router';
@@ -60,6 +62,7 @@ describe('HospitalScopeGateService', () => {
     await router.navigateByUrl('/gated');
     expect(gate.required()).toBeTrue();
     expect(gate.blocked()).toBeTrue();
+    expect(gate.showNetworkDirectory()).toBeTrue();
     expect(gate.showChip()).toBeTrue();
   });
 
@@ -70,6 +73,7 @@ describe('HospitalScopeGateService', () => {
     expect(gate.required()).toBeTrue();
     expect(gate.blocked()).toBeFalse();
     expect(gate.showChip()).toBeFalse();
+    expect(gate.showNetworkDirectory()).toBeFalse();
   });
 
   it('allows an explicitly supported global read without weakening facility-only routes', async () => {
@@ -172,6 +176,24 @@ describe('HospitalScopeGateService', () => {
     expect(gate.outletKey())
       .withContext('a pick on an ungated route, which reloads itself')
       .toBe(afterPick);
+  });
+
+  it('restores global view on browser history navigation without a hospital query', async () => {
+    asSuperAdminInGlobalView();
+    await router.navigateByUrl('/gated');
+    roleContext.scopeToHospital('h2');
+    const events = router.events as Subject<RouterEvent>;
+    events.next(new NavigationStart(100, '/gated', 'popstate'));
+    events.next(new NavigationEnd(100, '/gated', '/gated'));
+    expect(roleContext.globalView()).toBeTrue();
+    expect(gate.showNetworkDirectory()).toBeTrue();
+  });
+  it('does not offer the network directory to a staff account without an active hospital', async () => {
+    roleContext.setRoles(['ROLE_NURSE']);
+    roleContext.activeHospitalId = null;
+    await router.navigateByUrl('/gated');
+    expect(gate.blocked()).toBeTrue();
+    expect(gate.showNetworkDirectory()).toBeFalse();
   });
 
   it('routeRequiresHospitalScope accepts only a literal true', () => {

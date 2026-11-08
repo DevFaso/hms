@@ -74,22 +74,26 @@ export interface BedRequest {
 export class BedService {
   private readonly http = inject(HttpClient);
 
+  private hospitalOptions(hospitalId?: string): { headers?: Record<string, string> } {
+    return hospitalId ? { headers: { 'X-Hospital-Id': hospitalId } } : {};
+  }
+
   getWards(includeInactive = false): Observable<WardResponse[]> {
     let params = new HttpParams();
     if (includeInactive) params = params.set('includeInactive', true);
     return this.http.get<WardResponse[]>('/wards', { params });
   }
 
-  createWard(data: WardRequest): Observable<WardResponse> {
-    return this.http.post<WardResponse>('/wards', data);
+  createWard(data: WardRequest, hospitalId?: string): Observable<WardResponse> {
+    return this.http.post<WardResponse>('/wards', data, this.hospitalOptions(hospitalId));
   }
 
-  updateWard(wardId: string, data: WardRequest): Observable<WardResponse> {
-    return this.http.put<WardResponse>(`/wards/${wardId}`, data);
+  updateWard(wardId: string, data: WardRequest, hospitalId?: string): Observable<WardResponse> {
+    return this.http.put<WardResponse>(`/wards/${wardId}`, data, this.hospitalOptions(hospitalId));
   }
 
-  deleteWard(wardId: string): Observable<void> {
-    return this.http.delete<void>(`/wards/${wardId}`);
+  deleteWard(wardId: string, hospitalId?: string): Observable<void> {
+    return this.http.delete<void>(`/wards/${wardId}`, this.hospitalOptions(hospitalId));
   }
 
   getBeds(wardId: string): Observable<BedResponse[]> {
@@ -103,19 +107,32 @@ export class BedService {
       : this.http.get<BedResponse[]>('/beds/available');
   }
 
-  createBed(wardId: string, data: BedRequest): Observable<BedResponse> {
-    return this.http.post<BedResponse>(`/wards/${wardId}/beds`, data);
+  createBed(wardId: string, data: BedRequest, hospitalId?: string): Observable<BedResponse> {
+    return this.http.post<BedResponse>(
+      `/wards/${wardId}/beds`,
+      data,
+      this.hospitalOptions(hospitalId),
+    );
   }
 
-  updateBed(bedId: string, data: BedRequest): Observable<BedResponse> {
-    return this.http.put<BedResponse>(`/beds/${bedId}`, data);
+  updateBed(bedId: string, data: BedRequest, hospitalId?: string): Observable<BedResponse> {
+    return this.http.put<BedResponse>(`/beds/${bedId}`, data, this.hospitalOptions(hospitalId));
   }
 
-  updateBedStatus(bedId: string, status: BedStatus, notes?: string): Observable<BedResponse> {
-    return this.http.patch<BedResponse>(`/beds/${bedId}/status`, { status, notes });
+  updateBedStatus(
+    bedId: string,
+    status: BedStatus,
+    notes?: string,
+    hospitalId?: string,
+  ): Observable<BedResponse> {
+    return this.http.patch<BedResponse>(
+      `/beds/${bedId}/status`,
+      { status, notes },
+      this.hospitalOptions(hospitalId),
+    );
   }
 
-  deleteBed(bedId: string): Observable<void> {
-    return this.http.delete<void>(`/beds/${bedId}`);
+  deleteBed(bedId: string, hospitalId?: string): Observable<void> {
+    return this.http.delete<void>(`/beds/${bedId}`, this.hospitalOptions(hospitalId));
   }
 }

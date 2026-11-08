@@ -1,3 +1,4 @@
+import { HospitalNetworkWorkspaceComponent } from '../shared/hospital-network-workspace/hospital-network-workspace';
 import { EMPI_MATCHER_ROLES, EmpiStatusService } from '../reception/empi-status.service';
 import {
   Component,
@@ -89,6 +90,7 @@ function isMobileViewport(): boolean {
     DowntimeBannerComponent,
     HospitalScopeChipComponent,
     HospitalScopeHintComponent,
+    HospitalNetworkWorkspaceComponent,
     TranslateModule,
     SkipLinkComponent,
     BrandMarkComponent,
@@ -1643,6 +1645,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * backend permission set arrives), with any saved order re-applied on top.
    */
   navItems = signal<NavItem[]>([]);
+  protected readonly networkModuleTitleKey = computed(() => {
+    const path = this.scopeGate.routePath();
+    return (
+      [...this.navItems()]
+        .filter((item) => path === item.route || path.startsWith(item.route + '/'))
+        .sort((a, b) => b.route.length - a.route.length)[0]?.translationKey ??
+      'HOSPITAL_NETWORK.TITLE'
+    );
+  });
 
   /** The emergency-broadcast socket was opened by this shell (once). */
   private broadcastOpened = false;

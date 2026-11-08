@@ -17,6 +17,45 @@ describe('BedService', () => {
 
   afterEach(() => httpMock.verify());
 
+  it('targets each global write explicitly and does not leak that target to later reads', () => {
+    const ward = { name: 'Cdx Ward', code: 'CDX', wardType: 'GENERAL' as const };
+    const operations: [() => void, string, string, string][] = [
+      [() => service.createWard(ward, 'h2').subscribe(), '/wards', 'POST', 'h2'],
+      [() => service.updateWard('w2', ward, 'h2').subscribe(), '/wards/w2', 'PUT', 'h2'],
+      [() => service.deleteWard('w2', 'h2').subscribe(), '/wards/w2', 'DELETE', 'h2'],
+      [
+        () => service.createBed('w1', { bedNumber: 'CDX' }, 'h1').subscribe(),
+        '/wards/w1/beds',
+        'POST',
+        'h1',
+      ],
+      [
+        () => service.updateBed('b1', { bedNumber: 'CDX' }, 'h1').subscribe(),
+        '/beds/b1',
+        'PUT',
+        'h1',
+      ],
+      [
+        () => service.updateBedStatus('b1', 'MAINTENANCE', 'Cdx reason', 'h1').subscribe(),
+        '/beds/b1/status',
+        'PATCH',
+        'h1',
+      ],
+      [() => service.deleteBed('b1', 'h1').subscribe(), '/beds/b1', 'DELETE', 'h1'],
+    ];
+    for (const [run, url, method, hospital] of operations) {
+      run();
+      const req = httpMock.expectOne(url);
+      expect(req.request.method).toBe(method);
+      expect(req.request.headers.get('X-Hospital-Id')).toBe(hospital);
+      req.flush({});
+    }
+    service.getWards().subscribe();
+    const read = httpMock.expectOne('/wards');
+    expect(read.request.headers.has('X-Hospital-Id')).toBeFalse();
+    read.flush([]);
+  });
+
   it('GETs wards without the inactive flag by default', () => {
     service.getWards().subscribe();
     const req = httpMock.expectOne('/wards');

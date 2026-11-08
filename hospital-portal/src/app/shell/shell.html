@@ -494,7 +494,9 @@
       <app-emergency-broadcast-banner />
       <!-- P3 #23a — persistent read-only banner; not dismissible by design. -->
       <app-downtime-banner />
-      @if (scopeGate.blocked()) {
+      @if (scopeGate.showNetworkDirectory()) {
+        <app-hospital-network-workspace [moduleTitleKey]="networkModuleTitleKey()" />
+      } @else if (scopeGate.blocked()) {
         <!-- Route-level hospital scope gate (HospitalScopeGateService): a route
              flagged requiresHospitalScope is one facility's page. Until a
              hospital is pinned the page is not created, so it never fires a
@@ -510,10 +512,7 @@
       } @else {
         @if (scopeGate.showChip()) {
           <div class="scope-bar" data-testid="scope-bar">
-            <app-hospital-scope-chip
-              [preserveScope]="true"
-              [hospitalRequired]="!scopeGate.allowsGlobal()"
-            />
+            <app-hospital-scope-chip [preserveScope]="true" [hospitalRequired]="false" />
           </div>
         }
         <!-- The key advances on a scope change while the route is gated, so the

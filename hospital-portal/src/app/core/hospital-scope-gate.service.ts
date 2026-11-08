@@ -1,6 +1,6 @@
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRouteSnapshot, NavigationEnd, Router } from '@angular/router';
+import { ActivatedRouteSnapshot, NavigationEnd, NavigationStart, Router } from '@angular/router';
 import { filter } from 'rxjs';
 
 import { RoleContextService } from './role-context.service';
@@ -57,10 +57,17 @@ export class HospitalScopeGateService {
       !(this._allowsGlobal() && this.roleContext.isSuperAdmin() && this.roleContext.globalView()),
   );
 
+  /** Facility-only APIs stay gated; global super-admins get a useful network directory instead. */
+  readonly showNetworkDirectory = computed(
+    () => this.blocked() && this.roleContext.isSuperAdmin() && this.roleContext.globalView(),
+  );
+  readonly routePath = signal('');
+
   /** The chip belongs above a gated page only for the one account that can switch: a super-admin. */
   readonly showChip = computed(() => this._required() && this.roleContext.isSuperAdmin());
 
   private readonly _scopeEpoch = signal(0);
+  private historyNavigation = false;
   private lastEffectiveHospitalId: string | null | undefined;
 
   /** Identity of the outlet: advances on a scope change while a gated route is active, never on navigation. */
@@ -77,6 +84,14 @@ export class HospitalScopeGateService {
     });
     this.router.events
       .pipe(
+        filter((e): e is NavigationStart => e instanceof NavigationStart),
+        takeUntilDestroyed(),
+      )
+      .subscribe((e) => {
+        this.historyNavigation = e.navigationTrigger === 'popstate';
+      });
+    this.router.events
+      .pipe(
         filter((e): e is NavigationEnd => e instanceof NavigationEnd),
         takeUntilDestroyed(),
       )
@@ -84,6 +99,7 @@ export class HospitalScopeGateService {
   }
 
   private onNavigated(): void {
+    this.routePath.set(this.router.url.split(/[?#]/)[0]);
     const root = this.router.routerState.snapshot.root;
     const required = routeRequiresHospitalScope(root);
     let allowsGlobal = false;
@@ -95,6 +111,8 @@ export class HospitalScopeGateService {
       const fromUrl = root.queryParamMap.get('hospitalId');
       if (fromUrl) {
         this.roleContext.scopeToHospital(fromUrl);
+      } else if (this.historyNavigation) {
+        this.roleContext.enableGlobalView();
       }
     }
     this._required.set(required);

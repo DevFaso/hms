@@ -13198,5 +13198,41 @@
     "LOAD_FAILED": "Impossible de charger cette liste. Réessayez.",
     "RETRY": "Réessayer",
     "RX_SCOPE": "Aperçu des ordonnances chargées. Utilisez les onglets de statut pour retrouver les ordonnances nécessitant une attention."
+  },
+  "BEDS_NETWORK": {
+    "SUBTITLE": "Piloter les unités et la capacité des lits de tous les hôpitaux",
+    "HELP": "Consultez tous les établissements ici. Les actions de chaque ligne concernent son hôpital, sans quitter cette vue d’ensemble.",
+    "SEARCH": "Rechercher un hôpital, une unité, un code ou un service",
+    "TARGET_REQUIRED": "Identifiez l’hôpital concerné avant d’enregistrer cette opération.",
+    "TARGET_LABEL": "Hôpital concerné par cette opération",
+    "CREATE_HELP": "Choisissez où créer cette unité. La vue de tous les hôpitaux reste accessible après l’enregistrement.",
+    "CHANGE_TARGET": "Changer l’hôpital de destination",
+    "VIEW_BEDS": "Voir les lits",
+    "VIEW_CONTEXT": "Voir les lits de {{ward}} à {{hospital}}",
+    "NAMES_FAILED": "Les noms des hôpitaux n’ont pas pu être chargés. Leurs identifiants restent affichés en attendant une nouvelle tentative.",
+    "EDIT_CONTEXT": "Modifier {{ward}} à {{hospital}}",
+    "DELETE_CONTEXT": "Supprimer {{ward}} à {{hospital}}"
+  },
+  "HOSPITAL_NETWORK": {
+    "TITLE": "Réseau hospitalier",
+    "EYEBROW": "Super-admin · tous les hôpitaux",
+    "SUBTITLE": "Accédez à ce module dans l’ensemble de votre réseau hospitalier.",
+    "OVERVIEW": "Vue d’ensemble du réseau hospitalier",
+    "HOSPITALS": "Hôpitaux dans l’annuaire",
+    "ACTIVE": "Hôpitaux actifs",
+    "ACTIONS_TITLE": "Des actions pour chaque hôpital",
+    "ACTIONS_HELP": "Ouvrez directement le module depuis la ligne d’un hôpital. L’établissement concerné accompagne automatiquement l’opération.",
+    "DIRECTORY": "Liste de travail par hôpital",
+    "DIRECTORY_HELP": "Ce module est organisé par hôpital. Cet annuaire ne constitue pas une liste fusionnée de ses dossiers cliniques.",
+    "SEARCH": "Rechercher un hôpital, un code, une organisation ou une ville",
+    "ACTIVE_ONLY": "Hôpitaux actifs uniquement",
+    "LOAD_FAILED": "Impossible de charger l’annuaire des hôpitaux.",
+    "NO_MATCHES": "Aucun hôpital ne correspond à ces filtres.",
+    "EMPTY": "Aucun hôpital n’est disponible dans l’annuaire.",
+    "ORGANIZATION": "Organisation",
+    "CITY": "Ville",
+    "OPEN_MODULE": "Ouvrir le module",
+    "OPEN_CONTEXT": "Ouvrir {{module}} à {{hospital}}",
+    "RESULTS": "{{count}} hôpitaux sur {{total}}"
   }
 }
