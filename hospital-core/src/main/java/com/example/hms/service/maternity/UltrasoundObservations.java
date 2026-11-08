@@ -34,6 +34,14 @@ import java.util.stream.Stream;
  */
 public final class UltrasoundObservations {
 
+    /** The observation names, shared by the lists below (and the portal's). */
+    public static final String CARDIAC_ACTIVITY = "fetalCardiacActivity";
+    public static final String MOVEMENT = "fetalMovementObserved";
+    public static final String TONE = "fetalToneNormal";
+    public static final String NASAL_BONE = "nasalBonePresent";
+    public static final String ANOMALIES = "anomaliesDetected";
+    public static final String FETUS_COUNT = "numberOfFetuses";
+
     /** One observation, read from a request and from a stored report. */
     public record Field(String name, Function<UltrasoundReportBaseDTO, Object> request,
                         Function<UltrasoundReport, Object> stored) {
@@ -44,17 +52,17 @@ public final class UltrasoundObservations {
     }
 
     public static final List<Field> FIELDS = List.of(
-        new Field("fetalCardiacActivity", UltrasoundReportBaseDTO::getFetalCardiacActivity,
+        new Field(CARDIAC_ACTIVITY, UltrasoundReportBaseDTO::getFetalCardiacActivity,
             UltrasoundReport::getFetalCardiacActivity),
-        new Field("fetalMovementObserved", UltrasoundReportBaseDTO::getFetalMovementObserved,
+        new Field(MOVEMENT, UltrasoundReportBaseDTO::getFetalMovementObserved,
             UltrasoundReport::getFetalMovementObserved),
-        new Field("fetalToneNormal", UltrasoundReportBaseDTO::getFetalToneNormal,
+        new Field(TONE, UltrasoundReportBaseDTO::getFetalToneNormal,
             UltrasoundReport::getFetalToneNormal),
-        new Field("nasalBonePresent", UltrasoundReportBaseDTO::getNasalBonePresent,
+        new Field(NASAL_BONE, UltrasoundReportBaseDTO::getNasalBonePresent,
             UltrasoundReport::getNasalBonePresent),
-        new Field("anomaliesDetected", UltrasoundReportBaseDTO::getAnomaliesDetected,
+        new Field(ANOMALIES, UltrasoundReportBaseDTO::getAnomaliesDetected,
             UltrasoundReport::getAnomaliesDetected),
-        new Field("numberOfFetuses", UltrasoundReportBaseDTO::getNumberOfFetuses,
+        new Field(FETUS_COUNT, UltrasoundReportBaseDTO::getNumberOfFetuses,
             UltrasoundReport::getNumberOfFetuses));
 
     /** The findings that are not observations: any one present makes a report non-empty. */
@@ -91,9 +99,9 @@ public final class UltrasoundObservations {
      * FALSE - no cardiac activity, no movement, no anomaly - fits an empty sac).
      */
     public static final List<Finding> SIGNS_OF_A_FETUS = List.of(
-        new Finding("fetalCardiacActivity", UltrasoundReportBaseDTO::getFetalCardiacActivity),
-        new Finding("fetalMovementObserved", UltrasoundReportBaseDTO::getFetalMovementObserved),
-        new Finding("anomaliesDetected", UltrasoundReportBaseDTO::getAnomaliesDetected),
+        new Finding(CARDIAC_ACTIVITY, UltrasoundReportBaseDTO::getFetalCardiacActivity),
+        new Finding(MOVEMENT, UltrasoundReportBaseDTO::getFetalMovementObserved),
+        new Finding(ANOMALIES, UltrasoundReportBaseDTO::getAnomaliesDetected),
         new Finding("fetalHeartRate", UltrasoundReportBaseDTO::getFetalHeartRate),
         new Finding("biparietalDiameterMm", UltrasoundReportBaseDTO::getBiparietalDiameterMm),
         new Finding("headCircumferenceMm", UltrasoundReportBaseDTO::getHeadCircumferenceMm),
@@ -102,12 +110,12 @@ public final class UltrasoundObservations {
         new Finding("crownRumpLengthMm", UltrasoundReportBaseDTO::getCrownRumpLengthMm),
         new Finding("estimatedFetalWeightGrams", UltrasoundReportBaseDTO::getEstimatedFetalWeightGrams),
         new Finding("nuchalTranslucencyMm", UltrasoundReportBaseDTO::getNuchalTranslucencyMm),
-        new Finding("nasalBonePresent", UltrasoundReportBaseDTO::getNasalBonePresent),
-        new Finding("fetalToneNormal", UltrasoundReportBaseDTO::getFetalToneNormal),
+        new Finding(NASAL_BONE, UltrasoundReportBaseDTO::getNasalBonePresent),
+        new Finding(TONE, UltrasoundReportBaseDTO::getFetalToneNormal),
         new Finding("anatomyFindings", UltrasoundReportBaseDTO::getAnatomyFindings));
 
     public static final Set<String> SIGNS_ONLY_WHEN_TRUE =
-        Set.of("fetalCardiacActivity", "fetalMovementObserved", "anomaliesDetected");
+        Set.of(CARDIAC_ACTIVITY, MOVEMENT, ANOMALIES);
 
     /**
      * The value the old code filled for each observation it defaulted, before
@@ -116,11 +124,11 @@ public final class UltrasoundObservations {
      * never defaulted.
      */
     public static final Map<String, Object> LEGACY_DEFAULTS = Map.of(
-        "fetalCardiacActivity", Boolean.TRUE,
-        "fetalMovementObserved", Boolean.TRUE,
-        "fetalToneNormal", Boolean.TRUE,
-        "anomaliesDetected", Boolean.FALSE,
-        "numberOfFetuses", 1);
+        CARDIAC_ACTIVITY, Boolean.TRUE,
+        MOVEMENT, Boolean.TRUE,
+        TONE, Boolean.TRUE,
+        ANOMALIES, Boolean.FALSE,
+        FETUS_COUNT, 1);
 
     private UltrasoundObservations() {
     }
