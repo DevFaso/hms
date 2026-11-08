@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiPredicate;
 
 /**
@@ -38,14 +39,14 @@ public final class DeceasedPatientGuard {
     private static final String FIELD_PATIENT = "patientId";
 
     /** (patient, hospital) has an open dispute. Set at startup by {@link DeathCareEligibility}; none means blocked. */
-    private static volatile BiPredicate<UUID, UUID> openDispute;
+    private static final AtomicReference<BiPredicate<UUID, UUID>> OPEN_DISPUTE = new AtomicReference<>();
 
     private DeceasedPatientGuard() {
     }
 
     /** Package level for {@link DeathCareEligibility}; public tests reach it through that bean. */
     static void useDisputes(BiPredicate<UUID, UUID> disputes) {
-        openDispute = disputes;
+        OPEN_DISPUTE.set(disputes);
     }
 
     /** THE rule: a recorded death blocks new care, unless a doctor has disputed it at the acting hospital. */
@@ -55,6 +56,7 @@ public final class DeceasedPatientGuard {
 
     /** A recorded death under an open dispute at the acting hospital. Another hospital stays blocked. */
     public static boolean deathDisputedHere(Patient patient) {
+        BiPredicate<UUID, UUID> openDispute = OPEN_DISPUTE.get();
         if (patient == null || !patient.isDeceased() || openDispute == null) {
             return false;
         }

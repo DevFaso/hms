@@ -3,16 +3,25 @@ package com.example.hms.cdshooks.rules;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
 import com.example.hms.enums.InteractionSeverity;
+import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.model.Prescription;
 import com.example.hms.model.medication.DrugInteraction;
 import com.example.hms.repository.DrugInteractionRepository;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
- * Pairs the proposed prescription's RxNorm with each currently-active
- * prescription on the patient, looks up
+ * Pairs the proposed prescription's RxNorm with each other order on the
+ * patient (in force, or a proposal the patient may soon be on, QA D1523,
+ * whose status the card then names), looks up
  * {@code clinical.drug_interactions}, and emits one card per hit.
  *
  * <p>RxNorm is the join key. When either side has no resolved RxNorm
@@ -57,33 +66,62 @@ public class DrugDrugInteractionRule implements CdsRule {
         String proposed = context.proposedRxnormCode();
         if (proposed == null || proposed.isBlank()) return List.of();
 
-        return context.activePrescriptionRxnorms().stream()
-            .filter(existing -> existing != null && !existing.isBlank() && !existing.equals(proposed))
-            .map(existing -> canonicalPair(proposed, existing))
-            .distinct()
-            .map(pairKey -> {
-                int sep = pairKey.indexOf('|');
-                String a = pairKey.substring(0, sep);
-                String b = pairKey.substring(sep + 1);
-                // proposed is always one side of the pair; we don't care which
-                // because findInteractionBetween is bidirectional.
-                return repository.findInteractionBetween(a, b).orElse(null);
-            })
-            .filter(java.util.Objects::nonNull)
-            .filter(DrugInteraction::isActive)
-            .map(this::buildCard)
-            .toList();
+        Map<String, PrescriptionStatus> proposalOnly = proposalOnlyStatuses(context);
+        List<CdsCard> cards = new ArrayList<>();
+        for (String existing : new LinkedHashSet<>(context.activePrescriptionRxnorms())) {
+            if (existing == null || existing.isBlank() || existing.equals(proposed)) {
+                continue;
+            }
+            // proposed is always one side of the pair; findInteractionBetween is bidirectional.
+            String pairKey = canonicalPair(proposed, existing);
+            int sep = pairKey.indexOf('|');
+            repository.findInteractionBetween(pairKey.substring(0, sep), pairKey.substring(sep + 1))
+                .filter(DrugInteraction::isActive)
+                .ifPresent(di -> cards.add(buildCard(di, proposalOnly.get(existing))));
+        }
+        return cards;
+    }
+
+    /**
+     * QA D1523: the status of a proposal (a draft, an order waiting for its signature) for each RxNorm
+     * that only proposals carry, so the card says the other order is not signed yet. An RxNorm an
+     * order in force carries is not in the map: that order is the one the card is about.
+     */
+    private static Map<String, PrescriptionStatus> proposalOnlyStatuses(CdsRuleContext context) {
+        Map<String, PrescriptionStatus> proposals = new HashMap<>();
+        Set<String> inForce = new HashSet<>();
+        List<Prescription> orders = context.activePrescriptions();
+        List<String> rxnorms = context.activePrescriptionRxnorms();
+        for (int i = 0; i < rxnorms.size() && i < orders.size(); i++) {
+            String rx = rxnorms.get(i);
+            Prescription order = orders.get(i);
+            if (rx == null || order == null) {
+                continue;
+            }
+            if (order.getStatus() != null && order.getStatus().isProposal()) {
+                proposals.putIfAbsent(rx, order.getStatus());
+            } else {
+                inForce.add(rx);
+            }
+        }
+        proposals.keySet().removeAll(inForce);
+        return proposals;
     }
 
     private static String canonicalPair(String a, String b) {
         return a.compareTo(b) <= 0 ? a + "|" + b : b + "|" + a;
     }
 
-    private CdsCard buildCard(DrugInteraction di) {
+    private CdsCard buildCard(DrugInteraction di, PrescriptionStatus proposalStatus) {
         String summary = text.get("cds.ddi.summary", "Drug-drug interaction: {0} ↔ {1} ({2})",
             // QA D1134: the severity agrees with "interaction" (feminine in French and Spanish).
             di.getDrug1Name(), di.getDrug2Name(), text.severityWord(di.getSeverity()));
         String detail = composeDetail(di);
+        if (proposalStatus != null) {
+            String proposal = text.get("cds.ddi.proposal",
+                "The other order is not signed yet (status: {0}).", text.enumWord(proposalStatus));
+            detail = detail == null ? proposal : detail + " " + proposal;
+        }
         return new CdsCard(
             summary,
             detail,

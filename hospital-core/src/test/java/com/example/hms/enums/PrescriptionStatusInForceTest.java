@@ -34,4 +34,19 @@ class PrescriptionStatusInForceTest {
             }
         }
     }
+
+    /**
+     * QA D1523: a draft and an order waiting for its signature are proposals: never in force, yet named by
+     * the duplicate and interaction warnings. A withdrawn or rejected order is neither.
+     */
+    @Test
+    void onlyADraftAndAnOrderWaitingForItsSignatureAreProposals() {
+        for (PrescriptionStatus status : PrescriptionStatus.values()) {
+            boolean proposal = status == PrescriptionStatus.DRAFT || status == PrescriptionStatus.PENDING_SIGNATURE;
+            assertThat(status.isProposal()).as(status.name()).isEqualTo(proposal);
+            if (proposal) {
+                assertThat(status.isInForce()).as(status.name()).isFalse();
+            }
+        }
+    }
 }

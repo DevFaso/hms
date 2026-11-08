@@ -2,6 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
+import { backgroundRequestOptions } from './ws-transport';
+
 export type PlaceOfDeath = 'FACILITY' | 'HOME' | 'IN_TRANSIT' | 'OTHER' | 'UNKNOWN';
 
 export type MannerOfDeath =
@@ -208,10 +210,11 @@ export class MortalityService {
     return this.http.get<DeathRecordResponse>(`${this.baseUrl}/deaths/patient/${patientId}`);
   }
 
-  /** QA D1516: for the chart. */
+  /** QA D1516: for the chart. QA D1524: a side panel's read; a 403 costs the banner, never the chart. */
   voidedClosures(patientId: string): Observable<VoidedDeathClosures[]> {
     return this.http.get<VoidedDeathClosures[]>(
       `${this.baseUrl}/patients/${patientId}/voided-closures`,
+      backgroundRequestOptions(),
     );
   }
 

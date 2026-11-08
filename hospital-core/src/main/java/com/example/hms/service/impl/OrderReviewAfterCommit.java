@@ -20,7 +20,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.LinkedHashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -45,6 +47,31 @@ public class OrderReviewAfterCommit {
     /** One item for a hospital's readers. {@code recipients} empty falls back to its doctors. */
     public record Notice(UUID hospital, UUID patient, String patientName, UUID reference, String referenceType,
                          String titleKey, String bodyKey, Object[] bodyArgs, Set<UUID> recipients) {
+
+        /** Sonar S6218: the array's contents, not its identity, in equality, hashing and the text form. */
+        @Override
+        public boolean equals(Object other) {
+            return this == other || (other instanceof Notice that
+                && Objects.equals(hospital, that.hospital) && Objects.equals(patient, that.patient)
+                && Objects.equals(patientName, that.patientName) && Objects.equals(reference, that.reference)
+                && Objects.equals(referenceType, that.referenceType) && Objects.equals(titleKey, that.titleKey)
+                && Objects.equals(bodyKey, that.bodyKey) && Arrays.equals(bodyArgs, that.bodyArgs)
+                && Objects.equals(recipients, that.recipients));
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * Objects.hash(hospital, patient, patientName, reference, referenceType, titleKey, bodyKey,
+                recipients) + Arrays.hashCode(bodyArgs);
+        }
+
+        /** Ids and keys only: the patient's name and the body's arguments are not logged. */
+        @Override
+        public String toString() {
+            return "Notice[hospital=" + hospital + ", reference=" + reference + ", referenceType=" + referenceType
+                + ", titleKey=" + titleKey + ", bodyKey=" + bodyKey
+                + ", bodyArgs=" + (bodyArgs == null ? 0 : bodyArgs.length) + "]";
+        }
     }
 
     /** Under the order's lock, and only if the hold still stands: a decision may have come first. */

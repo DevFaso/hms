@@ -35,7 +35,9 @@ import {
   isFrontDeskOnly,
   CHART_VIEW_ROLES,
   ENCOUNTER_VIEW_ROLES,
+  STORYBOARD_VIEW_ROLES,
   VITALS_VIEW_ROLES,
+  VOIDED_CLOSURES_VIEW_ROLES,
   canInvokeCds,
 } from './patient-chart/chart-access';
 import { AdvanceDirectivesTabComponent } from './advance-directives/advance-directives-tab.component';
@@ -682,6 +684,16 @@ export class PatientDetailComponent implements OnInit {
    */
   canSeeBpaPanel(): boolean {
     return canInvokeCds(this.roleContext);
+  }
+
+  /** QA D1524: the voided-death banner, for the roles GET .../voided-closures admits. */
+  canSeeVoidedClosures(): boolean {
+    return this.roleContext.hasAnyActiveRole(VOIDED_CLOSURES_VIEW_ROLES);
+  }
+
+  /** QA D1524: the storyboard banner, for the roles GET /patients/{id}/storyboard admits. */
+  canSeeStoryboard(): boolean {
+    return this.roleContext.hasAnyActiveRole(STORYBOARD_VIEW_ROLES);
   }
 
   /** Insurance endpoints grant HOSPITAL_ADMIN/RECEPTIONIST/NURSE/DOCTOR only

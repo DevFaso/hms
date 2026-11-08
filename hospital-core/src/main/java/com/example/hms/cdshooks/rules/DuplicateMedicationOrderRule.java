@@ -28,7 +28,9 @@ import java.util.UUID;
  * </ol>
  *
  * <p>Window is the last seven days against any order in force (QA D1515:
- * signed, not withdrawn or rejected; a draft is a proposal, not an order).
+ * signed, not withdrawn or rejected) and any proposal (QA D1523: a draft or
+ * an order waiting for its signature, another order the patient may soon be
+ * on); the card names the other order's status.
  * The engine pre-fetches {@code activePrescriptions} so this rule does
  * no I/O.
  */

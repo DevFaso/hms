@@ -9,6 +9,7 @@ import com.example.hms.utility.ObstetricEligibility;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 
 /**
@@ -137,7 +138,9 @@ public final class DeathClassificationRules {
             return null;
         }
         if (bornAt != null) {
-            long elapsed = ChronoUnit.DAYS.between(bornAt, diedAt);
+            // Sonar: two wall-clock times on the hospital's one clock, counted at a stated fixed offset (UTC),
+            // so no daylight-saving shift enters the count: exactly the local arithmetic it replaces.
+            long elapsed = ChronoUnit.DAYS.between(bornAt.atOffset(ZoneOffset.UTC), diedAt.atOffset(ZoneOffset.UTC));
             return new CompletedDays(elapsed, elapsed);
         }
         if (bornOn == null) {

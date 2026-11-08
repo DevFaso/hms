@@ -1855,6 +1855,31 @@ class PrescriptionServiceImplTest {
             .satisfies(card -> assertThat(card.indicator()).isEqualTo(com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.WARNING));
     }
 
+    /** QA D1523: the warning cards the signature computed (a duplicate of another draft) reach its response. */
+    @Test
+    void signCarriesTheWarningCardsItComputed() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard duplicate =
+            new com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard(
+                "Possible duplicate order", "status: draft",
+                com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.WARNING,
+                new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS Duplicate-Order Check", null, null),
+                null, null, null, "dup");
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
+            .thenReturn(List.of(duplicate));
+
+        PrescriptionResponseDTO signed = prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(signed.getCdsAdvisories()).containsExactly(duplicate);
+    }
+
     /** Round 18: a controlled order (catalogue flag, no tick) is signed only after re-authentication. */
     @Test
     void signingAControlledOrderReAuthenticatesThePrescriberAndRecordsTheProof() {

@@ -114,8 +114,12 @@ class AdultParacetamolGuardTest {
             }
             if (PRESCRIPTION_READ.matcher(code).find()) {
                 readers.add(name);
-                assertThat(code).as(name + ": its read of the orders keeps only orders in force")
-                    .contains("CdsRuleEngine::inForce");
+                // QA D1523: the engine's context also keeps proposals, for the duplicate and interaction
+                // warnings only (theContextsOtherOrdersReachOnlyTheDuplicateAndInteractionRules).
+                assertThat(java.util.regex.Pattern.compile(name.endsWith("/CdsRuleEngine.java")
+                        ? "CdsRuleEngine::inForceOrProposed\\b" : "CdsRuleEngine::inForce\\b").matcher(code).find())
+                    .as(name + ": its read of the orders keeps only orders in force (the engine: and proposals)")
+                    .isTrue();
             }
         }
         assertThat(ownSets).as("a status set of its own beside PrescriptionStatus.isInForce()").isEmpty();
@@ -123,7 +127,32 @@ class AdultParacetamolGuardTest {
         assertThat(readers).containsExactlyInAnyOrder("cdshooks/rules/CdsRuleEngine.java",
             "cdshooks/rules/ParacetamolFactsReader.java", "cdshooks/bpa/BpaRuleEngine.java");
         assertThat(code(MAIN.resolve("cdshooks/rules/CdsRuleEngine.java")))
-            .contains("return order != null && order.getStatus() != null && order.getStatus().isInForce();");
+            .contains("return order != null && order.getStatus() != null && order.getStatus().isInForce();")
+            .contains("return inForce(order) || (order != null && order.getStatus() != null && order.getStatus().isProposal());");
+    }
+
+    /**
+     * QA D1523 (class: a warning between two drafts lost because drafts left every list). The engine's
+     * context carries the orders in force AND the proposals (drafts, orders waiting for a signature), so
+     * the duplicate and interaction warnings name another order the patient may soon be on. Only those
+     * two rules read that list: an exposure total or a dose limit that read it would count a draft again
+     * (QA D1515), so any other reader fails here.
+     */
+    @Test
+    void theContextsOtherOrdersReachOnlyTheDuplicateAndInteractionRules() throws IOException {
+        Set<String> readers = new TreeSet<>();
+        for (Path source : javaSources()) {
+            String code = code(source);
+            String name = MAIN.relativize(source).toString().replace('\\', '/');
+            if (!name.endsWith("/CdsRuleContext.java") && code.contains("CdsRuleContext")
+                && (code.contains(".activePrescriptions()") || code.contains(".activePrescriptionRxnorms()"))) {
+                readers.add(name);
+            }
+        }
+        assertThat(readers).as("a reader of the context's other orders, which include drafts (QA D1523)"
+                + SourceScan.MANDATE)
+            .containsExactlyInAnyOrder("cdshooks/rules/DuplicateMedicationOrderRule.java",
+                "cdshooks/rules/DrugDrugInteractionRule.java");
     }
 
     @Test
