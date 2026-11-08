@@ -1,3 +1,4 @@
+@use '../shared/styles/diagnostics-workspace' as diagnostics;
 @use '../shared/styles/page-common';
 
 // ── Summary Cards ──
@@ -664,3 +665,5 @@
     color: #ffffff;
   }
 }
+
+@include diagnostics.workspace;

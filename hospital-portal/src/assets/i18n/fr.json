@@ -13235,6 +13235,12 @@
     "OPEN_CONTEXT": "Ouvrir {{module}} à {{hospital}}",
     "RESULTS": "{{count}} hôpitaux sur {{total}}"
   },
+  "DIAGNOSTICS_WORKSPACE": {
+    "LABEL": "Espace diagnostic",
+    "LOADED_DEFINITIONS": "sur cette page",
+    "APPROVAL_NOTE": "Examinez chaque définition et ses justificatifs avant de décider.",
+    "CONFIG_NOTE": "Versions des tests, types de prélèvement et plages de référence."
+  },
   "PHARMACY_WORKSPACE": {
     "LABEL": "Espace pharmacie",
     "CLAIMS_SUBTITLE": "Suivre les demandes, les décisions et les remboursements.",

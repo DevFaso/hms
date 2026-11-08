@@ -1,7 +1,11 @@
-<div class="page-container">
+<div class="diagnostics-workspace page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">{{ 'LAB.TITLE' | translate }}</h1>
+      <p class="diagnostics-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">science</span
+        ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+      </p>
+      <h1 class="page-title" id="diagnostics-lab-title">{{ 'LAB.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'LAB.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
@@ -50,6 +54,7 @@
       [class.active]="activeTab() === 'all'"
       (click)="setTab('all')"
       [title]="'LAB.ALL_ORDERS' | translate"
+      [attr.aria-pressed]="activeTab() === 'all'"
     >
       {{ 'COMMON.ALL' | translate }} ({{ stats().total }})
     </button>
@@ -58,6 +63,7 @@
       [class.active]="activeTab() === 'pending'"
       (click)="setTab('pending')"
       [title]="'LAB.PENDING_ORDERS' | translate"
+      [attr.aria-pressed]="activeTab() === 'pending'"
     >
       {{ 'LAB.PENDING' | translate }} ({{ stats().pending }})
     </button>
@@ -66,6 +72,7 @@
       [class.active]="activeTab() === 'completed'"
       (click)="setTab('completed')"
       [title]="'LAB.COMPLETED_ORDERS' | translate"
+      [attr.aria-pressed]="activeTab() === 'completed'"
     >
       {{ 'LAB.COMPLETED' | translate }} ({{ stats().completed }})
     </button>
@@ -94,6 +101,9 @@
          back to the order's row, or to the active tab when the order left the list. -->
     <div
       class="data-table"
+      tabindex="0"
+      role="region"
+      aria-labelledby="diagnostics-lab-title"
       data-focus-return="[data-focus-place=lab-tabs] .tab.active || [data-focus-place=lab-search] input"
     >
       <table>
@@ -786,7 +796,7 @@
         } @else if (specimens().length === 0) {
           <p class="empty-hint">{{ 'LAB.NO_SPECIMENS' | translate }}</p>
         } @else {
-          <div class="data-table">
+          <div class="data-table" tabindex="0" role="region" aria-labelledby="lab-dialog-title-4">
             <table>
               <thead>
                 <tr>

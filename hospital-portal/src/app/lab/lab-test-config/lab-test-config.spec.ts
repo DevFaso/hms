@@ -30,6 +30,22 @@ function mockDefinition(overrides: Record<string, unknown> = {}): Record<string,
 }
 
 describe('LabTestConfigComponent', () => {
+  it('does not report a definition count when the page failed to load', () => {
+    fixture.detectChanges();
+    const count = () =>
+      fixture.nativeElement.querySelector('.diagnostics-context strong')?.textContent?.trim();
+    expect(count()).toBe('\u2014');
+    const req = httpMock.expectOne((r) => r.url.includes('/lab-test-definitions/search'));
+    req.flush({ message: 'Cdx unavailable' }, { status: 503, statusText: 'Unavailable' });
+    flushAssignments();
+    fixture.detectChanges();
+    expect(component.error()).not.toBeNull();
+    expect(count()).toBe('\u2014');
+    component.loadDefinitions();
+    flushSearch([mockDefinition()], 1);
+    fixture.detectChanges();
+    expect(count()).toBe('1');
+  });
   let fixture: ComponentFixture<LabTestConfigComponent>;
   let component: LabTestConfigComponent;
   let httpMock: HttpTestingController;

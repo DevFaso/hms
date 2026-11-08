@@ -1,7 +1,11 @@
-<div class="page-container">
+<div class="diagnostics-workspace page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">{{ 'IMAGING.TITLE' | translate }}</h1>
+      <p class="diagnostics-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">radiology</span
+        ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+      </p>
+      <h1 class="page-title" id="diagnostics-imaging-title">{{ 'IMAGING.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'IMAGING.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
@@ -15,10 +19,20 @@
   @if (canSeeResults) {
     <div class="filter-bar">
       <div class="tabs">
-        <button class="tab-btn" [class.active]="view() === 'orders'" (click)="setView('orders')">
+        <button
+          class="tab-btn"
+          [class.active]="view() === 'orders'"
+          (click)="setView('orders')"
+          [attr.aria-pressed]="view() === 'orders'"
+        >
           {{ 'IMAGING.ORDERS_TAB' | translate }}
         </button>
-        <button class="tab-btn" [class.active]="view() === 'results'" (click)="setView('results')">
+        <button
+          class="tab-btn"
+          [class.active]="view() === 'results'"
+          (click)="setView('results')"
+          [attr.aria-pressed]="view() === 'results'"
+        >
           {{ 'IMAGING.RESULTS_TAB' | translate }}
         </button>
       </div>
@@ -55,6 +69,7 @@
           [class.active]="activeTab() === 'all'"
           (click)="setTab('all')"
           [title]="'IMAGING.SHOW_ALL' | translate"
+          [attr.aria-pressed]="activeTab() === 'all'"
         >
           {{ 'COMMON.ALL' | translate }}
         </button>
@@ -63,6 +78,7 @@
           [class.active]="activeTab() === 'ordered'"
           (click)="setTab('ordered')"
           [title]="'IMAGING.SHOW_ACTIVE' | translate"
+          [attr.aria-pressed]="activeTab() === 'ordered'"
         >
           {{ 'COMMON.ACTIVE' | translate }}
         </button>
@@ -71,6 +87,7 @@
           [class.active]="activeTab() === 'completed'"
           (click)="setTab('completed')"
           [title]="'IMAGING.SHOW_COMPLETED' | translate"
+          [attr.aria-pressed]="activeTab() === 'completed'"
         >
           {{ 'IMAGING.COMPLETED' | translate }}
         </button>
@@ -79,6 +96,7 @@
           [class.active]="activeTab() === 'cancelled'"
           (click)="setTab('cancelled')"
           [title]="'IMAGING.SHOW_CANCELLED' | translate"
+          [attr.aria-pressed]="activeTab() === 'cancelled'"
         >
           {{ 'IMAGING.CANCELLED' | translate }}
         </button>
@@ -108,7 +126,12 @@
       </div>
     }
     @if (!loading() && filtered().length > 0) {
-      <div class="data-table">
+      <div
+        class="data-table"
+        tabindex="0"
+        role="region"
+        aria-labelledby="diagnostics-imaging-title"
+      >
         <table>
           <thead>
             <tr>
@@ -220,6 +243,7 @@
             class="tab-btn"
             [class.active]="reportStatusFilter() === st"
             (click)="setReportStatusFilter(st)"
+            [attr.aria-pressed]="reportStatusFilter() === st"
           >
             {{ 'IMAGING.REPORT_STATUS_' + st | translate }}
           </button>
@@ -257,7 +281,12 @@
       </div>
     }
     @if (!reportsLoading() && visibleReports().length > 0) {
-      <div class="data-table">
+      <div
+        class="data-table"
+        tabindex="0"
+        role="region"
+        aria-labelledby="diagnostics-imaging-title"
+      >
         <table>
           <thead>
             <tr>
