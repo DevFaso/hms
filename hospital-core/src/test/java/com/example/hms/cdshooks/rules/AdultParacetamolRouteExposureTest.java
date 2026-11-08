@@ -48,8 +48,16 @@ class AdultParacetamolRouteExposureTest {
         return new ParacetamolFacts.Documented(true, List.of(doses), List.of());
     }
 
+    /** One clock per test: two doses read the clock apart, so a slow runner put 1.98 h between "2 h" doses. */
+    private static LocalDateTime base;
+
+    @org.junit.jupiter.api.BeforeEach
+    void readTheClockOnce() {
+        base = LocalDateTime.now(ZoneId.systemDefault());
+    }
+
     private static ParacetamolFacts.Dose given(String dose, int hoursAgo) {
-        return new ParacetamolFacts.Dose(LocalDateTime.now(ZoneId.systemDefault()).minusHours(hoursAgo),
+        return new ParacetamolFacts.Dose(base.minusHours(hoursAgo),
             "Paracétamol", dose, null);
     }
 
