@@ -599,9 +599,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         // QA D793: the signature is the last look before the pharmacy and the
         // ward act on the order, so the cross-reactivity advisory is repeated
-        // here (it never blocks the signature).
+        // here (it never blocks the signature). QA D1523: with the cards this
+        // signature computed and passed (a duplicate or an interaction with
+        // another order, drafts included), so a warning is never dropped here.
         List<CdsCard> advisories = withCrossReactivityAdvisory(prescription.getPatient(),
-            prescription.getMedicationName(), List.of());
+            prescription.getMedicationName(), signingCards);
         if (!advisories.isEmpty()) {
             signed.setCdsAdvisories(advisories);
         }

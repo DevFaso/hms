@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -447,7 +448,9 @@ public class AdultParacetamolRule implements CdsRule {
             List<LocalDateTime> times = documented.doses().stream().map(ParacetamolFacts.Dose::givenAt)
                 .sorted(java.util.Comparator.reverseOrder()).toList();
             if (times.size() > 1) {
-                exposure.minutesBetweenLastTwo = ChronoUnit.MINUTES.between(times.get(1), times.get(0));
+                // Sonar: wall-clock times on one clock, counted at a stated fixed offset (UTC): the same minutes.
+                exposure.minutesBetweenLastTwo = ChronoUnit.MINUTES.between(times.get(1).atOffset(ZoneOffset.UTC),
+                    times.get(0).atOffset(ZoneOffset.UTC));
             }
             for (ParacetamolFacts.Dose dose : documented.doses()) {
                 Double mg = CdsRuleEngine.parseLabelledDoseMg(dose.dose(), weightKg(), dose.item());
@@ -457,7 +460,7 @@ public class AdultParacetamolRule implements CdsRule {
                     exposure.mg += mg;
                     exposure.counted++;
                 }
-                long minutes = ChronoUnit.MINUTES.between(dose.givenAt(), now);
+                long minutes = ChronoUnit.MINUTES.between(dose.givenAt().atOffset(ZoneOffset.UTC), now.atOffset(ZoneOffset.UTC));
                 if (exposure.minutesSinceLast == null || minutes < exposure.minutesSinceLast) {
                     exposure.minutesSinceLast = minutes;
                 }

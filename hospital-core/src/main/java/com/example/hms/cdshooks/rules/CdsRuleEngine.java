@@ -38,11 +38,14 @@ import java.util.regex.Pattern;
  * keeps the rules trivially unit-testable with a hand-built context and
  * avoids hidden N+1 lookups inside individual rules.
  *
- * <p>Active-prescription scope (QA D1515): only orders in force
- * ({@link PrescriptionStatus#isInForce()}): signed, and not withdrawn or
- * rejected. A draft is a proposal, judged when it is itself proposed or
- * signed. The remaining set is the patient's "current medication list"
- * for interaction and duplicate purposes.
+ * <p>Active-prescription scope (QA D1515, D1523): the context's other orders
+ * are the orders in force ({@link PrescriptionStatus#isInForce()}) and the
+ * proposals ({@link PrescriptionStatus#isProposal()}: drafts and orders
+ * waiting for a signature), withdrawn and rejected ones left out. Only the
+ * duplicate and interaction rules read that list, and they warn about a
+ * proposal as another order the patient may soon be on, naming its status.
+ * Exposure totals and dose limits never read it: the paracetamol facts keep
+ * only orders in force ({@link #inForce}).
  */
 @Service
 public class CdsRuleEngine {
@@ -131,6 +134,14 @@ public class CdsRuleEngine {
      */
     public static boolean inForce(Prescription order) {
         return order != null && order.getStatus() != null && order.getStatus().isInForce();
+    }
+
+    /**
+     * QA D1523: whether a saved order is one the duplicate and interaction warnings name: in force, or a
+     * proposal the patient may soon be on. Never read by an exposure total or a dose limit.
+     */
+    public static boolean inForceOrProposed(Prescription order) {
+        return inForce(order) || (order != null && order.getStatus() != null && order.getStatus().isProposal());
     }
 
     /**
@@ -382,8 +393,9 @@ public class CdsRuleEngine {
         List<Prescription> all = hospitalId != null
             ? prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)
             : prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged()).getContent();
+        // QA D1523: the duplicate and interaction rules, the only readers of this list, warn about a proposal too.
         return all.stream()
-            .filter(CdsRuleEngine::inForce)
+            .filter(CdsRuleEngine::inForceOrProposed)
             .toList();
     }
 

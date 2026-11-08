@@ -36,9 +36,10 @@ import java.util.UUID;
  * @param patientWeightKg          most recent recorded weight in kg, when
  *                                 available (may be null — pediatric rule
  *                                 then degrades to advisory)
- * @param activePrescriptions      the patient's currently-active
- *                                 prescriptions, hospital-scoped, used by
- *                                 the duplicate-order and DDI rules
+ * @param activePrescriptions      the patient's other orders, hospital-scoped:
+ *                                 in force or proposed (QA D1523), read ONLY by
+ *                                 the duplicate-order and DDI rules, never by an
+ *                                 exposure total or a dose limit
  * @param activePrescriptionRxnorms RxNorm codes already resolved for the
  *                                 active prescriptions (parallel to
  *                                 activePrescriptions order, with nulls

@@ -98,4 +98,19 @@ class OrderReviewAfterCommitTest {
         bean.recallPartnerOffers(order.getId());
         verify(partnerOffers).recallForReview(order);
     }
+
+    /** Sonar S6218: the body's arguments compare by content; the text form names no patient. */
+    @Test
+    void noticeComparesItsArgumentsByContent() {
+        UUID patient = UUID.randomUUID();
+        UUID reference = UUID.randomUUID();
+        OrderReviewAfterCommit.Notice a = new OrderReviewAfterCommit.Notice(hospital, patient, "A. Patient", reference,
+            "T", "title", "body", new Object[] {"A. Patient", 2}, Set.of());
+        OrderReviewAfterCommit.Notice b = new OrderReviewAfterCommit.Notice(hospital, patient, "A. Patient", reference,
+            "T", "title", "body", new Object[] {"A. Patient", 2}, Set.of());
+        OrderReviewAfterCommit.Notice c = new OrderReviewAfterCommit.Notice(hospital, patient, "A. Patient", reference,
+            "T", "title", "body", new Object[] {"A. Patient", 3}, Set.of());
+        assertThat(a).isEqualTo(b).hasSameHashCodeAs(b).isNotEqualTo(c);
+        assertThat(a.toString()).doesNotContain("A. Patient").contains("bodyArgs=2");
+    }
 }

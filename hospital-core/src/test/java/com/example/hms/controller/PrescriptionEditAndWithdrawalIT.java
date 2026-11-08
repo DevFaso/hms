@@ -521,7 +521,14 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
             created = UUID.fromString(com.jayway.jsonpath.JsonPath.read(answer, "$.id"));
             List<String> indicators = com.jayway.jsonpath.JsonPath.read(answer, "$.cdsAdvisories[*].indicator");
             List<String> summaries = com.jayway.jsonpath.JsonPath.read(answer, "$.cdsAdvisories[*].summary");
-            assertThat(indicators).as("judged alone: %s", summaries).containsExactly("info");
+            // QA D1523 (changed assertion: was containsExactly("info")): the draft is named by the duplicate
+            // warning, another order the patient may soon be on, and still adds nothing to the total, whose
+            // card is the same single "info" it is with nothing else on file.
+            assertThat(indicators).as("judged alone, the draft named as a duplicate: %s", summaries)
+                .containsExactlyInAnyOrder("info", "warning");
+            List<String> duplicates = com.jayway.jsonpath.JsonPath.read(answer,
+                "$.cdsAdvisories[?(@.indicator == 'warning')].detail");
+            assertThat(duplicates).singleElement().asString().containsAnyOf("brouillon", "draft", "borrador");
             assertThat(summaries).noneMatch(s -> s.contains("7500") || s.contains("3000 mg") && s.contains("4000 mg"));
 
             mockMvc.perform(post(API_CONTEXT + "/prescriptions/{id}/sign", created).contextPath(API_CONTEXT).with(as(authorUser)))
@@ -536,6 +543,61 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
                 }
             }
         }
+    }
+
+    /**
+     * QA D1523 on the real stack: two identical drafts. The second shows the duplicate warning when it is
+     * created (the first is a draft, named with its status), and the second signature carries it too: the
+     * signature no longer drops the warning cards it computed.
+     */
+    @Test
+    void d1523_aSecondIdenticalDraftIsWarnedAboutAtCreationAndAtItsSignature() throws Exception {
+        String body = "{\"patientId\":\"" + patient.getId() + "\",\"staffId\":\"" + authorStaff.getId()
+            + "\",\"encounterId\":\"" + encounter.getId() + "\",\"medicationName\":\"Métronidazole 500 mg\","
+            + "\"dosage\":\"500 mg\",\"frequency\":\"3 fois par jour\",\"route\":\"PO\",\"quantity\":21}";
+        UUID first = null;
+        UUID second = null;
+        try {
+            String one = createOrder(body);
+            first = UUID.fromString(com.jayway.jsonpath.JsonPath.read(one, "$.id"));
+            List<String> none = com.jayway.jsonpath.JsonPath.read(one, "$.cdsAdvisories[?(@.indicator == 'warning')].summary");
+            assertThat(none).as("nothing else on file").isEmpty();
+
+            String two = createOrder(body);
+            second = UUID.fromString(com.jayway.jsonpath.JsonPath.read(two, "$.id"));
+            assertThat(duplicateDetails(two)).as("the second draft, at creation").singleElement().asString()
+                .containsAnyOf("brouillon", "draft", "borrador");
+
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions/{id}/sign", first).contextPath(API_CONTEXT).with(as(authorUser)))
+                .andExpect(status().is2xxSuccessful());
+            String signed = mockMvc.perform(post(API_CONTEXT + "/prescriptions/{id}/sign", second).contextPath(API_CONTEXT)
+                    .with(as(authorUser)))
+                .andExpect(status().is2xxSuccessful())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+            assertThat(duplicateDetails(signed)).as("the second signature carries the warning").hasSize(1);
+            assertThat(prescriptionRepository.findById(second).orElseThrow().getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+        } finally {
+            for (UUID id : java.util.Arrays.asList(first, second)) {
+                if (id != null) {
+                    auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
+                        .filter(row -> id.toString().equals(row.getResourceId())).toList());
+                    prescriptionRepository.deleteById(id);
+                }
+            }
+        }
+    }
+
+    private String createOrder(String body) throws Exception {
+        return mockMvc.perform(post(API_CONTEXT + "/prescriptions").contextPath(API_CONTEXT).with(as(authorUser))
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /** The details of the warning cards whose summary names the drug: the duplicate check's. */
+    private static List<String> duplicateDetails(String answer) {
+        return com.jayway.jsonpath.JsonPath.read(answer,
+            "$.cdsAdvisories[?(@.indicator == 'warning' && @.summary =~ /.*Métronidazole.*/)].detail");
     }
 
     /** CR-02 on the real stack: the version in the token is the row's, and only the token passes a reason. */

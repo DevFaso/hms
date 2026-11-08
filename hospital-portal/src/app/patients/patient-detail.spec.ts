@@ -16,7 +16,11 @@ import { RoleContextService } from '../core/role-context.service';
 import { BpaService } from '../services/bpa.service';
 import { CdsAcknowledgementService } from '../services/cds-acknowledgement.service';
 import { StoryboardService } from '../services/storyboard.service';
-import { CHART_REVIEW_VIEW_ROLES } from './patient-chart/chart-access';
+import {
+  CHART_REVIEW_VIEW_ROLES,
+  STORYBOARD_VIEW_ROLES,
+  VOIDED_CLOSURES_VIEW_ROLES,
+} from './patient-chart/chart-access';
 import { BreakGlassService } from '../services/break-glass.service';
 import {
   expectEmptySubmitRefusal,
@@ -213,6 +217,10 @@ describe('PatientDetailComponent', () => {
     (
       Object.getOwnPropertyDescriptor(roleContextSpy, 'activeRole')!.get as jasmine.Spy
     ).and.returnValue(roles.length === 1 ? roles[0] : null);
+    // QA D1524: the role-list gates read the same roles (was left false, which no gate before needed).
+    roleContextSpy.hasAnyActiveRole.and.callFake((asked: string[]) =>
+      asked.some((role) => roles.includes(role)),
+    );
   }
 
   describe('Best-Practice Advisory panel (POST /cds-services is clinicians only)', () => {
@@ -246,6 +254,28 @@ describe('PatientDetailComponent', () => {
       holdRoles(['ROLE_RECEPTIONIST']);
       fixture.detectChanges();
       expect(fixture.nativeElement.querySelector('app-voided-death-closures-banner')).toBeNull();
+    });
+
+    // QA D1524: the pharmacist keeps the advisories, but GET .../voided-closures refuses the role,
+    // so the notice is neither rendered nor asked for, and its 403 can never take the chart.
+    it("the pharmacist's chart has the advisories and no voided-death notice", () => {
+      holdRoles(['ROLE_PHARMACIST']);
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('app-bpa-panel')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('app-voided-death-closures-banner')).toBeNull();
+    });
+
+    it('every side panel renders only for the roles its endpoint admits', () => {
+      for (const role of ['ROLE_PHARMACIST', 'ROLE_RECEPTIONIST', 'ROLE_BILLING_SPECIALIST']) {
+        expect(VOIDED_CLOSURES_VIEW_ROLES).withContext(role).not.toContain(role);
+      }
+      expect(STORYBOARD_VIEW_ROLES).not.toContain('ROLE_HOSPITAL_ADMIN');
+      expect(VOIDED_CLOSURES_VIEW_ROLES).toContain('ROLE_HOSPITAL_ADMIN');
+      holdRoles(['ROLE_HOSPITAL_ADMIN']);
+      fixture.detectChanges();
+      const page = fixture.nativeElement as HTMLElement;
+      expect(page.querySelector('app-storyboard-banner')).toBeNull();
+      expect(page.querySelector('app-voided-death-closures-banner')).not.toBeNull();
     });
 
     it('a multi-role user pinned to reception gets no panel', () => {
