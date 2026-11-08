@@ -10207,7 +10207,17 @@
     "AC_MM": "PA (mm)",
     "FL_MM": "LF (mm)",
     "NT_MM": "TN (mm)",
-    "CRL_MM": "LCN (mm)"
+    "CRL_MM": "LCN (mm)",
+    "OBSERVATIONS": "Observaciones",
+    "FLAG_fetalCardiacActivity": "Actividad cardíaca",
+    "FLAG_fetalMovementObserved": "Movimientos fetales",
+    "FLAG_fetalToneNormal": "Tono fetal",
+    "FLAG_NOT_ASSESSED": "No evaluado",
+    "FLAG_PRESENT": "Presente",
+    "FLAG_ABSENT": "Ausente",
+    "FLAG_NORMAL": "Normal",
+    "FLAG_ABNORMAL": "Anormal",
+    "REPORT_NO_FINDINGS": "Registre al menos un hallazgo que usted haya observado (una medida, el resumen o la interpretación) antes de guardar. Una plantilla no constata nada en su lugar."
   },
   "BIRTH_PLAN": {
     "TITLE": "Plan de parto",

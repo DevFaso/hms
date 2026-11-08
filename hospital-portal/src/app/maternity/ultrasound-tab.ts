@@ -23,6 +23,64 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 type UltrasoundWorklist = 'all' | 'pending' | 'high-risk' | 'follow-up' | 'anomalies';
 
+/** The report form: the finding stays empty until the clinician picks one (QA D1525). */
+export type UltrasoundReportForm = Omit<UltrasoundReportRequest, 'findingCategory'> & {
+  findingCategory: UltrasoundReportRequest['findingCategory'] | '';
+};
+
+/**
+ * The measured or written findings of a report: at least one is required
+ * (QA D1525, the server's UltrasoundReportFindings). The yes/no flags are not
+ * findings on their own, and one fetus is not (it was a default); twins are.
+ */
+const FINDING_FIELDS: readonly (keyof UltrasoundReportRequest)[] = [
+  'gestationalAgeAtScan',
+  'gestationalAgeDays',
+  'nuchalTranslucencyMm',
+  'crownRumpLengthMm',
+  'estimatedDueDate',
+  'fetalPosition',
+  'biparietalDiameterMm',
+  'headCircumferenceMm',
+  'abdominalCircumferenceMm',
+  'femurLengthMm',
+  'estimatedFetalWeightGrams',
+  'placentalLocation',
+  'placentalGrade',
+  'amnioticFluidIndex',
+  'amnioticFluidLevel',
+  'cervicalLengthMm',
+  'umbilicalArteryDoppler',
+  'uterineArteryDoppler',
+  'fetalHeartRate',
+  'anatomyFindings',
+  'findingsSummary',
+  'interpretation',
+  'anomalyDescription',
+];
+
+/** The tri-state observations (QA D1525): null is "not assessed", the default. */
+export const TRI_STATE_FLAGS = [
+  'fetalCardiacActivity',
+  'fetalMovementObserved',
+  'fetalToneNormal',
+] as const;
+
+/** Whether the clinician stated at least one finding (QA D1525). */
+export function hasUltrasoundFinding(
+  form: Partial<UltrasoundReportRequest> | UltrasoundReportForm,
+): boolean {
+  const record = form as Record<string, unknown>;
+  const fetuses = form.numberOfFetuses;
+  if (typeof fetuses === 'number' && fetuses > 1) return true;
+  return FINDING_FIELDS.some((field) => {
+    const value = record[field];
+    if (value === undefined || value === null) return false;
+    if (typeof value === 'string') return value.trim() !== '';
+    return true;
+  });
+}
+
 @Component({
   selector: 'app-ultrasound-tab',
   standalone: true,
@@ -104,7 +162,8 @@ export class UltrasoundTabComponent implements OnInit {
   showReportModal = signal(false);
   reportTargetOrder = signal<UltrasoundOrderResponse | null>(null);
   reportSaving = signal(false);
-  reportForm: UltrasoundReportRequest = this.emptyReportForm();
+  reportForm: UltrasoundReportForm = this.emptyReportForm();
+  readonly triStateFlags = TRI_STATE_FLAGS;
   templateLoading = signal(false);
   reportActionBusy = signal(false);
 
@@ -315,10 +374,18 @@ export class UltrasoundTabComponent implements OnInit {
 
   /* ── Report ── */
 
-  emptyReportForm(): UltrasoundReportRequest {
+  /**
+   * QA D1525: nothing clinical is preselected. The finding category used to
+   * start at NORMAL, and the three observations were left for the server to
+   * default to "present"; the clinician now states each one.
+   */
+  emptyReportForm(): UltrasoundReportForm {
     return {
       scanDate: localDateString(),
-      findingCategory: 'NORMAL',
+      findingCategory: '',
+      fetalCardiacActivity: null,
+      fetalMovementObserved: null,
+      fetalToneNormal: null,
       reportFinalized: false,
     };
   }
@@ -344,7 +411,10 @@ export class UltrasoundTabComponent implements OnInit {
       this.reportForm = {
         ...fields,
         scanDate: existing.scanDate ?? localDateString(),
-        findingCategory: existing.findingCategory ?? 'NORMAL',
+        findingCategory: existing.findingCategory ?? '',
+        fetalCardiacActivity: existing.fetalCardiacActivity ?? null,
+        fetalMovementObserved: existing.fetalMovementObserved ?? null,
+        fetalToneNormal: existing.fetalToneNormal ?? null,
         reportFinalized: false,
         providerReviewNotes: providerReviewNotes ?? undefined,
       };
@@ -364,9 +434,9 @@ export class UltrasoundTabComponent implements OnInit {
   }
 
   /** Form values as seeded by openReport — used to distinguish defaults. */
-  private reportSeed: UltrasoundReportRequest = this.emptyReportForm();
+  private reportSeed: UltrasoundReportForm = this.emptyReportForm();
   /** Form values after the last template application (or the seed). */
-  private reportBaseline: UltrasoundReportRequest = this.emptyReportForm();
+  private reportBaseline: UltrasoundReportForm = this.emptyReportForm();
 
   applyTemplate(kind: 'nuchal-translucency' | 'anatomy-scan'): void {
     this.templateLoading.set(true);
@@ -387,7 +457,7 @@ export class UltrasoundTabComponent implements OnInit {
           ...this.reportSeed,
           ...this.stripEmpty(template as UltrasoundReportRequest),
           ...userChanged,
-        } as UltrasoundReportRequest;
+        } as UltrasoundReportForm;
         this.reportBaseline = { ...this.reportForm };
         this.templateLoading.set(false);
       },
@@ -408,12 +478,20 @@ export class UltrasoundTabComponent implements OnInit {
 
   submitReport(): void {
     const order = this.reportTargetOrder();
-    if (!order || !this.reportForm.scanDate || !this.reportForm.findingCategory) {
+    if (!order) return;
+    const form = this.reportForm;
+    // QA D1525: an untouched template is an empty report — refused before the
+    // category is asked for, as the server does.
+    if (!hasUltrasoundFinding(form)) {
+      this.toast.error(this.translate.instant('ULTRASOUND.REPORT_NO_FINDINGS'));
+      return;
+    }
+    if (!form.scanDate || !form.findingCategory) {
       this.toast.error(this.translate.instant('ULTRASOUND.REPORT_REQUIRED_FIELDS'));
       return;
     }
     this.reportSaving.set(true);
-    this.ultrasoundService.submitReport(order.id, this.reportForm).subscribe({
+    this.ultrasoundService.submitReport(order.id, form as UltrasoundReportRequest).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ULTRASOUND.REPORT_SAVED'));
         this.reportSaving.set(false);

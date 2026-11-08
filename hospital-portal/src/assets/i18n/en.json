@@ -10207,7 +10207,17 @@
     "AC_MM": "AC (mm)",
     "FL_MM": "FL (mm)",
     "NT_MM": "NT (mm)",
-    "CRL_MM": "CRL (mm)"
+    "CRL_MM": "CRL (mm)",
+    "OBSERVATIONS": "Observations",
+    "FLAG_fetalCardiacActivity": "Cardiac activity",
+    "FLAG_fetalMovementObserved": "Fetal movement",
+    "FLAG_fetalToneNormal": "Fetal tone",
+    "FLAG_NOT_ASSESSED": "Not assessed",
+    "FLAG_PRESENT": "Present",
+    "FLAG_ABSENT": "Absent",
+    "FLAG_NORMAL": "Normal",
+    "FLAG_ABNORMAL": "Abnormal",
+    "REPORT_NO_FINDINGS": "Record at least one finding you observed (a measurement, the summary or the interpretation) before saving. A template suggests nothing on your behalf."
   },
   "BIRTH_PLAN": {
     "TITLE": "Birth plan",

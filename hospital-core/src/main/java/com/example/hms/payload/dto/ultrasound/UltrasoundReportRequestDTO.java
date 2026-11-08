@@ -25,7 +25,11 @@ public class UltrasoundReportRequestDTO extends UltrasoundReportBaseDTO {
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate scanDate;
 
-    @NotNull(message = "{ultrasoundReport.findingCategory.required}")
+    /**
+     * Required, but checked by the service after the findings
+     * ({@code UltrasoundReportFindings}, QA D1525): an untouched template, which
+     * no longer pre-selects NORMAL, is refused as an empty report first.
+     */
     private UltrasoundFindingCategory findingCategory;
 
     // Report finalization

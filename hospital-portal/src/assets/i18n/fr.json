@@ -10207,7 +10207,17 @@
     "AC_MM": "PA (mm)",
     "FL_MM": "LF (mm)",
     "NT_MM": "CN (mm)",
-    "CRL_MM": "LCC (mm)"
+    "CRL_MM": "LCC (mm)",
+    "OBSERVATIONS": "Observations",
+    "FLAG_fetalCardiacActivity": "Activité cardiaque",
+    "FLAG_fetalMovementObserved": "Mouvements fœtaux",
+    "FLAG_fetalToneNormal": "Tonus fœtal",
+    "FLAG_NOT_ASSESSED": "Non évalué",
+    "FLAG_PRESENT": "Présente",
+    "FLAG_ABSENT": "Absente",
+    "FLAG_NORMAL": "Normal",
+    "FLAG_ABNORMAL": "Anormal",
+    "REPORT_NO_FINDINGS": "Saisissez au moins un résultat que vous avez constaté (une mesure, le résumé ou l'interprétation) avant d'enregistrer. Un modèle ne constate rien à votre place."
   },
   "BIRTH_PLAN": {
     "TITLE": "Plan de naissance",

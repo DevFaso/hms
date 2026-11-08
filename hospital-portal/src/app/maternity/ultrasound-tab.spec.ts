@@ -4,8 +4,13 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
-import { UltrasoundTabComponent } from './ultrasound-tab';
-import { UltrasoundOrderResponse, UltrasoundService } from '../services/ultrasound.service';
+import { UltrasoundTabComponent, hasUltrasoundFinding } from './ultrasound-tab';
+import {
+  UltrasoundOrderResponse,
+  UltrasoundReportRequest,
+  UltrasoundReportResponse,
+  UltrasoundService,
+} from '../services/ultrasound.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
@@ -55,6 +60,8 @@ describe('UltrasoundTabComponent', () => {
       'highRiskOrders',
       'followUpRequired',
       'anomalies',
+      'template',
+      'submitReport',
     ]);
     service.pendingOrders.and.returnValue(of([]));
     service.anomalies.and.returnValue(of([]));
@@ -86,6 +93,8 @@ describe('UltrasoundTabComponent', () => {
         NO_ORDERS: 'Aucune demande',
         NO_REPORTS: 'Aucun compte rendu',
         LOAD_ERROR: 'Chargement impossible',
+        REPORT_NO_FINDINGS: 'Aucun résultat constaté',
+        REPORT_REQUIRED_FIELDS: 'Champs obligatoires',
       },
     });
   });
@@ -144,5 +153,74 @@ describe('UltrasoundTabComponent', () => {
     fixture.detectChanges();
     expect(toast.error).toHaveBeenCalledWith('Chargement impossible');
     expect(host().querySelector('.loading-state')).toBeNull();
+  });
+
+  describe('QA D1525: a finding is charted only when the clinician states it', () => {
+    it('preselects no category and leaves the three observations not assessed', () => {
+      create(['ROLE_MIDWIFE']);
+      const form = fixture.componentInstance.emptyReportForm();
+      expect(form.findingCategory).toBe('');
+      expect(form.fetalCardiacActivity).toBeNull();
+      expect(form.fetalMovementObserved).toBeNull();
+      expect(form.fetalToneNormal).toBeNull();
+    });
+
+    it('refuses an untouched template as an empty report, before asking for the category', () => {
+      create(['ROLE_MIDWIFE']);
+      const cmp = fixture.componentInstance;
+      service.template.and.returnValue(of({ scanDate: '2026-11-08' } as UltrasoundReportRequest));
+      cmp.openReport(order());
+      cmp.applyTemplate('nuchal-translucency');
+      cmp.submitReport();
+      expect(toast.error).toHaveBeenCalledWith('Aucun résultat constaté');
+      expect(service.submitReport).not.toHaveBeenCalled();
+    });
+
+    it('asks for the category once a finding is stated, and sends a stated "absent" as false', () => {
+      create(['ROLE_MIDWIFE']);
+      const cmp = fixture.componentInstance;
+      service.submitReport.and.returnValue(of({ id: 'r-1' } as UltrasoundReportResponse));
+      cmp.openReport(order());
+      cmp.reportForm.interpretation = 'Pas d’activité cardiaque';
+      cmp.reportForm.fetalCardiacActivity = false;
+      cmp.submitReport();
+      expect(toast.error).toHaveBeenCalledWith('Champs obligatoires');
+      expect(service.submitReport).not.toHaveBeenCalled();
+
+      cmp.reportForm.findingCategory = 'URGENT';
+      cmp.submitReport();
+      const sent = service.submitReport.calls.mostRecent().args[1];
+      expect(sent.fetalCardiacActivity).toBeFalse();
+      expect(sent.fetalMovementObserved).toBeNull();
+      expect(sent.findingCategory).toBe('URGENT');
+    });
+
+    it('renders the three observations as tri-state selects starting at "not assessed"', () => {
+      create(['ROLE_MIDWIFE']);
+      fixture.componentInstance.openReport(order());
+      fixture.detectChanges();
+      for (const flag of ['fetalCardiacActivity', 'fetalMovementObserved', 'fetalToneNormal']) {
+        const select = host().querySelector<HTMLSelectElement>(`#rep-${flag}`);
+        expect(select).withContext(flag).not.toBeNull();
+        expect(select!.options.length).withContext(flag).toBe(3);
+      }
+    });
+
+    it('counts no yes/no box, one fetus or blank text as a finding', () => {
+      expect(
+        hasUltrasoundFinding({
+          fetalCardiacActivity: true,
+          fetalMovementObserved: true,
+          fetalToneNormal: true,
+          nasalBonePresent: true,
+          numberOfFetuses: 1,
+          findingCategory: 'NORMAL',
+          findingsSummary: '  ',
+        }),
+      ).toBeFalse();
+      expect(hasUltrasoundFinding({ numberOfFetuses: 2 })).toBeTrue();
+      expect(hasUltrasoundFinding({ fetalHeartRate: 150 })).toBeTrue();
+      expect(hasUltrasoundFinding({ findingsSummary: 'Grossesse évolutive' })).toBeTrue();
+    });
   });
 });

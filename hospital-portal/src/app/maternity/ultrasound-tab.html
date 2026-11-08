@@ -487,6 +487,7 @@
           <div class="field">
             <label for="rep-category">{{ 'ULTRASOUND.FINDING' | translate }} *</label>
             <select id="rep-category" [(ngModel)]="reportForm.findingCategory">
+              <option value="" disabled>{{ 'COMMON.SELECT' | translate }}</option>
               @for (c of findingCategories; track c) {
                 <option [value]="c">{{ 'ULTRASOUND.FINDING_' + c | translate }}</option>
               }
@@ -541,6 +542,34 @@
               [(ngModel)]="reportForm.estimatedFetalWeightGrams"
             />
           </div>
+        </div>
+        <!-- QA D1525: stated by the clinician, "not assessed" until then -->
+        <h3 class="section-heading">{{ 'ULTRASOUND.OBSERVATIONS' | translate }}</h3>
+        <div class="form-row gtpal-row">
+          @for (flag of triStateFlags; track flag) {
+            <div class="field">
+              <label [for]="'rep-' + flag">{{ 'ULTRASOUND.FLAG_' + flag | translate }}</label>
+              <select [id]="'rep-' + flag" [(ngModel)]="reportForm[flag]">
+                <option [ngValue]="null">{{ 'ULTRASOUND.FLAG_NOT_ASSESSED' | translate }}</option>
+                <option [ngValue]="true">
+                  {{
+                    (flag === 'fetalToneNormal'
+                      ? 'ULTRASOUND.FLAG_NORMAL'
+                      : 'ULTRASOUND.FLAG_PRESENT'
+                    ) | translate
+                  }}
+                </option>
+                <option [ngValue]="false">
+                  {{
+                    (flag === 'fetalToneNormal'
+                      ? 'ULTRASOUND.FLAG_ABNORMAL'
+                      : 'ULTRASOUND.FLAG_ABSENT'
+                    ) | translate
+                  }}
+                </option>
+              </select>
+            </div>
+          }
         </div>
         <h3 class="section-heading">{{ 'ULTRASOUND.BIOMETRY' | translate }}</h3>
         <div class="form-row gtpal-row">

@@ -269,6 +269,13 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         String performerName = resolveStaffName(performedByUserId, order.getHospital().getId());
 
         UltrasoundReport report = reportRepository.findByUltrasoundOrderId(orderId).orElse(null);
+        if (report != null && Boolean.TRUE.equals(report.getReportReviewedByProvider())) {
+            throw new BusinessException("Cannot modify a reviewed report. Please create an addendum or new order.");
+        }
+        // QA D1525: a finding is charted only when the clinician states it; an
+        // untouched template is an empty report. Create and edit alike.
+        com.example.hms.service.maternity.UltrasoundReportFindings.requireStatedFindings(request);
+        com.example.hms.service.maternity.UltrasoundReportFindings.requireFindingCategory(request);
 
         if (report == null) {
             report = ultrasoundMapper.toReportEntity(request, order, order.getHospital());
@@ -276,9 +283,6 @@ public class UltrasoundServiceImpl implements UltrasoundService {
                 report.setScanPerformedBy(performerName);
             }
         } else {
-            if (Boolean.TRUE.equals(report.getReportReviewedByProvider())) {
-                throw new BusinessException("Cannot modify a reviewed report. Please create an addendum or new order.");
-            }
             ultrasoundMapper.updateReportFromRequest(report, request);
         }
 
@@ -489,34 +493,29 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             .toList();
     }
 
+    /**
+     * QA D1525: a template suggests the form, never a finding. It used to
+     * pre-fill cardiac activity, movement and tone as present, the category as
+     * NORMAL, a gestational age and one fetus, and an untouched template was
+     * charted as all of that. It now carries only the date of the scan (today,
+     * an administrative default the clinician corrects); every observation,
+     * measurement and the category are left for the clinician to state.
+     * {@code ClinicalTemplatePrefillGuardTest} fails if a finding comes back.
+     */
     @Override
     @Transactional(readOnly = true)
     public UltrasoundReportRequestDTO getNuchalTranslucencyTemplate() {
-        // Return a template with typical values pre-filled for NT scan
         return UltrasoundReportRequestDTO.builder()
             .scanDate(java.time.LocalDate.now())
-            .gestationalAgeAtScan(12) // weeks + days will be set by user
-            .numberOfFetuses(1)
-            .fetalCardiacActivity(true)
-            .fetalMovementObserved(true)
-            .fetalToneNormal(true)
-            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
             .build();
     }
 
+    /** QA D1525: as {@link #getNuchalTranslucencyTemplate()}, the date only. */
     @Transactional(readOnly = true)
     @Override
     public UltrasoundReportRequestDTO getAnatomyScanTemplate() {
-        // Return a template with typical values pre-filled for anatomy scan
         return UltrasoundReportRequestDTO.builder()
             .scanDate(java.time.LocalDate.now())
-            .gestationalAgeAtScan(20) // weeks + days will be set by user
-            .numberOfFetuses(1)
-            .fetalCardiacActivity(true)
-            .fetalMovementObserved(true)
-            .fetalToneNormal(true)
-            .anatomySurveyComplete(false)
-            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
             .build();
     }
 

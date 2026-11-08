@@ -99,9 +99,9 @@ public class UltrasoundReport extends BaseEntity implements TenantScoped {
     private Boolean dueDateConfirmed = false;
 
     // Fetal count and position
+    /** QA D1525: null until someone counts them; no default of one. */
     @Column(name = "number_of_fetuses")
-    @Builder.Default
-    private Integer numberOfFetuses = 1;
+    private Integer numberOfFetuses;
 
     @Column(name = "fetal_position", length = 100)
     private String fetalPosition;
@@ -150,17 +150,19 @@ public class UltrasoundReport extends BaseEntity implements TenantScoped {
     @Column(name = "fetal_heart_rate")
     private Integer fetalHeartRate;
 
+    /*
+     * QA D1525: tri-state. TRUE present / normal, FALSE absent / abnormal, null
+     * NOT ASSESSED. Never defaulted: a stored TRUE is something the clinician
+     * stated (rows written before D1525 may carry a default TRUE; see the PR).
+     */
     @Column(name = "fetal_cardiac_activity")
-    @Builder.Default
-    private Boolean fetalCardiacActivity = true;
+    private Boolean fetalCardiacActivity;
 
     @Column(name = "fetal_movement_observed")
-    @Builder.Default
-    private Boolean fetalMovementObserved = true;
+    private Boolean fetalMovementObserved;
 
     @Column(name = "fetal_tone_normal")
-    @Builder.Default
-    private Boolean fetalToneNormal = true;
+    private Boolean fetalToneNormal;
 
     @Column(name = "anatomy_survey_complete")
     @Builder.Default
@@ -173,8 +175,7 @@ public class UltrasoundReport extends BaseEntity implements TenantScoped {
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "finding_category", nullable = false, length = 50)
-    @Builder.Default
-    private UltrasoundFindingCategory findingCategory = UltrasoundFindingCategory.NORMAL;
+    private UltrasoundFindingCategory findingCategory; // QA D1525: chosen by the clinician, never NORMAL by default
 
     @Column(name = "findings_summary", length = 3000)
     private String findingsSummary;

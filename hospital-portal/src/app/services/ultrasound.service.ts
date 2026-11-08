@@ -43,9 +43,10 @@ export interface UltrasoundReportFields {
   umbilicalArteryDoppler?: string;
   uterineArteryDoppler?: string;
   fetalHeartRate?: number;
-  fetalCardiacActivity?: boolean;
-  fetalMovementObserved?: boolean;
-  fetalToneNormal?: boolean;
+  /** QA D1525: tri-state — true present/normal, false absent/abnormal, null not assessed. */
+  fetalCardiacActivity?: boolean | null;
+  fetalMovementObserved?: boolean | null;
+  fetalToneNormal?: boolean | null;
   anatomySurveyComplete?: boolean;
   anatomyFindings?: string;
   findingCategory?: UltrasoundFindingCategory;
