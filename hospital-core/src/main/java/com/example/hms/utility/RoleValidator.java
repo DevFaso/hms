@@ -2,6 +2,7 @@ package com.example.hms.utility;
 
 import com.example.hms.config.SecurityConstants;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.HospitalScopeRefusedException;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -280,13 +281,37 @@ public class RoleValidator {
         }
     }
 
-    /** "ROLE_DOCTOR" read as the role's label in the reader's language ("Médecin"). */
+    /**
+     * The chosen assignment ITSELF holds the role (#1096 review): it is active, it is at
+     * {@code hospitalId}, and its role is {@code roleCode}. Checking the assignment's user
+     * instead accepted an inactive or a non-doctor assignment of a user who holds an active
+     * doctor assignment elsewhere.
+     */
+    public void requireAssignmentHolds(UserRoleHospitalAssignment assignment, UUID hospitalId, String roleCode) {
+        if (assignment == null || !Boolean.TRUE.equals(assignment.getActive())) {
+            throw new FieldBusinessException("assignmentId", "role.assignment.inactive");
+        }
+        String held = assignment.getRole() == null || assignment.getRole().getCode() == null
+            ? "" : assignment.getRole().getCode().trim().toUpperCase(Locale.ROOT);
+        boolean atHospital = assignment.getHospital() != null && hospitalId != null
+            && hospitalId.equals(assignment.getHospital().getId());
+        if (!atHospital || !expandCodes(roleCode).contains(held)) {
+            throw new FieldBusinessException("assignmentId", "role.notHeld", roleLabel(roleCode));
+        }
+    }
+
+    /**
+     * "ROLE_DOCTOR" read as the role's label in the reader's language ("Médecin"); a code with
+     * no label reads as itself, never as a raw bundle key (#1096 review).
+     */
     private static String roleLabel(String roleCode) {
-        String bare = roleCode == null ? "" : roleCode.trim().toUpperCase(Locale.ROOT);
+        String code = roleCode == null ? "" : roleCode.trim();
+        String bare = code.toUpperCase(Locale.ROOT);
         if (bare.startsWith("ROLE_")) {
             bare = bare.substring("ROLE_".length());
         }
-        return MessageUtil.resolveOrRaw("email.role.label." + bare);
+        String label = MessageUtil.resolveOrNull(null, "email.role.label." + bare);
+        return label != null ? label : code;
     }
 
     public boolean isAnyActiveRole(UUID userId) { return assignmentRepository.existsByUserIdAndActiveTrue(userId); }

@@ -177,7 +177,7 @@ class PatientPrimaryCareServiceImplTest {
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.of(assignment));
-            doNothing().when(roleValidator).validateRoleOrThrow(eq(doctorUserId), eq(hospitalId),
+            doNothing().when(roleValidator).requireAssignmentHolds(eq(assignment), eq(hospitalId),
                     eq("ROLE_DOCTOR"));
             when(pcpRepo.findCurrentByPatientAndHospital(patientId, hospitalId))
                     .thenReturn(Optional.of(existing));
@@ -201,7 +201,7 @@ class PatientPrimaryCareServiceImplTest {
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.of(assignment));
-            doNothing().when(roleValidator).validateRoleOrThrow(eq(doctorUserId), eq(hospitalId),
+            doNothing().when(roleValidator).requireAssignmentHolds(eq(assignment), eq(hospitalId),
                     eq("ROLE_DOCTOR"));
             when(pcpRepo.findCurrentByPatientAndHospital(patientId, hospitalId))
                     .thenReturn(Optional.empty());
@@ -348,7 +348,7 @@ class PatientPrimaryCareServiceImplTest {
 
             when(pcpRepo.findById(pcpId)).thenReturn(Optional.of(pcpEntity));
             when(assignmentRepo.findById(newAssignmentId)).thenReturn(Optional.of(newAssignment));
-            doNothing().when(roleValidator).validateRoleOrThrow(eq(newDoctorId), eq(hospitalId),
+            doNothing().when(roleValidator).requireAssignmentHolds(eq(newAssignment), eq(hospitalId),
                     eq("ROLE_DOCTOR"));
             when(pcpRepo.save(pcpEntity)).thenReturn(pcpEntity);
             when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);
