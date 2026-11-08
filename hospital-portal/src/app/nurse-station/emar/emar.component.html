@@ -72,7 +72,7 @@
             }}</span>
             @if (taskSearch()) {
               <button type="button" class="btn-secondary" (click)="taskSearch.set('')">
-                {{ 'COMMON.CLEAR' | translate }}
+                {{ 'CARE_DASH.CLEAR_SEARCH' | translate }}
               </button>
             }
           </div>
@@ -131,8 +131,8 @@
                       | translate: { patient: task.patientName, medication: task.medication }
                   }}
                 </p>
-                <button type="button" class="emar__btn" (click)="taskSearch.set('')">
-                  {{ 'COMMON.CLEAR' | translate }}
+                <button type="button" class="btn-secondary" (click)="taskSearch.set('')">
+                  {{ 'CARE_DASH.CLEAR_SEARCH' | translate }}
                 </button>
               </div>
             }

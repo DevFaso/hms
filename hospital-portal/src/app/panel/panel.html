@@ -133,12 +133,12 @@
           }}</span>
           @if (providerSearch()) {
             <button type="button" class="btn-secondary" (click)="providerSearch.set('')">
-              {{ 'COMMON.CLEAR' | translate }}
+              {{ 'CARE_DASH.CLEAR_SEARCH' | translate }}
             </button>
           }
         </div>
       }
-      @if (overviewLoading()) {
+      @if (overviewLoading() && overviewRows().length === 0) {
         <p class="hint" role="status">{{ 'COMMON.LOADING' | translate }}</p>
       }
       @if (overviewFailed()) {
@@ -153,6 +153,7 @@
           tabindex="0"
           role="region"
           aria-labelledby="panel-overview-heading"
+          [attr.aria-busy]="overviewLoading()"
         >
           <table>
             <thead>

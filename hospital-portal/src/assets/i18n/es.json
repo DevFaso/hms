@@ -12118,6 +12118,7 @@
     "DOSE_QUEUE": "Cola de dosis",
     "SELECTED_DOSE_HIDDEN": "La dosis seleccionada para {{patient}} · {{medication}} está oculta por la búsqueda. El formulario de administración sigue correspondiendo a esta dosis.",
     "MATERNITY_GUIDE": "Una vista clara del recorrido de atención materna",
-    "MATERNITY_HINT": "Elija un área de atención y una lista de trabajo. Las alertas de riesgo y los requisitos de revisión siguen visibles en cada expediente."
+    "CLEAR_SEARCH": "Borrar la búsqueda",
+    "MATERNITY_HINT": "Elija un área de atención y una lista de trabajo. Las alertas de riesgo y los requisitos de revisión se muestran en cada expediente."
   }
 }

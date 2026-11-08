@@ -429,7 +429,10 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
   it('filters only the dose queue and keeps the selected bedside identity intact', () => {
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('en', {
-      CARE_DASH: { SELECTED_DOSE_HIDDEN: 'Selected {{patient}} · {{medication}} is hidden' },
+      CARE_DASH: {
+        SELECTED_DOSE_HIDDEN: 'Selected {{patient}} · {{medication}} is hidden',
+        CLEAR_SEARCH: 'Clear search',
+      },
     });
     translate.use('en');
     nurseSpy.getMedicationMAR.and.returnValue(
@@ -455,6 +458,7 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     expect(notice.classList.contains('emar__blocked')).toBeFalse();
     expect(notice.textContent).toContain(sampleTask.patientName);
     expect(notice.textContent).toContain(sampleTask.medication);
+    expect(notice.querySelector('button')?.textContent?.trim()).toBe('Clear search');
     expect(root().querySelector('[data-testid="emar-detail"]')?.textContent).toContain(
       sampleTask.patientName,
     );

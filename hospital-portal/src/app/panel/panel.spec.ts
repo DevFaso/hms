@@ -238,10 +238,13 @@ describe('PanelComponent', () => {
     expect(component.overviewLoading()).toBeTrue();
     expect(root.querySelector('.care-search input')).toBe(search);
     expect(root.querySelector('[aria-labelledby="panel-overview-heading"]')).toBe(table);
+    expect(table?.getAttribute('aria-busy')).toBe('true');
+    expect(table?.parentElement?.querySelector('.hint[role="status"]')).toBeNull();
     expect(search.value).toBe('Cdx');
     refresh.next([{ ...rows[0], activeCount: 4 }]);
     refresh.complete();
     fixture.detectChanges();
+    expect(table?.getAttribute('aria-busy')).toBe('false');
     expect(component.overviewLoading()).toBeFalse();
     expect(table?.textContent).toContain('4');
   });

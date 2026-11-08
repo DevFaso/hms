@@ -105,13 +105,16 @@
         [placeholder]="'CARE_DASH.SEARCH_PATIENTS' | translate"
         [disabled]="loading() || loadFailed()"
         [ngModel]="patientSearch()"
-        (ngModelChange)="patientSearch.set($event)" /></label
-    ><span class="care-visible-count">{{
-      'CARE_DASH.VISIBLE' | translate: { shown: visibleRows().length, total: rows().length }
-    }}</span>
+        (ngModelChange)="patientSearch.set($event)"
+    /></label>
+    @if (!loading() && !loadFailed()) {
+      <span class="care-visible-count">{{
+        'CARE_DASH.VISIBLE' | translate: { shown: visibleRows().length, total: rows().length }
+      }}</span>
+    }
     @if (patientSearch()) {
       <button type="button" class="btn-secondary" (click)="patientSearch.set('')">
-        {{ 'COMMON.CLEAR' | translate }}
+        {{ 'CARE_DASH.CLEAR_SEARCH' | translate }}
       </button>
     }
   </div>

@@ -12110,6 +12110,7 @@
     "SEARCH_PATIENTS": "Search loaded patients, MRN or phone",
     "SEARCH_PROVIDERS": "Search providers",
     "SEARCH_DOSES": "Search patient or medication",
+    "CLEAR_SEARCH": "Clear search",
     "NO_MATCHES": "No loaded rows match your search. Clear it to see the full loaded list.",
     "NO_MATCHES_TRUNCATED": "Not found in the first {{shown}} of {{total}} rows. This patient may still be enrolled. Review the programme and status filters; this search covers only loaded rows.",
     "DOSES_LOADED": "Doses loaded",
@@ -12118,6 +12119,6 @@
     "DOSE_QUEUE": "Dose queue",
     "SELECTED_DOSE_HIDDEN": "Selected dose for {{patient}} · {{medication}} is hidden by your search. The bedside form still applies to this dose.",
     "MATERNITY_GUIDE": "A clear view of the maternal care journey",
-    "MATERNITY_HINT": "Choose a care area, then a worklist. Existing risk flags and review requirements remain visible in each record."
+    "MATERNITY_HINT": "Choose a care area, then a worklist. Risk flags and review requirements are shown in each record."
   }
 }

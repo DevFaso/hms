@@ -12118,6 +12118,7 @@
     "DOSE_QUEUE": "File des doses",
     "SELECTED_DOSE_HIDDEN": "La dose sélectionnée pour {{patient}} · {{medication}} est masquée par votre recherche. Le formulaire au chevet concerne toujours cette dose.",
     "MATERNITY_GUIDE": "Une vue claire du parcours de soins maternels",
-    "MATERNITY_HINT": "Choisissez un domaine de soins, puis une liste de travail. Les indicateurs de risque et les exigences de revue restent visibles dans chaque dossier."
+    "CLEAR_SEARCH": "Effacer la recherche",
+    "MATERNITY_HINT": "Choisissez un domaine de soins, puis une liste de travail. Les indicateurs de risque et les exigences de revue sont affichés dans chaque dossier."
   }
 }

@@ -337,12 +337,15 @@ describe('RegistriesComponent', () => {
     const metrics = () =>
       Array.from(root().querySelectorAll('.care-metric strong'), (el) => el.textContent?.trim());
     expect(metrics()).toEqual(['—', '—', '—']);
+    expect(root().querySelector('.care-visible-count')).toBeNull();
     response.error(new Error('fixture outage'));
     fixture.detectChanges();
     expect(metrics()).toEqual(['—', '—', '—']);
+    expect(root().querySelector('.care-visible-count')).toBeNull();
     registryService.registry.and.returnValue(of(page([enrollment()], 250)));
     component.load();
     fixture.detectChanges();
     expect(metrics()).toEqual(['250', '1', '1']);
+    expect(root().querySelector('.care-visible-count')).not.toBeNull();
   });
 });
