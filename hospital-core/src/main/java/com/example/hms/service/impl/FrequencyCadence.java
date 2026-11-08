@@ -416,7 +416,8 @@ final class FrequencyCadence {
 
     /**
      * "08:00", "8h30": minutes only against the hour and under 60; "8 h, 20" is two times or none. QA D1514: the
-     * minutes stay a token behind the mark ("8 HMIN 30"), so a clock time is given at the minute it states.
+     * minutes stay a token before the mark ("8 30HMIN"), so a clock time is given at the minute it states; no digit
+     * touches a comma, so "08:00,20:00" is never read as a decimal.
      */
     private static final Pattern HOUR_AND_MINUTES = Pattern.compile("\\b(2[0-3]|[01]?\\d|24(?=[:H]00))[:H]([0-5]\\d)\\b");
     /** ".5", ",5", "q.5h": the point is part of a number, not a separator; "6'/6'": minutes. */
@@ -481,7 +482,7 @@ final class FrequencyCadence {
 
     /** The tokens of a text: what the grammar is matched on. */
     private static List<String> tokensOf(String upper) {
-        String clocked = HOUR_AND_MINUTES.matcher(upper).replaceAll("$1" + CLOCK_WITH_MINUTES + "$2");
+        String clocked = HOUR_AND_MINUTES.matcher(upper).replaceAll("$1 $2" + CLOCK_WITH_MINUTES);
         // QA round 36: "0,0 ml/h" is no rate, as "0 ml/h" is none.
         String noZero = ZERO_DECIMAL.matcher(clocked).replaceAll(" 0 ");
         String numbered = DECIMAL_NUMBER.matcher(noZero).replaceAll(" " + DECIMAL + " ")
@@ -854,9 +855,9 @@ final class FrequencyCadence {
                 return -1;
             }
             String after = time + 1 < tokens.size() ? tokens.get(time + 1) : "";
-            if (CLOCK_WITH_MINUTES.equals(after)) {
-                // QA D1514: the minutes tokensOf keeps behind the mark.
-                Integer minutes = time + 2 < tokens.size() ? wholeDigits(tokens.get(time + 2)) : null;
+            if (time + 2 < tokens.size() && CLOCK_WITH_MINUTES.equals(tokens.get(time + 2))) {
+                // QA D1514: the minutes tokensOf keeps before the mark.
+                Integer minutes = wholeDigits(after);
                 return minutes == null ? -1
                     : add(number, minutes, !before.isEmpty() || number >= FIRST_LONE_CLOCK_HOUR, time + 3);
             }

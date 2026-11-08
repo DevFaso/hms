@@ -1,10 +1,12 @@
 package com.example.hms.service.impl;
 
 import com.example.hms.model.Prescription;
+import com.example.hms.utility.HospitalTime;
 
 import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -119,16 +121,21 @@ public final class MarDoseSchedule {
             return kind == Kind.REPEATING;
         }
 
-        /** QA D1514: the first stated time of day at or after {@code moment}. Only for {@link Kind#TIMES_OF_DAY}. */
-        public LocalDateTime timeOfDayAtOrAfter(LocalDateTime moment) {
-            return firstTimeOfDay(moment, true);
+        /**
+         * QA D1514: the first stated time of day at or after {@code moment}. The times are the hospital's wall clock
+         * ({@code zone}); {@code moment} and the answer are on the server's clock, as the MAR stores them. Only for
+         * {@link Kind#TIMES_OF_DAY}.
+         */
+        public LocalDateTime timeOfDayAtOrAfter(LocalDateTime moment, ZoneId zone) {
+            return HospitalTime.toServer(firstTimeOfDay(HospitalTime.at(moment, zone), true), zone);
         }
 
-        /** QA D1514: the first stated time of day strictly after {@code moment}. Only for {@link Kind#TIMES_OF_DAY}. */
-        public LocalDateTime timeOfDayAfter(LocalDateTime moment) {
-            return firstTimeOfDay(moment, false);
+        /** QA D1514: the first stated time of day strictly after {@code moment}, as {@link #timeOfDayAtOrAfter}. */
+        public LocalDateTime timeOfDayAfter(LocalDateTime moment, ZoneId zone) {
+            return HospitalTime.toServer(firstTimeOfDay(HospitalTime.at(moment, zone), false), zone);
         }
 
+        /** On one wall clock: {@code moment} and the answer are both the hospital's. */
         private LocalDateTime firstTimeOfDay(LocalDateTime moment, boolean orAt) {
             LocalDate day = moment.toLocalDate();
             for (int minutes : clockMinutes) {
@@ -148,10 +155,12 @@ public final class MarDoseSchedule {
         /**
          * QA D1514: the real gap, in minutes, from the stated time a dose at {@code slotMoment} fills (the last
          * one at or before it) to the next stated time: "7 h 13 h 19 h" is 360 after 07:00 and 720 after 19:00.
-         * A single time of day is a day apart. Only for {@link Kind#TIMES_OF_DAY}.
+         * A single time of day is a day apart. {@code slotMoment} is on the server's clock, read on the hospital's
+         * ({@code zone}). Only for {@link Kind#TIMES_OF_DAY}.
          */
-        public int timeOfDayGapFrom(LocalDateTime slotMoment) {
-            int minute = slotMoment.getHour() * MINUTES_PER_HOUR + slotMoment.getMinute();
+        public int timeOfDayGapFrom(LocalDateTime slotMoment, ZoneId zone) {
+            LocalDateTime wall = HospitalTime.at(slotMoment, zone);
+            int minute = wall.getHour() * MINUTES_PER_HOUR + wall.getMinute();
             int filled = clockMinutes.size() - 1;
             for (int i = 0; i < clockMinutes.size(); i++) {
                 if (clockMinutes.get(i) <= minute) {

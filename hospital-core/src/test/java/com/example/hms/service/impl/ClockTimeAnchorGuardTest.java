@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * wordings, every filed wording, every form of the grammar, the repo's seeds) that writes clock times and no
  * interval, count or course is found here by a pattern of its own, not by the reader. Each one the reader
  * accepts is signed at moments across the day (just after a stated time, across midnight) and walked on the MAR
- * dose after dose; every due time must fall on a time of day the wording writes. A reading that spreads the day
+ * dose after dose; each due time must be the next time the wording writes, in order. A reading that spreads the day
  * evenly from the signing moment (the D1514 fault: "7 h 13 h 19 h" every 8 h from 00:01, "a 9 h" at 00:01)
  * fails it. A wording the reader asks about is never timed at all, so it passes: asking is the other lawful
  * answer.
@@ -94,6 +94,19 @@ class ClockTimeAnchorGuardTest {
         }
     }
 
+    /** The guard's own walk over the written times: the first at (or after) {@code from}, today or tomorrow. */
+    private static LocalDateTime nextWritten(Set<LocalTime> written, LocalDateTime from, boolean orAt) {
+        for (int days = 0; days <= 1; days++) {
+            for (LocalTime time : written) {
+                LocalDateTime candidate = from.toLocalDate().plusDays(days).atTime(time);
+                if (candidate.isAfter(from) || (orAt && candidate.equals(from))) {
+                    return candidate;
+                }
+            }
+        }
+        return null;
+    }
+
     private static String firstDueOffItsTimes(String wording, Set<LocalTime> written, LocalTime signed) {
         LocalDateTime signedAt = LocalDate.of(2026, 11, 7).atTime(signed);
         Prescription rx = new Prescription();
@@ -102,11 +115,15 @@ class ClockTimeAnchorGuardTest {
         rx.setSignedAt(signedAt);
         List<MedicationAdministrationRecord> rows = new ArrayList<>();
         LocalDateTime now = signedAt;
+        // The written times in order, the first at or after the signature: none skipped, none repeated.
+        LocalDateTime expected = nextWritten(written, signedAt, true);
         for (int dose = 1; dose <= DOSES_WALKED; dose++) {
             MarNextDose.Due due = MarNextDose.of(rx, now, rows, NurseTaskServiceImpl.EARLY_ADMINISTRATION_WINDOW);
-            if (due.dueTime() == null || due.dueTime().isBefore(signedAt) || !written.contains(due.dueTime().toLocalTime())) {
-                return "signed at " + signed + ", dose " + dose + " due at " + due.dueTime() + ", not at one of " + written;
+            if (due.dueTime() == null || !due.dueTime().equals(expected) || !expected.equals(due.scheduledSlot())) {
+                return "signed at " + signed + ", dose " + dose + " due at " + due.dueTime() + ", not at " + expected
+                    + " (written " + written + ")";
             }
+            expected = nextWritten(written, expected, false);
             MedicationAdministrationRecord given = new MedicationAdministrationRecord();
             given.setId(UUID.randomUUID());
             given.setStatus(MedicationAdministrationStatus.GIVEN);

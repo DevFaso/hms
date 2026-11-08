@@ -6,6 +6,7 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Prescription;
 import com.example.hms.utility.DisplayDates;
+import com.example.hms.utility.HospitalTime;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -132,7 +133,7 @@ public final class MarDoseInterval {
         if (reading.kind() == MarDoseSchedule.Kind.AS_NEEDED) {
             return requireAsNeededIntervalOrReason(rx, lastGiven.get(), now, reason);
         }
-        Integer gap = gapAfterLastGiven(reading, lastGiven.get(), earlyWindow, closedDoses);
+        Integer gap = gapAfterLastGiven(reading, lastGiven.get(), earlyWindow, closedDoses, rx.getHospital());
         if (gap == null) {
             return null;
         }
@@ -180,9 +181,9 @@ public final class MarDoseInterval {
      * same gap, so the screen and the administer call agree.
      */
     static Integer gapAfterLastGiven(MarDoseSchedule.Reading reading, LocalDateTime lastGiven, Duration earlyWindow,
-                                     int closedDoses) {
+                                     int closedDoses, Hospital hospital) {
         if (reading.kind() == MarDoseSchedule.Kind.TIMES_OF_DAY) {
-            return reading.timeOfDayGapFrom(lastGiven.plus(earlyWindow));
+            return reading.timeOfDayGapFrom(lastGiven.plus(earlyWindow), HospitalTime.zoneOf(hospital));
         }
         return reading.gapAfter(closedDoses);
     }

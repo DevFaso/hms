@@ -544,7 +544,7 @@ function countOver(count: number, period: number): FrequencyReading | null {
 /** `FrequencyCadence.tokensOf`. */
 function tokensOf(upper: string): string[] {
   const joined = upper
-    .replaceAll(/\b(2[0-3]|[01]?\d|24(?=[:H]00))[:H]([0-5]\d)\b/g, '$1HMIN$2')
+    .replaceAll(/\b(2[0-3]|[01]?\d|24(?=[:H]00))[:H]([0-5]\d)\b/g, '$1 $2HMIN')
     .replaceAll(/(?<![\d.,])0{1,4}[.,]0{1,3}(?![\d.,])/g, ' 0 ')
     .replaceAll(/(?<![\d.,])\d{1,4}[.,]\d{1,3}(?![\d.,])/g, ` ${DECIMAL} `)
     .replaceAll('VINGT-QUATRE', '24')
@@ -744,8 +744,8 @@ class ClockList {
     const number = wholeDigits(tokens[time]);
     if (number === null) return -1;
     const after = tokens[time + 1] ?? '';
-    if (after === 'HMIN') {
-      const minutes = wholeDigits(tokens[time + 2]);
+    if (tokens[time + 2] === 'HMIN') {
+      const minutes = wholeDigits(after);
       if (minutes === null) return -1;
       return this.add(number, minutes, before !== '' || number >= FIRST_LONE_CLOCK_HOUR, time + 3);
     }

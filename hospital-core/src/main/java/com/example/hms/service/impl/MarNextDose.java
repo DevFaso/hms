@@ -3,9 +3,11 @@ package com.example.hms.service.impl;
 import com.example.hms.enums.MedicationAdministrationStatus;
 import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Prescription;
+import com.example.hms.utility.HospitalTime;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
@@ -149,7 +151,9 @@ public final class MarNextDose {
         boolean timesOfDay = reading.kind() == MarDoseSchedule.Kind.TIMES_OF_DAY;
         LocalDateTime orderStart = start != null ? start : now.plusHours(1);
         // QA D1514: clock times are times of day: the first dose is the first time stated from the start, never the start.
-        LocalDateTime first = timesOfDay ? reading.timeOfDayAtOrAfter(orderStart) : orderStart;
+        // The stated times are the hospital's wall clock, read only for such an order (its organisation's zone).
+        ZoneId zone = timesOfDay ? HospitalTime.zoneOf(rx.getHospital()) : null;
+        LocalDateTime first = timesOfDay ? reading.timeOfDayAtOrAfter(orderStart, zone) : orderStart;
         if (reading.kind() == MarDoseSchedule.Kind.AS_NEEDED) {
             return asNeeded(rx, now, rows, earlyWindow);
         }
@@ -172,7 +176,7 @@ public final class MarNextDose {
             return Due.scheduled(slot, null, null, slot, true);
         }
         if (timesOfDay) {
-            return atTimesOfDay(reading, now, rows, earlyWindow, lastClosed.get());
+            return atTimesOfDay(rx, reading, zone, now, rows, earlyWindow, lastClosed.get());
         }
         Integer gap = reading.gapAfter(closedCount(rows));
         if (gap == null) {
@@ -196,7 +200,7 @@ public final class MarNextDose {
      * from the last dose given is the real one ({@link MarDoseInterval#gapAfterLastGiven}): 6 hours after the
      * 07:00 dose, 12 after the 19:00 one. The slot is never the last slot plus an even share of the day.
      */
-    private static Due atTimesOfDay(MarDoseSchedule.Reading reading, LocalDateTime now,
+    private static Due atTimesOfDay(Prescription rx, MarDoseSchedule.Reading reading, ZoneId zone, LocalDateTime now,
                                     List<MedicationAdministrationRecord> rows, Duration earlyWindow,
                                     MedicationAdministrationRecord last) {
         Optional<LocalDateTime> lastGiven = MarDoseInterval.lastGivenAt(rows, null);
@@ -204,14 +208,14 @@ public final class MarNextDose {
         if (lastSlot == null) {
             lastSlot = lastGiven.orElse(now);
         }
-        LocalDateTime scheduled = reading.timeOfDayAfter(lastSlot);
+        LocalDateTime scheduled = reading.timeOfDayAfter(lastSlot, zone);
         LocalDateTime recordedAt = last.getAdministeredAt();
         if (last.getStatus() != MedicationAdministrationStatus.GIVEN && recordedAt != null
             && scheduled.plus(earlyWindow).isBefore(recordedAt)) {
-            scheduled = reading.timeOfDayAfter(recordedAt);
+            scheduled = reading.timeOfDayAfter(recordedAt, zone);
         }
         Duration interval = lastGiven
-            .map(given -> Duration.ofMinutes(MarDoseInterval.gapAfterLastGiven(reading, given, earlyWindow, 0)))
+            .map(given -> Duration.ofMinutes(MarDoseInterval.gapAfterLastGiven(reading, given, earlyWindow, 0, rx.getHospital())))
             .orElse(Duration.ZERO);
         return afterTheSlot(scheduled, lastGiven, interval, earlyWindow);
     }

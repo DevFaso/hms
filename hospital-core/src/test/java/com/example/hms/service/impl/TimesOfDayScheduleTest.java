@@ -179,6 +179,30 @@ class TimesOfDayScheduleTest {
         assertThat(due.dueTime()).isEqualTo(at(8, 0).plusDays(1));
     }
 
+    /** The stated times are the hospital's wall clock, not the server's: its organisation's zone. */
+    @Test
+    void theStatedTimesAreTheHospitalsWallClock() {
+        java.time.ZoneId zone = java.time.ZoneId.of("Pacific/Kiritimati").equals(java.time.ZoneId.systemDefault())
+            ? java.time.ZoneId.of("America/Los_Angeles") : java.time.ZoneId.of("Pacific/Kiritimati");
+        com.example.hms.model.Organization organization = new com.example.hms.model.Organization();
+        organization.setDefaultTimezone(zone.getId());
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setOrganization(organization);
+        Prescription rx = order("8 h et 20 h", at(0, 1));
+        rx.setHospital(hospital);
+        List<MedicationAdministrationRecord> rows = new ArrayList<>();
+        LocalDateTime now = at(0, 1);
+        List<LocalTime> onTheWard = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            MarNextDose.Due due = MarNextDose.of(rx, now, rows, EARLY);
+            onTheWard.add(com.example.hms.utility.HospitalTime.at(due.dueTime(), zone).toLocalTime());
+            rows.add(0, row(MedicationAdministrationStatus.GIVEN, due.dueTime(), due.dueTime()));
+            now = due.dueTime();
+        }
+        assertThat(onTheWard).allMatch(t -> t.equals(LocalTime.of(8, 0)) || t.equals(LocalTime.of(20, 0)));
+        assertThat(onTheWard.get(1)).isNotEqualTo(onTheWard.get(0));
+    }
+
     @Test
     void theDispenseEstimateCountsTheTimesStated() {
         Prescription rx = order("8 h et 20 h", at(0, 1));
