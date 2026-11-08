@@ -3,7 +3,9 @@
     <div>
       <span class="care-eyebrow">{{ 'CARE_DASH.PANEL_EYEBROW' | translate }}</span>
       <h1>{{ 'PANEL.TITLE' | translate }}</h1>
-      <p class="page-subtitle">{{ 'CARE_DASH.PANEL_SUBTITLE' | translate }}</p>
+      @if (isAdmin()) {
+        <p class="page-subtitle">{{ 'CARE_DASH.PANEL_SUBTITLE' | translate }}</p>
+      }
     </div>
     <div class="header-actions">
       <button
@@ -115,7 +117,7 @@
   @if (isAdmin()) {
     <section class="card">
       <h2 id="panel-overview-heading">{{ 'PANEL.OVERVIEW' | translate }}</h2>
-      @if (!overviewLoading() && !overviewFailed() && overviewRows().length > 0) {
+      @if (!overviewFailed() && overviewRows().length > 0) {
         <div class="care-toolbar">
           <label class="care-search"
             ><span class="material-symbols-outlined" aria-hidden="true">search</span
@@ -138,13 +140,14 @@
       }
       @if (overviewLoading()) {
         <p class="hint" role="status">{{ 'COMMON.LOADING' | translate }}</p>
-      } @else if (overviewFailed()) {
+      }
+      @if (overviewFailed()) {
         <p class="hint error-hint">{{ 'PANEL.OVERVIEW_UNAVAILABLE' | translate }}</p>
-      } @else if (overviewRows().length === 0) {
+      } @else if (overviewRows().length === 0 && !overviewLoading()) {
         <p class="hint">{{ 'PANEL.OVERVIEW_EMPTY' | translate }}</p>
-      } @else if (visibleOverviewRows().length === 0) {
+      } @else if (overviewRows().length > 0 && visibleOverviewRows().length === 0) {
         <p class="care-no-matches" role="status">{{ 'CARE_DASH.NO_MATCHES' | translate }}</p>
-      } @else {
+      } @else if (overviewRows().length > 0) {
         <div
           class="table-scroll"
           tabindex="0"

@@ -116,7 +116,12 @@
     }
   </div>
   @if (!loading() && !loadFailed() && rows().length > 0 && visibleRows().length === 0) {
-    <div class="care-no-matches" role="status">{{ 'CARE_DASH.NO_MATCHES' | translate }}</div>
+    <div class="care-no-matches" role="status">
+      {{
+        (truncated() ? 'CARE_DASH.NO_MATCHES_TRUNCATED' : 'CARE_DASH.NO_MATCHES')
+          | translate: { shown: rows().length, total: totalRows() }
+      }}
+    </div>
   }
   @if (loading()) {
     <div class="loading-state">

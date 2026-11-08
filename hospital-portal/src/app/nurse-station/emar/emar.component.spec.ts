@@ -452,6 +452,7 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     expect(root().querySelector('[data-testid="emar-task-task-2"]')).not.toBeNull();
     const notice = root().querySelector('[data-testid="emar-selection-hidden"]') as HTMLElement;
     expect(notice.getAttribute('role')).toBe('status');
+    expect(notice.classList.contains('emar__blocked')).toBeFalse();
     expect(notice.textContent).toContain(sampleTask.patientName);
     expect(notice.textContent).toContain(sampleTask.medication);
     expect(root().querySelector('[data-testid="emar-detail"]')?.textContent).toContain(

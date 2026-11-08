@@ -12111,6 +12111,7 @@
     "SEARCH_PROVIDERS": "Buscar profesionales",
     "SEARCH_DOSES": "Buscar paciente o medicamento",
     "NO_MATCHES": "Ninguna fila cargada coincide. Borre la búsqueda para ver la lista cargada.",
+    "NO_MATCHES_TRUNCATED": "No se encontró en las primeras {{shown}} de {{total}} filas. El paciente puede seguir inscrito. Revise los filtros de programa y estado; la búsqueda solo cubre las filas cargadas.",
     "DOSES_LOADED": "Dosis cargadas",
     "PATIENTS_LOADED": "Pacientes representados",
     "PHARMACY_PENDING": "Pendiente de verificación farmacéutica",

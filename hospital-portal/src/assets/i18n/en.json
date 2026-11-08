@@ -12111,6 +12111,7 @@
     "SEARCH_PROVIDERS": "Search providers",
     "SEARCH_DOSES": "Search patient or medication",
     "NO_MATCHES": "No loaded rows match your search. Clear it to see the full loaded list.",
+    "NO_MATCHES_TRUNCATED": "Not found in the first {{shown}} of {{total}} rows. This patient may still be enrolled. Review the programme and status filters; this search covers only loaded rows.",
     "DOSES_LOADED": "Doses loaded",
     "PATIENTS_LOADED": "Patients represented",
     "PHARMACY_PENDING": "Awaiting pharmacist verification",

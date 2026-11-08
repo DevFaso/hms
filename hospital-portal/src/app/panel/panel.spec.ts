@@ -5,7 +5,12 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 
 import { PanelComponent } from './panel';
-import { PanelAssignment, PanelPage, PanelService } from '../services/panel.service';
+import {
+  PanelAssignment,
+  PanelOverviewRow,
+  PanelPage,
+  PanelService,
+} from '../services/panel.service';
 import { StaffService } from '../services/staff.service';
 import { PatientService } from '../services/patient.service';
 import { HospitalService } from '../services/hospital.service';
@@ -210,5 +215,42 @@ describe('PanelComponent', () => {
     expect(component.overviewRows().length).toBe(1);
     expect(component.loadedProviders()).toBe(1);
     expect(panelService.overview).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains the populated overview and search input during an action-triggered refresh', () => {
+    const rows: PanelOverviewRow[] = [
+      { providerStaffId: 's1', providerName: 'Cdx Example', panelRole: 'CHW', activeCount: 3 },
+    ];
+    const refresh = new Subject<PanelOverviewRow[]>();
+    panelService.overview.and.returnValues(of(rows), refresh);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const search = root.querySelector('.care-search input') as HTMLInputElement;
+    search.value = 'Cdx';
+    search.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const table = root.querySelector('[aria-labelledby="panel-overview-heading"]');
+    component.openAssign();
+    component.onPatientSelected({ id: 'cdx-patient' } as never);
+    component.formStaffId.set('s1');
+    component.submitAssign();
+    fixture.detectChanges();
+    expect(component.overviewLoading()).toBeTrue();
+    expect(root.querySelector('.care-search input')).toBe(search);
+    expect(root.querySelector('[aria-labelledby="panel-overview-heading"]')).toBe(table);
+    expect(search.value).toBe('Cdx');
+    refresh.next([{ ...rows[0], activeCount: 4 }]);
+    refresh.complete();
+    fixture.detectChanges();
+    expect(component.overviewLoading()).toBeFalse();
+    expect(table?.textContent).toContain('4');
+  });
+
+  it('does not describe the admin overview to a personal-panel-only clinician', () => {
+    adminRoles = false;
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.page-subtitle')).toBeNull();
+    expect(fixture.nativeElement.querySelector('#my-panel-heading')).not.toBeNull();
+    expect(panelService.overview).not.toHaveBeenCalled();
   });
 });

@@ -12111,6 +12111,7 @@
     "SEARCH_PROVIDERS": "Rechercher un soignant",
     "SEARCH_DOSES": "Rechercher un patient ou un médicament",
     "NO_MATCHES": "Aucune ligne chargée ne correspond. Effacez la recherche pour retrouver la liste chargée.",
+    "NO_MATCHES_TRUNCATED": "Aucun résultat parmi les {{shown}} premières lignes sur {{total}}. Ce patient peut encore être inscrit. Vérifiez les filtres de programme et de statut ; la recherche couvre uniquement les lignes chargées.",
     "DOSES_LOADED": "Doses chargées",
     "PATIENTS_LOADED": "Patients représentés",
     "PHARMACY_PENDING": "Vérification pharmaceutique attendue",

@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
 
 import { RegistriesComponent } from './registries';
@@ -308,5 +308,41 @@ describe('RegistriesComponent', () => {
     expect(component.visibleRows().length).toBe(0);
     expect(component.totalRows()).toBe(total);
     expect(registryService.registry.calls.count()).toBe(reads);
+  });
+  it('does not imply a patient is unenrolled when a truncated cohort has no search match', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', {
+      CARE_DASH: {
+        NO_MATCHES_TRUNCATED: 'First {{shown}} of {{total}}; patient may still be enrolled',
+      },
+    });
+    translate.use('en');
+    registryService.registry.and.returnValue(of(page([enrollment()], 250)));
+    fixture.detectChanges();
+    component.patientSearch.set('MRN-outside-loaded-page');
+    fixture.detectChanges();
+    expect(root().querySelector('.care-no-matches')?.textContent).toContain(
+      'First 1 of 250; patient may still be enrolled',
+    );
+    expect(component.totalRows()).toBe(250);
+    expect(component.truncated()).toBeTrue();
+    expect(registryService.registry).toHaveBeenCalledTimes(1);
+    expect(registryService.enroll).not.toHaveBeenCalled();
+  });
+
+  it('renders unavailable metrics through loading and failure, then true counts on recovery', () => {
+    const response = new Subject<ProgramRegistryPage>();
+    registryService.registry.and.returnValue(response);
+    fixture.detectChanges();
+    const metrics = () =>
+      Array.from(root().querySelectorAll('.care-metric strong'), (el) => el.textContent?.trim());
+    expect(metrics()).toEqual(['—', '—', '—']);
+    response.error(new Error('fixture outage'));
+    fixture.detectChanges();
+    expect(metrics()).toEqual(['—', '—', '—']);
+    registryService.registry.and.returnValue(of(page([enrollment()], 250)));
+    component.load();
+    fixture.detectChanges();
+    expect(metrics()).toEqual(['250', '1', '1']);
   });
 });
