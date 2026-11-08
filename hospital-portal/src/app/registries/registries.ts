@@ -90,6 +90,18 @@ export class RegistriesComponent implements OnInit, OnDestroy {
   loadFailed = signal(false);
   actingOnId = signal<string | null>(null);
 
+  readonly patientSearch = signal('');
+  readonly visibleRows = computed(() => {
+    const term = this.patientSearch().trim().toLocaleLowerCase();
+    return this.rows().filter(
+      (row) =>
+        !term ||
+        [row.patientName, row.mrn, row.phoneNumber].some((value) =>
+          value?.toLocaleLowerCase().includes(term),
+        ),
+    );
+  });
+
   overdueCount = computed(() => this.rows().filter((r) => r.overdueDays > 0).length);
   truncated = computed(() => this.totalRows() > this.rows().length);
 
