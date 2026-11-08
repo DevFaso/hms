@@ -1,4 +1,19 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { refusalReason } from '../shared/refusal-reason';
+import { Subscription } from 'rxjs';
+import { SlotInventoryService } from '../services/slot-inventory.service';
+import { OVERBOOK_REASON_FIELD, isOffSlot, refusesForOverbookReason } from './published-slot';
+import { focusFirstInvalid, refuseFields } from '../shared/forms/invalid-fields';
+import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
+import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+  ElementRef,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -8,7 +23,6 @@ import {
   AppointmentUpsertRequest,
   AppointmentStatus,
 } from '../services/appointment.service';
-import { ReceptionService } from '../reception/reception.service';
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { AuthService } from '../auth/auth.service';
@@ -16,6 +30,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverDateOrInstant } from '../shared/date-utils';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 
 /** Roles permitted to update appointment status (confirm / complete / no-show). */
 const STATUS_UPDATE_ROLES: readonly string[] = [
@@ -50,10 +65,25 @@ const CHECK_IN_ROLES: readonly string[] = [
  */
 const CHECK_IN_ELIGIBLE: readonly AppointmentStatus[] = ['SCHEDULED', 'CONFIRMED'];
 
+/** Every field the reschedule form may refuse. */
+const RESCHEDULE_FIELDS = ['reschedDate', 'reschedStart'];
+
+import { CheckinDialogComponent } from '../reception/checkin-dialog/checkin-dialog.component';
+import type { ReceptionQueueItem } from '../reception/reception.service';
 @Component({
   selector: 'app-appointment-detail',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    CheckinDialogComponent,
+    DateTimePipe,
+    SubmitGuardDirective,
+    DialogFocusDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './appointment-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-detail.scss',
@@ -63,21 +93,70 @@ export class AppointmentDetailComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly appointmentService = inject(AppointmentService);
   private readonly toast = inject(ToastService);
-  private readonly receptionService = inject(ReceptionService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly permissions = inject(PermissionService);
   private readonly auth = inject(AuthService);
+  private readonly staffService = inject(StaffService);
+  private readonly slots = inject(SlotInventoryService);
+
+  /**
+   * QA D1018 / D923: the reschedule can move the visit to another clinician,
+   * department or reason, not only another time. The hospital's clinicians,
+   * read when the dialog opens.
+   */
+  readonly rescheduleStaffOptions = signal<StaffResponse[]>([]);
+  rescheduleStaffId = '';
+  rescheduleDepartmentId = '';
+  rescheduleReason = '';
+
+  /** The departments of the hospital's clinicians (the booking form's list). */
+  rescheduleDepartments(): { id: string; name: string }[] {
+    const seen = new Map<string, string>();
+    for (const s of this.rescheduleStaffOptions()) {
+      if (s.departmentId && !seen.has(s.departmentId)) {
+        seen.set(s.departmentId, s.departmentName || s.departmentId);
+      }
+    }
+    const appt = this.appointment();
+    if (appt?.departmentId && !seen.has(appt.departmentId)) {
+      seen.set(appt.departmentId, appt.departmentName || appt.departmentId);
+    }
+    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
+  }
+
+  /** Whether the booked clinician is in the loaded list (else it is offered on its own). */
+  hasRescheduleStaff(staffId: string): boolean {
+    return this.rescheduleStaffOptions().some((s) => s.id === staffId);
+  }
+
+  /** A clinician picked: the visit follows them to their department. */
+  onRescheduleStaffChange(staffId: string): void {
+    this.rescheduleStaffId = staffId;
+    this.checkRescheduleSlot();
+    const picked = this.rescheduleStaffOptions().find((s) => s.id === staffId);
+    if (picked?.departmentId) this.rescheduleDepartmentId = picked.departmentId;
+  }
 
   appointment = signal<AppointmentResponse | null>(null);
   loading = signal(true);
   saving = signal(false);
+  /** QA D1415: the appointment being checked in through the dialog. */
+  checkinItem = signal<ReceptionQueueItem | null>(null);
   cancelling = signal(false);
 
   // Reschedule modal
   showReschedule = signal(false);
+  /** QA D1429: the new time is not a published free slot, so the dialog asks why. */
+  rescheduleOffSlot = signal(false);
+  /** QA D1474: why the time typed cannot be booked at all, told at once, before any reason is asked. */
+  rescheduleTimeRefusal = signal<string | null>(null);
+  private rescheduleTimeRead?: Subscription;
+  rescheduleOverbookReason = '';
+  /** The latest read only: an older answer never decides for a time since changed. */
+  private rescheduleSlotRead?: Subscription;
   rescheduleDate = '';
   rescheduleStart = '';
-  rescheduleEnd = '';
   rescheduleNotes = '';
 
   // Cancel confirm modal
@@ -184,18 +263,79 @@ export class AppointmentDetailComponent implements OnInit {
     if (!appt) return;
     this.rescheduleDate = appt.appointmentDate;
     this.rescheduleStart = appt.startTime;
-    this.rescheduleEnd = appt.endTime;
     this.rescheduleNotes = appt.notes ?? '';
+    this.rescheduleStaffId = appt.staffId;
+    this.rescheduleDepartmentId = appt.departmentId ?? '';
+    this.rescheduleReason = appt.reason ?? '';
+    this.rescheduleOverbookReason = '';
+    this.rescheduleSlotRead?.unsubscribe();
+    this.rescheduleOffSlot.set(false);
     this.showReschedule.set(true);
+    if (appt.hospitalId) {
+      this.staffService.list(appt.hospitalId).subscribe({
+        next: (list) => this.rescheduleStaffOptions.set(list.filter(isClinicalProvider)),
+        // The dialog still moves the time with the booked clinician.
+        error: () => this.rescheduleStaffOptions.set([]),
+      });
+    }
   }
 
   closeReschedule(): void {
+    this.rescheduleSlotRead?.unsubscribe();
     this.showReschedule.set(false);
+  }
+
+  /** The dialog's clinician, date or time changed: is it a published free slot? Unmoved asks nothing. */
+  checkRescheduleSlot(): void {
+    const appt = this.appointment();
+    const unmoved =
+      !appt ||
+      (this.rescheduleDate === appt.appointmentDate &&
+        this.rescheduleStart?.slice(0, 5) === appt.startTime?.slice(0, 5) &&
+        this.rescheduleStaffId === appt.staffId);
+    this.rescheduleTimeRead?.unsubscribe();
+    this.rescheduleTimeRefusal.set(null);
+    if (unmoved) {
+      this.rescheduleSlotRead?.unsubscribe();
+      this.rescheduleOffSlot.set(false);
+      return;
+    }
+    if (this.rescheduleStaffId && this.rescheduleDate && this.rescheduleStart) {
+      // Only the desk's warning: the server decides at the move, so a failed read says nothing.
+      this.rescheduleTimeRead = this.appointmentService
+        .bookingTimeCheck(
+          this.rescheduleStaffId,
+          this.rescheduleDate,
+          this.rescheduleStart,
+          appt.id,
+        )
+        .subscribe({
+          next: (answer) => this.rescheduleTimeRefusal.set(answer?.refusal ?? null),
+          error: () => this.rescheduleTimeRefusal.set(null),
+        });
+    }
+    this.rescheduleSlotRead?.unsubscribe();
+    this.rescheduleSlotRead = isOffSlot(
+      this.slots,
+      this.rescheduleStaffId,
+      this.rescheduleDate,
+      this.rescheduleStart,
+    ).subscribe((off) => this.rescheduleOffSlot.set(off));
   }
 
   submitReschedule(): void {
     const appt = this.appointment();
-    if (!appt || !this.rescheduleDate || !this.rescheduleStart || !this.rescheduleEnd) {
+    if (!appt || !this.rescheduleDate || !this.rescheduleStart) {
+      // QA D1072: the missing field is marked and focused.
+      refuseFields(
+        this.host.nativeElement,
+        [
+          !this.rescheduleDate ? 'reschedDate' : null,
+          !this.rescheduleStart ? 'reschedStart' : null,
+        ].filter((id): id is string => id !== null),
+        RESCHEDULE_FIELDS,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('APPOINTMENTS.REQUIRED_FIELDS'));
       return;
     }
@@ -205,20 +345,19 @@ export class AppointmentDetailComponent implements OnInit {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (selectedDate < today) {
-      this.toast.error(this.translate.instant('APPOINTMENTS.DATE_IN_PAST'));
+      // QA D1306 (round 28): the date is marked, not only a toast.
+      const message = this.translate.instant('APPOINTMENTS.DATE_IN_PAST');
+      refuseFields(this.host.nativeElement, ['reschedDate'], RESCHEDULE_FIELDS, message);
+      this.toast.error(message);
       return;
     }
-
-    if (this.rescheduleEnd <= this.rescheduleStart) {
-      this.toast.error(this.translate.instant('APPOINTMENTS.END_BEFORE_START'));
-      return;
-    }
+    refuseFields(this.host.nativeElement, [], RESCHEDULE_FIELDS, '');
 
     this.saving.set(true);
     const req: AppointmentUpsertRequest = {
       appointmentDate: this.rescheduleDate,
       startTime: this.rescheduleStart,
-      endTime: this.rescheduleEnd,
+      // QA D1060: no end time; the server sets it from the slot rules.
       // SCHEDULED, not RESCHEDULED. A moved appointment is a LIVE appointment
       // at a new time — the patient is expected to turn up and be checked in.
       // Writing RESCHEDULED here stranded it: every consumer treats that
@@ -234,11 +373,13 @@ export class AppointmentDetailComponent implements OnInit {
       // means anything and should be asked for again.
       status: 'SCHEDULED',
       patientId: appt.patientId,
-      staffId: appt.staffId,
+      // QA D1018: what the desk chose in the dialog, the booked values otherwise.
+      staffId: this.rescheduleStaffId || appt.staffId,
       hospitalId: appt.hospitalId,
-      departmentId: appt.departmentId ?? undefined,
-      reason: appt.reason,
+      departmentId: this.rescheduleDepartmentId || appt.departmentId || undefined,
+      reason: this.rescheduleReason.trim() || appt.reason,
       notes: this.rescheduleNotes || appt.notes || undefined,
+      overbookReason: this.rescheduleOverbookReason.trim() || undefined,
     };
     this.appointmentService.update(this.appointmentId, req).subscribe({
       next: (updated) => {
@@ -248,8 +389,21 @@ export class AppointmentDetailComponent implements OnInit {
         this.saving.set(false);
       },
       error: (err) => {
+        // QA D1429: the field opens on the refusal, marked and focused.
+        if (refusesForOverbookReason(err)) {
+          this.rescheduleOffSlot.set(true);
+          const message = this.translate.instant('APPOINTMENTS.OVERBOOK_HINT');
+          setTimeout(() =>
+            refuseFields(
+              this.host.nativeElement,
+              [OVERBOOK_REASON_FIELD],
+              [OVERBOOK_REASON_FIELD],
+              message,
+            ),
+          );
+        }
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('APPOINTMENTS.RESCHEDULE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('APPOINTMENTS.RESCHEDULE_FAILED'),
         );
         this.saving.set(false);
       },
@@ -258,7 +412,25 @@ export class AppointmentDetailComponent implements OnInit {
 
   // ─── Cancel ─────────────────────────────────────────────────────────────────
 
+  /**
+   * QA D1126 / D1132 (round 20): the visit is dropped (cancelled, or marked a
+   * no-show) only with a reason, which the server requires and keeps. One
+   * dialog serves both; the confirm button is never silently disabled for a
+   * blank reason, it says why on click (the D1089 rule).
+   */
+  readonly dropAction = signal<'CANCEL' | 'NO_SHOW'>('CANCEL');
+  dropReason = '';
+  readonly dropReasonError = signal(false);
+  readonly dropReasonMax = 500;
+
   openCancelConfirm(): void {
+    this.openDropDialog('CANCEL');
+  }
+
+  private openDropDialog(action: 'CANCEL' | 'NO_SHOW'): void {
+    this.dropAction.set(action);
+    this.dropReason = '';
+    this.dropReasonError.set(false);
     this.showCancelConfirm.set(true);
   }
 
@@ -267,17 +439,30 @@ export class AppointmentDetailComponent implements OnInit {
   }
 
   executeCancel(): void {
+    const reason = this.dropReason.trim();
+    if (!reason) {
+      this.dropReasonError.set(true);
+      // QA D1326: the template marks it (aria-invalid + message); focus goes there.
+      focusFirstInvalid(this.host.nativeElement, ['dropReason']);
+      return;
+    }
+    this.dropReasonError.set(false);
+    const action = this.dropAction();
     this.cancelling.set(true);
-    this.appointmentService.updateStatus(this.appointmentId, 'CANCEL').subscribe({
+    this.appointmentService.updateStatus(this.appointmentId, action, reason).subscribe({
       next: (updated) => {
         this.appointment.set(updated);
-        this.toast.success(this.translate.instant('APPOINTMENTS.CANCEL_SUCCESS'));
+        this.toast.success(
+          this.translate.instant(
+            action === 'CANCEL' ? 'APPOINTMENTS.CANCEL_SUCCESS' : 'APPOINTMENTS.STATUS_UPDATED',
+          ),
+        );
         this.showCancelConfirm.set(false);
         this.cancelling.set(false);
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('APPOINTMENTS.CANCEL_FAILED'),
+          refusalReason(err) ?? this.translate.instant('APPOINTMENTS.CANCEL_FAILED'),
         );
         this.cancelling.set(false);
       },
@@ -295,7 +480,8 @@ export class AppointmentDetailComponent implements OnInit {
   }
 
   markAsNoShow(): void {
-    this.updateStatus('NO_SHOW');
+    // QA D1132: a no-show drops the visit too, so it asks for the reason.
+    this.openDropDialog('NO_SHOW');
   }
 
   /**
@@ -320,7 +506,7 @@ export class AppointmentDetailComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('APPOINTMENTS.STATUS_UPDATE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('APPOINTMENTS.STATUS_UPDATE_FAILED'),
         );
         this.saving.set(false);
       },
@@ -348,24 +534,30 @@ export class AppointmentDetailComponent implements OnInit {
   checkIn(): void {
     const appt = this.appointment();
     if (!appt || this.saving()) return;
+    // QA D1415: the desk confirms the identity itself, in the same dialog as the
+    // queue: the server requires that attestation, and nothing here may assume it.
+    this.checkinItem.set({
+      appointmentId: this.appointmentId,
+      patientId: appt.patientId,
+      patientName: appt.patientName,
+      mrn: null,
+      dateOfBirth: null,
+      appointmentTime: appt.startTime ?? null,
+      providerName: appt.staffName ?? null,
+      departmentName: appt.departmentName ?? null,
+      appointmentReason: appt.reason ?? null,
+      status: appt.status,
+      waitMinutes: 0,
+      encounterId: null,
+      hasInsuranceIssue: false,
+      hasOutstandingBalance: false,
+    } as ReceptionQueueItem);
+  }
 
-    this.saving.set(true);
-    this.receptionService.checkInPatient({ appointmentId: this.appointmentId }).subscribe({
-      next: () => {
-        this.toast.success(this.translate.instant('RECEPTION.CHECK_IN_SUCCESS'));
-        // Re-read rather than patching the status locally: check-in also
-        // stamps checkedInAt and creates the encounter, and the row the
-        // server has is the one that matters.
-        this.loadAppointment(this.appointmentId);
-        this.saving.set(false);
-      },
-      error: (err) => {
-        this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.CHECK_IN_FAILED'),
-        );
-        this.saving.set(false);
-      },
-    });
+  /** Re-read rather than patch: check-in also stamps checkedInAt and creates the encounter. */
+  onCheckedIn(): void {
+    this.checkinItem.set(null);
+    this.loadAppointment(this.appointmentId);
   }
 
   /** Open the Reception cockpit — for the co-pay, insurance and consent steps. */

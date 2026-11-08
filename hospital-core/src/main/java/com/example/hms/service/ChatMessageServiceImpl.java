@@ -107,10 +107,15 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     public ChatMessageResponseDTO sendMessage(ChatMessageRequestDTO dto, Locale locale) {
         boolean hasContent = dto.getContent() != null && !dto.getContent().isBlank();
         boolean hasAttachments = dto.getAttachments() != null && !dto.getAttachments().isEmpty();
-        if (!hasContent && !hasAttachments) {
-            // QA D877: refusals are bundle keys, read in the sender's language.
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.message.empty"));
-        }
+        boolean namesRecipient = dto.getRecipientId() != null
+            || (dto.getRecipientEmail() != null && !dto.getRecipientEmail().isBlank());
+        // QA D877: refusals are bundle keys, read in the sender's language.
+        // QA D1299 (round 28): an empty body named the message only, with no
+        // field, and the recipient on the next press; both are named at once.
+        com.example.hms.exception.RequiredFields.check()
+            .require(namesRecipient, "recipientId", "chat.recipient.required")
+            .require(hasContent || hasAttachments, "content", "chat.message.empty")
+            .orThrow();
 
         UUID currentUserId = getCurrentUserId(); // Sender ID
 
@@ -128,7 +133,8 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             recipient = userRepository.findByEmail(dto.getRecipientEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("chat.recipient.notFound", dto.getRecipientEmail()));
         } else {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.recipient.required"));
+            // QA D1282: the refusal names the field, so the form can mark it.
+            throw new com.example.hms.exception.FieldBusinessException("recipientId", "chat.recipient.required");
         }
 
         if (sender.getId().equals(recipient.getId())) {
@@ -187,10 +193,11 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         List<ChatAttachment> persistedAttachments = persistAttachments(saved, dto.getAttachments());
 
         // The bell entry is read by the RECIPIENT, so it is rendered in the
-        // language they read it in, never the sender's (QA D665).
+        // language they read it in, never the sender's (QA D665). QA D983: typed
+        // CHAT_MESSAGE, so the bell labels it and opens the conversation.
         notificationService.createNotification("chat.newMessage.notification",
             new Object[]{(sender.getFirstName() + " " + sender.getLastName()).trim()},
-            recipient.getUsername(), null);
+            recipient.getUsername(), "CHAT_MESSAGE");
 
         return chatMessageMapper.toChatMessageResponseDTO(saved, persistedAttachments);
     }

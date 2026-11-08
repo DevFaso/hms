@@ -53,10 +53,13 @@ describe('VisitSummaryDialogComponent', () => {
       summary.referralSummary,
       summary.followUpInstructions,
       summary.patientEducationMaterials,
-      summary.followUpAppointmentDate,
     ]) {
       expect(root.textContent).toContain(text!);
     }
+    // The follow-up date reads in the reader's format, never the wire's yyyy-MM-dd.
+    const appointment = root.querySelector('[data-testid="avs-appointment"] p')?.textContent ?? '';
+    expect(appointment).toContain('2026');
+    expect(appointment).not.toContain(summary.followUpAppointmentDate!);
     expect(root.querySelector('[role="dialog"]')?.getAttribute('aria-labelledby')).toBe(
       'avs-title',
     );

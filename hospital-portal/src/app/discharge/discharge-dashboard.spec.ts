@@ -44,7 +44,13 @@ describe('Discharge dashboard', () => {
         { provide: AuthService, useValue: { getUserProfile: () => ({ staffId: 'cdx-staff' }) } },
         {
           provide: RoleContextService,
-          useValue: { effectiveHospitalIdForRequest: () => 'h2', hasAnyActiveRole: () => true },
+          // isSuperAdmin / globalView: the per-summary edit and finalize rules (QA D930) read them.
+          useValue: {
+            effectiveHospitalIdForRequest: () => 'h2',
+            hasAnyActiveRole: () => true,
+            isSuperAdmin: () => false,
+            globalView: () => false,
+          },
         },
         {
           provide: ToastService,

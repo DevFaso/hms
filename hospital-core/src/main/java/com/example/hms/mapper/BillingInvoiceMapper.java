@@ -77,7 +77,8 @@ public class BillingInvoiceMapper {
         if (encounter == null) return;
 
         dto.setEncounterCode(encounter.getCode());
-        dto.setEncounterDescription(encounter.getNotes());
+        // QA D1421: never Encounter.notes (nursing text, diagnoses), for any reader. A visit is
+        // named on an invoice by its type and date, below. Guard: ReceptionistClinicalReadGuardTest.
         dto.setEncounterType(encounter.getEncounterType() != null ? encounter.getEncounterType().name() : null);
         dto.setEncounterStatus(encounter.getStatus() != null ? encounter.getStatus().name() : null);
         dto.setEncounterDate(encounter.getEncounterDate() != null ? encounter.getEncounterDate().toString() : null);
@@ -86,6 +87,8 @@ public class BillingInvoiceMapper {
 
     private void populateInvoiceDetails(BillingInvoiceResponseDTO dto, BillingInvoice invoice) {
         dto.setInvoiceNumber(invoice.getInvoiceNumber());
+        // QA D936: the form tells the clerk which paid copays are still standing.
+        dto.setCheckInCopay(invoice.isCheckInCopay());
         // QA D428: a folded check-in copay names the invoice it went to.
         if (invoice.getCreditedToInvoice() != null) {
             dto.setCreditedToInvoiceNumber(invoice.getCreditedToInvoice().getInvoiceNumber());
@@ -97,14 +100,12 @@ public class BillingInvoiceMapper {
         dto.setTotalAmount(invoice.getTotalAmount());
         dto.setAmountPaid(invoice.getAmountPaid());
 
-        // Calculate balance due
-        BigDecimal balanceDue = (invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO)
-            .subtract(invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO);
-        // QA D202: a cancelled invoice is owed by nobody, whatever was billed on it.
-        if (invoice.getStatus() == com.example.hms.enums.InvoiceStatus.CANCELLED) {
-            balanceDue = BigDecimal.ZERO;
-        }
+        // QA D202 / D1104: one rule for the balance, shared with the invoice PDF:
+        // a cancelled invoice is owed by nobody, whatever was billed on it.
+        BigDecimal balanceDue = com.example.hms.utility.InvoiceBalance.dueOf(invoice);
         dto.setBalanceDue(balanceDue);
+        // QA D1466: a copay above the visit total leaves money owed back.
+        dto.setRefundDue(com.example.hms.utility.InvoiceBalance.refundDueOf(invoice));
 
         // Calculate patient responsibility
         BigDecimal patientResponsibility = balanceDue.subtract(
@@ -113,6 +114,8 @@ public class BillingInvoiceMapper {
 
         dto.setStatus(invoice.getStatus() != null ? invoice.getStatus().name() : null);
         dto.setNotes(invoice.getNotes());
+        dto.setCancelReason(invoice.getCancelReason());
+        dto.setCancelledAt(invoice.getCancelledAt() != null ? invoice.getCancelledAt().toString() : null);
         dto.setCreatedAt(invoice.getCreatedAt() != null ? invoice.getCreatedAt().toString() : null);
         dto.setUpdatedAt(invoice.getUpdatedAt() != null ? invoice.getUpdatedAt().toString() : null);
     }

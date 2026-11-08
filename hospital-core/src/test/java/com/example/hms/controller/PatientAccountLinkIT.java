@@ -178,7 +178,7 @@ class PatientAccountLinkIT extends BaseIT {
     private String body(UUID userId) {
         return """
             {"firstName":"Rasmané","lastName":"Kaboré","dateOfBirth":"1990-04-02","gender":"M",
-             "phoneNumberPrimary":"+22670%s","city":"Ouagadougou","country":"Burkina Faso",
+             "phoneNumberPrimary":"+226700%s","city":"Ouagadougou","country":"Burkina Faso",
              "hospitalId":"%s","userId":"%s"}
             """.formatted(nextId(), hospital.getId(), userId);
     }

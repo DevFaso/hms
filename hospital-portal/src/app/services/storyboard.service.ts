@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { RestrictedRows } from './patient.service';
+import { backgroundRequestOptions } from './ws-transport';
 
 /**
  * Wire shapes for {@code GET /api/patients/:patientId/storyboard}.
@@ -110,6 +111,10 @@ export class StoryboardService {
     if (hospitalId) {
       params = params.set('hospitalId', hospitalId);
     }
-    return this.http.get<PatientStoryboard>(`/patients/${patientId}/storyboard`, { params });
+    // QA D1524: a side panel's read; a 403 costs the banner, never the chart (background request).
+    return this.http.get<PatientStoryboard>(`/patients/${patientId}/storyboard`, {
+      params,
+      ...backgroundRequestOptions(),
+    });
   }
 }

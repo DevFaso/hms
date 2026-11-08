@@ -12,6 +12,8 @@
   role="dialog"
   aria-modal="true"
   [attr.aria-label]="'RECEPTION.CLOSE_UNSEEN_TITLE' | translate"
+  appDialogFocus
+  (dialogDismiss)="dismissed.emit()"
 >
   <div class="dialog-header">
     <span class="material-symbols-outlined header-icon">event_busy</span>
@@ -52,6 +54,7 @@
         >{{ 'RECEPTION.CLOSE_UNSEEN_REASON' | translate }} <span class="required">*</span></label
       >
       <textarea
+        required
         id="closeUnseenReason"
         class="form-control"
         rows="3"
@@ -70,7 +73,13 @@
     <button class="btn-secondary" (click)="dismissed.emit()" [disabled]="saving()">
       {{ 'COMMON.CANCEL' | translate }}
     </button>
-    <button class="btn-primary" [disabled]="saving()" (click)="submit()">
+    <button
+      appSubmitGuard
+      submitGuardRequired
+      class="btn-primary"
+      [disabled]="saving()"
+      (click)="submit()"
+    >
       @if (saving()) {
         <span class="material-symbols-outlined spin">progress_activity</span>
       }

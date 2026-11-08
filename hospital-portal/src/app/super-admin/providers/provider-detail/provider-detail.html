@@ -290,11 +290,11 @@
       <dl class="detail-grid">
         <div>
           <dt>{{ 'PROVIDER.DETAIL.SUBMITTED_AT' | translate }}</dt>
-          <dd>{{ p.submittedAt ? (p.submittedAt | serverTime | date: 'medium') : '—' }}</dd>
+          <dd>{{ p.submittedAt ? (p.submittedAt | serverTime | dateTime) : '—' }}</dd>
         </div>
         <div>
           <dt>{{ 'PROVIDER.DETAIL.DECIDED_AT' | translate }}</dt>
-          <dd>{{ p.decidedAt ? (p.decidedAt | serverTime | date: 'medium') : '—' }}</dd>
+          <dd>{{ p.decidedAt ? (p.decidedAt | serverTime | dateTime) : '—' }}</dd>
         </div>
         <div>
           <dt>{{ 'PROVIDER.DETAIL.IFU_CONFIRMED' | translate }}</dt>
@@ -356,7 +356,7 @@
               @for (row of history(); track row.verificationId) {
                 <tr data-test="history-row">
                   <td>
-                    {{ row.submittedAt ? (row.submittedAt | serverTime | date: 'medium') : '—' }}
+                    {{ row.submittedAt ? (row.submittedAt | serverTime | dateTime) : '—' }}
                   </td>
                   <td>
                     <span [class]="'status-badge ' + verificationBadge(row.status)">
@@ -365,7 +365,9 @@
                   </td>
                   <td>{{ row.legalName || '—' }}</td>
                   <td>{{ row.licenceNumber || '—' }}</td>
-                  <td>{{ row.decidedAt ? (row.decidedAt | serverTime | date: 'medium') : '—' }}</td>
+                  <td>
+                    {{ row.decidedAt ? (row.decidedAt | serverTime | dateTime) : '—' }}
+                  </td>
                   <td data-test="history-reason">{{ row.decisionReason || '—' }}</td>
                   <td data-test="history-note">{{ row.evidenceNote || '—' }}</td>
                 </tr>
@@ -385,13 +387,14 @@
         (keydown.escape)="closeDialogs()"
       >
         <div
+          appModalDialog
           class="modal modal-xl"
           role="dialog"
           aria-modal="true"
           aria-labelledby="verify-title"
           tabindex="-1"
           (click)="$event.stopPropagation()"
-          (keydown.escape)="closeDialogs()"
+          (keydown.escape)="closeDialogs(); $event.stopPropagation()"
         >
           <div class="modal-header">
             <h2 id="verify-title">{{ 'PROVIDER.VERIFY.TITLE' | translate }}</h2>
@@ -437,19 +440,21 @@
               <input
                 id="verify-ifu"
                 type="checkbox"
+                required
                 [ngModel]="dialog.ifuMatchesRccm"
                 (ngModelChange)="patchVerify({ ifuMatchesRccm: $event })"
               />
-              <label for="verify-ifu">{{ 'PROVIDER.VERIFY.IFU_MATCHES' | translate }}</label>
+              <label for="verify-ifu">{{ 'PROVIDER.VERIFY.IFU_MATCHES' | translate }} *</label>
             </div>
             <div class="check-row">
               <input
                 id="verify-cnss"
                 type="checkbox"
+                required
                 [ngModel]="dialog.cnssMatchesRccm"
                 (ngModelChange)="patchVerify({ cnssMatchesRccm: $event })"
               />
-              <label for="verify-cnss">{{ 'PROVIDER.VERIFY.CNSS_MATCHES' | translate }}</label>
+              <label for="verify-cnss">{{ 'PROVIDER.VERIFY.CNSS_MATCHES' | translate }} *</label>
             </div>
 
             <div class="field">
@@ -498,7 +503,10 @@
               type="button"
               class="btn-primary"
               data-test="verify-confirm"
-              [disabled]="busy() || !verifyReady()"
+              data-testid="verify-confirm"
+              [disabled]="busy()"
+              [appSubmitGuard]="!verifyReady()"
+              submitGuardRequired
               (click)="submitVerify()"
             >
               {{ 'PROVIDER.VERIFY.SUBMIT' | translate }}
@@ -517,13 +525,14 @@
         (keydown.escape)="closeDialogs()"
       >
         <div
+          appModalDialog
           class="modal"
           role="dialog"
           aria-modal="true"
           aria-labelledby="decision-title"
           tabindex="-1"
           (click)="$event.stopPropagation()"
-          (keydown.escape)="closeDialogs()"
+          (keydown.escape)="closeDialogs(); $event.stopPropagation()"
         >
           <div class="modal-header">
             <h2 id="decision-title">
@@ -551,7 +560,7 @@
               }
             </p>
             <div class="field">
-              <label for="decision-reason">{{ 'PROVIDER.DECISION.REASON' | translate }}</label>
+              <label for="decision-reason">{{ 'PROVIDER.DECISION.REASON' | translate }} *</label>
               <textarea
                 id="decision-reason"
                 rows="3"
@@ -578,7 +587,9 @@
               type="button"
               class="btn-primary"
               data-test="decision-confirm"
-              [disabled]="busy() || dialog.reason.trim() === ''"
+              [disabled]="busy()"
+              [appSubmitGuard]="dialog.reason.trim() === ''"
+              [submitGuardFields]="['decision-reason']"
               (click)="submitDecision()"
             >
               @if (dialog.kind === 'reject') {
@@ -601,13 +612,14 @@
         (keydown.escape)="closeDialogs()"
       >
         <div
+          appModalDialog
           class="modal"
           role="dialog"
           aria-modal="true"
           aria-labelledby="lifecycle-title"
           tabindex="-1"
           (click)="$event.stopPropagation()"
-          (keydown.escape)="closeDialogs()"
+          (keydown.escape)="closeDialogs(); $event.stopPropagation()"
         >
           <div class="modal-header">
             <h2 id="lifecycle-title">
@@ -648,7 +660,9 @@
             </p>
             @if (lifecycleNeedsReason(dialog.kind)) {
               <div class="field">
-                <label for="lifecycle-reason">{{ 'PROVIDER.LIFECYCLE.REASON' | translate }}</label>
+                <label for="lifecycle-reason"
+                  >{{ 'PROVIDER.LIFECYCLE.REASON' | translate }} *</label
+                >
                 <textarea
                   id="lifecycle-reason"
                   rows="3"
@@ -692,10 +706,12 @@
               {{ 'PROVIDER.COMMON.CANCEL' | translate }}
             </button>
             <button
+              submitGuardRequired
               type="button"
               class="btn-primary"
               data-test="lifecycle-confirm"
-              [disabled]="busy() || !lifecycleReady()"
+              [disabled]="busy()"
+              [appSubmitGuard]="!lifecycleReady()"
               (click)="submitLifecycle()"
             >
               {{ 'PROVIDER.COMMON.CONFIRM' | translate }}

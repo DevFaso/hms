@@ -1,6 +1,6 @@
 package com.example.hms.payload.dto.isolation;
 
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,7 +23,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class DiscontinuePrecautionRequestDTO {
 
-    @NotNull
+    @NotBlank
     @Size(max = 500)
     private String discontinuationReason;
 

@@ -492,6 +492,23 @@ class LabOrderServiceImplPerformingHospitalTest {
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.ORDERED);
     }
 
+    /** QA D1098 (round 19, order class): a resulted lab order is voided as entered in error, never cancelled. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = LabOrderStatus.class, names = {"RESULTED", "VERIFIED", "COMPLETED"})
+    void aResultedOrderIsNotCancelled_D1098(LabOrderStatus resulted) {
+        order.setStatus(resulted);
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+
+        UUID id = order.getId();
+        assertThatThrownBy(() -> service.transitionLabOrderStatus(id, LabOrderStatus.CANCELLED, "Wrong patient",
+                Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("order.lifecycle.resultedLocked");
+        assertThat(order.getStatus()).isEqualTo(resulted);
+        verify(labOrderRepository, never()).save(any());
+    }
+
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.NullAndEmptySource
     @org.junit.jupiter.params.provider.ValueSource(strings = {"   "})

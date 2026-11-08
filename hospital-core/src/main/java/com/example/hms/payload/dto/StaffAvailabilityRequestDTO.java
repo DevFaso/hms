@@ -23,4 +23,15 @@ public record StaffAvailabilityRequestDTO(
             dayOff = Boolean.FALSE;
         }
     }
+
+    /**
+     * QA round 29 sweep (D1318 class): a working day states its hours. Checked
+     * with the other fields (it was refused after them, by the service).
+     */
+    @jakarta.validation.constraints.AssertTrue(message = "{availability.time.required}")
+    @com.example.hms.validation.ReportedOn("availableFrom")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isHoursGivenUnlessDayOff() {
+        return Boolean.TRUE.equals(dayOff) || (availableFrom != null && availableTo != null);
+    }
 }

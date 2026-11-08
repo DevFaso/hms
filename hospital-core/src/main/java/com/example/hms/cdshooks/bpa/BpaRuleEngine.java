@@ -1,12 +1,13 @@
 package com.example.hms.cdshooks.bpa;
 
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
-import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.ProblemStatus;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientProblem;
 import com.example.hms.model.PatientVitalSign;
 import com.example.hms.model.Prescription;
+import com.example.hms.model.MaternalHistory;
+import com.example.hms.repository.MaternalHistoryRepository;
 import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
@@ -17,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -67,17 +69,6 @@ public class BpaRuleEngine {
      */
     private static final int VITALS_MAX_PAGES = 20;
 
-    /**
-     * Statuses considered terminal. Anything else (DRAFT, SIGNED,
-     * TRANSMITTED, DISPENSED, etc.) counts as a prescription the patient
-     * could currently be on.
-     */
-    private static final Set<PrescriptionStatus> TERMINAL_PRESCRIPTION_STATUSES = EnumSet.of(
-        PrescriptionStatus.CANCELLED,
-        PrescriptionStatus.DISCONTINUED,
-        PrescriptionStatus.PARTNER_REJECTED
-    );
-
     /** Problem statuses that count as "active" for BPA gating. */
     private static final Set<ProblemStatus> ACTIVE_PROBLEM_STATUSES = EnumSet.of(
         ProblemStatus.ACTIVE,
@@ -88,6 +79,26 @@ public class BpaRuleEngine {
     private final PatientVitalSignRepository vitalSignRepository;
     private final PatientProblemRepository problemRepository;
     private final PrescriptionRepository prescriptionRepository;
+    /** QA D971: the current pregnancy's due date; null outside Spring (no pregnancy is assumed). */
+    private final MaternalHistoryRepository maternalHistoryRepository;
+    /** A delivery recorded during the pregnancy ends it (review of #971). */
+    private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
+
+    /**
+     * QA D1121 (round 20): a rule that throws is a defect, not a quiet log
+     * line. In production the chart must still load, so the failure is logged
+     * at ERROR with its stack trace and the other rules still run; with
+     * {@code hms.cds.rules.fail-fast=true} (the test profile) it is rethrown,
+     * so any test that reaches the engine fails on it. The D1114 time-zone fix
+     * threw LazyInitializationException in every time-stamped rule and no test
+     * noticed, because the engine only logged a WARN.
+     */
+    private boolean failFast;
+
+    @org.springframework.beans.factory.annotation.Value("${hms.cds.rules.fail-fast:false}")
+    public void setFailFast(boolean failFast) {
+        this.failFast = failFast;
+    }
 
     public BpaRuleEngine(
         List<BpaRule> rules,
@@ -95,10 +106,24 @@ public class BpaRuleEngine {
         PatientProblemRepository problemRepository,
         PrescriptionRepository prescriptionRepository
     ) {
+        this(rules, vitalSignRepository, problemRepository, prescriptionRepository, null, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public BpaRuleEngine(
+        List<BpaRule> rules,
+        PatientVitalSignRepository vitalSignRepository,
+        PatientProblemRepository problemRepository,
+        PrescriptionRepository prescriptionRepository,
+        MaternalHistoryRepository maternalHistoryRepository,
+        com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository
+    ) {
         this.rules = List.copyOf(rules);
         this.vitalSignRepository = vitalSignRepository;
         this.problemRepository = problemRepository;
         this.prescriptionRepository = prescriptionRepository;
+        this.maternalHistoryRepository = maternalHistoryRepository;
+        this.deliveryRecordRepository = deliveryRecordRepository;
     }
 
     /** Build a context for the given patient; never null. */
@@ -112,7 +137,9 @@ public class BpaRuleEngine {
             hospitalId,
             loadRecentVitals(patientId, hospitalId),
             loadActiveProblems(patientId, hospitalId),
-            loadActivePrescriptions(patientId, hospitalId)
+            loadActivePrescriptions(patientId, hospitalId),
+            com.example.hms.utility.ObstetricEligibility.isRecordedMale(patient) ? null
+                : loadEstimatedDueDate(patientId, hospitalId)
         );
     }
 
@@ -123,17 +150,97 @@ public class BpaRuleEngine {
         for (BpaRule rule : rules) {
             try {
                 List<CdsCard> ruleCards = rule.evaluate(context);
-                if (ruleCards != null) cards.addAll(ruleCards);
+                if (ruleCards != null) {
+                    for (CdsCard card : ruleCards) {
+                        cards.add(card.withUuid(stableCardUuid(rule.id(), card)));
+                    }
+                }
             } catch (RuntimeException ex) {
                 // Defensive: a buggy rule must not crash the chart load.
                 // Log with the throwable so the stack trace lands in
                 // production logs and `ex.getMessage()` being null
-                // doesn't strip diagnostic context.
-                logger.warn("BPA rule {} threw {}: {}", rule.id(),
+                // doesn't strip diagnostic context. QA D1121: ERROR, and
+                // rethrown under fail-fast so a test cannot miss it.
+                if (failFast) {
+                    throw ex;
+                }
+                logger.error("BPA rule {} threw {}: {}", rule.id(),
                     ex.getClass().getSimpleName(), ex.getMessage(), ex);
             }
         }
         return cards;
+    }
+
+    /**
+     * QA D1194 (round 22): the card's id is the rule and its level, never a
+     * random value or the card's text. Cards were given a random uuid on every
+     * evaluation, so the 24-hour acknowledgement fell back to the summary
+     * TEXT - written in the language of whoever acknowledged it - and the
+     * same patient state was hidden in French and shown again in Spanish and
+     * English. The same rule at the same level is the same advisory in every
+     * language; a WARNING acknowledged does not hide the CRITICAL it becomes.
+     */
+    static String stableCardUuid(String ruleId, CdsCard card) {
+        return stableCardUuid(ruleId, card.indicator());
+    }
+
+    static String stableCardUuid(String ruleId, CdsCard.Indicator indicator) {
+        String level = indicator == null ? "" : indicator.wire();
+        return java.util.UUID.nameUUIDFromBytes(("hms-bpa:" + ruleId + ":" + level)
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+    }
+
+    /**
+     * QA D1238 (round 25): an acknowledgement covers the readings its author
+     * saw, nothing recorded after it. A midwife acknowledged the pregnancy
+     * hypertension card at 18:38; the 162/112 measured at 04:37 raised the
+     * same card (same rule, same level, so the same id) and the
+     * acknowledgement hid it for 24 hours.
+     *
+     * <p>True when the readings ENTERED after {@code acknowledgedAt} raise,
+     * on their own, the acknowledged card or a more severe card of the same
+     * rule. The rules run on the same context with only those readings, so
+     * a rule that needs older readings to fire stays covered by the
+     * acknowledgement (as before), and one new triggering reading brings the
+     * card back.
+     */
+    public boolean raisedAgainSince(BpaRuleContext context, String cardUuid, LocalDateTime acknowledgedAt) {
+        if (context == null || !context.hasPatient() || cardUuid == null || acknowledgedAt == null) {
+            return false;
+        }
+        List<PatientVitalSign> newer = context.recentVitals().stream()
+            .filter(v -> enteredAfter(v, acknowledgedAt))
+            .toList();
+        if (newer.isEmpty()) {
+            return false;
+        }
+        Set<String> sameOrWorse = sameRuleSameOrWorse(cardUuid);
+        BpaRuleContext sinceAcknowledgement = new BpaRuleContext(context.patient(), context.hospitalId(), newer,
+            context.activeProblems(), context.activePrescriptions(), context.estimatedDueDate());
+        return evaluate(sinceAcknowledgement).stream().anyMatch(c -> sameOrWorse.contains(c.uuid()));
+    }
+
+    /** When the reading reached the chart: its entry time, else its clinical time. */
+    private static boolean enteredAfter(PatientVitalSign v, LocalDateTime instant) {
+        LocalDateTime entered = v.getCreatedAt() != null ? v.getCreatedAt() : v.getRecordedAt();
+        return entered != null && entered.isAfter(instant);
+    }
+
+    /** The card's id and the ids of the same rule at a more severe level. */
+    private Set<String> sameRuleSameOrWorse(String cardUuid) {
+        Set<String> ids = new java.util.HashSet<>();
+        ids.add(cardUuid);
+        for (BpaRule rule : rules) {
+            CdsCard.Indicator[] levels = CdsCard.Indicator.values();
+            for (int i = 0; i < levels.length; i++) {
+                if (stableCardUuid(rule.id(), levels[i]).equals(cardUuid)) {
+                    for (int worse = i + 1; worse < levels.length; worse++) {
+                        ids.add(stableCardUuid(rule.id(), levels[worse]));
+                    }
+                }
+            }
+        }
+        return ids;
     }
 
     /** Convenience: build context + evaluate. */
@@ -174,12 +281,41 @@ public class BpaRuleEngine {
             .toList();
     }
 
+    /**
+     * QA D971: the due date of the current maternal history (latest version),
+     * ultrasound-dated first, then the recorded date, then LMP + 280 days.
+     */
+    LocalDate loadEstimatedDueDate(UUID patientId, UUID hospitalId) {
+        if (maternalHistoryRepository == null) return null;
+        java.util.Optional<MaternalHistory> current = hospitalId != null
+            ? maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(
+                patientId, List.of(hospitalId))
+            : maternalHistoryRepository.findCurrentByPatientId(patientId);
+        LocalDate dueDate = current.map(BpaRuleEngine::dueDateOf).orElse(null);
+        // A birth recorded since the pregnancy began ends it: a postpartum
+        // reading is not "at N weeks of pregnancy" (review of #971).
+        if (dueDate != null && deliveryRecordRepository != null && deliveryRecordRepository
+                .existsByPatient_IdAndBirthDateTimeGreaterThanEqual(patientId,
+                    dueDate.minusDays(PregnancyHypertensionProtocolRule.PREGNANCY_DAYS).atStartOfDay())) {
+            return null;
+        }
+        return dueDate;
+    }
+
+    static LocalDate dueDateOf(MaternalHistory history) {
+        if (history.getEstimatedDueDateByUltrasound() != null) return history.getEstimatedDueDateByUltrasound();
+        if (history.getEstimatedDueDate() != null) return history.getEstimatedDueDate();
+        return history.getLastMenstrualPeriod() == null ? null
+            : history.getLastMenstrualPeriod().plusDays(PregnancyHypertensionProtocolRule.PREGNANCY_DAYS);
+    }
+
     List<Prescription> loadActivePrescriptions(UUID patientId, UUID hospitalId) {
         List<Prescription> all = hospitalId != null
             ? prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)
             : prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged()).getContent();
         return all.stream()
-            .filter(p -> p.getStatus() != null && !TERMINAL_PRESCRIPTION_STATUSES.contains(p.getStatus()))
+            // QA D1515: the one definition of an order in force; a draft antimalarial is not treatment.
+            .filter(com.example.hms.cdshooks.rules.CdsRuleEngine::inForce)
             .toList();
     }
 }

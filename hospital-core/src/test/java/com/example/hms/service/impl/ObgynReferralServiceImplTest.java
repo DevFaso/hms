@@ -204,7 +204,7 @@ class ObgynReferralServiceImplTest {
         when(userRepository.findByIdWithRolesAndProfiles(userId)).thenReturn(Optional.of(user));
         assertThatThrownBy(() -> service.acknowledgeReferral(referralId, req, "admin"))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("acknowledge");
+            .hasMessage("referral.r7.wrongStatus"); // QA D1086: a key, no longer English
     }
 
     @Test void startReferralSuccess() {
@@ -225,7 +225,7 @@ class ObgynReferralServiceImplTest {
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
         assertThatThrownBy(() -> service.startReferral(referralId, "admin"))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("start");
+            .hasMessage("referral.r7.wrongStatus"); // QA D1086: a key, no longer English
     }
 
     @Test void completeReferral_success() {
@@ -241,6 +241,7 @@ class ObgynReferralServiceImplTest {
     }
 
     @Test void cancelReferral_success() {
+        signInAs(user);
         ObgynReferralCancelRequestDTO req = new ObgynReferralCancelRequestDTO();
         req.setReason("Patient transferred");
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
@@ -249,13 +250,30 @@ class ObgynReferralServiceImplTest {
         assertThat(result.getStatus()).isEqualTo(ObgynReferralStatus.CANCELLED);
     }
 
+    /** QA D1098: the service states why too, whatever the caller (the DTO checks only the HTTP edge). */
+    @Test void cancelReferral_refusesABlankReason_D1098() {
+        signInAs(user);
+        ObgynReferralCancelRequestDTO req = new ObgynReferralCancelRequestDTO();
+        req.setReason(" ");
+        ObgynReferralStatus before = referral.getStatus();
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        assertThatThrownBy(() -> service.cancelReferral(referralId, req, "admin"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting(e -> ((com.example.hms.exception.BusinessException) e).getMessageKey())
+            .isEqualTo("order.lifecycle.cancelReasonRequired");
+        assertThat(referral.getStatus()).isEqualTo(before);
+    }
+
     @Test void cancelReferral_alreadyClosed_throws() {
+        signInAs(user);
         referral.setStatus(ObgynReferralStatus.COMPLETED);
         ObgynReferralCancelRequestDTO req = new ObgynReferralCancelRequestDTO();
+        // QA D1098: a cancel now states its reason first; this test is about the terminal refusal.
+        req.setReason("Patient transferred");
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
         assertThatThrownBy(() -> service.cancelReferral(referralId, req, "admin"))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("terminal status");
+            .hasMessage("referral.r7.cannotCancelTerminal"); // QA D1086: a key, no longer English
     }
 
     @Test void addMessage_success() {
@@ -297,6 +315,24 @@ class ObgynReferralServiceImplTest {
     @AfterEach
     void clearHospitalContext() {
         HospitalContextHolder.clear();
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    /** QA D930 class: a cancel is the referring midwife's own act, so these tests sign in as her. */
+    private static void signInAs(User who) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(who, null, java.util.List.of()));
+    }
+
+    @Test void d930_aColleagueCannotCancelTheReferringMidwifesReferral() {
+        User colleague = new User(); colleague.setId(UUID.randomUUID());
+        signInAs(colleague);
+        ObgynReferralCancelRequestDTO req = new ObgynReferralCancelRequestDTO();
+        req.setReason("Not mine to cancel");
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        assertThatThrownBy(() -> service.cancelReferral(referralId, req, "colleague"))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(referral.getStatus()).isEqualTo(ObgynReferralStatus.SUBMITTED);
     }
 
     @Test void getReferralsForPatientFollowThePatientWhenActingInAHospital() {

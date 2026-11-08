@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import {
   Component,
   ElementRef,
@@ -27,7 +28,9 @@ import {
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type ConfirmKind = 'rotate-key' | 'revoke-key' | 'revoke-endpoint' | 'rotate-secret';
 
 interface RevealedSecret {
@@ -49,7 +52,14 @@ interface RevealedSecret {
 @Component({
   selector: 'app-webhooks',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    SubmitGuardDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    ModalDialogDirective,
+  ],
   templateUrl: './webhooks.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './webhooks.scss',
@@ -363,11 +373,12 @@ export class WebhooksComponent implements OnInit, OnDestroy {
   private loadDeliveries(endpointId: string): void {
     this.deliveryRows.set([]);
     this.deliveriesFailed.set(false);
-    this.api.deliveries(endpointId).subscribe({
-      next: (page) => {
+    // QA D1347: every delivery of the endpoint (all pages), not the 25 newest.
+    allRows((page, size) => this.api.deliveries(endpointId, page, size)).subscribe({
+      next: (rows) => {
         // A slow response for a drilldown the user already left is stale.
         if (this.deliveriesFor() === endpointId) {
-          this.deliveryRows.set(page.content ?? []);
+          this.deliveryRows.set(rows);
         }
       },
       error: () => {

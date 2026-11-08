@@ -322,7 +322,7 @@ class FhirTenantBoundaryIT {
             assertThat(noOp.getStatusCode().value()).as(noOp.getBody()).isEqualTo(200);
             assertOnlyTheMrnAtA(noOp.getBody(), "no-op PUT");
 
-            String newPhone = "+22670" + nextId().substring(6);
+            String newPhone = "+226700" + nextId().substring(6); // QA D1211: a valid 8-digit BF number (was 7)
             String newEmail = "Changed." + nextId() + "@Boundary.Test";
             String changed = "{\"resourceType\":\"Patient\",\"id\":\"" + id + "\",\"telecom\":["
                 + "{\"system\":\"phone\",\"use\":\"mobile\",\"value\":\"" + newPhone + "\"},"

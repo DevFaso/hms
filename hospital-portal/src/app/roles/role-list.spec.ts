@@ -5,6 +5,7 @@ import { of } from 'rxjs';
 import { RoleListComponent } from './role-list';
 import { RoleResponse, RoleService } from '../services/role.service';
 import { ToastService } from '../core/toast.service';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 /**
  * QA D868: the role cards were titled 'ROLE_DOCTOR ROLE_DOCTOR' and every role
@@ -113,7 +114,7 @@ describe('RoleListComponent (QA D868)', () => {
     expect(el.querySelector('[data-testid="no-permission-catalogue"]')).not.toBeNull();
     const save = Array.from(el.querySelectorAll('.modal-actions .btn-primary')).at(-1) as
       HTMLButtonElement | undefined;
-    expect(save?.disabled).toBeTrue();
+    expect(isSubmitBlocked(save)).toBeTrue();
   });
   it('locks the code of a built-in role and always sends its stored code (QA D902, #968 review)', () => {
     const component = fixture.componentInstance;

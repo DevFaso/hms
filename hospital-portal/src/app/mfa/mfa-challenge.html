@@ -31,10 +31,14 @@
       </div>
     } @else {
       <div class="step-content">
-        <p>{{ 'MFA.CHALLENGE_CODE_HINT' | translate }}</p>
+        <p>
+          <label for="mfa-challenge-code">{{ 'MFA.CHALLENGE_CODE_HINT' | translate }} *</label>
+        </p>
         <form (ngSubmit)="submitCode()" class="verify-form">
           <input
+            id="mfa-challenge-code"
             type="text"
+            required
             [(ngModel)]="code"
             name="mfaCode"
             maxlength="8"

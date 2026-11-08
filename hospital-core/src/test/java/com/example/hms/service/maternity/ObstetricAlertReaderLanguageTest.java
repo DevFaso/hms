@@ -143,6 +143,46 @@ class ObstetricAlertReaderLanguageTest {
         assertNoFrench(en);
     }
 
+    /**
+     * QA D1269 (round 26, D1053 sibling): the post-partum haemorrhage In-Basket
+     * item was stored as French prose and read in French by EN and ES doctors.
+     * Its title and body now carry keys; each reader's In-Basket renders them.
+     */
+    @Test
+    void thePostpartumInBasketItemReadsWholeInEachLanguage_D1269() throws Exception {
+        InBasketService inBasket = mock(InBasketService.class);
+        worker = new ObstetricAlertEscalationWorker(escalationRepository, inBasketItemRepository,
+            onCallScheduleRepository, staffRepository, userRepository, patientRepository,
+            notificationService, inBasket, MESSAGES,
+            Clock.fixed(Instant.parse("2026-10-23T10:00:00Z"), ZoneOffset.UTC), mock(ObstetricAlertCurrency.class));
+        User doctor = new User();
+        doctor.setId(UUID.randomUUID());
+        doctor.setUsername("drA");
+        when(userRepository.findByUsernameInIgnoreCase(anyList())).thenReturn(List.of(doctor));
+
+        worker.raise(new ObstetricAlertEscalationService.UrgentAlert(HOSPITAL, PATIENT, "Rihanata Sankara",
+            ObstetricAlertEscalationService.SOURCE_POSTPARTUM, UUID.randomUUID(), "HEMORRHAGE", "hémorragie",
+            "Risque d'hémorragie détecté. Activer le protocole utérotonique.", null,
+            "Alerte post-partum (hémorragie) pour Rihanata Sankara : Risque d'hémorragie détecté.",
+            "postpartum.alert.msg.postpartum-hemorrhage", null));
+
+        ArgumentCaptor<com.example.hms.payload.dto.clinical.CreateInBasketItemRequest> item =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.clinical.CreateInBasketItemRequest.class);
+        verify(inBasket).createItemInNewTransaction(item.capture());
+        com.example.hms.payload.dto.clinical.CreateInBasketItemRequest filed = item.getValue();
+        assertThat(filed.getTitleKey()).isEqualTo("postpartum.alert.notification");
+        assertThat(filed.getBodyKey()).isEqualTo("postpartum.alert.msg.postpartum-hemorrhage");
+
+        String en = read(filed.getTitleKey(), filed.getTitleArgs(), Locale.ENGLISH);
+        String es = read(filed.getTitleKey(), filed.getTitleArgs(), Locale.of("es"));
+        assertThat(en).contains("Postpartum alert").contains("Rihanata Sankara").contains("Haemorrhage risk detected");
+        assertThat(es).contains("Rihanata Sankara");
+        assertNoFrench(en);
+        assertNoFrench(es);
+        assertThat(read(filed.getBodyKey(), filed.getBodyArgs(), Locale.ENGLISH)).contains("Haemorrhage risk detected");
+        assertThat(read(filed.getTitleKey(), filed.getTitleArgs(), Locale.FRENCH)).contains("Alerte post-partum");
+    }
+
     @Test
     void aRowRaisedWithoutAKeyKeepsItsStoredSentence() {
         assertThat(ObstetricAlertEscalationWorker.alertMessageArg(null, null, "BP")).isEqualTo("BP");

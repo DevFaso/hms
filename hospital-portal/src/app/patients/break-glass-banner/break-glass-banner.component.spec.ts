@@ -6,6 +6,7 @@ import { BreakGlassBannerComponent } from './break-glass-banner.component';
 import { BreakGlassService, BreakGlassSession } from '../../services/break-glass.service';
 import { ToastService } from '../../core/toast.service';
 import { AuthService } from '../../auth/auth.service';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 
 const liveSession: BreakGlassSession = {
   id: 's1',
@@ -205,5 +206,16 @@ describe('BreakGlassBannerComponent', () => {
     bgSpy.findMyLiveSession.and.returnValue(of(null));
     setInputs(null);
     expect(bgSpy.findMyLiveSession).not.toHaveBeenCalled();
+  });
+
+  it('QA CX-010: ending the emergency access asks first; a no sends nothing', async () => {
+    init(['ROLE_DOCTOR']);
+    bgSpy.findMyLiveSession.and.returnValue(of(liveSession));
+    setInputs('p1');
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    const banner = fixture.componentInstance as unknown as { revoke(): Promise<void> };
+    await banner.revoke();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(bgSpy.revoke).not.toHaveBeenCalled();
   });
 });

@@ -7,8 +7,8 @@
     </div>
     <div class="page-actions">
       <button type="button" class="btn-secondary" (click)="load()" [disabled]="loading()">
-        <span class="material-symbols-outlined" aria-hidden="true">refresh</span
-        >{{ 'COMMON.REFRESH' | translate }}
+        <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+        {{ 'COMMON.REFRESH' | translate }}
       </button>
       @if (canSeeMultiHospital) {
         <button type="button" class="btn-secondary" (click)="toggleMultiHospital()">
@@ -41,7 +41,7 @@
           [class.metric-selected]="stayFilter() === metric.id"
           [attr.aria-pressed]="stayFilter() === metric.id"
           [attr.data-metric]="metric.id || 'all'"
-          [disabled]="loading() || loadError()"
+          [disabled]="loading()"
           (click)="selectMetric(metric.id)"
         >
           <span class="material-symbols-outlined metric-icon" aria-hidden="true">{{
@@ -155,9 +155,6 @@
         {{ 'COMMON.CLEAR_ALL_FILTERS' | translate }}
       </button>
     </div>
-    @if (!loading() && !loadError() && limitedResults()) {
-      <p class="loaded-notice" role="status">{{ 'REGISTRATIONS.LIMIT_NOTICE' | translate }}</p>
-    }
     @if (loading()) {
       <div class="loading-state">
         <div class="spinner"></div>
@@ -246,6 +243,13 @@
                     <span class="status-badge status-cancelled">
                       {{ 'COMMON.INACTIVE' | translate }}
                     </span>
+                    @if (r.deactivationReason) {
+                      <!-- QA D1430: why it was deactivated -->
+                      {{ ' '
+                      }}<span class="muted" data-testid="registration-deactivation-reason">{{
+                        'COMMON.REASON_VALUE' | translate: { reason: r.deactivationReason }
+                      }}</span>
+                    }
                   }
                 </td>
                 @if (canManage) {
@@ -255,6 +259,7 @@
                         type="button"
                         class="btn-secondary btn-sm"
                         [title]="'COMMON.EDIT' | translate"
+                        [attr.aria-label]="'COMMON.EDIT' | translate"
                         (click)="openEdit(r)"
                       >
                         <span class="material-symbols-outlined">edit</span>
@@ -264,7 +269,9 @@
                           type="button"
                           class="btn-secondary btn-sm"
                           [title]="'REGISTRATIONS.DEACTIVATE' | translate"
-                          (click)="deactivate(r)"
+                          [attr.aria-label]="'REGISTRATIONS.DEACTIVATE' | translate"
+                          data-testid="registration-deactivate"
+                          (click)="askDeactivate(r)"
                         >
                           <span class="material-symbols-outlined">person_off</span>
                         </button>
@@ -273,6 +280,7 @@
                         type="button"
                         class="btn-secondary btn-sm danger"
                         [title]="'COMMON.DELETE' | translate"
+                        [attr.aria-label]="'COMMON.DELETE' | translate"
                         (click)="confirmDelete(r)"
                       >
                         <span class="material-symbols-outlined">delete_forever</span>
@@ -338,15 +346,17 @@
     (keydown.escape)="closeFormModal()"
   >
     <div
+      appModalDialog
+      aria-labelledby="registrations-dialog-1-title"
       class="modal"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeFormModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="registrations-dialog-1-title">
           {{ (editingRegistration() ? 'REGISTRATIONS.EDIT' : 'REGISTRATIONS.NEW') | translate }}
         </h2>
         <button
@@ -363,6 +373,7 @@
           <div class="field">
             <label for="reg-patient">{{ 'REGISTRATIONS.PATIENT' | translate }} *</label>
             <app-patient-picker
+              required
               inputId="reg-patient"
               [selected]="formPatient()"
               (selectedChange)="onFormPatientPicked($event)"
@@ -394,6 +405,22 @@
             </label>
           </div>
         </div>
+        @if (endsTheRegistration) {
+          <div class="field">
+            <label for="reg-deactivation-reason"
+              >{{ 'REGISTRATIONS.DEACTIVATE_REASON' | translate }} *</label
+            >
+            <textarea
+              id="reg-deactivation-reason"
+              rows="2"
+              maxlength="500"
+              required
+              aria-required="true"
+              data-server-field="deactivationReason"
+              [(ngModel)]="form.deactivationReason"
+            ></textarea>
+          </div>
+        }
         <div class="form-row">
           <div class="field">
             <label for="reg-room">{{ 'REGISTRATIONS.ROOM' | translate }}</label>
@@ -408,10 +435,12 @@
           <label for="reg-physician">{{ 'REGISTRATIONS.PHYSICIAN' | translate }}</label>
           <input id="reg-physician" type="text" [(ngModel)]="form.attendingPhysicianName" />
         </div>
-        <div class="field">
-          <label for="reg-note">{{ 'REGISTRATIONS.DISCHARGE_NOTE' | translate }}</label>
-          <textarea id="reg-note" rows="2" [(ngModel)]="form.readyForDischargeNote"></textarea>
-        </div>
+        @if (!frontDeskOnly) {
+          <div class="field">
+            <label for="reg-note">{{ 'REGISTRATIONS.DISCHARGE_NOTE' | translate }}</label>
+            <textarea id="reg-note" rows="2" [(ngModel)]="form.readyForDischargeNote"></textarea>
+          </div>
+        }
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" (click)="closeFormModal()">
@@ -420,7 +449,12 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="formSaving() || (!editingRegistration() && !form.patientId)"
+          [disabled]="formSaving()"
+          [appSubmitGuard]="
+            (!editingRegistration() && !form.patientId) ||
+            (endsTheRegistration && !form.deactivationReason?.trim())
+          "
+          [submitGuardFields]="['reg-patient', 'reg-deactivation-reason']"
           (click)="submitForm()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -428,6 +462,23 @@
       </div>
     </div>
   </div>
+}
+
+<!-- QA D1430: it asks first and takes the reason, as the delete beside it asks. -->
+@if (deactivating(); as target) {
+  <app-reason-dialog
+    titleKey="REGISTRATIONS.DEACTIVATE_TITLE"
+    messageKey="REGISTRATIONS.DEACTIVATE_BODY"
+    labelKey="REGISTRATIONS.DEACTIVATE_REASON"
+    confirmKey="REGISTRATIONS.DEACTIVATE"
+    [busy]="deactivateBusy()"
+    (confirmed)="deactivate(target, $event)"
+    (cancelled)="deactivating.set(null)"
+  >
+    <p data-testid="registration-deactivate-who">
+      {{ target.patientFullName || target.patientUsername }}
+    </p>
+  </app-reason-dialog>
 }
 
 <!-- ══ Hard-delete confirm ══ -->
@@ -439,15 +490,17 @@
     (keydown.escape)="closeDelete()"
   >
     <div
+      appModalDialog
+      aria-labelledby="registrations-dialog-2-title"
       class="modal"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeDelete(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'REGISTRATIONS.DELETE_TITLE' | translate }}</h2>
+        <h2 id="registrations-dialog-2-title">{{ 'REGISTRATIONS.DELETE_TITLE' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -471,7 +524,7 @@
               target.patientUsername ||
               ('REGISTRATIONS.UNKNOWN_PATIENT' | translate)
           }}</strong>
-          ({{ target.mri }})?
+          ({{ target.mri }}){{ 'COMMON.QUESTION_MARK' | translate }}
         </p>
         <p class="muted">{{ 'REGISTRATIONS.DELETE_WARNING' | translate }}</p>
       </div>

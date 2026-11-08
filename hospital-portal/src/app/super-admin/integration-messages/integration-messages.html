@@ -87,6 +87,7 @@
       <span>{{ 'INTEGRATION_MESSAGES.FILTER.TO' | translate }}</span>
       <input
         type="datetime-local"
+        [attr.min]="fromDate() || null"
         [ngModel]="toDate()"
         (ngModelChange)="toDate.set($event)"
         name="toDate"
@@ -146,14 +147,14 @@
                 row.direction
               }}</span>
             </td>
-            <td>{{ row.messageType ?? '—' }}</td>
+            <td>{{ row.messageType | dash }}</td>
             <td>
               <span class="status-badge" [attr.data-status]="row.status">
-                {{ 'INTEGRATION_MESSAGES.STATUS.' + row.status | translate }}
+                {{ row.status | keyLabel: 'INTEGRATION_MESSAGES.STATUS.' }}
               </span>
             </td>
             <td>{{ row.attemptCount }}</td>
-            <td class="cell-error">{{ row.errorMessage ?? '—' }}</td>
+            <td class="cell-error">{{ row.errorMessage | dash }}</td>
             <td class="cell-actions">
               @if (isPurged(row)) {
                 <small
@@ -161,18 +162,19 @@
                   [attr.data-test-purged]="row.id"
                   [title]="
                     'INTEGRATION_MESSAGES.CONTENT_PURGED_TITLE'
-                      | translate: { date: (row.payloadPurgedAt | serverTime | date: 'medium') }
+                      | translate: { date: (row.payloadPurgedAt | serverTime | dateTime) }
                   "
                 >
                   {{ 'INTEGRATION_MESSAGES.CONTENT_PURGED' | translate }}
                 </small>
               }
-              @if (row.status === 'FAILED') {
+              <!-- QA D1124: a purged message cannot be replayed; the "content purged" note above says why, so no dead button. -->
+              @if (row.status === 'FAILED' && !isPurged(row)) {
                 <button
                   type="button"
                   class="replay-btn"
                   [attr.data-test-replay]="row.id"
-                  [disabled]="replayBusyFor(row.id) || isPurged(row)"
+                  [disabled]="replayBusyFor(row.id)"
                   (click)="replay(row.id)"
                 >
                   @if (replayBusyFor(row.id)) {

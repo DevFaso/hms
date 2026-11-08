@@ -280,7 +280,7 @@ describe('AdmissionsComponent', () => {
       );
       component.applyFilter();
       expect(component.pagedAdmissions()[0].id).toBe('cdx-25');
-      expect(component.pageCount()).toBe(3);
+      expect(component.totalPages()).toBe(3);
       component.setPage(2);
       expect(component.pagedAdmissions().length).toBe(6);
       component.typeFilter.set('EMERGENCY');
@@ -508,10 +508,13 @@ describe('AdmissionsComponent', () => {
       component.confirmDelete(adm());
       expect(component.showDeleteConfirm()).toBeTrue();
       admissionService.delete.and.returnValue(of(undefined as unknown as void));
+      component.deleteReason.set('Admission en double');
       component.executeDelete();
+      expect(admissionService.delete).toHaveBeenCalledWith('a1', 'Admission en double');
       expect(toast.success).toHaveBeenCalledWith('ADMISSIONS.DELETED');
       expect(component.deletingAdm()).toBeNull();
       component.confirmDelete(adm());
+      component.deleteReason.set('Erreur de saisie');
       admissionService.delete.and.returnValue(throwError(() => new Error('x')));
       component.executeDelete();
       expect(toast.error).toHaveBeenCalledWith('ADMISSIONS.DELETE_FAILED');
@@ -564,9 +567,32 @@ describe('AdmissionsComponent', () => {
       component.submitBedAssign();
       expect(toast.success).toHaveBeenCalledWith('ADMISSIONS.BED_ASSIGNED');
       expect(component.bedAssignFor()).toBeNull();
+      // QA D1100: freeing the bed goes through a dialog with a reason.
       admissionService.unassignBed.and.returnValue(of(adm()));
-      component.unassignBed(adm());
+      component.openUnassignBed(adm());
+      component.unassignReason.set('Transfert en réanimation');
+      component.confirmUnassignBed();
+      expect(admissionService.unassignBed).toHaveBeenCalledWith(
+        adm().id,
+        'Transfert en réanimation',
+      );
       expect(toast.success).toHaveBeenCalledWith('ADMISSIONS.BED_UNASSIGNED');
+      expect(component.unassigningAdm()).toBeNull();
+    });
+
+    // QA D1100 (round 19): "Retirer le lit" freed an inpatient's bed in one click.
+    it('QA D1100: freeing a bed asks for confirmation and a reason first', () => {
+      component.openUnassignBed(adm());
+      expect(component.unassigningAdm()).withContext('the dialog opens').toBeTruthy();
+      expect(admissionService.unassignBed).not.toHaveBeenCalled();
+      component.unassignReason.set('   ');
+      component.confirmUnassignBed();
+      expect(admissionService.unassignBed)
+        .withContext('no reason, no release')
+        .not.toHaveBeenCalled();
+      component.closeUnassignBed();
+      expect(component.unassigningAdm()).toBeNull();
+      expect(admissionService.unassignBed).not.toHaveBeenCalled();
     });
 
     it('reports bed failures', () => {
@@ -578,8 +604,50 @@ describe('AdmissionsComponent', () => {
       component.submitBedAssign();
       expect(component.bedAssigning()).toBeFalse();
       admissionService.unassignBed.and.returnValue(throwError(() => new Error('x')));
-      component.unassignBed(adm());
+      component.openUnassignBed(adm());
+      component.unassignReason.set('Erreur de lit');
+      component.confirmUnassignBed();
       expect(toast.error).toHaveBeenCalledWith('ADMISSIONS.BED_ASSIGN_FAILED');
+    });
+  });
+
+  describe('QA D1428 / D1439', () => {
+    it('offers no edit on a closed stay, and one on every open stay', () => {
+      for (const status of [
+        'DISCHARGED',
+        'CANCELLED',
+        'TRANSFERRED',
+        'DECEASED',
+        'CLOSED_IN_ERROR',
+      ]) {
+        expect(component.isEditable(adm({ status } as Partial<AdmissionResponse>)))
+          .withContext(status)
+          .toBeFalse();
+      }
+      for (const status of ['PENDING', 'ACTIVE', 'ON_LEAVE', 'AWAITING_DISCHARGE']) {
+        expect(component.isEditable(adm({ status } as Partial<AdmissionResponse>)))
+          .withContext(status)
+          .toBeTrue();
+      }
+    });
+
+    it('the room follows the held bed: read-only while editing a stay that holds one', () => {
+      departmentLookup.getActiveDepartments.and.returnValue(of([]));
+      component.openEdit(adm({ bedId: 'b1' } as Partial<AdmissionResponse>));
+      expect(component.editingHoldsBed()).toBeTrue();
+      component.openEdit(adm({ bedId: undefined } as Partial<AdmissionResponse>));
+      expect(component.editingHoldsBed()).toBeFalse();
+    });
+
+    it('says one order in the singular, as the panel does', () => {
+      toast.success.calls.reset();
+      component.onOrderSetApplied({
+        prescriptionIds: ['x'],
+        labOrderIds: [],
+        imagingOrderIds: [],
+        skippedItemCount: 0,
+      } as unknown as AppliedOrderSetSummary);
+      expect(toast.success).toHaveBeenCalledWith('ORDER_SETS.APPLIED_RESULT_ONE');
     });
   });
 });
@@ -600,7 +668,10 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
     admissionDateTime?: string,
     superAdmin = false,
   ): ComponentFixture<AdmissionsComponent> {
-    const admissions = jasmine.createSpyObj<AdmissionService>('AdmissionService', ['getAll']);
+    const admissions = jasmine.createSpyObj<AdmissionService>('AdmissionService', [
+      'getAll',
+      'delete',
+    ]);
     admissions.getAll.and.returnValue(
       of([
         {
@@ -666,6 +737,34 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
   }
 
   const newButton = (el: HTMLElement) => el.querySelector('.page-actions .btn-primary');
+
+  /**
+   * QA D1381 (round 32): the delete dialog asks for the reason, refuses a
+   * blank one on the field, and sends nothing. QA D1388: the patient's name is
+   * followed by a space, never glued to "Cette action est irréversible."
+   */
+  it('QA D1381 / D1388: the delete dialog asks the reason and reads cleanly', () => {
+    const fixture = mount(['ROLE_DOCTOR']);
+    const service = TestBed.inject(AdmissionService) as unknown as { delete: jasmine.Spy };
+    fixture.componentInstance.confirmDelete({
+      id: 'a1',
+      hospitalId: 'h1',
+      patientId: 'p1',
+      patientName: 'Fatimata Zongo',
+      status: 'ACTIVE',
+    } as AdmissionResponse);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const reason = el.querySelector<HTMLTextAreaElement>('#admission-cancel-reason');
+    expect(reason).withContext('the reason field').not.toBeNull();
+    expect(reason!.getAttribute('data-server-field')).toBe('reason');
+    fixture.componentInstance.executeDelete();
+    fixture.detectChanges();
+    expect(service.delete).not.toHaveBeenCalled();
+    expect(reason!.getAttribute('aria-invalid')).toBe('true');
+    const warning = el.querySelector('.delete-warning')!;
+    expect(warning.textContent!.replace(/\s+/g, ' ')).not.toMatch(/Zongo\S/);
+  });
 
   // QA D903/D912: the chip showed the email, or an empty line for a phone-only
   // patient, and the option led with the email; both now name the MRN.
@@ -733,7 +832,7 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
   });
 
   // QA D603: a discharged (finalized, billed) stay was deleted from the "Sorti" row.
-  for (const status of ['DISCHARGED', 'TRANSFERRED', 'DECEASED', 'CANCELLED']) {
+  for (const status of ['DISCHARGED', 'TRANSFERRED', 'DECEASED', 'CANCELLED', 'CLOSED_IN_ERROR']) {
     it(`offers no Delete on a ${status} stay, even to a doctor`, () => {
       const el = render(['ROLE_DOCTOR'], status);
       expect(el.querySelector('.delete-link')).toBeNull();

@@ -1,3 +1,4 @@
+import { EMPI_MATCHER_ROLES, EmpiStatusService } from '../reception/empi-status.service';
 import {
   Component,
   computed,
@@ -11,6 +12,8 @@ import {
   ViewChild,
   AfterViewInit,
   ChangeDetectionStrategy,
+  Injector,
+  afterNextRender,
 } from '@angular/core';
 import { NavigationEnd, RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -43,6 +46,8 @@ import {
 } from './nav-groups';
 import { ProviderContextService } from '../core/provider-context.service';
 import { SkipLinkComponent } from '../shared/a11y/skip-link.component';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { DrawerDialogDirective } from '../shared/a11y/drawer-dialog.directive';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
 import { HospitalScopeGateService } from '../core/hospital-scope-gate.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
@@ -51,6 +56,7 @@ import { clearReportedSilent403s } from '../interceptors/error.interceptor';
 import { storedLang, switchLanguage } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 interface NavItem {
   icon: string;
@@ -87,6 +93,8 @@ function isMobileViewport(): boolean {
     SkipLinkComponent,
     BrandMarkComponent,
     RoleLabelPipe,
+    ModalDialogDirective,
+    DrawerDialogDirective,
   ],
   templateUrl: './shell.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -120,7 +128,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly downtime = inject(DowntimeService);
   /** Whether this session acts at a provider facility (provider plan AC-12). */
   private readonly providerContext = inject(ProviderContextService);
+  private readonly empiStatus = inject(EmpiStatusService);
   readonly translate = inject(TranslateService);
+  private readonly confirmService = inject(ConfirmService);
+  private readonly injector = inject(Injector);
   private notifSub?: Subscription;
   private readCountSub?: Subscription;
 
@@ -133,6 +144,18 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * "did nothing" (QA D116).
    */
   sidebarCollapsed = signal(isMobileViewport());
+  /** Whether the viewport is a phone's (the sidebar is then a drawer over the page). */
+  private readonly phoneViewport = signal(isMobileViewport());
+  /**
+   * QA D1153 / D1125 (round 21): the drawer open on a phone is a modal over the
+   * page (appDrawerDialog: focus in, Tab kept inside, Escape from anywhere,
+   * focus back to Menu); the page behind it is inert. On a wide screen the
+   * expanded sidebar is a landmark beside the page, never a modal.
+   */
+  readonly phoneDrawerOpen = computed(() => this.phoneViewport() && !this.sidebarCollapsed());
+  private readonly phoneQuery = globalThis.matchMedia?.(MOBILE_SIDEBAR_QUERY);
+  private readonly onPhoneQueryChange = (event: MediaQueryListEvent): void =>
+    this.phoneViewport.set(event.matches);
   readonly sidebarMinWidth = 240;
   readonly sidebarMaxWidth = 420;
   readonly sidebarWidth = signal(this.savedSidebarWidth());
@@ -773,11 +796,17 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/in-basket',
         permission: 'View Patient Records',
         roles: [
+          'ROLE_HOSPITAL_ADMIN',
           'ROLE_DOCTOR',
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_LAB_TECHNICIAN',
           'ROLE_LAB_MANAGER',
+          'ROLE_LAB_DIRECTOR',
+          'ROLE_PHARMACIST',
+          'ROLE_PHARMACY_VERIFIER',
+          'ROLE_PHYSICIAN',
+          'ROLE_SURGEON',
           'ROLE_SUPER_ADMIN',
         ],
       },
@@ -1136,6 +1165,19 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/pharmacy/stock-adjustment',
         },
         {
+          // QA D967: mirrors the /pharmacy/controlled-register RoleGuard.
+          icon: 'local_police',
+          label: 'Controlled-Drug Register',
+          translationKey: 'NAV.CONTROLLED_REGISTER',
+          route: '/pharmacy/controlled-register',
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        {
           icon: 'medication',
           label: 'Dispensing',
           translationKey: 'NAV.DISPENSING',
@@ -1398,6 +1440,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/transfusions',
       });
     }
+    // Mortality register. Gate mirrors the /mortality route guard, which mirrors
+    // MortalityController's reader set.
+    if (
+      this.hasAnyRole([
+        'ROLE_DOCTOR',
+        'ROLE_SURGEON',
+        'ROLE_MIDWIFE',
+        'ROLE_NURSE',
+        'ROLE_QUALITY_MANAGER',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'history_edu',
+        label: 'Mortality register',
+        translationKey: 'NAV.MORTALITY',
+        route: '/mortality',
+      });
+    }
     // Microbiology workbench (P3 #19). Gate mirrors the /microbiology route
     // guard, which mirrors MicroCultureController.READ_ROLES.
     if (
@@ -1464,14 +1527,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // doctors could not reach the panel at all, the second reachability
     // defect on this same surface. Roles mirror the RoleGuard on
     // 'reception/empi-candidates'.
+    // QA D987: and only while the matcher is switched on; it answers 404 off.
     if (
-      this.hasAnyRole([
-        'ROLE_RECEPTIONIST',
-        'ROLE_NURSE',
-        'ROLE_DOCTOR',
-        'ROLE_HOSPITAL_ADMIN',
-        'ROLE_SUPER_ADMIN',
-      ])
+      (this.empiStatus.enabled() === true || this.empiStatus.failed()) &&
+      this.hasAnyRole([...EMPI_MATCHER_ROLES])
     ) {
       items.push({
         icon: 'join_inner',
@@ -1720,8 +1779,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngOnInit(): void {
+    // A test double of matchMedia may carry no listener API.
+    this.phoneQuery?.addEventListener?.('change', this.onPhoneQueryChange);
     this.userProfile.set(this.auth.getUserProfile());
     this.permissions.loadFromBackend();
+    // QA D987: the duplicate-patient entry depends on the matcher being on.
+    this.empiStatus.load();
 
     this.loadNotifications();
     this.loadUnreadMessages();
@@ -1763,15 +1826,25 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.routerSub = this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe(() => {
+        const focusMain = () => this.mainContent?.nativeElement.focus({ preventScroll: true });
+        // QA D1153: the open phone drawer keeps the page inert until this
+        // render; <main> takes focus once it is reachable again (the drawer
+        // then leaves focus where it is instead of sending it back to Menu).
+        if (this.phoneDrawerOpen()) {
+          this.sidebarCollapsed.set(true);
+          afterNextRender(focusMain, { injector: this.injector });
+          return;
+        }
         if (isMobileViewport()) this.sidebarCollapsed.set(true);
         // queueMicrotask defers until after the new component has
         // rendered into the outlet so focus actually lands on the
         // freshly painted <main>, not the previous one.
-        queueMicrotask(() => this.mainContent?.nativeElement.focus({ preventScroll: true }));
+        queueMicrotask(focusMain);
       });
   }
 
   ngOnDestroy(): void {
+    this.phoneQuery?.removeEventListener?.('change', this.onPhoneQueryChange);
     this.notifSub?.unsubscribe();
     this.readCountSub?.unsubscribe();
     this.routerSub?.unsubscribe();
@@ -1783,11 +1856,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private loadNotifications(): void {
+    // The bell previews the 10 newest (a preview: "see all" opens the list).
     this.notifService.getNotifications({ page: 0, size: 10 }).subscribe({
-      next: (page) => {
-        this.recentNotifications.set(page.content);
-        this.unreadCount.set(page.content.filter((n) => !n.read).length);
-      },
+      next: (page) => this.recentNotifications.set(page.content),
+    });
+    // QA D1347: the badge is the server's count of unread notifications, not
+    // the unread among the 10 newest (an 11th unread was never counted).
+    this.notifService.getNotifications({ read: false, page: 0, size: 1 }).subscribe({
+      next: (page) => this.unreadCount.set(page.totalElements ?? 0),
     });
   }
 
@@ -1949,6 +2025,17 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.sidebarCollapsed.set(true);
   }
 
+  /**
+   * QA D1125: Escape inside the phone drawer closes it and gives focus back to
+   * the menu button (the drawer is hidden, so focus would fall to the page).
+   * On a wide screen the expanded sidebar is not an overlay: Escape leaves it.
+   */
+  closeSidebarFromKeyboard(): void {
+    if (this.sidebarCollapsed() || !isMobileViewport()) return;
+    // appDrawerDialog gives focus back to the Menu button that opened the drawer.
+    this.sidebarCollapsed.set(true);
+  }
+
   toggleProfileMenu(): void {
     this.profileMenuOpen.update((v) => !v);
     if (this.profileMenuOpen()) {
@@ -2017,10 +2104,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   onLangSelect(event: Event): void {
-    this.switchLang((event.target as HTMLSelectElement).value);
+    void this.switchLang((event.target as HTMLSelectElement).value);
   }
 
-  switchLang(lang: string): void {
-    if (switchLanguage(lang, this.translate)) this.currentLang.set(storedLang());
+  async switchLang(lang: string): Promise<void> {
+    if (await switchLanguage(lang, this.translate, this.confirmService)) {
+      this.currentLang.set(storedLang());
+    }
   }
 }

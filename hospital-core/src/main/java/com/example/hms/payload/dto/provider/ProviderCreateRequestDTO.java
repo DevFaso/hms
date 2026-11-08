@@ -32,7 +32,7 @@ public class ProviderCreateRequestDTO {
     @Size(max = 100)
     private String code;
 
-    @Email
+    @Email(message = "{validation.email.invalid}")
     @Size(max = 255)
     private String email;
 

@@ -95,6 +95,18 @@ describe('AuditDescriptionService (QA D894)', () => {
     );
   });
 
+  it('tells an allergy acknowledgement given at the signature from one given on edit (r23 residual)', () => {
+    expect(describeIn('fr', 'Allergy override recorded at signature')).toBe(
+      'Passage outre une allergie : enregistré à la signature de la prescription',
+    );
+    expect(describeIn('es', 'Allergy override recorded at signature')).toBe(
+      'Alerta de alergia ignorada: registrada al firmar la orden',
+    );
+    expect(describeIn('fr', 'Allergy override recorded on edit')).toBe(
+      'Passage outre une allergie : enregistré à la modification de la prescription',
+    );
+  });
+
   it('reads a code with no portal-wide label through AUDIT.CODE, and keeps an unknown one', () => {
     expect(describeIn('fr', 'CHW empanelment ended')).toBe(
       'Inscription agent de santé communautaire sur la patientèle terminée',
@@ -311,5 +323,41 @@ describe('AuditDescriptionService (QA D894)', () => {
     expect(describeIn('fr', 'Refresh token revoked on logout (jti=abc)')).toBe(
       'Jeton de renouvellement révoqué à la déconnexion (jti=abc)',
     );
+  });
+});
+
+describe('AUDIT_DESCRIPTION_PATTERNS: emergency blood release', () => {
+  const of = (key: string) => AUDIT_DESCRIPTION_PATTERNS.find((p) => p.key === key)!;
+  const tail = ', O negative stated not obtainable in time, stock shown a,b,+40';
+
+  it('each sentence the service writes finds its own pattern first', () => {
+    const samples: [string, string][] = [
+      [
+        'Emergency uncrossmatched release of blood unit u against transfusion request r',
+        'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED',
+      ],
+      [
+        'Emergency release on a documented O positive decision of blood unit u against transfusion request r',
+        'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_O_POSITIVE',
+      ],
+      [
+        'Emergency release on a documented O positive decision of blood unit u against transfusion request r' +
+          tail,
+        'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_O_POSITIVE_STATED',
+      ],
+      [
+        'Emergency release, serologically incompatible, of blood unit u against transfusion request r',
+        'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE',
+      ],
+      [
+        'Emergency release, serologically incompatible, of blood unit u against transfusion request r' +
+          tail,
+        'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE_STATED',
+      ],
+    ];
+    for (const [sentence, key] of samples) {
+      expect(of(key).re.test(sentence)).withContext(key).toBeTrue();
+      expect(AUDIT_DESCRIPTION_PATTERNS.find((p) => p.re.test(sentence))?.key).toBe(key);
+    }
   });
 });

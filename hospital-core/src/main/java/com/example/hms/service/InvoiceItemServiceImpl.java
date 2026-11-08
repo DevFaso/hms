@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.InvoiceItemMapper;
 import com.example.hms.model.BillingInvoice;
@@ -28,6 +29,9 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class InvoiceItemServiceImpl implements InvoiceItemService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_BILLING_INVOICE_ID = "billingInvoiceId";
+
     private static final String INVOICE_ITEM_NOT_FOUND_KEY = "invoiceitem.notfound";
 
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
@@ -50,7 +54,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     @Transactional
     public InvoiceItemResponseDTO createInvoiceItem(InvoiceItemRequestDTO dto, Locale locale) {
         if (dto.getBillingInvoiceId() == null) {
-            throw new BusinessException("invoiceitem.invoiceRequired");
+            throw new FieldBusinessException(FIELD_BILLING_INVOICE_ID, "invoiceitem.invoiceRequired");
         }
         requireWholePrice(dto.getUnitPrice());
         requireLineTotalInRange(dto.getUnitPrice(), dto.getQuantity());
@@ -115,7 +119,12 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         UserRoleHospitalAssignment assignment = dto.getAssignmentId() == null && item.getAssignment() != null
             ? item.getAssignment()
             : resolveAssignment(dto.getAssignmentId(), invoice);
-        Treatment related = resolveRelatedService(dto.getRelatedServiceId(), invoice);
+        // QA D1088: a line priced in place keeps the service it was charged
+        // for, which is the checkout's link, as it keeps its owner, unless
+        // the body names another one.
+        Treatment related = dto.getRelatedServiceId() == null && item.getRelatedService() != null
+            ? item.getRelatedService()
+            : resolveRelatedService(dto.getRelatedServiceId(), invoice);
 
         // apply updates
         item.setBillingInvoice(invoice);
@@ -166,18 +175,18 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
             throw new ResourceNotFoundException(missKey, missArg);
         }
         if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
-            throw new BusinessException("billing.invoice.cancelledLocked");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_BILLING_INVOICE_ID, "billing.invoice.cancelledLocked");
         }
         // QA D147: a settled invoice is a closed record (its receipt was
         // issued against these lines). Reverse the payment to amend it.
         if (invoice.getStatus() == InvoiceStatus.PAID) {
-            throw new BusinessException("billing.invoice.paidLinesLocked");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_BILLING_INVOICE_ID, "billing.invoice.paidLinesLocked");
         }
         // QA D656: an issued invoice is a document the patient may hold; a
         // line added to it (2000 on a SENT invoice) changed what they were
         // billed. It is cancelled (or credited) and re-issued instead.
         if (invoice.getStatus() != InvoiceStatus.DRAFT) {
-            throw new BusinessException("billing.invoice.issuedLinesLocked");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_BILLING_INVOICE_ID, "billing.invoice.issuedLinesLocked");
         }
         return invoice;
     }
@@ -222,7 +231,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
      */
     private static void requireWholePrice(java.math.BigDecimal price) {
         if (price != null && price.stripTrailingZeros().scale() > 0) {
-            throw new BusinessException("billing.payment.wholeAmountOnly");
+            throw new com.example.hms.exception.FieldBusinessException("unitPrice", "billing.payment.wholeAmountOnly");
         }
     }
 
@@ -237,7 +246,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     private static void requireLineTotalInRange(java.math.BigDecimal unitPrice, Integer quantity) {
         if (unitPrice != null && quantity != null
                 && unitPrice.multiply(java.math.BigDecimal.valueOf(quantity.longValue())).compareTo(MAX_LINE_TOTAL) > 0) {
-            throw new BusinessException("billing.item.totalOutOfRange");
+            throw new com.example.hms.exception.FieldBusinessException("unitPrice", "billing.item.totalOutOfRange");
         }
     }
 }

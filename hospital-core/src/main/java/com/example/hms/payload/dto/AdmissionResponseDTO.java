@@ -67,6 +67,10 @@ public class AdmissionResponseDTO {
     private LocalDateTime expectedDischargeDateTime;
     private LocalDateTime actualDischargeDateTime;
 
+    /** QA D1381 (round 32): why the stay was cancelled, and when; null unless cancelled. */
+    private String cancellationReason;
+    private LocalDateTime cancelledAt;
+
     private String chiefComplaint;
     private String primaryDiagnosisCode;
     private String primaryDiagnosisDescription;

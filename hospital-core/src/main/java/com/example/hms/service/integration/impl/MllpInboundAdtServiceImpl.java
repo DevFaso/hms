@@ -1,5 +1,6 @@
 package com.example.hms.service.integration.impl;
 
+import com.example.hms.utility.PatientIdentityRules;
 import com.example.hms.enums.empi.EmpiAliasType;
 import com.example.hms.enums.integration.IntegrationMessageDirection;
 import com.example.hms.enums.integration.IntegrationMessageStatus;
@@ -149,6 +150,18 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
 
+        // QA D1414: what a desk would be refused is refused from an interface too,
+        // and only as a change: a stored value the sender repeats is not one.
+        String impossible = firstImpossibleDemographic(patient, parsed);
+        if (impossible != null) {
+            log.warn("MLLP ADT rejected — {} (sender={}/{} hospital={} event={})",
+                impossible, sendingApplication, sendingFacility,
+                receivingHospital.getId(), parsed.triggerEvent());
+            recordReject(parsed, receivingHospital, sendingApplication, sendingFacility,
+                messageControlId, impossible);
+            return MllpInboundOutcome.REJECTED_INVALID;
+        }
+
         boolean changed = applyDemographics(patient, parsed);
         if (changed) {
             patientRepository.save(patient);
@@ -293,6 +306,27 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
     private static String messageTypeOf(ParsedAdtMessage parsed) {
         String trigger = parsed == null ? null : parsed.triggerEvent();
         return StringUtils.hasText(trigger) ? "ADT^" + trigger.trim() : "ADT";
+    }
+
+    /** A fixed-set dead-letter reason for a birth date or a name the identity rules refuse, or null. */
+    private static String firstImpossibleDemographic(Patient patient, ParsedAdtMessage parsed) {
+        if (parsed.dateOfBirth() != null && !parsed.dateOfBirth().equals(patient.getDateOfBirth())
+                && PatientIdentityRules.birthDateProblem(parsed.dateOfBirth(), PatientIdentityRules.today()) != null) {
+            return "PID-7 is not a possible birth date";
+        }
+        if (digitNameChange(parsed.lastName(), patient.getLastName())) {
+            return "PID-5 family name is made of digits";
+        }
+        if (digitNameChange(parsed.firstName(), patient.getFirstName())) {
+            return "PID-5 given name is made of digits";
+        }
+        return digitNameChange(parsed.middleName(), patient.getMiddleName())
+            ? "PID-5 middle name is made of digits" : null;
+    }
+
+    private static boolean digitNameChange(String sent, String stored) {
+        return StringUtils.hasText(sent) && !sent.trim().equals(stored == null ? null : stored.trim())
+            && PatientIdentityRules.isMadeOfDigits(sent);
     }
 
     /** One demographic field as {@link #applyDemographics} writes it, with its limit. */

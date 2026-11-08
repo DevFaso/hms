@@ -7,8 +7,8 @@
     </div>
     <div class="header-actions">
       <button type="button" class="btn-secondary" [disabled]="loading()" (click)="load()">
-        <span class="material-symbols-outlined" aria-hidden="true">refresh</span
-        >{{ 'COMMON.REFRESH' | translate }}
+        <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+        {{ 'COMMON.REFRESH' | translate }}
       </button>
       <button
         type="button"
@@ -16,8 +16,8 @@
         data-testid="open-intake"
         (click)="openIntake($event)"
       >
-        <span class="material-symbols-outlined" aria-hidden="true">post_add</span
-        >{{ 'ROI.LOG_REQUEST' | translate }}
+        <span class="material-symbols-outlined" aria-hidden="true">post_add</span>
+        {{ 'ROI.LOG_REQUEST' | translate }}
       </button>
     </div>
   </header>
@@ -218,6 +218,7 @@
 @if (showIntake()) {
   <div class="modal-backdrop" (click)="closeIntake()" aria-hidden="true"></div>
   <div
+    appModalDialog
     #intakeDialog
     class="modal"
     role="dialog"
@@ -235,6 +236,7 @@
       <span>{{ 'ROI.PATIENT' | translate }} *</span>
     </label>
     <app-patient-picker
+      required
       inputId="roi-patient-picker"
       [hospitalId]="pickerHospitalId()"
       [selected]="selectedPatient()"
@@ -244,6 +246,7 @@
     <label class="field">
       <span>{{ 'ROI.REQUESTER_TYPE' | translate }} *</span>
       <select
+        required
         name="roiRequesterType"
         [ngModel]="formRequesterType()"
         (ngModelChange)="formRequesterType.set($event)"
@@ -279,6 +282,7 @@
     <label class="field">
       <span>{{ 'ROI.PURPOSE' | translate }} *</span>
       <textarea
+        required
         name="roiPurpose"
         rows="2"
         maxlength="500"
@@ -290,6 +294,7 @@
     <label class="field">
       <span>{{ 'ROI.SCOPE' | translate }} *</span>
       <input
+        required
         type="text"
         name="roiScope"
         maxlength="500"
@@ -314,10 +319,12 @@
         {{ 'COMMON.CANCEL' | translate }}
       </button>
       <button
+        submitGuardRequired
         type="button"
         class="btn-primary"
         data-testid="submit-intake"
-        [disabled]="!intakeValid() || saving()"
+        [disabled]="saving()"
+        [appSubmitGuard]="!intakeValid()"
         (click)="submitIntake()"
       >
         {{ 'ROI.LOG_CONFIRM' | translate }}
@@ -330,6 +337,7 @@
 @if (deciding(); as d) {
   <div class="modal-backdrop" (click)="closeDecision()" aria-hidden="true"></div>
   <div
+    appModalDialog
     #decisionDialog
     class="modal"
     role="dialog"
@@ -381,6 +389,7 @@
       </span>
       <textarea
         name="roiDecisionNote"
+        [required]="d.kind === 'deny'"
         rows="3"
         maxlength="500"
         [ngModel]="decisionNote()"
@@ -392,11 +401,13 @@
         {{ 'COMMON.CANCEL' | translate }}
       </button>
       <button
+        submitGuardRequired
         type="button"
         class="btn-primary"
         [class.danger]="d.kind === 'deny'"
         data-testid="submit-decision"
-        [disabled]="!decisionValid() || saving()"
+        [disabled]="saving()"
+        [appSubmitGuard]="!decisionValid()"
         (click)="submitDecision()"
       >
         {{ decisionActionKey(d.kind) | translate }}

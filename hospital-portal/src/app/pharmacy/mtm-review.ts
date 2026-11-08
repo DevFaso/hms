@@ -1,6 +1,9 @@
+import { allRows } from '../shared/all-pages';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import {
   Component,
   DestroyRef,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -19,17 +22,34 @@ import { RoleContextService } from '../core/role-context.service';
 import { finalize } from 'rxjs';
 import { localDateString } from '../shared/date-utils';
 import { refusalReason } from '../shared/refusal-reason';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refuseFields } from '../shared/forms/invalid-fields';
 /**
  * P-09: MTM (Medication Therapy Management) review screen — pharmacist-led
  * chronic disease review, adherence counselling flag, polypharmacy alert,
  * intervention record. This is a foundation skeleton; the workflow integrates
  * with the existing retrospective timeline produced by MedicationHistoryService.
  */
+/** The review field the form may refuse (QA D1306). */
+const MTM_FIELD_IDS = ['mtmPatient'];
+
 @Component({
   selector: 'app-mtm-review',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, PatientPickerComponent],
+  imports: [
+    SubmitGuardDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    PatientPickerComponent,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
+  ],
   templateUrl: './mtm-review.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './mtm-review.scss',
@@ -40,6 +60,7 @@ export class MtmReviewComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   reviews = signal<MtmReviewResponse[]>([]);
   loading = signal(false);
@@ -75,15 +96,15 @@ export class MtmReviewComponent implements OnInit {
       return;
     }
     this.loading.set(true);
-    this.svc
-      .listMtmReviewsByHospital(hospitalId, 0, 50)
+    // QA D1347: every review (all pages), not the 50 newest.
+    allRows((page, size) => this.svc.listMtmReviewsByHospital(hospitalId, page, size))
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.loading.set(false)),
       )
       .subscribe({
-        next: (page) => {
-          this.reviews.set(page?.content ?? []);
+        next: (reviews) => {
+          this.reviews.set(reviews);
           this.loading.set(false);
         },
         error: () => {
@@ -159,10 +180,15 @@ export class MtmReviewComponent implements OnInit {
   }
 
   submit(): void {
+    const root = this.host.nativeElement;
     if (!this.form.patientId || !this.form.hospitalId) {
-      this.toast.error(this.translate.instant('PHARMACY.MTM_PATIENT_HOSPITAL_REQUIRED'));
+      // QA D1306 (round 28): a blank patient is marked; the hospital is the scope.
+      const message = this.translate.instant('PHARMACY.MTM_PATIENT_HOSPITAL_REQUIRED');
+      refuseFields(root, this.form.patientId ? [] : MTM_FIELD_IDS, MTM_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(root, [], MTM_FIELD_IDS, '');
     this.saving.set(true);
     const stream = this.selectedReviewId
       ? this.svc.updateMtmReview(this.selectedReviewId, this.form)

@@ -45,7 +45,8 @@ public interface AdmissionService {
     /**
      * Cancel admission
      */
-    void cancelAdmission(UUID admissionId);
+    /** QA D1381: cancels a stay still in progress; the reason is required and kept on the admission. */
+    void cancelAdmission(UUID admissionId, String reason);
 
     /**
      * Assign a structured bed to an admission (P0 #4)
@@ -53,9 +54,10 @@ public interface AdmissionService {
     AdmissionResponseDTO assignBed(UUID admissionId, UUID bedId);
 
     /**
-     * Detach the admission's bed and make it available again
+     * Detach the admission's bed and make it available again. QA D1100: for a
+     * stated reason, audited with it.
      */
-    AdmissionResponseDTO unassignBed(UUID admissionId);
+    AdmissionResponseDTO unassignBed(UUID admissionId, String reason);
 
     /**
      * Get admissions by patient

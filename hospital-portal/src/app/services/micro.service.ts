@@ -52,6 +52,19 @@ export interface MicroIsolate {
   susceptibilities: MicroSusceptibility[];
 }
 
+/** What a report said just before one correction (QA CX-009). */
+export interface MicroCultureCorrection {
+  id: string;
+  correctedAt: string;
+  correctedByName: string | null;
+  reason: string;
+  statusBefore: MicroCultureStatus;
+  growthBefore: MicroGrowthResult | null;
+  gramStainBefore: string | null;
+  notesBefore: string | null;
+  isolatesBefore: string | null;
+}
+
 export interface MicroCultureResponse {
   id: string;
   labOrderId: string;
@@ -74,6 +87,7 @@ export interface MicroCultureResponse {
   correctionReason: string | null;
   reportedByName: string | null;
   notes: string | null;
+  corrections?: MicroCultureCorrection[];
   createdAt: string;
   updatedAt: string | null;
   isolates: MicroIsolate[];
@@ -106,6 +120,8 @@ export interface MicroCultureUpdateRequest {
   notes?: string;
   /** Mandatory once the report is FINAL/CORRECTED. */
   correctionReason?: string;
+  /** QA CX-009: correcting a validated report to no growth takes its organisms off, when asked. */
+  removeIsolates?: boolean;
 }
 
 export interface MicroIsolateRequest {

@@ -59,6 +59,9 @@ public class WristbandPdfService {
     /** 3.5in x 1.1in label media, in PDF points. */
     private static final float LABEL_WIDTH = 252f;
     private static final float LABEL_HEIGHT = 79f;
+    /** The room for text left of the QR code (label width, less the QR, its gap and both margins). */
+    private static final float TEXT_WIDTH = LABEL_WIDTH - (LABEL_HEIGHT - 12f) - 6f - 8f - 4f;
+    private static final float MIN_TEXT_SIZE = 6f;
     /** Printed where a value is missing; an em dash is a WinAnsi glyph. */
     private static final String DASH = "—";
 
@@ -80,8 +83,8 @@ public class WristbandPdfService {
         String mrn = hospitalId != null ? patient.getMrnForHospital(hospitalId) : null;
 
         return renderLabel(cs -> {
-            writeText(cs, 11, 8, LABEL_HEIGHT - 16,
-                truncate(safe(patient.getFirstName()) + " " + safe(patient.getLastName()), 28));
+            // QA D1036 / D1091: the whole name, middle name included, shrunk to fit, never cut mid-word.
+            writeFitted(cs, 11, 8, LABEL_HEIGHT - 16, safe(patient.getFullName()));
             writeText(cs, 8, 8, LABEL_HEIGHT - 30, t.get("pdf.wristband.dob",
                 patient.getDateOfBirth() != null ? t.fmt(patient.getDateOfBirth()) : DASH));
             writeText(cs, 8, 8, LABEL_HEIGHT - 42, t.get("pdf.wristband.mrn", mrn != null ? mrn : DASH));
@@ -100,9 +103,7 @@ public class WristbandPdfService {
             throw new ResourceNotFoundException("labspecimen.notfound", specimenId);
         }
         Patient patient = specimen.getLabOrder() != null ? specimen.getLabOrder().getPatient() : null;
-        String patientLine = patient != null
-            ? truncate(safe(patient.getFirstName()) + " " + safe(patient.getLastName()), 28)
-            : DASH;
+        String patientLine = patient != null ? safe(patient.getFullName()) : DASH;
         // The stored barcode_value ("LAB-" + accession) is what downstream
         // lab tooling expects — first surface to ever render it.
         String qrPayload = specimen.getBarcodeValue() != null
@@ -111,9 +112,9 @@ public class WristbandPdfService {
 
         return renderLabel(cs -> {
             writeText(cs, 10, 8, LABEL_HEIGHT - 16, safe(specimen.getAccessionNumber()));
-            writeText(cs, 8, 8, LABEL_HEIGHT - 30, patientLine);
-            writeText(cs, 8, 8, LABEL_HEIGHT - 42,
-                truncate(safe(specimen.getSpecimenType()), 22)
+            writeFitted(cs, 8, 8, LABEL_HEIGHT - 30, patientLine);
+            writeFitted(cs, 8, 8, LABEL_HEIGHT - 42,
+                safe(specimen.getSpecimenType())
                     + (specimen.getCollectedAt() != null ? "  " + t.fmt(specimen.getCollectedAt()) : ""));
         }, qrPayload);
     }
@@ -154,11 +155,11 @@ public class WristbandPdfService {
 
         MedicationCatalogItem item = inventoryItem != null
             ? inventoryItem.getMedicationCatalogItem() : null;
-        String drugLine = truncate(drugNameOf(item), 28);
+        String drugLine = drugNameOf(item);
         String strengthLine = strengthOf(item);
 
         return renderLabel(cs -> {
-            writeText(cs, 10, 8, LABEL_HEIGHT - 16, drugLine);
+            writeFitted(cs, 10, 8, LABEL_HEIGHT - 16, drugLine);
             writeText(cs, 8, 8, LABEL_HEIGHT - 30,
                 (strengthLine.isBlank() ? "" : strengthLine + "  ")
                     + t.get("pdf.stocklot.lot", safe(lot.getLotNumber())));
@@ -260,7 +261,17 @@ public class WristbandPdfService {
         return v == null ? "" : v;
     }
 
-    private static String truncate(String s, int n) {
-        return s != null && s.length() > n ? s.substring(0, n - 1) + "…" : s;
+    /**
+     * QA D1036 / D1091: a label line at {@code maxSize}, shrunk (down to
+     * {@link #MIN_TEXT_SIZE}) until it fits beside the QR code; only text that
+     * does not fit even then is shortened, at a word boundary. It used to be
+     * cut at a fixed character count, so a middle name was half printed.
+     */
+    private static void writeFitted(PDPageContentStream cs, float maxSize, float x, float y, String text)
+            throws IOException {
+        String clean = text != null ? text : "";
+        float size = PdfText.fitSize(PDType1Font.HELVETICA_BOLD, clean, TEXT_WIDTH, maxSize, MIN_TEXT_SIZE);
+        String line = PdfText.wrapAtMost(PDType1Font.HELVETICA_BOLD, size, clean, TEXT_WIDTH, 1).get(0);
+        writeText(cs, size, x, y, line);
     }
 }

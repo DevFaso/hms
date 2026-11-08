@@ -57,6 +57,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     public SubscriptionPlanResponseDTO createPlan(SubscriptionPlanRequestDTO request) {
         String currency = normalizeCurrency(request.getCurrency());
         requirePriceFitsCurrency(request.getMonthlyPriceCents(), currency);
+        requireTierCodeFree(request.getTierCode());
         SubscriptionPlan plan = SubscriptionPlan.builder()
             .name(request.getName())
             .tierCode(request.getTierCode())
@@ -82,6 +83,9 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         // QA D850: deactivating through an edit is the same act as DELETE.
         if (Boolean.FALSE.equals(request.getActive()) && plan.isActive()) {
             requireNotInUse(plan);
+        }
+        if (request.getTierCode() != null && !request.getTierCode().equalsIgnoreCase(plan.getTierCode())) {
+            requireTierCodeFree(request.getTierCode());
         }
         plan.setName(request.getName());
         plan.setTierCode(request.getTierCode());
@@ -109,6 +113,17 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         requireNotInUse(plan);
         plan.setActive(false);
         planRepository.save(plan);
+    }
+
+    /**
+     * QA CX-005: a tier code another plan holds is refused on its field, so the
+     * form marks it. It used to reach the unique constraint and come back as
+     * "this record already exists", naming nothing.
+     */
+    private void requireTierCodeFree(String tierCode) {
+        if (tierCode != null && planRepository.existsByTierCodeIgnoreCase(tierCode)) {
+            throw new FieldBusinessException("tierCode", "subscription.plan.tierCode.duplicate", tierCode);
+        }
     }
 
     /**
@@ -180,17 +195,18 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         // controller summary advertises that deactivated plans "reject new
         // assignments", which only holds if we enforce it here.
         if (!plan.isActive()) {
-            throw new BusinessException("subscription.plan.inactive", plan.getTierCode());
+            throw new com.example.hms.exception.FieldBusinessException("planId", "subscription.plan.inactive", plan.getTierCode());
         }
 
         // Cancel any existing ACTIVE subscription so the partial unique index
-        // (one ACTIVE per org) holds. Done in-memory then saved — keeps the
-        // entire assignment in a single tx.
+        // (one ACTIVE per org) holds, in a single tx. Flushed at once (QA CX-011):
+        // Hibernate runs INSERTs before UPDATEs, so with a plain save the new row
+        // reached uq_orgsub_active_per_org while this one still held it.
         subscriptionRepository.findByOrganizationIdAndStatus(organizationId, OrganizationSubscription.Status.ACTIVE)
             .ifPresent(existing -> {
                 existing.setStatus(OrganizationSubscription.Status.CANCELLED);
                 existing.setEndsAt(Instant.now());
-                subscriptionRepository.save(existing);
+                subscriptionRepository.saveAndFlush(existing);
             });
 
         // PR #228 review — billing period is now a typed enum on the DTO,

@@ -85,6 +85,7 @@ class SocialHistoryServiceImplTest {
         dto.setHospitalId(hospitalId);
         dto.setRecordedByStaffId(staffId);
         dto.setActive(true);
+        dto.setTobaccoUse(false); // QA D1148: a version carries at least one answer
 
         PatientSocialHistory entity = new PatientSocialHistory();
         entity.setId(historyId);
@@ -193,6 +194,7 @@ class SocialHistoryServiceImplTest {
     @Test
     void updateSocialHistory_success() {
         SocialHistoryRequestDTO dto = new SocialHistoryRequestDTO();
+        dto.setAlcoholUse(false); // QA D1148: a version carries at least one answer
         PatientSocialHistory existing = new PatientSocialHistory();
         existing.setId(historyId);
         SocialHistoryResponseDTO responseDTO = new SocialHistoryResponseDTO();
@@ -236,6 +238,7 @@ class SocialHistoryServiceImplTest {
         dto.setPatientId(patientId);
         dto.setHospitalId(hospitalId);
         dto.setActive(true);
+        dto.setTobaccoUse(false); // QA D1148: a version carries at least one answer
 
         PatientSocialHistory previousHistory = new PatientSocialHistory();
         previousHistory.setActive(true);

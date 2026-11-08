@@ -73,7 +73,11 @@ public class PharmacyServiceImpl implements PharmacyService {
     @Override
     @Transactional(readOnly = true)
     public Page<PharmacyResponseDTO> search(UUID hospitalId, String query, Pageable pageable) {
-        return pharmacyRepository.searchByHospital(hospitalId, query, pageable)
+        // A null scope is the verified super-admin's global view (the controller
+        // refuses it for everyone else), searched as the list endpoint lists.
+        return (hospitalId == null
+                ? pharmacyRepository.searchAllActive(query, pageable)
+                : pharmacyRepository.searchByHospital(hospitalId, query, pageable))
                 .map(mapper::toResponseDTO);
     }
 

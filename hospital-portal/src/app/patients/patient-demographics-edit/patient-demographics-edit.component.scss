@@ -1,0 +1,32 @@
+.demographics-dialog {
+  width: 720px;
+}
+
+.edit-section {
+  border: none;
+  margin: 0;
+  padding: 0;
+
+  legend {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 0.5rem;
+  }
+}
+
+.edit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.edit-error {
+  color: #b91c1c;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.dialog-footer {
+  padding: 0.875rem 0 0;
+}

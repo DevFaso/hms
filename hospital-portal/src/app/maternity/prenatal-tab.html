@@ -1,9 +1,10 @@
-<div class="view-section action-form prenatal-form">
+<div class="view-section action-form prenatal-form" data-submit-scope>
   <h3>{{ 'PRENATAL.GENERATE_TITLE' | translate }}</h3>
   <div class="form-row">
     <div class="field">
       <label for="pn-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
       <app-patient-picker
+        required
         inputId="pn-patient"
         [selected]="patient()"
         (selectedChange)="onPatientPicked($event)"
@@ -11,7 +12,14 @@
     </div>
     <div class="field">
       <label for="pn-lmp">{{ 'MATERNITY.LMP' | translate }} *</label>
-      <input id="pn-lmp" type="date" [max]="today" [(ngModel)]="lmpDate" />
+      <input
+        required
+        id="pn-lmp"
+        data-server-field="lastMenstrualPeriodDate"
+        type="date"
+        [max]="today"
+        [(ngModel)]="lmpDate"
+      />
     </div>
   </div>
   <div class="form-row">
@@ -24,12 +32,14 @@
         [placeholder]="'PRENATAL.SUPPLEMENTAL_HINT' | translate"
       />
     </div>
-    <div class="field checkbox-field">
-      <label>
-        <input type="checkbox" [(ngModel)]="highRisk" />
-        {{ 'ULTRASOUND.HIGH_RISK' | translate }}
-      </label>
-    </div>
+    @if (!frontDeskOnly()) {
+      <div class="field checkbox-field">
+        <label>
+          <input type="checkbox" [(ngModel)]="highRisk" />
+          {{ 'ULTRASOUND.HIGH_RISK' | translate }}
+        </label>
+      </div>
+    }
   </div>
   <div class="field">
     <label for="pn-notes">{{ 'MATERNITY.CLINICAL_NOTES' | translate }}</label>
@@ -38,7 +48,9 @@
   <div class="modal-actions">
     <button
       class="btn-primary"
-      [disabled]="generating() || !patient() || !lmpDate"
+      [disabled]="generating()"
+      [appSubmitGuard]="!patient() || !lmpDate"
+      [submitGuardFields]="['pn-patient', 'pn-lmp']"
       (click)="generate()"
     >
       {{ 'PRENATAL.GENERATE' | translate }}
@@ -59,11 +71,17 @@
       {{ 'PRENATAL.RESULT_TITLE' | translate }} — {{ 'PRENATAL.CURRENT_WEEK' | translate }}
       {{ s.currentGestationalWeek }}
       @if (s.estimatedDueDate) {
-        · {{ 'MATERNITY.EDD' | translate }}:
+        · {{ 'MATERNITY.EDD' | translate }}{{ 'COMMON.COLON' | translate }}
         {{ s.estimatedDueDate | serverTime | date: 'mediumDate' }}
       }
-      @if (s.highRisk) {
-        <span class="risk-badge risk-high">{{ 'ULTRASOUND.HIGH_RISK' | translate }}</span>
+      <!-- QA D1031: the antenatal contacts already held, and the number of the next one. -->
+      ·
+      <span data-testid="anc-contacts">{{
+        'PRENATAL.ANC_CONTACTS'
+          | translate: { done: s.completedContacts ?? 0, next: (s.completedContacts ?? 0) + 1 }
+      }}</span>
+      @if (s.highRisk && !frontDeskOnly()) {
+        {{ ' ' }}<span class="risk-badge risk-high">{{ 'ULTRASOUND.HIGH_RISK' | translate }}</span>
       }
     </h3>
     @for (alert of s.alerts; track alert) {
@@ -153,20 +171,29 @@
               <td>{{ (a.startTime | clockTime) || '—' }}</td>
               <td>{{ (a.status | enumLabel: 'appointmentStatus') || '—' }}</td>
               <td class="actions-cell">
-                <button
-                  class="btn-secondary btn-sm"
-                  [title]="'PRENATAL.RESCHEDULE' | translate"
-                  (click)="openReschedule(a)"
-                >
-                  <span class="material-symbols-outlined">edit_calendar</span>
-                </button>
-                <button
-                  class="btn-secondary btn-sm"
-                  [title]="'PRENATAL.SEND_REMINDER' | translate"
-                  (click)="openReminder(a)"
-                >
-                  <span class="material-symbols-outlined">notifications</span>
-                </button>
+                @if (canReschedule(a)) {
+                  <button
+                    [attr.aria-label]="'PRENATAL.RESCHEDULE' | translate"
+                    class="btn-secondary btn-sm"
+                    [title]="'PRENATAL.RESCHEDULE' | translate"
+                    (click)="openReschedule(a)"
+                  >
+                    <span class="material-symbols-outlined" aria-hidden="true">edit_calendar</span>
+                  </button>
+                }
+                @if (canRemind(a)) {
+                  <button
+                    [attr.aria-label]="'PRENATAL.SEND_REMINDER' | translate"
+                    class="btn-secondary btn-sm"
+                    [title]="'PRENATAL.SEND_REMINDER' | translate"
+                    (click)="openReminder(a)"
+                  >
+                    <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+                  </button>
+                }
+                @if (!canReschedule(a) && !canRemind(a)) {
+                  —
+                }
               </td>
             </tr>
           }
@@ -186,37 +213,66 @@
   >
     <div
       class="modal"
+      aria-labelledby="prenatal-tab-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeReschedule(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'PRENATAL.RESCHEDULE' | translate }}</h2>
+        <h2 id="prenatal-tab-dialog-1-title">{{ 'PRENATAL.RESCHEDULE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeReschedule()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
             <label for="pn-new-date">{{ 'PRENATAL.NEW_DATE' | translate }} *</label>
-            <input id="pn-new-date" type="date" [(ngModel)]="rescheduleDate" />
+            <input
+              required
+              id="pn-new-date"
+              data-server-field="newAppointmentDate"
+              type="date"
+              [(ngModel)]="rescheduleDate"
+            />
           </div>
           <div class="field">
             <label for="pn-new-time">{{ 'PRENATAL.NEW_TIME' | translate }} *</label>
-            <input id="pn-new-time" type="time" [(ngModel)]="rescheduleTime" />
+            <input
+              required
+              id="pn-new-time"
+              data-server-field="newStartTime"
+              type="time"
+              [(ngModel)]="rescheduleTime"
+            />
           </div>
         </div>
         <div class="field">
           <label for="pn-res-notes">{{ 'MATERNITY.CLINICAL_NOTES' | translate }}</label>
           <textarea id="pn-res-notes" rows="2" [(ngModel)]="rescheduleNotes"></textarea>
         </div>
+        @if (rescheduleOverbook()) {
+          <!-- QA D1429: the server refused the time as off the slots; the desk says why. -->
+          <div class="field">
+            <label for="pn-overbook">{{ 'APPOINTMENTS.OVERBOOK_REASON' | translate }} *</label>
+            <textarea
+              id="pn-overbook"
+              rows="2"
+              maxlength="500"
+              required
+              aria-required="true"
+              data-server-field="overbookReason"
+              [(ngModel)]="rescheduleOverbookReason"
+            ></textarea>
+          </div>
+        }
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeReschedule()">
@@ -224,7 +280,13 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="rescheduleBusy() || !rescheduleDate || !rescheduleTime"
+          [disabled]="rescheduleBusy()"
+          [appSubmitGuard]="
+            !rescheduleDate ||
+            !rescheduleTime ||
+            (rescheduleOverbook() && !rescheduleOverbookReason.trim())
+          "
+          [submitGuardFields]="['pn-new-date', 'pn-new-time', 'pn-overbook']"
           (click)="submitReschedule()"
         >
           {{ 'COMMON.CONFIRM' | translate }}
@@ -244,20 +306,22 @@
   >
     <div
       class="modal"
+      aria-labelledby="prenatal-tab-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeReminder(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'PRENATAL.SEND_REMINDER' | translate }}</h2>
+        <h2 id="prenatal-tab-dialog-2-title">{{ 'PRENATAL.SEND_REMINDER' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeReminder()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">

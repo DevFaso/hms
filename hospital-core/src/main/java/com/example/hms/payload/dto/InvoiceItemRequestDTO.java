@@ -26,10 +26,12 @@ public class InvoiceItemRequestDTO {
 
     private UUID id;
 
-    /** Required on create; on update the line stays on its own invoice. */
+    /** Required on create; on update the line stays on its own invoice. QA D1300: named with the other fields. */
+    @NotNull(groups = com.example.hms.validation.OnCreate.class, message = "{invoiceitem.invoiceRequired}")
     private UUID billingInvoiceId;
 
     @NotBlank
+    @jakarta.validation.constraints.Size(max = 255)
     private String itemDescription;
 
     @NotNull
@@ -39,7 +41,9 @@ public class InvoiceItemRequestDTO {
     private Integer quantity;
 
     @NotNull
-    @Digits(integer = 10, fraction = 2)
+    // QA D1483: too large and too precise are two reasons; the digit count only bounds what is parsed.
+    @jakarta.validation.constraints.DecimalMax(value = "9999999999.99", message = "{billing.amount.tooLarge}")
+    @Digits(integer = 30, fraction = 2, message = "{billing.payment.wholeAmountOnly}")
     @Positive
     private BigDecimal unitPrice;
 

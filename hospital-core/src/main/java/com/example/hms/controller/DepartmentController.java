@@ -109,6 +109,7 @@ public class DepartmentController {
         return ResponseEntity.ok(departmentService.searchDepartments(query, pageable, locale));
     }
 
+    @com.example.hms.security.ReadsOnly("a filtered search of departments, under POST for its body")
     @PostMapping("/filter")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('DOCTOR') or hasRole('NURSE') or hasRole('MIDWIFE') or hasRole('RECEPTIONIST')")
     public ResponseEntity<Page<DepartmentResponseDTO>> filterDepartments(

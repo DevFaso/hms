@@ -329,12 +329,36 @@ class AdmissionControllerTest {
         @DisplayName("returns 204 NO CONTENT")
         void cancelAdmission_noContent() throws Exception {
             UUID id = UUID.randomUUID();
-            doNothing().when(admissionService).cancelAdmission(id);
+            doNothing().when(admissionService).cancelAdmission(id, "Erreur de saisie");
 
-            mockMvc.perform(delete(BASE + "/{admissionId}", id))
+            // QA D1381: the reason travels in the body.
+            mockMvc.perform(delete(BASE + "/{admissionId}", id)
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"Erreur de saisie\"}"))
                 .andExpect(status().isNoContent());
 
-            verify(admissionService).cancelAdmission(id);
+            verify(admissionService).cancelAdmission(id, "Erreur de saisie");
+        }
+
+        @Test
+        @WithMockUser(authorities = "ROLE_NURSE")
+        @DisplayName("QA D1100: the bed-release reason travels in the body, never the query string")
+        void unassignBed_readsTheReasonFromTheBody_D1100() throws Exception {
+            UUID id = UUID.randomUUID();
+            when(admissionService.unassignBed(eq(id), any())).thenReturn(new AdmissionResponseDTO());
+
+            mockMvc.perform(delete(BASE + "/{admissionId}/bed", id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"Transfert en réanimation\"}"))
+                .andExpect(status().isOk());
+            verify(admissionService).unassignBed(id, "Transfert en réanimation");
+
+            Mockito.reset(admissionService);
+            when(admissionService.unassignBed(eq(id), any())).thenReturn(new AdmissionResponseDTO());
+            mockMvc.perform(delete(BASE + "/{admissionId}/bed", id).param("reason", "dans l'URL"))
+                .andExpect(status().isOk());
+            // A query-string reason is ignored: the service sees none and refuses it (400).
+            verify(admissionService).unassignBed(eq(id), isNull());
         }
     }
 
@@ -385,13 +409,15 @@ class AdmissionControllerTest {
 
         @Test
         @WithMockUser(authorities = "ROLE_NURSE")
-        @DisplayName("returns 404 NOT FOUND when no active admission")
-        void getCurrentAdmission_notFound() throws Exception {
+        // QA D1082 class (round 18): this used to expect 404; no open stay is an
+        // answer, and the house convention for an empty "current" is 204.
+        @DisplayName("returns 204 NO CONTENT when no active admission")
+        void getCurrentAdmission_noneIsNoContent() throws Exception {
             UUID patientId = UUID.randomUUID();
             when(admissionService.getCurrentAdmissionForPatient(patientId)).thenReturn(null);
 
             mockMvc.perform(get(BASE + "/patient/{patientId}/current", patientId))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNoContent());
 
             verify(admissionService).getCurrentAdmissionForPatient(patientId);
         }

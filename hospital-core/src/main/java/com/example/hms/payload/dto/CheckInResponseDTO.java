@@ -33,4 +33,8 @@ public class CheckInResponseDTO {
     private String chiefComplaint;
 
     private String message;
+
+    /** QA D975: the copay's invoice and payment, so the desk can print its receipt. */
+    private UUID copayInvoiceId;
+    private UUID copayPaymentId;
 }

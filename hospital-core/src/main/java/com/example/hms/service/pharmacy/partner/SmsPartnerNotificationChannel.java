@@ -108,6 +108,15 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
     }
 
     @Override
+    public void sendHeldForReview(PrescriptionRoutingDecision decision, Pharmacy partner) {
+        String phone = partner != null ? partner.getPhoneNumber() : null;
+        if (phone == null || phone.isBlank()) {
+            return;
+        }
+        trySend(phone, templates.heldForReview(buildRefToken(decision)));
+    }
+
+    @Override
     public void notifyPatientAccepted(Patient patient, Pharmacy partner) {
         String phone = patientPhone(patient);
         if (phone == null || partner == null) {
@@ -208,7 +217,9 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         if (remaining.compareTo(FillAccounting.expectedLifetimeQuantity(prescription)) == 0) {
             return null;
         }
-        return FillAccounting.remainingLabel(remaining, prescription.getQuantityUnit());
+        // The partner reads the offer in its SMS language (D1002 class: its decimal separator too).
+        return FillAccounting.remainingLabel(remaining, prescription.getQuantityUnit(),
+                com.example.hms.service.i18n.NotificationLocales.PARTNER_PHARMACY);
     }
 
     private Locale patientLocale(Patient patient) {

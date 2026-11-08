@@ -1,9 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Observable, Subject, of, throwError } from 'rxjs';
 
 import { StoryboardBannerComponent } from './storyboard-banner.component';
 import { PatientStoryboard, StoryboardService } from '../../services/storyboard.service';
+import { PatientChartChanges } from '../../interceptors/patient-chart-change.interceptor';
 
 describe('StoryboardBannerComponent', () => {
   let fixture: ComponentFixture<StoryboardBannerComponent>;
@@ -32,6 +33,29 @@ describe('StoryboardBannerComponent', () => {
     return fixture.nativeElement.querySelector('[data-testid="storyboard-banner"]');
   }
 
+  describe('after a chart write (QA D957)', () => {
+    it('re-reads the banner when an allergy or a problem of this patient is saved', () => {
+      storyboardSpy.getStoryboard.and.returnValues(
+        of({ ...populatedSummary(), allergies: [] }),
+        of(populatedSummary()),
+      );
+      setPatient('p-123');
+      TestBed.inject(PatientChartChanges).notify('p-123');
+      fixture.detectChanges();
+      expect(storyboardSpy.getStoryboard).toHaveBeenCalledTimes(2);
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="storyboard-allergies"]'),
+      ).not.toBeNull();
+    });
+
+    it('ignores a write on another patient', () => {
+      storyboardSpy.getStoryboard.and.returnValue(of(populatedSummary()));
+      setPatient('p-123');
+      TestBed.inject(PatientChartChanges).notify('p-999');
+      expect(storyboardSpy.getStoryboard).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('hides the banner entirely when patientId is missing', () => {
     setPatient(null);
     expect(bannerEl()).toBeNull();
@@ -57,6 +81,36 @@ describe('StoryboardBannerComponent', () => {
     expect(
       fixture.nativeElement.querySelector('[data-testid="storyboard-code-status"]'),
     ).not.toBeNull();
+  });
+
+  it('QA D1148 — the code status and a DNR directive read in French, never the raw code', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: {
+        ENUM: {
+          CODE_STATUS: { DO_NOT_RESUSCITATE: 'Ne pas réanimer (DNR)' },
+          ADVANCE_DIRECTIVE_TYPE: { DO_NOT_RESUSCITATE: 'Ne pas réanimer (DNR)' },
+        },
+      },
+    });
+    translate.use('fr');
+    storyboardSpy.getStoryboard.and.returnValue(
+      of({
+        ...populatedSummary(),
+        codeStatus: {
+          status: 'DO_NOT_RESUSCITATE',
+          directives: [
+            { id: 'd-1', directiveType: 'DO_NOT_RESUSCITATE', status: 'ACTIVE' } as never,
+          ],
+        },
+      }),
+    );
+    setPatient('p-123');
+    const text =
+      fixture.nativeElement.querySelector('[data-testid="storyboard-code-status"]')?.textContent ??
+      '';
+    expect(text).toContain('Ne pas réanimer (DNR)');
+    expect(text).not.toContain('DO_NOT_RESUSCITATE');
   });
 
   it('QA D504 — says when the opt-out held other hospitals’ allergies back', () => {

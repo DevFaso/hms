@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.payload.dto.mortality.DeathRecordAmendmentDTO;
+import com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordRequestDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordResponseDTO;
 import com.example.hms.payload.dto.mortality.MortalityRegisterDTO;
@@ -29,9 +30,8 @@ public interface MortalityService {
      * and close what is still open — admissions, encounters, future
      * appointments and pending recalls.
      *
-     * <p>Refuses a second death record for the same patient. There is
-     * deliberately no un-death path: reversing a death is a data-correction
-     * exercise, not something a form should be able to trigger.
+     * <p>Refuses a second death record for the same patient. A death recorded on
+     * the wrong patient is corrected by {@link #markEnteredInError}, nothing else.
      */
     RecordDeathResponseDTO recordDeath(DeathRecordRequestDTO request);
 
@@ -42,12 +42,26 @@ public interface MortalityService {
      */
     DeathRecordResponseDTO amendDeathRecord(UUID recordId, DeathRecordAmendmentDTO request);
 
+    /**
+     * QA D1488: a death recorded on the wrong patient. The row is kept and marked with who, when and why, it
+     * leaves the register and the indicators, the patient's {@code deceasedAt} is cleared and care reopens. It
+     * does not reopen what the death closed. A hospital administrator of that hospital or a super admin.
+     */
+    DeathRecordResponseDTO markEnteredInError(UUID recordId, DeathRecordEnteredInErrorDTO request);
+
     DeathRecordResponseDTO getForPatient(UUID patientId);
 
     /**
+     * QA D1516: what the patient's deaths marked entered in error at the acting hospital had closed (stays, visits,
+     * appointments), for the chart: nothing was reopened, so a clinician readmits or rebooks.
+     */
+    java.util.List<com.example.hms.payload.dto.mortality.VoidedDeathClosuresDTO> getVoidedClosures(UUID patientId);
+
+    /**
      * The register for a period, with maternal (WHO definition), late maternal,
-     * perinatal and stillbirth counts broken out — the numbers the facility is
-     * measured on and the ones the DHIS2 export needs.
+     * perinatal (WHO definition, without late neonatal deaths), stillbirth, early
+     * neonatal and late neonatal counts broken out: the numbers the facility is
+     * measured on.
      */
     MortalityRegisterDTO getRegister(LocalDate from, LocalDate to);
 }

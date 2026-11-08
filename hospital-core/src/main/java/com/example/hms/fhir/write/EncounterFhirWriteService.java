@@ -149,6 +149,10 @@ public class EncounterFhirWriteService {
                 "Encounter/" + encounterId + " not found at the active hospital scope.",
                 OperationOutcome.IssueType.NOTFOUND
             ));
+        // QA D1428 class: a closed visit's record is protected on this path too.
+        if (existing.getStatus() != null && existing.getStatus().isClosed()) {
+            throw forbidden("Encounter " + encounterId + " is closed: its record can no longer be changed.");
+        }
 
         // Defence-in-depth: the repository scope already filters by hospital,
         // but if the loaded entity disagrees with the context (which would

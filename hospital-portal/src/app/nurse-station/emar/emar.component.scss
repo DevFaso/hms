@@ -6,6 +6,14 @@
   gap: 1rem;
 }
 
+/* QA D1392: the open panel closed because its order was withdrawn. */
+.emar__notice {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-danger, #c53030);
+  border-radius: 0.5rem;
+  color: var(--color-danger, #c53030);
+}
+
 .emar__title {
   margin: 0;
   font-size: 1.25rem;
@@ -96,6 +104,13 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+.emar__queue-chip--controlled {
+  /* QA D922: a controlled substance, in the queue as in the detail. */
+  border: 1px solid #5b21b6;
+  color: #5b21b6;
+  background: #ede9fe;
 }
 
 .emar__queue-chip--blocked {
@@ -315,6 +330,35 @@
   padding: 2rem;
   text-align: center;
   color: var(--color-text-muted, #4a5568);
+}
+
+/* QA D1025: the dose and route inputs carry their own labels; the prescription is read beside them. */
+.emar__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.emar__prescribed {
+  margin: 0 0 0.5rem;
+  color: var(--text-secondary, #555);
+}
+
+/* QA D1329: a submit scope only; the scan and verify sections keep their layout. */
+.emar__verify-scope {
+  display: contents;
+}
+
+.review-hold-flag {
+  display: inline-block;
+  margin: 2px 0 2px 6px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #fff3e0;
+  color: #b45309;
 }
 
 @include care.workspace;

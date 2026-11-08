@@ -284,7 +284,9 @@ class BedManagementServiceImplTest {
 
         assertThatThrownBy(() -> service.updateBedStatus(bedId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("occupied");
+            .hasMessageContaining("occupied")
+            // QA D1366 class (added assertion): the requested status is named.
+            .hasFieldOrPropertyWithValue("field", "status");
     }
 
     @Test

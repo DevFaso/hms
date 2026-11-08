@@ -307,6 +307,25 @@
   }
 }
 
+// QA D1290 (round 27): a picker placed outside a styled field (the new
+// appointment form puts it straight in a .form-section) rendered as a 207×21 px
+// browser-default box with a cut-off placeholder. Its base look lives here,
+// at zero specificity (:where), so a page's own field rules still win.
+:where(.patient-picker-wrap) :where(.picker-input) {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  background: #fff;
+  text-overflow: ellipsis;
+}
+
 .picker-dropdown {
   position: absolute;
   top: calc(100% + 4px);
@@ -332,7 +351,9 @@
   cursor: pointer;
   transition: background 120ms;
 
-  &:hover {
+  /* QA D947: the option the arrow keys are on looks like the hovered one. */
+  &:hover,
+  &.active {
     background: var(--primary-soft);
   }
 
@@ -1371,4 +1392,15 @@ a.list-item {
     font-size: 16px;
     flex-shrink: 0;
   }
+}
+
+.review-hold-flag {
+  display: inline-block;
+  margin: 2px 0 2px 6px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #fff3e0;
+  color: #b45309;
 }

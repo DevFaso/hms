@@ -443,6 +443,10 @@ public class MaternalHistory extends BaseEntity {
     @Column(name = "risk_category", length = 50)
     private String riskCategory; // LOW, MODERATE, HIGH
 
+    /** When the category was last worked out, which says which pregnancy it belongs to. */
+    @Column(name = "risk_assessed_at")
+    private LocalDateTime riskAssessedAt;
+
     @Column(name = "identified_risk_factors", columnDefinition = "TEXT")
     private String identifiedRiskFactors;
 

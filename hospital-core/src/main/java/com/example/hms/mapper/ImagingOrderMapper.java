@@ -124,6 +124,7 @@ public class ImagingOrderMapper {
 
         return ImagingOrderResponseDTO.builder()
             .id(orderId)
+            .authorUserId(order.getOrderingProviderUserId())
             .patientId(patient != null ? patient.getId() : null)
             .patientDisplayName(resolvePatientDisplayName(patient))
             .patientMrn(resolvePatientMrn(patient, hospital, orderId))
@@ -219,7 +220,11 @@ public class ImagingOrderMapper {
         if (patient == null) {
             return null;
         }
-        String first = Optional.ofNullable(patient.getFirstName()).orElse("").trim();
+        // QA D1036: "Last, First Middle" - the given names whole, middle name included.
+        String first = java.util.stream.Stream.of(patient.getFirstName(), patient.getMiddleName())
+            .filter(part -> part != null && !part.isBlank())
+            .map(String::trim)
+            .collect(java.util.stream.Collectors.joining(" "));
         String last = Optional.ofNullable(patient.getLastName()).orElse("").trim();
         if (!last.isEmpty() && !first.isEmpty()) {
             return last + ", " + first;

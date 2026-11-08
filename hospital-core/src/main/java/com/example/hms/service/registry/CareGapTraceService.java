@@ -168,7 +168,7 @@ public class CareGapTraceService {
         String programName = messageSource.getMessage(
             "care.gap.program." + enrollment.getProgram().name(), null, locale);
         String reason = messageSource.getMessage("care.gap.recall.reason",
-            new Object[]{programName, missedDate}, locale);
+            new Object[]{programName, com.example.hms.utility.DisplayDates.date(missedDate, locale)}, locale);
         PatientRecall saved = recallRepository.saveAndFlush(PatientRecall.builder()
             .patient(enrollment.getPatient())
             .hospital(enrollment.getHospital())

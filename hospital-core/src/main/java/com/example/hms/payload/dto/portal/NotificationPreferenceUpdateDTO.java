@@ -21,5 +21,11 @@ public class NotificationPreferenceUpdateDTO {
     @NotNull
     private NotificationChannel channel;
 
-    private boolean enabled;
+    /**
+     * QA D1364 (round 31): on or off is said, never assumed. A primitive read
+     * a missing or blank value as "off" (a channel silently switched off) and
+     * a blank one was reported as malformed, hiding the blank type and channel.
+     */
+    @NotNull
+    private Boolean enabled;
 }

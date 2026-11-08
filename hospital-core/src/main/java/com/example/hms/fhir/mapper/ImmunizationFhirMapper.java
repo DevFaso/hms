@@ -45,6 +45,7 @@ public class ImmunizationFhirMapper {
                 src.getAdministrationDate().atStartOfDay(ZoneId.systemDefault()).toInstant()
             )));
         }
+        mapProvenance(src, out);
         if (src.getLotNumber() != null) out.setLotNumber(src.getLotNumber());
         if (src.getExpirationDate() != null) {
             out.setExpirationDate(Date.from(
@@ -65,6 +66,21 @@ public class ImmunizationFhirMapper {
         return out;
     }
 
+    /**
+     * QA D1113: a dose transcribed from a card or another record is not
+     * this hospital's own observation (FHIR primarySource = false).
+     */
+    private static void mapProvenance(PatientImmunization src, Immunization out) {
+        if (src.getSourceOfRecord() == null || src.getSourceOfRecord().isBlank()) {
+            return;
+        }
+        String transcribedFrom = com.example.hms.service.timeline.VisitTimelineRows.transcribedSourceOf(src);
+        out.setPrimarySource(transcribedFrom == null);
+        if (transcribedFrom != null) {
+            out.setReportOrigin(new CodeableConcept().setText(transcribedFrom));
+        }
+    }
+
     private static Immunization.ImmunizationStatus mapStatus(PatientImmunization src) {
         if (src.getStatus() == null) return Immunization.ImmunizationStatus.COMPLETED;
         return switch (src.getStatus().trim().toLowerCase(Locale.ROOT)) {
@@ -78,15 +94,18 @@ public class ImmunizationFhirMapper {
     private static CodeableConcept mapVaccineCode(PatientImmunization src) {
         CodeableConcept code = new CodeableConcept();
         if (src.getVaccineDisplay() != null) code.setText(src.getVaccineDisplay());
+        // QA D1003: the CVX code is optional. Without one the local type is the
+        // coding, and without that the concept is text only: never a coding
+        // with an empty code, which a FHIR validator rejects.
         if (src.getVaccineCode() != null && !src.getVaccineCode().isBlank()) {
             code.addCoding(new Coding()
                 .setSystem(SYSTEM_CVX)
-                .setCode(src.getVaccineCode())
+                .setCode(src.getVaccineCode().trim())
                 .setDisplay(src.getVaccineDisplay()));
-        } else if (src.getVaccineType() != null) {
+        } else if (src.getVaccineType() != null && !src.getVaccineType().isBlank()) {
             code.addCoding(new Coding()
                 .setSystem(SYSTEM_HMS_LOCAL)
-                .setCode(src.getVaccineType())
+                .setCode(src.getVaccineType().trim())
                 .setDisplay(src.getVaccineDisplay()));
         }
         return code;

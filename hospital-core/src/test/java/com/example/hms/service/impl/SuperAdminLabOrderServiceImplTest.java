@@ -339,7 +339,10 @@ class SuperAdminLabOrderServiceImplTest {
 
         assertThatThrownBy(() -> service.createLabOrder(payload, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("organizationIdentifier");
+            // QA D1299 / D1312 (assertion changed): named in fieldErrors, and by its label in the sentence.
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refusal -> org.assertj.core.api.Assertions.assertThat(refusal.getField()).isEqualTo("organizationIdentifier"))
+            .message().doesNotContain("organizationIdentifier");
     }
 
     @Test

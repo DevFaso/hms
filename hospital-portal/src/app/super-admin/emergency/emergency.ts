@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   DestroyRef,
+  ElementRef,
   computed,
   inject,
   signal,
@@ -22,6 +23,10 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
 import { isStepUpRefusal, stepUpRefusalKey } from '../../services/step-up';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { ListEscapeDirective } from '../../shared/a11y/list-escape.directive';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { refuseFields } from '../../shared/forms/invalid-fields';
 
 interface PanelState {
   busy: boolean;
@@ -48,10 +53,14 @@ interface HospitalsOutcome {
  */
 export const RESET_ALL_PHRASE = 'RESET ALL MFA';
 
+const DOWNTIME_MESSAGE_ID = 'emergency-downtime-message';
+
 @Component({
   selector: 'app-super-admin-emergency',
   standalone: true,
   imports: [
+    ListEscapeDirective,
+    SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -71,6 +80,8 @@ export class EmergencyComponent {
   private readonly userService = inject(UserService);
   private readonly hospitalService = inject(HospitalService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly confirm = inject(ConfirmService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /* ── Downtime read-only mode (P3 #23a) ── */
   readonly downtimeStatus = signal<DowntimeStatus | null>(null);
@@ -143,15 +154,48 @@ export class EmergencyComponent {
     this.downtimeStatus.set(this.downtimeService.status());
   }
 
-  setDowntime(readOnly: boolean): void {
+  /**
+   * QA CX-001: one click on "Activate" turned every hospital read-only with no
+   * message and no question, and the live incident blocked other users' writes
+   * for two minutes. Activating says why (the submit guard marks the blank
+   * message; the server refuses it too) and asks first; nothing is sent before
+   * the answer. Lifting the mode asks too, and needs no reason.
+   */
+  async setDowntime(readOnly: boolean): Promise<void> {
     if (this.downtimeBusy()) return;
-    this.downtimeBusy.set(true);
     this.downtimeError.set('');
-    this.downtimeService.toggle(readOnly, this.downtimeMessage().trim() || undefined).subscribe({
+    const message = readOnly ? this.downtimeMessage().trim() : '';
+    if (readOnly && !message) {
+      refuseFields(
+        this.host.nativeElement,
+        [DOWNTIME_MESSAGE_ID],
+        [DOWNTIME_MESSAGE_ID],
+        this.translate.instant('EMERGENCY.DOWNTIME.MESSAGE_REQUIRED'),
+      );
+      return;
+    }
+    const confirmed = await this.confirm.ask(
+      readOnly
+        ? {
+            titleKey: 'EMERGENCY.DOWNTIME.CONFIRM_ACTIVATE',
+            messageKey: 'EMERGENCY.DOWNTIME.CONFIRM_ACTIVATE_BODY',
+            params: { message },
+            confirmKey: 'EMERGENCY.DOWNTIME.ACTIVATE',
+          }
+        : {
+            titleKey: 'EMERGENCY.DOWNTIME.CONFIRM_DEACTIVATE',
+            messageKey: 'EMERGENCY.DOWNTIME.CONFIRM_DEACTIVATE_BODY',
+            confirmKey: 'EMERGENCY.DOWNTIME.DEACTIVATE',
+          },
+    );
+    if (!confirmed) return;
+    this.downtimeBusy.set(true);
+    this.downtimeService.toggle(readOnly, message || undefined).subscribe({
       next: (status) => {
         this.downtimeBusy.set(false);
         this.downtimeStatus.set(status);
         this.downtimeService.status.set(status);
+        this.downtimeMessage.set('');
       },
       error: (err) => {
         this.downtimeBusy.set(false);
@@ -250,18 +294,24 @@ export class EmergencyComponent {
     });
   }
 
-  killFeature(): void {
+  async killFeature(): Promise<void> {
+    // The submit guard marks a blank key or reason before this runs (QA CX-001).
+    const flagKey = this.killFlagKey().trim();
+    if (!flagKey || !this.killReason().trim()) return;
+    const confirmed = await this.confirm.ask({
+      titleKey: 'EMERGENCY.KILL_FEATURE.CONFIRM',
+      params: { key: flagKey },
+      confirmKey: 'EMERGENCY.KILL_FEATURE.ACTION',
+    });
+    if (!confirmed) return;
     this.killPanel.set({ busy: true, result: null, error: null });
-    this.service
-      .killFeature({ flagKey: this.killFlagKey(), reason: this.killReason() }, this.killMfa())
-      .subscribe({
-        next: (response) => this.killPanel.set({ busy: false, result: response, error: null }),
-        error: (err) =>
-          this.killPanel.set({ busy: false, result: null, error: this.errorText(err) }),
-      });
+    this.service.killFeature({ flagKey, reason: this.killReason() }, this.killMfa()).subscribe({
+      next: (response) => this.killPanel.set({ busy: false, result: response, error: null }),
+      error: (err) => this.killPanel.set({ busy: false, result: null, error: this.errorText(err) }),
+    });
   }
 
-  forceMfaReenrol(): void {
+  async forceMfaReenrol(): Promise<void> {
     const ids = this.mfaSelected().map((u) => u.id);
     const resetAll = ids.length === 0;
     if (resetAll && this.mfaResetAllConfirm() !== RESET_ALL_PHRASE) {
@@ -270,6 +320,15 @@ export class EmergencyComponent {
         error: this.translate.instant('EMERGENCY.FORCE_MFA.RESET_ALL_CONFIRM_TYPED'),
       });
       return;
+    }
+    // Everyone: the typed phrase is the question. Named users are asked here.
+    if (!resetAll) {
+      const confirmed = await this.confirm.ask({
+        titleKey: 'EMERGENCY.FORCE_MFA.CONFIRM',
+        params: { count: ids.length },
+        confirmKey: 'EMERGENCY.FORCE_MFA.ACTION',
+      });
+      if (!confirmed) return;
     }
     this.mfaPanel.set({ busy: true, result: null, error: null });
     this.service
@@ -293,7 +352,14 @@ export class EmergencyComponent {
       });
   }
 
-  broadcast(): void {
+  async broadcast(): Promise<void> {
+    // The submit guard marks a blank message before this runs (QA CX-001).
+    if (!this.broadcastMessage().trim()) return;
+    const confirmed = await this.confirm.ask({
+      titleKey: 'EMERGENCY.BROADCAST.CONFIRM',
+      confirmKey: 'EMERGENCY.BROADCAST.ACTION',
+    });
+    if (!confirmed) return;
     this.broadcastPanel.set({ busy: true, result: null, error: null });
     this.service
       .broadcast(

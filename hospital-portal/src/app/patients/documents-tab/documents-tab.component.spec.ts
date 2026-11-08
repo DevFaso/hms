@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
 import { DocumentsTabComponent, PAGE_SIZE } from './documents-tab.component';
@@ -155,11 +156,27 @@ describe('DocumentsTabComponent', () => {
     expect((fixture.nativeElement as HTMLElement).innerHTML).not.toContain('legacy.example');
   });
 
-  it('reports a failed download and clears the busy state', () => {
+  it('reports a failed download and clears the busy state', async () => {
     serviceSpy.downloadBlob.and.returnValue(throwError(() => new Error('503')));
     component.download(doc());
-    expect(toastSpy.error).toHaveBeenCalledWith('PATIENT_DOCUMENTS.DOWNLOAD_FAILED');
     expect(component.downloading()).toBeNull();
+    // The server's reason is read from the blob body first (QA D1184), so the toast follows a promise.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(toastSpy.error).toHaveBeenCalledWith('PATIENT_DOCUMENTS.DOWNLOAD_FAILED');
+  });
+
+  it('QA D1184: a stored file that is gone shows the server reason, not the generic toast', async () => {
+    const gone = new HttpErrorResponse({
+      status: 404,
+      error: new Blob([JSON.stringify({ message: "Le fichier stocké n'est plus disponible." })]),
+    });
+    serviceSpy.downloadBlob.and.returnValue(throwError(() => gone));
+    component.download(doc());
+    // Blob.text() resolves on its own schedule: wait for the toast, up to a second.
+    for (let i = 0; i < 50 && toastSpy.error.calls.count() === 0; i++) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    }
+    expect(toastSpy.error).toHaveBeenCalledWith("Le fichier stocké n'est plus disponible.");
   });
 
   it('formats sizes for humans', () => {

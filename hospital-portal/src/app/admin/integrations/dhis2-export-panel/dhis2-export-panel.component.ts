@@ -1,3 +1,4 @@
+import { allRows } from '../../../shared/all-pages';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -25,6 +26,7 @@ import { refusalReason } from '../../../shared/refusal-reason';
 import { ToastService } from '../../../core/toast.service';
 import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 
+import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directive';
 /**
  * Manual-trigger panel + last-N runs table.
  *
@@ -36,7 +38,7 @@ import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 @Component({
   selector: 'app-dhis2-export-panel',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="dhis2-export" data-testid="dhis2-export-panel">
@@ -46,7 +48,7 @@ import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 
       <form class="dhis2-export__form" (ngSubmit)="onTrigger()" data-testid="dhis2-export-form">
         <label>
-          {{ 'DHIS2.PANEL.DATASET_UID' | translate }}
+          {{ 'DHIS2.PANEL.DATASET_UID' | translate }} *
           <input
             type="text"
             name="datasetUid"
@@ -68,7 +70,7 @@ import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
         </label>
 
         <label>
-          {{ 'DHIS2.PANEL.PERIOD_ISO' | translate }}
+          {{ 'DHIS2.PANEL.PERIOD_ISO' | translate }} *
           <input
             type="text"
             name="periodIso"
@@ -84,7 +86,9 @@ import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
           type="submit"
           class="btn-primary"
           data-testid="dhis2-export-trigger"
-          [disabled]="triggering() || !canTrigger()"
+          [disabled]="triggering()"
+          [appSubmitGuard]="!canTrigger()"
+          submitGuardRequired
         >
           {{ 'DHIS2.PANEL.TRIGGER' | translate }}
         </button>
@@ -258,9 +262,10 @@ export class Dhis2ExportPanelComponent implements OnInit, OnDestroy {
     this.loading.set(true);
     this.error.set(false);
     this.listSub?.unsubscribe();
-    this.listSub = this.dhis2.listRuns(hospitalId).subscribe({
-      next: (page) => {
-        this.runs.set(page.content);
+    // QA D1347: every export run (all pages), not the 20 newest.
+    this.listSub = allRows((page, size) => this.dhis2.listRuns(hospitalId, page, size)).subscribe({
+      next: (runs) => {
+        this.runs.set(runs);
         this.loading.set(false);
       },
       error: () => {

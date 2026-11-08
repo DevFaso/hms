@@ -21,12 +21,14 @@ public class PatientProfileUpdateDTO {
 
     // Contact info
     @Size(max = 100)
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumberPrimary;
 
     @Size(max = 100)
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumberSecondary;
 
-    @Email @Size(max = 150)
+    @Email(message = "{validation.email.invalid}") @Size(max = 150)
     private String email;
 
     // Address
@@ -53,6 +55,7 @@ public class PatientProfileUpdateDTO {
     private String emergencyContactName;
 
     @Size(max = 20)
+    @com.example.hms.validation.PhoneNumber
     private String emergencyContactPhone;
 
     @Size(max = 50)

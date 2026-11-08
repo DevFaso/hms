@@ -9,6 +9,7 @@ import { HospitalService } from '../../services/hospital.service';
 import { ReferralService } from '../../services/referral.service';
 import { StaffResponse, StaffService } from '../../services/staff.service';
 import { ToastService } from '../../core/toast.service';
+import { expectEmptySubmitRefusal } from '../../testing/form-refusal-behaviour';
 
 describe('AdtIntakeConfigComponent', () => {
   let fixture: ComponentFixture<AdtIntakeConfigComponent>;
@@ -259,5 +260,18 @@ describe('AdtIntakeConfigComponent', () => {
 
     expect(c.fieldError('admittingProviderId')).toBe(reason);
     expect(toast.error).toHaveBeenCalledWith(reason);
+  });
+
+  it('QA CX-004: no hospital and no provider: both marked, starred, nothing sent', () => {
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="adt-intake-save"]',
+      alsoMarked: ['adt-provider'],
+      sent: svc.upsert,
+    });
+    expect(marked).toContain('adt-hospital-search');
+    expect(marked).toContain('adt-provider');
+    (fixture.nativeElement as HTMLElement).remove();
   });
 });

@@ -195,7 +195,7 @@ class RoiRequestServiceTest {
 
         assertThatThrownBy(() -> service.create(patientId, dto))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("requester's name");
+            .extracting("messageKey").isEqualTo("roi.request.thirdPartyNameRequired");
         verify(roiRepository, never()).save(any());
     }
 
@@ -209,7 +209,7 @@ class RoiRequestServiceTest {
 
         assertThatThrownBy(() -> service.create(patientId, dto))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("future");
+            .extracting("messageKey").isEqualTo("roi.request.dateInFuture");
         verify(roiRepository, never()).save(any());
     }
 
@@ -245,7 +245,7 @@ class RoiRequestServiceTest {
         RoiSelfRequestCreateDTO dto = selfDto();
         assertThatThrownBy(() -> service.createForSelf(patient, null, dto))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("registered hospital");
+            .extracting("messageKey").isEqualTo("roi.request.hospitalRequired");
     }
 
     // ── decisions ───────────────────────────────────────────────────────
@@ -298,19 +298,21 @@ class RoiRequestServiceTest {
 
         assertThatThrownBy(() -> service.fulfil(requestId, decision))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("disclosure log");
+            .extracting("messageKey").isEqualTo("roi.request.disclosureNotRecorded");
     }
 
     @Test
     @DisplayName("deny needs a reason — it is the outcome the requester is told")
     void denyNeedsAReason() {
-        asClinicianAtHospital();
+        // QA round 29 (assertion changed): a translated refusal on "note", read before the scope.
         RoiDecisionDTO blank = RoiDecisionDTO.builder().note("  ").build();
         UUID requestId = UUID.randomUUID();
 
         assertThatThrownBy(() -> service.deny(requestId, blank))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("reason");
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("note");
+                assertThat(ex.getMessageKey()).isEqualTo("roi.deny.noteRequired");
+            });
         verify(roiRepository, never()).saveAndFlush(any());
     }
 
@@ -346,7 +348,7 @@ class RoiRequestServiceTest {
 
         assertThatThrownBy(() -> service.deny(requestId, note))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already FULFILLED");
+            .extracting("messageKey").isEqualTo("roi.request.alreadyDecided");
     }
 
     @Test
@@ -386,7 +388,7 @@ class RoiRequestServiceTest {
 
         assertThatThrownBy(() -> service.fulfil(requestId, decision))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("reload and retry");
+            .extracting("messageKey").isEqualTo("roi.request.decideConflict");
     }
 
     @Test
@@ -458,7 +460,7 @@ class RoiRequestServiceTest {
         RoiRequestCreateDTO dto = createDto();
         assertThatThrownBy(() -> service.create(patientId, dto))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("active hospital context");
+            .extracting("messageKey").isEqualTo("roi.request.hospitalContextRequired");
     }
 
     @Test

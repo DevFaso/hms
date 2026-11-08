@@ -48,8 +48,9 @@ public class ChartReviewController {
         summary = "Get patient chart-review aggregate",
         description = "Returns the six chart-review sections plus a unified timeline for the "
             + "patient. Optional hospital scope is validated against the caller's active "
-            + "assignments. The {@code limit} parameter caps each section (default 20, "
-            + "min 5, max 100) so the response stays small on metered networks.",
+            + "assignments. The {@code limit} parameter is the page size of each section (default 20, "
+            + "min 5, max 100) so the response stays small on metered networks; {@code page} and "
+            + "{@code section} read the next pages, and {@code totals} counts every row (QA D1380).",
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @ApiResponse(responseCode = "200", description = "Chart review payload returned",
@@ -63,7 +64,7 @@ public class ChartReviewController {
     // THE CHART, not from /lab and /imaging, which are order-entry workbenches
     // for the teams that own those queues.
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
-        + "'ROLE_RECEPTIONIST','ROLE_PHARMACIST',"
+        + "'ROLE_PHARMACIST',"
         + "'ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER',"
         + "'ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER',"
         + CONSULTING_CLINICIANS_AUTHORITIES + ","
@@ -72,6 +73,8 @@ public class ChartReviewController {
         @PathVariable UUID patientId,
         @RequestParam(required = false) UUID hospitalId,
         @RequestParam(required = false) Integer limit,
+        @RequestParam(required = false) ChartReviewService.ChartReviewSection section,
+        @RequestParam(defaultValue = "0") int page,
         Authentication auth
     ) {
         authUtils.requireAuth(auth);
@@ -80,6 +83,6 @@ public class ChartReviewController {
         // derived queries, not Specifications, so we must enforce scope here.
         UUID effectiveHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         return ResponseEntity.ok(
-            chartReviewService.getChartReview(patientId, effectiveHospitalId, limit));
+            chartReviewService.getChartReview(patientId, effectiveHospitalId, limit, section, page));
     }
 }

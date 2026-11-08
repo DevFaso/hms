@@ -45,6 +45,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 /**
  * Slot inventory (P2 #11) — foundation pass.
@@ -64,6 +65,7 @@ class SlotInventoryServiceImplTest {
     @Mock private PatientRepository patientRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.repository.UserRepository userRepository;
 
     /** Fixed instant: holds, the reclaim sweep and the search all read the injected clock. */
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 2, 9, 0);
@@ -80,7 +82,7 @@ class SlotInventoryServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new SlotInventoryServiceImpl(templateRepository, slotRepository,
-            appointmentRepository, patientRepository, assignmentRepository, roleValidator, FIXED);
+            appointmentRepository, patientRepository, assignmentRepository, roleValidator, FIXED, userRepository);
 
         hospitalId = UUID.randomUUID();
         hospital = Hospital.builder().name("CHU").code("CHU").build();
@@ -364,6 +366,20 @@ class SlotInventoryServiceImplTest {
     }
 
     @Test
+    void qaD1073_aSlotBookingNamesWhoBookedIt() {
+        // The desk, or the receptionist accepting a waitlist offer: both book here.
+        AppointmentSlot slot = bookableSlot();
+        com.example.hms.model.User receptionist = new com.example.hms.model.User();
+        receptionist.setId(UUID.randomUUID());
+        when(roleValidator.getCurrentUserId()).thenReturn(receptionist.getId());
+        when(userRepository.findById(receptionist.getId())).thenReturn(java.util.Optional.of(receptionist));
+
+        service.book(slot.getId(), patientId, null);
+
+        assertThat(slot.getAppointment().getCreatedBy()).isSameAs(receptionist);
+    }
+
+    @Test
     void bookCompletesTheCallersOwnHold() {
         // A live hold placed by the caller is exactly the state booking is
         // meant to complete from.
@@ -506,5 +522,149 @@ class SlotInventoryServiceImplTest {
 
         assertThat(service.releaseForAppointment(UUID.randomUUID())).isZero();
         verify(slotRepository, never()).save(any());
+    }
+
+    /* ── QA D1013: a clinician booked by another path is never sold twice ── */
+
+    /** An appointment the desk booked for the slot's clinician over the slot's time. */
+    private Appointment deskBookingOver(AppointmentSlot slot, AppointmentStatus status) {
+        Appointment desk = Appointment.builder()
+            .staff(staff)
+            .appointmentDate(slot.getSlotDate())
+            .startTime(slot.getStartAt().toLocalTime())
+            .endTime(slot.getEndAt().toLocalTime())
+            .status(status)
+            .build();
+        desk.setId(UUID.randomUUID());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), slot.getSlotDate()))
+            .thenReturn(List.of(desk));
+        return desk;
+    }
+
+    @Test
+    void aSlotTheClinicianIsAlreadyBookedOverCannotBeHeld_D1013() {
+        AppointmentSlot slot = openSlot();
+        deskBookingOver(slot, AppointmentStatus.SCHEDULED);
+
+        UUID slotId = slot.getId();
+        assertThatThrownBy(() -> service.hold(slotId, 10))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "slotId")
+            .hasFieldOrPropertyWithValue("messageKey", "appointment.staff.unavailable");
+        assertThat(slot.getStatus()).isEqualTo(SlotStatus.OPEN);
+    }
+
+    @Test
+    void aSlotTheClinicianIsAlreadyBookedOverCannotBeBooked_D1013() {
+        AppointmentSlot slot = bookableSlot();
+        deskBookingOver(slot, AppointmentStatus.SCHEDULED);
+
+        UUID bookableId = slot.getId();
+        assertThatThrownBy(() -> service.book(bookableId, patientId, null))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "slotId")
+            .hasFieldOrPropertyWithValue("messageKey", "appointment.staff.unavailable");
+        verify(appointmentRepository, never()).save(any(Appointment.class));
+    }
+
+    @Test
+    void aCancelledDeskBookingFreesTheSlotAgain_D1013() {
+        AppointmentSlot slot = bookableSlot();
+        deskBookingOver(slot, AppointmentStatus.CANCELLED);
+
+        service.book(slot.getId(), patientId, null);
+
+        assertThat(slot.getStatus()).isEqualTo(SlotStatus.BOOKED);
+    }
+
+    @Test
+    void theSearchDoesNotOfferASlotTheClinicianIsBookedOver_D1013() {
+        AppointmentSlot taken = openSlot();
+        AppointmentSlot free = AppointmentSlot.builder()
+            .hospital(hospital).staff(staff)
+            .slotDate(taken.getSlotDate())
+            .startAt(taken.getEndAt()).endAt(taken.getEndAt().plusMinutes(30))
+            .status(SlotStatus.OPEN).build();
+        free.setId(UUID.randomUUID());
+        deskBookingOver(taken, AppointmentStatus.SCHEDULED);
+        when(slotRepository.searchOpen(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+            .thenReturn(List.of(taken, free));
+
+        List<AppointmentSlotDTO> offered = service.searchOpen(null, null, null, null, null, 50);
+
+        assertThat(offered).extracting(AppointmentSlotDTO::getId).containsExactly(free.getId());
+        // One read for the clinician's day, not one per slot.
+        verify(appointmentRepository, times(1))
+            .findByStaff_IdAndAppointmentDate(staff.getId(), taken.getSlotDate());
+    }
+
+    /* ── QA D1390 (D1347 class): the search is cut AFTER the booked-over filter, and paged with a total ── */
+
+    private List<AppointmentSlot> slotsInARow(int count) {
+        List<AppointmentSlot> out = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            java.time.LocalDateTime start = NOW.plusDays(1).plusMinutes(15L * i);
+            AppointmentSlot slot = AppointmentSlot.builder()
+                .hospital(hospital).staff(staff)
+                .slotDate(start.toLocalDate()).startAt(start).endAt(start.plusMinutes(15))
+                .status(SlotStatus.OPEN).build();
+            slot.setId(UUID.randomUUID());
+            out.add(slot);
+        }
+        return out;
+    }
+
+    @Test
+    void everyOpenSlotOfTheWindowIsReachedPageByPage_D1390() {
+        List<AppointmentSlot> window = slotsInARow(23);
+        deskBookingOver(window.get(0), AppointmentStatus.SCHEDULED);
+        org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> read =
+            org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        when(slotRepository.searchOpen(any(), any(), any(), any(), any(), any(), any(), any(), read.capture()))
+            .thenReturn(window);
+
+        List<UUID> seen = new java.util.ArrayList<>();
+        long total = -1;
+        for (int page = 0; page < 3; page++) {
+            org.springframework.data.domain.Page<AppointmentSlotDTO> slots =
+                service.searchOpenPage(null, null, null, null, null, page, 10);
+            total = slots.getTotalElements();
+            slots.getContent().forEach(dto -> seen.add(dto.getId()));
+        }
+
+        assertThat(read.getValue().isUnpaged()).as("never cut at the database before the filter").isTrue();
+        assertThat(total).as("the booked-over slot is not counted").isEqualTo(22);
+        assertThat(seen).doesNotHaveDuplicates().hasSize(22).doesNotContain(window.get(0).getId());
+    }
+
+    @Test
+    void aLimitedSearchAnswersTheLimitInOpenSlotsWhenThatManyExist_D1390() {
+        List<AppointmentSlot> window = slotsInARow(12);
+        deskBookingOver(window.get(0), AppointmentStatus.SCHEDULED);
+        when(slotRepository.searchOpen(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+            .thenReturn(window);
+
+        assertThat(service.searchOpen(null, null, null, null, null, 10)).hasSize(10)
+            .extracting(AppointmentSlotDTO::getId).doesNotContain(window.get(0).getId());
+    }
+
+    @Test
+    void aPagedSearchLongerThanTheHorizonIsRefusedNotCut_D1390() {
+        java.time.LocalDate from = NOW.toLocalDate();
+        java.time.LocalDate to = from.plusDays(SlotInventoryService.MAX_SEARCH_DAYS + 1L);
+        assertThatThrownBy(() -> service.searchOpenPage(null, null, null, from, to, 0, 50))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "to")
+            .hasFieldOrPropertyWithValue("messageKey", "slot.search.tooLong");
+    }
+
+    @Test
+    void theLimitedSearchBoundsItsWholeWindowTheSameWay_D1390() {
+        java.time.LocalDate from = NOW.toLocalDate();
+        java.time.LocalDate to = from.plusDays(SlotInventoryService.MAX_SEARCH_DAYS + 1L);
+        assertThatThrownBy(() -> service.searchOpen(null, null, null, from, to, 50))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "slot.search.tooLong");
+        verify(slotRepository, never()).searchOpen(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 }

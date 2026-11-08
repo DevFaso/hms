@@ -11,6 +11,10 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 interface FeatureFlag {
   key: string;
@@ -31,7 +35,7 @@ interface FlagOverride {
 @Component({
   selector: 'app-feature-flags',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [ModalDialogDirective, FormsModule, TranslateModule, SubmitGuardDirective],
   templateUrl: './feature-flags.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './feature-flags.scss',
@@ -40,6 +44,8 @@ export class FeatureFlagsComponent implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
 
   loading = signal(true);
   flags = signal<FeatureFlag[]>([]);
@@ -114,20 +120,20 @@ export class FeatureFlagsComponent implements OnInit {
             }),
           );
         },
-        error: () =>
-          this.toast.error(this.translate.instant('FLAGS.TOGGLE_FAILED', { key: flag.key })),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('FLAGS.TOGGLE_FAILED', { key: flag.key }),
+          ),
       });
   }
 
-  removeOverride(flag: FeatureFlag): void {
-    // A one-click delete on a platform-wide switch (D126): ask first.
-    if (
-      !globalThis.confirm(
-        this.translate.instant('FLAGS.REMOVE_OVERRIDE_CONFIRM', { key: flag.key }),
-      )
-    ) {
-      return;
-    }
+  async removeOverride(flag: FeatureFlag): Promise<void> {
+    // A one-click delete on a platform-wide switch (D126): ask first, in the app (QA D1229).
+    const confirmed = await this.confirmService.ask({
+      titleKey: 'FLAGS.REMOVE_OVERRIDE_CONFIRM',
+      params: { key: flag.key },
+    });
+    if (!confirmed) return;
     this.http
       .delete<Record<string, boolean>>(`/feature-flags/${encodeURIComponent(flag.key)}`)
       .subscribe({
@@ -135,9 +141,10 @@ export class FeatureFlagsComponent implements OnInit {
           this.loadFlags();
           this.toast.success(this.translate.instant('FLAGS.OVERRIDE_REMOVED', { key: flag.key }));
         },
-        error: () =>
+        error: (err: unknown) =>
           this.toast.error(
-            this.translate.instant('FLAGS.OVERRIDE_REMOVE_FAILED', { key: flag.key }),
+            refusalReason(err) ??
+              this.translate.instant('FLAGS.OVERRIDE_REMOVE_FAILED', { key: flag.key }),
           ),
       });
   }
@@ -155,10 +162,8 @@ export class FeatureFlagsComponent implements OnInit {
 
   createFlag(): void {
     const key = this.newFlagKey().trim();
-    if (!key) {
-      this.toast.error(this.translate.instant('FLAGS.KEY_REQUIRED'));
-      return;
-    }
+    // The submit guard refuses a blank key on its field (QA CX-004) before this runs.
+    if (!key) return;
     this.saving.set(true);
     this.http
       .put<Record<string, boolean>>(`/feature-flags/${encodeURIComponent(key)}`, {

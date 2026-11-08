@@ -1,16 +1,24 @@
 @if (isOpen() && snapshot(); as pt) {
   <div
+    [attr.aria-label]="'COMMON.CLOSE' | translate"
     class="drawer-overlay"
     role="button"
     tabindex="0"
     (click)="close()"
     (keydown.enter)="close()"
   ></div>
-  <aside class="snapshot-drawer">
+  <!-- QA D1125: a labelled modal; focus moves in, Escape closes, focus goes back to the opener. -->
+  <aside
+    class="snapshot-drawer"
+    appModalDialog
+    aria-labelledby="dashboard-snapshot-drawer-title"
+    data-testid="dashboard-snapshot-drawer"
+    (escaped)="close()"
+  >
     <!-- Header -->
     <div class="drawer-header">
       <div class="drawer-header-left">
-        <h2 class="drawer-patient-name">{{ pt.name }}</h2>
+        <h2 id="dashboard-snapshot-drawer-title" class="drawer-patient-name">{{ pt.name }}</h2>
         <span class="drawer-meta"
           >{{ pt.age }}{{ pt.sex ? '/' + pt.sex.charAt(0) : '' }} · {{ pt.mrn }}</span
         >
@@ -24,7 +32,11 @@
           <span class="material-symbols-outlined">open_in_full</span>
           {{ 'DASHBOARD.FULL_CHART' | translate }}
         </a>
-        <button class="drawer-close" (click)="close()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="drawer-close"
+          (click)="close()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -35,7 +47,7 @@
       @if (pt.codeStatus) {
         <div class="code-status-banner">
           <span class="material-symbols-outlined">emergency</span>
-          {{ pt.codeStatus }}
+          {{ pt.codeStatus | enumLabel: 'codeStatus' }}
         </div>
       }
 
@@ -173,8 +185,9 @@
                     [class.lab-abnormal]="lab.flag === 'ABNORMAL' || lab.flag === 'CRITICAL'"
                     [class.lab-critical]="lab.flag === 'CRITICAL'"
                   >
-                    {{ lab.value }}
+                    {{ lab.value | labValue }}
                   </span>
+                  <app-lab-correction-badge [corrected]="lab.corrected" />
                 </div>
               }
             }
@@ -277,16 +290,25 @@
 -->
 @if (isOpen() && !snapshot() && (loading() || loadError())) {
   <div
+    [attr.aria-label]="'COMMON.CLOSE' | translate"
     class="drawer-overlay"
     role="button"
     tabindex="0"
     (click)="close()"
     (keydown.enter)="close()"
   ></div>
-  <aside class="snapshot-drawer" data-testid="snapshot-status">
+  <aside
+    class="snapshot-drawer"
+    data-testid="snapshot-status"
+    appModalDialog
+    aria-labelledby="dashboard-snapshot-status-title"
+    (escaped)="close()"
+  >
     <div class="drawer-header">
       <div class="drawer-header-left">
-        <h2 class="drawer-patient-name">{{ 'DASHBOARD.SNAPSHOT_TITLE' | translate }}</h2>
+        <h2 id="dashboard-snapshot-status-title" class="drawer-patient-name">
+          {{ 'DASHBOARD.SNAPSHOT_TITLE' | translate }}
+        </h2>
       </div>
       <div class="drawer-header-actions">
         <button

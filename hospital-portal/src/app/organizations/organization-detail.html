@@ -16,7 +16,8 @@
         <p class="page-subtitle">
           <span class="code-badge">{{ org.code }}</span>
           @if (lifecycle(); as lc) {
-            <span
+            {{ ' '
+            }}<span
               class="state-chip"
               [style.background]="stateColor() + '14'"
               [style.color]="stateColor()"
@@ -36,7 +37,8 @@
         <div class="lifecycle-grid">
           <div class="lifecycle-row">
             <span class="lifecycle-label">{{ 'TENANT_LIFECYCLE.FIELD.STATE' | translate }}</span>
-            <span
+            {{ ' '
+            }}<span
               class="state-chip"
               [style.background]="stateColor() + '14'"
               [style.color]="stateColor()"
@@ -50,7 +52,7 @@
               <span class="lifecycle-label">{{
                 'TENANT_LIFECYCLE.FIELD.SUSPENDED_AT' | translate
               }}</span>
-              <span>{{ lc.suspendedAt | serverTime | date: 'medium' }}</span>
+              {{ ' ' }}<span>{{ lc.suspendedAt | serverTime | dateTime }}</span>
             </div>
           }
           @if (lc.suspensionReason) {
@@ -58,7 +60,7 @@
               <span class="lifecycle-label">{{
                 'TENANT_LIFECYCLE.FIELD.SUSPENSION_REASON' | translate
               }}</span>
-              <span>{{ lc.suspensionReason }}</span>
+              {{ ' ' }}<span>{{ lc.suspensionReason }}</span>
             </div>
           }
           @if (lc.archivedAt) {
@@ -66,7 +68,7 @@
               <span class="lifecycle-label">{{
                 'TENANT_LIFECYCLE.FIELD.ARCHIVED_AT' | translate
               }}</span>
-              <span>{{ lc.archivedAt | serverTime | date: 'medium' }}</span>
+              {{ ' ' }}<span>{{ lc.archivedAt | serverTime | dateTime }}</span>
             </div>
           }
           @if (lc.archiveReason) {
@@ -74,7 +76,7 @@
               <span class="lifecycle-label">{{
                 'TENANT_LIFECYCLE.FIELD.ARCHIVE_REASON' | translate
               }}</span>
-              <span>{{ lc.archiveReason }}</span>
+              {{ ' ' }}<span>{{ lc.archiveReason }}</span>
             </div>
           }
           @if (lc.purgeScheduledFor) {
@@ -82,7 +84,7 @@
               <span class="lifecycle-label">{{
                 'TENANT_LIFECYCLE.FIELD.PURGE_AT' | translate
               }}</span>
-              <span>{{ lc.purgeScheduledFor | serverTime | date: 'medium' }}</span>
+              {{ ' ' }}<span>{{ lc.purgeScheduledFor | serverTime | dateTime }}</span>
             </div>
           }
           @if (lc.purgeReason) {
@@ -90,7 +92,7 @@
               <span class="lifecycle-label">{{
                 'TENANT_LIFECYCLE.FIELD.PURGE_REASON' | translate
               }}</span>
-              <span>{{ lc.purgeReason }}</span>
+              {{ ' ' }}<span>{{ lc.purgeReason }}</span>
             </div>
           }
           @if (lc.purgedAt) {
@@ -98,7 +100,7 @@
               <span class="lifecycle-label">{{
                 'TENANT_LIFECYCLE.FIELD.PURGED_AT' | translate
               }}</span>
-              <span>{{ lc.purgedAt | serverTime | date: 'medium' }}</span>
+              <span>{{ lc.purgedAt | serverTime | dateTime }}</span>
             </div>
           }
         </div>
@@ -162,7 +164,10 @@
     >
       <div
         class="modal"
+        appModalDialog
+        aria-labelledby="organization-detail-dialog-1-title"
         role="dialog"
+        (escaped)="closeModal()"
         (click)="$event.stopPropagation()"
         (keydown)="$event.stopPropagation()"
       >
@@ -170,14 +175,14 @@
           <span class="material-symbols-outlined" [class.danger]="cfg.destructive">{{
             cfg.iconKey
           }}</span>
-          <h3>{{ cfg.titleKey | translate }}</h3>
+          <h3 id="organization-detail-dialog-1-title">{{ cfg.titleKey | translate }}</h3>
         </header>
 
         <p class="modal-desc">{{ cfg.descKey | translate }}</p>
 
         @if (cfg.reasonRequired) {
           <label class="field">
-            <span class="field-label">{{ 'TENANT_LIFECYCLE.FIELD.REASON' | translate }}</span>
+            <span class="field-label">{{ 'TENANT_LIFECYCLE.FIELD.REASON' | translate }}</span> *
             <textarea
               [ngModel]="modalReason()"
               (ngModelChange)="modalReason.set($event)"
@@ -258,10 +263,12 @@
             {{ 'TENANT_LIFECYCLE.CANCEL' | translate }}
           </button>
           <button
+            submitGuardRequired
             class="btn"
             [class.btn-danger]="cfg.destructive"
             [class.btn-primary]="!cfg.destructive"
-            [disabled]="!canConfirm() || submitting()"
+            [disabled]="submitting()"
+            [appSubmitGuard]="!canConfirm()"
             (click)="confirm()"
             data-test="action-confirm"
           >

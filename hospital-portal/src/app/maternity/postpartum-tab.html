@@ -44,7 +44,7 @@
             {{ 'POSTPARTUM.MINUTES' | translate }}
           }
           @if (s.nextDueAt) {
-            · {{ 'POSTPARTUM.NEXT_DUE' | translate }}:
+            · {{ 'POSTPARTUM.NEXT_DUE' | translate }}{{ 'COMMON.COLON' | translate }}
             {{ s.nextDueAt | serverTime | date: 'short' }}
           }
           @if (s.overdue) {
@@ -52,7 +52,8 @@
           }
         </p>
         <p class="muted">
-          {{ 'POSTPARTUM.IMMEDIATE_PROGRESS' | translate }}: {{ s.immediateChecksCompleted }} /
+          {{ 'POSTPARTUM.IMMEDIATE_PROGRESS' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ s.immediateChecksCompleted }} /
           {{ s.immediateCheckTarget }}
         </p>
       </div>
@@ -71,7 +72,7 @@
           [disabled]="!screeningAvailable()"
           [title]="screeningAvailable() ? '' : ('PRO.NOT_LOADED' | translate)"
         >
-          <span class="material-symbols-outlined">psychology</span>
+          <span class="material-symbols-outlined" aria-hidden="true">psychology</span>
           {{ 'PRO.ADMINISTER' | translate }}
         </button>
       </div>
@@ -89,18 +90,24 @@
         }
         @if (sc.lastAdministeredAt) {
           <p>
-            {{ 'PRO.LAST_SCREEN' | translate }}:
+            {{ 'PRO.LAST_SCREEN' | translate }}{{ 'COMMON.COLON' | translate }}
             {{ sc.lastAdministeredAt | serverTime | date: 'short' }} ·
             <strong>{{ sc.lastTotalScore }} / {{ sc.maxScore }}</strong>
             @if (sc.lastCriticalItemPositive) {
-              <span class="risk-badge risk-high">{{ 'PRO.CRITICAL_ITEM' | translate }}</span>
+              {{ ' '
+              }}<span class="risk-badge risk-high">{{ 'PRO.CRITICAL_ITEM' | translate }}</span>
             } @else if (sc.lastScreenPositive) {
-              <span class="risk-badge risk-moderate">{{ 'PRO.SCREEN_POSITIVE' | translate }}</span>
+              {{ ' '
+              }}<span class="risk-badge risk-moderate">{{
+                'PRO.SCREEN_POSITIVE' | translate
+              }}</span>
             } @else {
-              <span class="risk-badge risk-low">{{ 'PRO.SCREEN_NEGATIVE' | translate }}</span>
+              {{ ' '
+              }}<span class="risk-badge risk-low">{{ 'PRO.SCREEN_NEGATIVE' | translate }}</span>
             }
             @if (sc.escalationOpen) {
-              <span class="risk-badge risk-high">{{ 'PRO.ESCALATION_OPEN' | translate }}</span>
+              {{ ' '
+              }}<span class="risk-badge risk-high">{{ 'PRO.ESCALATION_OPEN' | translate }}</span>
             }
           </p>
         }
@@ -151,11 +158,13 @@
                       }}</span>
                     }
                     @if (r.screenPositive) {
-                      <span class="risk-badge risk-moderate">
+                      {{ ' '
+                      }}<span class="risk-badge risk-moderate">
                         {{ 'PRO.SCREEN_POSITIVE' | translate }}
                       </span>
                     } @else {
-                      <span class="risk-badge risk-low">{{
+                      {{ ' '
+                      }}<span class="risk-badge risk-low">{{
                         'PRO.SCREEN_NEGATIVE' | translate
                       }}</span>
                     }
@@ -197,7 +206,7 @@
     <div class="filter-bar">
       <h3 class="section-heading">{{ 'POSTPARTUM.OBSERVATIONS' | translate }}</h3>
       <button class="btn-primary" (click)="openObservation()">
-        <span class="material-symbols-outlined">add</span>
+        <span class="material-symbols-outlined" aria-hidden="true">add</span>
         {{ 'POSTPARTUM.NEW_OBSERVATION' | translate }}
       </button>
     </div>
@@ -231,6 +240,7 @@
               <th scope="col">{{ 'POSTPARTUM.LOCHIA' | translate }}</th>
               <th scope="col">{{ 'POSTPARTUM.MOOD' | translate }}</th>
               <th scope="col">{{ 'POSTPARTUM.ALERTS' | translate }}</th>
+              <th scope="col">{{ 'MATERNITY.CLINICAL_NOTES' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -259,6 +269,18 @@
                     </span>
                   }
                 </td>
+                <!-- QA D1068: the uterotonic given and the clinical notes typed with the observation. -->
+                <td class="saved-note" data-testid="postpartum-observation-notes">
+                  @if (o.uterotonicGiven) {
+                    <div>{{ 'POSTPARTUM.UTEROTONIC' | translate }}</div>
+                  }
+                  @if (o.psychosocialNotes) {
+                    <div>{{ o.psychosocialNotes }}</div>
+                  }
+                  @if (!o.uterotonicGiven && !o.psychosocialNotes) {
+                    —
+                  }
+                </td>
               </tr>
             }
           </tbody>
@@ -271,7 +293,7 @@
     <div class="filter-bar">
       <h3 class="section-heading">{{ 'POSTPARTUM.ASSESSMENTS' | translate }}</h3>
       <button class="btn-primary" (click)="openAssessment()">
-        <span class="material-symbols-outlined">add</span>
+        <span class="material-symbols-outlined" aria-hidden="true">add</span>
         {{ 'POSTPARTUM.NEW_ASSESSMENT' | translate }}
       </button>
     </div>
@@ -304,6 +326,7 @@
               <th scope="col">{{ 'POSTPARTUM.VITALS' | translate }}</th>
               <th scope="col">{{ 'POSTPARTUM.ESCALATION' | translate }}</th>
               <th scope="col">{{ 'POSTPARTUM.ALERTS' | translate }}</th>
+              <th scope="col">{{ 'POSTPARTUM.EXAM_NOTES' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -325,7 +348,9 @@
                 <td>
                   {{ a.temperatureCelsius | measure: '°C' }} ·
                   {{ a.heartRateBpm | measure: 'bpm' }} ·
-                  {{ a.oxygenSaturationPercent | measure: '%' }}
+                  {{ a.oxygenSaturationPercent | measure: '%' }} ·
+                  {{ a.respirationsPerMin | measure: '/min' }} ·
+                  {{ a.glucoseMgDl | measure: 'mg/dL' }}
                 </td>
                 <td>
                   @if (a.escalationRecommended) {
@@ -339,6 +364,52 @@
                     <span class="{{ alertClass(alert.severity) }}" [title]="alert.message">
                       {{ alert.type | enumLabel: 'newbornAlertType' }}
                     </span>
+                  }
+                  <!-- QA D1424: what asks to remeasure, or names the acceptable range, is read, not hovered. -->
+                  @for (alert of newbornAlertsToRead(a); track $index) {
+                    <p
+                      class="saved-note"
+                      [class.risk-badge]="isNewbornValueCheck(alert) || isNewbornDangerSign(alert)"
+                      [class.risk-high]="isNewbornValueCheck(alert) || isNewbornDangerSign(alert)"
+                      data-testid="newborn-alert-sentence"
+                    >
+                      {{ alert.message }}
+                    </p>
+                  }
+                </td>
+                <!-- QA D1068: appearance, exam and follow-up notes, as typed. -->
+                <td class="saved-note" data-testid="newborn-assessment-notes">
+                  @if (a.examGeneralAppearance) {
+                    <div>
+                      {{ 'POSTPARTUM.GENERAL_APPEARANCE' | translate
+                      }}{{ 'COMMON.COLON' | translate }} {{ a.examGeneralAppearance }}
+                    </div>
+                  }
+                  @if (a.examNotes) {
+                    <div>{{ a.examNotes }}</div>
+                  }
+                  @if (a.followUpNotes) {
+                    <div>
+                      {{ 'POSTPARTUM.FOLLOW_UP_NOTES' | translate }}{{ 'COMMON.COLON' | translate }}
+                      {{ a.followUpNotes }}
+                    </div>
+                  }
+                  <!-- CR-05: nobody looked is said out loud, and never reads as absent. -->
+                  @if (anyDangerSignLookedAt(a)) {
+                    @for (sign of newbornDangerSigns; track sign.field) {
+                      <div
+                        data-testid="newborn-danger-sign"
+                        [class.risk-badge]="a[sign.field] === 'PRESENT'"
+                        [class.risk-high]="a[sign.field] === 'PRESENT'"
+                      >
+                        {{ sign.label | translate }}{{ 'COMMON.COLON' | translate }}
+                        {{ dangerSignObservationKey(a[sign.field]) | translate }}
+                      </div>
+                    }
+                  } @else {
+                    <div class="muted" data-testid="newborn-danger-none">
+                      {{ 'POSTPARTUM.DANGER_SIGNS_NONE_ASSESSED' | translate }}
+                    </div>
                   }
                 </td>
               </tr>
@@ -360,20 +431,22 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="postpartum-tab-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeObservation(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'POSTPARTUM.NEW_OBSERVATION' | translate }}</h2>
+        <h2 id="postpartum-tab-dialog-1-title">{{ 'POSTPARTUM.NEW_OBSERVATION' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeObservation()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -580,20 +653,22 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="postpartum-tab-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeAssessment(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'POSTPARTUM.NEW_ASSESSMENT' | translate }}</h2>
+        <h2 id="postpartum-tab-dialog-2-title">{{ 'POSTPARTUM.NEW_ASSESSMENT' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeAssessment()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -658,23 +733,42 @@
             <label for="nb-temp">{{ 'POSTPARTUM.TEMPERATURE' | translate }}</label>
             <input
               id="nb-temp"
+              min="0"
               type="number"
               step="0.1"
-              min="25"
-              max="44"
               [(ngModel)]="assessmentForm.temperatureCelsius"
             />
+            @if (newbornValueToCheck('temperatureCelsius')) {
+              <p class="risk-badge risk-high" role="alert" data-testid="nb-temp-check">
+                {{ 'POSTPARTUM.CHECK_VALUE' | translate }}
+              </p>
+            }
           </div>
           <div class="field">
             <label for="nb-hr">{{ 'POSTPARTUM.PULSE' | translate }}</label>
-            <input id="nb-hr" type="number" [(ngModel)]="assessmentForm.heartRateBpm" />
+            <input id="nb-hr" type="number" min="0" [(ngModel)]="assessmentForm.heartRateBpm" />
+            @if (newbornValueToCheck('heartRateBpm')) {
+              <p class="risk-badge risk-high" role="alert" data-testid="nb-hr-check">
+                {{ 'POSTPARTUM.CHECK_VALUE' | translate }}
+              </p>
+            }
           </div>
           <div class="field">
             <label for="nb-resp">{{ 'POSTPARTUM.RESP' | translate }}</label>
-            <input id="nb-resp" type="number" [(ngModel)]="assessmentForm.respirationsPerMin" />
+            <input
+              id="nb-resp"
+              type="number"
+              min="0"
+              [(ngModel)]="assessmentForm.respirationsPerMin"
+            />
+            @if (newbornValueToCheck('respiratoryRateBpm')) {
+              <p class="risk-badge risk-high" role="alert" data-testid="nb-resp-check">
+                {{ 'POSTPARTUM.CHECK_VALUE' | translate }}
+              </p>
+            }
           </div>
           <div class="field">
-            <label for="nb-spo2">SpO2 %</label>
+            <label for="nb-spo2">{{ 'NURSE.SPO2' | translate }}</label>
             <input
               id="nb-spo2"
               type="number"
@@ -684,8 +778,30 @@
             />
           </div>
           <div class="field">
-            <label for="nb-glucose">{{ 'POSTPARTUM.GLUCOSE' | translate }}</label>
-            <input id="nb-glucose" type="number" min="0" [(ngModel)]="assessmentForm.glucoseMgDl" />
+            <label for="nb-glucose">{{ 'POSTPARTUM.GLUCOSE_VALUE' | translate }}</label>
+            <input
+              id="nb-glucose"
+              type="number"
+              min="0"
+              step="any"
+              [(ngModel)]="assessmentForm.glucoseValue"
+            />
+            @if (newbornValueToCheck('glucose')) {
+              <p class="risk-badge risk-high" role="alert" data-testid="nb-check-glucose">
+                {{ 'POSTPARTUM.CHECK_VALUE' | translate }}
+              </p>
+            }
+          </div>
+          <div class="field">
+            <label for="nb-glucose-unit">{{ 'POSTPARTUM.GLUCOSE_UNIT' | translate }}</label>
+            <select id="nb-glucose-unit" [(ngModel)]="assessmentForm.glucoseUnit">
+              <option [ngValue]="undefined">—</option>
+              @for (unit of glucoseUnits; track unit) {
+                <option [ngValue]="unit">
+                  {{ glucoseUnitLabels[unit] }}
+                </option>
+              }
+            </select>
           </div>
         </div>
         <div class="field">
@@ -700,7 +816,28 @@
           <label for="nb-exam-notes">{{ 'POSTPARTUM.EXAM_NOTES' | translate }}</label>
           <textarea id="nb-exam-notes" rows="2" [(ngModel)]="assessmentForm.examNotes"></textarea>
         </div>
+        <h3 class="section-heading">{{ 'POSTPARTUM.DANGER_SIGNS' | translate }}</h3>
+        <p class="muted" data-testid="newborn-danger-hint">
+          {{ 'POSTPARTUM.DANGER_SIGNS_HINT' | translate }}
+        </p>
+        <div class="form-row">
+          @for (sign of newbornDangerSigns; track sign.field) {
+            <div class="field">
+              <label [for]="sign.id">{{ sign.label | translate }}</label>
+              <select [id]="sign.id" [(ngModel)]="assessmentForm[sign.field]">
+                <option [ngValue]="undefined">
+                  {{ 'POSTPARTUM.DANGER_NOT_ASSESSED' | translate }}
+                </option>
+                <option [ngValue]="'PRESENT'">{{ 'POSTPARTUM.DANGER_PRESENT' | translate }}</option>
+                <option [ngValue]="'ABSENT'">{{ 'POSTPARTUM.DANGER_ABSENT' | translate }}</option>
+              </select>
+            </div>
+          }
+        </div>
         <h3 class="section-heading">{{ 'POSTPARTUM.INTERVENTIONS' | translate }}</h3>
+        <p class="muted" data-testid="newborn-interventions-hint">
+          {{ 'POSTPARTUM.INTERVENTIONS_HINT' | translate }}
+        </p>
         <div class="checkbox-grid">
           <label>
             <input type="checkbox" [(ngModel)]="assessmentForm.escalationRecommended" />
@@ -768,6 +905,7 @@
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeScreening(); $event.stopPropagation()"
       (keydown.tab)="trapTab($any($event), screeningDialog)"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="pro-screening-title">{{ screeningInstrument()?.name || screeningCode() }}</h2>
@@ -777,7 +915,7 @@
           (click)="closeScreening()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -796,7 +934,12 @@
           <div class="form-row">
             <div class="field">
               <label for="pro-time">{{ 'PRO.ADMINISTERED_AT' | translate }}</label>
-              <input id="pro-time" type="datetime-local" [(ngModel)]="screeningAdministeredAt" />
+              <input
+                id="pro-time"
+                data-server-field="administeredAt"
+                type="datetime-local"
+                [(ngModel)]="screeningAdministeredAt"
+              />
             </div>
             @if (instrument.availableLanguages.length > 1) {
               <div class="field">
@@ -862,6 +1005,7 @@
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeAcknowledge(); $event.stopPropagation()"
       (keydown.tab)="trapTab($any($event), ackDialog)"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="pro-ack-title">{{ 'PRO.ACKNOWLEDGE_TITLE' | translate }}</h2>
@@ -871,7 +1015,7 @@
           (click)="closeAcknowledge()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">

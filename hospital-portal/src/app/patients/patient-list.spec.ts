@@ -58,7 +58,11 @@ describe('PatientListComponent directory', () => {
         { provide: PatientService, useValue: patients },
         { provide: HospitalService, useValue: hospitals },
         { provide: PermissionService, useValue: { hasPermission: permission } },
-        { provide: RoleContextService, useValue: { isSuperAdmin: superAdmin } },
+        {
+          provide: RoleContextService,
+          // hasAnyActiveRole: the RCPT-CLIN front-desk check (blood type column and filter).
+          useValue: { isSuperAdmin: superAdmin, hasAnyActiveRole: () => false },
+        },
         { provide: ToastService, useValue: toast },
       ],
     });
@@ -180,14 +184,17 @@ describe('PatientListComponent directory', () => {
     expect(cells[1].querySelector('.contact-missing')).not.toBeNull();
   });
 
-  it('renders the retry state and disables metrics until a successful retry', () => {
+  it('renders the retry state; metrics wait only on the request in flight (QA D1124)', () => {
     patients.list.and.returnValue(throwError(() => new Error('offline')));
     const fixture = make();
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelector('.load-error')?.getAttribute('role')).toBe('alert');
+    // A failed load is said by the alert; the cards show "—" and stay pressable.
+    const cards = [...el.querySelectorAll<HTMLButtonElement>('.summary-card')];
+    expect(cards.every((b) => !b.disabled)).toBeTrue();
     expect(
-      [...el.querySelectorAll<HTMLButtonElement>('.summary-card')].every((b) => b.disabled),
+      cards.every((b) => b.querySelector('.card-value')?.textContent?.trim() === '—'),
     ).toBeTrue();
     expect(toast.error).not.toHaveBeenCalled();
     const pending = new Subject<PatientResponse[]>();

@@ -10,6 +10,7 @@ import {
   signal,
 } from '@angular/core';
 
+import { ElapsedPipe } from '../../shared/pipes/elapsed.pipe';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 import { PatientFlowItem } from '../../services/dashboard.service';
@@ -24,7 +25,7 @@ interface FlowColumn {
 @Component({
   selector: 'app-doctor-patient-flow',
   standalone: true,
-  imports: [TranslateModule],
+  imports: [TranslateModule, ElapsedPipe],
   templateUrl: './doctor-patient-flow.html',
   styleUrl: './doctor-patient-flow.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -133,10 +134,19 @@ export class DoctorPatientFlowComponent implements OnInit, OnDestroy {
     this.patientSelected.emit(patientId);
   }
 
+  /**
+   * QA D994: every encounter card read "Ambulatoire", urgences included. An
+   * admission or an inpatient visit is hospitalised, an emergency visit is
+   * "Urgences", the rest ambulatory.
+   */
   getSourceLabel(item: PatientFlowItem): string {
-    return item.flowSource === 'ADMISSION'
-      ? this.translate.instant('DASHBOARD.PATIENT_FLOW_INPATIENT')
-      : this.translate.instant('DASHBOARD.PATIENT_FLOW_OUTPATIENT');
+    if (item.flowSource === 'ADMISSION' || item.encounterType === 'INPATIENT') {
+      return this.translate.instant('DASHBOARD.PATIENT_FLOW_INPATIENT');
+    }
+    if (item.encounterType === 'EMERGENCY') {
+      return this.translate.instant('DASHBOARD.PATIENT_FLOW_EMERGENCY');
+    }
+    return this.translate.instant('DASHBOARD.PATIENT_FLOW_OUTPATIENT');
   }
 
   getElapsedClass(minutes: number): string {

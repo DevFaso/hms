@@ -20,6 +20,12 @@ import java.util.UUID;
 public class PharmacyPaymentResponseDTO {
 
     private UUID id;
+    /**
+     * QA D1032: the readable receipt number printed on the receipt,
+     * {@code CODE-PH-YYYY-000001} (the payment's rank among the hospital's
+     * pharmacy payments of that year), never a slice of the payment id.
+     */
+    private String receiptNumber;
     private UUID dispenseId;
     private UUID patientId;
     private UUID hospitalId;

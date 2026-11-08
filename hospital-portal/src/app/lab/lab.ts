@@ -1,3 +1,5 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches, rankPeopleByName } from '../shared/person-search';
 import {
   Component,
   computed,
@@ -9,7 +11,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { debounceTime, switchMap } from 'rxjs/operators';
 import {
   LabService,
   LabOrderResponse,
@@ -21,7 +23,11 @@ import {
 } from '../services/lab.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
-import { EncounterService, EncounterResponse } from '../services/encounter.service';
+import {
+  EncounterService,
+  EncounterResponse,
+  isClosedEncounterStatus,
+} from '../services/encounter.service';
 import { ProfileService } from '../services/profile.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -29,17 +35,27 @@ import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { PrintLabelService } from '../services/print-label.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
-import { currentLocale } from '../shared/i18n/app-locale';
+import { encounterOptionLabel } from '../shared/encounter-option-label';
 import { shortOrderCode } from '../shared/lab/order-code';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { serverInstant } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { ActivatedRoute } from '@angular/router';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
+import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 @Component({
   selector: 'app-lab',
   standalone: true,
   imports: [
+    DateTimePipe,
+    ListEscapeDirective,
+    SubmitGuardDirective,
+    PersonNamePipe,
+    ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
     CommonModule,
@@ -57,6 +73,7 @@ export class LabComponent implements OnInit {
   private readonly labService = inject(LabService);
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
+  private readonly activatedRoute = inject(ActivatedRoute);
   private readonly encounterService = inject(EncounterService);
   /** QA D177: the selected patient's encounters, so the order links one by name, not by a typed id. */
   readonly patientEncounters = signal<EncounterResponse[]>([]);
@@ -156,31 +173,53 @@ export class LabComponent implements OnInit {
   receivingSpecimenId = signal<string | null>(null);
   printingSpecimenId = signal<string | null>(null);
 
+  /** QA D962: the specimen being rejected, and the reason typed for it. */
+  rejectingSpecimen = signal<LabSpecimen | null>(null);
+  rejectReason = signal('');
+  rejecting = signal(false);
+  /** QA D962: the specimens of the order open in the detail panel, for their rejection reasons. */
+  detailSpecimens = signal<LabSpecimen[]>([]);
+  readonly rejectedDetailSpecimens = computed(() =>
+    this.detailSpecimens().filter((s) => s.status === 'REJECTED'),
+  );
+
   /** Matches the specimen create/receive @PreAuthorize (lab staff; E9 #67: no admins). */
   readonly canManageSpecimens = this.roleContext.hasAnyActiveRole(
     actionRoles('labSpecimenCollect'),
   );
 
-  priorities = ['ROUTINE', 'URGENT', 'STAT', 'ASAP'];
+  /** Matches the specimen reject @PreAuthorize (QA D962). */
+  readonly canRejectSpecimens = this.roleContext.hasAnyActiveRole(actionRoles('labSpecimenReject'));
 
-  /** Localised on every read so the options follow a runtime language switch. */
-  get orderChannels(): { value: string; label: string }[] {
-    return [
-      { value: 'PORTAL', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.PORTAL') },
-      { value: 'ELECTRONIC', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.ELECTRONIC') },
-      { value: 'PHONE', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.PHONE') },
-      { value: 'FAX', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.FAX') },
-      { value: 'EMAIL', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.EMAIL') },
-      { value: 'WRITTEN', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.WRITTEN') },
-      { value: 'WALK_IN', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.WALK_IN') },
-      { value: 'OTHER', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.OTHER') },
-    ];
+  /**
+   * QA D963: exactly the priorities the server accepts
+   * (LabOrderServiceImpl.LAB_PRIORITIES). ASAP was offered and refused with a 400.
+   * Labelled through the labOrderPriority enum domain, never shown raw.
+   */
+  readonly priorities = ['ROUTINE', 'URGENT', 'STAT'];
+
+  /** QA D963: LabOrderChannel, labelled through the labOrderChannel enum domain. */
+  readonly orderChannels = [
+    'PORTAL',
+    'ELECTRONIC',
+    'PHONE',
+    'FAX',
+    'EMAIL',
+    'WRITTEN',
+    'WALK_IN',
+    'OTHER',
+  ];
+
+  /** QA D963: a STAT or URGENT order is flagged wherever the lab reads it. */
+  isUrgentPriority(priority: string | null | undefined): boolean {
+    return priority === 'STAT' || priority === 'URGENT';
   }
 
   ngOnInit(): void {
     this.loadOrders();
     this.loadAssignedHospitals();
     this.initPatientSearch();
+    this.openFromQuery();
     this.labService.listTestDefinitions().subscribe((defs) => this.labTestDefs.set(defs));
     if (this.canCreateOrder()) {
       this.labService.listPerformingLabs().subscribe({
@@ -192,6 +231,27 @@ export class LabComponent implements OnInit {
       next: (assignments) => {
         const active = assignments.find((a) => a.active);
         if (active) this.activeAssignmentId = active.id;
+      },
+    });
+  }
+
+  /**
+   * QA D956: `/lab?new=1&patientId=…` opens the order form on that patient.
+   * The worklist's "Demander des Analyses" pointed at `/lab/new`, a route that
+   * does not exist, so the wildcard sent the doctor back to the dashboard.
+   */
+  private openFromQuery(): void {
+    const params = this.activatedRoute.snapshot.queryParamMap;
+    if (params.get('new') !== '1' || !this.canCreateOrder()) return;
+    this.openCreate();
+    const patientId = params.get('patientId');
+    if (!patientId) return;
+    this.patientService.getById(patientId, this.patientSearchHospitalId()).subscribe({
+      next: (patient) => {
+        if (patient?.id === patientId) this.selectPatient(patient);
+      },
+      error: () => {
+        /* the form stays open; the doctor searches for the patient */
       },
     });
   }
@@ -246,7 +306,9 @@ export class LabComponent implements OnInit {
    * sent here, which belongs to the ordering hospital.
    */
   isEditable(o: LabOrderResponse): boolean {
-    return !this.isIncomingExternal(o) && o.status !== 'ENTERED_IN_ERROR';
+    // QA D1428 class: the server refuses an edit of a resulted or cancelled order.
+    const closed = ['ENTERED_IN_ERROR', 'VERIFIED', 'COMPLETED', 'CANCELLED'].includes(o.status);
+    return !this.isIncomingExternal(o) && !closed;
   }
 
   /** As {@link isEditable}, and never on an order that carries results (QA D601/D616). */
@@ -326,7 +388,6 @@ export class LabComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
           return this.patientService.list(this.patientSearchHospitalId(), q);
@@ -334,7 +395,8 @@ export class LabComponent implements OnInit {
       )
       .subscribe({
         next: (list) => {
-          this.patientSuggestions.set(list.slice(0, 8));
+          // QA D1239: ranked by how the name answers the query, then cut.
+          this.patientSuggestions.set(rankPeopleByName(list, this.patientQuery()).slice(0, 8));
           this.patientDropdownOpen.set(list.length > 0);
           this.patientSearchLoading.set(false);
         },
@@ -367,20 +429,25 @@ export class LabComponent implements OnInit {
     this.encounterService.list({ patientId, hospitalId }).subscribe({
       next: (list) => {
         if (this.form.patientId !== patientId) return;
+        // QA D1094: any treating clinician of the hospital orders on an OPEN
+        // visit, a colleague's included; a closed visit takes no new order
+        // (the server refuses it), so it is not offered.
         this.patientEncounters.set(
-          [...list].sort((a, b) => (b.encounterDate ?? '').localeCompare(a.encounterDate ?? '')),
+          [...list]
+            .filter((e) => !isClosedEncounterStatus(e.status))
+            .sort((a, b) => (b.encounterDate ?? '').localeCompare(a.encounterDate ?? '')),
         );
       },
       error: () => this.patientEncounters.set([]),
     });
   }
 
-  /** QA D177: the date and department of an encounter, for the picker (the type is a pipe). */
+  /**
+   * QA D177: the date and department of an encounter, for the picker (the
+   * type is a pipe). QA D1309: and its time, so same-day visits differ.
+   */
   encounterLabel(e: EncounterResponse): string {
-    const date = e.encounterDate
-      ? serverInstant(e.encounterDate).toLocaleDateString(currentLocale())
-      : '';
-    return [date, e.departmentName].filter((part) => !!part).join(' · ');
+    return encounterOptionLabel(e);
   }
 
   onHospitalChange(hospitalId: string): void {
@@ -479,8 +546,17 @@ export class LabComponent implements OnInit {
         this.saving.set(false);
         this.loadOrders();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB.TOAST.SAVE_FAILED'));
+      error: (err: unknown) => {
+        // QA D1094: a refusal the server explains (a closed visit, another
+        // patient's visit) is shown in the reader's language; only a failure
+        // with no message falls back to the generic toast.
+        const status = (err as { status?: number } | null)?.status ?? 0;
+        const message = (err as { error?: { message?: unknown } } | null)?.error?.message;
+        this.toast.error(
+          status >= 400 && status < 500 && typeof message === 'string' && message.trim()
+            ? message
+            : this.translate.instant('LAB.TOAST.SAVE_FAILED'),
+        );
         this.saving.set(false);
       },
     });
@@ -548,8 +624,8 @@ export class LabComponent implements OnInit {
         this.deleting.set(false);
         this.loadOrders();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB.TOAST.DELETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB.TOAST.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });
@@ -557,7 +633,9 @@ export class LabComponent implements OnInit {
 
   loadOrders(): void {
     this.loading.set(true);
-    this.labService.listOrders({ size: 200 }).subscribe({
+    // QA D1347: every order in scope (listOrders without a page reads every
+    // page), not the 200 newest; the counters count every order the server has.
+    this.labService.listOrders().subscribe({
       next: (list) => {
         this.orders.set(list);
         this.computeStats(list);
@@ -606,7 +684,7 @@ export class LabComponent implements OnInit {
       list = list.filter(
         (o) =>
           (o.labOrderCode ?? '').toLowerCase().includes(term) ||
-          (o.patientFullName ?? '').toLowerCase().includes(term) ||
+          textMatches(o.patientFullName, term) ||
           (o.labTestName ?? '').toLowerCase().includes(term) ||
           (o.status ?? '').toLowerCase().includes(term),
       );
@@ -616,10 +694,20 @@ export class LabComponent implements OnInit {
 
   viewOrder(order: LabOrderResponse): void {
     this.selectedOrder.set(order);
+    // QA D962: a rejected specimen and its reason show on the order, so the
+    // ordering doctor sees why a new sample is needed.
+    this.detailSpecimens.set([]);
+    this.labService.listSpecimens(order.id).subscribe({
+      next: (list) => {
+        if (this.selectedOrder()?.id === order.id) this.detailSpecimens.set(list ?? []);
+      },
+      error: () => this.detailSpecimens.set([]),
+    });
   }
 
   closeDetail(): void {
     this.selectedOrder.set(null);
+    this.detailSpecimens.set([]);
   }
 
   getStatusClass(status: string): string {
@@ -688,8 +776,8 @@ export class LabComponent implements OnInit {
         this.closeApprovalModal();
         this.processingApproval.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB.TOAST.APPROVAL_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB.TOAST.APPROVAL_FAILED'));
         this.processingApproval.set(false);
       },
     });
@@ -768,8 +856,13 @@ export class LabComponent implements OnInit {
           this.specimenSaving.set(false);
           this.loadSpecimens(order.id);
         },
-        error: () => {
-          this.toast.error(this.translate.instant('LAB.TOAST.SPECIMEN_COLLECT_FAILED'));
+        error: (err: { error?: { errors?: Record<string, string>; message?: string } }) => {
+          // QA D1050: the server's own reason (a field too long), in the reader's
+          // language, instead of a generic failure; the form keeps what was typed.
+          const fieldMessage = Object.values(err?.error?.errors ?? {})[0];
+          this.toast.error(
+            fieldMessage ?? this.translate.instant('LAB.TOAST.SPECIMEN_COLLECT_FAILED'),
+          );
           this.specimenSaving.set(false);
         },
       });
@@ -801,9 +894,66 @@ export class LabComponent implements OnInit {
         this.receivingSpecimenId.set(null);
         this.loadSpecimens(order.id);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB.TOAST.SPECIMEN_RECEIVE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB.TOAST.SPECIMEN_RECEIVE_FAILED'),
+        );
         this.receivingSpecimenId.set(null);
+      },
+    });
+  }
+
+  /**
+   * QA D962: a specimen still on its way or in the laboratory can be refused,
+   * while the order has no result yet (the server's
+   * LabOrderLifecycle.acceptsSpecimenRejection: not voided, resulted,
+   * verified or completed).
+   */
+  canReject(specimen: LabSpecimen): boolean {
+    return (
+      this.canRejectSpecimens &&
+      this.specimensOrderAcceptsRejection() &&
+      (specimen.status === 'COLLECTED' ||
+        specimen.status === 'IN_TRANSIT' ||
+        specimen.status === 'RECEIVED')
+    );
+  }
+
+  openReject(specimen: LabSpecimen): void {
+    this.rejectReason.set('');
+    this.rejectingSpecimen.set(specimen);
+  }
+
+  closeReject(): void {
+    this.rejectingSpecimen.set(null);
+    this.rejectReason.set('');
+  }
+
+  onRejectReasonInput(event: Event): void {
+    this.rejectReason.set((event.target as HTMLTextAreaElement).value);
+  }
+
+  executeReject(): void {
+    const specimen = this.rejectingSpecimen();
+    const order = this.specimensOrder();
+    const reason = this.rejectReason().trim();
+    if (!specimen || !order || !reason) return;
+    this.rejecting.set(true);
+    this.labService.rejectSpecimen(specimen.id, reason).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('LAB.REJECT_SPECIMEN.DONE'));
+        this.rejecting.set(false);
+        this.closeReject();
+        this.loadSpecimens(order.id);
+        // The order is back to awaiting collection: the list must say so.
+        this.loadOrders();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        // The server's refusal is written for the reader (localised).
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('LAB.REJECT_SPECIMEN.FAILED'),
+        );
+        this.rejecting.set(false);
       },
     });
   }
@@ -813,13 +963,36 @@ export class LabComponent implements OnInit {
    * and a specimen already collected on it is not received (the server
    * refuses both, and a receipt would queue an analyzer work order).
    */
+  /**
+   * QA D1109: an order takes a new specimen only while it awaits or is in
+   * analysis (LabOrderLifecycle.acceptsNewSpecimen). Once a result exists it is
+   * answered (a repeat is a new order), and a cancelled or voided order takes
+   * nothing; the form was offered on released orders and left dangling tubes.
+   */
+  private static readonly SPECIMEN_OPEN_STATUSES = new Set([
+    'ORDERED',
+    'PENDING',
+    'COLLECTED',
+    'RECEIVED',
+    'IN_PROGRESS',
+  ]);
+
   specimensOrderAcceptsSpecimens(): boolean {
-    return this.specimensOrder()?.status !== 'ENTERED_IN_ERROR';
+    const status = this.specimensOrder()?.status;
+    return !!status && LabComponent.SPECIMEN_OPEN_STATUSES.has(status);
   }
 
+  /** Not once a result exists, nor on a cancelled or voided order (the same set). */
+  specimensOrderAcceptsRejection(): boolean {
+    return this.specimensOrderAcceptsSpecimens();
+  }
+
+  /** QA D1109: a tube already collected is received unless its order was cancelled or voided. */
   canReceive(specimen: LabSpecimen): boolean {
+    const status = this.specimensOrder()?.status;
     return (
-      this.specimensOrderAcceptsSpecimens() &&
+      status !== 'ENTERED_IN_ERROR' &&
+      status !== 'CANCELLED' &&
       (specimen.status === 'COLLECTED' || specimen.status === 'IN_TRANSIT')
     );
   }

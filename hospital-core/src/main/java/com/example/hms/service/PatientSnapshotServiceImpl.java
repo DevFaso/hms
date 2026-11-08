@@ -100,8 +100,6 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     private final PatientAllergyRepository patientAllergyRepository;
     private final PatientVitalSignRepository patientVitalSignRepository;
     private final PrescriptionRepository prescriptionRepository;
-    /** Prescriptions read to find the running ones; a chart never holds this many live courses. */
-    private static final int ACTIVE_MEDICATION_SCAN = 200;
     private final com.example.hms.repository.AdmissionRepository admissionRepository;
     private final LabOrderRepository labOrderRepository;
     private final LabResultRepository labResultRepository;
@@ -226,10 +224,11 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         List<Encounter> encounters = loadEncounters(patientId, hospitalId, readable, reach, unlocked);
         PatientSnapshotDTO snapshot = PatientSnapshotDTO.builder()
                 .patientId(patient.getId())
-                .name(patient.getFirstName() + " " + patient.getLastName())
+                .name(patient.getFullName())
                 .age(computeAge(patient))
                 .sex(patient.getGender())
-                .mrn(patient.getId().toString())
+                // QA D1040 class: the hospital's MRN, never the patient's UUID.
+                .mrn(patient.getMrnForHospital(hospitalId))
                 .codeStatus(patient.getCodeStatus())
                 .allergies(buildAllergies(patientId, patient, hospitalId, reach))
                 // QA D504 (round 2): the list above is narrowed by the patient's opt-out; say so.
@@ -299,10 +298,15 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                 patientAllergyRepository, recordAccessPolicy,
                 com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(),
                 patientId, hospitalId);
-            rows.forEach(a -> allergies.add(a.getAllergenDisplay()));
+            // QA D1423: this list is read as "the patient's allergies", so only the active
+            // rows go on it; a deactivated one stays on the chart's history table, marked.
+            // Whether rows exist is still asked of all of them: a patient whose allergies
+            // were all deactivated must not fall back to the summary text below.
+            List<PatientAllergy> active = rows.stream().filter(PatientAllergy::isActive).toList();
+            active.forEach(a -> allergies.add(a.getAllergenDisplay()));
             hasStructuredRows = !rows.isEmpty()
                 || (hospitalId != null && !patientAllergyRepository.findByPatient_Id(patientId).isEmpty());
-            account(reach, hospitalId, rows.stream().map(a -> CrossHospitalReachRecorder.hospitalIdOf(a.getHospital())).toList());
+            account(reach, hospitalId, active.stream().map(a -> CrossHospitalReachRecorder.hospitalIdOf(a.getHospital())).toList());
         } catch (Exception e) {
             log.debug("Allergy query error", e);
         }
@@ -406,18 +410,18 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             // QA D720/D737: "active" means a running course, by the rule the
             // patient's own list uses (MedicationCourseStatus): no draft, no
             // withdrawn or finished course, no order that ended with a
-            // discharged stay. Filtered before the cap, newest first, so the
-            // current stay's orders are not pushed off by finished ones.
+            // discharged stay. Round 33 (CX-003 class): every running course, newest
+            // first, read from every prescription of the chart; a long chart's old
+            // chronic course fell off a scan of the newest 200, and the list stopped at 10.
             List<com.example.hms.model.Admission> closedStays = admissionRepository
                     .findByPatientIdOrderByAdmissionDateTimeDesc(patientId).stream()
                     .filter(a -> a.getActualDischargeDateTime() != null)
                     .toList();
             List<com.example.hms.model.Prescription> rows = NeverSentRule.prescriptionsReadableHere(
                     prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable,
-                            PageRequest.of(0, ACTIVE_MEDICATION_SCAN, Sort.by(Sort.Direction.DESC, "createdAt")))
+                            org.springframework.data.domain.Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt")))
                     .getContent(), hospitalId).stream()
                     .filter(rx -> com.example.hms.service.MedicationCourseStatus.isActive(rx, closedStays))
-                    .limit(10)
                     .toList();
             account(reach, hospitalId, rows.stream().map(rx -> CrossHospitalReachRecorder.hospitalIdOf(rx.getHospital())).toList());
             rows.forEach(rx -> medications.add(PatientSnapshotDTO.MedicationItem.builder()
@@ -487,9 +491,11 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                                     ? r.getLabOrder().getLabTestDefinition().getName()
                                     : com.example.hms.utility.MessageUtil.resolveOrRaw(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL))
                             .value(r.getResultValue())
+                            .unit(com.example.hms.mapper.LabResultMapper.unitOf(r))
                             .flag(labResultFlag(r))
                             .abnormalDirection(r.getAbnormalFlag() != null ? r.getAbnormalFlag().direction() : null)
                             .date(r.getResultDate() != null ? r.getResultDate().format(DATE_FMT) : "")
+                            .corrected(com.example.hms.service.lab.LabResultCorrections.isCorrection(r))
                             .build()));
         } catch (Exception e) {
             log.debug("Lab results query error: {}", e.getMessage());
@@ -520,7 +526,6 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             rows.stream()
                     .filter(o -> o.getStatus() == com.example.hms.enums.LabOrderStatus.PENDING
                             || o.getStatus() == com.example.hms.enums.LabOrderStatus.IN_PROGRESS)
-                    .limit(10)
                     .forEach(o -> pendingOrders.add(PatientSnapshotDTO.OrderItem.builder()
                             .type("LAB")
                             .description(o.getLabTestDefinition() != null
@@ -544,7 +549,6 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                             .name(e.getStaff().getFullName())
                             .build())
                     .distinct()
-                    .limit(10)
                     .forEach(careTeam::add);
         } catch (Exception e) {
             log.debug("Care team query error: {}", e.getMessage());

@@ -40,14 +40,14 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
     @Override
     public GuarantorResponseDTO add(UUID patientId, UUID hospitalId, GuarantorRequestDTO request) {
         if (hospitalId == null) {
-            throw new BusinessException("An active hospital is required to add a guarantor.");
+            throw new BusinessException("guarantor.hospital.required");
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("Patient is not registered at this hospital.");
+            throw new BusinessException("guarantor.patient.notRegistered");
         }
 
         boolean primary = Boolean.TRUE.equals(request.getPrimary());
@@ -99,13 +99,21 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
     }
 
     @Override
-    public GuarantorResponseDTO deactivate(UUID patientId, UUID guarantorId, UUID hospitalId) {
+    public GuarantorResponseDTO deactivate(UUID patientId, UUID guarantorId, UUID hospitalId,
+                                           String reason, UUID actorUserId) {
+        // QA D1247 (round 25): one click with an empty body deactivated a
+        // guarantor; the reason is required (the shared cancellation rule).
+        String kept = com.example.hms.service.support.CancelledOrders.requireReason(reason, "reason",
+            "guarantor.deactivate.reasonRequired");
         PatientGuarantor guarantor = loadScoped(patientId, guarantorId, hospitalId);
         if (!guarantor.isActive()) {
-            throw new BusinessException("This guarantor is already inactive.");
+            throw new BusinessException("guarantor.alreadyInactive");
         }
         guarantor.setActive(false);
         guarantor.setPrimary(false);
+        guarantor.setDeactivationReason(kept.length() > 500 ? kept.substring(0, 500) : kept);
+        guarantor.setDeactivatedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        guarantor.setDeactivatedByUserId(actorUserId);
         return toDto(guarantorRepository.save(guarantor));
     }
 
@@ -113,9 +121,12 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
     public GuarantorResponseDTO reactivate(UUID patientId, UUID guarantorId, UUID hospitalId) {
         PatientGuarantor guarantor = loadScoped(patientId, guarantorId, hospitalId);
         if (guarantor.isActive()) {
-            throw new BusinessException("This guarantor is already active.");
+            throw new BusinessException("guarantor.alreadyActive");
         }
         guarantor.setActive(true);
+        guarantor.setDeactivationReason(null);
+        guarantor.setDeactivatedAt(null);
+        guarantor.setDeactivatedByUserId(null);
         return toDto(guarantorRepository.save(guarantor));
     }
 
@@ -152,6 +163,8 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
             .address(guarantor.getAddress())
             .primary(guarantor.isPrimary())
             .active(guarantor.isActive())
+            .deactivationReason(guarantor.getDeactivationReason())
+            .deactivatedAt(guarantor.getDeactivatedAt())
             .notes(guarantor.getNotes())
             .createdAt(guarantor.getCreatedAt())
             .updatedAt(guarantor.getUpdatedAt())

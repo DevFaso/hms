@@ -51,6 +51,39 @@ public interface StockTransactionRepository extends JpaRepository<StockTransacti
     BigDecimal sumQuantityForReference(@Param("referenceId") UUID referenceId,
                                        @Param("types") Collection<StockTransactionType> types);
 
+    /**
+     * QA D932: {@link #sumQuantityForReference} for several references in one
+     * query, as {@code [referenceId, total]} rows; a reference with nothing
+     * moved has no row.
+     */
+    @Query("SELECT t.referenceId, COALESCE(SUM(t.quantity), 0) FROM StockTransaction t "
+         + "WHERE t.referenceId IN :referenceIds AND t.transactionType IN :types GROUP BY t.referenceId")
+    java.util.List<Object[]> sumQuantityByReferences(@Param("referenceIds") Collection<UUID> referenceIds,
+                                           @Param("types") Collection<StockTransactionType> types);
+
+    /**
+     * QA D967: the controlled-drug register's movements - the given items'
+     * ledger rows in [from, to), oldest first, with who recorded and who
+     * witnessed each and the lot.
+     */
+    @Query("SELECT t FROM StockTransaction t LEFT JOIN FETCH t.performedByUser LEFT JOIN FETCH t.witnessedByUser "
+         + "LEFT JOIN FETCH t.stockLot WHERE t.inventoryItem.id IN :itemIds "
+         + "AND t.createdAt >= :from AND t.createdAt < :to ORDER BY t.createdAt ASC, t.id ASC")
+    java.util.List<StockTransaction> findRegisterRows(@Param("itemIds") Collection<UUID> itemIds,
+                                                     @Param("from") LocalDateTime from,
+                                                     @Param("to") LocalDateTime to,
+                                                     Pageable pageable);
+
+    /**
+     * QA D967: what the ledger moved for each item and type before a moment,
+     * as {@code [itemId, type, total]} rows - the register's opening balance.
+     */
+    @Query("SELECT t.inventoryItem.id, t.transactionType, COALESCE(SUM(t.quantity), 0) FROM StockTransaction t "
+         + "WHERE t.inventoryItem.id IN :itemIds AND t.createdAt < :before "
+         + "GROUP BY t.inventoryItem.id, t.transactionType")
+    java.util.List<Object[]> sumByItemAndTypeBefore(@Param("itemIds") Collection<UUID> itemIds,
+                                                    @Param("before") LocalDateTime before);
+
     Page<StockTransaction> findByInventoryItemPharmacyId(UUID pharmacyId, Pageable pageable);
 
     @Query("SELECT t FROM StockTransaction t WHERE t.inventoryItem.pharmacy.id = :pharmacyId " +

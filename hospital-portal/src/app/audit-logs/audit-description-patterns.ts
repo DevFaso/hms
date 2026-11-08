@@ -629,6 +629,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Patient linked to hospital '(.*)'$/,
     params: ['hospital'],
   },
+  // QA D926: the desk's demographics corrections (PATCH names the fields, PUT replaces all).
+  {
+    key: 'AUDIT.DESC.PATIENT_DEMOGRAPHICS_UPDATED',
+    re: /^Patient demographics updated: (.+)$/,
+    params: ['fields'],
+  },
+  {
+    key: 'AUDIT.DESC.PATIENT_DEMOGRAPHICS_REPLACED',
+    re: /^Patient demographics replaced$/,
+  },
   {
     key: 'AUDIT.DESC.PATIENT_ADDRESS_CHANGED',
     re: /^Patient address changed — previous address kept as history row (\S+)$/,
@@ -731,6 +741,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   {
     key: 'AUDIT.DESC.ENCOUNTER_DISCHARGE_COMPLETED',
     re: /^Encounter completed on discharge of admission (\S+) \(was (\S+)\)$/,
+    params: ['admission', 'previous'],
+    localise: { previous: 'enum' },
+  },
+  {
+    key: 'AUDIT.DESC.ENCOUNTER_CANCELLED_WITH_ADMISSION',
+    re: /^Encounter cancelled with admission (\S+) \(was (\S+)\)$/,
     params: ['admission', 'previous'],
     localise: { previous: 'enum' },
   },
@@ -917,8 +933,38 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['id'],
   },
   {
+    key: 'AUDIT.DESC.CDS_OVERRIDE_CREATED',
+    re: /^Critical decision-support alert overridden at creation$/,
+  },
+  {
+    key: 'AUDIT.DESC.CDS_OVERRIDE_EDITED',
+    re: /^Critical decision-support alert overridden on edit$/,
+  },
+  {
+    key: 'AUDIT.DESC.DOSE_LIMITS_APPROVED',
+    re: /^Paediatric dose limits approved on catalog item '(.*)'$/,
+    params: ['item'],
+  },
+  {
+    key: 'AUDIT.DESC.DOSE_LIMITS_DEFAULT',
+    re: /^Paediatric dose limits set as a default pending approval on catalog item '(.*)'$/,
+    params: ['item'],
+  },
+  {
+    key: 'AUDIT.DESC.RX_SIGN_REAUTH_VERIFIED',
+    re: /^Re-authentication to sign a controlled-drug prescription verified by (\S+)$/,
+    params: ['method'],
+    localise: { method: 'phrase:RX_SIGN_REAUTH' },
+  },
+  {
+    key: 'AUDIT.DESC.RX_SIGN_REAUTH_REFUSED',
+    re: /^Re-authentication to sign a controlled-drug prescription refused \((\S+)\)$/,
+    params: ['reason'],
+    localise: { reason: 'phrase:RX_SIGN_REAUTH' },
+  },
+  {
     key: 'AUDIT.DESC.ALLERGY_OVERRIDE',
-    re: /^Allergy override (recorded at creation|recorded on edit|reason replaced on edit|cleared: the edited order no longer conflicts)$/,
+    re: /^Allergy override (recorded at creation|recorded on edit|recorded at signature|reason replaced on edit|cleared: the edited order no longer conflicts)$/,
     params: ['what'],
     localise: { what: 'phrase:ALLERGY_OVERRIDE' },
   },
@@ -936,6 +982,76 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.RX_PRINTED',
     re: /^Prescription (\S+) printed for patient$/,
     params: ['rx'],
+  },
+  {
+    key: 'AUDIT.DESC.DEATH_RECORD_ENTERED_IN_ERROR',
+    re: /^Death record (\S+) marked entered in error; the patient is no longer recorded as deceased\. Stays, visits and appointments the death closed were not reopened\. Reason: ([\s\S]*)$/,
+    params: ['record', 'reason'],
+  },
+  // QA D1516: the entered-in-error description now counts what the death had closed.
+  {
+    key: 'AUDIT.DESC.DEATH_RECORD_ENTERED_IN_ERROR_REVIEW_FILED',
+    re: /^Death record (\S+) marked entered in error; the patient is no longer recorded as deceased\. Stays, visits and appointments the death closed were not reopened: (\d+) stay\(s\) marked closed in error, (\d+) visit\(s\), (\d+) appointment\(s\); an urgent review was filed\. Reason: ([\s\S]*)$/,
+    params: ['record', 'stays', 'visits', 'appointments', 'reason'],
+  },
+  {
+    key: 'AUDIT.DESC.DEATH_RECORD_ENTERED_IN_ERROR_NOTHING_CLOSED',
+    re: /^Death record (\S+) marked entered in error; the patient is no longer recorded as deceased\. Stays, visits and appointments the death closed were not reopened: (\d+) stay\(s\) marked closed in error, (\d+) visit\(s\), (\d+) appointment\(s\); nothing to review\. Reason: ([\s\S]*)$/,
+    params: ['record', 'stays', 'visits', 'appointments', 'reason'],
+  },
+  {
+    key: 'AUDIT.DESC.DEATH_DISPUTED',
+    re: /^Death status disputed at hospital (\S+) by doctor (\S+), death record (\S+) version (\S+): assessed alive and identity verified\. Care permitted pending review\. Reason: ([\s\S]*)$/,
+    params: ['hospital', 'doctor', 'record', 'version', 'reason'],
+  },
+  {
+    key: 'AUDIT.DESC.DEATH_UPHELD',
+    re: /^Death upheld: dispute (\S+) closed by (\S+), the block on care is back at hospital (\S+)\. Reason: ([\s\S]*)$/,
+    params: ['dispute', 'actor', 'hospital', 'reason'],
+  },
+  {
+    key: 'AUDIT.DESC.ORDER_REVIEW_HELD_AGAIN',
+    re: /^Order held again after a change: (\S+) (\S+) changed after its reconfirmation, dispute (\S+)$/,
+    params: ['type', 'order', 'dispute'],
+    localise: { type: 'enum' },
+  },
+  {
+    key: 'AUDIT.DESC.ORDER_REVIEW_DOSE_BEFORE_HOLD',
+    re: /^Dose charted as given before the hold: (\S+) (\S+) at (\S+), dispute (\S+), by (\S+)$/,
+    params: ['type', 'order', 'at', 'dispute', 'actor'],
+    localise: { type: 'enum' },
+  },
+  {
+    key: 'AUDIT.DESC.ORDER_REVIEW_CONTINUED',
+    re: /^Order reconfirmed unchanged: (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)$/,
+    params: ['type', 'order', 'version', 'dispute', 'actor'],
+    localise: { type: 'enum' },
+  },
+  {
+    key: 'AUDIT.DESC.ORDER_REVIEW_REPLACED',
+    re: /^Order replaced by (\S+): (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)$/,
+    params: ['replacement', 'type', 'order', 'version', 'dispute', 'actor'],
+    localise: { type: 'enum' },
+  },
+  {
+    key: 'AUDIT.DESC.ORDER_REVIEW_STOPPED',
+    re: /^Order stopped: (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)$/,
+    params: ['type', 'order', 'version', 'dispute', 'actor'],
+    localise: { type: 'enum' },
+  },
+  {
+    key: 'AUDIT.DESC.ORDER_REVIEW_ASSESSED',
+    re: /^Running treatment assessed: (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)$/,
+    params: ['type', 'order', 'version', 'dispute', 'actor'],
+    localise: { type: 'enum' },
+  },
+  {
+    key: 'AUDIT.DESC.RX_SIGNED_WITHDRAWN_BY_PRESCRIBER',
+    re: /^Signed prescription withdrawn by its prescriber$/,
+  },
+  {
+    key: 'AUDIT.DESC.RX_SIGNED_WITHDRAWN_BY_COLLEAGUE',
+    re: /^Signed prescription withdrawn by another prescriber of the hospital$/,
   },
   {
     key: 'AUDIT.DESC.RX_ROUTED_PARTNER',
@@ -1135,6 +1251,17 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { what: 'phrase:PARTNER_EVENT', status: 'enum' },
   },
   {
+    key: 'AUDIT.DESC.PARTNER_DISPENSE_OF_HELD_RX',
+    re: /^(.+) confirmed dispensing prescription (\S+), which is held for review; the hold stands\. A person must check with the patient and the partner\.$/,
+    params: ['what', 'rx'],
+    localise: { what: 'phrase:PARTNER_EVENT' },
+  },
+  {
+    key: 'AUDIT.DESC.PARTNER_OFFER_RECALLED',
+    re: /^Partner offer recalled: prescription (\S+) is held for review$/,
+    params: ['rx'],
+  },
+  {
     key: 'AUDIT.DESC.PARTNER_DISPENSE_ON_CLOSED_RX',
     re: /^(.+) confirmed dispensing prescription (\S+), which is (\S+); the prescription was not changed\. A person must check with the patient and the partner\.$/,
     params: ['what', 'rx', 'status'],
@@ -1191,10 +1318,97 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { why: 'enum' },
   },
   {
+    // QA D1100: an inpatient's bed freed, with its reason in the details.
+    key: 'AUDIT.DESC.ADMISSION_BED_RELEASED',
+    re: /^Bed (.+) released from admission (\S+)$/,
+    params: ['bed', 'admission'],
+  },
+  {
+    // QA D1096: the paediatric dose review an order needed before signing.
+    key: 'AUDIT.DESC.PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED',
+    re: /^Paediatric dose review recorded$/,
+  },
+  {
     key: 'AUDIT.DESC.PAYMENT_EVENT',
     re: /^(Payment recorded|Payment reversed|Pending payment confirmed|Pending payment rejected|Check-in copay recorded): payment (\S+) on invoice (\S+)$/,
     params: ['what', 'payment', 'invoice'],
     localise: { what: 'phrase:PAYMENT_EVENT' },
+  },
+  {
+    // QA D974: a discount, waiver or credit note on an invoice.
+    key: 'AUDIT.DESC.INVOICE_ADJUSTMENT',
+    re: /^Invoice adjustment ([A-Z_]+) on invoice (\S+)$/,
+    params: ['kind', 'invoice'],
+    localise: { kind: 'phrase:INVOICE_ADJUSTMENT' },
+  },
+  {
+    // QA D1105: a discount, waiver or credit note undone; the reason is kept on the row, not in the audit text.
+    key: 'AUDIT.DESC.INVOICE_ADJUSTMENT_REVERSED',
+    re: /^Invoice adjustment ([A-Z_]+) (\S+) reversed with a recorded reason on invoice (\S+)$/,
+    params: ['kind', 'adjustment', 'invoice'],
+    localise: { kind: 'phrase:INVOICE_ADJUSTMENT' },
+  },
+  {
+    // QA D1069: an issued invoice cancelled; the reason is kept on the invoice, not in the audit text.
+    key: 'AUDIT.DESC.INVOICE_CANCELLED',
+    re: /^Invoice cancelled with a recorded reason: invoice (\S+)$/,
+    params: ['invoice'],
+  },
+  {
+    // Who is on the row; the unit and the request by id only.
+    key: 'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED',
+    re: /^Emergency uncrossmatched release of blood unit (\S+) against transfusion request (\S+)$/,
+    params: ['unit', 'request'],
+  },
+  {
+    key: 'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_O_POSITIVE_STATED',
+    re: /^Emergency release on a documented O positive decision of blood unit (\S+) against transfusion request (\S+), O negative stated not obtainable in time, stock shown (\S+)$/,
+    params: ['unit', 'request', 'shown'],
+  },
+  {
+    key: 'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE_STATED',
+    re: /^Emergency release, serologically incompatible, of blood unit (\S+) against transfusion request (\S+), O negative stated not obtainable in time, stock shown (\S+)$/,
+    params: ['unit', 'request', 'shown'],
+  },
+  {
+    key: 'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_O_POSITIVE',
+    re: /^Emergency release on a documented O positive decision of blood unit (\S+) against transfusion request (\S+)$/,
+    params: ['unit', 'request'],
+  },
+  {
+    key: 'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE',
+    re: /^Emergency release, serologically incompatible, of blood unit (\S+) against transfusion request (\S+)$/,
+    params: ['unit', 'request'],
+  },
+  {
+    key: 'AUDIT.DESC.APPOINTMENT_OVERBOOKED',
+    re: /^Appointment overbooked outside the published slots$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.REGISTRATION_DEACTIVATED',
+    re: /^Patient registration deactivated$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.CDS_CRITICAL_OVERRIDDEN_AT_SIGNATURE',
+    re: /^Critical decision-support alert overridden at signature$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.SIGNATURE_EXCEPTION_ENDED',
+    re: /^Signature exception ended: what is ordered was changed$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.URGENT_DOSE_EXCEPTION_AT_SIGNATURE',
+    re: /^Urgent paediatric dose exception recorded at signature$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.DOSE_EXCEPTION_AT_SIGNATURE',
+    re: /^Dose exception recorded at signature$/,
+    params: [],
   },
   {
     key: 'AUDIT.DESC.STATUS_WAS',

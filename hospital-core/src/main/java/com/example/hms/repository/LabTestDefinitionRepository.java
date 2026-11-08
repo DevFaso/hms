@@ -22,14 +22,40 @@ public interface LabTestDefinitionRepository extends JpaRepository<LabTestDefini
         WHERE l.hospital.id = :hospitalId
           AND l.active = true
           AND (
-                UPPER(l.testCode) = UPPER(:identifier)
-             OR LOWER(l.name) = LOWER(:identifier)
+                UPPER(l.testCode) = UPPER(CAST(:identifier AS string))
+             OR LOWER(l.name) = LOWER(CAST(:identifier AS string))
           )
     """)
     Optional<LabTestDefinition> findActiveByHospitalIdAndIdentifier(@Param("hospitalId") UUID hospitalId,
                                                                      @Param("identifier") String identifier);
 
     List<LabTestDefinition> findByHospital_IdAndActiveTrue(UUID hospitalId);
+
+    /**
+     * QA D1120: the definitions of one hospital's catalogue that carry
+     * {@code testCode} and are not retired - the live code a new definition
+     * there may not reuse.
+     */
+    @Query("""
+        SELECT l FROM LabTestDefinition l
+        WHERE UPPER(l.testCode) = UPPER(CAST(:testCode AS string))
+          AND l.approvalStatus <> com.example.hms.enums.LabTestDefinitionApprovalStatus.RETIRED
+          AND l.hospital.id = :hospitalId
+    """)
+    List<LabTestDefinition> findLiveByCodeAtHospital(@Param("testCode") String testCode,
+                                                     @Param("hospitalId") UUID hospitalId);
+
+    /** QA D1120: as {@link #findLiveByCodeAtHospital}, in the global (platform) catalogue. */
+    @Query("""
+        SELECT l FROM LabTestDefinition l
+        WHERE UPPER(l.testCode) = UPPER(CAST(:testCode AS string))
+          AND l.approvalStatus <> com.example.hms.enums.LabTestDefinitionApprovalStatus.RETIRED
+          AND l.hospital IS NULL
+    """)
+    List<LabTestDefinition> findLiveGlobalByCode(@Param("testCode") String testCode);
+
+    /** QA D1120: the versions that replace {@code definitionId} (a draft in progress, or retired history). */
+    List<LabTestDefinition> findBySupersedesDefinitionId(UUID definitionId);
 
     List<LabTestDefinition> findByHospitalIsNullAndActiveTrue();
 
@@ -50,7 +76,7 @@ public interface LabTestDefinitionRepository extends JpaRepository<LabTestDefini
      * {@code varchar} by default) which is why the bug only surfaced on
      * UAT. Same fix pattern as {@code UserRepository#searchByCriteria}
      * and {@code HospitalRepository#findAllWithDepartments} — any
-     * existing JPQL with {@code CONCAT('%', :param, '%')} where
+     * existing JPQL with {@code CONCAT('%', CAST(:param AS string), '%')} where
      * {@code :param} can be null needs the same cast.</p>
      */
     @Query("""
@@ -90,8 +116,8 @@ public interface LabTestDefinitionRepository extends JpaRepository<LabTestDefini
         WHERE l.active = true
             AND l.hospital IS NULL
             AND (
-                UPPER(l.testCode) = UPPER(:identifier)
-             OR LOWER(l.name) = LOWER(:identifier)
+                UPPER(l.testCode) = UPPER(CAST(:identifier AS string))
+             OR LOWER(l.name) = LOWER(CAST(:identifier AS string))
             )
     """)
     Optional<LabTestDefinition> findActiveGlobalByIdentifier(@Param("identifier") String identifier);
@@ -100,8 +126,8 @@ public interface LabTestDefinitionRepository extends JpaRepository<LabTestDefini
         SELECT l FROM LabTestDefinition l
         WHERE l.active = true
             AND (
-                UPPER(l.testCode) = UPPER(:identifier)
-             OR LOWER(l.name) = LOWER(:identifier)
+                UPPER(l.testCode) = UPPER(CAST(:identifier AS string))
+             OR LOWER(l.name) = LOWER(CAST(:identifier AS string))
             )
     """)
     List<LabTestDefinition> findActiveByIdentifier(@Param("identifier") String identifier);

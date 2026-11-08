@@ -73,8 +73,11 @@ public class NewsScoreProtocolRule implements BpaRule {
 
         Optional<PatientVitalSign> latest = latestClinicalVitals(context.recentVitals());
         if (latest.isEmpty()) return List.of();
-        // QA D518: no adult NEWS2 card for a child.
-        if (!NewsScoreCalculator.appliesTo(context.patient()) || !NewsScoreCalculator.applies(latest.get())) {
+        // QA D518: no adult NEWS2 card for a child. QA D1121: asked of the
+        // context's patient only - the bundle's own patient is a LAZY proxy
+        // (the same patient: vitals are loaded by patient id) that cannot be
+        // read outside a session, and reading it dropped every NEWS2 card.
+        if (!NewsScoreCalculator.appliesTo(context.patient())) {
             return List.of();
         }
 
@@ -84,7 +87,7 @@ public class NewsScoreProtocolRule implements BpaRule {
         Optional<BpaProtocol> protocol = protocolRepository.findByProtocolCodeAndActiveTrue(PROTOCOL_CODE);
         if (protocol.isEmpty()) return List.of();
 
-        return List.of(buildCard(protocol.get(), score, latest.get()));
+        return List.of(buildCard(protocol.get(), score, latest.get(), text.zoneOf(context.hospitalId())));
     }
 
     /** Most recent non-home bundle inside the lookback (vitals arrive DESC). */
@@ -97,12 +100,12 @@ public class NewsScoreProtocolRule implements BpaRule {
     }
 
     private CdsCard buildCard(BpaProtocol protocol, NewsScoreResult score,
-                                     PatientVitalSign vitals) {
+                                     PatientVitalSign vitals, java.time.ZoneId zone) {
         StringBuilder detail = new StringBuilder(BpaCardText.summary(text, protocol))
             .append("\n\n").append(text.get("cds.bpa.news2.score", "NEWS2: {0} ({1} risk) — vitals recorded {2}",
                 String.valueOf(score.total()),
                 text.get("cds.bpa.news2.band." + score.riskBand().name(), score.riskBand().name().replace('_', '-')),
-                BpaCardText.when(vitals.getRecordedAt())));
+                BpaCardText.when(text, vitals.getRecordedAt(), zone)));
         if (!score.complete()) {
             detail.append("\n").append(text.get("cds.bpa.news2.incomplete",
                 "⚠ Score is INCOMPLETE — not recorded: {0}. The true score can only be equal or higher.",
@@ -128,7 +131,7 @@ public class NewsScoreProtocolRule implements BpaRule {
             links,
             null,
             null,
-            java.util.UUID.randomUUID().toString()
+            null // QA D1194: BpaRuleEngine gives the card its stable id (rule + level)
         );
     }
 }

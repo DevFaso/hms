@@ -46,4 +46,16 @@ public class SuperAdminUserForcePasswordResetRequestDTO {
     public List<String> getUsernames() {
         return usernames == null ? new ArrayList<>() : usernames;
     }
+
+    /**
+     * QA round 29 sweep: an empty body answered 200 and reset nobody. At least
+     * one user is named, by id, e-mail or username; the refusal marks the picker.
+     */
+    @jakarta.validation.constraints.AssertTrue(message = "{superadmin.forceReset.noTarget}")
+    @com.example.hms.validation.ReportedOn("userIds")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isAnyTargetGiven() {
+        return !getUserIds().isEmpty() || getEmails().stream().anyMatch(e -> e != null && !e.isBlank())
+            || getUsernames().stream().anyMatch(u -> u != null && !u.isBlank());
+    }
 }

@@ -128,6 +128,11 @@
   font-size: 0.85rem;
   color: #6b7280;
 }
+/* QA D1402: what the tile's number leaves out of the list of the same name. */
+.card-hint {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
 
 /* ── Station Layout ───────────────────────────────────────── */
 
@@ -295,6 +300,45 @@
     background: #fef3c7;
     color: #92400e;
   }
+  /* QA D922: a controlled substance is never shown as an ordinary drug. */
+  &.status-controlled {
+    margin-left: 0.4rem;
+    background: #ede9fe;
+    color: #5b21b6;
+  }
+  /* QA D949: tomorrow's slot, not yet due. */
+  &.status-upcoming {
+    background: #e0f2fe;
+    color: #075985;
+  }
+  /* QA D1225: the last dose was given before the minimum interval. */
+  &.status-early {
+    background: #fff4e5;
+    color: #7a4b00;
+  }
+}
+
+/* QA D929: the outcome of the last recorded dose, beside the status. */
+/* QA D1225: and the reason recorded with it. */
+.last-outcome,
+.last-reason {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.action-upcoming {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #075985;
+}
+
+/* QA D954: close a visit nobody has seen. */
+.action-lwbs {
+  background: #f1f5f9;
+  color: #334155;
 }
 
 .priority-badge {
@@ -529,6 +573,13 @@
     color: #6b7280;
     margin-bottom: 0.75rem;
   }
+}
+
+.mar-reason-label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
 }
 
 .reason-input {
@@ -1304,6 +1355,13 @@
      rather than the page, so the header and the actions stay reachable. */
   overflow-y: auto;
   flex: 1 1 auto;
+}
+
+/* QA round 30: the as-needed rule under the drug's name. */
+.cell-sub {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--text-secondary, #4b5563);
 }
 
 @include workspace-dashboard.layout;

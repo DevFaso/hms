@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { TranslateModule } from '@ngx-translate/core';
 import { AfterVisitSummary } from '../../services/encounter.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
@@ -8,7 +9,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 @Component({
   selector: 'app-visit-summary-dialog',
   standalone: true,
-  imports: [CommonModule, TranslateModule, CdkTrapFocus, ServerTimePipe],
+  imports: [CommonModule, TranslateModule, ModalDialogDirective, ServerTimePipe, DateTimePipe],
   templateUrl: './visit-summary-dialog.component.html',
   styleUrl: './visit-summary-dialog.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

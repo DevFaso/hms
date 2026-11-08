@@ -83,7 +83,10 @@ class HospitalAdminOffChartTest {
         assertOffChart(GeneralReferralController.class, "/admin/expire-overdue");
         assertKept(GeneralReferralController.class, "POST /admin/expire-overdue");
         assertOffChart(ObgynReferralController.class, "/reports/summary");
-        assertOffChart(InBasketController.class);
+        // The one exception, a user-approved flow: the urgent review of a disputed death is filed for hospital
+        // administrators, so they open their in-basket, and it answers them with those items and nothing else
+        // (InBasketAdminDisputeReviewTest). Every other sender's recipients leave them out (InBasketRecipientGuardTest).
+        assertKept(InBasketController.class, "GET ");
         assertOffChart(CdsAcknowledgementController.class);
     }
 }

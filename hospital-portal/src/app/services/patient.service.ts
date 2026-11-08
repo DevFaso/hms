@@ -1,6 +1,8 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { Observable, catchError, forkJoin, map, of } from 'rxjs';
+
+import { birthDateQuery, emailQuery, isCompactDate } from '../shared/patient-query';
 
 export interface PatientAddressHistoryEntry {
   id: string;
@@ -10,6 +12,32 @@ export interface PatientAddressHistoryEntry {
   country?: string;
   /** When this address stopped being current. */
   replacedAt: string;
+}
+
+/** QA D926: the demographics PATCH /patients/{id} corrects (null or absent = unchanged). */
+export interface PatientDemographicsPatch {
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  phoneNumberPrimary?: string;
+  phoneNumberSecondary?: string;
+  email?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  /** QA D1036: the postal code (the record's `zipCode`). */
+  postalCode?: string;
+  /** QA D1036: self-reported, correctable. */
+  ethnicity?: string;
+  /** QA D1036: A, B, AB or O with its Rhesus sign. */
+  bloodType?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
 }
 
 export interface PatientResponse {
@@ -53,6 +81,11 @@ export interface PatientResponse {
   departmentName?: string;
   organizationId?: string;
   active: boolean;
+  /** QA D1488: a death is on record. `active` is the administrative flag, not this. */
+  deceased?: boolean;
+  deceasedAt?: string | null;
+  /** A doctor has disputed the death at this hospital: care is permitted here pending review. */
+  deathDisputed?: boolean;
   /** E8 #54 — every read of this chart needs a live break-the-glass session. */
   chartRestricted?: boolean;
   chartRestrictionReason?: string | null;
@@ -127,6 +160,9 @@ export interface PatientAllergy {
   lastOccurrenceDate?: string;
   recordedDate?: string;
   active?: boolean;
+  /** QA D1242: why and when the entry was deactivated (kept, shown on the inactive row). */
+  deactivationReason?: string | null;
+  deactivatedAt?: string | null;
   recordedBy?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -165,6 +201,8 @@ export interface PatientProblem {
   supportingEvidence?: string;
   chronic?: boolean;
   diagnosisCodes?: string[];
+  /** When the problem was last recorded or reviewed (server time). */
+  lastReviewedAt?: string | null;
 }
 
 export interface PatientDiagnosisRequest {
@@ -239,6 +277,8 @@ export interface ChartUpdateRequest {
  * wire and was discarded here.
  */
 export interface TimelineEntryMetadata {
+  /** QA D1423: on an ALLERGY entry, false when the allergy was deactivated. */
+  active?: boolean;
   /** Hospital the row belongs to — present on local rows too, not just foreign ones. */
   sourceHospitalName?: string;
   sourceHospitalId?: string;
@@ -303,11 +343,15 @@ export interface PatientLabResult {
   /** NORMAL | ABNORMAL | ABNORMAL_LOW | ABNORMAL_HIGH | CRITICAL | PENDING | UNKNOWN (not interpreted, D31). */
   status?: string;
   released: boolean;
+  /** QA D1016 (round 18): a released value that replaces an earlier released one. */
+  corrected?: boolean;
   /**
    * No configured reference range is in this result's unit, so nothing
    * graded it: a NORMAL status then only means no abnormal flag was recorded.
    */
   unitMismatch?: boolean;
+  /** QA D1394: a range applies but the value does not settle a grade against it. */
+  gradeUnknown?: boolean;
   collectedAt?: string;
   resultedAt?: string;
   orderedBy?: string;
@@ -318,12 +362,20 @@ export interface PatientLabResult {
   hospitalName?: string;
 }
 
+/** QA D1380: entries per page of the audited doctor timeline. */
+export const DOCTOR_TIMELINE_PAGE_SIZE = 50;
+
 export interface PatientTimeline {
   patientId: string;
   patientName: string;
   accessReason: string;
   entries: TimelineEntry[];
+  /** QA D1380: every entry the filters keep, across every page (never the page's length). */
   totalEntries: number;
+  /** QA D1380: the 0-based page of entries returned. */
+  page?: number | null;
+  /** QA D1380: entries per page. */
+  pageSize?: number | null;
   generatedAt: string;
   /** E9 #64 — empty in-hospital and under a live break-the-glass session. */
   restrictedRows?: RestrictedRows[];
@@ -351,7 +403,29 @@ export interface RegistrationMatch {
   maskedEmail: string | null;
   hospitalCount: number;
   alreadyRegisteredHere: boolean;
-  matchedOn: 'PHONE' | 'EMAIL';
+  /**
+   * PHONE / EMAIL: the typed contact is on file. IDENTITY (QA D1064): the same
+   * name and date of birth at another hospital of the organisation, whatever
+   * the phone.
+   */
+  matchedOn: 'PHONE' | 'EMAIL' | 'IDENTITY';
+  /**
+   * QA D1061: true when the record has the typed name and date of birth, false
+   * when it only shares the contact (a parent's phone on a child's
+   * registration), null when the request carried no name or date of birth.
+   */
+  sameIdentity?: boolean | null;
+}
+
+/** The registration-match request: a contact, and/or the identity (QA D1064). */
+export interface RegistrationMatchQuery {
+  email?: string;
+  phone?: string;
+  hospitalId?: string;
+  firstName?: string;
+  lastName?: string;
+  /** yyyy-MM-dd */
+  dateOfBirth?: string;
 }
 
 export interface AllergyListResult {
@@ -373,6 +447,74 @@ export function recordsWithheld(headers: { get(name: string): string | null }): 
   return headers.get('X-Records-Withheld') === 'OTHER_HOSPITALS';
 }
 
+/** How many patients a birth-date or e-mail search asks for (QA D1274). */
+const FIELD_SEARCH_SIZE = 20;
+
+/** Every source's patients, each once, in source order (a failed source reads as none). */
+function mergeSources(sources: Observable<PatientResponse[]>[]): Observable<PatientResponse[]> {
+  if (sources.length === 1) return sources[0];
+  return forkJoin(sources).pipe(
+    map((lists) => {
+      const seen = new Set<string>();
+      const out: PatientResponse[] = [];
+      for (const p of lists.flat()) {
+        if (p && !seen.has(p.id)) {
+          seen.add(p.id);
+          out.push(p);
+        }
+      }
+      return out;
+    }),
+  );
+}
+
+interface TermSearchParams {
+  hospitalId?: string;
+  size?: number;
+  includeInactive?: boolean;
+}
+
+/** The search by birth date or e-mail `term` calls for, or null (a failure reads as no match). */
+function fieldSearch(
+  patients: Pick<PatientService, 'search'>,
+  term: string,
+  params: TermSearchParams,
+): Observable<PatientResponse[]> | null {
+  const dob = birthDateQuery(term);
+  const email = dob ? null : emailQuery(term);
+  if (!dob && !email) return null;
+  return patients
+    .search({ ...params, dob: dob ?? undefined, email: email ?? undefined })
+    .pipe(catchError(() => of([] as PatientResponse[])));
+}
+
+/**
+ * QA D1274 (D1253 sibling, round 27): a patient typeahead's search. The term
+ * is searched as a name (the server also matches it as an MRN or a phone
+ * number) within the hospital scope and, when it is a birth date (ISO,
+ * 15/03/2020, 15-03-2020, 15032020) or an e-mail (or a piece of one), by that
+ * field too; the results are merged, each patient once. A birth date used to
+ * be sent only as a name, and found nobody in any format. A failed source
+ * reads as no match.
+ */
+export function searchPatientsByTerm(
+  patients: Pick<PatientService, 'search'>,
+  term: string,
+  params: TermSearchParams,
+): Observable<PatientResponse[]> {
+  // A day-first or ISO date is never a name; eight digits are a phone number too.
+  const asName =
+    birthDateQuery(term) && !isCompactDate(term)
+      ? null
+      : patients
+          .search({ ...params, name: term })
+          .pipe(catchError(() => of([] as PatientResponse[])));
+  const sources = [asName, fieldSearch(patients, term, params)].filter(
+    (o): o is Observable<PatientResponse[]> => o !== null,
+  );
+  return mergeSources(sources);
+}
+
 @Injectable({ providedIn: 'root' })
 export class PatientService {
   private readonly http = inject(HttpClient);
@@ -381,7 +523,16 @@ export class PatientService {
     let params = new HttpParams();
     if (hospitalId) params = params.set('hospitalId', hospitalId);
     if (search) params = params.set('search', search);
-    return this.http.get<PatientResponse[]>('/patients', { params });
+    const listed = this.http.get<PatientResponse[]>('/patients', { params });
+    // QA D1274: a typed birth date or e-mail is also asked of the search that
+    // answers it by that field (the 11 hand-written typeaheads call list()).
+    const byField = search ? this.fieldMatches(search, hospitalId) : null;
+    return byField ? mergeSources([listed, byField]) : listed;
+  }
+
+  /** The search by birth date or e-mail a term calls for, or null (failures read as no match). */
+  private fieldMatches(term: string, hospitalId?: string): Observable<PatientResponse[]> | null {
+    return fieldSearch(this, term, { hospitalId, size: FIELD_SEARCH_SIZE, includeInactive: true });
   }
 
   /** Superseded addresses, newest move first (Tier 2 item 38). */
@@ -414,6 +565,14 @@ export class PatientService {
     return this.http.put<PatientResponse>(`/patients/${id}`, req);
   }
 
+  /**
+   * QA D926: the desk corrects a chart's identity, contact and guardian.
+   * PATCH: a field left out is unchanged; a required one sent blank is refused.
+   */
+  patchDemographics(id: string, req: PatientDemographicsPatch): Observable<PatientResponse> {
+    return this.http.patch<PatientResponse>(`/patients/${id}`, req);
+  }
+
   lookup(params: {
     identifier?: string;
     email?: string;
@@ -434,15 +593,16 @@ export class PatientService {
    * Exact email/phone match across ALL hospitals for the registration form.
    * Returns a masked, privacy-minimal projection — link via POST /registrations.
    */
-  registrationMatch(params: {
-    email?: string;
-    phone?: string;
-    hospitalId?: string;
-  }): Observable<RegistrationMatch[]> {
+  registrationMatch(params: RegistrationMatchQuery): Observable<RegistrationMatch[]> {
     let httpParams = new HttpParams();
     if (params.email) httpParams = httpParams.set('email', params.email);
     if (params.phone) httpParams = httpParams.set('phone', params.phone);
     if (params.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
+    // QA D1061 / D1064: the identity, so a record is told apart from one that
+    // only shares the phone, and found at another hospital when the phone differs.
+    if (params.firstName) httpParams = httpParams.set('firstName', params.firstName);
+    if (params.lastName) httpParams = httpParams.set('lastName', params.lastName);
+    if (params.dateOfBirth) httpParams = httpParams.set('dateOfBirth', params.dateOfBirth);
     return this.http.get<RegistrationMatch[]>('/patients/registration-match', {
       params: httpParams,
     });
@@ -470,10 +630,12 @@ export class PatientService {
     });
   }
 
-  /** Hospital-scoped free search (GET /patients/search) — name/MRN/phone/email patterns. */
+  /** Hospital-scoped free search (GET /patients/search) — name/MRN/birth date/phone/email. */
   search(params: {
     name?: string;
     mrn?: string;
+    /** QA D1274: a birth date, yyyy-mm-dd (birthDateQuery reads the desk's formats). */
+    dob?: string;
     phone?: string;
     email?: string;
     hospitalId?: string;
@@ -483,6 +645,7 @@ export class PatientService {
   }): Observable<PatientResponse[]> {
     let httpParams = new HttpParams();
     if (params.name) httpParams = httpParams.set('name', params.name);
+    if (params.dob) httpParams = httpParams.set('dob', params.dob);
     if (params.mrn) httpParams = httpParams.set('mrn', params.mrn);
     if (params.phone) httpParams = httpParams.set('phone', params.phone);
     if (params.email) httpParams = httpParams.set('email', params.email);
@@ -623,14 +786,20 @@ export class PatientService {
 
   /* ── Doctor timeline (audited access) ── */
 
+  /**
+   * One page of the audited timeline (QA D1380): `totalEntries` counts every
+   * entry, `page` reads the next ones with the same stated reason.
+   */
   getDoctorTimeline(
     patientId: string,
     accessReason: string,
-    maxEvents = 50,
+    page = 0,
+    maxEvents: number = DOCTOR_TIMELINE_PAGE_SIZE,
   ): Observable<PatientTimeline> {
     return this.http.post<PatientTimeline>(`/patients/${patientId}/doctor-timeline`, {
       accessReason,
       maxEvents,
+      page,
     });
   }
 

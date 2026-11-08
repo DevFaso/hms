@@ -26,40 +26,22 @@ describe('GoodsReceiptComponent', () => {
     { id: 'inv-par', medicationCatalogItemId: 'cat-par', medicationName: 'Paracetamol' },
   ];
 
-  it('marks a partial lot read and keeps the successful medication identifiable', () => {
-    svc.listLotsByInventoryItem.and.callFake((id) =>
-      id === 'inv-mor'
-        ? (of({
-            data: {
-              content: [
-                {
-                  id: 'lot-a',
-                  inventoryItemId: id,
-                  lotNumber: 'CDX-A',
-                  receivedDate: '2026-11-08',
-                },
-              ],
-            },
-          }) as any)
-        : throwError(() => new Error('offline')),
-    );
-    component.selectedPharmacyId = 'ph-1';
-    component.onPharmacyChange();
-    expect(component.lotsPartial()).toBeTrue();
-    expect(component.lotsFailed()).toBeFalse();
-    expect(component.lotMedication(component.recentLots()[0])).toBe('Morphine');
+  it('keeps lot medication search local to loaded rows', () => {
+    component.recentLots.set([
+      { id: 'lot-a', inventoryItemId: 'inv-mor', lotNumber: 'CDX-A' },
+    ] as any);
     component.searchTerm = 'morphine';
     expect(component.visibleLots().length).toBe(1);
     component.searchTerm = 'missing';
     expect(component.visibleLots().length).toBe(0);
     expect(component.recentLots().length).toBe(1);
   });
-  it('does not let a previous pharmacy lot request overwrite the new pharmacy', () => {
+  it('ignores a late recent-lots response from the previous pharmacy', () => {
     const old = new Subject<any>();
-    svc.listLotsByInventoryItem.and.returnValue(old);
+    svc.listLotsByPharmacy.and.returnValue(old);
     component.selectedPharmacyId = 'old';
     component.onPharmacyChange();
-    svc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as any);
+    svc.listLotsByPharmacy.and.returnValue(of({ data: { content: [] } }) as any);
     component.selectedPharmacyId = 'new';
     component.onPharmacyChange();
     old.next({ data: { content: [{ id: 'old-lot' }] } });
@@ -67,10 +49,10 @@ describe('GoodsReceiptComponent', () => {
     expect(component.lotsLoading()).toBeFalse();
   });
   it('distinguishes an unavailable lot list from an empty one and retries', () => {
-    svc.listInventoryByPharmacy.and.returnValue(throwError(() => new Error('offline')));
+    svc.listLotsByPharmacy.and.returnValue(throwError(() => new Error('offline')));
     component.loadRecentLots();
     expect(component.lotsFailed()).toBeTrue();
-    svc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as any);
+    svc.listLotsByPharmacy.and.returnValue(of({ data: { content: [] } }) as any);
     component.loadRecentLots();
     expect(component.lotsFailed()).toBeFalse();
     expect(component.recentLots()).toEqual([]);
@@ -81,6 +63,7 @@ describe('GoodsReceiptComponent', () => {
       'listPharmacies',
       'listInventoryByPharmacy',
       'listLotsByInventoryItem',
+      'listLotsByPharmacy',
       'listWitnessCandidates',
       'receiveStock',
     ]);
@@ -88,6 +71,7 @@ describe('GoodsReceiptComponent', () => {
     svc.listPharmacies.and.returnValue(of({ content: [{ id: 'ph-1', name: 'Main' }] } as any));
     svc.listInventoryByPharmacy.and.returnValue(of({ data: { content: items } } as any));
     svc.listLotsByInventoryItem.and.returnValue(of({ data: { content: [] } } as any));
+    svc.listLotsByPharmacy.and.returnValue(of({ data: { content: [] } } as any));
     svc.listWitnessCandidates.and.returnValue(
       of({ data: [{ userId: 'user-2', displayName: 'Pharmacist B' }] } as any),
     );
@@ -146,5 +130,20 @@ describe('GoodsReceiptComponent', () => {
     component.submitForm();
     expect(svc.receiveStock).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith('PHARMACY.UNIT_COST_NEGATIVE');
+  });
+
+  it('QA D1233: recent lots are the newest received across every item, in one sorted read', () => {
+    const newest = { id: 'lot-03c', lotNumber: 'LOT-A-R24-03c', receivedDate: '2026-11-02' };
+    svc.listLotsByPharmacy.and.returnValue(of({ data: { content: [newest] } } as any));
+    svc.listLotsByInventoryItem.calls.reset();
+    component.selectedPharmacyId = 'ph-1';
+    component.onPharmacyChange();
+
+    expect(svc.listLotsByPharmacy).toHaveBeenCalledWith('ph-1', 0, 20, [
+      'receivedDate,desc',
+      'createdAt,desc',
+    ]);
+    expect(svc.listLotsByInventoryItem).not.toHaveBeenCalled();
+    expect(component.recentLots().map((l) => l.id)).toEqual(['lot-03c']);
   });
 });

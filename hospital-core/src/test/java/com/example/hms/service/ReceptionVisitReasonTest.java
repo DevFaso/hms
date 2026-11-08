@@ -22,5 +22,9 @@ class ReceptionVisitReasonTest {
         Encounter enc = new Encounter();
         enc.setChiefComplaint("Toux");
         assertThat(ReceptionServiceImpl.visitReason(appt, enc)).isEqualTo("Toux");
+        // RCPT-CLIN: the same row for the desk: triage's complaint is not on it.
+        assertThat(ReceptionServiceImpl.deskVisitReason(appt, enc)).isNull();
+        enc.setDeskChiefComplaint("Fièvre");
+        assertThat(ReceptionServiceImpl.deskVisitReason(appt, enc)).isEqualTo("Fièvre");
     }
 }

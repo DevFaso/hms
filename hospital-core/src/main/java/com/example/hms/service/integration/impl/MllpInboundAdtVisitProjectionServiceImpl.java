@@ -235,7 +235,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             : LocalDateTime.now();
 
         boolean firstTransition = row.getStatus() != AdmissionStatus.DISCHARGED
-            && row.getStatus() != AdmissionStatus.DECEASED;
+            && row.getStatus() != AdmissionStatus.DECEASED
+            // QA D1516: its bed was released when the voided death closed it.
+            && row.getStatus() != AdmissionStatus.CLOSED_IN_ERROR;
 
         row.setStatus(AdmissionStatus.DISCHARGED);
         row.setActualDischargeDateTime(dischargeAt);
@@ -243,6 +245,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
 
         if (firstTransition) {
             bedAssignmentService.releaseBed(row);
+            // QA D1435: an ADT discharge ends the stay's nursing work like any other.
+            stayEncounters.ifAvailable(service -> service.closeNursingWorkOfEndedStay(row));
             emitAdmissionLifecycleAudit(
                 AuditEventType.ADMISSION_DISCHARGED, row, ctx,
                 String.format(

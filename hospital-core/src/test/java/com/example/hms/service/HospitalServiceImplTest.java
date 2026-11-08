@@ -1105,6 +1105,7 @@ class HospitalServiceImplTest {
         @Test
         @DisplayName("US address requires state")
         void usNoState() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
                     .name("No State").city("NY").country("US").address("1 Main St")
@@ -1112,13 +1113,14 @@ class HospitalServiceImplTest {
                     .active(true).build();
             stubMessage("hospital.state.required");
 
-            assertThrows(IllegalArgumentException.class,
+            assertThrows(com.example.hms.exception.FieldBusinessException.class,
                     () -> hospitalService.createHospital(dto, Locale.ENGLISH));
         }
 
         @Test
         @DisplayName("US address requires zipCode")
         void usNoZip() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
                     .name("No Zip").city("NY").country("US").address("1 Main St").state("NY")
@@ -1126,7 +1128,7 @@ class HospitalServiceImplTest {
                     .active(true).build();
             stubMessage("hospital.zipCode.required");
 
-            assertThrows(IllegalArgumentException.class,
+            assertThrows(com.example.hms.exception.FieldBusinessException.class,
                     () -> hospitalService.createHospital(dto, Locale.ENGLISH));
         }
 
@@ -1152,6 +1154,7 @@ class HospitalServiceImplTest {
         @Test
         @DisplayName("US address with blank state throws")
         void usBlankState() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
                     .name("Blank State").city("NY").country("US").address("1 Main St").state("  ")
@@ -1159,13 +1162,14 @@ class HospitalServiceImplTest {
                     .active(true).build();
             stubMessage("hospital.state.required");
 
-            assertThrows(IllegalArgumentException.class,
+            assertThrows(com.example.hms.exception.FieldBusinessException.class,
                     () -> hospitalService.createHospital(dto, Locale.ENGLISH));
         }
 
         @Test
         @DisplayName("US address with blank zipCode throws")
         void usBlankZip() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
                     .name("Blank Zip").city("NY").country("US").address("1 Main St").state("NY")
@@ -1173,7 +1177,7 @@ class HospitalServiceImplTest {
                     .active(true).build();
             stubMessage("hospital.zipCode.required");
 
-            assertThrows(IllegalArgumentException.class,
+            assertThrows(com.example.hms.exception.FieldBusinessException.class,
                     () -> hospitalService.createHospital(dto, Locale.ENGLISH));
         }
 

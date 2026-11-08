@@ -1,8 +1,13 @@
 package com.example.hms.repository;
 
+import com.example.hms.enums.AboGroup;
+import com.example.hms.enums.BloodProductType;
 import com.example.hms.enums.BloodUnitStatus;
+import com.example.hms.enums.RhFactor;
 import com.example.hms.model.BloodUnit;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -33,4 +38,38 @@ public interface BloodUnitRepository extends JpaRepository<BloodUnit, UUID> {
         + "com.example.hms.enums.BloodUnitStatus.RETURNED) "
         + "AND u.expiresOn > :today ORDER BY u.expiresOn ASC")
     List<BloodUnit> findAssignable(@Param("hospitalId") UUID hospitalId, @Param("today") LocalDate today);
+
+    /**
+     * Row lock on the bag, so a release, a crossmatch result and a hang of one bag take turns and
+     * each sees what the one before wrote. Taken before the bag is read.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM BloodUnit u WHERE u.id = :id")
+    Optional<BloodUnit> lockById(@Param("id") UUID id);
+
+    /** The same lock on every bag held by a request. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM BloodUnit u WHERE u.request.id = :requestId ORDER BY u.id")
+    List<BloodUnit> lockByRequestId(@Param("requestId") UUID requestId);
+
+    /**
+     * A bag of this kind in stock at this hospital that could go to this patient: on hand and in
+     * date as {@link #findAssignable} has it, so a bag returned to the lab counts. One already found
+     * incompatible for them is not available to them, and one ever hung can go out to nobody. A bag's
+     * last day counts as expired.
+     */
+    @Query("SELECT u FROM BloodUnit u WHERE u.hospital.id = :hospitalId "
+        + "AND u.productType = :product AND u.aboGroup = :abo AND u.rhFactor = :rh "
+        + "AND u.status IN (com.example.hms.enums.BloodUnitStatus.AVAILABLE, "
+        + "com.example.hms.enums.BloodUnitStatus.RETURNED) AND u.expiresOn > :today "
+        + "AND NOT EXISTS (SELECT a.id FROM TransfusionAdministration a WHERE a.bloodUnit = u) "
+        + "AND NOT EXISTS (SELECT c.id FROM TransfusionCrossmatch c WHERE c.bloodUnit = u "
+        + "AND c.request.patient.id = :patientId AND c.compatible = FALSE) "
+        + "ORDER BY u.expiresOn ASC, u.unitNumber ASC")
+    List<BloodUnit> findStockForPatient(@Param("hospitalId") UUID hospitalId,
+                                        @Param("patientId") UUID patientId,
+                                        @Param("product") BloodProductType product,
+                                        @Param("abo") AboGroup abo,
+                                        @Param("rh") RhFactor rh,
+                                        @Param("today") LocalDate today);
 }

@@ -17,7 +17,7 @@ public class PlatformOwnershipDTO {
     @Size(max = 120)
     private String ownerTeam;
 
-    @Email
+    @Email(message = "{validation.email.invalid}")
     @Size(max = 255)
     private String ownerContactEmail;
 

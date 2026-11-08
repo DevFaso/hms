@@ -1,3 +1,4 @@
+import { allRows } from '../../shared/all-pages';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -170,10 +171,13 @@ export class InBasketPanelComponent {
   private loadData(): void {
     const request = ++this.loadRequest;
     this.loading.set(true);
-    this.inBasketService.getItems().subscribe({
-      next: (page) => {
+    // QA D1347: every in-basket item (all pages), not the server's first 20.
+    allRows((page, size) =>
+      this.inBasketService.getItems(undefined, undefined, undefined, page, size),
+    ).subscribe({
+      next: (items) => {
         if (request !== this.loadRequest) return;
-        this.items.set(page.content);
+        this.items.set(items);
         this.loading.set(false);
       },
       error: () => {

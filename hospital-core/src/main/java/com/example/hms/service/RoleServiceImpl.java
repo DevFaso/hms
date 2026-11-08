@@ -2,7 +2,6 @@ package com.example.hms.service;
 
 import com.example.hms.config.SecurityConstants;
 import com.example.hms.enums.RoleBlueprint;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.RoleMapper;
@@ -185,23 +184,24 @@ public class RoleServiceImpl implements RoleService {
 
     private void validateFields(String name, String code) {
         if (name == null || name.isBlank()) {
-            throw new BusinessException("role.name.blank");
+            throw new com.example.hms.exception.FieldBusinessException("name", "role.name.blank");
         }
         if (code == null || code.isBlank()) {
-            throw new BusinessException("role.code.blank");
+            throw new com.example.hms.exception.FieldBusinessException("code", "role.code.blank");
         }
     }
 
     private void checkDuplicate(String name, String code, UUID currentId) {
+        // QA D1301 class: the refusal names the field whose value is already used.
         roleRepository.findByCode(code).ifPresent(existing -> {
             if (currentId == null || !existing.getId().equals(currentId)) {
-                throw new BusinessException("role.duplicate");
+                throw new com.example.hms.exception.FieldBusinessException("code", "role.duplicate");
             }
         });
 
         roleRepository.findByNameIgnoreCase(name).ifPresent(existing -> {
             if (currentId == null || !existing.getId().equals(currentId)) {
-                throw new BusinessException("role.duplicate");
+                throw new com.example.hms.exception.FieldBusinessException("name", "role.duplicate");
             }
         });
     }

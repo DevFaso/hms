@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
@@ -15,6 +15,7 @@ import { PatientService } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 function mockOrder(overrides: Partial<ImagingOrderResponse> = {}): ImagingOrderResponse {
   return {
@@ -156,6 +157,52 @@ describe('ImagingComponent', () => {
     expect(component.selectedOrder()).toBeNull();
   });
 
+  it('QA D1156: "Créer une Demande" on an empty form names the missing fields before any request', () => {
+    const fixture = TestBed.createComponent(ImagingComponent);
+    fixture.detectChanges();
+    const cmp = fixture.componentInstance;
+    cmp.openCreate();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    host.querySelector<HTMLButtonElement>('[data-testid="imaging-order-submit"]')!.click();
+    fixture.detectChanges();
+    expect(imagingSpy.createOrder).not.toHaveBeenCalled();
+    expect(host.querySelector('#img-studyType')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('label[for="img-studyType"]')?.textContent).toContain('*');
+  });
+
+  it('QA D1156: a server field refusal is named by its label and marked, never the bare constraint text', fakeAsync(() => {
+    const fixture = TestBed.createComponent(ImagingComponent);
+    fixture.detectChanges();
+    const cmp = fixture.componentInstance;
+    cmp.openCreate();
+    // QA D1245: the patient is picked (the picker's input is required while empty).
+    cmp.onPatientPicked({ id: 'p1', firstName: 'Awa', lastName: 'Kaboré' } as never);
+    cmp.form.studyType = 'Thorax';
+    cmp.form.hospitalId = 'h1';
+    fixture.detectChanges();
+    // ngModel writes the model into the inputs a tick later; the guard reads them.
+    tick();
+    fixture.detectChanges();
+    imagingSpy.createOrder.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          error: 'Validation Failed',
+          message: 'ne doit pas être vide',
+          fieldErrors: { studyType: 'ne doit pas être vide' },
+        },
+      })),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+    host.querySelector<HTMLButtonElement>('[data-testid="imaging-order-submit"]')!.click();
+    fixture.detectChanges();
+    expect(imagingSpy.createOrder).toHaveBeenCalled();
+    // The label key (TranslateModule without translations echoes it) precedes the reason.
+    expect(cmp.formError()).toBe('FIELD_LIMITS.FIELD_REASON');
+    expect(host.querySelector('#img-studyType')?.getAttribute('aria-invalid')).toBe('true');
+  }));
+
   it('submitForm creates an order and strips the empty laterality', () => {
     component.ngOnInit();
     imagingSpy.createOrder.and.returnValue(of(mockOrder()));
@@ -172,11 +219,28 @@ describe('ImagingComponent', () => {
     component.ngOnInit();
     imagingSpy.updateOrderStatus.and.returnValue(of(mockOrder({ status: 'CANCELLED' })));
     component.confirmCancel(component.orders()[0]);
+    // QA D1098: the cancel states its reason (the test sent none before).
+    component.cancelReason.set('Examen en double');
     component.executeCancel();
     const [id, req] = imagingSpy.updateOrderStatus.calls.mostRecent().args;
     expect(id).toBe('o1');
     expect(req['status']).toBe('CANCELLED');
+    expect(req['cancellationReason']).toBe('Examen en double');
     expect(component.showDeleteConfirm()).toBeFalse();
+  });
+
+  // QA D1098 (round 19): a resulted order offered "Annuler la demande" and sent no reason.
+  it('QA D1098: no cancel without a reason, and none on a resulted order', () => {
+    component.ngOnInit();
+    component.confirmCancel(component.orders()[0]);
+    component.executeCancel();
+    expect(imagingSpy.updateOrderStatus).not.toHaveBeenCalled();
+    expect(component.showDeleteConfirm()).toBeTrue();
+    for (const status of ['RESULTS_AVAILABLE', 'COMPLETED', 'CANCELLED'] as const) {
+      expect(component.canCancelThisOrder(mockOrder({ status })))
+        .withContext(status)
+        .toBeFalse();
+    }
   });
 
   it('setView(results) lazily loads reports scoped to the active hospital', () => {
@@ -307,18 +371,18 @@ describe('ImagingComponent', () => {
     expect(imagingSpy.createReport).not.toHaveBeenCalled();
   });
 
-  it('signReport asks before signing and does nothing when declined', () => {
-    spyOn(window, 'confirm').and.returnValue(false);
-    component.signReport(mockReport());
+  it('signReport asks before signing and does nothing when declined', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    await component.signReport(mockReport());
     expect(imagingSpy.signReport).not.toHaveBeenCalled();
   });
 
-  it('signReport signs and refreshes when confirmed', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('signReport signs and refreshes when confirmed', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     imagingSpy.getReportsByHospital.and.returnValue(of([]));
     const signed = mockReport({ reportStatus: 'FINAL', signed: true });
     imagingSpy.signReport.and.returnValue(of(signed));
-    component.signReport(mockReport());
+    await component.signReport(mockReport());
     expect(imagingSpy.signReport).toHaveBeenCalledWith('r1');
     expect(component.selectedReport()).toBe(signed);
     expect(toastSpy.success).toHaveBeenCalled();
@@ -425,6 +489,18 @@ describe('ImagingComponent — order actions by role (QA D527)', () => {
     const el = render('ROLE_DOCTOR');
     expect(titles(el)).toContain('IMAGING.EDIT_ORDER');
     expect(titles(el)).toContain('IMAGING.CANCEL_ORDER');
+  });
+
+  // QA D1081: DOCTOR2_A was offered "Annuler la Demande" on DOCTOR_A's order
+  // and refused only after confirming.
+  it('D1081: a doctor who did not write the order is offered no Cancel', () => {
+    const el = render('ROLE_DOCTOR', { orderingProviderUserId: 'u-colleague' });
+    expect(titles(el)).not.toContain('IMAGING.CANCEL_ORDER');
+  });
+
+  it('D1081: the order author keeps Cancel', () => {
+    const mine = render('ROLE_DOCTOR', { orderingProviderUserId: 'u-me' });
+    expect(titles(mine)).toContain('IMAGING.CANCEL_ORDER');
   });
 
   it('QA D611: a signed order offers no Edit, even to its ordering doctor', () => {

@@ -48,3 +48,16 @@ export function firstImplausibleVital(
   }
   return null;
 }
+
+/**
+ * QA D1424: VitalSignLimits.bloodPressureOrdered on the server. A diastolic at or
+ * above the systolic is a swapped entry; a pressure alone is a real reading.
+ */
+export function bloodPressureReversed(
+  systolic: number | string | null | undefined,
+  diastolic: number | string | null | undefined,
+): boolean {
+  if (systolic === null || systolic === undefined || systolic === '') return false;
+  if (diastolic === null || diastolic === undefined || diastolic === '') return false;
+  return Number(diastolic) >= Number(systolic);
+}

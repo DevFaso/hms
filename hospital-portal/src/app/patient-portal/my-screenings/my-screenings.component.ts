@@ -1,5 +1,12 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule, DatePipe } from '@angular/common';
+import {
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -19,6 +26,13 @@ import {
 } from '../../shared/pro-instrument-form/pro-instrument-form.component';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { refusalReason } from '../../shared/refusal-reason';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+
+/** Must match `idPrefix` of the questionnaire in the template. */
+const PRO_ID_PREFIX = 'my-pro';
 /**
  * A mother answers her own mental-health screening (EPDS) from home while a
  * postpartum plan is open for her (Tier 2 item 47).
@@ -29,13 +43,22 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
  * whether her care team will follow up, and whether they were alerted
  * straight away.
  */
+/** The first option of each item (of `only`, when given): where an unanswered item is marked. */
+function itemIds(instrument: ProInstrumentView, only?: readonly number[]): string[] {
+  return instrument.items
+    .filter((item) => !only || only.includes(item.itemNo))
+    .filter((item) => item.options.length > 0)
+    .map((item) => `${PRO_ID_PREFIX}-item-${item.itemNo}-opt-${item.options[0].optionNo}`);
+}
+
 @Component({
   selector: 'app-my-screenings',
   standalone: true,
   imports: [
+    DateTimePipe,
+    SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
-    DatePipe,
     FormsModule,
     TranslateModule,
     ProInstrumentFormComponent,
@@ -48,6 +71,7 @@ export class MyScreeningsComponent implements OnInit {
   private readonly screenings = inject(ProScreeningService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   loading = signal(true);
   /**
@@ -56,6 +80,8 @@ export class MyScreeningsComponent implements OnInit {
    * patient when the request simply failed.
    */
   failed = signal(false);
+  /** QA D1212: the server's reason the read failed (a 4xx), when it gave one. */
+  failureReason = signal<string | null>(null);
   available = signal<ProSelfReportAvailable[]>([]);
   history = signal<ProSelfReportEntry[]>([]);
 
@@ -117,7 +143,8 @@ export class MyScreeningsComponent implements OnInit {
         this.history.set(report.history ?? []);
         this.loading.set(false);
       },
-      error: () => {
+      error: (err: unknown) => {
+        this.failureReason.set(refusalReason(err));
         this.failed.set(true);
         this.loading.set(false);
       },
@@ -152,10 +179,19 @@ export class MyScreeningsComponent implements OnInit {
     const instrument = this.instrument();
     if (!instrument) return;
     const missing = this.unanswered();
+    const allItems = itemIds(instrument);
     if (missing.length > 0) {
+      // QA D1306 (round 28): each unanswered item is marked, not only a toast.
+      refuseFields(
+        this.host.nativeElement,
+        itemIds(instrument, missing),
+        allItems,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.warning(this.translate.instant('PRO.INCOMPLETE', { items: missing.join(', ') }));
       return;
     }
+    refuseFields(this.host.nativeElement, [], allItems, '');
     this.submitting.set(true);
     this.screenings
       .submitMine({
@@ -170,8 +206,8 @@ export class MyScreeningsComponent implements OnInit {
           this.cancel();
           this.toast.success(this.translate.instant('PRO.MY.SUBMITTED'));
         },
-        error: () => {
-          this.toast.error(this.translate.instant('PRO.MY.SUBMIT_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('PRO.MY.SUBMIT_ERROR'));
           this.submitting.set(false);
         },
       });

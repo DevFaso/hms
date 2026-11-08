@@ -90,8 +90,26 @@ public interface LabResultService {
      */
     LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, Locale locale);
 
+    /**
+     * QA D1092: as {@link #releaseLabResult(UUID, boolean, Locale)}; a result
+     * no range can grade (its unit matches no range and converts to none) is
+     * released only with {@code ungradedConfirmed}, and its in-basket item
+     * reaches the ordering clinician flagged for review.
+     */
+    LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, boolean ungradedConfirmed,
+                                          Locale locale);
+
     /** A release that has not confirmed a self-release. */
     LabResultResponseDTO releaseLabResult(UUID id, Locale locale);
+
+    /**
+     * QA D938/D178: everything a release tells people (the ordering
+     * clinician's in-basket item, the patient's notification), for a result a
+     * path OUTSIDE this service released - today the HL7 auto-release. Call it
+     * inside the transaction that set {@code released}; the writes are
+     * registered for after its commit.
+     */
+    void announceReleasedResult(com.example.hms.model.LabResult result);
 
     /**
      * The release worklist of the caller's hospital: every result nobody

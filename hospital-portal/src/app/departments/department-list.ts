@@ -9,6 +9,10 @@ import { RoleContextService } from '../core/role-context.service';
 import { ProfileService } from '../services/profile.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
+import { missingRequiredMessage } from '../shared/required-fields';
 
 interface Department {
   id: string;
@@ -39,7 +43,14 @@ interface DepartmentRequest {
 @Component({
   selector: 'app-department-list',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    PhoneFieldDirective,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './department-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './department-list.scss',
@@ -254,7 +265,14 @@ export class DepartmentListComponent implements OnInit {
 
   submitForm(): void {
     if (!this.form.name || !this.form.code || !this.form.hospitalId) {
-      this.toast.error(this.translate.instant('DEPARTMENTS.TOAST.REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list.
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'ENCOUNTERS.HOSPITAL', value: this.form.hospitalId },
+          { labelKey: 'DEPARTMENTS.NAME', value: this.form.name },
+          { labelKey: 'DEPARTMENTS.CODE', value: this.form.code },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
       return;
     }
     this.saving.set(true);

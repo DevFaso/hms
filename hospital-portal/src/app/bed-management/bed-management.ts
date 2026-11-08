@@ -20,9 +20,14 @@ import {
 } from '../services/bed.service';
 import { ToastService } from '../core/toast.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 /**
  * Ward & bed administration (P0 #4). First writer for the V25 ward/bed
  * schema — makes the dashboard occupancy tiles real.
@@ -30,7 +35,14 @@ import { RoleContextService } from '../core/role-context.service';
 @Component({
   selector: 'app-bed-management',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    MeasurePipe,
+  ],
   templateUrl: './bed-management.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './bed-management.scss',
@@ -39,6 +51,7 @@ export class BedManagementComponent implements OnInit {
   private readonly bedService = inject(BedService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
   private readonly departmentLookup = inject(DepartmentLookupService);
   private readonly roleContext = inject(RoleContextService);
 
@@ -291,14 +304,21 @@ export class BedManagementComponent implements OnInit {
         this.closeWardModal();
         this.refreshAll();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('BEDS.TOAST.SAVE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BEDS.TOAST.SAVE_FAILED'));
         this.saving.set(false);
       },
     });
   }
 
-  deleteWard(ward: WardResponse): void {
+  async deleteWard(ward: WardResponse): Promise<void> {
+    // QA CX-010: one click removed the ward.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'BEDS.DELETE_WARD_CONFIRM',
+      params: { name: ward.name },
+      confirmKey: 'COMMON.DELETE',
+    });
+    if (!confirmed) return;
     this.bedService.deleteWard(ward.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('BEDS.TOAST.WARD_DELETED'));
@@ -309,7 +329,10 @@ export class BedManagementComponent implements OnInit {
         this.loadWards();
       },
       // Backend rejects deleting a ward that still has beds — surface that.
-      error: () => this.toast.error(this.translate.instant('BEDS.TOAST.WARD_DELETE_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('BEDS.TOAST.WARD_DELETE_FAILED'),
+        ),
     });
   }
 
@@ -358,8 +381,8 @@ export class BedManagementComponent implements OnInit {
         this.closeBedModal();
         this.refreshAll();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('BEDS.TOAST.SAVE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BEDS.TOAST.SAVE_FAILED'));
         this.saving.set(false);
       },
     });
@@ -372,20 +395,29 @@ export class BedManagementComponent implements OnInit {
         this.toast.success(this.translate.instant('BEDS.TOAST.STATUS_UPDATED'));
         this.refreshAll();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('BEDS.TOAST.SAVE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BEDS.TOAST.SAVE_FAILED'));
         this.refreshAll(); // revert the select to the server state
       },
     });
   }
 
-  deleteBed(bed: BedResponse): void {
+  async deleteBed(bed: BedResponse): Promise<void> {
+    const confirmed = await this.confirm.ask({
+      titleKey: 'BEDS.DELETE_BED_CONFIRM',
+      params: { name: bed.bedNumber },
+      confirmKey: 'COMMON.DELETE',
+    });
+    if (!confirmed) return;
     this.bedService.deleteBed(bed.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('BEDS.TOAST.BED_DELETED'));
         this.refreshAll();
       },
-      error: () => this.toast.error(this.translate.instant('BEDS.TOAST.BED_DELETE_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('BEDS.TOAST.BED_DELETE_FAILED'),
+        ),
     });
   }
 

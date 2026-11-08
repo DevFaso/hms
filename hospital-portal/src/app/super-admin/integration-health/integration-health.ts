@@ -23,6 +23,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { OrgTextPipe } from '../../shared/pipes/org-text.pipe';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { refusalReason } from '../../shared/refusal-reason';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 
 interface StatusChip {
   status: IntegrationHealthStatus;
@@ -57,6 +58,7 @@ interface HistoryState {
   selector: 'app-integration-health',
   standalone: true,
   imports: [
+    KeyLabelPipe,
     ServerTimePipe,
     CommonModule,
     RouterLink,

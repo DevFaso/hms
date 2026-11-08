@@ -325,7 +325,9 @@ class OwnEmailChangeServiceTest {
                 .applyEmail(userId, "new@example.com");
 
             assertThatThrownBy(() -> service.confirmChange(userId, "482913"))
-                .isExactlyInstanceOf(BusinessException.class)
+                // QA round 29 sweep (assertion changed): the same refusal, now marked on newEmail.
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                    ex -> assertThat(ex.getField()).isEqualTo("newEmail"))
                 .hasMessage(MessageUtil.resolve("user.update.email.taken"));
             verify(emailService, never()).sendEmailChangedNoticeEmail(any(), any(), any(), any());
             assertThat(auditRows()).singleElement()
@@ -356,7 +358,9 @@ class OwnEmailChangeServiceTest {
         @DisplayName("a wrong code: refused (400), counted, one FAILURE row, nothing written")
         void wrongCodeIsCounted() {
             assertThatThrownBy(() -> service.confirmChange(userId, "000000"))
-                .isExactlyInstanceOf(BusinessException.class)
+                // QA round 29 sweep (assertion changed): the same refusal, now marked on code.
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                    ex -> assertThat(ex.getField()).isEqualTo("code"))
                 .hasMessage(MessageUtil.resolve("user.email.change.code.invalid"));
 
             assertThat(state.getCodeAttempts()).isEqualTo(1);
