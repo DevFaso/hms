@@ -1,6 +1,6 @@
 package com.example.hms.utility;
 
-import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.Patient;
 
 import java.util.Locale;
@@ -10,7 +10,11 @@ import java.util.Set;
  * Refuses obstetric records (labour episode, postpartum observation, prenatal
  * schedule, birth plan, high-risk pregnancy plan) for a patient whose record
  * says male (QA D46: a labour episode and postpartum observations were saved
- * for a MALE patient).
+ * for a MALE patient). QA D1538 (round 40): also the prenatal ultrasound order,
+ * the OB/GYN referral (every care context is a pregnancy episode) and the
+ * antenatal programme enrolment; {@code ObstetricEntryPointGuardTest} lists
+ * every obstetric entry point and what it does. An emergency order or referral
+ * (STAT or URGENT) is never refused here.
  *
  * <p>{@code Patient.gender} is free text with no closed vocabulary, so this
  * refuses only the values that unambiguously mean male. A blank, unknown or
@@ -46,13 +50,28 @@ public final class ObstetricEligibility {
         return MALE.contains(patient.getGender().trim().toLowerCase(Locale.ROOT));
     }
 
-    /** Throws when an obstetric record must not be created for this patient. */
+    /**
+     * QA D1538 (round 40): the request field a refusal is keyed on when the caller names none: the
+     * patient the record is for, as the form's patient picker sends it.
+     */
+    public static final String PATIENT_FIELD = "patientId";
+
+    /** Throws when an obstetric record must not be created for this patient, keyed on {@link #PATIENT_FIELD}. */
     public static void requireObstetricEligible(Patient patient) {
+        requireObstetricEligible(patient, PATIENT_FIELD);
+    }
+
+    /**
+     * Throws when an obstetric record must not be created for this patient. QA D1538: the refusal
+     * names {@code field}, so the form marks the patient it was picked in. Unknown sex or birth date
+     * refuses nothing (the class comment). Provisional, pending clinical approval.
+     */
+    public static void requireObstetricEligible(Patient patient, String field) {
         if (isRecordedMale(patient)) {
-            throw new BusinessException(MESSAGE_KEY);
+            throw new FieldBusinessException(field, MESSAGE_KEY);
         }
         if (isRecordedChild(patient)) {
-            throw new BusinessException(TOO_YOUNG_MESSAGE_KEY, MIN_OBSTETRIC_AGE_YEARS);
+            throw new FieldBusinessException(field, TOO_YOUNG_MESSAGE_KEY, MIN_OBSTETRIC_AGE_YEARS);
         }
     }
 

@@ -74,6 +74,8 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        // QA D1538 (round 40): every scan of this module is a pregnancy scan (UltrasoundScanType).
+        requireObstetricPatient(patient, request.getPriority());
         // Validate gestational age for scan type
         validateGestationalAgeForScanType(request.getScanType(), request.getGestationalAgeAtOrder());
         requirePlausibleSchedule(request, null);
@@ -104,6 +106,27 @@ public class UltrasoundServiceImpl implements UltrasoundService {
 
         UltrasoundOrder saved = orderRepository.save(entity);
         return ultrasoundMapper.toOrderResponseDTO(saved);
+    }
+
+    /**
+     * QA D1538 (round 40): a prenatal scan is not ordered for a patient recorded as male or as a
+     * child (ObstetricEligibility, the maternity rule), refused on {@code patientId}. An emergency
+     * scan (STAT or URGENT) is never refused: a record that contradicts the scan is corrected
+     * afterwards, the care is not delayed. Provisional, pending clinical approval.
+     */
+    static void requireObstetricPatient(Patient patient, String priority) {
+        if (isEmergencyPriority(priority)) {
+            return;
+        }
+        com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(patient, "patientId");
+    }
+
+    static boolean isEmergencyPriority(String priority) {
+        if (priority == null) {
+            return false;
+        }
+        String value = priority.trim().toUpperCase(java.util.Locale.ROOT);
+        return "STAT".equals(value) || "URGENT".equals(value);
     }
 
     /**

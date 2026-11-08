@@ -64,6 +64,18 @@ class ObstetricEligibilityTest {
             .doesNotThrowAnyException();
     }
 
+    /* D1538 (round 40): the refusal names the field the patient was picked in. */
+
+    @Test
+    void d1538_theRefusalIsKeyedOnTheField() {
+        assertThatThrownBy(() -> ObstetricEligibility.requireObstetricEligible(withGender("M"), "patientId"))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("patientId"));
+        assertThatThrownBy(() -> ObstetricEligibility.requireObstetricEligible(bornYearsAgo(6)))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo(ObstetricEligibility.PATIENT_FIELD));
+    }
+
     @Test
     void d413_aMissingBirthDateIsLetThrough() {
         assertThat(ObstetricEligibility.isRecordedChild(withGender("FEMALE"))).isFalse();

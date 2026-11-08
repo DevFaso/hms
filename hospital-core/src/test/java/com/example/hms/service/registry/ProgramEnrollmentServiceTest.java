@@ -176,6 +176,37 @@ class ProgramEnrollmentServiceTest {
         verify(enrollmentRepository, never()).save(any());
     }
 
+    /** QA D1538 (round 40): the antenatal programme follows a pregnancy; a man is refused on the programme. */
+    @Test
+    @DisplayName("a man is not enrolled in the antenatal programme; the refusal names the programme")
+    void d1538_aManIsNotEnrolledInAnc() {
+        asClinicianAtHospital();
+        patient.setGender("M");
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        ProgramEnrollmentRequestDTO request = enrollRequest(CareProgram.ANC, 30);
+
+        assertThatThrownBy(() -> service.enroll(patientId, request))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("program"));
+        verify(enrollmentRepository, never()).save(any());
+    }
+
+    /** QA D1538: a man is still enrolled in another programme. */
+    @Test
+    @DisplayName("a man is enrolled in a programme that is not antenatal")
+    void d1538_aManIsEnrolledInHiv() {
+        asClinicianAtHospital();
+        patient.setGender("M");
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(enrollmentRepository.findByPatientIdAndHospitalIdAndProgramAndStatus(
+            any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(hospitalRepository.getReferenceById(hospitalId)).thenReturn(hospital);
+        when(enrollmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.enroll(patientId, enrollRequest(CareProgram.HIV, 30)).getStatus())
+            .isEqualTo(ProgramEnrollmentStatus.ACTIVE);
+    }
+
     @Test
     @DisplayName("another hospital's patient is a 404, not a 403")
     void enrollIsTenantScoped() {

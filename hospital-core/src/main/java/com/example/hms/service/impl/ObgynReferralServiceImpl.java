@@ -88,6 +88,13 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        // QA D1538 (round 40): every care context (antenatal, intrapartum, postpartum) is a
+        // pregnancy episode, so the maternity rule applies (ObstetricEligibility), refused on
+        // patientId. An URGENT referral is never refused: the care is not delayed, a record that
+        // contradicts it is corrected afterwards. Provisional, pending clinical approval.
+        if (request.getUrgency() != com.example.hms.enums.ObgynReferralUrgency.URGENT) {
+            com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(patient, "patientId");
+        }
         User midwife = resolveUserByUsername(username);
 
         validateAttachmentsForUrgency(request);

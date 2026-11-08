@@ -119,6 +119,50 @@ class ObgynReferralServiceImplTest {
         assertThat(result.getId()).isEqualTo(referralId);
     }
 
+    /** QA D1538 (round 40): an antenatal referral for a man or a 6-year-old is refused on patientId. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"male", "child"})
+    void d1538_aReferralForAManOrAChildIsRefusedOnThePatient(String who) {
+        if ("male".equals(who)) {
+            patient.setGender("MALE");
+        } else {
+            patient.setGender("FEMALE");
+            patient.setDateOfBirth(java.time.LocalDate.now().minusYears(6));
+        }
+        ObgynReferralCreateRequestDTO req = new ObgynReferralCreateRequestDTO();
+        req.setPatientId(patientId); req.setHospitalId(hospitalId);
+        req.setUrgency(ObgynReferralUrgency.ROUTINE);
+        req.setCareContext(com.example.hms.enums.ObgynReferralCareContext.ANTENATAL);
+        req.setGestationalAgeWeeks(23);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        assertThatThrownBy(() -> service.createReferral(req, "midwife1"))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("patientId");
+                assertThat(e.getMessageKey()).isEqualTo("male".equals(who)
+                    ? com.example.hms.utility.ObstetricEligibility.MESSAGE_KEY
+                    : com.example.hms.utility.ObstetricEligibility.TOO_YOUNG_MESSAGE_KEY);
+            });
+        org.mockito.Mockito.verify(referralRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    /** QA D1538: an URGENT referral is never refused by the obstetric rule (it reaches its own checks). */
+    @Test void d1538_anUrgentReferralIsNotRefusedByTheObstetricRule() {
+        patient.setGender("MALE");
+        ObgynReferralCreateRequestDTO req = new ObgynReferralCreateRequestDTO();
+        req.setPatientId(patientId); req.setHospitalId(hospitalId);
+        req.setUrgency(ObgynReferralUrgency.URGENT);
+        req.setAttachments(null);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findByUsername("midwife1")).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.createReferral(req, "midwife1"))
+            .isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getMessageKey())
+                .isNotEqualTo(com.example.hms.utility.ObstetricEligibility.MESSAGE_KEY));
+    }
+
     @Test void createReferral_patientNotFound() {
         ObgynReferralCreateRequestDTO req = new ObgynReferralCreateRequestDTO();
         req.setPatientId(patientId); req.setHospitalId(hospitalId);

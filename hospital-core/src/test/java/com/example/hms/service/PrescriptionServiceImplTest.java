@@ -4585,6 +4585,27 @@ class PrescriptionServiceImplTest {
             .containsExactly(signed.getId());
     }
 
+    /** QA D1537 (round 40): a draft cancelled unsigned is not the patient's prescription; a signed one stopped is. */
+    @Test
+    void d1537_portalPrescriptionsLeaveOutADiscardedDraft() {
+        Prescription discarded = new Prescription();
+        discarded.setId(UUID.randomUUID());
+        discarded.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        Prescription stopped = new Prescription();
+        stopped.setId(UUID.randomUUID());
+        stopped.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        stopped.setSignedAt(java.time.LocalDateTime.now().minusDays(1));
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(discarded, stopped)));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class)))
+            .thenAnswer(inv -> PrescriptionResponseDTO.builder().id(((Prescription) inv.getArgument(0)).getId()).build());
+        when(readyForCollection.openPreparations(List.of(stopped))).thenReturn(java.util.Map.of());
+
+        assertThat(prescriptionService.getPrescriptionsForPortalPatient(patientId, Locale.FRENCH))
+            .extracting(PrescriptionResponseDTO::getId)
+            .containsExactly(stopped.getId());
+    }
+
     @Test
     void portalPrescriptionsCarryReadinessOnTheRowWithAFillWaiting() {
         // G15 AC-12

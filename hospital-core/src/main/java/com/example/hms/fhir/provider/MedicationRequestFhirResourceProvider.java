@@ -43,7 +43,9 @@ public class MedicationRequestFhirResourceProvider implements IResourceProvider 
     @Read
     public MedicationRequest read(@IdParam IdType id) {
         UUID uuid = FhirIds.parseOrThrow(id);
+        // QA D1537: the search's rule, so the read never answers what the search leaves out.
         return repository.findById(uuid)
+            .filter(com.example.hms.service.support.PrescriptionIssuance::wasIssued)
             .map(mapper::toFhir)
             .orElseThrow(() -> new ResourceNotFoundException(id));
     }
@@ -55,8 +57,10 @@ public class MedicationRequestFhirResourceProvider implements IResourceProvider 
     ) {
         UUID patientId = FhirIds.fromReference(patient != null ? patient : subject);
         if (patientId == null) return Collections.emptyList();
+        // QA D1537: the orders that were issued, never a draft or a discarded one.
         return repository.findByPatient_Id(patientId, PageRequest.of(0, MAX_RESULTS, NEWEST_FIRST))
             .stream()
+            .filter(com.example.hms.service.support.PrescriptionIssuance::wasIssued)
             .map(mapper::toFhir)
             .toList();
     }

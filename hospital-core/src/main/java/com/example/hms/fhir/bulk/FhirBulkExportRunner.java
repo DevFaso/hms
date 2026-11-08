@@ -304,7 +304,9 @@ public class FhirBulkExportRunner {
         if (types.contains(TYPE_MEDICATION_REQUEST)) {
             pageThrough(p -> prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId, p),
                 rx -> {
-                    if (passesSince(rx.getUpdatedAt(), since)) {
+                    // QA D1537: an export carries the orders that were issued, never a draft or a discarded one.
+                    if (com.example.hms.service.support.PrescriptionIssuance.wasIssued(rx)
+                        && passesSince(rx.getUpdatedAt(), since)) {
                         sink.write(TYPE_MEDICATION_REQUEST, medicationRequestMapper.toFhir(rx));
                     }
                 });
