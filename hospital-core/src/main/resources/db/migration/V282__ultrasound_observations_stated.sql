@@ -28,13 +28,18 @@
 -- #1090, so every prod row predates D1525. Edited in place before being applied anywhere shared (dev is paused on
 -- develop 537132bb2, without #1093).
 --
--- Restore: the backup holds the original six values of every row the step changed. To put them back on rows that
--- were not saved since (a row saved since is TRUE and holds newer values), run
+-- Restore: the backup holds the original six values of every row the step changed. A restore must only touch a row
+-- still exactly as this migration left it: still legacy, never reviewed, and not saved since the backup was taken
+-- (updated_at at or before migrated_at). Any other row may hold newer measurements or a signed report and must not
+-- be overwritten. Run
 --   UPDATE clinical.ultrasound_reports r SET fetal_cardiac_activity = b.fetal_cardiac_activity,
 --     fetal_movement_observed = b.fetal_movement_observed, fetal_tone_normal = b.fetal_tone_normal,
 --     anomalies_detected = b.anomalies_detected, number_of_fetuses = b.number_of_fetuses,
 --     gestational_age_at_scan = b.gestational_age_at_scan
---   FROM clinical.ultrasound_report_legacy_backup b WHERE b.id = r.id AND r.observations_stated = FALSE
+--   FROM clinical.ultrasound_report_legacy_backup b
+--   WHERE b.id = r.id AND r.observations_stated = FALSE AND r.report_reviewed_by_provider IS NOT TRUE
+--     AND r.updated_at <= b.migrated_at
+-- and compare its row count with the backup's before committing.
 --
 -- Idempotent and re-runnable: the template-signature ids are computed once (a session temp table) and used by both
 -- the backup and the gestational-age update, the backup skips ids already copied, the data step only touches legacy

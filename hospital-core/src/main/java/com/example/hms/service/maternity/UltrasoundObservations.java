@@ -137,11 +137,11 @@ public final class UltrasoundObservations {
      * an old contradictory report still saves); on a new or stated report,
      * always.
      */
-    public static final List<Field> CONTRADICTION_INPUTS = distinct(Stream.of(
+    public static final List<Field> CONTRADICTION_INPUTS = List.copyOf(distinctByName(Stream.of(
             Stream.of(new Field("findingCategory", UltrasoundReportBaseDTO::getFindingCategory,
                 UltrasoundReport::getFindingCategory)),
             byName(FINDINGS, "anomalyDescription"), FIELDS.stream(), SIGNS_OF_A_FETUS.stream())
-        .flatMap(f -> f));
+        .flatMap(f -> f)));
 
     /**
      * The value the old code filled for each observation it defaulted, before
@@ -164,10 +164,10 @@ public final class UltrasoundObservations {
             .orElseThrow());
     }
 
-    private static List<Field> distinct(Stream<Field> fields) {
+    private static java.util.Collection<Field> distinctByName(Stream<Field> fields) {
         Map<String, Field> byName = new LinkedHashMap<>();
         fields.forEach(f -> byName.putIfAbsent(f.name(), f));
-        return List.copyOf(byName.values());
+        return byName.values();
     }
 
     /** Every finding of the request, observations first: one list for the empty-report rule. */
