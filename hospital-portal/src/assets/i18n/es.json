@@ -12121,6 +12121,20 @@
     "CLEAR_SEARCH": "Borrar la búsqueda",
     "MATERNITY_HINT": "Elija un área de atención y una lista de trabajo. Las alertas de riesgo y los requisitos de revisión se muestran en cada expediente."
   },
+  "SPECIALIST_DASH": {
+    "CONSULT_EYEBROW": "ATENCIÓN ESPECIALIZADA",
+    "PLAN_EYEBROW": "TRATAMIENTO COORDINADO",
+    "REFERRAL_EYEBROW": "COORDINACIÓN DE DERIVACIONES",
+    "OVERVIEW": "Resumen del trabajo",
+    "LOADED_SCOPE": "Los indicadores describen los planes o derivaciones cargados. La búsqueda filtra solo esta lista.",
+    "CONSULT_SCOPE": "Los indicadores usan el resumen disponible del ámbito; la búsqueda filtra la lista cargada.",
+    "STATS_FALLBACK": "El resumen del ámbito no está disponible. Los indicadores usan la lista de consultas cargada.",
+    "UNAVAILABLE": "No se pudo cargar este espacio",
+    "VISIBLE": "Mostrando {{shown}} / {{loaded}} cargados",
+    "CLEAR_SEARCH": "Borrar búsqueda",
+    "DRAFT_REVIEW": "Borrador / revisión",
+    "NO_MATCHES": "Ningún registro cargado coincide con los filtros actuales."
+  },
   "VISIT_SUMMARY": {
     "EYEBROW": "DOCUMENTO DE LA VISITA",
     "PATIENT": "Nombre del paciente",

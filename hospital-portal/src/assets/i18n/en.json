@@ -12121,6 +12121,20 @@
     "MATERNITY_GUIDE": "A clear view of the maternal care journey",
     "MATERNITY_HINT": "Choose a care area, then a worklist. Risk flags and review requirements are shown in each record."
   },
+  "SPECIALIST_DASH": {
+    "CONSULT_EYEBROW": "SPECIALIST CARE",
+    "PLAN_EYEBROW": "COORDINATED TREATMENT",
+    "REFERRAL_EYEBROW": "REFERRAL COORDINATION",
+    "OVERVIEW": "Work overview",
+    "LOADED_SCOPE": "Counts describe the loaded plans or referrals. Search filters this loaded list only.",
+    "CONSULT_SCOPE": "Consultation indicators use the available scope summary; search filters the loaded list.",
+    "STATS_FALLBACK": "The scope summary is unavailable. Indicators use the loaded consultation list.",
+    "UNAVAILABLE": "Unable to load this workspace",
+    "VISIBLE": "Showing {{shown}} / {{loaded}} loaded",
+    "CLEAR_SEARCH": "Clear search",
+    "DRAFT_REVIEW": "Draft / review",
+    "NO_MATCHES": "No loaded records match the current filters."
+  },
   "VISIT_SUMMARY": {
     "EYEBROW": "VISIT DOCUMENT",
     "PATIENT": "Patient name",
