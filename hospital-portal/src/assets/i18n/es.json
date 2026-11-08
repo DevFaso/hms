@@ -13198,5 +13198,41 @@
     "LOAD_FAILED": "No se pudo cargar esta lista. Inténtelo de nuevo.",
     "RETRY": "Reintentar",
     "RX_SCOPE": "Resumen de recetas cargadas. Use las pestañas de estado para encontrar órdenes que requieren atención."
+  },
+  "BEDS_NETWORK": {
+    "SUBTITLE": "Gestionar unidades y capacidad de camas de todos los hospitales",
+    "HELP": "Consulte todos los centros aquí. Las acciones de cada fila se aplican a su hospital sin salir de esta vista general.",
+    "SEARCH": "Buscar hospitales, unidades, códigos o departamentos",
+    "TARGET_REQUIRED": "Identifique el hospital de destino antes de guardar esta operación.",
+    "TARGET_LABEL": "Hospital de esta operación",
+    "CREATE_HELP": "Elija dónde crear esta unidad. Podrá seguir consultando todos los hospitales después de guardar.",
+    "CHANGE_TARGET": "Cambiar hospital de destino",
+    "VIEW_BEDS": "Ver camas",
+    "VIEW_CONTEXT": "Ver camas de {{ward}} en {{hospital}}",
+    "NAMES_FAILED": "No se pudieron cargar los nombres de hospitales. Se muestran los identificadores hasta que reintente.",
+    "EDIT_CONTEXT": "Editar {{ward}} en {{hospital}}",
+    "DELETE_CONTEXT": "Eliminar {{ward}} en {{hospital}}"
+  },
+  "HOSPITAL_NETWORK": {
+    "TITLE": "Red hospitalaria",
+    "EYEBROW": "Super-admin · todos los hospitales",
+    "SUBTITLE": "Acceda a este módulo en toda su red hospitalaria.",
+    "OVERVIEW": "Resumen de la red hospitalaria",
+    "HOSPITALS": "Hospitales del directorio",
+    "ACTIVE": "Hospitales activos",
+    "ACTIONS_TITLE": "Acciones para cada hospital",
+    "ACTIONS_HELP": "Abra directamente el módulo desde la fila de un hospital. El centro se asigna automáticamente a la operación.",
+    "DIRECTORY": "Lista de trabajo por hospital",
+    "DIRECTORY_HELP": "Este módulo se organiza por hospital. Este directorio no es una lista combinada de sus historias clínicas.",
+    "SEARCH": "Buscar hospital, código, organización o ciudad",
+    "ACTIVE_ONLY": "Solo hospitales activos",
+    "LOAD_FAILED": "No se pudo cargar el directorio de hospitales.",
+    "NO_MATCHES": "Ningún hospital coincide con estos filtros.",
+    "EMPTY": "No hay hospitales disponibles en el directorio.",
+    "ORGANIZATION": "Organización",
+    "CITY": "Ciudad",
+    "OPEN_MODULE": "Abrir módulo",
+    "OPEN_CONTEXT": "Abrir {{module}} en {{hospital}}",
+    "RESULTS": "{{count}} de {{total}} hospitales"
   }
 }
