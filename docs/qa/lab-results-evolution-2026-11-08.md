@@ -41,3 +41,7 @@ The detail history DTO supplies only date/value/unit and a correction flag, not 
 Reloads after actions retain the selected page, while user filters, tabs, page size and hospital scope still reset it. Displayed deltas retain the operands' decimal precision (up to 20 decimal places) rather than imposing two decimals. Invalid dates sort after valid observations and cannot produce a delta. Component and pager regression tests cover these paths.
 
 Final follow-up validation: `npm run test:coverage` passed 4,989 tests; `npm run test:scripts` passed 537; build, lint, formatting, i18n/RBAC/repository guards and coverage floors passed. Fourteen local screenshot/accessibility checks passed without page errors. Backend `:hospital-core:test -PtestForks=1` passed with six tasks up to date in 29 seconds; backend sources are identical to the previously verified backend revision.
+
+### Failed CI follow-up
+
+Run 42527516550 failed because the D1428 lab test called `component.isEditable()` without creating its own fixture. Jasmine random ordering sometimes ran that test before any other test initialized the shared variable. Running only that assertion reproduced the exact CI TypeError (one failed test); adding its own awaited setup made the same isolated run pass. Full verification after incorporating the retained clamped-page correction passed 4,993 tests, lint, formatting, build and coverage floors. No clinical limits, role policies or backend code changed.
