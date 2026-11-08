@@ -438,6 +438,36 @@ public class Prescription extends BaseEntity {
     @Builder.Default
     private PrescriptionStatus status = PrescriptionStatus.DRAFT;
 
+    /**
+     * QA D1537 (round 40): the order was withdrawn (CANCELLED, DISCONTINUED) while it was still a
+     * proposal (DRAFT, PENDING_SIGNATURE): it was never issued, and no reader shows it as a medicine the
+     * patient took ({@code PrescriptionIssuance}). Written only by {@link #setStatus}, the one door
+     * every withdrawal path goes through, from the status the order held before. V283 backfilled it
+     * where the evidence was unambiguous; every other row is FALSE, which means shown.
+     */
+    @Column(name = "withdrawn_before_signing", nullable = false)
+    @Builder.Default
+    @Setter(lombok.AccessLevel.NONE)
+    private boolean withdrawnBeforeSigning = false;
+
+    /**
+     * Sets the status, and with it whether a withdrawal came before any signature (QA D1537). A move to
+     * a withdrawn status records whether the order was then still a proposal; a withdrawn order moved
+     * on to another withdrawn status keeps what its withdrawal recorded; any other status clears it
+     * (a signed or re-proposed order is not a withdrawn one).
+     */
+    public void setStatus(PrescriptionStatus status) {
+        PrescriptionStatus before = this.status;
+        if (status != null && status.isWithdrawn()) {
+            if (before == null || !before.isWithdrawn()) {
+                this.withdrawnBeforeSigning = before == null || before.isProposal();
+            }
+        } else {
+            this.withdrawnBeforeSigning = false;
+        }
+        this.status = status;
+    }
+
     @Builder.Default
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(

@@ -4593,8 +4593,8 @@ class PrescriptionServiceImplTest {
         discarded.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
         Prescription stopped = new Prescription();
         stopped.setId(UUID.randomUUID());
+        stopped.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         stopped.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
-        stopped.setSignedAt(java.time.LocalDateTime.now().minusDays(1));
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
             .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(discarded, stopped)));
         when(prescriptionMapper.toResponseDTO(any(Prescription.class)))

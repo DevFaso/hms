@@ -303,7 +303,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     static final List<PrescriptionStatus> NEVER_SENT = NeverSentRule.NEVER_SENT_PRESCRIPTION;
 
     static boolean wasSent(Prescription prescription) {
-        return NeverSentRule.sent(prescription.getStatus());
+        return NeverSentRule.sent(prescription);
     }
 
     /**

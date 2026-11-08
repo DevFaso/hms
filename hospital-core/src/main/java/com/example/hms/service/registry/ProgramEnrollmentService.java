@@ -92,7 +92,7 @@ public class ProgramEnrollmentService {
         // QA D1538 (round 40): the antenatal programme follows a pregnancy, so the maternity rule
         // applies (ObstetricEligibility), refused on the programme picked. Provisional.
         if (request.getProgram() == CareProgram.ANC) {
-            com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(patient, "program");
+            com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(patient, "program", false);
         }
         enrollmentRepository.findByPatientIdAndHospitalIdAndProgramAndStatus(
                 patientId, hospitalId, request.getProgram(), ProgramEnrollmentStatus.ACTIVE)

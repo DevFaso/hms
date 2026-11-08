@@ -10,51 +10,46 @@ import java.util.List;
  * presents a patient's medicines as taken asks.
  *
  * <p>A draft and an order still waiting for its signature were never given to the patient (QA D101,
- * D152). Neither was a draft the prescriber then cancelled or discontinued: the status alone says
- * CANCELLED or DISCONTINUED, the same words a signed order takes when it is stopped, so the status
- * cannot tell the two apart. The signature can: a withdrawn order was issued only when it carries
- * one ({@code signedAt}, the signer or the digest, all written by the signing ceremony). A signed
- * order that was then discontinued stays a past medicine.
+ * D152). Neither was a draft the prescriber then cancelled or discontinued: its status says CANCELLED
+ * or DISCONTINUED, the same words a signed order takes when it is stopped. The order records which it
+ * was when it is withdrawn ({@code Prescription.withdrawnBeforeSigning}, set by
+ * {@code Prescription.setStatus} from the status it held before; V283 backfilled it only where the
+ * evidence was unambiguous). The signature columns are not read: an order signed before V118 carries
+ * none, and stays a past medicine once stopped.
  *
  * <p>Two readings:
  * <ul>
  *   <li>{@link #wasIssued} - the patient's own and the proxy's readers, the health summary, the
- *       prescriptions list, the patient apps (the same API) and the FHIR exports: only orders that
- *       were issued.</li>
+ *       prescriptions list, the patient apps (the same API), the FHIR exports, and another hospital's
+ *       reads ({@code NeverSentRule}): only orders that were issued.</li>
  *   <li>{@link #isDiscardedProposal} - the clinician's medication list and timeline, which keep a
  *       live draft (shown on hold, waiting for its signature) but never present a draft that was
  *       thrown away as a course that was stopped.</li>
  * </ul>
- *
- * <p>Caveat: a signed order from before V118 (2026-08) has no signature on record; once withdrawn it
- * reads as never issued. Manufacturing the evidence is worse (V118's rule), and such rows predate
- * the patient portal's medication pages.
  */
 public final class PrescriptionIssuance {
+
+    /** A draft and an order waiting for its signature: proposals, never issued (QA D101, D152, D652). */
+    public static final List<PrescriptionStatus> PROPOSALS =
+        List.of(PrescriptionStatus.DRAFT, PrescriptionStatus.PENDING_SIGNATURE);
 
     private PrescriptionIssuance() {
     }
 
-    /** Whether the order was ever issued to the patient: signed, and not only proposed. */
+    /** Whether the order was ever issued to the patient: not a proposal, and not withdrawn as one. */
     public static boolean wasIssued(Prescription prescription) {
         if (prescription == null) {
             return false;
         }
         PrescriptionStatus status = prescription.getStatus();
-        if (status == null) {
-            // A row with no status predates the workflow; it was never a proposal.
-            return true;
-        }
-        if (status.isProposal()) {
-            return false;
-        }
-        return !status.isWithdrawn() || carriesSignature(prescription);
+        // A row with no status predates the workflow; it was never a proposal.
+        return status == null || !(status.isProposal() || isDiscardedProposal(prescription));
     }
 
     /** A proposal (draft or unsigned order) that was withdrawn before anyone signed it. */
     public static boolean isDiscardedProposal(Prescription prescription) {
         return prescription != null && prescription.getStatus() != null
-            && prescription.getStatus().isWithdrawn() && !carriesSignature(prescription);
+            && prescription.getStatus().isWithdrawn() && prescription.isWithdrawnBeforeSigning();
     }
 
     /** {@link #wasIssued} over a list, in its order. */
@@ -65,11 +60,5 @@ public final class PrescriptionIssuance {
     /** The list less the discarded proposals ({@link #isDiscardedProposal}), in its order. */
     public static List<Prescription> withoutDiscardedProposals(List<Prescription> rows) {
         return rows.stream().filter(p -> !isDiscardedProposal(p)).toList();
-    }
-
-    private static boolean carriesSignature(Prescription prescription) {
-        return prescription.getSignedAt() != null
-            || prescription.getSignedBy() != null
-            || prescription.getSignatureValue() != null;
     }
 }

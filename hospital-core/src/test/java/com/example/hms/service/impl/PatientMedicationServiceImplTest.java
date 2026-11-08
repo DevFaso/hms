@@ -164,8 +164,8 @@ class PatientMedicationServiceImplTest {
         p.setId(UUID.randomUUID());
         p.setCreatedAt(LocalDateTime.now());
         p.setMedicationName("Med");
+        p.setStatus(PrescriptionStatus.SIGNED); // QA D1537: a stopped order was signed first
         p.setStatus(PrescriptionStatus.DISCONTINUED);
-        p.setSignedAt(LocalDateTime.now().minusDays(1)); // QA D1537: a stopped order was signed first
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
@@ -246,8 +246,8 @@ class PatientMedicationServiceImplTest {
     @Test
     void getMedications_discontinuedPrescriptionIsNotRefillable() {
         Prescription p = refillablePrescription();
+        p.setStatus(PrescriptionStatus.SIGNED); // QA D1537: a stopped order was signed first
         p.setStatus(PrescriptionStatus.DISCONTINUED);
-        p.setSignedAt(LocalDateTime.now().minusDays(1)); // QA D1537: a stopped order was signed first
         stubMedicationsFor(p);
 
         assertThat(service.getMedicationsForPatient(patientId, hospitalId, 10).get(0).isRefillable())
@@ -284,8 +284,8 @@ class PatientMedicationServiceImplTest {
         assertThat(service.getMedicationsForPatient(patientId, hospitalId, 10).get(0).getRefillBlockedReason())
                 .isNull();
 
+        refillable.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED); // QA D1537: a stopped order was signed first
         refillable.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
-        refillable.setSignedAt(LocalDateTime.now().minusDays(1)); // QA D1537: a stopped order was signed first
         PatientMedicationResponseDTO dto = service.getMedicationsForPatient(patientId, hospitalId, 10).get(0);
         assertThat(dto.isRefillable()).isFalse();
         assertThat(dto.getRefillBlockedReason()).isEqualTo("NOT_REFILLABLE");
@@ -437,10 +437,10 @@ class PatientMedicationServiceImplTest {
         p.setId(UUID.randomUUID());
         p.setMedicationName(name);
         p.setCreatedAt(LocalDateTime.now());
-        p.setStatus(status);
         if (signed) {
-            p.setSignedAt(LocalDateTime.now().minusHours(1));
+            p.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         }
+        p.setStatus(status);
         return p;
     }
 
@@ -670,11 +670,11 @@ class PatientMedicationServiceImplTest {
         Prescription p = new Prescription();
         p.setId(UUID.randomUUID());
         p.setMedicationName(name);
+        if (status != null && status.isWithdrawn()) {
+            p.setStatus(PrescriptionStatus.SIGNED); // QA D1537: a stopped order was signed first
+        }
         p.setStatus(status);
         p.setCreatedAt(createdAt);
-        if (status != null && !status.isProposal()) {
-            p.setSignedAt(createdAt); // QA D1537: every order past a proposal was signed
-        }
         return p;
     }
 
@@ -704,8 +704,8 @@ class PatientMedicationServiceImplTest {
         LocalDateTime sameMoment = LocalDateTime.of(2026, 11, 1, 9, 0);
         for (int i = 0; i < 45; i++) {
             Prescription past = issued("Passé " + i, sameMoment);
+            past.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED); // QA D1537: a stopped order was signed first
             past.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
-            past.setSignedAt(LocalDateTime.now().minusDays(1)); // QA D1537: a stopped order was signed first
             rows.add(past);
         }
         when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
@@ -728,8 +728,8 @@ class PatientMedicationServiceImplTest {
     void d1399_thePagesPutActiveCoursesFirstAndLeaveOutDrafts() {
         Prescription old = issued("Ancien actif", LocalDateTime.now().minusDays(9));
         Prescription recentPast = issued("Récent arrêté", LocalDateTime.now().minusDays(1));
+        recentPast.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED); // QA D1537: a stopped order was signed first
         recentPast.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
-        recentPast.setSignedAt(LocalDateTime.now().minusDays(1)); // QA D1537: a stopped order was signed first
         Prescription draft = issued("Brouillon", LocalDateTime.now());
         draft.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
         when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);

@@ -64,7 +64,7 @@ class CrossHospitalListByIdAgreementTest {
         new ListPair("@GetMapping", "/{documentId}", "PatientDocumentStaffController",
             "service/impl/PatientDocumentServiceImpl.java", false));
 
-    /** A finder call on a never-sent-capable record; it reads across hospitals when its name has Hospital_IdIn. */
+    /** A finder call on a never-sent-capable record; it reads across hospitals when its name has Hospital_IdIn (or HospitalIdIn). */
     private static final Pattern CROSS_HOSPITAL_READ = Pattern.compile(
         "\\b(?:prescriptionRepository|imagingOrderRepository|referralRepository)\\s*+\\.\\s*+"
             + "(find\\w++)\\s*+\\(");
@@ -99,7 +99,7 @@ class CrossHospitalListByIdAgreementTest {
         try (Stream<Path> files = Files.walk(MAIN)) {
             for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
                 String src = read(file);
-                if (CROSS_HOSPITAL_READ.matcher(src).results().noneMatch(m -> m.group(1).contains("Hospital_IdIn"))) {
+                if (CROSS_HOSPITAL_READ.matcher(src).results().noneMatch(m -> m.group(1).contains("Hospital_IdIn") || m.group(1).contains("HospitalIdIn"))) {
                     continue;
                 }
                 String name = file.getFileName().toString();
@@ -127,9 +127,14 @@ class CrossHospitalListByIdAgreementTest {
         assertThat(NeverSentRule.readableHere(a, b, true)).isTrue();
         assertThat(NeverSentRule.readableHere(a, a, false)).isTrue();
         assertThat(NeverSentRule.readableHere(a, null, false)).isTrue();
-        assertThat(NeverSentRule.sent(PrescriptionStatus.DRAFT)).isFalse();
-        assertThat(NeverSentRule.sent(PrescriptionStatus.PENDING_SIGNATURE)).isFalse();
-        assertThat(NeverSentRule.sent(PrescriptionStatus.SIGNED)).isTrue();
+        assertThat(NeverSentRule.sent(inStatuses(PrescriptionStatus.DRAFT))).isFalse();
+        assertThat(NeverSentRule.sent(inStatuses(PrescriptionStatus.PENDING_SIGNATURE))).isFalse();
+        assertThat(NeverSentRule.sent(inStatuses(PrescriptionStatus.SIGNED))).isTrue();
+        // QA D1537: a proposal withdrawn before anyone signed it was never sent; a signed order stopped was.
+        assertThat(NeverSentRule.sent(inStatuses(PrescriptionStatus.DRAFT, PrescriptionStatus.CANCELLED))).isFalse();
+        assertThat(NeverSentRule.sent(inStatuses(PrescriptionStatus.PENDING_SIGNATURE, PrescriptionStatus.DISCONTINUED))).isFalse();
+        assertThat(NeverSentRule.sent(inStatuses(PrescriptionStatus.SIGNED, PrescriptionStatus.CANCELLED))).isTrue();
+        assertThat(NeverSentRule.sent(inStatuses(PrescriptionStatus.DISPENSED, PrescriptionStatus.DISCONTINUED))).isTrue();
         assertThat(NeverSentRule.sent(ImagingOrderStatus.DRAFT)).isFalse();
         assertThat(NeverSentRule.sent(ImagingOrderStatus.ORDERED)).isTrue();
 
@@ -140,6 +145,41 @@ class CrossHospitalListByIdAgreementTest {
         draftAtA.setStatus(PrescriptionStatus.DRAFT);
         assertThat(NeverSentRule.prescriptionsReadableHere(List.of(draftAtA), b)).isEmpty();
         assertThat(NeverSentRule.prescriptionsReadableHere(List.of(draftAtA), a)).containsExactly(draftAtA);
+
+        // QA D1537: hospital A's discarded draft is not read at B as CANCELLED; it stays readable at A.
+        Prescription discardedAtA = inStatuses(PrescriptionStatus.DRAFT, PrescriptionStatus.CANCELLED);
+        discardedAtA.setHospital(hospitalA);
+        Prescription stoppedAtA = inStatuses(PrescriptionStatus.SIGNED, PrescriptionStatus.CANCELLED);
+        stoppedAtA.setHospital(hospitalA);
+        stoppedAtA.setId(UUID.randomUUID());
+        discardedAtA.setId(UUID.randomUUID());
+        assertThat(NeverSentRule.prescriptionsReadableHere(List.of(discardedAtA, stoppedAtA), b)).containsExactly(stoppedAtA);
+        assertThat(NeverSentRule.prescriptionsReadableHere(List.of(discardedAtA), a)).containsExactly(discardedAtA);
+    }
+
+    /** QA D1537: the paged list's query and the by-id read leave out the same withdrawn-before-signing rows. */
+    @Test
+    @DisplayName("the cross-hospital list query leaves out a proposal withdrawn before signing, as the by-id read does")
+    void theListQueryLeavesOutAWithdrawnProposal() throws IOException {
+        String repository = read(MAIN.resolve("repository/PrescriptionRepository.java"));
+        java.util.regex.Matcher sentQueries = Pattern.compile(
+            "p\\.hospital\\.id = :actingHospitalId OR \\(p\\.status NOT IN :unsent AND p\\.withdrawnBeforeSigning = false\\)")
+            .matcher(repository);
+        int found = 0;
+        while (sentQueries.find()) {
+            found++;
+        }
+        assertThat(found).as("findSentAcrossHospitals and findSentAcrossHospitalsAndStatusIn, value and count queries")
+            .isEqualTo(4);
+        assertThat(read(findFile("PrescriptionServiceImpl.java"))).contains("NeverSentRule.sent(prescription)");
+    }
+
+    private static Prescription inStatuses(PrescriptionStatus... statuses) {
+        Prescription p = new Prescription();
+        for (PrescriptionStatus status : statuses) {
+            p.setStatus(status);
+        }
+        return p;
     }
 
     private static Path findFile(String name) throws IOException {

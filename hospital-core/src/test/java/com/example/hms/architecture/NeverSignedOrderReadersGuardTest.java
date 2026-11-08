@@ -49,12 +49,12 @@ class NeverSignedOrderReadersGuardTest {
         Map.entry("service/PrescriptionServiceImpl.java", new Reader("PrescriptionIssuance.issuedOnly(",
             "/me/patient/prescriptions: issued orders only; the staff lists carry each row's status")),
         // Exports.
-        Map.entry("fhir/everything/PatientEverythingService.java", new Reader("PrescriptionIssuance.issuedOnly(",
-            "$everything and the patient record export: issued orders only")),
+        Map.entry("fhir/everything/PatientEverythingService.java", new Reader("findIssuedByPatientIdAndHospitalIdIn(",
+            "$everything and the patient record export: issued orders only, chosen in the query")),
         Map.entry("fhir/bulk/FhirBulkExportRunner.java", new Reader("PrescriptionIssuance.wasIssued(",
             "bulk export: issued orders only")),
-        Map.entry("fhir/provider/MedicationRequestFhirResourceProvider.java", new Reader(ISSUED,
-            "FHIR MedicationRequest search and read: issued orders only")),
+        Map.entry("fhir/provider/MedicationRequestFhirResourceProvider.java", new Reader("findIssuedByPatientId(",
+            "FHIR MedicationRequest search: issued orders only, chosen in the query (the read applies wasIssued)")),
         // The clinician's medication history, presented as courses.
         Map.entry("service/impl/MedicationHistoryServiceImpl.java", new Reader("PrescriptionIssuance.withoutDiscardedProposals(",
             "the medication timeline: a live draft stays, a discarded one is no course")),
@@ -84,7 +84,11 @@ class NeverSignedOrderReadersGuardTest {
         Map.entry("service/pharmacy/MtmReviewServiceImpl.java", new Reader("ACTIVE_STATUSES.contains",
             "active statuses only, none withdrawn or unsigned")),
         Map.entry("service/StayOrderDiscontinuation.java", new Reader("ENDABLE_STATUSES",
-            "ends a stay's orders; presents nothing")));
+            "ends a stay's orders; presents nothing")),
+        Map.entry("service/emar/MarWardReader.java", new Reader("ON_MAR_STATUSES",
+            "the ward MAR: SIGNED and TRANSMITTED orders only")),
+        Map.entry("service/impl/OrderReviewHoldServiceImpl.java", new Reader("LOCKED_FOR_REVIEW",
+            "review holds over the open orders and their replacement candidates; presents no medicine as taken")));
 
     @Test
     @DisplayName("a reader of a patient's prescriptions is listed, and still handles a never-signed order as listed")
@@ -121,18 +125,92 @@ class NeverSignedOrderReadersGuardTest {
     void thePatientFacingPathsUseTheSharedRule() throws IOException {
         String medications = read("service/impl/PatientMedicationServiceImpl.java");
         for (String method : List.of("getMedicationsPageForPatientPortal", "countMedicationsForPatientPortal", "getMedications")) {
-            assertThat(methodBody(medications, method)).as(method).contains(ISSUED);
+            assertThat(SourceScan.methodBody(medications, method)).as(method).contains(ISSUED);
         }
-        assertThat(methodBody(read("service/PrescriptionServiceImpl.java"), "getPrescriptionsForPortalPatient"))
+        assertThat(SourceScan.methodBody(read("service/PrescriptionServiceImpl.java"), "getPrescriptionsForPortalPatient"))
             .contains("PrescriptionIssuance.issuedOnly(")
             .doesNotContain("PrescriptionStatus.DRAFT");
         assertThat(medications).as("the old status-only test is gone").doesNotContain("isIssued(");
     }
 
-    private static boolean readsPrescriptionRows(String code) {
+    /**
+     * QA D1537 review: every method of {@code PrescriptionRepository} that reads a patient's or a visit's
+     * rows, read off the repository itself: a parameter named for a patient or an encounter, a derived
+     * name on the patient or the encounter, or the ward MAR's query. A new such method is scanned for
+     * without editing this test.
+     */
+    static java.util.Set<String> patientOrVisitReads() throws IOException {
+        String repository = SourceScan.stripComments(Files.readString(
+            ROOT.resolve("repository/PrescriptionRepository.java"), StandardCharsets.UTF_8));
+        java.util.Set<String> methods = new TreeSet<>();
+        // A declaration: a return type, the name, its balanced parameter list, then ';' (an annotation
+        // is preceded by '@', a call has no type before it).
+        Matcher declaration = Pattern.compile("[\\w>\\]]\\s++([A-Za-z_]\\w*+)\\s*+\\(").matcher(repository);
+        while (declaration.find()) {
+            String name = declaration.group(1);
+            int open = repository.indexOf('(', declaration.end() - 1);
+            int close = SourceScan.closingParen(repository, open);
+            int after = close + 1;
+            while (after < repository.length() && Character.isWhitespace(repository.charAt(after))) {
+                after++;
+            }
+            if (after >= repository.length() || repository.charAt(after) != ';' || "new".equals(name)) {
+                continue;
+            }
+            String params = repository.substring(open, close);
+            if (params.contains("patientId") || params.contains("encounterId") || params.contains("UUID patient")
+                || name.matches("(?:find|lock|count|exists)\\w*(?:Patient|Encounter|WardMar)\\w*")) {
+                methods.add(name);
+            }
+        }
+        return methods;
+    }
+
+    /**
+     * QA D1537 review: the shared rule reads {@code withdrawnBeforeSigning}, recorded at withdrawal from the
+     * status the order held before. One door writes it, the entity's status setter, which every withdrawal
+     * path (the author's, the signed withdrawal, the stay's end, a review hold's stop) goes through; the
+     * rule reads it, not the signature columns, which an order signed before V118 lacks.
+     */
+    @Test
+    @DisplayName("the withdrawal fact is written only by the status setter, and the rule reads it")
+    void theWithdrawalFactHasOneWriter() throws IOException {
+        String entity = read("model/Prescription.java");
+        assertThat(SourceScan.methodBody(entity, "setStatus"))
+            .contains("before.isProposal()")
+            .contains("this.withdrawnBeforeSigning =");
+        assertThat(entity).containsPattern("@Setter\\(lombok\\.AccessLevel\\.NONE\\)\\s++private boolean withdrawnBeforeSigning");
+        List<String> writers = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(ROOT)) {
+            for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
+                String rel = ROOT.relativize(file).toString().replace('\\', '/');
+                String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+                // The repository's queries read the column; they write nothing.
+                if (!rel.equals("model/Prescription.java") && !rel.startsWith("repository/")
+                    && Pattern.compile("withdrawnBeforeSigning\\s*+=[^=]|setWithdrawnBeforeSigning\\(").matcher(code).find()) {
+                    writers.add(rel);
+                }
+            }
+        }
+        assertThat(writers).as("only Prescription.setStatus writes the withdrawal fact").isEmpty();
+        String rule = read("service/support/PrescriptionIssuance.java");
+        assertThat(rule).contains("isWithdrawnBeforeSigning()").doesNotContain("getSignedAt()");
+    }
+
+    @Test
+    @DisplayName("the repository scan finds every patient and visit read, the named queries among them")
+    void theRepositoryScanFindsTheReads() throws IOException {
+        assertThat(patientOrVisitReads()).contains("findByPatient_Id", "findByPatient_IdAndHospital_IdIn",
+            "findByEncounter_Id", "findSentAcrossHospitals", "findSentAcrossHospitalsAndStatusIn", "findWrittenSince",
+            "findWardMarOrders", "lockUncompletedForReview", "findIssuedByPatientId", "findIssuedByPatientIdAndHospitalIdIn",
+            "findIdsByEncounterIdAndStatusNotIn", "findByPatient_IdAndStatusIn");
+    }
+
+    private static boolean readsPrescriptionRows(String code) throws IOException {
+        String alternatives = String.join("|", patientOrVisitReads());
         Matcher field = FIELD.matcher(code);
         while (field.find()) {
-            if (Pattern.compile("\\b" + field.group(1) + "\\s*+\\.\\s*+(?:findByPatient_\\w*|findByEncounter_\\w*)\\(")
+            if (Pattern.compile("\\b" + field.group(1) + "\\s*+\\.\\s*+(?:" + alternatives + ")\\s*+\\(")
                 .matcher(code).find()) {
                 return true;
             }
@@ -142,21 +220,5 @@ class NeverSignedOrderReadersGuardTest {
 
     private static String read(String rel) throws IOException {
         return SourceScan.stripComments(Files.readString(ROOT.resolve(rel), StandardCharsets.UTF_8));
-    }
-
-    /** The body of the first method declared with this name, or null. */
-    private static String methodBody(String code, String name) {
-        Matcher m = Pattern.compile("[\\w>\\]]\\s++" + name + "\\s*+\\(").matcher(code);
-        while (m.find()) {
-            int open = code.indexOf('(', m.start());
-            int close = SourceScan.closingParen(code, open);
-            int brace = SourceScan.indexOfOutsideLiterals(code, '{', close);
-            int semicolon = SourceScan.indexOfOutsideLiterals(code, ';', close);
-            if (brace < 0 || (semicolon >= 0 && semicolon < brace)) {
-                continue;
-            }
-            return code.substring(brace, SourceScan.closingBrace(code, brace) + 1);
-        }
-        return null;
     }
 }

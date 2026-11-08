@@ -44,7 +44,7 @@ class ObstetricEntryPointGuardTest {
 
     /** File, and the entry points in it that create an obstetric record: each calls the rule. */
     private static final Map<String, List<String>> ENTRY_POINTS = Map.ofEntries(
-        Map.entry("service/impl/UltrasoundServiceImpl.java", List.of("createOrder")),
+        Map.entry("service/impl/UltrasoundServiceImpl.java", List.of("createOrder", "requireObstetricPatientOnEdit")),
         Map.entry("service/impl/ObgynReferralServiceImpl.java", List.of("createReferral")),
         Map.entry("service/impl/LaborServiceImpl.java", List.of("startEpisode")),
         Map.entry("service/impl/PostpartumCareServiceImpl.java", List.of("recordObservation")),
@@ -60,8 +60,13 @@ class ObstetricEntryPointGuardTest {
         "service/pro/ProResponseService.java",
         "flags the mental-health referral on a postpartum plan created at delivery (LaborServiceImpl)");
 
-    /** The ultrasound order's delegate: it holds the rule, and skips it only for an emergency scan. */
-    private static final String ULTRASOUND_DELEGATE = "requireObstetricPatient(";
+    /**
+     * QA D1538: the emergency each order or referral is judged with, as the shared rule's third argument
+     * (the class comment of ObstetricEligibility): an ultrasound order's URGENT or STAT, a referral's URGENT.
+     */
+    private static final Map<String, String> EMERGENCY_ARGUMENT = Map.of(
+        "service/impl/UltrasoundServiceImpl.java#createOrder", "ClinicalPriority.isEmergency(request.getPriority())",
+        "service/impl/ObgynReferralServiceImpl.java#createReferral", "request.getUrgency() == com.example.hms.enums.ObgynReferralUrgency.URGENT");
 
     @Test
     @DisplayName("each listed entry point calls the rule")
@@ -70,17 +75,21 @@ class ObstetricEntryPointGuardTest {
         for (Map.Entry<String, List<String>> entry : ENTRY_POINTS.entrySet()) {
             String code = read(entry.getKey());
             for (String method : entry.getValue()) {
-                String body = methodBody(code, method);
+                String body = SourceScan.methodBody(code, method);
                 if (body == null) {
                     problems.add(entry.getKey() + "#" + method + " is gone: update the list");
-                } else if (!body.contains(RULE) && !body.contains(ULTRASOUND_DELEGATE)) {
+                } else if (!body.contains(RULE)) {
                     problems.add(entry.getKey() + "#" + method + " creates an obstetric record without " + RULE);
+                } else if (EMERGENCY_ARGUMENT.containsKey(entry.getKey() + "#" + method)
+                    && !body.replaceAll("\\s++", " ").contains(EMERGENCY_ARGUMENT.get(entry.getKey() + "#" + method))) {
+                    problems.add(entry.getKey() + "#" + method + " no longer judges its emergency with `"
+                        + EMERGENCY_ARGUMENT.get(entry.getKey() + "#" + method) + "`");
                 }
             }
         }
-        String ultrasound = methodBody(read("service/impl/UltrasoundServiceImpl.java"), "requireObstetricPatient");
-        assertThat(ultrasound).as("the ultrasound delegate holds the rule").isNotNull().contains(RULE);
-        String enroll = methodBody(read("service/registry/ProgramEnrollmentService.java"), "enroll");
+        String update = SourceScan.methodBody(read("service/impl/UltrasoundServiceImpl.java"), "updateOrder");
+        assertThat(update).as("an edit that lowers an emergency scan is judged again").contains("requireObstetricPatientOnEdit(");
+        String enroll = SourceScan.methodBody(read("service/registry/ProgramEnrollmentService.java"), "enroll");
         assertThat(enroll).as("the antenatal programme is the one judged").contains("CareProgram.ANC");
         assertThat(problems).as(SourceScan.MANDATE).isEmpty();
     }
@@ -135,21 +144,5 @@ class ObstetricEntryPointGuardTest {
 
     private static String read(String rel) throws IOException {
         return SourceScan.stripComments(Files.readString(ROOT.resolve(rel), StandardCharsets.UTF_8));
-    }
-
-    /** The body of the first method declared with this name, or null. */
-    private static String methodBody(String code, String name) {
-        Matcher m = Pattern.compile("[\\w>\\]]\\s++" + name + "\\s*+\\(").matcher(code);
-        while (m.find()) {
-            int open = code.indexOf('(', m.start());
-            int close = SourceScan.closingParen(code, open);
-            int brace = SourceScan.indexOfOutsideLiterals(code, '{', close);
-            int semicolon = SourceScan.indexOfOutsideLiterals(code, ';', close);
-            if (brace < 0 || (semicolon >= 0 && semicolon < brace)) {
-                continue;
-            }
-            return code.substring(brace, SourceScan.closingBrace(code, brace) + 1);
-        }
-        return null;
     }
 }

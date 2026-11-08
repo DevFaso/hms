@@ -1,5 +1,6 @@
 package com.example.hms.fhir.mapper;
 
+import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.model.Prescription;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
@@ -30,7 +31,7 @@ public class MedicationRequestFhirMapper {
         if (src == null) return null;
         MedicationRequest out = new MedicationRequest();
         out.setId(src.getId() == null ? null : src.getId().toString());
-        out.setStatus(MedicationRequest.MedicationRequestStatus.ACTIVE);
+        out.setStatus(statusOf(src));
         out.setIntent(MedicationRequest.MedicationRequestIntent.ORDER);
 
         if (src.getPatient() != null && src.getPatient().getId() != null) {
@@ -60,6 +61,48 @@ public class MedicationRequestFhirMapper {
             out.setDispenseRequest(disp);
         }
         return out;
+    }
+
+    /**
+     * QA D1537 review (round 40): the order's own status, never "active" for all. Every value is decided
+     * here (the switch has no default, so a new status does not compile until it is):
+     * <ul>
+     *   <li>draft: a proposal (DRAFT, PENDING_SIGNATURE);</li>
+     *   <li>cancelled: withdrawn as CANCELLED, or withdrawn before anyone signed it (FHIR: withdrawn
+     *       before any administration);</li>
+     *   <li>stopped: a signed order DISCONTINUED;</li>
+     *   <li>completed: the medicine was dispensed (DISPENSED, PARTNER_DISPENSED), or a running order's
+     *       stated duration has passed ({@code MedicationCourseStatus.endDate});</li>
+     *   <li>on-hold: waiting on the pharmacy (PENDING_CLARIFICATION, PENDING_STOCK, TRANSMISSION_FAILED,
+     *       PARTNER_REJECTED);</li>
+     *   <li>active: every other signed order.</li>
+     * </ul>
+     */
+    static MedicationRequest.MedicationRequestStatus statusOf(Prescription src) {
+        PrescriptionStatus status = src.getStatus();
+        if (status == null) {
+            return MedicationRequest.MedicationRequestStatus.UNKNOWN;
+        }
+        if (status.isWithdrawn() && src.isWithdrawnBeforeSigning()) {
+            return MedicationRequest.MedicationRequestStatus.CANCELLED;
+        }
+        MedicationRequest.MedicationRequestStatus mapped = switch (status) {
+            case DRAFT, PENDING_SIGNATURE -> MedicationRequest.MedicationRequestStatus.DRAFT;
+            case CANCELLED -> MedicationRequest.MedicationRequestStatus.CANCELLED;
+            case DISCONTINUED -> MedicationRequest.MedicationRequestStatus.STOPPED;
+            case DISPENSED, PARTNER_DISPENSED -> MedicationRequest.MedicationRequestStatus.COMPLETED;
+            case PENDING_CLARIFICATION, PENDING_STOCK, TRANSMISSION_FAILED, PARTNER_REJECTED ->
+                MedicationRequest.MedicationRequestStatus.ONHOLD;
+            case SIGNED, TRANSMITTED, PARTIALLY_FILLED, SENT_TO_PARTNER, PARTNER_ACCEPTED, PRINTED_FOR_PATIENT ->
+                MedicationRequest.MedicationRequestStatus.ACTIVE;
+        };
+        if (mapped == MedicationRequest.MedicationRequestStatus.ACTIVE) {
+            java.time.LocalDate end = com.example.hms.service.MedicationCourseStatus.endDate(src);
+            if (end != null && end.isBefore(java.time.LocalDate.now(ZoneId.systemDefault()))) {
+                return MedicationRequest.MedicationRequestStatus.COMPLETED;
+            }
+        }
+        return mapped;
     }
 
     private static CodeableConcept buildMedicationCode(Prescription src) {

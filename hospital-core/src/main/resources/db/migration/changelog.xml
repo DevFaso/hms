@@ -3435,4 +3435,12 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V282 is reserved by draft PR #1093. -->
+    <changeSet id="V283-r40-prescription-withdrawn-before-signing" author="hms-team" runOnChange="false">
+        <sqlFile path="V283__r40_prescription_withdrawn_before_signing.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -68,12 +68,20 @@ class ObstetricEligibilityTest {
 
     @Test
     void d1538_theRefusalIsKeyedOnTheField() {
-        assertThatThrownBy(() -> ObstetricEligibility.requireObstetricEligible(withGender("M"), "patientId"))
+        assertThatThrownBy(() -> ObstetricEligibility.requireObstetricEligible(withGender("M"), "patientId", false))
             .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
                 e -> assertThat(e.getField()).isEqualTo("patientId"));
         assertThatThrownBy(() -> ObstetricEligibility.requireObstetricEligible(bornYearsAgo(6)))
             .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
                 e -> assertThat(e.getField()).isEqualTo(ObstetricEligibility.PATIENT_FIELD));
+    }
+
+    @Test
+    void d1538_anEmergencyIsNeverRefused() {
+        assertThatCode(() -> ObstetricEligibility.requireObstetricEligible(withGender("M"), "patientId", true))
+            .doesNotThrowAnyException();
+        assertThatCode(() -> ObstetricEligibility.requireObstetricEligible(bornYearsAgo(6), "patientId", true))
+            .doesNotThrowAnyException();
     }
 
     @Test

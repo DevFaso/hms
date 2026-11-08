@@ -74,8 +74,11 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
-        // QA D1538 (round 40): every scan of this module is a pregnancy scan (UltrasoundScanType).
-        requireObstetricPatient(patient, request.getPriority());
+        // QA D1538 (round 40): every scan of this module is a pregnancy scan (UltrasoundScanType), so
+        // the maternity rule applies, refused on patientId; an URGENT or STAT scan is an emergency,
+        // which the rule never refuses.
+        com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(patient, "patientId",
+            com.example.hms.enums.ClinicalPriority.isEmergency(request.getPriority()));
         // Validate gestational age for scan type
         validateGestationalAgeForScanType(request.getScanType(), request.getGestationalAgeAtOrder());
         requirePlausibleSchedule(request, null);
@@ -109,24 +112,18 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     }
 
     /**
-     * QA D1538 (round 40): a prenatal scan is not ordered for a patient recorded as male or as a
-     * child (ObstetricEligibility, the maternity rule), refused on {@code patientId}. An emergency
-     * scan (STAT or URGENT) is never refused: a record that contradicts the scan is corrected
-     * afterwards, the care is not delayed. Provisional, pending clinical approval.
+     * QA D1538 (round 40): an edit that lowers an emergency scan (URGENT, STAT) to a routine one
+     * leaves the exemption it was ordered under, so the maternity rule is judged again, refused on
+     * {@code priority}. An edit that keeps the order an emergency, or one that was never one (judged
+     * when it was ordered, or ordered before the rule), is not judged.
      */
-    static void requireObstetricPatient(Patient patient, String priority) {
-        if (isEmergencyPriority(priority)) {
-            return;
+    static void requireObstetricPatientOnEdit(UltrasoundOrder order, UltrasoundOrderRequestDTO request) {
+        String resulting = request.getPriority() != null ? request.getPriority() : order.getPriority();
+        boolean wasEmergency = com.example.hms.enums.ClinicalPriority.isEmergency(order.getPriority());
+        boolean staysEmergency = com.example.hms.enums.ClinicalPriority.isEmergency(resulting);
+        if (wasEmergency && !staysEmergency) {
+            com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(order.getPatient(), "priority", false);
         }
-        com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(patient, "patientId");
-    }
-
-    static boolean isEmergencyPriority(String priority) {
-        if (priority == null) {
-            return false;
-        }
-        String value = priority.trim().toUpperCase(java.util.Locale.ROOT);
-        return "STAT".equals(value) || "URGENT".equals(value);
     }
 
     /**
@@ -189,6 +186,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         }
 
         requirePlausibleSchedule(request, order);
+        requireObstetricPatientOnEdit(order, request);
         ultrasoundMapper.updateOrderFromRequest(order, request);
 
         UltrasoundOrder saved = orderRepository.save(order);

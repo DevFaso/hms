@@ -452,13 +452,15 @@ public class PatientEverythingService {
 
     private void appendMedicationRequestSection(Bundle bundle, SectionContext ctx) {
         if (!ctx.includes("MedicationRequest")) return;
+        // QA D1537: an export carries the orders that were issued, never a draft or a discarded one,
+        // chosen in the query so a page is never thinned after it was fetched.
         Page<com.example.hms.model.Prescription> prescriptions = prescriptionRepository
-            .findByPatient_IdAndHospital_IdIn(ctx.patientId(), ctx.readable(), ctx.pageRequest());
+            .findIssuedByPatientIdAndHospitalIdIn(ctx.patientId(), ctx.readable(),
+                com.example.hms.service.support.PrescriptionIssuance.PROPOSALS, ctx.pageRequest());
         ctx.notePageOverflow(prescriptions);
         // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
-        // QA D1537: an export carries the orders that were issued, never a draft or a discarded one.
-        List<com.example.hms.model.Prescription> shown = com.example.hms.service.support.PrescriptionIssuance.issuedOnly(
-            NeverSentRule.prescriptionsReadableHere(prescriptions.getContent(), ctx.hospitalId()));
+        List<com.example.hms.model.Prescription> shown =
+            NeverSentRule.prescriptionsReadableHere(prescriptions.getContent(), ctx.hospitalId());
         ctx.account(shown.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList());
         shown.forEach(p -> {
             if (ctx.passesSinceFilter(p.getUpdatedAt())) {

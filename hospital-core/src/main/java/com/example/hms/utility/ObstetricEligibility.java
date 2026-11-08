@@ -10,11 +10,26 @@ import java.util.Set;
  * Refuses obstetric records (labour episode, postpartum observation, prenatal
  * schedule, birth plan, high-risk pregnancy plan) for a patient whose record
  * says male (QA D46: a labour episode and postpartum observations were saved
- * for a MALE patient). QA D1538 (round 40): also the prenatal ultrasound order,
- * the OB/GYN referral (every care context is a pregnancy episode) and the
- * antenatal programme enrolment; {@code ObstetricEntryPointGuardTest} lists
- * every obstetric entry point and what it does. An emergency order or referral
- * (STAT or URGENT) is never refused here.
+ * for a MALE patient), or a child (QA D413). QA D1538 (round 40): also the
+ * prenatal ultrasound order, the OB/GYN referral (every care context is a
+ * pregnancy episode) and the antenatal programme enrolment;
+ * {@code ObstetricEntryPointGuardTest} lists every obstetric entry point.
+ *
+ * <p><b>Emergencies.</b> The caller says whether the request is an emergency
+ * ({@link #requireObstetricEligible(Patient, String, boolean)}), and an
+ * emergency is never refused: the care is not delayed, a record that
+ * contradicts it is corrected afterwards. What counts as one:
+ * <ul>
+ *   <li>an ultrasound order placed URGENT or STAT ({@code ClinicalPriority.isEmergency});</li>
+ *   <li>an OB/GYN referral placed URGENT ({@code ObgynReferralUrgency} has no EMERGENCY value).</li>
+ * </ul>
+ * The labour episode, the postpartum observation and the newborn assessment
+ * carry no emergency marker in their requests, nor do the birth plan, the
+ * high-risk plan, the maternal history, the prenatal schedule or the antenatal
+ * enrolment: they pass {@code false} (the one-argument form) and keep the D46 /
+ * D413 refusal. Whether labour, postpartum and newborn records must instead
+ * never refuse is a decision for the clinical lead. Provisional, pending
+ * clinical approval.
  *
  * <p>{@code Patient.gender} is free text with no closed vocabulary, so this
  * refuses only the values that unambiguously mean male. A blank, unknown or
@@ -56,17 +71,21 @@ public final class ObstetricEligibility {
      */
     public static final String PATIENT_FIELD = "patientId";
 
-    /** Throws when an obstetric record must not be created for this patient, keyed on {@link #PATIENT_FIELD}. */
+    /** Throws when an obstetric record must not be created for this patient, keyed on {@link #PATIENT_FIELD}; no emergency. */
     public static void requireObstetricEligible(Patient patient) {
-        requireObstetricEligible(patient, PATIENT_FIELD);
+        requireObstetricEligible(patient, PATIENT_FIELD, false);
     }
 
     /**
      * Throws when an obstetric record must not be created for this patient. QA D1538: the refusal
-     * names {@code field}, so the form marks the patient it was picked in. Unknown sex or birth date
-     * refuses nothing (the class comment). Provisional, pending clinical approval.
+     * names {@code field}, so the form marks what was picked. Unknown sex or birth date refuses
+     * nothing, and an {@code emergency} refuses nothing (the class comment). Provisional, pending
+     * clinical approval.
      */
-    public static void requireObstetricEligible(Patient patient, String field) {
+    public static void requireObstetricEligible(Patient patient, String field, boolean emergency) {
+        if (emergency) {
+            return;
+        }
         if (isRecordedMale(patient)) {
             throw new FieldBusinessException(field, MESSAGE_KEY);
         }

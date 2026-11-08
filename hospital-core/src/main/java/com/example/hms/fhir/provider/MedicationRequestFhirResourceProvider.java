@@ -57,10 +57,11 @@ public class MedicationRequestFhirResourceProvider implements IResourceProvider 
     ) {
         UUID patientId = FhirIds.fromReference(patient != null ? patient : subject);
         if (patientId == null) return Collections.emptyList();
-        // QA D1537: the orders that were issued, never a draft or a discarded one.
-        return repository.findByPatient_Id(patientId, PageRequest.of(0, MAX_RESULTS, NEWEST_FIRST))
+        // QA D1537: the orders that were issued, never a draft or a discarded one, chosen in the query
+        // so the capped page is never thinned after it was fetched.
+        return repository.findIssuedByPatientId(patientId, com.example.hms.service.support.PrescriptionIssuance.PROPOSALS,
+                PageRequest.of(0, MAX_RESULTS, NEWEST_FIRST))
             .stream()
-            .filter(com.example.hms.service.support.PrescriptionIssuance::wasIssued)
             .map(mapper::toFhir)
             .toList();
     }
