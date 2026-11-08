@@ -16,16 +16,22 @@
   <app-hospital-scope-hint />
 
   <ol class="workspace-steps" [attr.aria-label]="'PHARMACY.STOCK_ROUTING' | translate">
-    <li [class.current]="!selected()" [attr.aria-current]="!selected() ? 'step' : null">
+    <li
+      [class.current]="currentStep() === 1"
+      [attr.aria-current]="currentStep() === 1 ? 'step' : null"
+    >
       <b>1</b><span>{{ 'PHARMACY.ROUTING_RX_SEARCH' | translate }}</span>
     </li>
     <li
-      [class.current]="selected() && !stockResult()"
-      [attr.aria-current]="selected() && !stockResult() ? 'step' : null"
+      [class.current]="currentStep() === 2"
+      [attr.aria-current]="currentStep() === 2 ? 'step' : null"
     >
       <b>2</b><span>{{ 'PHARMACY.CHECK_STOCK' | translate }}</span>
     </li>
-    <li [class.current]="stockResult()" [attr.aria-current]="stockResult() ? 'step' : null">
+    <li
+      [class.current]="currentStep() === 3"
+      [attr.aria-current]="currentStep() === 3 ? 'step' : null"
+    >
       <b>3</b><span>{{ 'PHARMACY_WORKSPACE.ROUTING_DECISION' | translate }}</span>
     </li>
   </ol>

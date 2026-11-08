@@ -165,6 +165,22 @@ describe('StockRoutingComponent', () => {
     expect(pharmacySvc.checkStock).toHaveBeenCalledWith('rx-deep-1');
     // QA D888: the deep link still works alongside the search.
     expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalled();
+    // The linked order may be absent from the loaded queue page.
+    expect(c.selected()).toBeNull();
+    const steps = Array.from(
+      f.nativeElement.querySelectorAll('.workspace-steps li'),
+    ) as HTMLElement[];
+    expect(steps.map((step) => step.getAttribute('aria-current'))).toEqual([null, null, 'step']);
+    expect(steps.map((step) => step.classList.contains('current'))).toEqual([false, false, true]);
+
+    const pending = new Subject<any>();
+    pharmacySvc.checkStock.and.returnValue(pending);
+    c.checkStock();
+    f.detectChanges();
+    expect(steps.map((step) => step.getAttribute('aria-current'))).toEqual([null, 'step', null]);
+    pending.next(stockCheckResponse);
+    f.detectChanges();
+    expect(steps.map((step) => step.getAttribute('aria-current'))).toEqual([null, null, 'step']);
   });
 
   it('QA D888: offers no raw prescription-id box, only a search over the queue', () => {
