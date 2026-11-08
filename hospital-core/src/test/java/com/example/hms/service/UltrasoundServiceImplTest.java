@@ -227,7 +227,6 @@ class UltrasoundServiceImplTest {
             .findingsSummary("Grossesse évolutive")
             .scanDate(LocalDate.now())
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
-            .findingsSummary("Single live intrauterine pregnancy")
             .build();
 
         UltrasoundOrder order = new UltrasoundOrder();
@@ -305,15 +304,17 @@ class UltrasoundServiceImplTest {
         verify(orderRepository).save(order);
     }
 
-    /** QA D1182 (round 22): the EDIT of a report with only the form's default boxes is refused, nothing saved. */
+    /**
+     * QA D1182 (round 22), restated by D1525: the EDIT of a report whose every
+     * observation is "not assessed" and that states nothing else is refused,
+     * nothing saved. (The boxes themselves are no longer defaults: a stated
+     * one is a finding, see createOrUpdateReport_savesAStatedAbsentObservation.)
+     */
     @Test
-    void createOrUpdateReport_refusesAnEditWithOnlyTheDefaultBoxes() {
+    void createOrUpdateReport_refusesAnEditThatStatesNothing() {
         UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
             .scanDate(LocalDate.now())
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
-            .fetalCardiacActivity(Boolean.TRUE)
-            .fetalMovementObserved(Boolean.TRUE)
-            .fetalToneNormal(Boolean.TRUE)
             .build();
         UltrasoundOrder order = new UltrasoundOrder();
         order.setId(orderId);
@@ -339,7 +340,6 @@ class UltrasoundServiceImplTest {
             .findingsSummary("Grossesse évolutive")
             .scanDate(LocalDate.now())
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
-            .findingsSummary("Single live intrauterine pregnancy")
             .build();
 
         UltrasoundOrder order = new UltrasoundOrder();
@@ -362,7 +362,6 @@ class UltrasoundServiceImplTest {
             .findingsSummary("Grossesse évolutive")
             .scanDate(LocalDate.now())
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
-            .findingsSummary("Single live intrauterine pregnancy")
             .build();
 
         UltrasoundOrder order = new UltrasoundOrder();
@@ -513,41 +512,74 @@ class UltrasoundServiceImplTest {
         verify(reportRepository, never()).save(any());
     }
 
-    /** QA D1525: a template carries the scan date only, never a finding. */
+    /** QA D1525: a report that states nothing is refused on the summary field, before the category. */
     @Test
-    void templatesStateNoFinding() {
-        for (UltrasoundReportRequestDTO template : List.of(
-                ultrasoundService.getNuchalTranslucencyTemplate(), ultrasoundService.getAnatomyScanTemplate())) {
-            assertThat(template.getScanDate()).isNotNull();
-            assertThat(template.getFetalCardiacActivity()).isNull();
-            assertThat(template.getFetalMovementObserved()).isNull();
-            assertThat(template.getFetalToneNormal()).isNull();
-            assertThat(template.getFindingCategory()).isNull();
-            assertThat(template.getGestationalAgeAtScan()).isNull();
-            assertThat(template.getNumberOfFetuses()).isNull();
-        }
-    }
-
-    /** QA D1525: the untouched template is refused as an empty report, named on the summary field. */
-    @Test
-    void createOrUpdateReport_refusesAnUntouchedTemplateAsAnEmptyReport() {
+    void createOrUpdateReport_refusesAReportThatStatesNothing() {
         UltrasoundOrder order = new UltrasoundOrder();
         order.setId(orderId);
         order.setHospital(hospital);
         order.setStatus(UltrasoundOrderStatus.ORDERED);
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
         when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.empty());
+        UltrasoundReportRequestDTO dateOnly = UltrasoundReportRequestDTO.builder().scanDate(LocalDate.now()).build();
 
-        for (UltrasoundReportRequestDTO template : List.of(
-                ultrasoundService.getNuchalTranslucencyTemplate(), ultrasoundService.getAnatomyScanTemplate())) {
-            assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, template, null))
+        assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, dateOnly, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("findingsSummary");
+                assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.findingsRequired");
+            });
+        verify(reportRepository, never()).save(any());
+        assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.ORDERED);
+    }
+
+    /** QA D1525: "cardiac activity absent" with URGENT and nothing else is a report, and is marked as stated. */
+    @Test
+    void createOrUpdateReport_savesAStatedAbsentObservation() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now())
+            .fetalCardiacActivity(Boolean.FALSE)
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.URGENT)
+            .build();
+        UltrasoundReport mapped = new UltrasoundReport();
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.empty());
+        when(ultrasoundMapper.toReportEntity(request, order, hospital)).thenReturn(mapped);
+        when(reportRepository.save(mapped)).thenReturn(mapped);
+
+        ultrasoundService.createOrUpdateReport(orderId, request, null);
+
+        verify(reportRepository).save(mapped);
+        assertThat(mapped.getObservationsStated()).as("saved from now on: not legacy").isTrue();
+    }
+
+    /** QA D1525: NORMAL cannot be saved with absent cardiac activity, abnormal tone or anomalies. */
+    @Test
+    void createOrUpdateReport_refusesNormalWithAContradictingObservation() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.empty());
+        List<UltrasoundReportRequestDTO> contradictions = List.of(
+            UltrasoundReportRequestDTO.builder().scanDate(LocalDate.now()).fetalCardiacActivity(false)
+                .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL).build(),
+            UltrasoundReportRequestDTO.builder().scanDate(LocalDate.now()).fetalToneNormal(false)
+                .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL).build(),
+            UltrasoundReportRequestDTO.builder().scanDate(LocalDate.now()).anomaliesDetected(true)
+                .anomalyDescription("Hygroma").findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL).build());
+        for (UltrasoundReportRequestDTO request : contradictions) {
+            assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, request, null))
                 .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
-                    assertThat(ex.getField()).isEqualTo("findingsSummary");
-                    assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.findingsRequired");
+                    assertThat(ex.getField()).isEqualTo("findingCategory");
+                    assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.normalContradictsObservation");
                 });
         }
         verify(reportRepository, never()).save(any());
-        assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.ORDERED);
     }
 
     /** QA D1525: with a finding but no category, the category is asked for, never assumed NORMAL. */

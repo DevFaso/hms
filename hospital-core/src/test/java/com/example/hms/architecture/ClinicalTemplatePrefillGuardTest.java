@@ -2,17 +2,12 @@ package com.example.hms.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.example.hms.payload.dto.ultrasound.UltrasoundReportRequestDTO;
-import com.example.hms.service.impl.UltrasoundServiceImpl;
-import java.beans.Introspector;
-import java.beans.PropertyDescriptor;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,11 +28,14 @@ import org.junit.jupiter.api.Test;
  * untouched template was charted as a normal scan nobody described. This guard
  * reads the whole tree for the three shapes of that defect:
  * <ol>
- *   <li>a template endpoint that returns a pre-filled clinical request;</li>
+ *   <li>a template endpoint that returns a pre-filled clinical request (none remain);</li>
  *   <li>an entity field initialised to {@code true} or to a "normal"-type enum
  *       constant (a stated finding on every row built without it);</li>
  *   <li>a write that turns a missing Boolean into {@code true}
- *       ({@code dto.getX() == null || dto.getX()}).</li>
+ *       ({@code dto.getX() == null || dto.getX()});</li>
+ *   <li>the negative mirror: an entity field named like a negative finding
+ *       (anomaly, bleeding, concern, ...) defaulted to {@code false}, and a write
+ *       {@code .x(Boolean.TRUE.equals(dto.getX()))} of one.</li>
  * </ol>
  * Bookkeeping flags (active, enabled, ...) are allowed by name. The other
  * allowances are the sweep's known debts, each with its reason; they may only
@@ -94,46 +92,60 @@ class ClinicalTemplatePrefillGuardTest {
     private static final Set<String> NULL_AS_TRUE_BOOKKEEPING = Set.of("getActive", "getEnabled");
 
     private static final Pattern TRUE_FIELD = Pattern.compile(
-            "private\\s+(?:Boolean|boolean)\\s+(\\w+)\\s*=\\s*(?:true|Boolean\\.TRUE)\\s*;");
+            "private\\s++(?:Boolean|boolean)\\s++(\\w++)\\s*+=\\s*+(?:true|Boolean\\.TRUE)\\s*+;");
     private static final Pattern ENUM_FIELD = Pattern.compile(
-            "private\\s+(\\w+)\\s+(\\w+)\\s*=\\s*\\1\\.([A-Z_]+)\\s*;");
+            "private\\s++(\\w++)\\s++(\\w++)\\s*+=\\s*+\\1\\.([A-Z_]++)\\s*+;");
     private static final Pattern NULL_AS_TRUE = Pattern.compile(
-            "(\\w+)\\.(get\\w+|is\\w+)\\(\\)\\s*==\\s*null\\s*\\|\\|\\s*\\1\\.\\2\\(\\)(?=\\s*[),;?:])");
+            "(\\w++)\\.((?:get|is)\\w++)\\(\\)\\s*+==\\s*+null\\s*+\\|\\|\\s*+\\1\\.\\2\\(\\)(?=\\s*+[),;?:])");
     private static final Pattern TEMPLATE_METHOD = Pattern.compile(
-            "public\\s+(\\w*RequestDTO)\\s+(\\w*[Tt]emplate\\w*)\\s*\\(");
+            "public\\s++(\\w*+RequestDTO)\\s++(\\w*?[Tt]emplate\\w*+)\\s*+\\(");
 
-    /** Template endpoints returning a clinical request; each is checked by {@link #ultrasoundTemplatesStateNoFinding}. */
-    private static final Set<String> KNOWN_TEMPLATES = Set.of(
-            "UltrasoundServiceImpl.java#getNuchalTranslucencyTemplate",
-            "UltrasoundServiceImpl.java#getAnatomyScanTemplate");
+    /**
+     * QA D1525: the ultrasound templates were removed (without the findings they
+     * pre-filled they carried only today's date, which overwrote a stored scan
+     * date). No method may return a pre-filled clinical request again; one that
+     * truly suggests only structure must be added here with a test that it
+     * states no finding.
+     */
+    private static final Set<String> KNOWN_TEMPLATES = Set.of();
 
-    /** The only property an ultrasound template may fill: an administrative default. */
-    private static final Set<String> TEMPLATE_MAY_FILL = Set.of("scanDate");
+    /**
+     * A negatively phrased finding: defaulted to {@code false}, it states "no
+     * anomaly / no bleeding / no concern" that nobody may have said (the D1525
+     * sibling of a {@code true} default: UltrasoundReport.anomaliesDetected).
+     */
+    private static final Pattern NEGATIVE_FINDING_NAME = Pattern.compile(
+            "(?i)anomal|abnormal|absent|complication|adverse|distress|concern|critical|bleeding|infection"
+                    + "|positive|exposure|violence|suspect");
+
+    private static final Pattern FALSE_FIELD = Pattern.compile(
+            "private\\s++(?:Boolean|boolean)\\s++(\\w++)\\s*+=\\s*+(?:false|Boolean\\.FALSE)\\s*+;");
+
+    /** {@code .x(Boolean.TRUE.equals(dto.getX()))}: a missing answer written as "no". */
+    private static final Pattern NULL_AS_FALSE_WRITE = Pattern.compile(
+            "\\.(\\w++)\\(\\s*+Boolean\\.TRUE\\.equals\\(\\w++\\.get(\\w++)\\(\\)\\)\\s*+\\)");
+
+    /** "File.java#field" -> reason: negatively phrased findings defaulted to false today. Only shrinks. */
+    private static final Map<String, String> ENTITY_FALSE_DEBT = Map.of(
+            "MaternalHistory.java#fetalAnomalyHistory", "D1525 sweep debt: maternal history answers default to 'No'",
+            "MaternalHistory.java#familyPregnancyComplications", "D1525 sweep debt: maternal history answers default to 'No'",
+            "MaternalHistory.java#zikaRiskExposure", "D1525 sweep debt: maternal history answers default to 'No'",
+            "MaternalHistory.java#domesticViolenceConcerns", "D1525 sweep debt: maternal history answers default to 'No'",
+            "MaternalHistory.java#financialConcerns", "D1525 sweep debt: maternal history answers default to 'No'",
+            "MtmReview.java#adherenceConcern", "D1525 sweep debt: primitive column, needs a migration",
+            "PostpartumObservation.java#excessiveBleeding", "D1525 sweep debt: primitive column, needs a migration and a clinician decision",
+            "ProResponse.java#criticalItemPositive", "computed by the scoring service from the patient's answers, not entered",
+            "MaternalHistory.java#domesticViolenceScreening", "whether a screening was done (an action), not a finding",
+            "PostpartumObservation.java#uterineAtonySuspected", "D1525 sweep debt: primitive column, needs a migration and a clinician decision");
+
+    /** "File.java#getter" -> reason: {@code Boolean.TRUE.equals(dto.getX())} writes of a negative finding. Only shrinks. */
+    private static final Map<String, String> NULL_AS_FALSE_DEBT = Map.of(
+            "PostpartumCareServiceImpl.java#ExcessiveBleeding", "D1525 sweep debt: primitive column (excessiveBleeding)",
+            "PostpartumCareServiceImpl.java#UterineAtonySuspected", "D1525 sweep debt: postpartum observation answers",
+            "MtmReviewServiceImpl.java#AdherenceConcern", "D1525 sweep debt: primitive column (adherenceConcern)");
 
     @Test
-    void ultrasoundTemplatesStateNoFinding() throws Exception {
-        // The template methods read no collaborator: build the service with nulls.
-        java.lang.reflect.Constructor<?> ctor = UltrasoundServiceImpl.class.getDeclaredConstructors()[0];
-        UltrasoundServiceImpl service = (UltrasoundServiceImpl) ctor.newInstance(
-                new Object[ctor.getParameterCount()]);
-        for (UltrasoundReportRequestDTO template : List.of(
-                service.getNuchalTranslucencyTemplate(), service.getAnatomyScanTemplate())) {
-            List<String> filled = new ArrayList<>();
-            for (PropertyDescriptor p : Introspector.getBeanInfo(UltrasoundReportRequestDTO.class).getPropertyDescriptors()) {
-                if (p.getReadMethod() == null || "class".equals(p.getName()) || TEMPLATE_MAY_FILL.contains(p.getName())) {
-                    continue;
-                }
-                if (p.getReadMethod().invoke(template) != null) {
-                    filled.add(p.getName());
-                }
-            }
-            assertThat(filled).as("an ultrasound template pre-fills what only the clinician may state (QA D1525)")
-                    .isEmpty();
-        }
-    }
-
-    @Test
-    void noOtherTemplateReturnsAPrefilledClinicalRequest() {
+    void noMethodReturnsAPrefilledClinicalRequest() {
         Set<String> found = new TreeSet<>();
         for (Path f : javaFiles(MAIN)) {
             Matcher m = TEMPLATE_METHOD.matcher(read(f));
@@ -142,8 +154,40 @@ class ClinicalTemplatePrefillGuardTest {
             }
         }
         assertThat(found)
-                .as("a new template endpoint: add it to KNOWN_TEMPLATES with a test that it states no finding (QA D1525)")
+                .as("a template endpoint returning a pre-filled clinical request (QA D1525)")
                 .isEqualTo(new TreeSet<>(KNOWN_TEMPLATES));
+    }
+
+    @Test
+    void noEntityDefaultsANegativeFindingToFalse() {
+        Set<String> found = new TreeSet<>();
+        for (Path f : javaFiles(MAIN.resolve("model"))) {
+            Matcher m = FALSE_FIELD.matcher(read(f));
+            while (m.find()) {
+                if (NEGATIVE_FINDING_NAME.matcher(m.group(1)).find() && !m.group(1).startsWith("isHighRisk")) {
+                    found.add(f.getFileName() + "#" + m.group(1));
+                }
+            }
+        }
+        assertThat(found).as("a negatively phrased finding defaulted to false states 'no ...' nobody said (QA D1525)")
+                .isSubsetOf(ENTITY_FALSE_DEBT.keySet());
+        assertThat(ENTITY_FALSE_DEBT.keySet()).as("a listed debt was fixed: delete its line").isSubsetOf(found);
+    }
+
+    @Test
+    void noWriteTurnsAMissingNegativeFindingIntoFalse() {
+        Set<String> found = new TreeSet<>();
+        for (Path f : javaFiles(MAIN)) {
+            Matcher m = NULL_AS_FALSE_WRITE.matcher(read(f));
+            while (m.find()) {
+                if ((m.group(1).equalsIgnoreCase(m.group(2)) || m.group(1).equalsIgnoreCase("set" + m.group(2))) && NEGATIVE_FINDING_NAME.matcher(m.group(2)).find()) {
+                    found.add(f.getFileName() + "#" + m.group(2));
+                }
+            }
+        }
+        assertThat(found).as("a missing negative finding written as false (QA D1525): keep null as 'not stated'")
+                .isSubsetOf(NULL_AS_FALSE_DEBT.keySet());
+        assertThat(NULL_AS_FALSE_DEBT.keySet()).as("a listed debt was fixed: delete its line").isSubsetOf(found);
     }
 
     @Test

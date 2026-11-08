@@ -208,6 +208,7 @@ public class UltrasoundMapper {
             .reportReviewedByProvider(report.getReportReviewedByProvider())
             .providerReviewNotes(report.getProviderReviewNotes())
             .patientNotified(report.getPatientNotified())
+            .observationsStated(Boolean.TRUE.equals(report.getObservationsStated()))
             .patientNotifiedAt(report.getPatientNotifiedAt())
             .createdAt(report.getCreatedAt())
             .updatedAt(report.getUpdatedAt())
@@ -281,7 +282,7 @@ public class UltrasoundMapper {
             .findingCategory(dto.getFindingCategory())
             .findingsSummary(dto.getFindingsSummary())
             .interpretation(dto.getInterpretation())
-            .anomaliesDetected(Boolean.TRUE.equals(dto.getAnomaliesDetected()))
+            .anomaliesDetected(dto.getAnomaliesDetected()) // QA D1525: null = not stated
             .anomalyDescription(dto.getAnomalyDescription())
             // Genetic screening
             .geneticScreeningRecommended(Boolean.TRUE.equals(dto.getGeneticScreeningRecommended()))

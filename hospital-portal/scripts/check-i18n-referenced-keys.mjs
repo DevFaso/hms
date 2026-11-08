@@ -80,6 +80,8 @@ const PATTERNS = [
   new RegExp(`translate\\.(?:instant|get|stream)\\(\\s*['"\`]${KEY}['"\`]`, 'g'),
   new RegExp(`translationKey:\\s*['"\`]${KEY}['"\`]`, 'g'),
   new RegExp(`(?:labelKey|valueKey):\\s*['"\`]${KEY}['"\`]`, 'g'),
+  // QA D1525: the ultrasound observations keep each answer's key by name.
+  new RegExp(`(?:trueKey|falseKey|notAssessedKey|legacyKey):\\s*['"\`]${KEY}['"\`]`, 'g'),
 ];
 
 const defined = flatten(JSON.parse(readFileSync(EN, 'utf8')));

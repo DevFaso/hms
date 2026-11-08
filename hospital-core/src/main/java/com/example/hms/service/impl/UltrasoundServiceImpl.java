@@ -347,22 +347,28 @@ public class UltrasoundServiceImpl implements UltrasoundService {
      * with every value null. Create and edit go through here alike. A scan
      * with no cardiac activity says so in the findings or the interpretation.
      * {@code UltrasoundReportFindingsTest} sets every box at once and expects
-     * the refusal. One fetus is not a finding either (it was a default for
-     * years); more than one is.
+     * the refusal.
      *
-     * <p>QA D1525 (round 38): a finding is charted only when the clinician
-     * states it. The templates no longer pre-fill the three flags, the
-     * category, the gestational age or the fetus count, the entity no longer
-     * defaults the flags to {@code true}, and the mapper keeps a missing flag
-     * {@code null} ("not assessed"). So every value counted here was entered by
-     * someone. {@code UltrasoundReportFindingsTest} and
+     * <p>QA D1525 (round 38) supersedes the D1182 exclusion. The boxes were
+     * excluded only because they were defaults: the templates pre-filled them,
+     * the entity defaulted them to {@code true}, the mapper turned a missing
+     * one into {@code true}, and the fetus count defaulted to one. None of that
+     * remains (the templates are gone, null stays "not assessed"), so a
+     * non-null observation is something the clinician stated: "cardiac
+     * activity absent" is a finding, and so is a fetus count or "no
+     * anomalies". {@link com.example.hms.service.support.ClinicalContent#isPresent} drops {@code Boolean.FALSE}
+     * (an unticked box), so each tri-state answer is passed through
+     * {@link #stated}. A report whose every observation is "not assessed" and
+     * that states nothing else is still refused.
+     * {@code UltrasoundReportFindingsTest} and
      * {@code ClinicalTemplatePrefillGuardTest} pin it.
      */
     static void requireReportFindings(UltrasoundReportRequestDTO request) {
-        Integer fetuses = request.getNumberOfFetuses();
         com.example.hms.service.support.ClinicalContent.requireAny("findingsSummary",
             "ultrasound.report.findingsRequired",
-            fetuses != null && fetuses > 1 ? fetuses : null,
+            stated(request.getFetalCardiacActivity()), stated(request.getFetalMovementObserved()),
+            stated(request.getFetalToneNormal()), stated(request.getNasalBonePresent()),
+            stated(request.getAnomaliesDetected()), request.getNumberOfFetuses(),
             request.getGestationalAgeAtScan(), request.getGestationalAgeDays(), request.getNuchalTranslucencyMm(),
             request.getCrownRumpLengthMm(), request.getEstimatedDueDate(),
             request.getFetalPosition(), request.getBiparietalDiameterMm(), request.getHeadCircumferenceMm(),
@@ -380,6 +386,28 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     static void requireFindingCategory(UltrasoundReportRequestDTO request) {
         com.example.hms.service.support.ClinicalContent.requirePresent(request.getFindingCategory(),
             "findingCategory", "ultrasoundReport.findingCategory.required");
+    }
+
+    /**
+     * QA D1525: a report cannot read NORMAL while it states absent cardiac
+     * activity, an abnormal fetal tone or detected anomalies. Refused on the
+     * category, which the clinician corrects.
+     */
+    static void requireCategoryMatchesObservations(UltrasoundReportRequestDTO request) {
+        if (request.getFindingCategory() != com.example.hms.enums.UltrasoundFindingCategory.NORMAL) {
+            return;
+        }
+        if (Boolean.FALSE.equals(request.getFetalCardiacActivity())
+                || Boolean.FALSE.equals(request.getFetalToneNormal())
+                || Boolean.TRUE.equals(request.getAnomaliesDetected())) {
+            throw new com.example.hms.exception.FieldBusinessException("findingCategory",
+                "ultrasound.report.normalContradictsObservation");
+        }
+    }
+
+    /** A tri-state answer as a finding: stated (true or false) or not (null). */
+    private static Boolean stated(Boolean answer) {
+        return answer != null ? Boolean.TRUE : null;
     }
 
     @Override
@@ -400,6 +428,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         // (which no longer pre-selects NORMAL) reads as empty, not "pick a category".
         requireReportFindings(request);
         requireFindingCategory(request);
+        requireCategoryMatchesObservations(request);
 
         if (report == null) {
             report = ultrasoundMapper.toReportEntity(request, order, order.getHospital());
@@ -409,6 +438,10 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         } else {
             ultrasoundMapper.updateReportFromRequest(report, request);
         }
+
+        // QA D1525: whatever this save carries is what the clinician stated
+        // (null = not assessed); from now on the row is no longer legacy.
+        report.setObservationsStated(Boolean.TRUE);
 
         // Update order status
         if (order.getStatus() == UltrasoundOrderStatus.ORDERED || order.getStatus() == UltrasoundOrderStatus.SCHEDULED) {
@@ -620,31 +653,13 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             .toList();
     }
 
-    /**
-     * QA D1525: a template suggests the form, never a finding. It used to
-     * pre-fill cardiac activity, movement and tone as present, the category as
-     * NORMAL, a gestational age and one fetus, and an untouched template was
-     * charted as all of that. It now carries only the date of the scan (today,
-     * an administrative default the clinician corrects); every observation,
-     * measurement and the category are left for the clinician to state.
-     * {@code ClinicalTemplatePrefillGuardTest} fails if a finding comes back.
+    /*
+     * QA D1525: the nuchal-translucency and anatomy-scan templates were removed.
+     * They pre-filled findings (cardiac activity, movement, tone, NORMAL, a
+     * gestational age, one fetus); without those they carried only today's date,
+     * which overwrote a stored scan date. A template that states nothing has
+     * nothing to offer, so the endpoints and the portal buttons are gone.
      */
-    @Override
-    @Transactional(readOnly = true)
-    public UltrasoundReportRequestDTO getNuchalTranslucencyTemplate() {
-        return UltrasoundReportRequestDTO.builder()
-            .scanDate(java.time.LocalDate.now())
-            .build();
-    }
-
-    /** QA D1525: as {@link #getNuchalTranslucencyTemplate()}, the date only. */
-    @Transactional(readOnly = true)
-    @Override
-    public UltrasoundReportRequestDTO getAnatomyScanTemplate() {
-        return UltrasoundReportRequestDTO.builder()
-            .scanDate(java.time.LocalDate.now())
-            .build();
-    }
 
     // Private helper methods
 

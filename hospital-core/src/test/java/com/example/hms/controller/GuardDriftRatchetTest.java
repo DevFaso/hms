@@ -246,9 +246,7 @@ class GuardDriftRatchetTest {
         listed.put("UltrasoundController.cancelOrder", ULTRASOUNDCONTROLLER_REASON);
         listed.put("UltrasoundController.createOrUpdateReport", ULTRASOUNDCONTROLLER_REASON);
         listed.put("UltrasoundController.createOrder", ULTRASOUNDCONTROLLER_REASON);
-        listed.put("UltrasoundController.getAnatomyScanTemplate", ULTRASOUNDCONTROLLER_REASON);
         listed.put("UltrasoundController.getHighRiskOrders", ULTRASOUNDCONTROLLER_REASON);
-        listed.put("UltrasoundController.getNuchalTranslucencyTemplate", ULTRASOUNDCONTROLLER_REASON);
         listed.put("UltrasoundController.getOrdersByHospitalId", ULTRASOUNDCONTROLLER_REASON);
         listed.put("UltrasoundController.getPendingOrders", ULTRASOUNDCONTROLLER_REASON);
         listed.put("UltrasoundController.getReportsRequiringFollowUp", ULTRASOUNDCONTROLLER_REASON);

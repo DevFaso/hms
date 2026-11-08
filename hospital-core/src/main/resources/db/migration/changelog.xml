@@ -3435,4 +3435,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V282-ultrasound-observations-stated" author="hms-team" runOnChange="false">
+        <sqlFile path="V282__ultrasound_observations_stated.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

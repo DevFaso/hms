@@ -164,6 +164,15 @@ public class UltrasoundReport extends BaseEntity implements TenantScoped {
     @Column(name = "fetal_tone_normal")
     private Boolean fetalToneNormal;
 
+    /**
+     * QA D1525 (V282): TRUE on every report saved since D1525, whose
+     * observations and anomalies answer are what the clinician stated. NULL on
+     * a row written before: its TRUE flags, "no anomalies" and "1 fetus" were
+     * server defaults, read as "not stated (legacy)" and never re-sent on edit.
+     */
+    @Column(name = "observations_stated")
+    private Boolean observationsStated;
+
     @Column(name = "anatomy_survey_complete")
     @Builder.Default
     private Boolean anatomySurveyComplete = false;
@@ -183,9 +192,9 @@ public class UltrasoundReport extends BaseEntity implements TenantScoped {
     @Column(name = "interpretation", length = 3000)
     private String interpretation;
 
+    /** QA D1525: tri-state like the observations; null = not stated, never "no anomalies" by default. */
     @Column(name = "anomalies_detected")
-    @Builder.Default
-    private Boolean anomaliesDetected = false;
+    private Boolean anomaliesDetected;
 
     @Column(name = "anomaly_description", length = 2000)
     private String anomalyDescription;

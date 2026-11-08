@@ -457,7 +457,6 @@
     "TRIAGE.SPO2": "SpO₂",
     "ULTRASOUND.FINDING_NORMAL": "Normal",
     "ULTRASOUND.FINDING_URGENT": "Urgent",
-    "ULTRASOUND.FLAG_NORMAL": "Normal",
     "ULTRASOUND.OBSERVATIONS": "Observations",
     "ULTRASOUND.WORKLIST_ANOMALIES": "Anomalies",
     "USERS.TOTAL": "Total",
@@ -469,7 +468,8 @@
     "inBasket.labColPatient": "Patient",
     "inBasket.labNormal": "Normal",
     "inBasket.messages": "Messages",
-    "inBasket.urgent": "Urgent"
+    "inBasket.urgent": "Urgent",
+    "ULTRASOUND.FLAG_TONE_NORMAL": "Normal"
   },
   "es": {
     "CHART.LAB_STATUS_NORMAL": "Normal",
