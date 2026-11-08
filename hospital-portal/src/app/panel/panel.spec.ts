@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 
@@ -120,10 +120,17 @@ describe('PanelComponent', () => {
   });
 
   it('an overview outage renders unavailable — never an empty hospital', () => {
-    panelService.overview.and.returnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+    const overview = new Subject<never[]>();
+    panelService.overview.and.returnValue(overview);
     fixture.detectChanges();
+    expect(component.overviewLoading()).toBeTrue();
+    overview.error(new HttpErrorResponse({ status: 500 }));
+    fixture.detectChanges();
+    expect(component.overviewLoading()).toBeFalse();
     expect(component.overviewFailed()).toBeTrue();
     expect(component.overviewRows().length).toBe(0);
+    expect(fixture.nativeElement.textContent).toContain('PANEL.OVERVIEW_UNAVAILABLE');
+    expect(fixture.nativeElement.textContent).not.toContain('PANEL.OVERVIEW_EMPTY');
   });
 
   it('carries no scope chip or hint of its own: the route gate owns them', () => {
@@ -174,6 +181,22 @@ describe('PanelComponent', () => {
     expect(fixture.nativeElement.querySelector('[role="alert"]')).not.toBeNull();
     expect(toast.error).not.toHaveBeenCalled();
     expect(component.noStaffProfile()).toBeFalse();
+  });
+  it('retries a personal-panel outage and replaces the alert with the loaded panel', () => {
+    panelService.myPanel.and.returnValues(
+      throwError(() => new HttpErrorResponse({ status: 503 })),
+      of(page([assignment({ patientName: 'Cdx Retry' })])),
+    );
+    fixture.detectChanges();
+    const retry = fixture.nativeElement.querySelector('[role="alert"] button') as HTMLButtonElement;
+    expect(retry).not.toBeNull();
+    retry.click();
+    fixture.detectChanges();
+    expect(panelService.myPanel).toHaveBeenCalledTimes(2);
+    expect(component.myPanelLoading()).toBeFalse();
+    expect(component.myPanelFailed()).toBeFalse();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('table')?.textContent).toContain('Cdx Retry');
   });
   it('filters the provider overview locally while preserving its source rows', () => {
     panelService.overview.and.returnValue(
