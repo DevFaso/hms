@@ -129,7 +129,8 @@ class MarAndOpenStayQueriesPostgresIT {
     }
 
     @ParameterizedTest
-    @EnumSource(value = AdmissionStatus.class, names = {"CANCELLED", "DISCHARGED"})
+    // QA D1516 (changed: CLOSED_IN_ERROR added): a stay a voided death closed has ended, as InpatientOrderEnd says.
+    @EnumSource(value = AdmissionStatus.class, names = {"CANCELLED", "DISCHARGED", "CLOSED_IN_ERROR"})
     void anOpenEncounterOfAnEndedAdmissionIsNoOpenStay(AdmissionStatus ended) {
         encounter(PATIENT, HOSPITAL, admission(ended), EncounterStatus.IN_PROGRESS, "2026-11-05 08:00:00");
 
@@ -137,7 +138,7 @@ class MarAndOpenStayQueriesPostgresIT {
     }
 
     @ParameterizedTest
-    @EnumSource(value = AdmissionStatus.class, mode = EnumSource.Mode.EXCLUDE, names = {"CANCELLED", "DISCHARGED"})
+    @EnumSource(value = AdmissionStatus.class, mode = EnumSource.Mode.EXCLUDE, names = {"CANCELLED", "DISCHARGED", "CLOSED_IN_ERROR"})
     void anOpenEncounterOfAnyOtherAdmissionIsTheOpenStay(AdmissionStatus live) {
         UUID stay = encounter(PATIENT, HOSPITAL, admission(live), EncounterStatus.IN_PROGRESS, "2026-11-05 08:00:00");
 

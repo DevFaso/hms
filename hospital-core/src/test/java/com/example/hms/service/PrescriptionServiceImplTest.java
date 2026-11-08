@@ -6541,8 +6541,9 @@ class PrescriptionServiceImplTest {
 
         verify(encounterRepository).findOpenStayEncounters(patientId, hospitalId,
             com.example.hms.enums.EncounterStatus.CLOSED,
+            // QA D1516 (changed: CLOSED_IN_ERROR added): a stay a voided death closed has ended too.
             java.util.EnumSet.of(com.example.hms.enums.AdmissionStatus.DISCHARGED,
-                com.example.hms.enums.AdmissionStatus.CANCELLED));
+                com.example.hms.enums.AdmissionStatus.CANCELLED, com.example.hms.enums.AdmissionStatus.CLOSED_IN_ERROR));
         org.mockito.ArgumentCaptor<Encounter> anchor = org.mockito.ArgumentCaptor.forClass(Encounter.class);
         verify(encounterRepository).save(anchor.capture());
         assertThat(anchor.getValue().getAdmissionId()).isNull();
