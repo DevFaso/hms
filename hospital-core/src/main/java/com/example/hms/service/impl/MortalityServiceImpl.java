@@ -385,10 +385,23 @@ public class MortalityServiceImpl implements MortalityService {
     private List<Admission> closedStays(DeathRecord deathRecord, UUID hospitalId, Set<AdmissionStatus> statuses) {
         List<Admission> candidates = recordedIds(deathRecord, DeathRecord.CLOSED_ADMISSIONS)
             .map(ids -> ids.isEmpty() ? List.<Admission>of() : admissionRepository.findAllById(ids))
-            .orElseGet(() -> admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(deathRecord.getPatient().getId()));
+            .orElseGet(() -> legacyGuessIsSafe(deathRecord)
+                ? admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(deathRecord.getPatient().getId())
+                : List.of());
         return candidates.stream()
             .filter(stay -> inScope(stay.getHospital(), hospitalId) && statuses.contains(stay.getStatus()))
             .toList();
+    }
+
+    /**
+     * A row from before V281 names nothing, so what it closed is read off the records' marks (DECEASED, the closure
+     * note). Only while the patient has no live death: a real death recorded later leaves the same marks, and its
+     * closures must never be read as the voided one's ("readmit or rebook" for a patient who has died).
+     */
+    private boolean legacyGuessIsSafe(DeathRecord voided) {
+        return voided.getPatient() != null && deathRecordRepository.findByPatient_Id(voided.getPatient().getId())
+            .filter(live -> !Objects.equals(live.getId(), voided.getId()))
+            .isEmpty();
     }
 
     /** A row from before V281 kept only the first visit it closed. */
@@ -404,7 +417,8 @@ public class MortalityServiceImpl implements MortalityService {
     private List<Appointment> closedAppointments(DeathRecord deathRecord, UUID hospitalId) {
         List<Appointment> candidates = recordedIds(deathRecord, DeathRecord.CLOSED_APPOINTMENTS)
             .map(ids -> ids.isEmpty() ? List.<Appointment>of() : appointmentRepository.findAllById(ids))
-            .orElseGet(() -> appointmentRepository.findByPatient_IdAndAppointmentDateAfter(deathRecord.getPatient().getId(),
+            .orElseGet(() -> !legacyGuessIsSafe(deathRecord) ? List.of()
+                : appointmentRepository.findByPatient_IdAndAppointmentDateAfter(deathRecord.getPatient().getId(),
                     deathRecord.getDiedAt().toLocalDate()).stream()
                 .filter(a -> a.getNotes() != null && a.getNotes().contains(CLOSURE_REASON))
                 .toList());

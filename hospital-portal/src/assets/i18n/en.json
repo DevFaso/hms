@@ -12271,7 +12271,7 @@
     "PERINATAL_EARLY_NEONATAL": "Early neonatal (under 7 completed days)",
     "PERINATAL_LATE_NEONATAL": "Late neonatal (7 to under 28 completed days)",
     "VOIDED_CLOSURES": {
-      "TITLE": "A death recorded on {{date}} was entered in error, and it had closed care here",
+      "TITLE": "A death marked entered in error on {{date}} had closed care here",
       "NOT_REOPENED": "Nothing it closed was reopened. If care continues, readmit the patient or rebook.",
       "STAYS": "Stays it closed:",
       "STAY_LINE": "admitted {{admitted}}, closed {{closed}}",

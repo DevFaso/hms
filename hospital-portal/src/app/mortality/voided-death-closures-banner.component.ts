@@ -72,7 +72,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
                     | translate
                       : {
                           admitted: stay.admittedAt | serverTime | dateTime,
-                          closed: stay.closedAt | serverTime | dateTime,
+                          closed: stay.closedAt ? (stay.closedAt | serverTime | dateTime) : '—',
                         }
                 }}
               </li>

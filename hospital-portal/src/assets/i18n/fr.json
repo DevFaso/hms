@@ -12271,7 +12271,7 @@
     "PERINATAL_EARLY_NEONATAL": "Néonatal précoce (moins de 7 jours révolus)",
     "PERINATAL_LATE_NEONATAL": "Néonatal tardif (de 7 à moins de 28 jours révolus)",
     "VOIDED_CLOSURES": {
-      "TITLE": "Un décès enregistré le {{date}} a été saisi par erreur, et il avait clôturé des soins ici",
+      "TITLE": "Un décès marqué comme saisi par erreur le {{date}} avait clôturé des soins ici",
       "NOT_REOPENED": "Rien de ce qu’il a clôturé n’a été rouvert. Si les soins continuent, réadmettez le patient ou reprogrammez.",
       "STAYS": "Séjours clôturés :",
       "STAY_LINE": "admis le {{admitted}}, clôturé le {{closed}}",

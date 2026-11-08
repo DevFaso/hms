@@ -538,6 +538,23 @@ class MortalityServiceImplTest {
     }
 
     @Test
+    void aRowFromBeforeV281NeverTakesTheClosuresOfALaterRealDeath() {
+        DeathRecord legacy = recordedDeath();
+        markInError(legacy);
+        Admission closedByTheRealDeath = openStayWith(null);
+        closedByTheRealDeath.setStatus(AdmissionStatus.DECEASED);
+        when(admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId)).thenReturn(List.of(closedByTheRealDeath));
+        DeathRecord live = DeathRecord.builder().patient(patient).hospital(hospital)
+            .diedAt(LocalDateTime.now().minusHours(1)).immediateCause("y").build();
+        live.setId(UUID.randomUUID());
+        when(deathRecordRepository.findByPatient_Id(patientId)).thenReturn(Optional.of(live));
+        when(deathRecordRepository.findEnteredInErrorForPatient(patientId, hospitalId)).thenReturn(List.of(legacy));
+
+        assertThat(service.getVoidedClosures(patientId)).isEmpty();
+        assertThat(closedByTheRealDeath.getStatus()).isEqualTo(AdmissionStatus.DECEASED);
+    }
+
+    @Test
     void theChartReadsWhatAVoidedDeathClosedAtThisHospital() {
         Admission stay = openStayWith(doctorWithUser());
         var visit = openVisit();

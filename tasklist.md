@@ -6370,3 +6370,12 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **`GuardDriftRatchetTest`, `MortalityController.disputeDeath`:** failed on this branch in the targeted run; this PR does not change that controller. It was not run on a clean base. The coordinator reports it as one of the failures `fix/r36-order-review-hold` fixes.
 - **Urgent dose exception, the item:** a reviewer who joins the hospital after the signature is not told; the order still shows the review as due. The in-basket item does not link to the order. An order discontinued by discharge or a death leaves its open items until someone acknowledges them: only a recorded review, a withdrawal and an edit of what is ordered close them.
 - **CDS hooks:** a hook still sends no frequency (standing since round 34), so its daily total counts one dose.
+
+## Standing debt — round 37 (fix/r37-exposure-and-stays)
+
+- **D1516, deaths voided before this deploy:** their stays stay DECEASED (the brief forbids touching dev data; the coordinator owns the round-37 test patient). The chart banner already lists them, read off the DECEASED mark, while the patient has no live death. A one-off backfill (status CLOSED_IN_ERROR, discharge time = the record's creation) is the coordinator's call.
+- **D1516, an HL7 A03 on a CLOSED_IN_ERROR stay** sets it DISCHARGED, as it did for DECEASED. A sender's discharge is its own fact; not changed.
+- **D1516, orders of a CLOSED_IN_ERROR stay** end with it (`InpatientOrderEnd`) but are not withdrawn like a discharge's (`StayOrderDiscontinuation`); the death's holds stand (#1068).
+- **D1516, the in-basket item has no click-through** for reference type `DEATH_ENTERED_IN_ERROR_CLOSURES`; it names the patient, and the chart shows the closures.
+- **D1515 sibling, under-inclusion:** `CdsCheckServiceImpl` (dispense interaction check) and `MtmReviewServiceImpl` (polypharmacy) keep their own "active" lists (SIGNED, TRANSMITTED, PARTIALLY_FILLED, DISPENSED). They already exclude drafts, so D1515 is not there, but they miss other signed statuses (PENDING_STOCK, the partner ones, PENDING_CLARIFICATION, TRANSMISSION_FAILED, PRINTED_FOR_PATIENT). Moving them to `isInForce()` widens a pharmacy check: left for its own change.
+- **D1516, a real death's stay** still has no discharge time (only the voided one gets it); setting it would change which orders end with the stay before `snapshotAtDeath`. Clinical decision.

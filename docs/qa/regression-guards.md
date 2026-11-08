@@ -1116,3 +1116,13 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `repository/MarAndOpenStayQueriesPostgresIT#cr03_*` (new) | The documented doses on PostgreSQL across midnight. | none |
 | `service/emar/ParacetamolExposureAfterCommitIT`, `architecture/AdultParacetamolGuardTest#theExposureIsReadOutsideTheDoseAndTheMarTakesNoPatientLock` (new) | CR-03: a failed exposure read undoing a dose, a read inside the dose, a patient lock in the MAR; two concurrent doses, the last to commit counting both. | none |
 | `service/PrescriptionServiceImplTest#cr01_*` (new) | The urgent exception of a child's cannot-assess order: a routine order and the review by age cannot use it. `#paed_*`: a child's dose above an approved limit asks for a fresh decision at signing, and an urgent one asks for the review afterwards. | none |
+
+## Guards added or widened by round 37 (fix/r37-exposure-and-stays)
+
+| Guard | Class it fails on | Allowlist |
+|---|---|---|
+| `architecture/AdultParacetamolGuardTest#everyCdsReaderOfOrdersCountsOnlyOrdersInForce` (new) | D1515: a CDS file that reads a patient's prescriptions without `CdsRuleEngine::inForce` (the one reading of `PrescriptionStatus.isInForce()`), or holds a status set of its own; the three readers are named, so a new one is checked. | none |
+| `enums/PrescriptionStatusInForceTest` (new) | D1515: a status nobody decided: every value answers `isInForce()`, the count pins the enum so a new status is decided. | none |
+| `cdshooks/rules/ParacetamolFactsReaderTest#d1515_*`, `#everyStatusIsCountedExactlyWhenTheOrderIsInForce`, `controller/PrescriptionEditAndWithdrawalIT#d1515_*` (new) | D1515: a draft left after a refused signature, or a withdrawn order, adding to a later total or holding a routine signature. | none |
+| `architecture/VoidedDeathClosureGuardTest` (new) | D1516: a writer of DECEASED other than the death's cascade; a cascade status write whose id is not kept on the record; entered in error not settling or not filing the review, or filing it inside the transaction; a file that reads DECEASED and not CLOSED_IN_ERROR; a discharge count taking a voided closure. | none |
+| `service/MortalityServiceImplTest` (D1516 tests), `controller/DeathEnteredInErrorClosuresIT`, `repository/DeathRecordEnteredInErrorPostgresIT#thePatientsVoidedDeathsAtAHospitalWithWhatEachClosed` (new) | D1516 over the real endpoints and on PostgreSQL: the stay flagged and ended when the closure ran, the urgent item to the attending (doctors as fallback), a failed filing never undoing the correction, a row from before V281, the chart read. | none |
