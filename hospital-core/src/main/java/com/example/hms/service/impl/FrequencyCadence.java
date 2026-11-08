@@ -414,8 +414,11 @@ final class FrequencyCadence {
         .sorted((a, b) -> b.tokens().size() - a.tokens().size())
         .toList();
 
-    /** "08:00", "8h30": minutes only against the hour and under 60; "8 h, 20" is two times or none. */
-    private static final Pattern HOUR_AND_MINUTES = Pattern.compile("\\b(2[0-3]|[01]?\\d|24(?=[:H]00))[:H][0-5]\\d\\b");
+    /**
+     * "08:00", "8h30": minutes only against the hour and under 60; "8 h, 20" is two times or none. QA D1514: the
+     * minutes stay a token behind the mark ("8 HMIN 30"), so a clock time is given at the minute it states.
+     */
+    private static final Pattern HOUR_AND_MINUTES = Pattern.compile("\\b(2[0-3]|[01]?\\d|24(?=[:H]00))[:H]([0-5]\\d)\\b");
     /** ".5", ",5", "q.5h": the point is part of a number, not a separator; "6'/6'": minutes. */
     private static final Pattern NUMBER_MARK = Pattern.compile("(?<![\\dA-Z])[.,](?=\\d)|(?<=[A-Z])\\.(?=\\d)|(?<=\\d)['\u2019]");
     /** "0,5", "2.5": never a count. */
@@ -478,7 +481,7 @@ final class FrequencyCadence {
 
     /** The tokens of a text: what the grammar is matched on. */
     private static List<String> tokensOf(String upper) {
-        String clocked = HOUR_AND_MINUTES.matcher(upper).replaceAll("$1" + CLOCK_WITH_MINUTES);
+        String clocked = HOUR_AND_MINUTES.matcher(upper).replaceAll("$1" + CLOCK_WITH_MINUTES + "$2");
         // QA round 36: "0,0 ml/h" is no rate, as "0 ml/h" is none.
         String noZero = ZERO_DECIMAL.matcher(clocked).replaceAll(" 0 ");
         String numbered = DECIMAL_NUMBER.matcher(noZero).replaceAll(" " + DECIMAL + " ")
@@ -811,6 +814,11 @@ final class FrequencyCadence {
      * <p>QA D1486: "a" and "vers" open the list or follow its joining word; between two times with nothing
      * else they make a range or a window ("8 h a 20 h"), never two doses. QA D1512: an hour that does not
      * exist reads nothing ("13 pm", "0 am", "25h", "24:30").
+     *
+     * <p>QA D1514 (round 37, coordinator rule, provisional): clock times are times of day. The list is read as
+     * the times it states ({@link MarDoseSchedule.Kind#TIMES_OF_DAY}), never as a count spread evenly from the
+     * signing moment: "7 h 13 h 19 h" is given at 07:00, 13:00 and 19:00, 6, 6 and 12 hours apart, and "a 9 h"
+     * at 09:00 every day. The gap overnight is a gap too: "1 h et 23 h" is a window, asked like "6h et 8h".
      */
     private static Reading clockTimes(List<String> tokens) {
         ClockList list = new ClockList();
@@ -827,9 +835,9 @@ final class FrequencyCadence {
         return list.reading();
     }
 
-    /** The clock times read so far. */
+    /** The clock times read so far, in minutes after midnight as written ("24 h" is 1440). */
     private static final class ClockList {
-        private final List<Integer> hours = new ArrayList<>();
+        private final List<Integer> times = new ArrayList<>();
         private boolean marked;
 
         /** Reads one time at {@code at}: the index after it, or -1. {@code mayOpen}: a word may stand before it. */
@@ -845,28 +853,32 @@ final class FrequencyCadence {
             if (number == null) {
                 return -1;
             }
-            return readItsMark(number, time + 1 < tokens.size() ? tokens.get(time + 1) : "", before, time + 2);
+            String after = time + 1 < tokens.size() ? tokens.get(time + 1) : "";
+            if (CLOCK_WITH_MINUTES.equals(after)) {
+                // QA D1514: the minutes tokensOf keeps behind the mark.
+                Integer minutes = time + 2 < tokens.size() ? wholeDigits(tokens.get(time + 2)) : null;
+                return minutes == null ? -1
+                    : add(number, minutes, !before.isEmpty() || number >= FIRST_LONE_CLOCK_HOUR, time + 3);
+            }
+            return readItsMark(number, after, before, time + 2);
         }
 
         /** The number of a time and what follows it; {@code next} is the index after that mark. */
         private int readItsMark(int number, String after, String before, int next) {
             if (AM.equals(after) || PM.equals(after)) {
-                return number < 1 || number > NOON ? -1 : add(hourOf(number, after), true, next);
-            }
-            if (CLOCK_WITH_MINUTES.equals(after)) {
-                return add(number, !before.isEmpty() || number >= FIRST_LONE_CLOCK_HOUR, next);
+                return number < 1 || number > NOON ? -1 : add(hourOf(number, after), 0, true, next);
             }
             if (HOUR_MARK.equals(after)) {
-                return add(number, !before.isEmpty(), next);
+                return add(number, 0, !before.isEmpty(), next);
             }
-            return BEFORE_BARE_CLOCK.contains(before) ? add(number, true, next - 1) : -1;
+            return BEFORE_BARE_CLOCK.contains(before) ? add(number, 0, true, next - 1) : -1;
         }
 
-        private int add(int hour, boolean isMarked, int next) {
+        private int add(int hour, int minutes, boolean isMarked, int next) {
             if (hour > HOURS_PER_DAY) {
                 return -1;
             }
-            hours.add(hour);
+            times.add(hour * MINUTES_PER_HOUR + minutes);
             marked = marked || isMarked;
             return next;
         }
@@ -878,16 +890,26 @@ final class FrequencyCadence {
             return AM.equals(mark) && number == NOON ? 0 : number;
         }
 
+        /**
+         * The times of day, rising, each at least {@value FrequencyCadence#MIN_CLOCK_GAP_HOURS} hours after the one
+         * before it, and the last as far before the first of the next day; {@code null} when they are not that.
+         */
         Reading reading() {
-            if (hours.isEmpty() || (hours.size() == 1 && !marked) || hours.get(hours.size() - 1) - hours.get(0) >= HOURS_PER_DAY) {
+            if (times.isEmpty() || (times.size() == 1 && !marked)) {
                 return null;
             }
-            for (int i = 1; i < hours.size(); i++) {
-                if (hours.get(i) - hours.get(i - 1) < MIN_CLOCK_GAP_HOURS) {
+            int first = times.get(0);
+            int last = times.get(times.size() - 1);
+            int leastGap = MIN_CLOCK_GAP_HOURS * MINUTES_PER_HOUR;
+            if (last - first >= MINUTES_PER_DAY || (times.size() > 1 && first + MINUTES_PER_DAY - last < leastGap)) {
+                return null;
+            }
+            for (int i = 1; i < times.size(); i++) {
+                if (times.get(i) - times.get(i - 1) < leastGap) {
                     return null;
                 }
             }
-            return countOver(hours.size(), MINUTES_PER_DAY);
+            return Reading.timesOfDay(times.stream().map(time -> time % MINUTES_PER_DAY).sorted().toList());
         }
     }
 

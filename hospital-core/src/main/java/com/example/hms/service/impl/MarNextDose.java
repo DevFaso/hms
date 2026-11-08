@@ -69,6 +69,11 @@ import java.util.Optional;
  * <p>QA D1491 (round 36): an older order with no frequency written is
  * {@link MarDoseSchedule.Kind#UNREAD} too: it stays open and flagged, it no longer ends after one dose.
  *
+ * <p>QA D1514 (round 37, coordinator rule, provisional): clock times are times of day
+ * ({@link MarDoseSchedule.Kind#TIMES_OF_DAY}). Every dose, the first included, is due at a time the order
+ * states: "a 9 h" signed at 00:01 is due at 09:00, not at 00:01; "7 h 13 h 19 h" signed at 07:05 is due at
+ * 13:00, then 19:00, then 07:00. The minimum gap is the real gap before the next stated time.
+ *
  * <p>Pure: the caller passes the clock reading and the order's rows.
  */
 public final class MarNextDose {
@@ -140,8 +145,11 @@ public final class MarNextDose {
         // QA D154: the first dose is due when the order starts, which is its
         // signature (or, failing that, its creation), not four hours later.
         LocalDateTime start = rx.getSignedAt() != null ? rx.getSignedAt() : rx.getCreatedAt();
-        LocalDateTime first = start != null ? start : now.plusHours(1);
         MarDoseSchedule.Reading reading = MarDoseSchedule.read(rx);
+        boolean timesOfDay = reading.kind() == MarDoseSchedule.Kind.TIMES_OF_DAY;
+        LocalDateTime orderStart = start != null ? start : now.plusHours(1);
+        // QA D1514: clock times are times of day: the first dose is the first time stated from the start, never the start.
+        LocalDateTime first = timesOfDay ? reading.timeOfDayAtOrAfter(orderStart) : orderStart;
         if (reading.kind() == MarDoseSchedule.Kind.AS_NEEDED) {
             return asNeeded(rx, now, rows, earlyWindow);
         }
@@ -163,6 +171,9 @@ public final class MarNextDose {
                 .orElse(now.truncatedTo(ChronoUnit.MINUTES));
             return Due.scheduled(slot, null, null, slot, true);
         }
+        if (timesOfDay) {
+            return atTimesOfDay(reading, now, rows, earlyWindow, lastClosed.get());
+        }
         Integer gap = reading.gapAfter(closedCount(rows));
         if (gap == null) {
             // A single dose, or a course past its last one.
@@ -176,6 +187,38 @@ public final class MarNextDose {
             lastSlot = lastGiven.orElse(now);
         }
         LocalDateTime scheduled = afterLateOutcome(last, lastSlot, interval, earlyWindow);
+        return afterTheSlot(scheduled, lastGiven, interval, earlyWindow);
+    }
+
+    /**
+     * QA D1514: an order at stated times of day ("7 h 13 h 19 h", "a 9 h"). The next slot is the next time stated
+     * after the last slot (after the moment a late held or refused outcome was recorded, QA D1262), and the gap
+     * from the last dose given is the real one ({@link MarDoseInterval#gapAfterLastGiven}): 6 hours after the
+     * 07:00 dose, 12 after the 19:00 one. The slot is never the last slot plus an even share of the day.
+     */
+    private static Due atTimesOfDay(MarDoseSchedule.Reading reading, LocalDateTime now,
+                                    List<MedicationAdministrationRecord> rows, Duration earlyWindow,
+                                    MedicationAdministrationRecord last) {
+        Optional<LocalDateTime> lastGiven = MarDoseInterval.lastGivenAt(rows, null);
+        LocalDateTime lastSlot = last.getScheduledTime();
+        if (lastSlot == null) {
+            lastSlot = lastGiven.orElse(now);
+        }
+        LocalDateTime scheduled = reading.timeOfDayAfter(lastSlot);
+        LocalDateTime recordedAt = last.getAdministeredAt();
+        if (last.getStatus() != MedicationAdministrationStatus.GIVEN && recordedAt != null
+            && scheduled.plus(earlyWindow).isBefore(recordedAt)) {
+            scheduled = reading.timeOfDayAfter(recordedAt);
+        }
+        Duration interval = lastGiven
+            .map(given -> Duration.ofMinutes(MarDoseInterval.gapAfterLastGiven(reading, given, earlyWindow, 0)))
+            .orElse(Duration.ZERO);
+        return afterTheSlot(scheduled, lastGiven, interval, earlyWindow);
+    }
+
+    /** The next dose once the schedule's slot is known: offered from its early window, or after the minimum gap. */
+    private static Due afterTheSlot(LocalDateTime scheduled, Optional<LocalDateTime> lastGiven, Duration interval,
+                                    Duration earlyWindow) {
         if (lastGiven.isEmpty()) {
             return Due.scheduled(scheduled, scheduled.minus(earlyWindow), null, scheduled, false);
         }

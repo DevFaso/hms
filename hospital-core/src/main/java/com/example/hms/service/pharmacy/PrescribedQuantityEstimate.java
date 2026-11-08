@@ -35,8 +35,9 @@ public final class PrescribedQuantityEstimate {
         if (com.example.hms.service.impl.PrnMinInterval.isAsNeeded(prescription)) {
             return null;
         }
-        Integer interval = MarDoseSchedule.intervalHours(prescription.getFrequency());
-        if (interval == null || 24 % interval != 0) {
+        // QA D1514: a whole-hour repeat that divides the day, or the times of day stated ("8 h et 20 h" is two).
+        Integer dosesPerDay = MarDoseSchedule.wholeDosesPerDay(prescription.getFrequency());
+        if (dosesPerDay == null) {
             return null;
         }
         Integer days = days(prescription.getDuration());
@@ -44,7 +45,7 @@ public final class PrescribedQuantityEstimate {
         if (days == null || unitsPerDose == null) {
             return null;
         }
-        return unitsPerDose.multiply(BigDecimal.valueOf((24L / interval) * days));
+        return unitsPerDose.multiply(BigDecimal.valueOf((long) dosesPerDay * days));
     }
 
     static Integer days(String duration) {
