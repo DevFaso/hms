@@ -330,6 +330,39 @@ describe('RegistriesComponent', () => {
     expect(registryService.enroll).not.toHaveBeenCalled();
   });
 
+  it('filters through the search input, clears through the button and disables search during outages', async () => {
+    const response = new Subject<ProgramRegistryPage>();
+    registryService.registry.and.returnValue(response);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const search = root().querySelector('.care-search input') as HTMLInputElement;
+    expect(search.disabled).toBeTrue();
+    response.error(new Error('fixture outage'));
+    fixture.detectChanges();
+    expect(search.disabled).toBeTrue();
+
+    registryService.registry.and.returnValue(of(page([enrollment()])));
+    component.load();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(search.disabled).toBeFalse();
+    search.value = 'cdx-no-match';
+    search.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(root().querySelector('.care-no-matches')).not.toBeNull();
+    expect(root().querySelector('.registry-table')).toBeNull();
+    (root().querySelector('.care-toolbar button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(search.value).toBe('');
+    expect(root().querySelector('.care-no-matches')).toBeNull();
+    expect(root().querySelector('.registry-table')?.textContent).toContain('MRN-1');
+    expect(registryService.registry).toHaveBeenCalledTimes(2);
+    expect(registryService.recordVisit).not.toHaveBeenCalled();
+    expect(registryService.enroll).not.toHaveBeenCalled();
+    expect(registryService.updateStatus).not.toHaveBeenCalled();
+  });
+
   it('renders unavailable metrics through loading and failure, then true counts on recovery', () => {
     const response = new Subject<ProgramRegistryPage>();
     registryService.registry.and.returnValue(response);

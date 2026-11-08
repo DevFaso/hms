@@ -238,3 +238,7 @@ table {
 }
 
 @include care.workspace;
+
+.card .hint.error-hint {
+  color: #b45309;
+}

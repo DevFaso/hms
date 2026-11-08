@@ -168,6 +168,17 @@ describe('PanelComponent', () => {
     expect(component.overviewFailed()).toBeFalse();
   });
 
+  it('keeps both outage messages visually distinct from ordinary hints', () => {
+    panelService.myPanel.and.returnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
+    panelService.overview.and.returnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
+    fixture.detectChanges();
+    const errors = (fixture.nativeElement as HTMLElement).querySelectorAll('.hint.error-hint');
+    expect(errors.length).toBe(2);
+    for (const message of Array.from(errors)) {
+      expect(getComputedStyle(message).color).toBe('rgb(180, 83, 9)');
+    }
+  });
+
   it('carries no scope chip or hint of its own: the route gate owns them', () => {
     // The route is flagged requiresHospitalScope: the shell shows the one
     // chip and builds this page only with a hospital pinned.
