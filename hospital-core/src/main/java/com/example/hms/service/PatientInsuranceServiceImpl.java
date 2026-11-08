@@ -166,11 +166,11 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             // answers exactly as the missing id does.
             enforcePatientSelfAccess(patient, () -> patientNotFound(req.getPatientId()));
             enforcePatientSelfAccess(insurance.getPatient(), () -> insuranceNotFound(insuranceId));
-            rejectHospitalLinkForPatient(req, locale);
+            rejectHospitalLinkForPatient(req);
         } else {
             UUID hospitalId = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalId, actorUserId, ctx, locale);
-            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalId, locale));
+            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalId));
         }
 
         // Always attach to patient
@@ -273,7 +273,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             insurance.setPatient(patient);
             UUID hospitalId = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalId, actorUserId, ctx, locale);
-            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalId, locale));
+            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalId));
         }
 
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
@@ -287,7 +287,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         ActingContext ctx,
         Locale locale
     ) {
-        validateNaturalKeyParts(req, locale);
+        validateNaturalKeyParts(req);
 
         final UUID patientId = req.getPatientId();
         final String payerCode = req.getPayerCode().trim();
@@ -302,7 +302,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         UUID hospitalIdForStaff = null;
         if (actAsPatient) {
             enforcePatientSelfAccess(patient, () -> patientNotFound(patientId));
-            rejectHospitalLinkForPatient(req, locale);
+            rejectHospitalLinkForPatient(req);
         } else {
             hospitalIdForStaff = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalIdForStaff, actorUserId, ctx, locale);
@@ -312,7 +312,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         applyProviderName(insurance, req.getProviderName(), payerCode);
 
         if (!actAsPatient) {
-            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalIdForStaff, locale));
+            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalIdForStaff));
         }
 
         applyPrimaryFlag(req, actAsPatient, insurance, patient, hospitalIdForStaff);
@@ -358,7 +358,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         }
     }
 
-    private void rejectHospitalLinkForPatient(LinkPatientInsuranceRequestDTO req, Locale locale) {
+    private void rejectHospitalLinkForPatient(LinkPatientInsuranceRequestDTO req) {
         if (req.getHospitalId() != null) {
             throw new com.example.hms.exception.FieldBusinessException("hospitalId", "patient.cannot.link.hospital");
         }
@@ -373,7 +373,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             || roleValidator.isHospitalAdminFromAuthGlobalOnly();
 
         if (hasChosenRole) {
-            roleValidator.validateRoleOrThrow(actorUserId, hospitalId, ctx.roleCode().trim(), locale, messageSource);
+            roleValidator.validateRoleOrThrow(actorUserId, hospitalId, ctx.roleCode().trim());
         } else {
             final boolean hasScopedPermission = roleValidator.canLinkInsurance(actorUserId, hospitalId);
             if (!hasScopedPermission && !jwtGlobalOverride) {
@@ -384,13 +384,13 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         }
     }
 
-    private UserRoleHospitalAssignment resolveStaffAssignment(UUID actorUserId, UUID hospitalId, Locale locale) {
+    private UserRoleHospitalAssignment resolveStaffAssignment(UUID actorUserId, UUID hospitalId) {
         return assignmentRepository
             .findFirstByUser_IdAndHospital_IdAndActiveTrue(actorUserId, hospitalId)
             .orElseThrow(() -> new BusinessException(ASSIGNMENT_REQUIRED_KEY));
     }
 
-    private void validateNaturalKeyParts(LinkPatientInsuranceRequestDTO req, Locale locale) {
+    private void validateNaturalKeyParts(LinkPatientInsuranceRequestDTO req) {
         // QA D1355 class (round 30): the patient, the payer and the policy named in one refusal.
         com.example.hms.exception.RequiredFields.check()
             .requireValue(req == null ? null : req.getPatientId(), "patientId", PATIENT_REQUIRED_KEY)

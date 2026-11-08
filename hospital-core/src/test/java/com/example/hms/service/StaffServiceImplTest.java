@@ -81,8 +81,7 @@ class StaffServiceImplTest {
      */
     private Object previousMessageUtilSource;
 
-    @BeforeEach
-    void routeMessageUtilToTheMock() {
+    private void routeMessageUtilToTheMock() {
         previousMessageUtilSource = org.springframework.test.util.ReflectionTestUtils.getField(
             com.example.hms.utility.MessageUtil.class, "messageSource");
         com.example.hms.utility.MessageUtil.setMessageSource(messageSource);
@@ -93,14 +92,14 @@ class StaffServiceImplTest {
             .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
-    @AfterEach
-    void restoreMessageUtil() {
+    private void restoreMessageUtil() {
         com.example.hms.utility.MessageUtil.setMessageSource(
             (org.springframework.context.MessageSource) previousMessageUtilSource);
     }
 
     @BeforeEach
     void setUp() {
+        routeMessageUtilToTheMock();
         staffId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         locale = Locale.ENGLISH;
@@ -133,6 +132,7 @@ class StaffServiceImplTest {
 
     @AfterEach
     void tearDown() {
+        restoreMessageUtil();
         HospitalContextHolder.clear();
     }
 

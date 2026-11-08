@@ -125,7 +125,7 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         Locale effectiveLocale = determineEffectiveLocale(locale);
         enforceHospitalScopeOnDto(dto);
-        validateDepartmentRequest(dto, effectiveLocale);
+        validateDepartmentRequest(dto);
 
         Hospital hospital = resolveHospitalAndSyncDto(dto);
         ensureDepartmentUniqueness(dto, hospital, effectiveLocale);
@@ -275,7 +275,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         Department department = findDepartmentOrThrow(id);
         enforceHospitalScopeOnEntity(department);
         enforceHospitalScopeOnDto(dto);
-        validateDepartmentRequest(dto, locale);
+        validateDepartmentRequest(dto);
 
         Hospital hospital = resolveHospital(dto);
         dto.setHospitalName(hospital.getName());
@@ -711,7 +711,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     }
 
 
-    private void validateDepartmentRequest(DepartmentRequestDTO dto, Locale locale) {
+    private void validateDepartmentRequest(DepartmentRequestDTO dto) {
         if (dto == null) {
             throw new IllegalArgumentException("Department request cannot be null");
         }

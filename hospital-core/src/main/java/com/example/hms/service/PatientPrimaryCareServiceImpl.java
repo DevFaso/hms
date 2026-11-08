@@ -16,13 +16,11 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -41,7 +39,6 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
     private final UserRoleHospitalAssignmentRepository assignmentRepo;
     private final PatientPrimaryCareMapper mapper;
     private final RoleValidator roleValidator;   // you already have it
-    private final MessageSource messageSource;   // for i18n messages if needed
 
     @Override
     @Transactional
@@ -63,7 +60,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
         }
 
         // Validate role: must be a doctor (or allowed set)
-        roleValidator.validateRoleOrThrow(assignment.getId(), hospital.getId(), "ROLE_DOCTOR", Locale.getDefault(), messageSource);
+        roleValidator.validateRoleOrThrow(assignment.getId(), hospital.getId(), "ROLE_DOCTOR");
 
         // End current PCP for this patient at this hospital, if exists
         pcpRepo.findCurrentByPatientAndHospital(patient.getId(), hospital.getId())
@@ -102,7 +99,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
             if (!a.getHospital().getId().equals(entity.getHospital().getId())) {
                 throw new com.example.hms.exception.FieldBusinessException("assignmentId", "primaryCare.assignmentHospitalMismatch");
             }
-            roleValidator.validateRoleOrThrow(a.getId(), entity.getHospital().getId(), "ROLE_DOCTOR", Locale.getDefault(), messageSource);
+            roleValidator.validateRoleOrThrow(a.getId(), entity.getHospital().getId(), "ROLE_DOCTOR");
             entity.setAssignment(a);
         }
 

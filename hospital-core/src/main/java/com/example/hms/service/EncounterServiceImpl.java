@@ -451,7 +451,7 @@ public class EncounterServiceImpl implements EncounterService {
                 request.getStatus().localizedLabel(locale));
         }
 
-        assertNoDuplicateEncounter(ctx, encounterDate, locale);
+        assertNoDuplicateEncounter(ctx, encounterDate);
 
         Encounter encounter = encounterMapper.mergeEncounter(
             request,
@@ -732,11 +732,11 @@ public class EncounterServiceImpl implements EncounterService {
 
         Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
-        EncounterNote note = resolveAddendumEntry(encounter, noteId, isSuperAdmin, callerHospitalId, locale);
+        EncounterNote note = resolveAddendumEntry(encounter, noteId, isSuperAdmin, callerHospitalId);
 
         NoteAuthor author = resolveSessionNoteAuthor(encounter, request.getAuthorStaffId(),
             request.getAuthorUserId(), request.getAuthorName(), locale);
-        validateAuthorScope(encounter, author.staff(), locale);
+        validateAuthorScope(encounter, author.staff());
 
         EncounterNoteAddendum addendum = EncounterNoteAddendum.builder()
             .note(note)
@@ -979,7 +979,7 @@ public class EncounterServiceImpl implements EncounterService {
      * {@link #loadNoteScoped}); no name means the current entry.
      */
     private EncounterNote resolveAddendumEntry(Encounter encounter, UUID noteId, boolean isSuperAdmin,
-                                               UUID callerHospitalId, Locale locale) {
+                                               UUID callerHospitalId) {
         if (noteId == null) {
             return currentNoteEntry(encounter)
                 .orElseThrow(() -> new BusinessException(NOTE_NOT_FOUND_KEY));
@@ -1069,7 +1069,7 @@ public class EncounterServiceImpl implements EncounterService {
         if (isClosedStatus(statusBefore) && hasExistingNote(encounter)) {
             throw new BusinessException("encounter.note.closedLocked");
         }
-        validateAuthorScope(encounter, author.staff(), locale);
+        validateAuthorScope(encounter, author.staff());
 
         EncounterNote current = currentNoteEntry(encounter).orElse(null);
         // QA D711: on an inpatient stay each POST is the day's progress entry,
@@ -1172,7 +1172,7 @@ public class EncounterServiceImpl implements EncounterService {
             throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
-        ensureStaffHospitalAlignment(staff, hospitalId, locale);
+        ensureStaffHospitalAlignment(staff, hospitalId);
 
         Appointment appointment = findAppointment(request.getAppointmentId());
         UUID departmentId = resolveDepartmentId(request, hospital, locale);
@@ -1230,13 +1230,13 @@ public class EncounterServiceImpl implements EncounterService {
             .orElse(null);
     }
 
-    private void ensureStaffHospitalAlignment(Staff staff, UUID hospitalId, Locale locale) {
+    private void ensureStaffHospitalAlignment(Staff staff, UUID hospitalId) {
         if (staff.getHospital() == null || !hospitalId.equals(staff.getHospital().getId())) {
             throw new BusinessException(MSG_ENCOUNTER_STAFF_HOSPITAL_MISMATCH);
         }
     }
 
-    private void assertNoDuplicateEncounter(EncounterResolution ctx, LocalDateTime encounterDate, Locale locale) {
+    private void assertNoDuplicateEncounter(EncounterResolution ctx, LocalDateTime encounterDate) {
         boolean exists = ctx.appointment() != null
             ? encounterRepository.existsByHospital_IdAndPatient_IdAndAppointment_IdAndEncounterDate(
                 ctx.hospitalId(), ctx.patient().getId(), ctx.appointment().getId(), encounterDate)
@@ -1454,7 +1454,7 @@ public class EncounterServiceImpl implements EncounterService {
             }
             LabOrder order = labOrderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
-            validateArtifactScope(encounter, order.getPatient().getId(), order.getHospital().getId(), locale);
+            validateArtifactScope(encounter, order.getPatient().getId(), order.getHospital().getId());
             note.addLink(EncounterNoteLink.builder()
                 .artifactType(EncounterNoteLinkType.LAB_ORDER)
                 .artifactId(order.getId())
@@ -1482,7 +1482,7 @@ public class EncounterServiceImpl implements EncounterService {
             }
             Prescription prescription = prescriptionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
-            validateArtifactScope(encounter, prescription.getPatient().getId(), prescription.getHospital().getId(), locale);
+            validateArtifactScope(encounter, prescription.getPatient().getId(), prescription.getHospital().getId());
             note.addLink(EncounterNoteLink.builder()
                 .artifactType(EncounterNoteLinkType.PRESCRIPTION)
                 .artifactId(prescription.getId())
@@ -1507,7 +1507,7 @@ public class EncounterServiceImpl implements EncounterService {
             }
             ObgynReferral referral = obgynReferralRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("obgyn.referral.notfound"));
-            validateArtifactScope(encounter, referral.getPatient().getId(), referral.getHospital().getId(), locale);
+            validateArtifactScope(encounter, referral.getPatient().getId(), referral.getHospital().getId());
             note.addLink(EncounterNoteLink.builder()
                 .artifactType(EncounterNoteLinkType.REFERRAL)
                 .artifactId(referral.getId())
@@ -1623,7 +1623,7 @@ public class EncounterServiceImpl implements EncounterService {
                                          Staff defaultStaff,
                                          Locale locale) {
         Staff staff = resolveAuthorStaff(requestedStaffId, defaultStaff);
-        User user = resolveAuthorUser(requestedUserId, staff, locale);
+        User user = resolveAuthorUser(requestedUserId, staff);
         String displayName = trimToNull(requestedDisplayName);
         if (displayName == null && user != null) {
             displayName = joinName(user.getFirstName(), user.getLastName());
@@ -1686,7 +1686,7 @@ public class EncounterServiceImpl implements EncounterService {
             .orElseThrow(() -> new ResourceNotFoundException(MSG_STAFF_NOT_FOUND, requestedStaffId));
     }
 
-    private User resolveAuthorUser(UUID requestedUserId, Staff authorStaff, Locale locale) {
+    private User resolveAuthorUser(UUID requestedUserId, Staff authorStaff) {
         if (requestedUserId != null) {
             return userRepository.findById(requestedUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.notfound", requestedUserId));
@@ -1716,7 +1716,7 @@ public class EncounterServiceImpl implements EncounterService {
         return null;
     }
 
-    private void validateAuthorScope(Encounter encounter, Staff authorStaff, Locale locale) {
+    private void validateAuthorScope(Encounter encounter, Staff authorStaff) {
         if (authorStaff == null) {
             return;
         }
@@ -1728,8 +1728,7 @@ public class EncounterServiceImpl implements EncounterService {
 
     private void validateArtifactScope(Encounter encounter,
                                        UUID artifactPatientId,
-                                       UUID artifactHospitalId,
-                                       Locale locale) {
+                                       UUID artifactHospitalId) {
         if (!Objects.equals(encounter.getPatient().getId(), artifactPatientId)
             || !Objects.equals(encounter.getHospital().getId(), artifactHospitalId)) {
             throw new BusinessException("encounter.note.link.scope");

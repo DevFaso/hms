@@ -193,7 +193,7 @@ public class StaffServiceImpl implements StaffService {
                 .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, dto.getDepartmentName()));
         }
 
-        validateDepartmentHospitalConsistency(department, hospital, locale);
+        validateDepartmentHospitalConsistency(department, hospital);
 
         Role role = null;
         if (dto.getRoleName() != null && !dto.getRoleName().isBlank()) {
@@ -243,7 +243,7 @@ public class StaffServiceImpl implements StaffService {
                 .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, dto.getDepartmentName()));
         }
 
-        validateDepartmentHospitalConsistency(department, hospital, locale);
+        validateDepartmentHospitalConsistency(department, hospital);
 
         Role role = null;
         if (dto.getRoleName() != null && !dto.getRoleName().isBlank()) {
@@ -280,7 +280,7 @@ public class StaffServiceImpl implements StaffService {
         applyActiveTransition(wasActive, existingStaff, user.getId(), hospital.getId(), assignment.getId());
         Staff updatedStaff = staffRepository.save(existingStaff);
 
-        handleHeadOfDepartmentUpdates(dto, existingStaff, department, locale);
+        handleHeadOfDepartmentUpdates(dto, existingStaff, department);
         return staffMapper.toStaffDTO(updatedStaff);
     }
 
@@ -415,7 +415,7 @@ public class StaffServiceImpl implements StaffService {
     }
 
 
-    private void handleHeadOfDepartmentUpdates(StaffRequestDTO dto, Staff existingStaff, Department department, Locale locale) {
+    private void handleHeadOfDepartmentUpdates(StaffRequestDTO dto, Staff existingStaff, Department department) {
         if (dto.getHeadOfDepartment() != null) {
             if (Boolean.TRUE.equals(dto.getHeadOfDepartment())) {
                 if (department == null) {
@@ -428,7 +428,7 @@ public class StaffServiceImpl implements StaffService {
         }
     }
 
-    private void validateDepartmentHospitalConsistency(Department department, Hospital hospital, Locale locale) {
+    private void validateDepartmentHospitalConsistency(Department department, Hospital hospital) {
         if (department != null && !department.getHospital().getId().equals(hospital.getId())) {
             throw BusinessRuleException.ofKey("staff.department.wrongHospital");
         }

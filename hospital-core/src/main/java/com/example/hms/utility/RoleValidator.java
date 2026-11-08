@@ -9,7 +9,6 @@ import com.example.hms.security.PrincipalUserIds;
 import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.MessageSource;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -273,7 +272,7 @@ public class RoleValidator {
     }
     public boolean hasRole(UUID userId, UUID hospitalId, String roleCode) { return hasAnyCode(userId, hospitalId, roleCode); }
 
-    public void validateRoleOrThrow(UUID userId, UUID hospitalId, String roleCode, Locale locale, MessageSource messageSource) {
+    public void validateRoleOrThrow(UUID userId, UUID hospitalId, String roleCode) {
         if (!hasAnyCode(userId, hospitalId, roleCode)) {
             throw new BusinessException("role.notfound", roleCode);
         }
@@ -336,13 +335,13 @@ public class RoleValidator {
         return LAB_ORDERING_ROLE_CODES.contains(bare);
     }
 
-    public void requireLabScientistOrAdmin(UUID userId, UUID hospitalId, Locale locale, MessageSource messageSource) {
+    public void requireLabScientistOrAdmin(UUID userId, UUID hospitalId) {
         if (!(isLabScientist(userId, hospitalId) || isHospitalAdmin(userId, hospitalId))) {
             throw new BusinessException("auth.lab.required");
         }
     }
 
-    public void requireLabStaffOrAdmin(UUID userId, UUID hospitalId, Locale locale, MessageSource messageSource) {
+    public void requireLabStaffOrAdmin(UUID userId, UUID hospitalId) {
         if (!(isLabStaff(userId, hospitalId) || isHospitalAdmin(userId, hospitalId))) {
             throw new BusinessException("auth.lab.staff.required");
         }

@@ -95,8 +95,7 @@ class DepartmentServiceImplTest {
      */
     private Object previousMessageUtilSource;
 
-    @BeforeEach
-    void routeMessageUtilToTheMock() {
+    private void routeMessageUtilToTheMock() {
         previousMessageUtilSource = org.springframework.test.util.ReflectionTestUtils.getField(
             com.example.hms.utility.MessageUtil.class, "messageSource");
         com.example.hms.utility.MessageUtil.setMessageSource(messageSource);
@@ -115,6 +114,7 @@ class DepartmentServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        routeMessageUtilToTheMock();
         // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
         lenient().when(hospitalRepository.findClinicalById(any()))
             .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))

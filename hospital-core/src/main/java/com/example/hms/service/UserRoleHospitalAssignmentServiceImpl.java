@@ -278,14 +278,14 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         enforceRoleScopeConstraints(dto, roleCode, adminRequest);
 
-        Hospital hospital = resolveHospitalHumanAware(dto, role, locale);
+        Hospital hospital = resolveHospitalHumanAware(dto, role);
         if (grant != null) {
             requireGrantAt(grant, hospital, roleCode);
         }
         facilityAssignmentGuard.requireCompatible(roleCode, hospital);
         // QA D789: an archived hospital takes no new role (a 409 before anything is saved).
         FacilityAssignmentGuard.requireOpenForAssignment(hospital);
-        User user = resolveUser(dto, locale);
+        User user = resolveUser(dto);
         facilityAssignmentGuard.requireSingleFacilityKind(user, roleCode, hospital, null);
         checkActiveDoctorConflict(dto, user, role, hospital, locale);
         checkExistingAssignment(user, role, hospital, locale);
@@ -302,7 +302,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // creation has one only when an admin registers (none on
         // self-registration or bootstrap).
         assignment.setRegisteredBy(adminRequest
-            ? requireCallerAccount(locale)
+            ? requireCallerAccount()
             : accountAccess.currentUserId().flatMap(userRepository::findById).orElse(null));
 
         UserRoleHospitalAssignment saved = assignmentRepository.save(assignment);
@@ -325,7 +325,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         return saved;
     }
 
-    private User resolveUser(UserRoleHospitalAssignmentRequestDTO dto, Locale locale) {
+    private User resolveUser(UserRoleHospitalAssignmentRequestDTO dto) {
         if (dto.getUserId() != null) {
             return userRepository.findById(dto.getUserId()).orElseThrow(() ->
                 new ResourceNotFoundException(MSG_USER_NOT_FOUND, dto.getUserId()));
@@ -450,7 +450,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         // Resolved before anything on the row changes: a re-invite with no
         // registrar would leave a row nobody can confirm.
-        User newRegistrar = reinvite ? requireCallerAccount(locale) : null;
+        User newRegistrar = reinvite ? requireCallerAccount() : null;
         boolean wasActive = Boolean.TRUE.equals(target.getActive());
 
         mapper.updateEntity(target, dto, newHospital, newRole);
@@ -507,7 +507,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      *
      * @throws BusinessException when the caller has no resolvable account
      */
-    private User requireCallerAccount(Locale locale) {
+    private User requireCallerAccount() {
         return accountAccess.currentUserId()
             .flatMap(userRepository::findById)
             .orElseThrow(() -> new BusinessException(MSG_ASSIGNMENT_ACTOR_MISMATCH));
@@ -854,7 +854,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         for (UUID hospitalId : hospitalIds) {
             Hospital hospital;
             try {
-                hospital = resolveHospitalHumanAware(buildSingleAssignmentRequest(requestDTO, hospitalId), role, locale);
+                hospital = resolveHospitalHumanAware(buildSingleAssignmentRequest(requestDTO, hospitalId), role);
             } catch (BusinessException | ResourceNotFoundException unresolved) {
                 continue;
             }
@@ -915,7 +915,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         User registrar = assignment.getRegisteredBy();
         // By id, as a re-invite records the registrar (requireCallerAccount):
         // a phone-login registrar's principal name resolves no account.
-        User actor = requireCallerAccount(locale);
+        User actor = requireCallerAccount();
 
         if (registrar == null || registrar.getId() == null || !registrar.getId().equals(actor.getId())) {
             throw new BusinessException(MSG_ASSIGNMENT_ACTOR_MISMATCH);
@@ -1757,10 +1757,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      * Hospital is required unless role is global (ROLE_SUPER_ADMIN).
      */
     private Hospital resolveHospital(UserRoleHospitalAssignmentRequestDTO dto, Role role, Locale locale) {
-        return resolveHospitalHumanAware(dto, role, locale);
+        return resolveHospitalHumanAware(dto, role);
     }
 
-    private Hospital resolveHospitalHumanAware(UserRoleHospitalAssignmentRequestDTO dto, Role role, Locale locale) {
+    private Hospital resolveHospitalHumanAware(UserRoleHospitalAssignmentRequestDTO dto, Role role) {
         if (dto.getHospitalId() != null) {
             return hospitalRepository.findById(dto.getHospitalId()).orElseThrow(() ->
                 new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND, dto.getHospitalId()));

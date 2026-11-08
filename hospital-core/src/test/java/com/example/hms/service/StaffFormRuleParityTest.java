@@ -27,12 +27,12 @@ class StaffFormRuleParityTest {
 
     @Test
     void theSpecializationTitlesAreTheForms() throws IOException {
-        assertThat(StaffServiceImpl.SPECIALTY_JOB_TITLES).isEqualTo(formSet("specialtyTitles"));
+        assertThat(formSet("specialtyTitles")).isEqualTo(StaffServiceImpl.SPECIALTY_JOB_TITLES);
     }
 
     @Test
     void theLicenceTitlesAreTheForms() throws IOException {
-        assertThat(StaffServiceImpl.CLINICAL_JOB_TITLES).isEqualTo(formSet("licencedTitles"));
+        assertThat(formSet("licencedTitles")).isEqualTo(StaffServiceImpl.CLINICAL_JOB_TITLES);
     }
 
     private static Set<String> formSet(String name) throws IOException {
