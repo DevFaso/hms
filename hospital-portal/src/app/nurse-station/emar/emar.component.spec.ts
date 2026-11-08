@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { EmarComponent } from './emar.component';
@@ -425,5 +425,53 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     component['onDoseInput']('500 mg');
 
     expect(component['verification']()).toBe(verified);
+  });
+  it('filters only the dose queue and keeps the selected bedside identity intact', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', {
+      CARE_DASH: {
+        SELECTED_DOSE_HIDDEN: 'Selected {{patient}} · {{medication}} is hidden',
+        CLEAR_SEARCH: 'Clear search',
+      },
+    });
+    translate.use('en');
+    nurseSpy.getMedicationMAR.and.returnValue(
+      of([
+        sampleTask,
+        { ...sampleTask, id: 'task-2', patientId: 'pat-2', patientName: 'Cdx Other' },
+      ]),
+    );
+    fixture.detectChanges();
+    (root().querySelector('[data-testid="emar-task-task-1"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(root().querySelector('[data-testid="emar-selection-hidden"]')).toBeNull();
+    component['onScanInput']('patient', 'cdx-wristband');
+    const selected = component['activeTask']();
+    const search = root().querySelector('.care-search input') as HTMLInputElement;
+    search.value = 'Cdx Other';
+    search.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(root().querySelector('[data-testid="emar-task-task-1"]')).toBeNull();
+    expect(root().querySelector('[data-testid="emar-task-task-2"]')).not.toBeNull();
+    const notice = root().querySelector('[data-testid="emar-selection-hidden"]') as HTMLElement;
+    expect(notice.getAttribute('role')).toBe('status');
+    expect(notice.classList.contains('emar__blocked')).toBeFalse();
+    expect(notice.textContent).toContain(sampleTask.patientName);
+    expect(notice.textContent).toContain(sampleTask.medication);
+    expect(notice.querySelector('button')?.textContent?.trim()).toBe('Clear search');
+    expect(root().querySelector('[data-testid="emar-detail"]')?.textContent).toContain(
+      sampleTask.patientName,
+    );
+    (notice.querySelector('button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(root().querySelector('[data-testid="emar-selection-hidden"]')).toBeNull();
+    expect(
+      root().querySelector('[data-testid="emar-task-task-1"]')?.getAttribute('aria-pressed'),
+    ).toBe('true');
+    expect(component['activeTask']()).toBe(selected);
+    expect(component['patientScan']()).toBe('cdx-wristband');
+    expect(nurseSpy.getMedicationMAR).toHaveBeenCalledTimes(1);
+    expect(nurseSpy.verifyMedication).not.toHaveBeenCalled();
+    expect(nurseSpy.administerMedication).not.toHaveBeenCalled();
   });
 });

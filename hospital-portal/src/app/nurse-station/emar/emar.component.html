@@ -1,5 +1,6 @@
 <section class="emar" data-testid="emar-root">
   <header class="emar__header">
+    <span class="care-eyebrow">{{ 'CARE_DASH.EMAR_EYEBROW' | translate }}</span>
     <h1 class="emar__title">{{ 'EMAR.TITLE' | translate }}</h1>
     <p class="emar__subtitle">
       {{ 'EMAR.SUBTITLE' | translate }}
@@ -26,49 +27,115 @@
       </div>
     }
     @case ('ready') {
+      <section class="care-overview">
+        <div class="care-metrics">
+          <div class="care-metric">
+            <span class="material-symbols-outlined" aria-hidden="true">medication</span>
+            <div>
+              <strong>{{ tasks().length }}</strong
+              ><span>{{ 'CARE_DASH.DOSES_LOADED' | translate }}</span>
+            </div>
+          </div>
+          <div class="care-metric">
+            <span class="material-symbols-outlined" aria-hidden="true">groups</span>
+            <div>
+              <strong>{{ patientCount() }}</strong
+              ><span>{{ 'CARE_DASH.PATIENTS_LOADED' | translate }}</span>
+            </div>
+          </div>
+          <div class="care-metric">
+            <span class="material-symbols-outlined" aria-hidden="true">local_pharmacy</span>
+            <div>
+              <strong>{{ pendingPharmacyCount() }}</strong
+              ><span>{{ 'CARE_DASH.PHARMACY_PENDING' | translate }}</span>
+            </div>
+          </div>
+        </div>
+        <p class="care-scope-note">{{ 'CARE_DASH.LOADED_SCOPE' | translate }}</p>
+      </section>
+
       <div class="emar__layout">
-        <ul class="emar__queue" data-testid="emar-queue">
-          @for (task of tasks(); track task.id) {
-            <li
-              class="emar__queue-item"
-              [class.emar__queue-item--active]="activeTask()?.id === task.id"
-            >
-              <button
-                type="button"
-                class="emar__queue-button"
-                (click)="selectTask(task)"
-                [attr.data-testid]="'emar-task-' + task.id"
+        <section class="emar__queue-workspace">
+          <h2>{{ 'CARE_DASH.DOSE_QUEUE' | translate }}</h2>
+          <div class="care-toolbar">
+            <label class="care-search"
+              ><span class="material-symbols-outlined" aria-hidden="true">search</span
+              ><input
+                type="search"
+                [attr.aria-label]="'CARE_DASH.SEARCH_DOSES' | translate"
+                [placeholder]="'CARE_DASH.SEARCH_DOSES' | translate"
+                [ngModel]="taskSearch()"
+                (ngModelChange)="taskSearch.set($event)" /></label
+            ><span class="care-visible-count">{{
+              'CARE_DASH.VISIBLE'
+                | translate: { shown: visibleTasks().length, total: tasks().length }
+            }}</span>
+            @if (taskSearch()) {
+              <button type="button" class="btn-secondary" (click)="taskSearch.set('')">
+                {{ 'CARE_DASH.CLEAR_SEARCH' | translate }}
+              </button>
+            }
+          </div>
+          @if (visibleTasks().length === 0) {
+            <p class="care-no-matches" role="status">{{ 'CARE_DASH.NO_MATCHES' | translate }}</p>
+          }
+          <ul class="emar__queue" data-testid="emar-queue">
+            @for (task of visibleTasks(); track task.id) {
+              <li
+                class="emar__queue-item"
+                [class.emar__queue-item--active]="activeTask()?.id === task.id"
               >
-                <span class="emar__queue-patient">{{ task.patientName }}</span>
-                <span class="emar__queue-med">{{ task.medication }}</span>
-                <span class="emar__queue-meta">
-                  {{ task.dose }} · {{ task.route }} ·
-                  {{ task.dueTime | serverTime | date: 'HH:mm' }}
-                </span>
-                <!-- Marked in the queue, not only in the detail: a nurse
+                <button
+                  type="button"
+                  class="emar__queue-button"
+                  (click)="selectTask(task)"
+                  [attr.aria-pressed]="activeTask()?.id === task.id"
+                  [attr.data-testid]="'emar-task-' + task.id"
+                >
+                  <span class="emar__queue-patient">{{ task.patientName }}</span>
+                  <span class="emar__queue-med">{{ task.medication }}</span>
+                  <span class="emar__queue-meta">
+                    {{ task.dose }} · {{ task.route }} ·
+                    {{ task.dueTime | serverTime | date: 'HH:mm' }}
+                  </span>
+                  <!-- Marked in the queue, not only in the detail: a nurse
                      planning a round needs to see which doses they cannot give
                      before they walk to the bed. -->
-                @if (task.cdsAdvisories?.length) {
-                  <span
-                    class="emar__queue-chip emar__queue-chip--advisory"
-                    [attr.data-testid]="'emar-advisory-chip-' + task.id"
-                    >{{ 'EMAR.ALLERGY_ADVISORY_CHIP' | translate }}</span
-                  >
-                }
-                @if (task.requiresPharmacistVerification && !task.pharmacistVerified) {
-                  <span
-                    class="emar__queue-chip emar__queue-chip--blocked"
-                    [attr.data-testid]="'emar-pharm-chip-' + task.id"
-                    >{{ 'EMAR.PHARMACIST_PENDING_CHIP' | translate }}</span
-                  >
-                }
-              </button>
-            </li>
-          }
-        </ul>
+                  @if (task.cdsAdvisories?.length) {
+                    <span
+                      class="emar__queue-chip emar__queue-chip--advisory"
+                      [attr.data-testid]="'emar-advisory-chip-' + task.id"
+                      >{{ 'EMAR.ALLERGY_ADVISORY_CHIP' | translate }}</span
+                    >
+                  }
+                  @if (task.requiresPharmacistVerification && !task.pharmacistVerified) {
+                    <span
+                      class="emar__queue-chip emar__queue-chip--blocked"
+                      [attr.data-testid]="'emar-pharm-chip-' + task.id"
+                      >{{ 'EMAR.PHARMACIST_PENDING_CHIP' | translate }}</span
+                    >
+                  }
+                </button>
+              </li>
+            }
+          </ul>
+        </section>
 
         @if (activeTask(); as task) {
           <article class="emar__detail" data-testid="emar-detail">
+            @if (selectedTaskHidden()) {
+              <div class="emar__notice" role="status" data-testid="emar-selection-hidden">
+                <p>
+                  {{
+                    'CARE_DASH.SELECTED_DOSE_HIDDEN'
+                      | translate: { patient: task.patientName, medication: task.medication }
+                  }}
+                </p>
+                <button type="button" class="btn-secondary" (click)="taskSearch.set('')">
+                  {{ 'CARE_DASH.CLEAR_SEARCH' | translate }}
+                </button>
+              </div>
+            }
             <header class="emar__detail-header">
               <div>
                 <h2>{{ task.patientName }}</h2>
