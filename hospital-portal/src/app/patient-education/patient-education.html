@@ -1,6 +1,7 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <span class="care-eyebrow">{{ 'CARE_DASH.EDUCATION_EYEBROW' | translate }}</span>
       <h1 class="page-title">{{ 'EDUCATION.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'EDUCATION.SUBTITLE' | translate }}</p>
     </div>
@@ -20,12 +21,43 @@
     </div>
   </div>
 
+  @if (activeTab() === 'resources') {
+    <section class="care-overview">
+      <div class="care-metrics">
+        <div class="care-metric">
+          <span class="material-symbols-outlined" aria-hidden="true">auto_stories</span>
+          <div>
+            <strong>{{ resourcesLoading() || resourcesError() ? '—' : resources().length }}</strong
+            ><span>{{ 'CARE_DASH.RESOURCES' | translate }}</span>
+          </div>
+        </div>
+        <div class="care-metric">
+          <span class="material-symbols-outlined" aria-hidden="true">category</span>
+          <div>
+            <strong>{{ resourcesLoading() || resourcesError() ? '—' : loadedCategories() }}</strong
+            ><span>{{ 'CARE_DASH.CATEGORIES' | translate }}</span>
+          </div>
+        </div>
+        <div class="care-metric">
+          <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>
+          <div>
+            <strong>{{
+              resourcesLoading() || resourcesError() ? '—' : filteredResources().length
+            }}</strong
+            ><span>{{ 'CARE_DASH.VISIBLE_RESOURCES' | translate }}</span>
+          </div>
+        </div>
+      </div>
+      <p class="care-scope-note">{{ 'CARE_DASH.LOADED_SCOPE' | translate }}</p>
+    </section>
+  }
   <div class="filter-bar">
     <div class="tabs">
       <button
         type="button"
         class="tab-btn"
         [class.active]="activeTab() === 'resources'"
+        [attr.aria-pressed]="activeTab() === 'resources'"
         (click)="setTab('resources')"
       >
         {{ 'EDUCATION.RESOURCES_TAB' | translate }}
@@ -35,6 +67,7 @@
           type="button"
           class="tab-btn"
           [class.active]="activeTab() === 'progress'"
+          [attr.aria-pressed]="activeTab() === 'progress'"
           (click)="setTab('progress')"
         >
           {{ 'EDUCATION.PROGRESS_TAB' | translate }}
@@ -102,7 +135,12 @@
       </div>
     }
     @if (!resourcesLoading() && !resourcesError() && filteredResources().length > 0) {
-      <div class="data-table">
+      <div
+        class="data-table"
+        tabindex="0"
+        role="region"
+        [attr.aria-label]="'EDUCATION.TITLE' | translate"
+      >
         <table>
           <thead>
             <tr>
@@ -215,7 +253,12 @@
       </div>
     }
     @if (progressPatient() && !progressLoading() && progressEntries().length > 0) {
-      <div class="data-table">
+      <div
+        class="data-table"
+        tabindex="0"
+        role="region"
+        [attr.aria-label]="'EDUCATION.TITLE' | translate"
+      >
         <table>
           <thead>
             <tr>

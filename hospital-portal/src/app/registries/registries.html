@@ -1,6 +1,7 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <span class="care-eyebrow">{{ 'CARE_DASH.REGISTRY_EYEBROW' | translate }}</span>
       <h1>{{ 'REGISTRIES.TITLE' | translate }}</h1>
       <p class="subtitle">{{ 'REGISTRIES.SUBTITLE' | translate }}</p>
     </div>
@@ -17,6 +18,32 @@
     </div>
   </div>
 
+  <section class="care-overview">
+    <div class="care-metrics">
+      <div class="care-metric">
+        <span class="material-symbols-outlined" aria-hidden="true">groups</span>
+        <div>
+          <strong>{{ loading() || loadFailed() ? '—' : totalRows() }}</strong
+          ><span>{{ 'CARE_DASH.COHORT_TOTAL' | translate }}</span>
+        </div>
+      </div>
+      <div class="care-metric">
+        <span class="material-symbols-outlined" aria-hidden="true">list_alt</span>
+        <div>
+          <strong>{{ loading() || loadFailed() ? '—' : rows().length }}</strong
+          ><span>{{ 'CARE_DASH.LOADED_ROWS' | translate }}</span>
+        </div>
+      </div>
+      <div class="care-metric">
+        <span class="material-symbols-outlined" aria-hidden="true">event_busy</span>
+        <div>
+          <strong>{{ loading() || loadFailed() ? '—' : overdueCount() }}</strong
+          ><span>{{ 'CARE_DASH.OVERDUE_LOADED' | translate }}</span>
+        </div>
+      </div>
+    </div>
+    <p class="care-scope-note">{{ 'CARE_DASH.LOADED_SCOPE' | translate }}</p>
+  </section>
   <!-- Programme filter. Plain toggle buttons, not the ARIA tab pattern:
        these filter one table rather than switching panels, and half a
        tablist (roles without roving tabindex or arrow keys) reads worse
@@ -69,6 +96,27 @@
     }
   </div>
 
+  <div class="care-toolbar">
+    <label class="care-search"
+      ><span class="material-symbols-outlined" aria-hidden="true">search</span
+      ><input
+        type="search"
+        [attr.aria-label]="'CARE_DASH.SEARCH_PATIENTS' | translate"
+        [placeholder]="'CARE_DASH.SEARCH_PATIENTS' | translate"
+        [ngModel]="patientSearch()"
+        (ngModelChange)="patientSearch.set($event)" /></label
+    ><span class="care-visible-count">{{
+      'CARE_DASH.VISIBLE' | translate: { shown: visibleRows().length, total: rows().length }
+    }}</span>
+    @if (patientSearch()) {
+      <button type="button" class="btn-secondary" (click)="patientSearch.set('')">
+        {{ 'COMMON.CLEAR' | translate }}
+      </button>
+    }
+  </div>
+  @if (!loading() && !loadFailed() && rows().length > 0 && visibleRows().length === 0) {
+    <div class="care-no-matches" role="status">{{ 'CARE_DASH.NO_MATCHES' | translate }}</div>
+  }
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
@@ -99,7 +147,12 @@
         {{ 'REGISTRIES.SHOWING_FIRST' | translate: { shown: rows().length, total: totalRows() } }}
       </p>
     }
-    <div class="table-wrap">
+    <div
+      class="table-wrap"
+      tabindex="0"
+      role="region"
+      [attr.aria-label]="'REGISTRIES.TITLE' | translate"
+    >
       <table class="registry-table">
         <thead>
           <tr>
@@ -113,7 +166,7 @@
           </tr>
         </thead>
         <tbody>
-          @for (row of rows(); track row.id) {
+          @for (row of visibleRows(); track row.id) {
             <tr [class.overdue-row]="row.overdueDays > 0">
               <td>
                 <div class="patient-cell">

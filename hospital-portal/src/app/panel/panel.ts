@@ -87,6 +87,18 @@ export class PanelComponent implements OnInit {
 
   /* ── admin overview ── */
   overviewRows = signal<PanelOverviewRow[]>([]);
+  readonly providerSearch = signal('');
+  readonly visibleOverviewRows = computed(() => {
+    const term = this.providerSearch().trim().toLocaleLowerCase();
+    return this.overviewRows().filter(
+      (row) => !term || row.providerName?.toLocaleLowerCase().includes(term),
+    );
+  });
+  readonly loadedProviders = computed(
+    () => new Set(this.overviewRows().map((row) => row.providerStaffId)).size,
+  );
+  overviewLoading = signal(false);
+  myPanelFailed = signal(false);
   overviewFailed = signal(false);
   drilldownProvider = signal<PanelOverviewRow | null>(null);
   drilldownRows = signal<PanelAssignment[]>([]);
@@ -128,6 +140,7 @@ export class PanelComponent implements OnInit {
 
   loadMyPanel(): void {
     this.myPanelLoading.set(true);
+    this.myPanelFailed.set(false);
     this.panelService.myPanel(0, PanelComponent.PAGE_SIZE).subscribe({
       next: (page) => {
         this.myPanelLoading.set(false);
@@ -142,6 +155,7 @@ export class PanelComponent implements OnInit {
         if (err.status === 400) {
           this.noStaffProfile.set(true);
         } else {
+          this.myPanelFailed.set(true);
           this.toast.error(this.translate.instant('PANEL.LOAD_FAILED'));
         }
       },
@@ -149,14 +163,19 @@ export class PanelComponent implements OnInit {
   }
 
   loadOverview(): void {
+    this.overviewLoading.set(true);
     this.panelService.overview().subscribe({
       next: (rows) => {
+        this.overviewLoading.set(false);
         this.overviewRows.set(rows);
         this.overviewFailed.set(false);
       },
       // Unavailable, never "no panels": an outage must not read as an
       // empty hospital (same stance as the registries counts).
-      error: () => this.overviewFailed.set(true),
+      error: () => {
+        this.overviewLoading.set(false);
+        this.overviewFailed.set(true);
+      },
     });
   }
 

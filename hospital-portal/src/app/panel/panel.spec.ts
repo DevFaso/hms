@@ -167,4 +167,24 @@ describe('PanelComponent', () => {
     expect(panelService.myPanel).toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalled();
   });
+  it('distinguishes a personal-panel outage from an empty panel', () => {
+    panelService.myPanel.and.returnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
+    fixture.detectChanges();
+    expect(component.myPanelFailed()).toBeTrue();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).not.toBeNull();
+    expect(component.noStaffProfile()).toBeFalse();
+  });
+  it('filters the provider overview locally while preserving its source rows', () => {
+    panelService.overview.and.returnValue(
+      of([
+        { providerStaffId: 's1', providerName: 'Cdx Example', panelRole: 'CHW', activeCount: 3 },
+      ]),
+    );
+    fixture.detectChanges();
+    component.providerSearch.set('missing');
+    expect(component.visibleOverviewRows().length).toBe(0);
+    expect(component.overviewRows().length).toBe(1);
+    expect(component.loadedProviders()).toBe(1);
+    expect(panelService.overview).toHaveBeenCalledTimes(1);
+  });
 });

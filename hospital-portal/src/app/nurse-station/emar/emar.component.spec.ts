@@ -426,4 +426,21 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
 
     expect(component['verification']()).toBe(verified);
   });
+  it('filters only the dose queue and keeps the selected bedside identity intact', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
+    fixture.detectChanges();
+    (root().querySelector('[data-testid="emar-task-task-1"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const search = root().querySelector('.care-search input') as HTMLInputElement;
+    search.value = 'cdx-no-match';
+    search.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(root().querySelector('[data-testid="emar-task-task-1"]')).toBeNull();
+    expect(root().querySelector('[data-testid="emar-detail"]')?.textContent).toContain(
+      sampleTask.patientName,
+    );
+    expect(nurseSpy.getMedicationMAR).toHaveBeenCalledTimes(1);
+    expect(nurseSpy.verifyMedication).not.toHaveBeenCalled();
+    expect(nurseSpy.administerMedication).not.toHaveBeenCalled();
+  });
 });

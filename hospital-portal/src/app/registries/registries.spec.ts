@@ -294,4 +294,16 @@ describe('RegistriesComponent', () => {
 
     expect(toast.error).toHaveBeenCalledWith('The patient is already enrolled in this programme.');
   });
+  it('searches loaded identities without changing cohort totals or fetching again', () => {
+    registryService.registry.and.returnValue(of(page([enrollment()])));
+    fixture.detectChanges();
+    const reads = registryService.registry.calls.count();
+    const total = component.totalRows();
+    component.patientSearch.set('MRN-1');
+    expect(component.visibleRows().length).toBe(1);
+    component.patientSearch.set('cdx-no-match');
+    expect(component.visibleRows().length).toBe(0);
+    expect(component.totalRows()).toBe(total);
+    expect(registryService.registry.calls.count()).toBe(reads);
+  });
 });
