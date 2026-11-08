@@ -1,3 +1,4 @@
+@use '../shared/styles/workspace-dashboard';
 @use '../shared/styles/page-common';
 
 /* ── Page Header with Refresh ─────────────────────────────── */
@@ -212,7 +213,7 @@
 }
 
 .overdue-row {
-  background: #fef2f2 !important;
+  background: #fff;
 }
 .cell-primary {
   font-weight: 600;
@@ -1361,4 +1362,276 @@
   display: block;
   font-size: 0.8125rem;
   color: var(--text-secondary, #4b5563);
+}
+
+@include workspace-dashboard.layout;
+.nurse-dashboard {
+  max-width: none;
+  width: 100%;
+  padding: 28px 32px;
+  box-sizing: border-box;
+  min-width: 0;
+}
+.page-header {
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.page-title {
+  font-size: clamp(26px, 2vw, 32px);
+  letter-spacing: -0.04em;
+}
+.header-actions {
+  flex-wrap: wrap;
+}
+.refresh-btn {
+  border-radius: 9px;
+  width: auto;
+  height: 42px;
+  padding: 10px 14px;
+  gap: 8px;
+  font-size: 13px;
+  color: #172d43;
+}
+.care-overview {
+  padding: 22px;
+}
+.overview-heading {
+  margin-bottom: 16px;
+}
+.filter-bar {
+  margin-bottom: 18px;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.filter-btn {
+  border-radius: 7px;
+  padding: 7px 12px;
+  font-size: 11px;
+}
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 0;
+}
+.summary-card {
+  padding: 20px;
+  min-width: 0;
+  border: 1px solid #e1e9ef;
+  border-radius: 12px;
+  background: #f7fafc;
+  gap: 14px;
+}
+.summary-card:first-child {
+  background: #102e3b;
+  border-color: #102e3b;
+}
+.summary-card:first-child .card-value {
+  color: #fff;
+}
+.summary-card:first-child .card-label {
+  color: #d0e1e8;
+}
+.summary-card:first-child .card-icon {
+  background: #2b4d58;
+  color: #fff;
+}
+.card-value {
+  color: #172d43;
+  font-size: 29px;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+  font-weight: 750;
+}
+.card-label {
+  color: #52667b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.card-icon {
+  width: 42px;
+  height: 44px;
+  border-radius: 10px;
+  padding: 9px;
+  background: #e3f2ed;
+  color: #08685b;
+}
+.summary-card.overdue {
+  background: #fff4f5;
+  border-color: #eed0d5;
+}
+.summary-card.overdue .card-value {
+  color: #a32132;
+}
+.workspace-heading {
+  padding: 22px;
+}
+.workspace-heading > .material-symbols-outlined {
+  padding: 10px;
+  color: #08685b;
+  background: #e7f4ef;
+  border-radius: 10px;
+}
+.section-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 0 22px 18px;
+  margin: 0;
+  border-bottom: 1px solid #e5edf2;
+}
+.section-tabs .tab-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #dce5ec;
+  color: #52667b;
+}
+.section-tabs .tab-btn.active {
+  color: #075d52;
+  background: #e7f4ef;
+  border-color: #8fc4b3;
+}
+.overdue-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #52667b;
+  font-size: 12px;
+}
+.overdue-toggle input {
+  accent-color: #0b7061;
+  width: 16px;
+  height: 16px;
+}
+.clear-task-filters {
+  border: 1px solid #cbd9e2;
+  border-radius: 8px;
+  padding: 10px 13px;
+  background: #fff;
+  color: #172d43;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.station-layout {
+  padding: 0;
+  min-width: 0;
+}
+.main-content {
+  min-width: 0;
+}
+.data-table {
+  border: 0;
+  border-radius: 0 0 16px 16px;
+  max-height: 65vh;
+  overflow: auto;
+  margin-bottom: 0;
+}
+.data-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.data-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f5f8fb;
+  padding: 15px 20px;
+  color: #52667b;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.data-table td {
+  padding: 18px 20px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #172d43;
+  vertical-align: top;
+}
+.data-table .overdue-row {
+  background: #fff;
+}
+.data-table .overdue-row td:first-child {
+  box-shadow: inset 3px 0 #ce7781;
+}
+.data-table .data-row:hover {
+  background: #f6fbf9;
+}
+.patient-link {
+  color: #08685b;
+  font-weight: 650;
+}
+.action-btn {
+  border-radius: 7px;
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  background: #eef8f3;
+  color: #075d52;
+  border: 1px solid #c3ddd1;
+}
+.action-btn .material-symbols-outlined {
+  font-size: 17px;
+}
+.badge-overdue {
+  color: #a32132;
+  background: #fff0f1;
+  font-size: 10px;
+}
+.badge-pending {
+  color: #805012;
+  background: #fff4d8;
+  font-size: 10px;
+}
+@media (max-width: 1200px) {
+  .summary-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 800px) {
+  .nurse-dashboard {
+    padding: 24px;
+  }
+}
+@media (max-width: 600px) {
+  .nurse-dashboard {
+    padding: 18px 12px;
+  }
+  .care-overview {
+    padding: 16px;
+  }
+  .summary-cards {
+    gap: 9px;
+  }
+  .summary-card {
+    padding: 15px 12px;
+    gap: 8px;
+  }
+  .card-icon {
+    display: none;
+  }
+  .card-value {
+    font-size: 25px;
+  }
+  .workspace-heading {
+    padding: 16px;
+  }
+  .section-tabs {
+    padding: 0 16px 16px;
+  }
+  .data-table table {
+    min-width: 780px;
+  }
+}
+
+.last-refreshed {
+  color: #52667b;
 }

@@ -79,7 +79,7 @@ const PAST_ALLOWED = new Map([
     'the start of a preferred window: a window opened earlier still offers its later days; its end is bounded by rule 1 and checked on submit',
   ],
   [
-    'reception/empi-candidates-panel/empi-candidates-panel.component.ts::empi-dob',
+    'reception/empi-candidates-panel/empi-candidates-panel.component.html::empi-dob',
     'a date of birth searched for: always in the past',
   ],
 ]);

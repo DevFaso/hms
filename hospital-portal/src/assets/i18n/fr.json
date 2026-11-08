@@ -3141,6 +3141,27 @@
       "MERGED": "Identités fusionnées — {{name}} est conservé",
       "MERGE_FAILED": "Échec de la fusion des identités",
       "NEW_PATIENT_HANDOFF": "Transfert vers le formulaire nouveau patient (à venir)."
+    },
+    "WORKSPACE": {
+      "EYEBROW": "IDENTITÉ DU PATIENT",
+      "IDENTITY": "Rechercher une identité",
+      "IDENTITY_HINT": "Renseignez les informations connues. Au moins un champ est requis.",
+      "GUIDE_TITLE": "Une personne. Le bon dossier.",
+      "GUIDE_TEXT": "Comparez les informations disponibles avant d’ouvrir un dossier patient ou d’en créer un nouveau.",
+      "SCORE_HINT": "Le score aide à comparer ; il ne confirme pas automatiquement l’identité.",
+      "CANDIDATES": "Comparer les candidats",
+      "CANDIDATES_HINT": "Vérifiez chaque champ avant de confirmer une correspondance.",
+      "RESULT_COUNT": "Candidats : {{count}}",
+      "READY_TITLE": "Prêt pour la recherche",
+      "READY_HINT": "Renseignez les informations d’identité ci-dessus pour trouver les dossiers existants possibles.",
+      "AGREES": "Concordance",
+      "NOT_AGREED": "Non indiqué comme concordant",
+      "MERGE_TITLE": "Fusion administrative"
+    },
+    "SEX": {
+      "F": "Féminin",
+      "M": "Masculin",
+      "X": "X"
     }
   },
   "ENCOUNTERS": {
@@ -4726,7 +4747,19 @@
     },
     "PAIN_SCORE": "Douleur (0-10)",
     "MAR_REASON_LABEL": "Motif",
-    "CARE_NOTE_EMPTY": "Rédigez la note : une note de soins vide n'est pas enregistrée."
+    "CARE_NOTE_EMPTY": "Rédigez la note : une note de soins vide n'est pas enregistrée.",
+    "WORKSPACE": "Espace de l’équipe soignante",
+    "PATIENT_SCOPE": "Filtre d’affectation des patients",
+    "WORKLOAD": "Vue d’ensemble des soins",
+    "OVERVIEW_HELP": "La recherche et le filtre des retards ne modifient pas ces indicateurs.",
+    "WORKLIST_HELP": "Consultez les soins prévus et ouvrez l’action appropriée.",
+    "WORKLISTS": "Files de travail des soins",
+    "SEARCH_TASKS": "Rechercher un patient ou un médicament",
+    "OVERDUE_ONLY": "En retard uniquement",
+    "CLEAR_FILTERS": "Effacer les filtres",
+    "NO_MATCHES": "Aucune tâche ne correspond à ces filtres",
+    "WORKLIST_UNAVAILABLE": "Cette file de soins est indisponible. Actualisez pour réessayer.",
+    "MEDS_OVERDUE_METRIC": "Médicaments en retard"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Vos capacités",
@@ -8153,7 +8186,20 @@
     "PAYMENT_EXCEEDS_WITH_PENDING": "Le patient a déclaré {{pending}} sur ce solde, en attente de confirmation : saisissez au plus {{max}}.",
     "COPAY_AMOUNT_NEGATIVE": "La participation ne peut pas être négative.",
     "WINDOW_FROM": "À partir du {{date}}",
-    "WINDOW_UNTIL": "Jusqu'au {{date}}"
+    "WINDOW_UNTIL": "Jusqu'au {{date}}",
+    "WORKSPACE": "Pilotage de l’accueil",
+    "WORKSPACE_HELP": "Coordonnez les arrivées, les rendez-vous et le suivi administratif.",
+    "DAILY_OVERVIEW": "Vue d’ensemble de la journée",
+    "WORKLISTS": "Files de travail de la réception",
+    "STATUS_FILTERS": "Filtrer la file par statut",
+    "SEARCH_QUEUE": "Rechercher patient, dossier, soignant ou motif",
+    "ATTENTION_FILTER": "Alertes administratives",
+    "ALL_ALERTS": "Tous les dossiers",
+    "CLEAR_FILTERS": "Effacer les filtres",
+    "NO_MATCHES": "Aucun patient ne correspond à ces filtres",
+    "VISIBLE_QUEUE": "Affichées : {{shown}} / {{loaded}} entrées chargées",
+    "SUMMARY_UNAVAILABLE": "La synthèse de la journée est indisponible. Actualisez pour réessayer.",
+    "PANEL_UNAVAILABLE": "Cette file de travail est indisponible. Réessayez."
   },
   "REFERRALS": {
     "ACCEPTED": "Acceptée",
@@ -13052,5 +13098,10 @@
     "FAILED": "La décision n’a pas pu être enregistrée.",
     "HELD_FLAG": "Retenue pour revue",
     "ASSESSMENT_DUE_FLAG": "Un décès enregistré a été contesté pendant cette transfusion : non arrêtée, évaluation à faire. Consignez-la au dossier."
+  },
+  "CHUNK_RECOVERY": {
+    "TITLE": "Impossible de charger cette page",
+    "MESSAGE": "Un fichier nécessaire à l’application est indisponible. Rechargez pour essayer la version actuelle. Si le problème persiste, contactez le support.",
+    "RELOAD": "Recharger la page"
   }
 }

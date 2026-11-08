@@ -1,7 +1,8 @@
-<div class="page-container">
+<div class="page-container nurse-dashboard">
   <!-- ── Header with Refresh ──────────────────────────────── -->
   <div class="page-header">
     <div>
+      <p class="dashboard-eyebrow">{{ 'NURSE.WORKSPACE' | translate }}</p>
       <h1 class="page-title">{{ 'NURSE.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'NURSE.SUBTITLE' | translate }}</p>
     </div>
@@ -18,1151 +19,1337 @@
         [title]="'COMMON.REFRESH' | translate"
         [attr.aria-label]="'COMMON.REFRESH' | translate"
       >
-        <span class="material-symbols-outlined">refresh</span>
+        <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+        {{ 'COMMON.REFRESH' | translate }}
       </button>
     </div>
   </div>
 
-  <!-- ── Filter Bar ───────────────────────────────────────── -->
-  <div class="filter-bar">
-    <button class="filter-btn" [class.active]="filterMode() === 'me'" (click)="setFilter('me')">
-      {{ 'NURSE.MY_PATIENTS' | translate }}
-    </button>
-    <button class="filter-btn" [class.active]="filterMode() === 'unit'" (click)="setFilter('unit')">
-      {{ 'NURSE.MY_UNIT' | translate }}
-    </button>
-    <button class="filter-btn" [class.active]="filterMode() === 'all'" (click)="setFilter('all')">
-      {{ 'COMMON.ALL' | translate }}
-    </button>
-  </div>
-
-  <!-- ── Summary Cards (backed by summary endpoint) ──────── -->
-  <div class="summary-cards">
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon vitals">monitor_heart</span>
-      <div class="card-info">
-        <span class="card-value">{{ summary()?.vitalsDue ?? vitals().length }}</span>
-        <span class="card-label">{{ 'NURSE.VITALS_DUE' | translate }}</span>
+  <section class="care-overview">
+    <div class="overview-heading">
+      <div>
+        <h2>{{ 'NURSE.WORKLOAD' | translate }}</h2>
+        <p>{{ 'NURSE.OVERVIEW_HELP' | translate }}</p>
       </div>
     </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon meds">medication</span>
-      <div class="card-info">
-        <span class="card-value">{{ medsDueCount() }}</span>
-        <span class="card-label">{{ 'NURSE.MEDICATIONS_DUE' | translate }}</span>
-        @if (medsAsNeededCount() > 0) {
-          {{ ' '
-          }}<span class="card-hint" data-testid="meds-as-needed-hint">{{
-            'NURSE.MEDICATIONS_AS_NEEDED_HINT' | translate: { count: medsAsNeededCount() }
+    <!-- ── Filter Bar ───────────────────────────────────────── -->
+    <div class="filter-bar" role="group" [attr.aria-label]="'NURSE.PATIENT_SCOPE' | translate">
+      <button
+        class="filter-btn"
+        [class.active]="filterMode() === 'me'"
+        [attr.aria-pressed]="filterMode() === 'me'"
+        (click)="setFilter('me')"
+      >
+        {{ 'NURSE.MY_PATIENTS' | translate }}
+      </button>
+      <button
+        class="filter-btn"
+        [class.active]="filterMode() === 'unit'"
+        [attr.aria-pressed]="filterMode() === 'unit'"
+        (click)="setFilter('unit')"
+      >
+        {{ 'NURSE.MY_UNIT' | translate }}
+      </button>
+      <button
+        class="filter-btn"
+        [class.active]="filterMode() === 'all'"
+        [attr.aria-pressed]="filterMode() === 'all'"
+        (click)="setFilter('all')"
+      >
+        {{ 'COMMON.ALL' | translate }}
+      </button>
+    </div>
+
+    <!-- ── Summary Cards (backed by summary endpoint) ──────── -->
+    <div class="summary-cards">
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon vitals">monitor_heart</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            (loading() && !lastRefreshed()) || (vitalsFailed() && !summary())
+              ? '—'
+              : (summary()?.vitalsDue ?? vitals().length)
           }}</span>
-        }
+          <span class="card-label">{{ 'NURSE.VITALS_DUE' | translate }}</span>
+        </div>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon meds">medication</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            (loading() && !lastRefreshed()) || (medicationsFailed() && !summary())
+              ? '—'
+              : medsDueCount()
+          }}</span>
+          <span class="card-label">{{ 'NURSE.MEDICATIONS_DUE' | translate }}</span>
+          @if (medsAsNeededCount() > 0) {
+            {{ ' '
+            }}<span class="card-hint" data-testid="meds-as-needed-hint">{{
+              'NURSE.MEDICATIONS_AS_NEEDED_HINT' | translate: { count: medsAsNeededCount() }
+            }}</span>
+          }
+        </div>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon orders">assignment</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            (loading() && !lastRefreshed()) || (ordersFailed() && !summary())
+              ? '—'
+              : (summary()?.ordersPending ?? orders().length)
+          }}</span>
+          <span class="card-label">{{ 'NURSE.ORDERS' | translate }}</span>
+        </div>
+      </div>
+      <div class="summary-card" [class.overdue]="medsOverdueCount() > 0">
+        <span class="material-symbols-outlined card-icon overdue-icon">warning</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            (loading() && !lastRefreshed()) || (medicationsFailed() && !summary())
+              ? '—'
+              : medsOverdueCount()
+          }}</span>
+          <span class="card-label">{{ 'NURSE.MEDICATIONS_OVERDUE' | translate }}</span>
+        </div>
       </div>
     </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon orders">assignment</span>
-      <div class="card-info">
-        <span class="card-value">{{ summary()?.ordersPending ?? orders().length }}</span>
-        <span class="card-label">{{ 'NURSE.ORDERS' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card overdue">
-      <span class="material-symbols-outlined card-icon overdue-icon">warning</span>
-      <div class="card-info">
-        <span class="card-value">{{ medsOverdueCount() }}</span>
-        <span class="card-label">{{ 'NURSE.MEDICATIONS_OVERDUE' | translate }}</span>
-      </div>
-    </div>
-  </div>
 
-  <!-- QA D769: the triage queue is everyone's job, so it shows on every tab and
+    <!-- QA D769: the triage queue is everyone's job, so it shows on every tab and
        under every filter ("Mes patients" included): a patient just checked in
        has no nurse yet, so no per-nurse list could ever hold them. -->
-  @if (!loading() && canTriage() && awaitingTriage().length > 0) {
-    <section class="awaiting-triage" data-testid="awaiting-triage">
-      <h3>{{ 'NURSE.AWAITING_TRIAGE' | translate }} ({{ awaitingTriage().length }})</h3>
-      <div class="workboard-grid">
-        @for (e of awaitingTriage(); track e.id) {
-          <div class="workboard-card">
-            <div class="workboard-card-header">
-              <span class="patient-name">{{ e.patientName }}</span>
-            </div>
-            <div class="workboard-card-meta">
-              <span class="meta-item">
-                <span class="material-symbols-outlined">schedule</span>
-                <!-- QA D1039: the arrival time, never the visit day's midnight (00:00). -->
-                {{ waitStart(e) | serverTime | date: 'shortTime' }}
-              </span>
-            </div>
-            <div class="workboard-card-actions">
-              <button
-                class="action-btn action-triage"
-                data-testid="awaiting-triage-open"
-                (click)="openTriageForEncounter(e)"
-                [title]="'TRIAGE.TITLE' | translate"
-              >
-                <span class="material-symbols-outlined">emergency</span>
-                {{ 'TRIAGE.TITLE' | translate }}
-              </button>
-              <!-- QA D954: a patient who leaves before being seen is closed here,
-                   with a reason, instead of staying in the queue (QA D1108: the
-                   one never-seen rule, core/encounter-start). -->
-              @if (isNeverSeenVisit(e.status)) {
+    @if (!loading() && canTriage() && awaitingTriage().length > 0) {
+      <section class="awaiting-triage" data-testid="awaiting-triage">
+        <h3>{{ 'NURSE.AWAITING_TRIAGE' | translate }} ({{ awaitingTriage().length }})</h3>
+        <div class="workboard-grid">
+          @for (e of awaitingTriage(); track e.id) {
+            <div class="workboard-card">
+              <div class="workboard-card-header">
+                <span class="patient-name">{{ e.patientName }}</span>
+              </div>
+              <div class="workboard-card-meta">
+                <span class="meta-item">
+                  <span class="material-symbols-outlined">schedule</span>
+                  <!-- QA D1039: the arrival time, never the visit day's midnight (00:00). -->
+                  {{ waitStart(e) | serverTime | date: 'shortTime' }}
+                </span>
+              </div>
+              <div class="workboard-card-actions">
                 <button
-                  class="action-btn action-lwbs"
-                  data-testid="awaiting-triage-lwbs"
-                  (click)="openCloseUnseen(e)"
-                  [title]="'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate"
+                  class="action-btn action-triage"
+                  data-testid="awaiting-triage-open"
+                  (click)="openTriageForEncounter(e)"
+                  [title]="'TRIAGE.TITLE' | translate"
                 >
-                  <span class="material-symbols-outlined" aria-hidden="true">directions_walk</span>
-                  {{ 'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate }}
+                  <span class="material-symbols-outlined">emergency</span>
+                  {{ 'TRIAGE.TITLE' | translate }}
                 </button>
-              }
+                <!-- QA D954: a patient who leaves before being seen is closed here,
+                     with a reason, instead of staying in the queue (QA D1108: the
+                     one never-seen rule, core/encounter-start). -->
+                @if (isNeverSeenVisit(e.status)) {
+                  <button
+                    class="action-btn action-lwbs"
+                    data-testid="awaiting-triage-lwbs"
+                    (click)="openCloseUnseen(e)"
+                    [title]="'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate"
+                  >
+                    <span class="material-symbols-outlined" aria-hidden="true"
+                      >directions_walk</span
+                    >
+                    {{ 'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate }}
+                  </button>
+                }
+              </div>
             </div>
-          </div>
+          }
+        </div>
+      </section>
+    }
+
+    <!-- ── Section Tabs ──────────────────────────────── -->
+  </section>
+  <section class="care-workspace">
+    <div class="workspace-heading">
+      <div>
+        <h2>{{ sectionLabels[activeSection()] | translate }}</h2>
+        <p>{{ 'NURSE.WORKLIST_HELP' | translate }}</p>
+      </div>
+      <span class="material-symbols-outlined" aria-hidden="true">clinical_notes</span>
+    </div>
+    <div
+      class="section-tabs"
+      role="group"
+      data-focus-place="nurse-sections"
+      [attr.aria-label]="'NURSE.WORKLISTS' | translate"
+    >
+      <button
+        class="tab-btn"
+        [class.active]="activeSection() === 'vitals'"
+        [attr.aria-pressed]="activeSection() === 'vitals'"
+        (click)="setSection('vitals')"
+        [title]="'NURSE.VITALS_DUE' | translate"
+      >
+        {{ 'NURSE.VITALS_DUE' | translate }}
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeSection() === 'medications'"
+        [attr.aria-pressed]="activeSection() === 'medications'"
+        (click)="setSection('medications')"
+        [title]="'NURSE.MEDICATION_MAR' | translate"
+      >
+        {{ 'NURSE.MEDICATION_MAR' | translate }}
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeSection() === 'orders'"
+        [attr.aria-pressed]="activeSection() === 'orders'"
+        (click)="setSection('orders')"
+        [title]="'NURSE.ORDERS' | translate"
+      >
+        {{ 'NURSE.ORDERS' | translate }}
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeSection() === 'handoffs'"
+        [attr.aria-pressed]="activeSection() === 'handoffs'"
+        (click)="setSection('handoffs')"
+        [title]="'NURSE.HANDOFFS' | translate"
+      >
+        {{ 'NURSE.HANDOFFS' | translate }}
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeSection() === 'workboard'"
+        [attr.aria-pressed]="activeSection() === 'workboard'"
+        (click)="setSection('workboard')"
+        [title]="'NURSE.WORKBOARD' | translate"
+      >
+        {{ 'NURSE.WORKBOARD' | translate }}
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeSection() === 'flowboard'"
+        [attr.aria-pressed]="activeSection() === 'flowboard'"
+        (click)="setSection('flowboard')"
+        [title]="'NURSE.FLOW_BOARD' | translate"
+      >
+        {{ 'NURSE.FLOW_BOARD' | translate }}
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeSection() === 'admissions'"
+        [attr.aria-pressed]="activeSection() === 'admissions'"
+        (click)="setSection('admissions')"
+        [title]="'NURSE.ADMISSIONS' | translate"
+      >
+        {{ 'NURSE.ADMISSIONS' | translate }}
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeSection() === 'tasks'"
+        [attr.aria-pressed]="activeSection() === 'tasks'"
+        (click)="setSection('tasks')"
+        [title]="'NURSE.TASK_BOARD' | translate"
+      >
+        {{ 'NURSE.TASK_BOARD' | translate }}
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeSection() === 'inbox'"
+        [attr.aria-pressed]="activeSection() === 'inbox'"
+        (click)="setSection('inbox')"
+        [title]="'NURSE.INBOX' | translate"
+      >
+        {{ 'NURSE.INBOX' | translate }}
+        @if (inboxUnreadCount() > 0) {
+          <span class="badge-count">{{ inboxUnreadCount() }}</span>
+        }
+      </button>
+    </div>
+    @if (taskListSection()) {
+      <div class="task-toolbar">
+        <label class="task-search"
+          ><span class="material-symbols-outlined" aria-hidden="true">search</span
+          ><input
+            type="search"
+            [attr.aria-label]="'NURSE.SEARCH_TASKS' | translate"
+            [placeholder]="'NURSE.SEARCH_TASKS' | translate"
+            [ngModel]="searchTerm()"
+            (ngModelChange)="searchTerm.set($event)"
+        /></label>
+        @if (activeSection() !== 'orders') {
+          <label class="overdue-toggle"
+            ><input
+              type="checkbox"
+              [ngModel]="overdueOnly()"
+              (ngModelChange)="overdueOnly.set($event)"
+            />{{ 'NURSE.OVERDUE_ONLY' | translate }}</label
+          >
+        }
+        @if (hasTaskFilters()) {
+          <button type="button" class="clear-task-filters" (click)="clearTaskFilters()">
+            {{ 'NURSE.CLEAR_FILTERS' | translate }}
+          </button>
         }
       </div>
-    </section>
-  }
+    }
+    <div class="station-layout" [class.no-sidebar]="announcements().length === 0">
+      <div class="main-content">
+        @if (loading()) {
+          <div class="loading-state">
+            <div class="spinner"></div>
+            <p>{{ 'NURSE.LOADING_TASKS' | translate }}</p>
+          </div>
+        }
 
-  <!-- ── Section Tabs ──────────────────────────────── -->
-  <div class="section-tabs" data-focus-place="nurse-sections">
-    <button
-      class="tab-btn"
-      [class.active]="activeSection() === 'vitals'"
-      (click)="setSection('vitals')"
-      [title]="'NURSE.VITALS_DUE' | translate"
-    >
-      {{ 'NURSE.VITALS_DUE' | translate }}
-    </button>
-    <button
-      class="tab-btn"
-      [class.active]="activeSection() === 'medications'"
-      (click)="setSection('medications')"
-      [title]="'NURSE.MEDICATION_MAR' | translate"
-    >
-      {{ 'NURSE.MEDICATION_MAR' | translate }}
-    </button>
-    <button
-      class="tab-btn"
-      [class.active]="activeSection() === 'orders'"
-      (click)="setSection('orders')"
-      [title]="'NURSE.ORDERS' | translate"
-    >
-      {{ 'NURSE.ORDERS' | translate }}
-    </button>
-    <button
-      class="tab-btn"
-      [class.active]="activeSection() === 'handoffs'"
-      (click)="setSection('handoffs')"
-      [title]="'NURSE.HANDOFFS' | translate"
-    >
-      {{ 'NURSE.HANDOFFS' | translate }}
-    </button>
-    <button
-      class="tab-btn"
-      [class.active]="activeSection() === 'workboard'"
-      (click)="setSection('workboard')"
-      [title]="'NURSE.WORKBOARD' | translate"
-    >
-      {{ 'NURSE.WORKBOARD' | translate }}
-    </button>
-    <button
-      class="tab-btn"
-      [class.active]="activeSection() === 'flowboard'"
-      (click)="setSection('flowboard')"
-      [title]="'NURSE.FLOW_BOARD' | translate"
-    >
-      {{ 'NURSE.FLOW_BOARD' | translate }}
-    </button>
-    <button
-      class="tab-btn"
-      [class.active]="activeSection() === 'admissions'"
-      (click)="setSection('admissions')"
-      [title]="'NURSE.ADMISSIONS' | translate"
-    >
-      {{ 'NURSE.ADMISSIONS' | translate }}
-    </button>
-    <button
-      class="tab-btn"
-      [class.active]="activeSection() === 'tasks'"
-      (click)="setSection('tasks')"
-      [title]="'NURSE.TASK_BOARD' | translate"
-    >
-      {{ 'NURSE.TASK_BOARD' | translate }}
-    </button>
-    <button
-      class="tab-btn"
-      [class.active]="activeSection() === 'inbox'"
-      (click)="setSection('inbox')"
-      [title]="'NURSE.INBOX' | translate"
-    >
-      {{ 'NURSE.INBOX' | translate }}
-      @if (inboxUnreadCount() > 0) {
-        <span class="badge-count">{{ inboxUnreadCount() }}</span>
-      }
-    </button>
-  </div>
-  <div class="station-layout" [class.no-sidebar]="announcements().length === 0">
-    <div class="main-content">
-      @if (loading()) {
-        <div class="loading-state">
-          <div class="spinner"></div>
-          <p>{{ 'NURSE.LOADING_TASKS' | translate }}</p>
-        </div>
-      }
-
-      <!-- ═══════════ VITALS TAB ═══════════ -->
-      @if (!loading() && activeSection() === 'vitals') {
-        @if (vitals().length === 0) {
-          <div class="empty-state">
-            <span class="material-symbols-outlined empty-icon">monitor_heart</span>
-            <h3>{{ 'NURSE.NO_VITALS_DUE' | translate }}</h3>
-          </div>
-        }
-        @if (vitals().length > 0) {
-          <div class="data-table">
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">{{ 'PATIENTS.PATIENT' | translate }}</th>
-                  <th scope="col">{{ 'COMMON.TYPE' | translate }}</th>
-                  <th scope="col">{{ 'NURSE.DUE_TIME' | translate }}</th>
-                  <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-                  <th scope="col">{{ 'COMMON.ACTION' | translate }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (v of vitals(); track v.id) {
-                  <tr class="data-row" [class.overdue-row]="v.overdue">
-                    <td>
-                      @if (v.patientId) {
-                        <a
-                          class="cell-primary patient-link"
-                          [routerLink]="['/patients', v.patientId]"
-                          >{{ v.patientName }}</a
-                        >
-                      } @else {
-                        <div class="cell-primary">{{ v.patientName }}</div>
-                      }
-                    </td>
-                    <td>{{ v.type | enumLabel: 'vitalTaskType' }}</td>
-                    <td>
-                      {{
-                        v.dueTime
-                          | serverTime
-                          | date: (isDueToday(v.dueTime) ? 'shortTime' : 'short')
-                      }}
-                    </td>
-                    <td>
-                      @if (v.overdue) {
-                        <span class="badge-overdue">{{ 'NURSE.OVERDUE' | translate }}</span>
-                      } @else {
-                        <span class="badge-pending">{{ 'NURSE.PENDING' | translate }}</span>
-                      }
-                    </td>
-                    <td>
-                      <!-- QA D1124: a row with no patient cannot be recorded, so it offers no dead button. -->
-                      @if (v.patientId) {
-                        <button
-                          class="action-btn action-record"
-                          (click)="recordVitals(v.patientId, v.patientName)"
-                        >
-                          <span class="material-symbols-outlined">edit_note</span>
-                          {{ 'NURSE.RECORD' | translate }}
-                        </button>
-                      }
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        }
-      }
-
-      <!-- ═══════════ MEDICATIONS TAB ═══════════ -->
-      @if (!loading() && activeSection() === 'medications') {
-        @if (medications().length === 0) {
-          <div class="empty-state">
-            <span class="material-symbols-outlined empty-icon">medication</span>
-            <h3>{{ 'NURSE.NO_MEDICATIONS' | translate }}</h3>
-          </div>
-        }
-        @if (medications().length > 0) {
-          <!-- QA D1283: a dose recorded reloads this table; focus comes back to the
-               row's action, or to the MAR tab when the row is gone. -->
-          <div
-            class="data-table"
-            data-focus-return="[data-focus-place=nurse-sections] .tab-btn.active"
-          >
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">{{ 'PATIENTS.PATIENT' | translate }}</th>
-                  <th scope="col">{{ 'NURSE.MEDICATION' | translate }}</th>
-                  <th scope="col">{{ 'NURSE.DOSE' | translate }}</th>
-                  <th scope="col">{{ 'NURSE.ROUTE' | translate }}</th>
-                  <th scope="col">{{ 'NURSE.DUE' | translate }}</th>
-                  <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-                  <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (m of medications(); track m.id) {
-                  <tr class="data-row" [class.overdue-row]="m.status === 'OVERDUE'">
-                    <td>
-                      @if (m.patientId) {
-                        <a
-                          class="cell-primary patient-link"
-                          [routerLink]="['/patients', m.patientId]"
-                          >{{ m.patientName }}</a
-                        >
-                      } @else {
-                        <div class="cell-primary">{{ m.patientName }}</div>
-                      }
-                    </td>
-                    <td>
-                      <strong>{{ m.medication }}</strong>
-                      @if (m.heldForReview) {
-                        <span class="review-hold-flag" data-testid="mar-review-hold">{{
-                          'ORDER_REVIEW.HELD_FLAG' | translate
-                        }}</span>
-                      }
-                      @if (m.controlledSubstance) {
-                        {{ ' '
-                        }}<span
-                          class="status-badge status-controlled"
-                          [attr.data-testid]="'med-controlled-' + m.id"
-                          >{{ 'NURSE.CONTROLLED_SUBSTANCE' | translate }}</span
-                        >
-                      }
-                      <!-- QA D1237: a frequency the MAR cannot schedule. -->
-                      @if (m.frequencyUnread) {
-                        {{ ' '
-                        }}<span
-                          class="status-badge status-advisory"
-                          [attr.data-testid]="'med-frequency-unread-' + m.id"
-                          [title]="
-                            (m.lastOutcome
-                              ? 'EMAR.FREQUENCY_UNREAD_LABEL'
-                              : 'EMAR.FREQUENCY_UNREAD_FIRST_LABEL'
-                            ) | translate
-                          "
-                          ><span aria-hidden="true">{{
-                            'EMAR.FREQUENCY_UNREAD_CHIP' | translate
-                          }}</span
-                          ><span class="sr-only">{{
-                            'EMAR.FREQUENCY_UNREAD_LABEL' | translate
-                          }}</span></span
-                        >
-                      }
-                      <!-- QA round 30: an as-needed order and the prescriber's minimum interval. -->
-                      @if (m.prnLabel) {
-                        {{ ' '
-                        }}<span class="cell-sub" [attr.data-testid]="'med-prn-' + m.id">{{
-                          m.prnLabel
-                        }}</span>
-                      }
-                      @if (m.cdsAdvisories?.length) {
-                        {{ ' '
-                        }}<span
-                          class="status-badge status-advisory"
-                          [attr.data-testid]="'med-advisory-' + m.id"
-                          [title]="m.cdsAdvisories![0].summary"
-                          >{{ 'EMAR.ALLERGY_ADVISORY_CHIP' | translate }}</span
-                        >
-                      }
-                    </td>
-                    <td>{{ m.dose }}</td>
-                    <td>{{ m.route | medicationRoute }}</td>
-                    <!-- QA D949: a dose not due today shows its date. -->
-                    <td>
-                      {{
-                        m.dueTime
-                          | serverTime
-                          | date: (isDueToday(m.dueTime) ? 'shortTime' : 'short')
-                      }}
-                    </td>
-                    <td>
-                      <span class="status-badge status-{{ m.status | lowercase }}">{{
-                        m.status | enumLabel: 'marTaskStatus'
-                      }}</span>
-                      <!-- QA D1254: offered, but inside the minimum interval since
-                           the last dose: Give opens the early-dose reason dialog. -->
-                      @if (m.earlyDose) {
-                        {{ ' '
-                        }}<span
-                          class="status-badge status-early"
-                          [attr.data-testid]="'med-early-dose-' + m.id"
-                          [title]="'EMAR.EARLY_DOSE.CHIP_LABEL' | translate"
-                          ><span aria-hidden="true">{{ 'EMAR.EARLY_DOSE.CHIP' | translate }}</span
-                          ><span class="sr-only">{{
-                            'EMAR.EARLY_DOSE.CHIP_LABEL' | translate
-                          }}</span></span
-                        >
-                      }
-                      <!-- QA D929: what happened to the last dose, so a held or
-                           refused dose is never read as given. -->
-                      @if (m.lastOutcome) {
-                        <span class="last-outcome" [attr.data-testid]="'med-last-outcome-' + m.id"
-                          >{{ 'NURSE.LAST_DOSE' | translate }}
-                          {{ m.lastOutcome | enumLabel: 'medicationAdministrationStatus' }}</span
-                        >
-                      }
-                      <!-- QA D1225: the last dose's reason (held, refused or given
-                           early) and the dose history, read where the row is read. -->
-                      @if (m.lastGivenEarly) {
-                        {{ ' '
-                        }}<span
-                          class="status-badge status-early"
-                          [attr.data-testid]="'med-last-early-' + m.id"
-                          >{{ 'MAR_HISTORY.EARLY' | translate }}</span
-                        >
-                      }
-                      @if (m.lastReason) {
-                        {{ ' '
-                        }}<span class="last-reason" [attr.data-testid]="'med-last-reason-' + m.id"
-                          >{{ 'MAR_HISTORY.REASON' | translate }} {{ m.lastReason }}</span
-                        >
-                      }
-                      <app-mar-dose-history [doses]="m.doseHistory ?? []" />
-                    </td>
-                    <td class="action-cell">
-                      @if (canRecordDose(m)) {
-                        <button
-                          class="action-btn action-give"
-                          (click)="administerMedication(m.id)"
-                          [disabled]="actionInProgress() === m.id"
-                          [title]="'NURSE.ADMINISTER' | translate"
-                        >
-                          <span class="material-symbols-outlined">check_circle</span>
-                          {{ 'NURSE.GIVE' | translate }}
-                        </button>
-                        <button
-                          class="action-btn action-hold"
-                          (click)="promptHoldRefuse(m.id, 'HELD')"
-                          [disabled]="actionInProgress() === m.id"
-                          [title]="'NURSE.HOLD' | translate"
-                        >
-                          <span class="material-symbols-outlined">pause_circle</span>
-                          {{ 'NURSE.HOLD' | translate }}
-                        </button>
-                        <button
-                          class="action-btn action-refuse"
-                          (click)="promptHoldRefuse(m.id, 'REFUSED')"
-                          [disabled]="actionInProgress() === m.id"
-                          [title]="'NURSE.REFUSE' | translate"
-                        >
-                          <span class="material-symbols-outlined">cancel</span>
-                          {{ 'NURSE.REFUSE' | translate }}
-                        </button>
-                      } @else if (m.status === 'UPCOMING') {
-                        <span class="action-upcoming">
-                          <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
-                          {{ 'NURSE.NOT_YET_DUE' | translate }}
-                        </span>
-                      } @else {
-                        <span class="action-done">
-                          <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
-                          {{ 'NURSE.COURSE_ENDED' | translate }}
-                        </span>
-                      }
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        }
-      }
-
-      <!-- ═══════════ ORDERS TAB ═══════════ -->
-      @if (!loading() && activeSection() === 'orders') {
-        @if (orders().length === 0) {
-          <div class="empty-state">
-            <span class="material-symbols-outlined empty-icon">assignment</span>
-            <h3>{{ 'NURSE.NO_ORDERS' | translate }}</h3>
-          </div>
-        }
-        @if (orders().length > 0) {
-          <div class="data-table">
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">{{ 'PATIENTS.PATIENT' | translate }}</th>
-                  <th scope="col">{{ 'NURSE.ORDER_TYPE' | translate }}</th>
-                  <th scope="col">{{ 'NURSE.PRIORITY' | translate }}</th>
-                  <th scope="col">{{ 'NURSE.DUE' | translate }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (o of orders(); track o.id) {
-                  <tr class="data-row">
-                    <td>
-                      @if (o.patientId) {
-                        <a
-                          class="cell-primary patient-link"
-                          [routerLink]="['/patients', o.patientId]"
-                          >{{ o.patientName }}</a
-                        >
-                      } @else {
-                        <div class="cell-primary">{{ o.patientName }}</div>
-                      }
-                    </td>
-                    <td>{{ o.orderType | enumLabel: 'orderSourceType' }}</td>
-                    <td>
-                      <span class="priority-badge priority-{{ o.priority | lowercase }}">{{
-                        o.priority | enumLabel: 'taskPriority'
-                      }}</span>
-                    </td>
-                    <td>
-                      {{
-                        o.dueTime
-                          | serverTime
-                          | date: (isDueToday(o.dueTime) ? 'shortTime' : 'short')
-                      }}
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        }
-      }
-
-      <!-- ═══════════ HANDOFFS TAB ═══════════ -->
-      @if (!loading() && activeSection() === 'handoffs') {
-        <div class="task-board-header">
-          <h3>{{ 'NURSE.HANDOFFS' | translate }}</h3>
-          <div class="handoff-header-actions">
-            <!-- Completed handoffs became readable via ?status= in PR #462;
-                 this toggle is that parameter's first caller. -->
-            <div class="handoff-view-toggle">
-              <button
-                class="btn-small"
-                [class.btn-primary]="handoffView() === 'PENDING'"
-                (click)="setHandoffView('PENDING')"
-                data-testid="handoffs-view-pending"
-              >
-                {{ 'NURSE.HANDOFFS_PENDING' | translate }}
+        <!-- ═══════════ VITALS TAB ═══════════ -->
+        @if (!loading() && activeSection() === 'vitals') {
+          @if (vitalsFailed()) {
+            <div class="dashboard-error" role="alert">
+              <p>{{ 'NURSE.WORKLIST_UNAVAILABLE' | translate }}</p>
+              <button type="button" class="clear-task-filters" (click)="refresh()">
+                {{ 'COMMON.RETRY' | translate }}
               </button>
-              <button
-                class="btn-small"
-                [class.btn-primary]="handoffView() === 'COMPLETED'"
-                (click)="setHandoffView('COMPLETED')"
-                data-testid="handoffs-view-completed"
-              >
-                {{ 'NURSE.HANDOFFS_COMPLETED' | translate }}
-              </button>
-            </div>
-            <button class="btn-small btn-primary" (click)="openHandoffCreate()">
-              <span class="material-symbols-outlined">add</span>
-              {{ 'NURSE.NEW_HANDOFF' | translate }}
-            </button>
-          </div>
-        </div>
-        @if (handoffView() === 'COMPLETED' && completedHandoffsLoading()) {
-          <div class="empty-state">
-            <span class="material-symbols-outlined empty-icon spin">progress_activity</span>
-          </div>
-        } @else {
-          @if ((handoffView() === 'PENDING' ? handoffs() : completedHandoffs()).length === 0) {
-            <div class="empty-state">
-              <span class="material-symbols-outlined empty-icon">swap_horiz</span>
-              <h3>
-                {{
-                  (handoffView() === 'PENDING'
-                    ? 'NURSE.NO_HANDOFFS'
-                    : 'NURSE.NO_COMPLETED_HANDOFFS'
-                  ) | translate
-                }}
-              </h3>
             </div>
           }
-          <div class="handoff-list">
-            @for (h of handoffView() === 'PENDING' ? handoffs() : completedHandoffs(); track h.id) {
-              <div class="handoff-card">
-                <div class="handoff-header">
-                  @if (h.patientId) {
-                    <a
-                      class="cell-primary patient-link"
-                      [routerLink]="['/patients', h.patientId]"
-                      >{{ h.patientName }}</a
-                    >
-                  } @else {
-                    <span class="cell-primary">{{ h.patientName }}</span>
-                  }
-                  <span class="handoff-dir">{{ h.direction | enumLabel: 'handoffDirection' }}</span>
-                </div>
-                <p class="handoff-note">{{ h.note || ('NURSE.NO_NOTES' | translate) }}</p>
-                @if (h.background) {
-                  <p class="handoff-sbar">
-                    <strong
-                      >{{ 'NURSE.HANDOFF_BACKGROUND' | translate
-                      }}{{ 'COMMON.COLON' | translate }}</strong
-                    >
-                    {{ h.background }}
-                  </p>
-                }
-                @if (h.assessment) {
-                  <p class="handoff-sbar">
-                    <strong
-                      >{{ 'NURSE.HANDOFF_ASSESSMENT' | translate
-                      }}{{ 'COMMON.COLON' | translate }}</strong
-                    >
-                    {{ h.assessment }}
-                  </p>
-                }
-                @if (h.recommendation) {
-                  <p class="handoff-sbar">
-                    <strong
-                      >{{ 'NURSE.HANDOFF_RECOMMENDATION' | translate
-                      }}{{ 'COMMON.COLON' | translate }}</strong
-                    >
-                    {{ h.recommendation }}
-                  </p>
-                }
-                <div class="handoff-footer">
-                  <span class="handoff-time">
-                    @if (h.createdByName) {
-                      {{ 'NURSE.HANDOFF_REPORTED_BY' | translate }} {{ h.createdByName }} ·
-                    }
-                    @if (h.recipientName) {
-                      {{ 'NURSE.HANDOFF_TO' | translate }} {{ h.recipientName }} ·
-                    }
-                    <!-- QA D1075: the report time, never the completion time. -->
-                    <span [attr.data-testid]="'handoff-reported-at-' + h.id">{{
-                      handoffReportedAt(h) | serverTime | dateTime
-                    }}</span>
-                  </span>
-                  @if (h.completedAt) {
-                    <span
-                      class="handoff-completed"
-                      [attr.data-testid]="'handoff-completed-' + h.id"
-                    >
-                      <span class="material-symbols-outlined">check_circle</span>
-                      {{ 'NURSE.HANDOFF_COMPLETED_BY' | translate }}
-                      {{ h.completedByName || '—' }} ·
-                      {{ h.completedAt | serverTime | dateTime }}
-                    </span>
-                  } @else if (canCompleteHandoff(h)) {
-                    <!-- QA D776: only the recipient completes (server rule) -->
-                    <button
-                      class="action-btn action-complete"
-                      (click)="completeHandoff(h.id)"
-                      [disabled]="actionInProgress() === h.id"
-                      [title]="'NURSE.COMPLETE_HANDOFF' | translate"
-                    >
-                      <span class="material-symbols-outlined">check_circle</span>
-                      {{ 'NURSE.COMPLETE' | translate }}
-                    </button>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-        }
-      }
-
-      <!-- ═══════════ WORKBOARD TAB ═══════════ -->
-      @if (!loading() && activeSection() === 'workboard') {
-        @if (workboard().length === 0) {
-          <div class="empty-state">
-            <span class="material-symbols-outlined empty-icon">grid_view</span>
-            <h3>{{ 'NURSE.NO_WORKBOARD_PATIENTS' | translate }}</h3>
-            <p>{{ 'NURSE.ACTIVE_ADMISSIONS_HERE' | translate }}</p>
-          </div>
-        }
-        @if (workboard().length > 0) {
-          <div class="workboard-grid">
-            @for (p of workboard(); track p.patientId) {
-              <div
-                class="workboard-card"
-                [class.workboard-card-alert]="p.vitalsDue || p.medsDue > 0"
+          @if (!vitalsFailed() && vitals().length > 0 && visibleVitals().length === 0) {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon" aria-hidden="true"
+                >search_off</span
               >
-                <div class="workboard-card-header">
-                  @if (p.patientId) {
-                    <a class="cell-primary patient-link" [routerLink]="['/patients', p.patientId]">
-                      {{ p.patientName }}
-                    </a>
-                  } @else {
-                    <span class="cell-primary">{{ p.patientName }}</span>
-                  }
-                  @if (p.acuityLevel) {
-                    {{ ' '
-                    }}<span class="acuity-badge {{ acuityCssClass(p.acuityLevel) }}">
-                      {{ acuityLabel(p.acuityLevel) }}
-                    </span>
-                  }
-                </div>
-                <div class="workboard-card-meta">
-                  @if (p.roomBed) {
-                    <span class="meta-item">
-                      <span class="material-symbols-outlined">bed</span> {{ p.roomBed }}
-                    </span>
-                  }
-                  @if (p.mrn) {
-                    <span class="meta-item"
-                      >{{ 'NURSE.MRN' | translate }}{{ 'COMMON.COLON' | translate }}
-                      {{ p.mrn }}</span
-                    >
-                  }
-                  @if (p.departmentName) {
-                    <span class="meta-item">{{ p.departmentName }}</span>
-                  }
-                  @if (p.attendingDoctor) {
-                    <span class="meta-item">
-                      <span class="material-symbols-outlined">stethoscope</span>
-                      {{ p.attendingDoctor }}
-                    </span>
-                  }
-                </div>
-                <div class="workboard-card-indicators">
-                  @if (p.vitalsDue) {
-                    <span class="indicator indicator-warn">
-                      <span class="material-symbols-outlined">monitor_heart</span>
-                      {{ 'NURSE.VITALS_DUE' | translate }}
-                    </span>
-                  } @else if (p.lastVitalsTime) {
-                    <span class="indicator indicator-ok">
-                      <span class="material-symbols-outlined">monitor_heart</span>
-                      {{ p.lastVitalsTime | serverTime | date: 'shortTime' }}
-                    </span>
-                  }
-                  @if (p.medsDue > 0) {
-                    <span class="indicator indicator-warn">
-                      <span class="material-symbols-outlined">medication</span>
-                      {{ p.medsDue }} {{ 'NURSE.MEDS' | translate }} {{ 'NURSE.DUE' | translate }}
-                    </span>
-                  }
-                  @if (p.admittedAt) {
-                    <span class="indicator indicator-neutral">
-                      <span class="material-symbols-outlined">login</span>
-                      {{ 'NURSE.ADMITTED' | translate }}
-                      {{ p.admittedAt | serverTime | date: 'shortDate' }}
-                    </span>
-                  }
-                </div>
-                <div class="workboard-card-actions">
-                  <button
-                    class="action-btn action-record"
-                    (click)="recordVitals(p.patientId, p.patientName)"
-                    [title]="'NURSE.RECORD_VITALS' | translate"
-                  >
-                    <span class="material-symbols-outlined">edit_note</span>
-                    {{ 'NURSE.VITALS' | translate }}
-                  </button>
-                  <button
-                    class="action-btn action-triage"
-                    (click)="openTriage(p.patientId)"
-                    [disabled]="encounterLookupInProgress()"
-                    [title]="'TRIAGE.TITLE' | translate"
-                  >
-                    <span class="material-symbols-outlined">emergency</span>
-                    {{ 'TRIAGE.TITLE' | translate }}
-                  </button>
-                  <button
-                    class="action-btn action-intake"
-                    (click)="openIntake(p.patientId)"
-                    [disabled]="encounterLookupInProgress()"
-                    [title]="'INTAKE.TITLE' | translate"
-                  >
-                    <span class="material-symbols-outlined">clinical_notes</span>
-                    {{ 'INTAKE.TITLE' | translate }}
-                  </button>
-                  @if (p.patientId) {
-                    <a
-                      class="action-btn action-view"
-                      [routerLink]="['/patients', p.patientId]"
-                      [title]="'NURSE.VIEW_PATIENT' | translate"
-                    >
-                      <span class="material-symbols-outlined">open_in_new</span>
-                      {{ 'NURSE.CHART' | translate }}
-                    </a>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-        }
-      }
-
-      <!-- ═══════════ FLOW BOARD TAB ═══════════ -->
-      @if (!loading() && activeSection() === 'flowboard') {
-        @if (
-          !flowBoard() ||
-          (flowBoard()!.pending.length === 0 &&
-            flowBoard()!.active.length === 0 &&
-            flowBoard()!.critical.length === 0 &&
-            flowBoard()!.awaitingDischarge.length === 0)
-        ) {
-          <div class="empty-state">
-            <span class="material-symbols-outlined empty-icon">view_kanban</span>
-            <h3>{{ 'NURSE.NO_FLOW_BOARD' | translate }}</h3>
-            <p>{{ 'NURSE.FLOW_BOARD_APPEAR' | translate }}</p>
-          </div>
-        } @else {
-          <div class="flow-board">
-            <!-- Pending column -->
-            <div class="flow-column">
-              <div class="flow-column-header flow-header-pending">
-                <span class="material-symbols-outlined">pending</span>
-                {{ 'NURSE.PENDING' | translate }}
-                <span class="flow-count">{{ flowBoard()!.pending.length }}</span>
-              </div>
-              <div class="flow-cards">
-                @for (c of flowBoard()!.pending; track c.admissionId) {
-                  <div class="flow-card">
-                    <div class="flow-card-name">
-                      @if (c.patientId) {
-                        <a [routerLink]="['/patients', c.patientId]">{{ c.patientName }}</a>
-                      } @else {
-                        {{ c.patientName }}
-                      }
-                    </div>
-                    @if (c.roomBed) {
-                      <div class="flow-card-room">{{ c.roomBed }}</div>
-                    }
-                    @if (c.acuityLevel) {
-                      <span class="acuity-badge {{ acuityCssClass(c.acuityLevel) }}">
-                        {{ acuityLabel(c.acuityLevel) }}
-                      </span>
-                    }
-                    <div class="flow-card-wait">
-                      {{ c.waitMinutes }} {{ 'NURSE.MIN_UNIT' | translate }}
-                    </div>
-                  </div>
-                }
-              </div>
+              <h3>{{ 'NURSE.NO_MATCHES' | translate }}</h3>
+              <button type="button" class="clear-task-filters" (click)="clearTaskFilters()">
+                {{ 'NURSE.CLEAR_FILTERS' | translate }}
+              </button>
             </div>
+          }
 
-            <!-- Active column -->
-            <div class="flow-column">
-              <div class="flow-column-header flow-header-active">
-                <span class="material-symbols-outlined">local_hospital</span>
-                {{ 'COMMON.ACTIVE' | translate }}
-                <span class="flow-count">{{ flowBoard()!.active.length }}</span>
-              </div>
-              <div class="flow-cards">
-                @for (c of flowBoard()!.active; track c.admissionId) {
-                  <div class="flow-card">
-                    <div class="flow-card-name">
-                      @if (c.patientId) {
-                        <a [routerLink]="['/patients', c.patientId]">{{ c.patientName }}</a>
-                      } @else {
-                        {{ c.patientName }}
-                      }
-                    </div>
-                    @if (c.roomBed) {
-                      <div class="flow-card-room">{{ c.roomBed }}</div>
-                    }
-                    @if (c.acuityLevel) {
-                      <span class="acuity-badge {{ acuityCssClass(c.acuityLevel) }}">
-                        {{ acuityLabel(c.acuityLevel) }}
-                      </span>
-                    }
-                    <div class="flow-card-wait">
-                      {{ c.waitMinutes }} {{ 'NURSE.MIN_UNIT' | translate }}
-                    </div>
-                  </div>
-                }
-              </div>
+          @if (!vitalsFailed() && vitals().length === 0) {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon">monitor_heart</span>
+              <h3>{{ 'NURSE.NO_VITALS_DUE' | translate }}</h3>
             </div>
-
-            <!-- Critical column -->
-            <div class="flow-column">
-              <div class="flow-column-header flow-header-critical">
-                <span class="material-symbols-outlined">warning</span>
-                {{ 'NURSE.CRITICAL_SEVERE' | translate }}
-                <span class="flow-count">{{ flowBoard()!.critical.length }}</span>
-              </div>
-              <div class="flow-cards">
-                @for (c of flowBoard()!.critical; track c.admissionId) {
-                  <div class="flow-card flow-card-critical">
-                    <div class="flow-card-name">
-                      @if (c.patientId) {
-                        <a [routerLink]="['/patients', c.patientId]">{{ c.patientName }}</a>
-                      } @else {
-                        {{ c.patientName }}
-                      }
-                    </div>
-                    @if (c.roomBed) {
-                      <div class="flow-card-room">{{ c.roomBed }}</div>
-                    }
-                    @if (c.acuityLevel) {
-                      <span class="acuity-badge {{ acuityCssClass(c.acuityLevel) }}">
-                        {{ acuityLabel(c.acuityLevel) }}
-                      </span>
-                    }
-                    <div class="flow-card-wait">
-                      {{ c.waitMinutes }} {{ 'NURSE.MIN_UNIT' | translate }}
-                    </div>
-                  </div>
-                }
-              </div>
-            </div>
-
-            <!-- Awaiting Discharge column -->
-            <div class="flow-column">
-              <div class="flow-column-header flow-header-discharge">
-                <span class="material-symbols-outlined">logout</span>
-                {{ 'NURSE.AWAITING_DISCHARGE' | translate }}
-                <span class="flow-count">{{ flowBoard()!.awaitingDischarge.length }}</span>
-              </div>
-              <div class="flow-cards">
-                @for (c of flowBoard()!.awaitingDischarge; track c.admissionId) {
-                  <div class="flow-card">
-                    <div class="flow-card-name">
-                      @if (c.patientId) {
-                        <a [routerLink]="['/patients', c.patientId]">{{ c.patientName }}</a>
-                      } @else {
-                        {{ c.patientName }}
-                      }
-                    </div>
-                    @if (c.roomBed) {
-                      <div class="flow-card-room">{{ c.roomBed }}</div>
-                    }
-                    @if (c.acuityLevel) {
-                      <span class="acuity-badge {{ acuityCssClass(c.acuityLevel) }}">
-                        {{ acuityLabel(c.acuityLevel) }}
-                      </span>
-                    }
-                    <div class="flow-card-wait">
-                      {{ c.waitMinutes }} {{ 'NURSE.MIN_UNIT' | translate }}
-                    </div>
-                  </div>
-                }
-              </div>
-            </div>
-          </div>
-        }
-      }
-
-      <!-- ═══════════ ADMISSIONS TAB ═══════════ -->
-      @if (!loading() && activeSection() === 'admissions') {
-        @if (pendingAdmissions().length === 0) {
-          <div class="empty-state">
-            <span class="material-symbols-outlined empty-icon">transfer_within_a_station</span>
-            <h3>{{ 'NURSE.NO_PENDING_ADMISSIONS' | translate }}</h3>
-            <p>{{ 'NURSE.ADMISSIONS_APPEAR_HERE' | translate }}</p>
-          </div>
-        }
-        @if (pendingAdmissions().length > 0) {
-          <div class="data-table">
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">{{ 'PATIENTS.PATIENT' | translate }}</th>
-                  <th scope="col">{{ 'NURSE.MRN' | translate }}</th>
-                  <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-                  <th scope="col">{{ 'NURSE.ACUITY' | translate }}</th>
-                  <th scope="col">{{ 'NURSE.ROOM_BED' | translate }}</th>
-                  <th scope="col">{{ 'STAFF.DEPARTMENT' | translate }}</th>
-                  <th scope="col">{{ 'NURSE.DOCTOR' | translate }}</th>
-                  <th scope="col">{{ 'NURSE.ADMITTED' | translate }}</th>
-                  <th scope="col">{{ 'COMMON.TYPE' | translate }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (a of pendingAdmissions(); track a.admissionId) {
-                  <tr class="data-row" [class.discharge-row]="a.status === 'AWAITING_DISCHARGE'">
-                    <td>
-                      @if (a.patientId) {
-                        <a
-                          class="cell-primary patient-link"
-                          [routerLink]="['/patients', a.patientId]"
-                        >
-                          {{ a.patientName }}
-                        </a>
-                      } @else {
-                        <div class="cell-primary">{{ a.patientName }}</div>
-                      }
-                    </td>
-                    <td>{{ a.mrn || '—' }}</td>
-                    <td>
-                      <span class="status-badge status-{{ a.status | lowercase }}">{{
-                        a.status | enumLabel: 'admissionStatus'
-                      }}</span>
-                    </td>
-                    <td>
-                      @if (a.acuityLevel) {
-                        <span class="acuity-badge {{ acuityCssClass(a.acuityLevel) }}">
-                          {{ acuityLabel(a.acuityLevel) }}
-                        </span>
-                      } @else {
-                        —
-                      }
-                    </td>
-                    <td>{{ a.roomBed || '—' }}</td>
-                    <td>{{ a.departmentName || '—' }}</td>
-                    <td>{{ a.admittingDoctor || '—' }}</td>
-                    <td>{{ fromServerDateTime(a.admissionDateTime) | date: 'short' }}</td>
-                    <td>
-                      {{ a.admissionType ? (a.admissionType | enumLabel: 'admissionType') : '—' }}
-                    </td>
+          }
+          @if (!vitalsFailed() && visibleVitals().length > 0) {
+            <div
+              class="data-table"
+              tabindex="0"
+              role="region"
+              [attr.aria-label]="sectionLabels[activeSection()] | translate"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'PATIENTS.PATIENT' | translate }}</th>
+                    <th scope="col">{{ 'COMMON.TYPE' | translate }}</th>
+                    <th scope="col">{{ 'NURSE.DUE_TIME' | translate }}</th>
+                    <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                    <th scope="col">{{ 'COMMON.ACTION' | translate }}</th>
                   </tr>
-                }
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  @for (v of visibleVitals(); track v.id) {
+                    <tr class="data-row" [class.overdue-row]="v.overdue">
+                      <td>
+                        @if (v.patientId) {
+                          <a
+                            class="cell-primary patient-link"
+                            [routerLink]="['/patients', v.patientId]"
+                            >{{ v.patientName }}</a
+                          >
+                        } @else {
+                          <div class="cell-primary">{{ v.patientName }}</div>
+                        }
+                      </td>
+                      <td>{{ v.type | enumLabel: 'vitalTaskType' }}</td>
+                      <td>
+                        {{
+                          v.dueTime
+                            | serverTime
+                            | date: (isDueToday(v.dueTime) ? 'shortTime' : 'short')
+                        }}
+                      </td>
+                      <td>
+                        @if (v.overdue) {
+                          <span class="badge-overdue">{{ 'NURSE.OVERDUE' | translate }}</span>
+                        } @else {
+                          <span class="badge-pending">{{ 'NURSE.PENDING' | translate }}</span>
+                        }
+                      </td>
+                      <td>
+                        <!-- QA D1124: a row with no patient cannot be recorded, so it offers no dead button. -->
+                        @if (v.patientId) {
+                          <button
+                            class="action-btn action-record"
+                            (click)="recordVitals(v.patientId, v.patientName)"
+                          >
+                            <span class="material-symbols-outlined">edit_note</span>
+                            {{ 'NURSE.RECORD' | translate }}
+                          </button>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
         }
-      }
 
-      <!-- ═══════════ TASK BOARD TAB ═══════════ -->
-      @if (!loading() && activeSection() === 'tasks') {
-        <div class="task-board-header">
-          <h3>{{ 'NURSE.TASK_BOARD' | translate }}</h3>
-          <button class="btn-small btn-primary" (click)="openTaskCreate()">
-            <span class="material-symbols-outlined">add_task</span>
-            {{ 'NURSE.NEW_TASK' | translate }}
-          </button>
-        </div>
-        @if (nursingTasks().length === 0) {
-          <div class="empty-state">
-            <span class="material-symbols-outlined empty-icon">task_alt</span>
-            <h3>{{ 'NURSE.NO_TASKS' | translate }}</h3>
-            <p>{{ 'NURSE.CREATE_TASK_HINT' | translate }}</p>
-          </div>
-        }
-        @if (nursingTasks().length > 0) {
-          <div class="task-list">
-            @for (task of nursingTasks(); track task.id) {
-              <div
-                class="task-card"
-                [class.task-overdue]="task.overdue"
-                [class]="taskPriorityClass(task.priority)"
+        <!-- ═══════════ MEDICATIONS TAB ═══════════ -->
+        @if (!loading() && activeSection() === 'medications') {
+          @if (medicationsFailed()) {
+            <div class="dashboard-error" role="alert">
+              <p>{{ 'NURSE.WORKLIST_UNAVAILABLE' | translate }}</p>
+              <button type="button" class="clear-task-filters" (click)="refresh()">
+                {{ 'COMMON.RETRY' | translate }}
+              </button>
+            </div>
+          }
+          @if (
+            !medicationsFailed() && medications().length > 0 && visibleMedications().length === 0
+          ) {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon" aria-hidden="true"
+                >search_off</span
               >
-                <div class="task-card-header">
-                  <span class="task-category">{{ taskCategoryLabel(task.category) }}</span>
-                  {{ ' '
-                  }}<span class="task-priority-badge">{{
-                    task.priority | enumLabel: 'taskPriority'
-                  }}</span>
-                </div>
-                <div class="task-card-body">
-                  <div class="task-patient">
-                    <strong>{{ task.patientName }}</strong>
-                    @if (task.mrn) {
-                      <span class="task-mrn">{{ task.mrn }}</span>
+              <h3>{{ 'NURSE.NO_MATCHES' | translate }}</h3>
+              <button type="button" class="clear-task-filters" (click)="clearTaskFilters()">
+                {{ 'NURSE.CLEAR_FILTERS' | translate }}
+              </button>
+            </div>
+          }
+
+          @if (!medicationsFailed() && medications().length === 0) {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon">medication</span>
+              <h3>{{ 'NURSE.NO_MEDICATIONS' | translate }}</h3>
+            </div>
+          }
+          @if (!medicationsFailed() && visibleMedications().length > 0) {
+            <!-- QA D1283: a dose recorded reloads this table; focus comes back to the
+                 row's action, or to the MAR tab when the row is gone. -->
+            <div
+              class="data-table"
+              data-focus-return="[data-focus-place=nurse-sections] .tab-btn.active"
+              tabindex="0"
+              role="region"
+              [attr.aria-label]="sectionLabels[activeSection()] | translate"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'PATIENTS.PATIENT' | translate }}</th>
+                    <th scope="col">{{ 'NURSE.MEDICATION' | translate }}</th>
+                    <th scope="col">{{ 'NURSE.DOSE' | translate }}</th>
+                    <th scope="col">{{ 'NURSE.ROUTE' | translate }}</th>
+                    <th scope="col">{{ 'NURSE.DUE' | translate }}</th>
+                    <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                    <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (m of visibleMedications(); track m.id) {
+                    <tr class="data-row" [class.overdue-row]="m.status === 'OVERDUE'">
+                      <td>
+                        @if (m.patientId) {
+                          <a
+                            class="cell-primary patient-link"
+                            [routerLink]="['/patients', m.patientId]"
+                            >{{ m.patientName }}</a
+                          >
+                        } @else {
+                          <div class="cell-primary">{{ m.patientName }}</div>
+                        }
+                      </td>
+                      <td>
+                        <strong>{{ m.medication }}</strong>
+                        @if (m.heldForReview) {
+                          <span class="review-hold-flag" data-testid="mar-review-hold">{{
+                            'ORDER_REVIEW.HELD_FLAG' | translate
+                          }}</span>
+                        }
+                        @if (m.controlledSubstance) {
+                          {{ ' '
+                          }}<span
+                            class="status-badge status-controlled"
+                            [attr.data-testid]="'med-controlled-' + m.id"
+                            >{{ 'NURSE.CONTROLLED_SUBSTANCE' | translate }}</span
+                          >
+                        }
+                        <!-- QA D1237: a frequency the MAR cannot schedule. -->
+                        @if (m.frequencyUnread) {
+                          {{ ' '
+                          }}<span
+                            class="status-badge status-advisory"
+                            [attr.data-testid]="'med-frequency-unread-' + m.id"
+                            [title]="
+                              (m.lastOutcome
+                                ? 'EMAR.FREQUENCY_UNREAD_LABEL'
+                                : 'EMAR.FREQUENCY_UNREAD_FIRST_LABEL'
+                              ) | translate
+                            "
+                            ><span aria-hidden="true">{{
+                              'EMAR.FREQUENCY_UNREAD_CHIP' | translate
+                            }}</span
+                            ><span class="sr-only">{{
+                              'EMAR.FREQUENCY_UNREAD_LABEL' | translate
+                            }}</span></span
+                          >
+                        }
+                        <!-- QA round 30: an as-needed order and the prescriber's minimum interval. -->
+                        @if (m.prnLabel) {
+                          {{ ' '
+                          }}<span class="cell-sub" [attr.data-testid]="'med-prn-' + m.id">{{
+                            m.prnLabel
+                          }}</span>
+                        }
+                        @if (m.cdsAdvisories?.length) {
+                          {{ ' '
+                          }}<span
+                            class="status-badge status-advisory"
+                            [attr.data-testid]="'med-advisory-' + m.id"
+                            [title]="m.cdsAdvisories![0].summary"
+                            >{{ 'EMAR.ALLERGY_ADVISORY_CHIP' | translate }}</span
+                          >
+                        }
+                      </td>
+                      <td>{{ m.dose }}</td>
+                      <td>{{ m.route | medicationRoute }}</td>
+                      <!-- QA D949: a dose not due today shows its date. -->
+                      <td>
+                        {{
+                          m.dueTime
+                            | serverTime
+                            | date: (isDueToday(m.dueTime) ? 'shortTime' : 'short')
+                        }}
+                      </td>
+                      <td>
+                        <span class="status-badge status-{{ m.status | lowercase }}">{{
+                          m.status | enumLabel: 'marTaskStatus'
+                        }}</span>
+                        <!-- QA D1254: offered, but inside the minimum interval since
+                             the last dose: Give opens the early-dose reason dialog. -->
+                        @if (m.earlyDose) {
+                          {{ ' '
+                          }}<span
+                            class="status-badge status-early"
+                            [attr.data-testid]="'med-early-dose-' + m.id"
+                            [title]="'EMAR.EARLY_DOSE.CHIP_LABEL' | translate"
+                            ><span aria-hidden="true">{{ 'EMAR.EARLY_DOSE.CHIP' | translate }}</span
+                            ><span class="sr-only">{{
+                              'EMAR.EARLY_DOSE.CHIP_LABEL' | translate
+                            }}</span></span
+                          >
+                        }
+                        <!-- QA D929: what happened to the last dose, so a held or
+                             refused dose is never read as given. -->
+                        @if (m.lastOutcome) {
+                          <span class="last-outcome" [attr.data-testid]="'med-last-outcome-' + m.id"
+                            >{{ 'NURSE.LAST_DOSE' | translate }}
+                            {{ m.lastOutcome | enumLabel: 'medicationAdministrationStatus' }}</span
+                          >
+                        }
+                        <!-- QA D1225: the last dose's reason (held, refused or given
+                             early) and the dose history, read where the row is read. -->
+                        @if (m.lastGivenEarly) {
+                          {{ ' '
+                          }}<span
+                            class="status-badge status-early"
+                            [attr.data-testid]="'med-last-early-' + m.id"
+                            >{{ 'MAR_HISTORY.EARLY' | translate }}</span
+                          >
+                        }
+                        @if (m.lastReason) {
+                          {{ ' '
+                          }}<span class="last-reason" [attr.data-testid]="'med-last-reason-' + m.id"
+                            >{{ 'MAR_HISTORY.REASON' | translate }} {{ m.lastReason }}</span
+                          >
+                        }
+                        <app-mar-dose-history [doses]="m.doseHistory ?? []" />
+                      </td>
+                      <td class="action-cell">
+                        @if (canRecordDose(m)) {
+                          <button
+                            class="action-btn action-give"
+                            (click)="administerMedication(m.id)"
+                            [disabled]="actionInProgress() === m.id"
+                            [title]="'NURSE.ADMINISTER' | translate"
+                          >
+                            <span class="material-symbols-outlined">check_circle</span>
+                            {{ 'NURSE.GIVE' | translate }}
+                          </button>
+                          <button
+                            class="action-btn action-hold"
+                            (click)="promptHoldRefuse(m.id, 'HELD')"
+                            [disabled]="actionInProgress() === m.id"
+                            [title]="'NURSE.HOLD' | translate"
+                          >
+                            <span class="material-symbols-outlined">pause_circle</span>
+                            {{ 'NURSE.HOLD' | translate }}
+                          </button>
+                          <button
+                            class="action-btn action-refuse"
+                            (click)="promptHoldRefuse(m.id, 'REFUSED')"
+                            [disabled]="actionInProgress() === m.id"
+                            [title]="'NURSE.REFUSE' | translate"
+                          >
+                            <span class="material-symbols-outlined">cancel</span>
+                            {{ 'NURSE.REFUSE' | translate }}
+                          </button>
+                        } @else if (m.status === 'UPCOMING') {
+                          <span class="action-upcoming">
+                            <span class="material-symbols-outlined" aria-hidden="true"
+                              >schedule</span
+                            >
+                            {{ 'NURSE.NOT_YET_DUE' | translate }}
+                          </span>
+                        } @else {
+                          <span class="action-done">
+                            <span class="material-symbols-outlined" aria-hidden="true"
+                              >task_alt</span
+                            >
+                            {{ 'NURSE.COURSE_ENDED' | translate }}
+                          </span>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        }
+
+        <!-- ═══════════ ORDERS TAB ═══════════ -->
+        @if (!loading() && activeSection() === 'orders') {
+          @if (ordersFailed()) {
+            <div class="dashboard-error" role="alert">
+              <p>{{ 'NURSE.WORKLIST_UNAVAILABLE' | translate }}</p>
+              <button type="button" class="clear-task-filters" (click)="refresh()">
+                {{ 'COMMON.RETRY' | translate }}
+              </button>
+            </div>
+          }
+          @if (!ordersFailed() && orders().length > 0 && visibleOrders().length === 0) {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon" aria-hidden="true"
+                >search_off</span
+              >
+              <h3>{{ 'NURSE.NO_MATCHES' | translate }}</h3>
+              <button type="button" class="clear-task-filters" (click)="clearTaskFilters()">
+                {{ 'NURSE.CLEAR_FILTERS' | translate }}
+              </button>
+            </div>
+          }
+
+          @if (!ordersFailed() && orders().length === 0) {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon">assignment</span>
+              <h3>{{ 'NURSE.NO_ORDERS' | translate }}</h3>
+            </div>
+          }
+          @if (!ordersFailed() && visibleOrders().length > 0) {
+            <div
+              class="data-table"
+              tabindex="0"
+              role="region"
+              [attr.aria-label]="sectionLabels[activeSection()] | translate"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'PATIENTS.PATIENT' | translate }}</th>
+                    <th scope="col">{{ 'NURSE.ORDER_TYPE' | translate }}</th>
+                    <th scope="col">{{ 'NURSE.PRIORITY' | translate }}</th>
+                    <th scope="col">{{ 'NURSE.DUE' | translate }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (o of visibleOrders(); track o.id) {
+                    <tr class="data-row">
+                      <td>
+                        @if (o.patientId) {
+                          <a
+                            class="cell-primary patient-link"
+                            [routerLink]="['/patients', o.patientId]"
+                            >{{ o.patientName }}</a
+                          >
+                        } @else {
+                          <div class="cell-primary">{{ o.patientName }}</div>
+                        }
+                      </td>
+                      <td>{{ o.orderType | enumLabel: 'orderSourceType' }}</td>
+                      <td>
+                        <span class="priority-badge priority-{{ o.priority | lowercase }}">{{
+                          o.priority | enumLabel: 'taskPriority'
+                        }}</span>
+                      </td>
+                      <td>
+                        {{
+                          o.dueTime
+                            | serverTime
+                            | date: (isDueToday(o.dueTime) ? 'shortTime' : 'short')
+                        }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        }
+
+        <!-- ═══════════ HANDOFFS TAB ═══════════ -->
+        @if (!loading() && activeSection() === 'handoffs') {
+          <div class="task-board-header">
+            <h3>{{ 'NURSE.HANDOFFS' | translate }}</h3>
+            <div class="handoff-header-actions">
+              <!-- Completed handoffs became readable via ?status= in PR #462;
+                 this toggle is that parameter's first caller. -->
+              <div class="handoff-view-toggle">
+                <button
+                  class="btn-small"
+                  [class.btn-primary]="handoffView() === 'PENDING'"
+                  (click)="setHandoffView('PENDING')"
+                  data-testid="handoffs-view-pending"
+                >
+                  {{ 'NURSE.HANDOFFS_PENDING' | translate }}
+                </button>
+                <button
+                  class="btn-small"
+                  [class.btn-primary]="handoffView() === 'COMPLETED'"
+                  (click)="setHandoffView('COMPLETED')"
+                  data-testid="handoffs-view-completed"
+                >
+                  {{ 'NURSE.HANDOFFS_COMPLETED' | translate }}
+                </button>
+              </div>
+              <button class="btn-small btn-primary" (click)="openHandoffCreate()">
+                <span class="material-symbols-outlined">add</span>
+                {{ 'NURSE.NEW_HANDOFF' | translate }}
+              </button>
+            </div>
+          </div>
+          @if (handoffView() === 'COMPLETED' && completedHandoffsLoading()) {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon spin">progress_activity</span>
+            </div>
+          } @else {
+            @if ((handoffView() === 'PENDING' ? handoffs() : completedHandoffs()).length === 0) {
+              <div class="empty-state">
+                <span class="material-symbols-outlined empty-icon">swap_horiz</span>
+                <h3>
+                  {{
+                    (handoffView() === 'PENDING'
+                      ? 'NURSE.NO_HANDOFFS'
+                      : 'NURSE.NO_COMPLETED_HANDOFFS'
+                    ) | translate
+                  }}
+                </h3>
+              </div>
+            }
+            <div class="handoff-list">
+              @for (
+                h of handoffView() === 'PENDING' ? handoffs() : completedHandoffs();
+                track h.id
+              ) {
+                <div class="handoff-card">
+                  <div class="handoff-header">
+                    @if (h.patientId) {
+                      <a
+                        class="cell-primary patient-link"
+                        [routerLink]="['/patients', h.patientId]"
+                        >{{ h.patientName }}</a
+                      >
+                    } @else {
+                      <span class="cell-primary">{{ h.patientName }}</span>
+                    }
+                    <span class="handoff-dir">{{
+                      h.direction | enumLabel: 'handoffDirection'
+                    }}</span>
+                  </div>
+                  <p class="handoff-note">{{ h.note || ('NURSE.NO_NOTES' | translate) }}</p>
+                  @if (h.background) {
+                    <p class="handoff-sbar">
+                      <strong
+                        >{{ 'NURSE.HANDOFF_BACKGROUND' | translate
+                        }}{{ 'COMMON.COLON' | translate }}</strong
+                      >
+                      {{ h.background }}
+                    </p>
+                  }
+                  @if (h.assessment) {
+                    <p class="handoff-sbar">
+                      <strong
+                        >{{ 'NURSE.HANDOFF_ASSESSMENT' | translate
+                        }}{{ 'COMMON.COLON' | translate }}</strong
+                      >
+                      {{ h.assessment }}
+                    </p>
+                  }
+                  @if (h.recommendation) {
+                    <p class="handoff-sbar">
+                      <strong
+                        >{{ 'NURSE.HANDOFF_RECOMMENDATION' | translate
+                        }}{{ 'COMMON.COLON' | translate }}</strong
+                      >
+                      {{ h.recommendation }}
+                    </p>
+                  }
+                  <div class="handoff-footer">
+                    <span class="handoff-time">
+                      @if (h.createdByName) {
+                        {{ 'NURSE.HANDOFF_REPORTED_BY' | translate }} {{ h.createdByName }} ·
+                      }
+                      @if (h.recipientName) {
+                        {{ 'NURSE.HANDOFF_TO' | translate }} {{ h.recipientName }} ·
+                      }
+                      <!-- QA D1075: the report time, never the completion time. -->
+                      <span [attr.data-testid]="'handoff-reported-at-' + h.id">{{
+                        handoffReportedAt(h) | serverTime | dateTime
+                      }}</span>
+                    </span>
+                    @if (h.completedAt) {
+                      <span
+                        class="handoff-completed"
+                        [attr.data-testid]="'handoff-completed-' + h.id"
+                      >
+                        <span class="material-symbols-outlined">check_circle</span>
+                        {{ 'NURSE.HANDOFF_COMPLETED_BY' | translate }}
+                        {{ h.completedByName || '—' }} ·
+                        {{ h.completedAt | serverTime | dateTime }}
+                      </span>
+                    } @else if (canCompleteHandoff(h)) {
+                      <!-- QA D776: only the recipient completes (server rule) -->
+                      <button
+                        class="action-btn action-complete"
+                        (click)="completeHandoff(h.id)"
+                        [disabled]="actionInProgress() === h.id"
+                        [title]="'NURSE.COMPLETE_HANDOFF' | translate"
+                      >
+                        <span class="material-symbols-outlined">check_circle</span>
+                        {{ 'NURSE.COMPLETE' | translate }}
+                      </button>
                     }
                   </div>
-                  @if (task.description) {
-                    <p class="task-description">{{ task.description }}</p>
-                  }
-                  @if (task.dueAt) {
-                    <span class="task-due" [class.overdue-text]="task.overdue">
-                      {{ 'NURSE.DUE_LABEL' | translate }}
-                      {{
-                        task.dueAt
-                          | serverTime
-                          | date: (isDueToday(task.dueAt) ? 'shortTime' : 'short')
-                      }}
-                      @if (task.overdue) {
-                        <span class="overdue-badge">{{ 'NURSE.OVERDUE_BADGE' | translate }}</span>
-                      }
-                    </span>
-                  }
                 </div>
-                <div class="task-card-actions">
-                  @if (task.status === 'PENDING' || task.status === 'IN_PROGRESS') {
+              }
+            </div>
+          }
+        }
+
+        <!-- ═══════════ WORKBOARD TAB ═══════════ -->
+        @if (!loading() && activeSection() === 'workboard') {
+          @if (workboard().length === 0) {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon">grid_view</span>
+              <h3>{{ 'NURSE.NO_WORKBOARD_PATIENTS' | translate }}</h3>
+              <p>{{ 'NURSE.ACTIVE_ADMISSIONS_HERE' | translate }}</p>
+            </div>
+          }
+          @if (workboard().length > 0) {
+            <div class="workboard-grid">
+              @for (p of workboard(); track p.patientId) {
+                <div
+                  class="workboard-card"
+                  [class.workboard-card-alert]="p.vitalsDue || p.medsDue > 0"
+                >
+                  <div class="workboard-card-header">
+                    @if (p.patientId) {
+                      <a
+                        class="cell-primary patient-link"
+                        [routerLink]="['/patients', p.patientId]"
+                      >
+                        {{ p.patientName }}
+                      </a>
+                    } @else {
+                      <span class="cell-primary">{{ p.patientName }}</span>
+                    }
+                    @if (p.acuityLevel) {
+                      {{ ' '
+                      }}<span class="acuity-badge {{ acuityCssClass(p.acuityLevel) }}">
+                        {{ acuityLabel(p.acuityLevel) }}
+                      </span>
+                    }
+                  </div>
+                  <div class="workboard-card-meta">
+                    @if (p.roomBed) {
+                      <span class="meta-item">
+                        <span class="material-symbols-outlined">bed</span> {{ p.roomBed }}
+                      </span>
+                    }
+                    @if (p.mrn) {
+                      <span class="meta-item"
+                        >{{ 'NURSE.MRN' | translate }}{{ 'COMMON.COLON' | translate }}
+                        {{ p.mrn }}</span
+                      >
+                    }
+                    @if (p.departmentName) {
+                      <span class="meta-item">{{ p.departmentName }}</span>
+                    }
+                    @if (p.attendingDoctor) {
+                      <span class="meta-item">
+                        <span class="material-symbols-outlined">stethoscope</span>
+                        {{ p.attendingDoctor }}
+                      </span>
+                    }
+                  </div>
+                  <div class="workboard-card-indicators">
+                    @if (p.vitalsDue) {
+                      <span class="indicator indicator-warn">
+                        <span class="material-symbols-outlined">monitor_heart</span>
+                        {{ 'NURSE.VITALS_DUE' | translate }}
+                      </span>
+                    } @else if (p.lastVitalsTime) {
+                      <span class="indicator indicator-ok">
+                        <span class="material-symbols-outlined">monitor_heart</span>
+                        {{ p.lastVitalsTime | serverTime | date: 'shortTime' }}
+                      </span>
+                    }
+                    @if (p.medsDue > 0) {
+                      <span class="indicator indicator-warn">
+                        <span class="material-symbols-outlined">medication</span>
+                        {{ p.medsDue }} {{ 'NURSE.MEDS' | translate }} {{ 'NURSE.DUE' | translate }}
+                      </span>
+                    }
+                    @if (p.admittedAt) {
+                      <span class="indicator indicator-neutral">
+                        <span class="material-symbols-outlined">login</span>
+                        {{ 'NURSE.ADMITTED' | translate }}
+                        {{ p.admittedAt | serverTime | date: 'shortDate' }}
+                      </span>
+                    }
+                  </div>
+                  <div class="workboard-card-actions">
                     <button
-                      class="btn-small btn-success"
-                      (click)="completeTask(task.id)"
-                      [disabled]="actionInProgress() === task.id"
-                    >
-                      <span class="material-symbols-outlined">check_circle</span>
-                      {{ 'NURSE.COMPLETE' | translate }}
-                    </button>
-                    <button
-                      class="btn-small btn-outline"
-                      (click)="openCareNote(task.patientId, task.patientName)"
+                      class="action-btn action-record"
+                      (click)="recordVitals(p.patientId, p.patientName)"
+                      [title]="'NURSE.RECORD_VITALS' | translate"
                     >
                       <span class="material-symbols-outlined">edit_note</span>
-                      {{ 'NURSE.NOTE' | translate }}
+                      {{ 'NURSE.VITALS' | translate }}
                     </button>
-                  } @else {
-                    <span class="task-completed-info">
-                      {{ 'NURSE.COMPLETED_PREFIX' | translate }}
-                      {{ task.completedAt | serverTime | date: 'short' }}
-                      @if (task.completedByName) {
-                        {{ 'NURSE.BY_PREFIX' | translate }} {{ task.completedByName }}
+                    <button
+                      class="action-btn action-triage"
+                      (click)="openTriage(p.patientId)"
+                      [disabled]="encounterLookupInProgress()"
+                      [title]="'TRIAGE.TITLE' | translate"
+                    >
+                      <span class="material-symbols-outlined">emergency</span>
+                      {{ 'TRIAGE.TITLE' | translate }}
+                    </button>
+                    <button
+                      class="action-btn action-intake"
+                      (click)="openIntake(p.patientId)"
+                      [disabled]="encounterLookupInProgress()"
+                      [title]="'INTAKE.TITLE' | translate"
+                    >
+                      <span class="material-symbols-outlined">clinical_notes</span>
+                      {{ 'INTAKE.TITLE' | translate }}
+                    </button>
+                    @if (p.patientId) {
+                      <a
+                        class="action-btn action-view"
+                        [routerLink]="['/patients', p.patientId]"
+                        [title]="'NURSE.VIEW_PATIENT' | translate"
+                      >
+                        <span class="material-symbols-outlined">open_in_new</span>
+                        {{ 'NURSE.CHART' | translate }}
+                      </a>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        }
+
+        <!-- ═══════════ FLOW BOARD TAB ═══════════ -->
+        @if (!loading() && activeSection() === 'flowboard') {
+          @if (
+            !flowBoard() ||
+            (flowBoard()!.pending.length === 0 &&
+              flowBoard()!.active.length === 0 &&
+              flowBoard()!.critical.length === 0 &&
+              flowBoard()!.awaitingDischarge.length === 0)
+          ) {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon">view_kanban</span>
+              <h3>{{ 'NURSE.NO_FLOW_BOARD' | translate }}</h3>
+              <p>{{ 'NURSE.FLOW_BOARD_APPEAR' | translate }}</p>
+            </div>
+          } @else {
+            <div class="flow-board">
+              <!-- Pending column -->
+              <div class="flow-column">
+                <div class="flow-column-header flow-header-pending">
+                  <span class="material-symbols-outlined">pending</span>
+                  {{ 'NURSE.PENDING' | translate }}
+                  <span class="flow-count">{{ flowBoard()!.pending.length }}</span>
+                </div>
+                <div class="flow-cards">
+                  @for (c of flowBoard()!.pending; track c.admissionId) {
+                    <div class="flow-card">
+                      <div class="flow-card-name">
+                        @if (c.patientId) {
+                          <a [routerLink]="['/patients', c.patientId]">{{ c.patientName }}</a>
+                        } @else {
+                          {{ c.patientName }}
+                        }
+                      </div>
+                      @if (c.roomBed) {
+                        <div class="flow-card-room">{{ c.roomBed }}</div>
                       }
-                    </span>
+                      @if (c.acuityLevel) {
+                        <span class="acuity-badge {{ acuityCssClass(c.acuityLevel) }}">
+                          {{ acuityLabel(c.acuityLevel) }}
+                        </span>
+                      }
+                      <div class="flow-card-wait">
+                        {{ c.waitMinutes }} {{ 'NURSE.MIN_UNIT' | translate }}
+                      </div>
+                    </div>
                   }
                 </div>
               </div>
-            }
-          </div>
-        }
-      }
 
-      <!-- ═══════════ INBOX TAB ═══════════ -->
-      @if (!loading() && activeSection() === 'inbox') {
-        <div class="inbox-header">
-          <h3>{{ 'NURSE.COMMUNICATION_INBOX' | translate }}</h3>
-          @if (inboxUnreadCount() > 0) {
-            <button class="btn-small btn-outline" (click)="markAllRead()">
-              {{ 'NURSE.MARK_ALL_READ' | translate }}
-            </button>
-          }
-        </div>
-        @if (inboxItems().length === 0) {
-          <div class="empty-state">
-            <span class="material-symbols-outlined empty-icon">inbox</span>
-            <h3>{{ 'NURSE.NO_MESSAGES' | translate }}</h3>
-            <p>{{ 'NURSE.MESSAGES_APPEAR_HERE' | translate }}</p>
-          </div>
-        }
-        @if (inboxItems().length > 0) {
-          <div class="inbox-list">
-            @for (item of inboxItems(); track item.id) {
-              <div
-                class="inbox-item"
-                [class.inbox-unread]="!item.read"
-                (click)="markRead(item.id)"
-                (keydown.enter)="markRead(item.id)"
-                tabindex="0"
-                role="button"
-              >
-                <div class="inbox-icon">
-                  <span class="material-symbols-outlined">{{
-                    item.read ? 'mark_email_read' : 'mail'
-                  }}</span>
+              <!-- Active column -->
+              <div class="flow-column">
+                <div class="flow-column-header flow-header-active">
+                  <span class="material-symbols-outlined">local_hospital</span>
+                  {{ 'COMMON.ACTIVE' | translate }}
+                  <span class="flow-count">{{ flowBoard()!.active.length }}</span>
                 </div>
-                <div class="inbox-body">
-                  <p class="inbox-message">{{ item.message }}</p>
-                  <span class="inbox-time">{{ item.createdAt | serverTime | date: 'short' }}</span>
+                <div class="flow-cards">
+                  @for (c of flowBoard()!.active; track c.admissionId) {
+                    <div class="flow-card">
+                      <div class="flow-card-name">
+                        @if (c.patientId) {
+                          <a [routerLink]="['/patients', c.patientId]">{{ c.patientName }}</a>
+                        } @else {
+                          {{ c.patientName }}
+                        }
+                      </div>
+                      @if (c.roomBed) {
+                        <div class="flow-card-room">{{ c.roomBed }}</div>
+                      }
+                      @if (c.acuityLevel) {
+                        <span class="acuity-badge {{ acuityCssClass(c.acuityLevel) }}">
+                          {{ acuityLabel(c.acuityLevel) }}
+                        </span>
+                      }
+                      <div class="flow-card-wait">
+                        {{ c.waitMinutes }} {{ 'NURSE.MIN_UNIT' | translate }}
+                      </div>
+                    </div>
+                  }
                 </div>
               </div>
+
+              <!-- Critical column -->
+              <div class="flow-column">
+                <div class="flow-column-header flow-header-critical">
+                  <span class="material-symbols-outlined">warning</span>
+                  {{ 'NURSE.CRITICAL_SEVERE' | translate }}
+                  <span class="flow-count">{{ flowBoard()!.critical.length }}</span>
+                </div>
+                <div class="flow-cards">
+                  @for (c of flowBoard()!.critical; track c.admissionId) {
+                    <div class="flow-card flow-card-critical">
+                      <div class="flow-card-name">
+                        @if (c.patientId) {
+                          <a [routerLink]="['/patients', c.patientId]">{{ c.patientName }}</a>
+                        } @else {
+                          {{ c.patientName }}
+                        }
+                      </div>
+                      @if (c.roomBed) {
+                        <div class="flow-card-room">{{ c.roomBed }}</div>
+                      }
+                      @if (c.acuityLevel) {
+                        <span class="acuity-badge {{ acuityCssClass(c.acuityLevel) }}">
+                          {{ acuityLabel(c.acuityLevel) }}
+                        </span>
+                      }
+                      <div class="flow-card-wait">
+                        {{ c.waitMinutes }} {{ 'NURSE.MIN_UNIT' | translate }}
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <!-- Awaiting Discharge column -->
+              <div class="flow-column">
+                <div class="flow-column-header flow-header-discharge">
+                  <span class="material-symbols-outlined">logout</span>
+                  {{ 'NURSE.AWAITING_DISCHARGE' | translate }}
+                  <span class="flow-count">{{ flowBoard()!.awaitingDischarge.length }}</span>
+                </div>
+                <div class="flow-cards">
+                  @for (c of flowBoard()!.awaitingDischarge; track c.admissionId) {
+                    <div class="flow-card">
+                      <div class="flow-card-name">
+                        @if (c.patientId) {
+                          <a [routerLink]="['/patients', c.patientId]">{{ c.patientName }}</a>
+                        } @else {
+                          {{ c.patientName }}
+                        }
+                      </div>
+                      @if (c.roomBed) {
+                        <div class="flow-card-room">{{ c.roomBed }}</div>
+                      }
+                      @if (c.acuityLevel) {
+                        <span class="acuity-badge {{ acuityCssClass(c.acuityLevel) }}">
+                          {{ acuityLabel(c.acuityLevel) }}
+                        </span>
+                      }
+                      <div class="flow-card-wait">
+                        {{ c.waitMinutes }} {{ 'NURSE.MIN_UNIT' | translate }}
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+          }
+        }
+
+        <!-- ═══════════ ADMISSIONS TAB ═══════════ -->
+        @if (!loading() && activeSection() === 'admissions') {
+          @if (pendingAdmissions().length === 0) {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon">transfer_within_a_station</span>
+              <h3>{{ 'NURSE.NO_PENDING_ADMISSIONS' | translate }}</h3>
+              <p>{{ 'NURSE.ADMISSIONS_APPEAR_HERE' | translate }}</p>
+            </div>
+          }
+          @if (pendingAdmissions().length > 0) {
+            <div
+              class="data-table"
+              tabindex="0"
+              role="region"
+              [attr.aria-label]="sectionLabels[activeSection()] | translate"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'PATIENTS.PATIENT' | translate }}</th>
+                    <th scope="col">{{ 'NURSE.MRN' | translate }}</th>
+                    <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                    <th scope="col">{{ 'NURSE.ACUITY' | translate }}</th>
+                    <th scope="col">{{ 'NURSE.ROOM_BED' | translate }}</th>
+                    <th scope="col">{{ 'STAFF.DEPARTMENT' | translate }}</th>
+                    <th scope="col">{{ 'NURSE.DOCTOR' | translate }}</th>
+                    <th scope="col">{{ 'NURSE.ADMITTED' | translate }}</th>
+                    <th scope="col">{{ 'COMMON.TYPE' | translate }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (a of pendingAdmissions(); track a.admissionId) {
+                    <tr class="data-row" [class.discharge-row]="a.status === 'AWAITING_DISCHARGE'">
+                      <td>
+                        @if (a.patientId) {
+                          <a
+                            class="cell-primary patient-link"
+                            [routerLink]="['/patients', a.patientId]"
+                          >
+                            {{ a.patientName }}
+                          </a>
+                        } @else {
+                          <div class="cell-primary">{{ a.patientName }}</div>
+                        }
+                      </td>
+                      <td>{{ a.mrn || '—' }}</td>
+                      <td>
+                        <span class="status-badge status-{{ a.status | lowercase }}">{{
+                          a.status | enumLabel: 'admissionStatus'
+                        }}</span>
+                      </td>
+                      <td>
+                        @if (a.acuityLevel) {
+                          <span class="acuity-badge {{ acuityCssClass(a.acuityLevel) }}">
+                            {{ acuityLabel(a.acuityLevel) }}
+                          </span>
+                        } @else {
+                          —
+                        }
+                      </td>
+                      <td>{{ a.roomBed || '—' }}</td>
+                      <td>{{ a.departmentName || '—' }}</td>
+                      <td>{{ a.admittingDoctor || '—' }}</td>
+                      <td>{{ fromServerDateTime(a.admissionDateTime) | date: 'short' }}</td>
+                      <td>
+                        {{ a.admissionType ? (a.admissionType | enumLabel: 'admissionType') : '—' }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        }
+
+        <!-- ═══════════ TASK BOARD TAB ═══════════ -->
+        @if (!loading() && activeSection() === 'tasks') {
+          <div class="task-board-header">
+            <h3>{{ 'NURSE.TASK_BOARD' | translate }}</h3>
+            <button class="btn-small btn-primary" (click)="openTaskCreate()">
+              <span class="material-symbols-outlined">add_task</span>
+              {{ 'NURSE.NEW_TASK' | translate }}
+            </button>
+          </div>
+          @if (nursingTasks().length === 0) {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon">task_alt</span>
+              <h3>{{ 'NURSE.NO_TASKS' | translate }}</h3>
+              <p>{{ 'NURSE.CREATE_TASK_HINT' | translate }}</p>
+            </div>
+          }
+          @if (nursingTasks().length > 0) {
+            <div class="task-list">
+              @for (task of nursingTasks(); track task.id) {
+                <div
+                  class="task-card"
+                  [class.task-overdue]="task.overdue"
+                  [class]="taskPriorityClass(task.priority)"
+                >
+                  <div class="task-card-header">
+                    <span class="task-category">{{ taskCategoryLabel(task.category) }}</span>
+                    {{ ' '
+                    }}<span class="task-priority-badge">{{
+                      task.priority | enumLabel: 'taskPriority'
+                    }}</span>
+                  </div>
+                  <div class="task-card-body">
+                    <div class="task-patient">
+                      <strong>{{ task.patientName }}</strong>
+                      @if (task.mrn) {
+                        <span class="task-mrn">{{ task.mrn }}</span>
+                      }
+                    </div>
+                    @if (task.description) {
+                      <p class="task-description">{{ task.description }}</p>
+                    }
+                    @if (task.dueAt) {
+                      <span class="task-due" [class.overdue-text]="task.overdue">
+                        {{ 'NURSE.DUE_LABEL' | translate }}
+                        {{
+                          task.dueAt
+                            | serverTime
+                            | date: (isDueToday(task.dueAt) ? 'shortTime' : 'short')
+                        }}
+                        @if (task.overdue) {
+                          <span class="overdue-badge">{{ 'NURSE.OVERDUE_BADGE' | translate }}</span>
+                        }
+                      </span>
+                    }
+                  </div>
+                  <div class="task-card-actions">
+                    @if (task.status === 'PENDING' || task.status === 'IN_PROGRESS') {
+                      <button
+                        class="btn-small btn-success"
+                        (click)="completeTask(task.id)"
+                        [disabled]="actionInProgress() === task.id"
+                      >
+                        <span class="material-symbols-outlined">check_circle</span>
+                        {{ 'NURSE.COMPLETE' | translate }}
+                      </button>
+                      <button
+                        class="btn-small btn-outline"
+                        (click)="openCareNote(task.patientId, task.patientName)"
+                      >
+                        <span class="material-symbols-outlined">edit_note</span>
+                        {{ 'NURSE.NOTE' | translate }}
+                      </button>
+                    } @else {
+                      <span class="task-completed-info">
+                        {{ 'NURSE.COMPLETED_PREFIX' | translate }}
+                        {{ task.completedAt | serverTime | date: 'short' }}
+                        @if (task.completedByName) {
+                          {{ 'NURSE.BY_PREFIX' | translate }} {{ task.completedByName }}
+                        }
+                      </span>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        }
+
+        <!-- ═══════════ INBOX TAB ═══════════ -->
+        @if (!loading() && activeSection() === 'inbox') {
+          <div class="inbox-header">
+            <h3>{{ 'NURSE.COMMUNICATION_INBOX' | translate }}</h3>
+            @if (inboxUnreadCount() > 0) {
+              <button class="btn-small btn-outline" (click)="markAllRead()">
+                {{ 'NURSE.MARK_ALL_READ' | translate }}
+              </button>
             }
           </div>
+          @if (inboxItems().length === 0) {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon">inbox</span>
+              <h3>{{ 'NURSE.NO_MESSAGES' | translate }}</h3>
+              <p>{{ 'NURSE.MESSAGES_APPEAR_HERE' | translate }}</p>
+            </div>
+          }
+          @if (inboxItems().length > 0) {
+            <div class="inbox-list">
+              @for (item of inboxItems(); track item.id) {
+                <div
+                  class="inbox-item"
+                  [class.inbox-unread]="!item.read"
+                  (click)="markRead(item.id)"
+                  (keydown.enter)="markRead(item.id)"
+                  tabindex="0"
+                  role="button"
+                >
+                  <div class="inbox-icon">
+                    <span class="material-symbols-outlined">{{
+                      item.read ? 'mark_email_read' : 'mail'
+                    }}</span>
+                  </div>
+                  <div class="inbox-body">
+                    <p class="inbox-message">{{ item.message }}</p>
+                    <span class="inbox-time">{{
+                      item.createdAt | serverTime | date: 'short'
+                    }}</span>
+                  </div>
+                </div>
+              }
+            </div>
+          }
         }
-      }
-    </div>
+      </div>
 
-    <!--
+      <!--
       ── Announcements Sidebar ────────────────────────────
       Rendered ONLY when there is something to announce. An empty notice
       board is not information a nurse needs, and reserving 260px for it
       squeezed the tab row into wrapping while leaving a card that said
       nothing sitting level with the tabs.
     -->
-    @if (announcements().length > 0) {
-      <aside class="announcements-sidebar">
-        <h3>
-          <span class="material-symbols-outlined">campaign</span>
-          {{ 'NURSE.ANNOUNCEMENTS' | translate }}
-        </h3>
-        @for (a of announcements(); track a.id) {
-          <div class="announcement-card">
-            <span class="announcement-category">{{ a.category }}</span>
-            <p>{{ a.text }}</p>
-            <span class="announcement-time">{{ a.createdAt | serverTime | date: 'short' }}</span>
-          </div>
-        }
-      </aside>
-    }
-  </div>
+      @if (announcements().length > 0) {
+        <aside class="announcements-sidebar">
+          <h3>
+            <span class="material-symbols-outlined">campaign</span>
+            {{ 'NURSE.ANNOUNCEMENTS' | translate }}
+          </h3>
+          @for (a of announcements(); track a.id) {
+            <div class="announcement-card">
+              <span class="announcement-category">{{ a.category }}</span>
+              <p>{{ a.text }}</p>
+              <span class="announcement-time">{{ a.createdAt | serverTime | date: 'short' }}</span>
+            </div>
+          }
+        </aside>
+      }
+    </div>
+  </section>
 </div>
 
 <!-- ── Hold/Refuse Reason Modal ──────────────────────────── -->

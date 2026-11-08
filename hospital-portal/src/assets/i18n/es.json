@@ -3141,6 +3141,27 @@
       "MERGED": "Identidades fusionadas — se conserva {{name}}",
       "MERGE_FAILED": "Error al fusionar las identidades",
       "NEW_PATIENT_HANDOFF": "Transferencia al formulario de nuevo paciente (próximo)."
+    },
+    "WORKSPACE": {
+      "EYEBROW": "IDENTIDAD DEL PACIENTE",
+      "IDENTITY": "Buscar identidad",
+      "IDENTITY_HINT": "Introduzca los datos conocidos. Se requiere al menos un campo.",
+      "GUIDE_TITLE": "Una persona. El expediente correcto.",
+      "GUIDE_TEXT": "Compare los datos disponibles antes de abrir un expediente o crear uno nuevo.",
+      "SCORE_HINT": "La puntuación ayuda a comparar; no confirma la identidad automáticamente.",
+      "CANDIDATES": "Comparar candidatos",
+      "CANDIDATES_HINT": "Revise cada campo antes de confirmar una coincidencia.",
+      "RESULT_COUNT": "Candidatos: {{count}}",
+      "READY_TITLE": "Listo para buscar",
+      "READY_HINT": "Introduzca los datos de identidad para encontrar posibles expedientes existentes.",
+      "AGREES": "Coincide",
+      "NOT_AGREED": "No indicado como coincidente",
+      "MERGE_TITLE": "Fusión administrativa"
+    },
+    "SEX": {
+      "F": "Femenino",
+      "M": "Masculino",
+      "X": "X"
     }
   },
   "ENCOUNTERS": {
@@ -4726,7 +4747,19 @@
     },
     "PAIN_SCORE": "Dolor (0-10)",
     "MAR_REASON_LABEL": "Motivo",
-    "CARE_NOTE_EMPTY": "Redacte la nota: una nota de cuidados vacía no se guarda."
+    "CARE_NOTE_EMPTY": "Redacte la nota: una nota de cuidados vacía no se guarda.",
+    "WORKSPACE": "Espacio del equipo de cuidados",
+    "PATIENT_SCOPE": "Filtro de asignación de pacientes",
+    "WORKLOAD": "Resumen de cuidados",
+    "OVERVIEW_HELP": "La búsqueda y el filtro de retrasos no cambian estos indicadores.",
+    "WORKLIST_HELP": "Revise los cuidados previstos y abra la acción adecuada.",
+    "WORKLISTS": "Listas de trabajo de cuidados",
+    "SEARCH_TASKS": "Buscar paciente o medicamento",
+    "OVERDUE_ONLY": "Solo pendientes con retraso",
+    "CLEAR_FILTERS": "Borrar filtros",
+    "NO_MATCHES": "Ninguna tarea coincide con estos filtros",
+    "WORKLIST_UNAVAILABLE": "Esta lista de cuidados no está disponible. Actualice para reintentar.",
+    "MEDS_OVERDUE_METRIC": "Medicamentos con retraso"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Sus capacidades",
@@ -8153,7 +8186,20 @@
     "PAYMENT_EXCEEDS_WITH_PENDING": "El paciente declaró {{pending}} sobre este saldo, pendiente de confirmación: ingrese como máximo {{max}}.",
     "COPAY_AMOUNT_NEGATIVE": "El copago no puede ser negativo.",
     "WINDOW_FROM": "Desde el {{date}}",
-    "WINDOW_UNTIL": "Hasta el {{date}}"
+    "WINDOW_UNTIL": "Hasta el {{date}}",
+    "WORKSPACE": "Gestión de recepción",
+    "WORKSPACE_HELP": "Coordine llegadas, citas y seguimiento administrativo.",
+    "DAILY_OVERVIEW": "Resumen del día",
+    "WORKLISTS": "Listas de trabajo de recepción",
+    "STATUS_FILTERS": "Filtrar cola por estado",
+    "SEARCH_QUEUE": "Buscar paciente, historia, profesional o motivo",
+    "ATTENTION_FILTER": "Alertas administrativas",
+    "ALL_ALERTS": "Todos los registros",
+    "CLEAR_FILTERS": "Borrar filtros",
+    "NO_MATCHES": "Ningún paciente coincide con estos filtros",
+    "VISIBLE_QUEUE": "Mostradas: {{shown}} / {{loaded}} entradas cargadas",
+    "SUMMARY_UNAVAILABLE": "El resumen del día no está disponible. Actualice para reintentar.",
+    "PANEL_UNAVAILABLE": "Esta lista de trabajo no está disponible. Reintente."
   },
   "REFERRALS": {
     "ACCEPTED": "Aceptada",
@@ -13052,5 +13098,10 @@
     "FAILED": "No se pudo registrar la decisión.",
     "HELD_FLAG": "Retenida para revisión",
     "ASSESSMENT_DUE_FLAG": "Se impugnó un fallecimiento registrado durante esta transfusión: no se detuvo, evaluación pendiente. Regístrela en la historia."
+  },
+  "CHUNK_RECOVERY": {
+    "TITLE": "No se pudo cargar esta página",
+    "MESSAGE": "Un archivo necesario no está disponible. Recargue para probar la versión actual. Si el problema continúa, contacte con soporte.",
+    "RELOAD": "Recargar página"
   }
 }

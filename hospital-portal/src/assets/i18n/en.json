@@ -3141,6 +3141,27 @@
       "MERGED": "Identities merged — {{name}} survives",
       "MERGE_FAILED": "Failed to merge identities",
       "NEW_PATIENT_HANDOFF": "Hand-off to new-patient form (follow-on)."
+    },
+    "WORKSPACE": {
+      "EYEBROW": "PATIENT IDENTITY",
+      "IDENTITY": "Search identity",
+      "IDENTITY_HINT": "Enter the known details. At least one field is required.",
+      "GUIDE_TITLE": "One person. The right record.",
+      "GUIDE_TEXT": "Compare the available details before opening a patient record or creating a new one.",
+      "SCORE_HINT": "The score helps comparison; it does not confirm identity automatically.",
+      "CANDIDATES": "Candidate comparison",
+      "CANDIDATES_HINT": "Review each field before confirming a match.",
+      "RESULT_COUNT": "Candidates: {{count}}",
+      "READY_TITLE": "Ready to search",
+      "READY_HINT": "Enter identity details above to find possible existing records.",
+      "AGREES": "Agrees",
+      "NOT_AGREED": "Not marked as matching",
+      "MERGE_TITLE": "Administrative merge"
+    },
+    "SEX": {
+      "F": "Female",
+      "M": "Male",
+      "X": "X"
     }
   },
   "ENCOUNTERS": {
@@ -4726,7 +4747,19 @@
     },
     "PAIN_SCORE": "Pain (0-10)",
     "MAR_REASON_LABEL": "Reason",
-    "CARE_NOTE_EMPTY": "Write the note: an empty care note is not saved."
+    "CARE_NOTE_EMPTY": "Write the note: an empty care note is not saved.",
+    "WORKSPACE": "Care team workspace",
+    "PATIENT_SCOPE": "Patient assignment filter",
+    "WORKLOAD": "Care workload overview",
+    "OVERVIEW_HELP": "Task search and overdue filters do not change these summary totals.",
+    "WORKLIST_HELP": "Review due care, then open the appropriate action.",
+    "WORKLISTS": "Care worklists",
+    "SEARCH_TASKS": "Search patient or medication",
+    "OVERDUE_ONLY": "Overdue only",
+    "CLEAR_FILTERS": "Clear filters",
+    "NO_MATCHES": "No tasks match these filters",
+    "WORKLIST_UNAVAILABLE": "This care worklist is unavailable. Refresh to retry.",
+    "MEDS_OVERDUE_METRIC": "Overdue medications"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Your Abilities",
@@ -8153,7 +8186,20 @@
     "PAYMENT_EXCEEDS_WITH_PENDING": "The patient has declared {{pending}} on this balance, pending confirmation: enter at most {{max}}.",
     "COPAY_AMOUNT_NEGATIVE": "The copay cannot be negative.",
     "WINDOW_FROM": "From {{date}}",
-    "WINDOW_UNTIL": "Until {{date}}"
+    "WINDOW_UNTIL": "Until {{date}}",
+    "WORKSPACE": "Front desk operations",
+    "WORKSPACE_HELP": "Coordinate arrivals, appointments and administrative follow-up.",
+    "DAILY_OVERVIEW": "Daily overview",
+    "WORKLISTS": "Front desk worklists",
+    "STATUS_FILTERS": "Filter queue by status",
+    "SEARCH_QUEUE": "Search patient, MRN, provider or reason",
+    "ATTENTION_FILTER": "Administrative alerts",
+    "ALL_ALERTS": "All records",
+    "CLEAR_FILTERS": "Clear filters",
+    "NO_MATCHES": "No patients match these filters",
+    "VISIBLE_QUEUE": "Shown: {{shown}} / {{loaded}} loaded queue entries",
+    "SUMMARY_UNAVAILABLE": "The daily overview is unavailable. Refresh to retry.",
+    "PANEL_UNAVAILABLE": "This worklist is unavailable. Please retry."
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",
@@ -13052,5 +13098,10 @@
     "FAILED": "The decision could not be recorded.",
     "HELD_FLAG": "Held for review",
     "ASSESSMENT_DUE_FLAG": "A recorded death was disputed while this ran: not stopped, assessment due. Record it on the chart."
+  },
+  "CHUNK_RECOVERY": {
+    "TITLE": "This page could not be loaded",
+    "MESSAGE": "A required application file is unavailable. Reload to try the current version. If this continues, contact support.",
+    "RELOAD": "Reload page"
   }
 }

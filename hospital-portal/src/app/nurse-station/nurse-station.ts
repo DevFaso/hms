@@ -1,5 +1,8 @@
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { RoleContextService } from '../core/role-context.service';
 import {
   Component,
+  DestroyRef,
   computed,
   inject,
   OnInit,
@@ -10,7 +13,6 @@ import {
   ElementRef,
   AfterViewChecked,
   ChangeDetectionStrategy,
-  DestroyRef,
 } from '@angular/core';
 import { isNeverSeenVisit } from '../core/encounter-start';
 import { VITAL_SIGN_LIMITS, VitalSignField } from '../shared/vital-sign-limits';
@@ -66,7 +68,6 @@ import {
 } from '../services/nurse-task.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { PatientResponse, PatientService } from '../services/patient.service';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -160,6 +161,53 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   private readonly translate = inject(TranslateService);
   private readonly trackerWs = inject(PatientTrackerWsService);
   private readonly auth = inject(AuthService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly roleContext = inject(RoleContextService);
+  private fastRequest = 0;
+  private slowRequest = 0;
+  readonly searchTerm = signal('');
+  readonly overdueOnly = signal(false);
+  readonly vitalsFailed = signal(false);
+  readonly medicationsFailed = signal(false);
+  readonly ordersFailed = signal(false);
+  readonly visibleVitals = computed(() =>
+    this.vitals().filter(
+      (v) => (!this.overdueOnly() || v.overdue) && this.matchesTask(v.patientName, v.type),
+    ),
+  );
+  readonly visibleMedications = computed(() =>
+    this.medications().filter(
+      (m) =>
+        (!this.overdueOnly() || m.status === 'OVERDUE') &&
+        this.matchesTask(m.patientName, m.medication),
+    ),
+  );
+  readonly visibleOrders = computed(() =>
+    this.orders().filter((o) => this.matchesTask(o.patientName, o.orderType)),
+  );
+  readonly hasTaskFilters = computed(() => !!this.searchTerm() || this.overdueOnly());
+  readonly taskListSection = computed(() =>
+    ['vitals', 'medications', 'orders'].includes(this.activeSection()),
+  );
+  readonly sectionLabels: Record<SectionType, string> = {
+    vitals: 'NURSE.VITALS_DUE',
+    medications: 'NURSE.MEDICATION_MAR',
+    orders: 'NURSE.ORDERS',
+    handoffs: 'NURSE.HANDOFFS',
+    workboard: 'NURSE.WORKBOARD',
+    flowboard: 'NURSE.FLOW_BOARD',
+    admissions: 'NURSE.ADMISSIONS',
+    tasks: 'NURSE.TASK_BOARD',
+    inbox: 'NURSE.INBOX',
+  };
+  private matchesTask(patient: string, detail: string): boolean {
+    const term = this.searchTerm().trim().toLocaleLowerCase();
+    return !term || [patient, detail].some((v) => v?.toLocaleLowerCase().includes(term));
+  }
+  clearTaskFilters(): void {
+    this.searchTerm.set('');
+    this.overdueOnly.set(false);
+  }
   private refreshSub?: Subscription;
   private slowRefreshSub?: Subscription;
   private wsEventsSub?: Subscription;
@@ -212,7 +260,6 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   readonly vitalsPatientDob = signal<string | null>(null);
   readonly showHeadCircumference = computed(() => offersHeadCircumference(this.vitalsPatientDob()));
   private readonly patientLookup = inject(PatientService);
-  private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   vitalsForm = signal<NurseVitalCaptureRequest>({});
   vitalsCapturing = signal(false);
@@ -314,7 +361,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     // instead of waiting up to 5 min for the slow tier. Debounced so a
     // burst of transitions (e.g. discharge auto-completing several
     // encounters) triggers one refetch.
-    const hospitalId = this.auth.getHospitalId();
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     if (hospitalId) {
       this.wsEventsSub = this.trackerWs
         .getEvents()
@@ -340,6 +387,9 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   /** Fast tier (60 s): time-critical data that nurses need up-to-the-minute. */
   loadFast$(): Observable<void> {
+    const request = ++this.fastRequest;
+    let vitalsFailed = false;
+    let medicationsFailed = false;
     const mode = this.filterMode();
     const assignee = mode === 'me' ? 'me' : 'all';
     const params = { assignee } as { assignee?: string };
@@ -348,12 +398,14 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       forkJoin({
         vitals: this.nurseService.getVitalsDue(params).pipe(
           catchError(() => {
+            vitalsFailed = true;
             this.toast.error(this.translate.instant('NURSE.TOAST.VITALS_LOAD_FAILED'));
             return of([] as NurseVitalTask[]);
           }),
         ),
         medications: this.nurseService.getMedicationMAR(params).pipe(
           catchError(() => {
+            medicationsFailed = true;
             this.toast.error(this.translate.instant('NURSE.TOAST.MEDS_LOAD_FAILED'));
             return of([] as NurseMedicationTask[]);
           }),
@@ -369,13 +421,16 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           .pipe(catchError(() => of([] as NurseInboxItem[]))),
       }).pipe(
         tap((results) => {
+          if (request !== this.fastRequest) return;
+          this.vitalsFailed.set(vitalsFailed);
+          this.medicationsFailed.set(medicationsFailed);
           this.vitals.set(results.vitals ?? []);
           this.medications.set(results.medications ?? []);
           this.summary.set(results.summary);
           this.nursingTasks.set(results.nursingTasks ?? []);
           this.inboxItems.set(results.inboxItems ?? []);
           this.inboxUnreadCount.set((results.inboxItems ?? []).filter((i) => !i.read).length);
-          this.lastRefreshed.set(new Date());
+          if (!vitalsFailed && !medicationsFailed) this.lastRefreshed.set(new Date());
         }),
       ),
     ).pipe(map(() => void 0));
@@ -383,6 +438,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   /** Slow tier (300 s): less time-critical data that can tolerate a longer poll period. */
   loadSlow$(): Observable<void> {
+    const request = ++this.slowRequest;
+    let ordersFailed = false;
     const mode = this.filterMode();
     const assignee = mode === 'me' ? 'me' : 'all';
     const params = { assignee } as { assignee?: string };
@@ -391,6 +448,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       forkJoin({
         orders: this.nurseService.getOrders(params).pipe(
           catchError(() => {
+            ordersFailed = true;
             this.toast.error(this.translate.instant('NURSE.TOAST.ORDERS_LOAD_FAILED'));
             return of([] as NurseOrderTask[]);
           }),
@@ -416,6 +474,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         awaitingTriage: this.loadAwaitingTriage$(),
       }).pipe(
         tap((results) => {
+          if (request !== this.slowRequest) return;
+          this.ordersFailed.set(ordersFailed);
           this.awaitingTriage.set(results.awaitingTriage);
           this.orders.set(results.orders ?? []);
           this.handoffs.set(results.handoffs ?? []);
@@ -470,6 +530,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     return defer(() => {
       this.pendingLoads.update((count) => count + 1);
       return source$.pipe(
+        takeUntilDestroyed(this.destroyRef),
         finalize(() => this.pendingLoads.update((count) => Math.max(0, count - 1))),
       );
     });
@@ -485,6 +546,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   setFilter(mode: FilterMode): void {
     if (this.filterMode() !== mode) {
       this.filterMode.set(mode);
+      this.clearTaskFilters();
       this.loadAll();
     }
   }
@@ -493,6 +555,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   setSection(s: SectionType): void {
     this.activeSection.set(s);
+    this.clearTaskFilters();
   }
 
   /* ── Manual refresh ────────────────────────────────────── */

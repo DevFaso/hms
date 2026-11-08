@@ -974,7 +974,7 @@
       "count": 1,
       "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
     },
-    "src/app/reception/empi-candidates-panel/empi-candidates-panel.component.ts::empty-submit-untested::data-testid=empi-search": {
+    "src/app/reception/empi-candidates-panel/empi-candidates-panel.component.html::empty-submit-untested::data-testid=empi-search": {
       "count": 1,
       "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
     },

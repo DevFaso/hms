@@ -1,3 +1,4 @@
+import { RoleContextService } from '../core/role-context.service';
 import { formatDate } from '@angular/common';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
@@ -107,6 +108,10 @@ describe('NurseStationComponent — two-tier polling', () => {
         { provide: Router, useValue: routerSpy },
         { provide: EncounterService, useValue: encounterSpy },
         { provide: AuthService, useValue: authSpy },
+        {
+          provide: RoleContextService,
+          useValue: { effectiveHospitalIdForRequest: () => authSpy.getHospitalId() },
+        },
         { provide: PatientTrackerWsService, useValue: trackerWsSpy },
       ],
     }).compileComponents();
@@ -120,6 +125,95 @@ describe('NurseStationComponent — two-tier polling', () => {
     component.ngOnDestroy();
   });
 
+  it('searches loaded tasks and overdue flags without changing source counts or doses', () => {
+    fixture.detectChanges();
+    component.vitals.set([
+      {
+        id: 'v1',
+        patientId: 'p1',
+        patientName: 'Cdx One',
+        type: 'FULL',
+        dueTime: '2026-11-07T08:00:00Z',
+        overdue: true,
+      },
+      {
+        id: 'v2',
+        patientId: 'p2',
+        patientName: 'Cdx Two',
+        type: 'FULL',
+        dueTime: '2026-11-07T09:00:00Z',
+        overdue: false,
+      },
+    ]);
+    const calls = nurseServiceSpy.getVitalsDue.calls.count();
+    component.searchTerm.set('two');
+    component.overdueOnly.set(true);
+    expect(component.visibleVitals()).toEqual([]);
+    expect(component.vitals().length).toBe(2);
+    component.clearTaskFilters();
+    expect(component.visibleVitals().length).toBe(2);
+    expect(nurseServiceSpy.getVitalsDue.calls.count()).toBe(calls);
+  });
+  it('honours the selected hospital for live updates', () => {
+    spyOn(TestBed.inject(RoleContextService), 'effectiveHospitalIdForRequest').and.returnValue(
+      'h2',
+    );
+    fixture.detectChanges();
+    expect(trackerWsSpy.connect).toHaveBeenCalledWith('h2');
+  });
+  it('uses the server overdue total when the MAR fails, and shows unavailable without a summary', () => {
+    nurseServiceSpy.getMedicationMAR.and.returnValue(throwError(() => new Error('offline')));
+    nurseServiceSpy.getDashboardSummary.and.returnValue(
+      of({
+        assignedPatients: 1,
+        vitalsDue: 0,
+        medicationsDue: 2,
+        medicationsOverdue: 3,
+        ordersPending: 0,
+        handoffsPending: 0,
+        announcements: 0,
+      }),
+    );
+    fixture.detectChanges();
+    const overdueValue = () =>
+      fixture.nativeElement.querySelectorAll('.summary-card .card-value')[3].textContent.trim();
+    expect(component.medicationsFailed()).toBeTrue();
+    expect(overdueValue()).toBe('3');
+    component.searchTerm.set('missing');
+    fixture.detectChanges();
+    expect(overdueValue()).toBe('3');
+    nurseServiceSpy.getDashboardSummary.and.returnValue(throwError(() => new Error('offline')));
+    component.refresh();
+    fixture.detectChanges();
+    expect(overdueValue()).toBe('—');
+  });
+  it('keeps the latest assignee response and distinguishes a failed vital list from an empty one', () => {
+    const old = new Subject<import('../services/nurse-task.service').NurseVitalTask[]>();
+    nurseServiceSpy.getVitalsDue.and.returnValue(old);
+    fixture.detectChanges();
+    nurseServiceSpy.getVitalsDue.and.returnValue(
+      of([
+        {
+          id: 'current',
+          patientId: 'p',
+          patientName: 'Cdx Current',
+          type: 'FULL',
+          dueTime: '2026-11-07T08:00:00Z',
+          overdue: false,
+        },
+      ]),
+    );
+    component.setFilter('all');
+    old.next([]);
+    old.complete();
+    expect(component.vitals()[0].id).toBe('current');
+    nurseServiceSpy.getVitalsDue.and.returnValue(throwError(() => new Error('offline')));
+    component.refresh();
+    fixture.detectChanges();
+    expect(component.vitalsFailed()).toBeTrue();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.empty-state')).toBeNull();
+  });
   it('should create', () => {
     expect(component).toBeTruthy();
   });

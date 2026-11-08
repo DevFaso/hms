@@ -1826,9 +1826,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.routerSub = this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe(() => {
-        // A successful navigation proves the chunk graph is healthy — re-arm
-        // the one-shot stale-chunk reload guard (see app.config.ts).
-        sessionStorage.removeItem('hms-chunk-reload');
         const focusMain = () => this.mainContent?.nativeElement.focus({ preventScroll: true });
         // QA D1153: the open phone drawer keeps the page inert until this
         // render; <main> takes focus once it is reachable again (the drawer
