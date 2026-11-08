@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.maternity.LegacyUltrasoundDefaults;
 import com.example.hms.enums.UltrasoundOrderStatus;
 import com.example.hms.enums.UltrasoundScanType;
 import com.example.hms.exception.BusinessException;
@@ -390,8 +391,8 @@ public class UltrasoundServiceImpl implements UltrasoundService {
 
     /**
      * QA D1525: a report cannot read NORMAL while it states absent cardiac
-     * activity, an abnormal fetal tone, detected anomalies or an absent nasal
-     * bone (a recognised soft marker). Refused on the category, which the
+     * activity, an abnormal fetal tone, detected anomalies, an absent nasal
+     * bone (a recognised soft marker) or no fetus seen. Refused on the category, which the
      * clinician corrects. Absent fetal movement is deliberately NOT a
      * contradiction: on a single scan it can be normal (a resting fetus).
      */
@@ -402,9 +403,23 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         if (Boolean.FALSE.equals(request.getFetalCardiacActivity())
                 || Boolean.FALSE.equals(request.getFetalToneNormal())
                 || Boolean.TRUE.equals(request.getAnomaliesDetected())
-                || Boolean.FALSE.equals(request.getNasalBonePresent())) {
+                || Boolean.FALSE.equals(request.getNasalBonePresent())
+                || Integer.valueOf(0).equals(request.getNumberOfFetuses())) {
             throw new com.example.hms.exception.FieldBusinessException("findingCategory",
                 "ultrasound.report.normalContradictsObservation");
+        }
+    }
+
+    /**
+     * QA D1525 review: no fetus seen contradicts cardiac activity or fetal
+     * movement present. Refused on the fetus count.
+     */
+    static void requireFetusCountMatchesObservations(UltrasoundReportRequestDTO request) {
+        if (Integer.valueOf(0).equals(request.getNumberOfFetuses())
+                && (Boolean.TRUE.equals(request.getFetalCardiacActivity())
+                    || Boolean.TRUE.equals(request.getFetalMovementObserved()))) {
+            throw new com.example.hms.exception.FieldBusinessException("numberOfFetuses",
+                "ultrasound.report.noFetusContradictsObservation");
         }
     }
 
@@ -427,11 +442,15 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         if (report != null && Boolean.TRUE.equals(report.getReportReviewedByProvider())) {
             throw new BusinessException("ultrasound.report.reviewedNoEdit");
         }
-        // QA D1525: the empty report is refused first, so an untouched template
-        // (which no longer pre-selects NORMAL) reads as empty, not "pick a category".
+        // QA D1525: on a legacy row (existed before V282), values equal to an old
+        // default are unknown unless the client says it states them; cleared
+        // first, so the checks below never count what will read back as unknown.
+        LegacyUltrasoundDefaults.clearEchoedDefaults(report, request);
+        // The empty report is refused first, then the category is asked for.
         requireReportFindings(request);
         requireFindingCategory(request);
         requireCategoryMatchesObservations(request);
+        requireFetusCountMatchesObservations(request);
 
         if (report == null) {
             report = ultrasoundMapper.toReportEntity(request, order, order.getHospital());
@@ -442,13 +461,10 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             ultrasoundMapper.updateReportFromRequest(report, request);
         }
 
-        // QA D1525: the row is marked as stated only when the client says it
-        // states its observations (tri-state controls, no defaults: the
-        // D1525 portal). A stale client that echoes a legacy row's defaults
-        // (true flags, "no anomalies", one fetus, NORMAL) leaves it legacy, so
-        // those values keep reading as unknown. A stated row is never
-        // downgraded.
-        if (Boolean.TRUE.equals(request.getObservationsStated())) {
+        // QA D1525: a new report is stated (entity default). A legacy row
+        // becomes stated only when the client says it showed the old defaults
+        // as unknown and the clinician answered; a stated row stays stated.
+        if (LegacyUltrasoundDefaults.legacy(report) && Boolean.TRUE.equals(request.getObservationsStated())) {
             report.setObservationsStated(Boolean.TRUE);
         }
 

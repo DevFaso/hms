@@ -121,6 +121,12 @@ const FLAG_KEYS: Record<
 const LEGACY_KEYS = {
   legacyKey: 'ULTRASOUND.FLAG_NOT_STATED_LEGACY',
 };
+const NASAL_BONE_KEYS = {
+  labelKey: 'ULTRASOUND.NASAL_BONE',
+  trueKey: 'ULTRASOUND.NASAL_BONE_PRESENT',
+  falseKey: 'ULTRASOUND.NASAL_BONE_ABSENT',
+  notAssessedKey: 'ULTRASOUND.NASAL_BONE_NOT_ASSESSED',
+};
 const ANOMALY_KEYS = {
   trueKey: 'ULTRASOUND.ANOMALIES_YES',
   falseKey: 'ULTRASOUND.ANOMALIES_NO',
@@ -154,7 +160,8 @@ export function hasUltrasoundFinding(
 
 /**
  * QA D1525: NORMAL contradicts absent cardiac activity, an abnormal tone,
- * detected anomalies or an absent nasal bone (a recognised soft marker); the
+ * detected anomalies, an absent nasal bone (a recognised soft marker) or no
+ * fetus seen; the
  * server refuses the same, on the category. Absent fetal movement is
  * deliberately not a contradiction: on a single scan it can be normal.
  */
@@ -166,7 +173,21 @@ export function normalContradictsObservation(
     (form.fetalCardiacActivity === false ||
       form.fetalToneNormal === false ||
       form.anomaliesDetected === true ||
-      form.nasalBonePresent === false)
+      form.nasalBonePresent === false ||
+      form.numberOfFetuses === 0)
+  );
+}
+
+/**
+ * QA D1525 review: no fetus seen contradicts cardiac activity or fetal movement
+ * present (the server refuses the same, on the fetus count).
+ */
+export function noFetusContradictsObservation(
+  form: UltrasoundReportForm | Partial<UltrasoundReportRequest>,
+): boolean {
+  return (
+    form.numberOfFetuses === 0 &&
+    (form.fetalCardiacActivity === true || form.fetalMovementObserved === true)
   );
 }
 
@@ -277,6 +298,9 @@ export class UltrasoundTabComponent implements OnInit {
   reportForm: UltrasoundReportForm = this.emptyReportForm();
   readonly triStateFlags = TRI_STATE_FLAGS;
   readonly maxFetuses = MAX_FETUSES;
+  readonly nasalBoneKeys = NASAL_BONE_KEYS;
+  /** QA D1525: the report being edited existed before V282 (its old defaults read as unknown). */
+  private editingLegacy = false;
   reportActionBusy = signal(false);
 
   ngOnInit(): void {
@@ -594,6 +618,13 @@ export class UltrasoundTabComponent implements OnInit {
     return report.observationsStated ? FLAG_KEYS[flag].notAssessedKey : LEGACY_KEYS.legacyKey;
   }
 
+  /** The nasal bone answer as read, by the same rule. */
+  nasalBoneKey(report: UltrasoundReportResponse): string {
+    if (report.nasalBonePresent === true) return NASAL_BONE_KEYS.trueKey;
+    if (report.nasalBonePresent === false) return NASAL_BONE_KEYS.falseKey;
+    return report.observationsStated ? NASAL_BONE_KEYS.notAssessedKey : LEGACY_KEYS.legacyKey;
+  }
+
   /** The anomalies answer as read, by the same rule. */
   anomaliesKey(report: UltrasoundReportResponse): string {
     if (report.anomaliesDetected === true) return ANOMALY_KEYS.trueKey;
@@ -624,6 +655,7 @@ export class UltrasoundTabComponent implements OnInit {
       fetalMovementObserved: null,
       fetalToneNormal: null,
       anomaliesDetected: null,
+      nasalBonePresent: null,
       reportFinalized: false,
     };
   }
@@ -631,6 +663,7 @@ export class UltrasoundTabComponent implements OnInit {
   openReport(order: UltrasoundOrderResponse): void {
     this.reportTargetOrder.set(order);
     const existing = order.report;
+    this.editingLegacy = existing?.observationsStated === false;
     if (existing) {
       // Strip the response-only bookkeeping fields before reusing as a request.
       const {
@@ -660,6 +693,7 @@ export class UltrasoundTabComponent implements OnInit {
         fetalMovementObserved: existing.fetalMovementObserved ?? null,
         fetalToneNormal: existing.fetalToneNormal ?? null,
         anomaliesDetected: existing.anomaliesDetected ?? null,
+        nasalBonePresent: existing.nasalBonePresent ?? null,
         numberOfFetuses: existing.numberOfFetuses ?? undefined,
         gestationalAgeAtScan: existing.gestationalAgeAtScan ?? undefined,
         reportFinalized: false,
@@ -726,6 +760,15 @@ export class UltrasoundTabComponent implements OnInit {
       );
       return;
     }
+    if (noFetusContradictsObservation(form)) {
+      refuseFields(
+        this.host.nativeElement,
+        ['rep-fetuses'],
+        REPORT_FIELD_IDS,
+        this.translate.instant('ULTRASOUND.NO_FETUS_CONTRADICTS_OBSERVATION'),
+      );
+      return;
+    }
     if (normalContradictsObservation(form)) {
       refuseFields(
         this.host.nativeElement,
@@ -736,10 +779,14 @@ export class UltrasoundTabComponent implements OnInit {
       return;
     }
     refuseFields(this.host.nativeElement, [], REPORT_FIELD_IDS, '');
-    // QA D1525: the observations are sent as stated (null = not assessed),
-    // and the request says so: the server marks the row as stated only for a
-    // client that states them, never for a stale one echoing old defaults.
-    const request = { ...form, observationsStated: true } as Partial<UltrasoundReportRequest>;
+    // QA D1525: the observations are sent as stated (null = not assessed).
+    // Only the edit of a legacy report (it existed before V282) says so:
+    // this form showed its old defaults as unknown and the clinician
+    // answered, so the server takes the values as stated. A new report or a
+    // stated one needs nothing: the server never defaults a finding.
+    const request = (
+      this.editingLegacy ? { ...form, observationsStated: true } : { ...form }
+    ) as Partial<UltrasoundReportRequest>;
     this.reportSaving.set(true);
     this.ultrasoundService.submitReport(order.id, request as UltrasoundReportRequest).subscribe({
       next: () => {

@@ -267,6 +267,10 @@
                 </li>
               }
               <li>
+                {{ nasalBoneKeys.labelKey | translate }}{{ 'COMMON.COLON' | translate }}
+                {{ nasalBoneKey(rep) | translate }}
+              </li>
+              <li>
                 {{ 'ULTRASOUND.ANOMALIES' | translate }}{{ 'COMMON.COLON' | translate }}
                 {{ anomaliesKey(rep) | translate }}
               </li>
@@ -277,11 +281,8 @@
                 }
               </li>
             </ul>
-            @if (rep.anomaliesDetected) {
-              <p>
-                <span class="risk-badge risk-high">{{ 'ULTRASOUND.ANOMALIES' | translate }}</span>
-                {{ rep.anomalyDescription }}
-              </p>
+            @if (rep.anomalyDescription) {
+              <p>{{ rep.anomalyDescription }}</p>
             }
             @if (rep.followUpRequired) {
               <p class="muted">
@@ -627,6 +628,14 @@
               </select>
             </div>
           }
+          <div class="field">
+            <label for="rep-nasal-bone">{{ nasalBoneKeys.labelKey | translate }}</label>
+            <select id="rep-nasal-bone" [(ngModel)]="reportForm.nasalBonePresent">
+              <option [ngValue]="null">{{ nasalBoneKeys.notAssessedKey | translate }}</option>
+              <option [ngValue]="true">{{ nasalBoneKeys.trueKey | translate }}</option>
+              <option [ngValue]="false">{{ nasalBoneKeys.falseKey | translate }}</option>
+            </select>
+          </div>
           <div class="field">
             <label for="rep-anomalies">{{ 'ULTRASOUND.ANOMALIES' | translate }}</label>
             <select id="rep-anomalies" [(ngModel)]="reportForm.anomaliesDetected">

@@ -2,6 +2,8 @@ package com.example.hms.payload.dto.ultrasound;
 
 import com.example.hms.enums.UltrasoundFindingCategory;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -42,6 +44,9 @@ public abstract class UltrasoundReportBaseDTO {
     private Boolean dueDateConfirmed;
 
     // Fetal count and position
+    /** QA D1525 review: 0 means no fetus seen (a finding); negatives and implausible counts are refused. */
+    @Min(value = 0, message = "{ultrasoundReport.numberOfFetuses.range}")
+    @Max(value = 8, message = "{ultrasoundReport.numberOfFetuses.range}")
     private Integer numberOfFetuses;
 
     private String fetalPosition;

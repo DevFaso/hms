@@ -129,7 +129,7 @@ class UltrasoundReportFindingsTest {
     }
 
     @Test
-    void aNewEntityStatesNothingAndIsLegacyUntilSaved() {
+    void aNewEntityStatesNothingAndIsStated() {
         for (UltrasoundReport r : new UltrasoundReport[] {UltrasoundReport.builder().build(), new UltrasoundReport()}) {
             assertThat(r.getFetalCardiacActivity()).isNull();
             assertThat(r.getFetalMovementObserved()).isNull();
@@ -137,7 +137,7 @@ class UltrasoundReportFindingsTest {
             assertThat(r.getAnomaliesDetected()).isNull();
             assertThat(r.getFindingCategory()).isNull();
             assertThat(r.getNumberOfFetuses()).isNull();
-            assertThat(r.getObservationsStated()).isNull();
+            assertThat(r.getObservationsStated()).as("created after V282: stated").isTrue();
         }
     }
 
@@ -145,8 +145,8 @@ class UltrasoundReportFindingsTest {
     void theResponseSaysWhetherTheObservationsWereStated() {
         UltrasoundReport legacy = new UltrasoundReport();
         legacy.setFetalCardiacActivity(true);
+        legacy.setObservationsStated(false);
         UltrasoundReport stated = new UltrasoundReport();
-        stated.setObservationsStated(true);
         UltrasoundMapper mapper = new UltrasoundMapper();
         assertThat(mapper.toReportResponseDTO(legacy).getObservationsStated()).isFalse();
         assertThat(mapper.toReportResponseDTO(stated).getObservationsStated()).isTrue();
@@ -206,6 +206,7 @@ class UltrasoundReportFindingsTest {
     void aLegacyRowReadsOnlyItsPossibleDefaultsAsUnknown() {
         UltrasoundMapper mapper = new UltrasoundMapper();
         UltrasoundReport defaults = new UltrasoundReport();
+        defaults.setObservationsStated(false);
         defaults.setFetalCardiacActivity(true);
         defaults.setFetalMovementObserved(true);
         defaults.setFetalToneNormal(true);
@@ -224,6 +225,7 @@ class UltrasoundReportFindingsTest {
         assertThat(read.getObservationsStated()).isFalse();
 
         UltrasoundReport typed = new UltrasoundReport();
+        typed.setObservationsStated(false);
         typed.setFetalCardiacActivity(false);
         typed.setFetalMovementObserved(false);
         typed.setFetalToneNormal(false);
@@ -281,5 +283,62 @@ class UltrasoundReportFindingsTest {
                 .isInstanceOf(FieldBusinessException.class);
         assertThatCode(() -> UltrasoundServiceImpl.requireCategoryMatchesObservations(noMovement))
                 .doesNotThrowAnyException();
+    }
+
+    /**
+     * QA D1525 review: the legacy reading applies only to a row that existed
+     * before V282 (observations_stated FALSE), never to a row whose client
+     * merely omitted the flag, nor to one where the marker is missing.
+     */
+    @Test
+    void theLegacyReadingAppliesOnlyToRowsMarkedLegacy() {
+        UltrasoundMapper mapper = new UltrasoundMapper();
+        for (Boolean marker : new Boolean[] {Boolean.TRUE, null}) {
+            UltrasoundReport row = new UltrasoundReport();
+            row.setObservationsStated(marker);
+            row.setFetalCardiacActivity(true);
+            row.setAnomaliesDetected(false);
+            row.setNumberOfFetuses(1);
+            row.setFindingCategory(UltrasoundFindingCategory.NORMAL);
+            var read = mapper.toReportResponseDTO(row);
+            assertThat(read.getFetalCardiacActivity()).as("marker " + marker).isTrue();
+            assertThat(read.getAnomaliesDetected()).as("marker " + marker).isFalse();
+            assertThat(read.getNumberOfFetuses()).as("marker " + marker).isEqualTo(1);
+            assertThat(read.getFindingCategory()).as("marker " + marker).isEqualTo(UltrasoundFindingCategory.NORMAL);
+            assertThat(read.getObservationsStated()).as("marker " + marker).isTrue();
+
+            UltrasoundReportRequestDTO request = base().fetalCardiacActivity(true).numberOfFetuses(1)
+                    .findingCategory(UltrasoundFindingCategory.NORMAL).build();
+            com.example.hms.service.maternity.LegacyUltrasoundDefaults.clearEchoedDefaults(row, request);
+            assertThat(request.getFetalCardiacActivity()).as("nothing cleared, marker " + marker).isTrue();
+            assertThat(request.getFindingCategory()).isEqualTo(UltrasoundFindingCategory.NORMAL);
+        }
+    }
+
+    /** QA D1525 review: no fetus seen contradicts NORMAL, and cardiac activity or movement present. */
+    @Test
+    void noFetusSeenContradictsNormalAndAPresentHeartOrMovement() {
+        UltrasoundReportRequestDTO normal = base().numberOfFetuses(0).findingCategory(UltrasoundFindingCategory.NORMAL).build();
+        assertThatThrownBy(() -> UltrasoundServiceImpl.requireCategoryMatchesObservations(normal))
+                .isInstanceOfSatisfying(FieldBusinessException.class,
+                        ex -> assertThat(ex.getField()).isEqualTo("findingCategory"));
+        for (UltrasoundReportRequestDTO r : new UltrasoundReportRequestDTO[] {
+                base().numberOfFetuses(0).fetalCardiacActivity(true).findingCategory(UltrasoundFindingCategory.URGENT).build(),
+                base().numberOfFetuses(0).fetalMovementObserved(true).findingCategory(UltrasoundFindingCategory.URGENT).build()}) {
+            assertThatThrownBy(() -> UltrasoundServiceImpl.requireFetusCountMatchesObservations(r))
+                    .isInstanceOfSatisfying(FieldBusinessException.class, ex -> {
+                        assertThat(ex.getField()).isEqualTo("numberOfFetuses");
+                        assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.noFetusContradictsObservation");
+                    });
+        }
+        UltrasoundReportRequestDTO noHeart = base().numberOfFetuses(0).fetalCardiacActivity(false)
+                .findingCategory(UltrasoundFindingCategory.URGENT).build();
+        assertThatCode(() -> UltrasoundServiceImpl.requireFetusCountMatchesObservations(noHeart))
+                .doesNotThrowAnyException();
+        for (java.util.Locale locale : new java.util.Locale[] {
+                java.util.Locale.ENGLISH, java.util.Locale.FRENCH, java.util.Locale.forLanguageTag("es")}) {
+            assertThat(java.util.ResourceBundle.getBundle("i18n/messages-lab", locale)
+                    .getString("ultrasound.report.noFetusContradictsObservation")).isNotBlank();
+        }
     }
 }

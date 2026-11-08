@@ -49,6 +49,8 @@ class ClinicalTemplatePrefillGuardTest {
     private static final Set<String> BOOKKEEPING_FLAGS = Set.of(
             "active", "isActive", "enabled", "current", "published", "managedByPlatform",
             "latestVersion", "providerReviewRequired",
+            // QA D1525: provenance of a report's observations (new rows are stated), not a finding
+            "observationsStated",
             // catalogue attributes of an education resource, not a patient
             "isEvidenceBased", "isCulturallySensitive",
             // a referral's care arrangement, not an observation

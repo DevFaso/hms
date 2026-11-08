@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.service.maternity.LegacyUltrasoundDefaults;
 import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.service.recordaccess.CrossHospitalRows;
 import com.example.hms.service.recordaccess.WithheldRows;
@@ -2589,7 +2590,7 @@ public class PatientServiceImpl implements PatientService {
                 putIfNotNull(metadata, "scanPerformedBy", report.getScanPerformedBy());
                 putIfNotNull(metadata, "reportFinalizedBy", report.getReportFinalizedBy());
                 // QA D1525: a legacy "no anomalies" was a default, not a finding
-                putIfNotNull(metadata, "anomaliesDetected", com.example.hms.service.maternity.LegacyUltrasoundDefaults.anomaliesDetected(report));
+                putIfNotNull(metadata, "anomaliesDetected", LegacyUltrasoundDefaults.anomaliesDetected(report));
                 putIfNotNull(metadata, "followUpRecommendations", truncate(report.getFollowUpRecommendations()));
                 return PatientTimelineEntryDTO.builder()
                     .entryId(report.getId() != null ? report.getId().toString() : null)

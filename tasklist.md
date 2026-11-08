@@ -6385,3 +6385,7 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **D1516, the in-basket item has no click-through** for reference type `DEATH_ENTERED_IN_ERROR_CLOSURES`; it names the patient, and the chart shows the closures.
 - **D1515 sibling, under-inclusion:** `CdsCheckServiceImpl` (dispense interaction check) and `MtmReviewServiceImpl` (polypharmacy) keep their own "active" lists (SIGNED, TRANSMITTED, PARTIALLY_FILLED, DISPENSED). They already exclude drafts, so D1515 is not there, but they miss other signed statuses (PENDING_STOCK, the partner ones, PENDING_CLARIFICATION, TRANSMISSION_FAILED, PRINTED_FOR_PATIENT). Moving them to `isInForce()` widens a pharmacy check: left for its own change.
 - **D1516, a real death's stay** still has no discharge time (only the voided one gets it); setting it would change which orders end with the stay before `snapshotAtDeath`. Clinical decision.
+
+## Standing debt — D1525 (fix/d1525-review-followups)
+
+- **D1525, legacy gestational age (Low):** on a report that existed before V282, the template's gestational age (12 or 20 weeks) reads as unknown only while the row keeps the whole template signature (no days, every text blank, no biometry, no heart rate, the flags at their defaults). A legacy row whose template age was kept while other fields were typed shows that age as stated; the stored data cannot tell it from a typed 12 or 20 (`LegacyUltrasoundDefaults.gestationalAgeAtScan`).

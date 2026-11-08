@@ -165,13 +165,15 @@ public class UltrasoundReport extends BaseEntity implements TenantScoped {
     private Boolean fetalToneNormal;
 
     /**
-     * QA D1525 (V282): TRUE on every report saved since D1525, whose
-     * observations and anomalies answer are what the clinician stated. NULL on
-     * a row written before: its TRUE flags, "no anomalies" and "1 fetus" were
-     * server defaults, read as "not stated (legacy)" and never re-sent on edit.
+     * QA D1525 (V282): FALSE exactly on a report that existed before V282
+     * (legacy: its possible old defaults read as unknown, see
+     * LegacyUltrasoundDefaults); TRUE on every report created since, from any
+     * client, because nothing defaults a finding any more. Provenance, not a
+     * finding.
      */
-    @Column(name = "observations_stated")
-    private Boolean observationsStated;
+    @Column(name = "observations_stated", nullable = false)
+    @Builder.Default
+    private Boolean observationsStated = Boolean.TRUE;
 
     @Column(name = "anatomy_survey_complete")
     @Builder.Default

@@ -25,7 +25,8 @@ export interface UltrasoundReportFields {
   gestationalAgeDays?: number;
   nuchalTranslucencyMm?: number;
   crownRumpLengthMm?: number;
-  nasalBonePresent?: boolean;
+  /** QA D1525: tri-state, null = not assessed. */
+  nasalBonePresent?: boolean | null;
   estimatedDueDate?: string;
   dueDateConfirmed?: boolean;
   numberOfFetuses?: number;

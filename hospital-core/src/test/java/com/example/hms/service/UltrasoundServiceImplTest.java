@@ -543,7 +543,6 @@ class UltrasoundServiceImplTest {
             .scanDate(LocalDate.now())
             .fetalCardiacActivity(Boolean.FALSE)
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.URGENT)
-            .observationsStated(Boolean.TRUE)
             .build();
         UltrasoundReport mapped = new UltrasoundReport();
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
@@ -558,9 +557,11 @@ class UltrasoundServiceImplTest {
     }
 
     /**
-     * QA D1525 review: a stale client (no observationsStated) editing a legacy
-     * row and echoing its defaults leaves the row legacy, so the echoed true
-     * flags, "no anomalies", one fetus and NORMAL keep reading as unknown.
+     * QA D1525 review: on a LEGACY row (existed before V282) a client that does
+     * not say it states the observations has its echoed old defaults (true
+     * flags, "no anomalies", one fetus, NORMAL) treated as unknown: they are
+     * neither counted nor stored, NORMAL must be chosen again, and the row stays
+     * legacy. The D1525 portal (observationsStated=true) makes it stated.
      */
     @Test
     void createOrUpdateReport_aStaleClientEchoingLegacyDefaultsDoesNotStampThemAsStated() {
@@ -572,6 +573,22 @@ class UltrasoundServiceImplTest {
         legacy.setUltrasoundOrder(order);
         legacy.setHospital(hospital);
         legacy.setReportReviewedByProvider(false);
+        legacy.setObservationsStated(false);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.of(legacy));
+
+        // Only echoed defaults: they will read back as unknown, so they are no finding.
+        UltrasoundReportRequestDTO onlyDefaults = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now())
+            .fetalCardiacActivity(true).fetalMovementObserved(true).fetalToneNormal(true)
+            .anomaliesDetected(false).numberOfFetuses(1)
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
+            .build();
+        assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, onlyDefaults, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.findingsRequired"));
+
+        // With a real finding, the echoed NORMAL is unknown: the category is asked for.
         UltrasoundReportRequestDTO echo = UltrasoundReportRequestDTO.builder()
             .scanDate(LocalDate.now())
             .fetalCardiacActivity(true).fetalMovementObserved(true).fetalToneNormal(true)
@@ -579,23 +596,55 @@ class UltrasoundServiceImplTest {
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
             .findingsSummary("Revu")
             .build();
-        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.of(legacy));
+        assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, echo, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("findingCategory"));
+        verify(reportRepository, never()).save(any());
+
+        // A chosen category: saved, the echoed defaults cleared, the row still legacy.
         when(reportRepository.save(legacy)).thenReturn(legacy);
-
+        echo.setFindingCategory(com.example.hms.enums.UltrasoundFindingCategory.VARIANT);
+        echo.setFetalCardiacActivity(true);
+        echo.setAnomaliesDetected(false);
+        echo.setNumberOfFetuses(1);
         ultrasoundService.createOrUpdateReport(orderId, echo, null);
+        assertThat(echo.getFetalCardiacActivity()).as("echoed default, not stored as a statement").isNull();
+        assertThat(echo.getAnomaliesDetected()).isNull();
+        assertThat(echo.getNumberOfFetuses()).isNull();
+        assertThat(legacy.getObservationsStated()).as("still legacy").isFalse();
 
-        assertThat(legacy.getObservationsStated()).as("still legacy: the echo is not a statement").isNull();
-
-        // The D1525 portal says it states them: the row becomes stated.
-        echo.setObservationsStated(Boolean.TRUE);
-        ultrasoundService.createOrUpdateReport(orderId, echo, null);
+        // The D1525 portal says it states them: taken as stated, the row becomes stated.
+        UltrasoundReportRequestDTO stated = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).fetalCardiacActivity(true).numberOfFetuses(1)
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
+            .observationsStated(Boolean.TRUE)
+            .build();
+        ultrasoundService.createOrUpdateReport(orderId, stated, null);
+        assertThat(stated.getFetalCardiacActivity()).isTrue();
         assertThat(legacy.getObservationsStated()).isTrue();
+    }
 
-        // ...and is never downgraded by a stale client afterwards.
-        echo.setObservationsStated(null);
-        ultrasoundService.createOrUpdateReport(orderId, echo, null);
-        assertThat(legacy.getObservationsStated()).isTrue();
+    /** QA D1525 review: a new report is stated whatever the client sends; the client flag plays no part. */
+    @Test
+    void createOrUpdateReport_aNewReportIsStatedWithoutAnyClientFlag() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).fetalCardiacActivity(true).numberOfFetuses(1)
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
+            .build();
+        UltrasoundReport mapped = UltrasoundReport.builder().build();
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.empty());
+        when(ultrasoundMapper.toReportEntity(request, order, hospital)).thenReturn(mapped);
+        when(reportRepository.save(mapped)).thenReturn(mapped);
+
+        ultrasoundService.createOrUpdateReport(orderId, request, null);
+
+        assertThat(request.getFetalCardiacActivity()).as("nothing cleared on a new report").isTrue();
+        assertThat(mapped.getObservationsStated()).isTrue();
     }
 
     /** QA D1525: NORMAL cannot be saved with absent cardiac activity, abnormal tone or anomalies. */

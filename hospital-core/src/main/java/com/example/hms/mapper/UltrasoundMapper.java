@@ -8,6 +8,7 @@ import com.example.hms.payload.dto.ultrasound.UltrasoundOrderRequestDTO;
 import com.example.hms.payload.dto.ultrasound.UltrasoundOrderResponseDTO;
 import com.example.hms.payload.dto.ultrasound.UltrasoundReportRequestDTO;
 import com.example.hms.payload.dto.ultrasound.UltrasoundReportResponseDTO;
+import com.example.hms.service.maternity.LegacyUltrasoundDefaults;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -152,7 +153,7 @@ public class UltrasoundMapper {
             .scanPerformedBy(report.getScanPerformedBy())
             .scanPerformedByCredentials(report.getScanPerformedByCredentials())
             // QA D1525: a row not marked as stated reads its old defaults as unknown
-            .gestationalAgeAtScan(com.example.hms.service.maternity.LegacyUltrasoundDefaults.gestationalAgeAtScan(report))
+            .gestationalAgeAtScan(LegacyUltrasoundDefaults.gestationalAgeAtScan(report))
             .gestationalAgeDays(report.getGestationalAgeDays())
             // First trimester measurements
             .nuchalTranslucencyMm(report.getNuchalTranslucencyMm())
@@ -162,7 +163,7 @@ public class UltrasoundMapper {
             .estimatedDueDate(report.getEstimatedDueDate())
             .dueDateConfirmed(report.getDueDateConfirmed())
             // Fetal count and position
-            .numberOfFetuses(com.example.hms.service.maternity.LegacyUltrasoundDefaults.numberOfFetuses(report))
+            .numberOfFetuses(LegacyUltrasoundDefaults.numberOfFetuses(report))
             .fetalPosition(report.getFetalPosition())
             // Second trimester measurements
             .biparietalDiameterMm(report.getBiparietalDiameterMm())
@@ -182,17 +183,17 @@ public class UltrasoundMapper {
             .uterineArteryDoppler(report.getUterineArteryDoppler())
             // Fetal well-being
             .fetalHeartRate(report.getFetalHeartRate())
-            .fetalCardiacActivity(com.example.hms.service.maternity.LegacyUltrasoundDefaults.flag(report, report.getFetalCardiacActivity()))
-            .fetalMovementObserved(com.example.hms.service.maternity.LegacyUltrasoundDefaults.flag(report, report.getFetalMovementObserved()))
-            .fetalToneNormal(com.example.hms.service.maternity.LegacyUltrasoundDefaults.flag(report, report.getFetalToneNormal()))
+            .fetalCardiacActivity(LegacyUltrasoundDefaults.flag(report, report.getFetalCardiacActivity()))
+            .fetalMovementObserved(LegacyUltrasoundDefaults.flag(report, report.getFetalMovementObserved()))
+            .fetalToneNormal(LegacyUltrasoundDefaults.flag(report, report.getFetalToneNormal()))
             // Anatomy
             .anatomySurveyComplete(report.getAnatomySurveyComplete())
             .anatomyFindings(report.getAnatomyFindings())
             // Findings
-            .findingCategory(com.example.hms.service.maternity.LegacyUltrasoundDefaults.findingCategory(report))
+            .findingCategory(LegacyUltrasoundDefaults.findingCategory(report))
             .findingsSummary(report.getFindingsSummary())
             .interpretation(report.getInterpretation())
-            .anomaliesDetected(com.example.hms.service.maternity.LegacyUltrasoundDefaults.anomaliesDetected(report))
+            .anomaliesDetected(LegacyUltrasoundDefaults.anomaliesDetected(report))
             .anomalyDescription(report.getAnomalyDescription())
             // Genetic screening
             .geneticScreeningRecommended(report.getGeneticScreeningRecommended())
@@ -209,7 +210,7 @@ public class UltrasoundMapper {
             .reportReviewedByProvider(report.getReportReviewedByProvider())
             .providerReviewNotes(report.getProviderReviewNotes())
             .patientNotified(report.getPatientNotified())
-            .observationsStated(Boolean.TRUE.equals(report.getObservationsStated()))
+            .observationsStated(!LegacyUltrasoundDefaults.legacy(report))
             .patientNotifiedAt(report.getPatientNotifiedAt())
             .createdAt(report.getCreatedAt())
             .updatedAt(report.getUpdatedAt())

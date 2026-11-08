@@ -33,16 +33,13 @@ public class UltrasoundReportRequestDTO extends UltrasoundReportBaseDTO {
     private UltrasoundFindingCategory findingCategory;
 
     /**
-     * QA D1525: TRUE when the client states the observations (tri-state
-     * controls, nothing defaulted), which marks the saved row as stated. A
-     * client that does not send it writes a row read with the legacy rule.
+     * QA D1525: read only on the edit of a LEGACY report (one that existed
+     * before V282). TRUE says the client showed that report's old defaults as
+     * unknown and the clinician answered: the values are taken as stated and
+     * the row becomes stated. Without it, values equal to an old default are
+     * treated as unknown. Ignored on create (always stated) and on a stated row.
      */
     private Boolean observationsStated;
-
-    /** QA D1525 review: 0 means no fetus seen (a finding); negatives and implausible counts are refused. */
-    @jakarta.validation.constraints.Min(value = 0, message = "{ultrasoundReport.numberOfFetuses.range}")
-    @jakarta.validation.constraints.Max(value = 8, message = "{ultrasoundReport.numberOfFetuses.range}")
-    private Integer numberOfFetuses;
 
     // Report finalization
     private Boolean reportFinalized;
