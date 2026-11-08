@@ -1,6 +1,7 @@
-<div class="page-container">
+<div class="page-container pharmacy-workspace">
   <div class="page-header">
     <div>
+      <p class="workspace-eyebrow">{{ 'PHARMACY_DASH.WORKSPACE' | translate }}</p>
       <h1 class="page-title">{{ 'PHARMACY.GOODS_RECEIPT_TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'PHARMACY.GOODS_RECEIPT_SUBTITLE' | translate }}</p>
     </div>
@@ -147,18 +148,69 @@
     </div>
   }
 
+  @if (pharmacyFailed()) {
+    <div class="workspace-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+      <button class="btn-secondary" (click)="loadPharmacies()">
+        {{ 'PHARMACY_DASH.RETRY' | translate }}
+      </button>
+    </div>
+  }
+  <p class="workspace-note scope-note">
+    <span class="material-symbols-outlined" aria-hidden="true">info</span
+    >{{ 'PHARMACY_DASH.LOT_SCOPE' | translate }}
+  </p>
+  <div class="workspace-toolbar">
+    <label class="workspace-search"
+      ><span class="material-symbols-outlined" aria-hidden="true">search</span
+      ><input
+        [(ngModel)]="searchTerm"
+        [attr.aria-label]="'PHARMACY_DASH.SEARCH_LOTS' | translate"
+        [placeholder]="'PHARMACY_DASH.SEARCH_LOTS' | translate" /></label
+    ><span class="workspace-note"
+      >{{ recentLots().length }} {{ 'PHARMACY_DASH.LOTS_LOADED' | translate }}</span
+    >
+  </div>
+  @if (lotsPartial()) {
+    <p class="workspace-error" role="status">
+      {{ 'PHARMACY_DASH.PARTIAL' | translate
+      }}<button class="btn-secondary" (click)="loadRecentLots()">
+        {{ 'PHARMACY_DASH.RETRY' | translate }}
+      </button>
+    </p>
+  }
   <!-- Recent Lots -->
   <h3 class="section-title">{{ 'PHARMACY.RECENT_LOTS' | translate }}</h3>
-  @if (lotsLoading()) {
+  @if (lotsFailed()) {
+    @if (lotsFailed()) {
+      <div class="workspace-error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+        <button class="btn-secondary" (click)="loadRecentLots()">
+          {{ 'PHARMACY_DASH.RETRY' | translate }}
+        </button>
+      </div>
+    }
+  } @else if (lotsLoading()) {
     <div class="loading-state">
       <div class="spinner"></div>
       <p>{{ 'COMMON.LOADING' | translate }}</p>
     </div>
   } @else if (recentLots().length > 0) {
-    <div class="table-wrapper">
+    @if (visibleLots().length === 0) {
+      <p class="workspace-note" role="status">{{ 'PHARMACY_DASH.NO_MATCHES' | translate }}</p>
+    }
+    <div
+      class="table-wrapper"
+      tabindex="0"
+      role="region"
+      [attr.aria-label]="'PHARMACY.RECENT_LOTS' | translate"
+    >
       <table class="data-table">
         <thead>
           <tr>
+            <th>{{ 'PHARMACY.MEDICATION' | translate }}</th>
             <th>{{ 'PHARMACY.LOT_NUMBER' | translate }}</th>
             <th>{{ 'PHARMACY.RECEIVED_DATE' | translate }}</th>
             <th>{{ 'PHARMACY.EXPIRY_DATE' | translate }}</th>
@@ -169,8 +221,9 @@
           </tr>
         </thead>
         <tbody>
-          @for (lot of recentLots(); track lot.id) {
+          @for (lot of visibleLots(); track lot.id) {
             <tr>
+              <td class="med-name">{{ lotMedication(lot) }}</td>
               <td>
                 <span class="code-chip">{{ lot.lotNumber }}</span>
               </td>

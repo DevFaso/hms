@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { GoodsReceiptComponent } from './goods-receipt';
 import { PharmacyService } from '../services/pharmacy.service';
 import { ToastService } from '../core/toast.service';
@@ -25,6 +25,56 @@ describe('GoodsReceiptComponent', () => {
     },
     { id: 'inv-par', medicationCatalogItemId: 'cat-par', medicationName: 'Paracetamol' },
   ];
+
+  it('marks a partial lot read and keeps the successful medication identifiable', () => {
+    svc.listLotsByInventoryItem.and.callFake((id) =>
+      id === 'inv-mor'
+        ? (of({
+            data: {
+              content: [
+                {
+                  id: 'lot-a',
+                  inventoryItemId: id,
+                  lotNumber: 'CDX-A',
+                  receivedDate: '2026-11-08',
+                },
+              ],
+            },
+          }) as any)
+        : throwError(() => new Error('offline')),
+    );
+    component.selectedPharmacyId = 'ph-1';
+    component.onPharmacyChange();
+    expect(component.lotsPartial()).toBeTrue();
+    expect(component.lotsFailed()).toBeFalse();
+    expect(component.lotMedication(component.recentLots()[0])).toBe('Morphine');
+    component.searchTerm = 'morphine';
+    expect(component.visibleLots().length).toBe(1);
+    component.searchTerm = 'missing';
+    expect(component.visibleLots().length).toBe(0);
+    expect(component.recentLots().length).toBe(1);
+  });
+  it('does not let a previous pharmacy lot request overwrite the new pharmacy', () => {
+    const old = new Subject<any>();
+    svc.listLotsByInventoryItem.and.returnValue(old);
+    component.selectedPharmacyId = 'old';
+    component.onPharmacyChange();
+    svc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as any);
+    component.selectedPharmacyId = 'new';
+    component.onPharmacyChange();
+    old.next({ data: { content: [{ id: 'old-lot' }] } });
+    expect(component.recentLots()).toEqual([]);
+    expect(component.lotsLoading()).toBeFalse();
+  });
+  it('distinguishes an unavailable lot list from an empty one and retries', () => {
+    svc.listInventoryByPharmacy.and.returnValue(throwError(() => new Error('offline')));
+    component.loadRecentLots();
+    expect(component.lotsFailed()).toBeTrue();
+    svc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as any);
+    component.loadRecentLots();
+    expect(component.lotsFailed()).toBeFalse();
+    expect(component.recentLots()).toEqual([]);
+  });
 
   beforeEach(async () => {
     svc = jasmine.createSpyObj('PharmacyService', [

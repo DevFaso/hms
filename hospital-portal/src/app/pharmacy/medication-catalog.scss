@@ -1,3 +1,4 @@
+@use '../shared/styles/pharmacy-workspace' as pharmacy;
 @use '../shared/styles/page-common';
 
 .med-name {
@@ -69,3 +70,5 @@
   gap: 0.75rem;
   justify-content: center;
 }
+
+@include pharmacy.workspace;

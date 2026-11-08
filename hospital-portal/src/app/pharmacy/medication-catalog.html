@@ -1,6 +1,7 @@
-<div class="page-container">
+<div class="page-container pharmacy-workspace">
   <div class="page-header">
     <div>
+      <p class="workspace-eyebrow">{{ 'PHARMACY_DASH.WORKSPACE' | translate }}</p>
       <h1 class="page-title">{{ 'PHARMACY.CATALOG_TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'PHARMACY.CATALOG_SUBTITLE' | translate }}</p>
     </div>
@@ -12,6 +13,47 @@
     }
   </div>
 
+  @if (!loading() && !loadFailed()) {
+    <section class="workspace-stats" [attr.aria-label]="'PHARMACY_DASH.SUMMARY' | translate">
+      <div class="workspace-stat stat-lead">
+        <span class="material-symbols-outlined" aria-hidden="true">medication</span>
+        <div>
+          <strong>{{ totalElements }}</strong
+          ><span>{{ 'PHARMACY_DASH.RESULTS' | translate }}</span>
+        </div>
+      </div>
+      <div class="workspace-stat">
+        <span class="material-symbols-outlined" aria-hidden="true">view_list</span>
+        <div>
+          <strong>{{ filtered().length }}</strong
+          ><span>{{ 'PHARMACY_DASH.LOADED' | translate }}</span>
+        </div>
+      </div>
+      <div class="workspace-stat">
+        <span class="material-symbols-outlined" aria-hidden="true">verified</span>
+        <div>
+          <strong>{{ pageCount('essentialList') }}</strong
+          ><span>{{ 'PHARMACY_DASH.ESSENTIAL' | translate }}</span>
+        </div>
+      </div>
+      <div class="workspace-stat">
+        <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+        <div>
+          <strong>{{ pageCount('controlled') }}</strong
+          ><span>{{ 'PHARMACY_DASH.CONTROLLED' | translate }}</span>
+        </div>
+      </div>
+    </section>
+  }
+  @if (loadFailed()) {
+    <div class="workspace-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+      <button class="btn-secondary" (click)="loadItems()">
+        {{ 'PHARMACY_DASH.RETRY' | translate }}
+      </button>
+    </div>
+  }
   <div class="search-bar">
     <span class="material-symbols-outlined search-icon">search</span>
     <input
@@ -31,8 +73,13 @@
     </div>
   }
 
-  @if (!loading() && filtered().length > 0) {
-    <div class="table-wrapper">
+  @if (!loading() && !loadFailed() && filtered().length > 0) {
+    <div
+      class="table-wrapper"
+      tabindex="0"
+      role="region"
+      [attr.aria-label]="'PHARMACY.CATALOG_TITLE' | translate"
+    >
       <table class="data-table">
         <thead>
           <tr>
@@ -121,7 +168,7 @@
     }
   }
 
-  @if (!loading() && filtered().length === 0) {
+  @if (!loading() && !loadFailed() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">medication</span>
       <h3>{{ 'PHARMACY.NO_MEDICATIONS' | translate }}</h3>

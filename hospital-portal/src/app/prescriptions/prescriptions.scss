@@ -1,3 +1,4 @@
+@use '../shared/styles/pharmacy-workspace' as pharmacy;
 @use '../shared/styles/page-common';
 
 .summary-cards {
@@ -625,3 +626,5 @@
   background: #fffbeb;
   color: #78350f;
 }
+
+@include pharmacy.workspace;

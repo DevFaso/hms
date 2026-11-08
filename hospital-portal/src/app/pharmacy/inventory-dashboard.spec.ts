@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { InventoryDashboardComponent } from './inventory-dashboard';
 import { InventoryItemResponse, PharmacyService } from '../services/pharmacy.service';
 import { ToastService } from '../core/toast.service';
@@ -127,5 +127,62 @@ describe('InventoryDashboardComponent price column (QA D835)', () => {
       (fixture.nativeElement.querySelector('[data-testid="price-inv-1"]') as HTMLElement)
         .textContent,
     ).toContain('30');
+  });
+});
+
+describe('Inventory workspace scoped reads', () => {
+  function setup() {
+    const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
+      'listInventoryByPharmacy',
+      'getReorderAlertsByPharmacy',
+      'getExpiringSoon',
+    ]);
+    TestBed.configureTestingModule({
+      imports: [InventoryDashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: PharmacyService, useValue: svc },
+        { provide: RoleContextService, useValue: {} },
+        { provide: ToastService, useValue: { error: jasmine.createSpy('error') } },
+      ],
+    });
+    return { svc, c: TestBed.createComponent(InventoryDashboardComponent).componentInstance };
+  }
+  it('ignores a late stock page from the previous pharmacy', () => {
+    const { svc, c } = setup();
+    const old = new Subject<any>();
+    svc.listInventoryByPharmacy.and.returnValues(
+      old,
+      of({ data: { content: [{ id: 'new' }], totalPages: 1 } }) as any,
+    );
+    c.selectedPharmacyId = 'old';
+    c.loadStockLevels();
+    c.selectedPharmacyId = 'new';
+    c.onPharmacyChange();
+    old.next({ data: { content: [{ id: 'old' }], totalPages: 8 } });
+    expect(c.inventoryItems().map((i) => i.id)).toEqual(['new']);
+    expect(c.totalPages).toBe(1);
+  });
+  it('keeps page counts independent of local search and never changes stock', () => {
+    const { c } = setup();
+    const rows = [
+      { id: 'a', medicationName: 'Cdx A', quantityOnHand: 0, reorderThreshold: 5 },
+      { id: 'b', medicationName: 'Cdx B', quantityOnHand: 4, reorderThreshold: 5 },
+    ] as InventoryItemResponse[];
+    c.inventoryItems.set(rows);
+    c.searchTerm = 'cdx b';
+    expect(c.visibleStock().map((i) => i.id)).toEqual(['b']);
+    expect(c.stockCount('stock-out')).toBe(1);
+    expect(c.inventoryItems()).toBe(rows);
+  });
+  it('shows failure until a stock retry succeeds', () => {
+    const { svc, c } = setup();
+    svc.listInventoryByPharmacy.and.returnValues(
+      throwError(() => new Error('offline')),
+      of({ data: { content: [] } }) as any,
+    );
+    c.loadStockLevels();
+    expect(c.stockFailed()).toBeTrue();
+    c.loadStockLevels();
+    expect(c.stockFailed()).toBeFalse();
   });
 });

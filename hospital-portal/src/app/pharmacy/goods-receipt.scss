@@ -1,3 +1,4 @@
+@use '../shared/styles/pharmacy-workspace' as pharmacy;
 @use '../shared/styles/page-common';
 
 .header-actions {
@@ -68,3 +69,5 @@
   font-size: 0.875rem;
   color: var(--text-secondary, #5b6472);
 }
+
+@include pharmacy.workspace;

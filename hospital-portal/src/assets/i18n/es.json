@@ -12134,5 +12134,25 @@
     "CLEAR_SEARCH": "Borrar búsqueda",
     "DRAFT_REVIEW": "Borrador / revisión",
     "NO_MATCHES": "Ningún registro cargado coincide con los filtros actuales."
+  },
+  "PHARMACY_DASH": {
+    "WORKSPACE": "Espacio de farmacia",
+    "SUMMARY": "Resumen del panel",
+    "RESULTS": "Resultados del catálogo",
+    "LOADED": "Filas de esta página",
+    "ESSENTIAL": "Esenciales · esta página",
+    "CONTROLLED": "Controlados · esta página",
+    "LOW": "Existencias bajas · esta página",
+    "OUT": "Agotados · esta página",
+    "SEARCH_STOCK": "Buscar medicamentos en esta página",
+    "PAGE_SCOPE": "Los contadores cubren solo la página cargada.",
+    "NO_MATCHES": "Ninguna fila cargada coincide. Borre la búsqueda para volver a verlas.",
+    "LOT_SCOPE": "Vista de muestra: hasta 20 lotes de la primera página de lotes de cada uno de los primeros 5 artículos. No es un historial completo de entregas.",
+    "SEARCH_LOTS": "Buscar lotes, medicamentos o proveedores cargados",
+    "LOTS_LOADED": "lotes cargados",
+    "PARTIAL": "No se pudieron cargar algunos artículos de la muestra. La lista está incompleta.",
+    "LOAD_FAILED": "No se pudo cargar esta lista. Inténtelo de nuevo.",
+    "RETRY": "Reintentar",
+    "RX_SCOPE": "Resumen de recetas cargadas. Use las pestañas de estado para encontrar órdenes que requieren atención."
   }
 }

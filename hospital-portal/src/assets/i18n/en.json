@@ -12134,5 +12134,25 @@
     "CLEAR_SEARCH": "Clear search",
     "DRAFT_REVIEW": "Draft / review",
     "NO_MATCHES": "No loaded records match the current filters."
+  },
+  "PHARMACY_DASH": {
+    "WORKSPACE": "Pharmacy workspace",
+    "SUMMARY": "Dashboard summary",
+    "RESULTS": "Catalogue results",
+    "LOADED": "Rows on this page",
+    "ESSENTIAL": "Essential · this page",
+    "CONTROLLED": "Controlled · this page",
+    "LOW": "Low stock · this page",
+    "OUT": "Out of stock · this page",
+    "SEARCH_STOCK": "Search medications on this page",
+    "PAGE_SCOPE": "Counts cover the loaded page only.",
+    "NO_MATCHES": "No loaded rows match this search. Clear the search to see them again.",
+    "LOT_SCOPE": "Sample view: up to 20 lots from the first lots page of each of the first 5 inventory items. This is not a complete delivery history.",
+    "SEARCH_LOTS": "Search loaded lots, medications or suppliers",
+    "LOTS_LOADED": "lots loaded",
+    "PARTIAL": "Some sampled items could not be loaded. The list is incomplete.",
+    "LOAD_FAILED": "This list could not be loaded. Try again.",
+    "RETRY": "Try again",
+    "RX_SCOPE": "Overview of loaded prescriptions. Use the status tabs to find orders that need attention."
   }
 }

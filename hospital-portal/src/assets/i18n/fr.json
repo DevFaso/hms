@@ -12134,5 +12134,25 @@
     "CLEAR_SEARCH": "Effacer la recherche",
     "DRAFT_REVIEW": "Brouillon / revue",
     "NO_MATCHES": "Aucun dossier chargé ne correspond aux filtres actuels."
+  },
+  "PHARMACY_DASH": {
+    "WORKSPACE": "Espace pharmacie",
+    "SUMMARY": "Synthèse du tableau de bord",
+    "RESULTS": "Résultats du catalogue",
+    "LOADED": "Lignes de cette page",
+    "ESSENTIAL": "Essentiels · cette page",
+    "CONTROLLED": "Contrôlés · cette page",
+    "LOW": "Stock faible · cette page",
+    "OUT": "En rupture · cette page",
+    "SEARCH_STOCK": "Rechercher un médicament sur cette page",
+    "PAGE_SCOPE": "Les compteurs concernent uniquement la page chargée.",
+    "NO_MATCHES": "Aucune ligne chargée ne correspond. Effacez la recherche pour les retrouver.",
+    "LOT_SCOPE": "Vue échantillonnée : jusqu’à 20 lots provenant de la première page de lots de chacun des 5 premiers articles. Cet aperçu ne constitue pas un historique complet des livraisons.",
+    "SEARCH_LOTS": "Rechercher un lot, médicament ou fournisseur chargé",
+    "LOTS_LOADED": "lots chargés",
+    "PARTIAL": "Certains articles échantillonnés n’ont pas pu être chargés. La liste est incomplète.",
+    "LOAD_FAILED": "Impossible de charger cette liste. Réessayez.",
+    "RETRY": "Réessayer",
+    "RX_SCOPE": "Aperçu des ordonnances chargées. Utilisez les onglets de statut pour retrouver les ordonnances nécessitant une attention."
   }
 }
