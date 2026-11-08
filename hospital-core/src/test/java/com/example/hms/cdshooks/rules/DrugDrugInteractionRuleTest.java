@@ -150,6 +150,13 @@ class DrugDrugInteractionRuleTest {
             "11289", null, null, null, List.of(draft, signed), List.of("1191", "1191")));
         assertThat(withSigned).singleElement()
             .satisfies(card -> assertThat(String.valueOf(card.detail())).doesNotContain("not signed yet"));
+
+        // An abandoned draft (past the duplicate check's look-back) is not an order the patient may soon be on.
+        com.example.hms.model.Prescription abandoned = com.example.hms.model.Prescription.builder()
+            .medicationName("Aspirin").status(com.example.hms.enums.PrescriptionStatus.DRAFT).build();
+        abandoned.setCreatedAt(java.time.LocalDateTime.now().minus(DuplicateMedicationOrderRule.LOOKBACK).minusDays(1));
+        assertThat(rule.evaluate(new CdsRuleContext(null, UUID.randomUUID(), "Warfarin", null,
+            "11289", null, null, null, List.of(abandoned), List.of("1191")))).isEmpty();
     }
 
     @Test

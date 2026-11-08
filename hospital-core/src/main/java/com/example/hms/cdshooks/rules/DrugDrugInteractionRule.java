@@ -9,19 +9,19 @@ import com.example.hms.model.medication.DrugInteraction;
 import com.example.hms.repository.DrugInteractionRepository;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 /**
  * Pairs the proposed prescription's RxNorm with each other order on the
- * patient (in force, or a proposal the patient may soon be on, QA D1523,
- * whose status the card then names), looks up
+ * patient (in force, or a proposal the patient may soon be on, written in
+ * the duplicate check's look-back, QA D1523, whose status the card then
+ * names), looks up
  * {@code clinical.drug_interactions}, and emits one card per hit.
  *
  * <p>RxNorm is the join key. When either side has no resolved RxNorm
@@ -66,46 +66,47 @@ public class DrugDrugInteractionRule implements CdsRule {
         String proposed = context.proposedRxnormCode();
         if (proposed == null || proposed.isBlank()) return List.of();
 
-        Map<String, PrescriptionStatus> proposalOnly = proposalOnlyStatuses(context);
         List<CdsCard> cards = new ArrayList<>();
-        for (String existing : new LinkedHashSet<>(context.activePrescriptionRxnorms())) {
-            if (existing == null || existing.isBlank() || existing.equals(proposed)) {
-                continue;
-            }
+        for (Map.Entry<String, PrescriptionStatus> other : otherOrders(context, proposed).entrySet()) {
+            String existing = other.getKey();
             // proposed is always one side of the pair; findInteractionBetween is bidirectional.
             String pairKey = canonicalPair(proposed, existing);
             int sep = pairKey.indexOf('|');
             repository.findInteractionBetween(pairKey.substring(0, sep), pairKey.substring(sep + 1))
                 .filter(DrugInteraction::isActive)
-                .ifPresent(di -> cards.add(buildCard(di, proposalOnly.get(existing))));
+                .ifPresent(di -> cards.add(buildCard(di, other.getValue())));
         }
         return cards;
     }
 
     /**
-     * QA D1523: the status of a proposal (a draft, an order waiting for its signature) for each RxNorm
-     * that only proposals carry, so the card says the other order is not signed yet. An RxNorm an
-     * order in force carries is not in the map: that order is the one the card is about.
+     * The other orders' RxNorms, in their order, each once: mapped to {@code null} when an order in force
+     * carries it, else to the status of the proposal (a draft, an order waiting for its signature) that
+     * does, so the card says the other order is not signed yet (QA D1523). A proposal older than the
+     * duplicate check's look-back is left out: an abandoned draft is not an order the patient may soon be
+     * on, and must not hold every later order on a critical interaction. A position with no order beside
+     * it counts as in force, as before.
      */
-    private static Map<String, PrescriptionStatus> proposalOnlyStatuses(CdsRuleContext context) {
-        Map<String, PrescriptionStatus> proposals = new HashMap<>();
-        Set<String> inForce = new HashSet<>();
+    private static Map<String, PrescriptionStatus> otherOrders(CdsRuleContext context, String proposed) {
+        Map<String, PrescriptionStatus> others = new LinkedHashMap<>();
         List<Prescription> orders = context.activePrescriptions();
         List<String> rxnorms = context.activePrescriptionRxnorms();
-        for (int i = 0; i < rxnorms.size() && i < orders.size(); i++) {
+        LocalDateTime cutoff = LocalDateTime.now(ZoneId.systemDefault()).minus(DuplicateMedicationOrderRule.LOOKBACK);
+        for (int i = 0; i < rxnorms.size(); i++) {
             String rx = rxnorms.get(i);
-            Prescription order = orders.get(i);
-            if (rx == null || order == null) {
+            if (rx == null || rx.isBlank() || rx.equals(proposed)) {
                 continue;
             }
-            if (order.getStatus() != null && order.getStatus().isProposal()) {
-                proposals.putIfAbsent(rx, order.getStatus());
-            } else {
-                inForce.add(rx);
+            Prescription order = i < orders.size() ? orders.get(i) : null;
+            if (order == null || order.getStatus() == null || !order.getStatus().isProposal()) {
+                others.put(rx, null);
+            } else if (!others.containsKey(rx)
+                && (order.getCreatedAt() == null || !order.getCreatedAt().isBefore(cutoff))) {
+                // containsKey, not putIfAbsent: a null value (in force) must not be replaced.
+                others.put(rx, order.getStatus());
             }
         }
-        proposals.keySet().removeAll(inForce);
-        return proposals;
+        return others;
     }
 
     private static String canonicalPair(String a, String b) {
