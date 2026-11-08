@@ -13234,5 +13234,18 @@
     "OPEN_MODULE": "Ouvrir le module",
     "OPEN_CONTEXT": "Ouvrir {{module}} à {{hospital}}",
     "RESULTS": "{{count}} hôpitaux sur {{total}}"
+  },
+  "PHARMACY_WORKSPACE": {
+    "LABEL": "Espace pharmacie",
+    "CLAIMS_SUBTITLE": "Suivre les demandes, les décisions et les remboursements.",
+    "LOADED_CLAIMS": "demandes chargées",
+    "CLAIMS_NONE_HINT": "Aucune demande pour le moment. Actualisez la liste pour vérifier les nouvelles demandes.",
+    "CLAIMS_EMPTY_HINT": "Aucune demande pour ce filtre. Changez de statut ou actualisez la liste.",
+    "LOADED_MOVEMENTS": "mouvements chargés pour ce filtre",
+    "STOCK_HINT": "Consultez le lot, le motif et l’auteur de chaque mouvement.",
+    "LOADED_QUEUE": "ordonnances sur cette page de la file",
+    "DISPENSE_HINT": "Vérifiez le patient, le médicament et la quantité avant la délivrance.",
+    "ROUTING_DECISION": "Choisir une orientation",
+    "VISIBLE_INTERACTIONS": "interactions correspondant aux filtres"
   }
 }

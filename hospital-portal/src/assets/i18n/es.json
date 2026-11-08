@@ -13234,5 +13234,18 @@
     "OPEN_MODULE": "Abrir módulo",
     "OPEN_CONTEXT": "Abrir {{module}} en {{hospital}}",
     "RESULTS": "{{count}} de {{total}} hospitales"
+  },
+  "PHARMACY_WORKSPACE": {
+    "LABEL": "Espacio de farmacia",
+    "CLAIMS_SUBTITLE": "Seguir las solicitudes, decisiones y reembolsos.",
+    "LOADED_CLAIMS": "solicitudes cargadas",
+    "CLAIMS_NONE_HINT": "Todavía no hay solicitudes. Actualice la lista para comprobar si hay nuevas solicitudes.",
+    "CLAIMS_EMPTY_HINT": "No hay solicitudes para este filtro. Cambie el estado o actualice la lista.",
+    "LOADED_MOVEMENTS": "movimientos cargados para este filtro",
+    "STOCK_HINT": "Revise el lote, el motivo y el autor de cada movimiento.",
+    "LOADED_QUEUE": "recetas en esta página de la cola",
+    "DISPENSE_HINT": "Verifique el paciente, el medicamento y la cantidad antes de la entrega.",
+    "ROUTING_DECISION": "Elegir una derivación",
+    "VISIBLE_INTERACTIONS": "interacciones que coinciden con los filtros"
   }
 }
