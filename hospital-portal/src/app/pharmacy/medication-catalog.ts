@@ -155,7 +155,6 @@ export class MedicationCatalogComponent implements OnInit {
       error: () => {
         if (version !== this.readVersion) return;
         this.loadFailed.set(true);
-        this.toast.error(this.translate.instant('PHARMACY.CATALOG_LOAD_FAILED'));
         this.loading.set(false);
       },
     });

@@ -212,7 +212,8 @@
       background: white;
       box-shadow: 0 4px 14px #123e3005;
     }
-    table {
+    .table-wrapper > table,
+    div.data-table > table {
       width: 100%;
       border-collapse: collapse;
       font-size: 13px;
@@ -366,7 +367,8 @@
         flex: 1 1 auto;
         padding: 10px;
       }
-      table {
+      .table-wrapper > table,
+      div.data-table > table {
         min-width: 850px;
       }
     }

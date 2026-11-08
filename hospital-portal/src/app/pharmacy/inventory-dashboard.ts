@@ -190,7 +190,6 @@ export class InventoryDashboardComponent implements OnInit {
         error: () => {
           if (scope !== this.scopeVersion || version !== this.stockVersion) return;
           this.stockFailed.set(true);
-          this.toast.error(this.translate.instant('PHARMACY.INVENTORY_LOAD_FAILED'));
           this.stockLoading.set(false);
         },
       });
@@ -210,7 +209,6 @@ export class InventoryDashboardComponent implements OnInit {
       error: () => {
         if (scope !== this.scopeVersion || version !== this.alertsVersion) return;
         this.alertsFailed.set(true);
-        this.toast.error(this.translate.instant('PHARMACY.ALERTS_LOAD_FAILED'));
         this.alertsLoading.set(false);
       },
     });
@@ -230,7 +228,6 @@ export class InventoryDashboardComponent implements OnInit {
       error: () => {
         if (scope !== this.scopeVersion || version !== this.expiryVersion) return;
         this.expiryFailed.set(true);
-        this.toast.error(this.translate.instant('PHARMACY.EXPIRING_LOAD_FAILED'));
         this.expiryLoading.set(false);
       },
     });

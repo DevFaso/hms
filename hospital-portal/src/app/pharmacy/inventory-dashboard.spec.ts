@@ -285,4 +285,17 @@ describe('Inventory workspace scoped reads', () => {
     c.loadStockLevels();
     expect(c.stockFailed()).toBeFalse();
   });
+  it('keeps failed stock, alert and expiry reads in their inline alerts without error toasts', () => {
+    const { svc, c } = setup();
+    svc.listInventoryByPharmacy.and.returnValue(throwError(() => new Error('offline')));
+    svc.getReorderAlertsByPharmacy.and.returnValue(throwError(() => new Error('offline')));
+    svc.getExpiringSoon.and.returnValue(throwError(() => new Error('offline')));
+    c.loadStockLevels();
+    c.loadReorderAlerts();
+    c.loadExpiringLots();
+    expect(c.stockFailed()).toBeTrue();
+    expect(c.alertsFailed()).toBeTrue();
+    expect(c.expiryFailed()).toBeTrue();
+    expect(TestBed.inject(ToastService).error).not.toHaveBeenCalled();
+  });
 });
