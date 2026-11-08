@@ -103,8 +103,95 @@ final class MessageKeyScanner {
     private static final Set<String> NOT_A_METHOD = Set.of(
         "if", "for", "while", "switch", "catch", "synchronized", "try", "return", "new", "else", "do");
 
-    /** A call, optionally {@code new} and qualified ({@code new com.example.hms.exception.X(}, {@code MessageUtil.resolve(}). */
-    private static final Pattern CALL = Pattern.compile("(new\\s+)?((?:[A-Za-z_]\\w*\\s*\\.\\s*)+)?\\b(\\w+)\\s*\\(");
+    /** The name of a call: an identifier followed by '('. Its qualifier and {@code new} are read by {@link CallMatcher}. */
+    private static final Pattern CALL_NAME = Pattern.compile("\\b([A-Za-z_]\\w*+)\\s*+\\(");
+
+    /**
+     * A call, optionally {@code new} and qualified ({@code new com.example.hms.exception.X(},
+     * {@code MessageUtil.resolve(}). Rex on #1096: the regex it replaces repeated a group per
+     * qualifier segment, and a long qualified name overflowed the stack (StackOverflowError),
+     * aborting the whole scan. The name is matched by a flat regex and the qualifier is read
+     * backwards by hand, in linear time, with no recursion. Groups as before: 1 is
+     * {@code new} (or null), 2 the qualifier with its dots (or null), 3 the name.
+     */
+    static final class CallMatcher {
+        private final String source;
+        private final Matcher names;
+        private int start;
+        private String isNew;
+        private String chain;
+
+        CallMatcher(String source) {
+            this.source = source;
+            this.names = CALL_NAME.matcher(source);
+        }
+
+        boolean find() {
+            if (!names.find()) {
+                return false;
+            }
+            int chainStart = names.start(1);
+            int i = chainStart - 1;
+            while (true) {
+                int j = skipSpaceBack(i);
+                if (j < 0 || source.charAt(j) != '.') {
+                    break;
+                }
+                int k = skipSpaceBack(j - 1);
+                int end = k + 1;
+                while (k >= 0 && Character.isJavaIdentifierPart(source.charAt(k))) {
+                    k--;
+                }
+                if (k + 1 == end || !Character.isJavaIdentifierStart(source.charAt(k + 1))) {
+                    break;
+                }
+                chainStart = k + 1;
+                i = k;
+            }
+            chain = chainStart < names.start(1) ? source.substring(chainStart, names.start(1)) : null;
+            start = chainStart;
+            isNew = null;
+            int before = skipSpaceBack(chainStart - 1);
+            if (before >= 2 && before < chainStart - 1 && source.startsWith("new", before - 2)
+                    && (before - 3 < 0 || !Character.isJavaIdentifierPart(source.charAt(before - 3)))) {
+                isNew = source.substring(before - 2, chainStart);
+                start = before - 2;
+            }
+            return true;
+        }
+
+        private int skipSpaceBack(int from) {
+            int i = from;
+            while (i >= 0 && Character.isWhitespace(source.charAt(i))) {
+                i--;
+            }
+            return i;
+        }
+
+        String group(int group) {
+            return switch (group) {
+                case 1 -> isNew;
+                case 2 -> chain;
+                case 3 -> names.group(1);
+                default -> throw new IllegalArgumentException(String.valueOf(group));
+            };
+        }
+
+        int start() {
+            return start;
+        }
+
+        int start(int group) {
+            if (group != 3) {
+                throw new IllegalArgumentException(String.valueOf(group));
+            }
+            return names.start(1);
+        }
+
+        int end() {
+            return names.end();
+        }
+    }
 
     /** The exceptions that resolve their message as a key, and every class that extends one. */
     private static final Set<String> KEYED_EXCEPTION_ROOTS = Set.of(
@@ -193,7 +280,7 @@ final class MessageKeyScanner {
         Pattern resolved = Pattern.compile("^(?:this\\.)?(?:[\\w.]+\\.)?(?:getMessage|getLocalizedMessage)\\s*\\(");
         for (Map.Entry<String, String> file : sources.entrySet()) {
             String source = stripComments(file.getValue());
-            Matcher m = CALL.matcher(source);
+            CallMatcher m = new CallMatcher(source);
             while (m.find()) {
                 boolean isNew = m.group(1) != null;
                 String name = m.group(3);
@@ -336,7 +423,7 @@ final class MessageKeyScanner {
 
             List<Site> out = new ArrayList<>();
             List<int[]> sinkArgumentSpans = new ArrayList<>();
-            Matcher m = CALL.matcher(source);
+            CallMatcher m = new CallMatcher(source);
             while (m.find()) {
                 boolean isNew = m.group(1) != null;
                 String qualifier = lastSegment(m.group(2));
@@ -666,13 +753,21 @@ final class MessageKeyScanner {
                 Unit ownerUnit = owner == null ? null : units.get(byQualifiedName.get(owner));
                 return ownerUnit == null ? null : ownerUnit.constants().get(expression);
             }
-            Matcher q = Pattern.compile("((?:[A-Za-z_]\\w*\\.)*[A-Z]\\w*)\\.([A-Z][A-Z0-9_]*)").matcher(expression);
-            if (!q.matches()) {
+            // "Class.CONSTANT" or "pkg.Class.CONSTANT", split at the last dot: a flat character class,
+            // no repeated group, so a long name cannot overflow the stack (Rex on #1096).
+            int dot = expression.lastIndexOf('.');
+            if (dot <= 0 || !expression.matches("[A-Za-z0-9_.]++")) {
                 return null;
             }
-            String path = resolveClass(unit, q.group(1));
-            Unit owner = path == null ? null : units.get(path);
-            return owner == null ? null : owner.constants().get(q.group(2));
+            String owner = expression.substring(0, dot);
+            String name = expression.substring(dot + 1);
+            String simple = owner.substring(owner.lastIndexOf('.') + 1);
+            if (!name.matches("[A-Z][A-Z0-9_]*+") || simple.isEmpty() || !Character.isUpperCase(simple.charAt(0))) {
+                return null;
+            }
+            String path = resolveClass(unit, owner);
+            Unit ownerUnit = path == null ? null : units.get(path);
+            return ownerUnit == null ? null : ownerUnit.constants().get(name);
         }
 
         /**

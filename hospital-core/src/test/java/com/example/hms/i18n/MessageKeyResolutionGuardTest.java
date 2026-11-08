@@ -284,6 +284,52 @@ class MessageKeyResolutionGuardTest {
         assertThat(unresolved).containsExactly("t.unknownKey()");
     }
 
+    @Test
+    @DisplayName("a very long qualified name is read without overflowing the stack (Rex on #1096)")
+    void aVeryLongQualifiedNameIsRead() {
+        // The call regex repeated one group per qualifier segment: 20,000 segments overflowed the
+        // stack (StackOverflowError) and aborted the whole scan.
+        String chain = "segment.".repeat(20_000);
+        String source = String.join("\n",
+            "package com.example.hms.service;",
+            "class LongChainFixture {",
+            "    void a(Locale locale) {",
+            "        Object x = " + chain + "value();",
+            "        MessageUtil.resolveOrRaw(\"fix.after.chain\");",
+            "        throw new " + chain + "BusinessException(messageSource.getMessage(\"fix.eager\", null, locale));",
+            "    }",
+            "}");
+        Map<String, String> sources = Map.of("com/example/hms/service/LongChainFixture.java", source);
+
+        Set<String> literal = new TreeSet<>();
+        for (Site s : MessageKeyScanner.scan(sources)) {
+            if (s.kind() == Kind.LITERAL) {
+                literal.add(s.key());
+            }
+        }
+        assertThat(literal).contains("fix.after.chain", "fix.eager");
+        assertThat(MessageKeyScanner.eagerRefusals(sources)).singleElement().asString().contains("fix.eager");
+    }
+
+    @Test
+    @DisplayName("the call reader keeps new, the qualifier and the name apart")
+    void theCallReaderSplitsACall() {
+        MessageKeyScanner.CallMatcher m = new MessageKeyScanner.CallMatcher(
+            "x = new com.example.hms.exception.FieldBusinessException(a); foo().bar(b); this . messageSource . getMessage(c);");
+        assertThat(m.find()).isTrue();
+        assertThat(m.group(1)).isNotNull();
+        assertThat(m.group(2)).isEqualTo("com.example.hms.exception.");
+        assertThat(m.group(3)).isEqualTo("FieldBusinessException");
+        assertThat(m.find()).isTrue();
+        assertThat(m.group(3)).isEqualTo("foo");
+        assertThat(m.find()).isTrue();
+        assertThat(m.group(2)).isNull();
+        assertThat(m.group(3)).isEqualTo("bar");
+        assertThat(m.find()).isTrue();
+        assertThat(m.group(2)).isEqualTo("this . messageSource . ");
+        assertThat(m.group(3)).isEqualTo("getMessage");
+    }
+
     private static List<String> bundlesWithout(String key) {
         List<String> without = new ArrayList<>();
         bundles.forEach((name, bundle) -> {
