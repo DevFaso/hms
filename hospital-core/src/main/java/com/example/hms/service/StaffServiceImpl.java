@@ -22,6 +22,7 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.support.HospitalScopeUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.data.domain.Page;
@@ -37,6 +38,7 @@ import java.util.Set;
 import java.util.UUID;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class StaffServiceImpl implements StaffService {
     private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
@@ -213,7 +215,7 @@ public class StaffServiceImpl implements StaffService {
         }
 
         validateLicenseNumber(dto);
-        validateRoleSpecificRequirements(dto, dto.getRoleName(), locale);
+        validateRoleSpecificRequirements(dto, dto.getRoleName());
 
         Staff staff = staffMapper.toStaff(dto, user, hospital, department, assignment);
         Staff savedStaff = staffRepository.save(staff);
@@ -273,7 +275,7 @@ public class StaffServiceImpl implements StaffService {
             validateLicenseNumber(dto);
         }
 
-        validateRoleSpecificRequirements(dto, dto.getRoleName(), locale);
+        validateRoleSpecificRequirements(dto, dto.getRoleName());
 
         boolean wasActive = existingStaff.isActive();
         staffMapper.updateStaffFromDto(dto, existingStaff, user, hospital, department, assignment);
@@ -506,66 +508,84 @@ public class StaffServiceImpl implements StaffService {
         }
     }
 
-    private void validateRoleSpecificRequirements(StaffRequestDTO dto, String roleName, Locale locale) {
+    private void validateRoleSpecificRequirements(StaffRequestDTO dto, String roleName) {
         if (roleName == null || roleName.isBlank()) {
             return; // no role-specific validation needed when no role is assigned
         }
         switch (roleName.toUpperCase()) {
             case "ROLE_DOCTOR":
-                validateDoctorFields(dto, locale);
+                validateDoctorFields(dto);
                 break;
             case "ROLE_NURSE":
-                validateNurseFields(dto, locale);
+                validateNurseFields(dto);
                 break;
             case "ROLE_RADIOLOGIST":
-                validateRadiologistFields(dto, locale);
+                validateRadiologistFields(dto);
                 break;
             default:
                 break;
         }
     }
 
-    private void validateDoctorFields(StaffRequestDTO dto, Locale locale) {
+    /*
+     * QA D1536 (round 40): RequiredFields and FieldBusinessException take the
+     * message KEY and resolve it only when the field is refused. The round-30
+     * D1355 refactor handed them a message already looked up through the
+     * message source, so every save looked four keys up, valid fields or not,
+     * and the nurse and radiologist keys were in no bundle: every nurse or
+     * radiologist save answered 500 (NoSuchMessageException). The key is now
+     * passed as is, and MessageKeyResolutionGuardTest holds every key the
+     * code hands to the message source against every bundle.
+     */
+    private void validateDoctorFields(StaffRequestDTO dto) {
         if (dto.getSpecialization() == null) {
-            throw new com.example.hms.exception.FieldBusinessException("specialization", getLocalizedMessage("staff.doctor.specializationRequired", null, locale));
+            throw new com.example.hms.exception.FieldBusinessException("specialization",
+                "staff.doctor.specializationRequired");
         }
     }
 
-    private void validateNurseFields(StaffRequestDTO dto, Locale locale) {
+    private void validateNurseFields(StaffRequestDTO dto) {
         // QA D1355 class (round 30): both named in one refusal.
         com.example.hms.exception.RequiredFields.check()
-            .requireValue(dto.getEmploymentType(), "employmentType",
-                getLocalizedMessage("staff.nurse.employmentTypeRequired", null, locale))
-            .requireValue(dto.getStartDate(), "startDate", getLocalizedMessage("staff.nurse.startDateRequired", null, locale))
+            .requireValue(dto.getEmploymentType(), "employmentType", "staff.nurse.employmentTypeRequired")
+            .requireValue(dto.getStartDate(), "startDate", "staff.nurse.startDateRequired")
             .orThrow();
-        if (dto.getEndDate() != null && dto.getEndDate().isBefore(dto.getStartDate())) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.nurse.endDateAfterStart", null, locale)
-            );
-        }
+        requireEndNotBeforeStart(dto, "staff.nurse.endDateAfterStart");
     }
 
-    private void validateRadiologistFields(StaffRequestDTO dto, Locale locale) {
+    private void validateRadiologistFields(StaffRequestDTO dto) {
         // QA D1355 class (round 30): the licence, the start date and the
         // specialization named in one refusal (the specialization used to be
         // named only after the dates passed).
         com.example.hms.exception.RequiredFields.check()
-            .requireValue(dto.getLicenseNumber(), "licenseNumber",
-                getLocalizedMessage("staff.radiologist.licenseRequired", null, locale))
-            .requireValue(dto.getStartDate(), "startDate",
-                getLocalizedMessage("staff.radiologist.startDateRequired", null, locale))
-            .requireValue(dto.getSpecialization(), "specialization",
-                getLocalizedMessage("staff.radiologist.specializationRequired", null, locale))
+            .requireValue(dto.getLicenseNumber(), "licenseNumber", "staff.radiologist.licenseRequired")
+            .requireValue(dto.getStartDate(), "startDate", "staff.radiologist.startDateRequired")
+            .requireValue(dto.getSpecialization(), "specialization", "staff.radiologist.specializationRequired")
             .orThrow();
-        if (dto.getEndDate() != null && dto.getEndDate().isBefore(dto.getStartDate())) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.radiologist.endDateAfterStart", null, locale)
-            );
+        requireEndNotBeforeStart(dto, "staff.radiologist.endDateAfterStart");
+    }
+
+    /** An end date before the start date is refused on the end date, so the form marks it. */
+    private static void requireEndNotBeforeStart(StaffRequestDTO dto, String messageKey) {
+        if (dto.getEndDate() != null && dto.getStartDate() != null
+                && dto.getEndDate().isBefore(dto.getStartDate())) {
+            throw new com.example.hms.exception.FieldBusinessException("endDate", messageKey);
         }
     }
 
+    /**
+     * The message for {@code code} in {@code locale}. A key no bundle carries
+     * is logged and answered as the key itself, never as a 500: the refusal
+     * the caller is building still reaches the user (QA D1536). The guard
+     * test keeps that fallback from being reached.
+     */
     private String getLocalizedMessage(String code, Object[] args, Locale locale) {
-        return messageSource.getMessage(code, args, locale);
+        try {
+            return messageSource.getMessage(code, args, locale);
+        } catch (org.springframework.context.NoSuchMessageException e) {
+            log.warn("Missing message key '{}' for locale '{}'", code, locale);
+            return code;
+        }
     }
 
     // ── MVP 3: Lab staff management ─────────────────────────────
