@@ -129,7 +129,6 @@ describe('LabResultsComponent', () => {
     const first = component.results()[0];
     component.viewResult(first);
     const pending = httpMock.expectOne('/lab-results/result-1');
-    component.closeDetail();
     component.viewResult({ ...first, id: 'result-2', patientId: 'patient-2' });
     httpMock
       .expectOne('/lab-results/result-2')
@@ -154,6 +153,35 @@ describe('LabResultsComponent', () => {
     expect(component.detailHistoryError()).toBeTrue();
     expect(component.detailHistoryLoading()).toBeFalse();
     expect(component.detailHistory()).toEqual([]);
+  });
+
+  it('rejects history with a mismatched result or patient identity', () => {
+    fixture.detectChanges();
+    flushInit();
+    const result = component.results()[0];
+    for (const mismatch of [{ id: 'another-result' }, { patientId: 'another-patient' }]) {
+      component.viewResult(result);
+      httpMock.expectOne('/lab-results/result-1').flush({ data: { ...result, ...mismatch } });
+      expect(component.detailHistoryError()).toBeTrue();
+      expect(component.detailHistory()).toEqual([]);
+    }
+  });
+
+  it('closes details and ignores in-flight history when the hospital scope changes', () => {
+    fixture.detectChanges();
+    flushInit();
+    component.viewResult(component.results()[0]);
+    const pending = httpMock.expectOne('/lab-results/result-1');
+    component.onScopeChange('another-hospital');
+    expect(component.selectedResult()).toBeNull();
+    pending.flush({ data: component.results()[0] });
+    expect(component.detailHistory()).toEqual([]);
+    httpMock
+      .expectOne((r) => r.url === '/lab-results' && r.method === 'GET')
+      .flush({
+        data: { content: [], totalElements: 0, totalPages: 0, number: 0 },
+        success: true,
+      });
   });
 
   it('should create the component', () => {

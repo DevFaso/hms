@@ -18,6 +18,8 @@ const scripts = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Lab sites that may render raw, and why. Shrink it; never grow it with an enum. */
 const LAB_FREE_TEXT = {
+  'src/app/lab/shared/result-evolution.component.ts::<option>u':
+    'LabResultTrendPointDTO.resultUnit comes from the size-bounded String LabResultRequestDTO.resultUnit, typed in lab-results.html input#lr-resultUnit; measurement notation is free text, not an enum',
   'src/app/lab/lab-approval-queue/lab-approval-queue.html::def.category':
     'LabTestDefinition.category is a label typed by the lab (QA D836)',
   'src/app/lab/lab-approval-queue/lab-approval-queue.html::def.rejectionReason':

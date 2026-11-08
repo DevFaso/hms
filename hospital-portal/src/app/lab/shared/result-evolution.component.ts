@@ -1,5 +1,5 @@
 import { formatDecimal } from '../../shared/i18n/app-locale';
-import { Component, computed, input, signal } from '@angular/core';
+import { Component, computed, input, linkedSignal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -9,6 +9,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { LabValuePipe } from './lab-value.pipe';
 import { LabCorrectionBadgeComponent } from './lab-correction-badge.component';
 import { evolutionSeries } from './result-evolution';
+import { serverInstant } from '../../shared/date-utils';
 
 @Component({
   selector: 'app-result-evolution',
@@ -89,16 +90,18 @@ import { evolutionSeries } from './result-evolution';
                 <tr>
                   <th scope="col">{{ 'LAB_RESULTS.RESULT_DATE' | translate }}</th>
                   <th scope="col">{{ 'LAB_RESULTS.VALUE' | translate }}</th>
+                  <th scope="col">{{ 'LAB_RESULTS.DELTA' | translate }}</th>
                 </tr>
               </thead>
               <tbody>
-                @for (p of history(); track $index) {
+                @for (p of sortedHistory(); track $index) {
                   <tr>
                     <td>{{ p.resultDate | serverTime | dateTime }}</td>
                     <td>
                       {{ p.resultValue | labValue: p.resultUnit }}
                       <app-lab-correction-badge [corrected]="p.corrected" />
                     </td>
+                    <td>{{ delta($index) }}</td>
                   </tr>
                 }
               </tbody>
@@ -169,7 +172,9 @@ import { evolutionSeries } from './result-evolution';
       stroke-width: 2;
     }
     circle.corrected {
-      fill: #8b4a0d;
+      fill: white;
+      stroke: #8b4a0d;
+      stroke-width: 3;
     }
     text {
       fill: #405a65;
@@ -203,8 +208,16 @@ export class ResultEvolutionComponent {
   history = input<LabResultTrendPoint[]>([]);
   loading = input(false);
   failed = input(false);
-  chosenUnit = signal('');
   preferredUnit = input('');
+  chosenUnit = linkedSignal({
+    source: () => ({ history: this.history(), preferredUnit: this.preferredUnit() }),
+    computation: () => '',
+  });
+  sortedHistory = computed(() =>
+    [...this.history()].sort(
+      (a, b) => serverInstant(b.resultDate).getTime() - serverInstant(a.resultDate).getTime(),
+    ),
+  );
   units = computed(() => [
     ...new Set(
       this.history()
@@ -234,6 +247,17 @@ export class ResultEvolutionComponent {
   });
   formatAxis(value: number): string {
     return formatDecimal(value, 3);
+  }
+  delta(index: number): string {
+    const current = this.sortedHistory()[index];
+    const previous = this.sortedHistory()[index + 1];
+    if (!current || !previous) return '—';
+    const unit = current.resultUnit?.trim() ?? '';
+    const currentPoint = evolutionSeries([current], unit)[0];
+    const previousPoint = evolutionSeries([previous], unit)[0];
+    if (!currentPoint || !previousPoint) return '—';
+    const change = currentPoint.value - previousPoint.value;
+    return `${change > 0 ? '+' : ''}${formatDecimal(change, 2)}`;
   }
   x(time: number): number {
     const times = this.points().map((p) => p.time);
