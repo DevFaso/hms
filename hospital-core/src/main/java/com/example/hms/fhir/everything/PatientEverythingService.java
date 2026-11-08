@@ -453,18 +453,20 @@ public class PatientEverythingService {
     private void appendMedicationRequestSection(Bundle bundle, SectionContext ctx) {
         if (!ctx.includes("MedicationRequest")) return;
         // QA D1537: an export carries the orders that were issued, never a draft or a discarded one,
-        // chosen in the query so a page is never thinned after it was fetched.
+        // chosen in the query so a page is never thinned after it was fetched. The query is the single
+        // source: an issued order is a sent one (NeverSentRule.sent), so no hospital's never-sent row
+        // reaches this section and no post-filter is needed (QA D652).
         Page<com.example.hms.model.Prescription> prescriptions = prescriptionRepository
             .findIssuedByPatientIdAndHospitalIdIn(ctx.patientId(), ctx.readable(),
                 com.example.hms.service.support.PrescriptionIssuance.PROPOSALS, ctx.pageRequest());
         ctx.notePageOverflow(prescriptions);
-        // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
-        List<com.example.hms.model.Prescription> shown =
-            NeverSentRule.prescriptionsReadableHere(prescriptions.getContent(), ctx.hospitalId());
+        List<com.example.hms.model.Prescription> shown = prescriptions.getContent();
         ctx.account(shown.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList());
+        List<com.example.hms.model.Admission> closedStays = shown.isEmpty() ? List.of()
+            : medicationRequestMapper.closedStaysOf(ctx.patientId());
         shown.forEach(p -> {
             if (ctx.passesSinceFilter(p.getUpdatedAt())) {
-                addEntry(bundle, medicationRequestMapper.toFhir(p));
+                addEntry(bundle, medicationRequestMapper.toFhir(p, closedStays));
             }
         });
     }

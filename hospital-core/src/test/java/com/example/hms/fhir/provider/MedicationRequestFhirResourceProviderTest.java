@@ -69,7 +69,7 @@ class MedicationRequestFhirResourceProviderTest {
     @Test
     void theReadRefusesADiscardedDraft() {
         Prescription discarded = rx(PrescriptionStatus.DRAFT, PrescriptionStatus.CANCELLED);
-        when(repository.findById(discarded.getId())).thenReturn(Optional.of(discarded));
+        when(repository.findWithEncounterById(discarded.getId())).thenReturn(Optional.of(discarded));
 
         assertThatThrownBy(() -> provider.read(new IdType("MedicationRequest", discarded.getId().toString())))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -78,7 +78,7 @@ class MedicationRequestFhirResourceProviderTest {
     @Test
     void theReadReturnsAStoppedOrderAsStopped() {
         Prescription stopped = rx(PrescriptionStatus.SIGNED, PrescriptionStatus.DISCONTINUED);
-        when(repository.findById(stopped.getId())).thenReturn(Optional.of(stopped));
+        when(repository.findWithEncounterById(stopped.getId())).thenReturn(Optional.of(stopped));
 
         assertThat(provider.read(new IdType("MedicationRequest", stopped.getId().toString())).getStatus())
             .isEqualTo(MedicationRequest.MedicationRequestStatus.STOPPED);

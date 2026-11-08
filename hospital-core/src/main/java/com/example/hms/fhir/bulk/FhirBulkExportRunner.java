@@ -302,12 +302,14 @@ public class FhirBulkExportRunner {
                 .forEach(c -> sink.write(TYPE_CONDITION, conditionMapper.toFhir(c)));
         }
         if (types.contains(TYPE_MEDICATION_REQUEST)) {
+            // The patient's discharged stays, read once (the course status the portal shows).
+            List<com.example.hms.model.Admission> closedStays = medicationRequestMapper.closedStaysOf(patientId);
             pageThrough(p -> prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId, p),
                 rx -> {
                     // QA D1537: an export carries the orders that were issued, never a draft or a discarded one.
                     if (com.example.hms.service.support.PrescriptionIssuance.wasIssued(rx)
                         && passesSince(rx.getUpdatedAt(), since)) {
-                        sink.write(TYPE_MEDICATION_REQUEST, medicationRequestMapper.toFhir(rx));
+                        sink.write(TYPE_MEDICATION_REQUEST, medicationRequestMapper.toFhir(rx, closedStays));
                     }
                 });
         }

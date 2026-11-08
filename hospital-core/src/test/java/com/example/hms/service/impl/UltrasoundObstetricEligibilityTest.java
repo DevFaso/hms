@@ -92,6 +92,66 @@ class UltrasoundObstetricEligibilityTest {
             .doesNotThrowAnyException();
     }
 
+    private static UltrasoundOrderRequestDTO create(com.example.hms.enums.UltrasoundScanType type, String priority) {
+        UltrasoundOrderRequestDTO request = new UltrasoundOrderRequestDTO();
+        request.setScanType(type);
+        request.setPriority(priority);
+        return request;
+    }
+
+    /** QA D1538 review: OTHER ("not covered by standard categories") need not be prenatal: not judged. */
+    @Test
+    void anOtherScanForAManIsNotJudged() {
+        assertThat(UltrasoundServiceImpl.judgeOnCreate(patient("MALE", 40),
+            create(com.example.hms.enums.UltrasoundScanType.OTHER, "ROUTINE"))).isFalse();
+        assertThat(UltrasoundServiceImpl.judgeOnCreate(patient("MALE", 40),
+            create(com.example.hms.enums.UltrasoundScanType.OTHER, "STAT"))).as("nothing skipped, nothing to audit").isFalse();
+    }
+
+    @Test
+    void aRoutinePrenatalScanForAManIsRefusedOnThePatient() {
+        assertThatThrownBy(() -> UltrasoundServiceImpl.judgeOnCreate(patient("MALE", 40),
+                create(com.example.hms.enums.UltrasoundScanType.GROWTH_SCAN, "ROUTINE")))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> assertThat(e.getField()).isEqualTo("patientId"));
+    }
+
+    /** QA D1538 review: an emergency prenatal scan for a man or a child is let through and reported skipped. */
+    @ParameterizedTest
+    @CsvSource({"MALE,40,STAT", "FEMALE,6,URGENT"})
+    void anEmergencyPrenatalScanForAnIneligiblePatientIsSkippedAndReported(String gender, int age, String priority) {
+        assertThat(UltrasoundServiceImpl.judgeOnCreate(patient(gender, age),
+            create(com.example.hms.enums.UltrasoundScanType.ANATOMY_SCAN, priority))).isTrue();
+    }
+
+    @Test
+    void anEmergencyScanForAWomanSkipsNothing() {
+        assertThat(UltrasoundServiceImpl.judgeOnCreate(patient("FEMALE", 28),
+            create(com.example.hms.enums.UltrasoundScanType.GROWTH_SCAN, "STAT"))).isFalse();
+    }
+
+    /** QA D1538 review: an OTHER scan turned into a prenatal one leaves its exemption: refused on scanType. */
+    @Test
+    void anOtherScanTurnedPrenatalIsJudgedOnTheScanType() {
+        UltrasoundOrder scan = order(patient("MALE", 40), "ROUTINE");
+        scan.setScanType(com.example.hms.enums.UltrasoundScanType.OTHER);
+        UltrasoundOrderRequestDTO request = edit("ROUTINE");
+        request.setScanType(com.example.hms.enums.UltrasoundScanType.GROWTH_SCAN);
+        assertThatThrownBy(() -> UltrasoundServiceImpl.requireObstetricPatientOnEdit(scan, request))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> assertThat(e.getField()).isEqualTo("scanType"));
+    }
+
+    /** QA D1538 review: an edit that makes an unflagged order an emergency prenatal scan for a man reports it. */
+    @Test
+    void anEditIntoAnEmergencyForAManIsReportedOnce() {
+        UltrasoundOrder scan = order(patient("MALE", 40), "STAT");
+        scan.setScanType(com.example.hms.enums.UltrasoundScanType.OTHER);
+        UltrasoundOrderRequestDTO request = edit("STAT");
+        request.setScanType(com.example.hms.enums.UltrasoundScanType.GROWTH_SCAN);
+        assertThat(UltrasoundServiceImpl.requireObstetricPatientOnEdit(scan, request)).isTrue();
+        scan.setObstetricRuleSkipped(true);
+        assertThat(UltrasoundServiceImpl.requireObstetricPatientOnEdit(scan, request)).as("already flagged").isFalse();
+    }
+
     @Test
     void loweringAWomansEmergencyScanIsAccepted() {
         UltrasoundOrder scan = order(patient("FEMALE", 28), "STAT");

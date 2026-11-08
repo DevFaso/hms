@@ -60,6 +60,8 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     private final PatientSubjectReadGuard subjectReadGuard;
     private final RoleValidator roleValidator;
     private final PatientHospitalRegistrationRepository registrationRepository;
+    /** QA D1538 review: audits an obstetric rule skipped for an emergency. */
+    private final com.example.hms.service.support.ObstetricRuleSkipRecorder skipRecorder;
 
     @Override
     public UltrasoundOrderResponseDTO createOrder(UltrasoundOrderRequestDTO request, UUID orderedByUserId) {
@@ -74,11 +76,10 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
-        // QA D1538 (round 40): every scan of this module is a pregnancy scan (UltrasoundScanType), so
-        // the maternity rule applies, refused on patientId; an URGENT or STAT scan is an emergency,
-        // which the rule never refuses.
-        com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(patient, "patientId",
-            com.example.hms.enums.ClinicalPriority.isEmergency(request.getPriority()));
+        // QA D1538 (round 40): every scan type of this module but OTHER is a pregnancy scan, so the
+        // maternity rule applies, refused on patientId; an URGENT or STAT scan is an emergency, which
+        // the rule never refuses, but an emergency for a patient it would refuse is flagged and audited.
+        boolean ruleSkipped = judgeOnCreate(patient, request);
         // Validate gestational age for scan type
         validateGestationalAgeForScanType(request.getScanType(), request.getGestationalAgeAtOrder());
         requirePlausibleSchedule(request, null);
@@ -86,6 +87,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         // Use mapper to create entity
         UltrasoundOrder entity = ultrasoundMapper.toOrderEntity(request, patient, hospital);
         entity.setStatus(UltrasoundOrderStatus.ORDERED);
+        entity.setObstetricRuleSkipped(ruleSkipped);
 
         // Set ordered by information. QA D930 class: the id decides who may
         // change or cancel the order; the name is for display. The session
@@ -108,22 +110,55 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         }
 
         UltrasoundOrder saved = orderRepository.save(entity);
+        if (ruleSkipped) {
+            skipRecorder.record(patient, saved.getPriority(), AUDIT_ENTITY_ULTRASOUND_ORDER, saved.getId(), hospital.getId());
+        }
         return ultrasoundMapper.toOrderResponseDTO(saved);
     }
 
+    static final String AUDIT_ENTITY_ULTRASOUND_ORDER = com.example.hms.service.support.ObstetricRuleSkipRecorder.ENTITY_ULTRASOUND_ORDER;
+
     /**
-     * QA D1538 (round 40): an edit that lowers an emergency scan (URGENT, STAT) to a routine one
-     * leaves the exemption it was ordered under, so the maternity rule is judged again, refused on
-     * {@code priority}. An edit that keeps the order an emergency, or one that was never one (judged
-     * when it was ordered, or ordered before the rule), is not judged.
+     * QA D1538 review: whether a scan of this type is judged by the obstetric rule. Every type is a
+     * prenatal scan but OTHER ("not covered by standard categories"), which need not be; a missing type
+     * is judged (the request is refused for it elsewhere).
      */
-    static void requireObstetricPatientOnEdit(UltrasoundOrder order, UltrasoundOrderRequestDTO request) {
-        String resulting = request.getPriority() != null ? request.getPriority() : order.getPriority();
-        boolean wasEmergency = com.example.hms.enums.ClinicalPriority.isEmergency(order.getPriority());
-        boolean staysEmergency = com.example.hms.enums.ClinicalPriority.isEmergency(resulting);
-        if (wasEmergency && !staysEmergency) {
-            com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(order.getPatient(), "priority", false);
+    static boolean isObstetricScan(com.example.hms.enums.UltrasoundScanType type) {
+        return type != com.example.hms.enums.UltrasoundScanType.OTHER;
+    }
+
+    /** The rule on a new order: judged unless OTHER; returns whether it was skipped for an emergency. */
+    static boolean judgeOnCreate(Patient patient, UltrasoundOrderRequestDTO request) {
+        if (!isObstetricScan(request.getScanType())) {
+            return false;
         }
+        return com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(patient, "patientId",
+            com.example.hms.enums.ClinicalPriority.isEmergency(request.getPriority()));
+    }
+
+    /**
+     * QA D1538 (round 40): an edit that leaves an exemption the order was placed under is judged
+     * again: an URGENT or STAT scan lowered to routine (refused on {@code priority}), or an OTHER scan
+     * turned into a prenatal one (refused on {@code scanType}). An edit that keeps the order exempt, or
+     * one that was judged when it was ordered (or ordered before the rule), is not judged again.
+     *
+     * @return true when the edit leaves a prenatal emergency scan for a patient the rule would refuse
+     *     that was not flagged yet: the caller flags it and audits the skip.
+     */
+    static boolean requireObstetricPatientOnEdit(UltrasoundOrder order, UltrasoundOrderRequestDTO request) {
+        String resultingPriority = request.getPriority() != null ? request.getPriority() : order.getPriority();
+        com.example.hms.enums.UltrasoundScanType resultingType =
+            request.getScanType() != null ? request.getScanType() : order.getScanType();
+        boolean judgedBefore = isObstetricScan(order.getScanType())
+            && !com.example.hms.enums.ClinicalPriority.isEmergency(order.getPriority());
+        boolean obstetricAfter = isObstetricScan(resultingType);
+        boolean emergencyAfter = com.example.hms.enums.ClinicalPriority.isEmergency(resultingPriority);
+        if (obstetricAfter && !emergencyAfter && !judgedBefore) {
+            String field = isObstetricScan(order.getScanType()) ? "priority" : "scanType";
+            com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(order.getPatient(), field, false);
+        }
+        return obstetricAfter && emergencyAfter && !order.isObstetricRuleSkipped()
+            && com.example.hms.utility.ObstetricEligibility.isIneligible(order.getPatient());
     }
 
     /**
@@ -186,10 +221,17 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         }
 
         requirePlausibleSchedule(request, order);
-        requireObstetricPatientOnEdit(order, request);
+        boolean ruleSkipped = requireObstetricPatientOnEdit(order, request);
         ultrasoundMapper.updateOrderFromRequest(order, request);
+        if (ruleSkipped) {
+            order.setObstetricRuleSkipped(true);
+        }
 
         UltrasoundOrder saved = orderRepository.save(order);
+        if (ruleSkipped) {
+            skipRecorder.record(saved.getPatient(), saved.getPriority(), AUDIT_ENTITY_ULTRASOUND_ORDER, saved.getId(),
+                saved.getHospital() != null ? saved.getHospital().getId() : null);
+        }
         return ultrasoundMapper.toOrderResponseDTO(saved);
     }
 

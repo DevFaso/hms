@@ -1,4 +1,4 @@
--- V283: QA D1537 (round 40). A draft cancelled or discontinued before anyone signed it was shown to the patient as
+-- V283: QA D1537 and D1538 (round 40). A draft cancelled or discontinued before anyone signed it was shown to the patient as
 -- a past medicine: its status (CANCELLED, DISCONTINUED) is the word a signed order takes when it is stopped, and a
 -- signed order from before V118 carries no signature either, so neither the status nor the signature columns can
 -- tell them apart afterwards. The fact is now recorded when the order is withdrawn (Prescription.setStatus: the
@@ -28,3 +28,15 @@ UPDATE clinical.prescriptions p
    AND NOT EXISTS (SELECT 1 FROM clinical.prescription_transmissions t WHERE t.prescription_id = p.id)
    AND NOT EXISTS (SELECT 1 FROM clinical.medication_administration_records m WHERE m.prescription_id = p.id)
    AND NOT EXISTS (SELECT 1 FROM clinical.refill_requests q WHERE q.prescription_id = p.id);
+
+-- Residual (recorded as standing debt in tasklist.md): a draft discarded before 2026-08-22 is not inferred from any other
+-- source and stays FALSE, so it can still show as a stopped medicine.
+
+-- QA D1538 (round 40): a prenatal ultrasound order or an OB/GYN referral placed as an emergency (URGENT, STAT) is
+-- never refused by the obstetric rule. When the patient record says male or a child, the order is flagged for review
+-- and the skip is audited (OBSTETRIC_RULE_SKIPPED_EMERGENCY). Existing rows were never judged: FALSE.
+ALTER TABLE clinical.ultrasound_orders
+    ADD COLUMN IF NOT EXISTS obstetric_rule_skipped BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE clinical.obgyn_referrals
+    ADD COLUMN IF NOT EXISTS obstetric_rule_skipped BOOLEAN NOT NULL DEFAULT FALSE;

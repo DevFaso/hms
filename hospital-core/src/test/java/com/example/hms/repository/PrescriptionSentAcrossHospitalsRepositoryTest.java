@@ -211,6 +211,8 @@ class PrescriptionSentAcrossHospitalsRepositoryTest {
             com.example.hms.service.support.PrescriptionIssuance.PROPOSALS, PageRequest.of(0, 1));
         assertThat(issued.getTotalElements()).isEqualTo(2);
         assertThat(issued.getContent()).hasSize(1);
+        assertThat(prescriptionRepository.countIssuedByPatientId(patient.getId(),
+            com.example.hms.service.support.PrescriptionIssuance.PROPOSALS)).isEqualTo(2);
         Page<Prescription> all = prescriptionRepository.findIssuedByPatientId(patient.getId(),
             com.example.hms.service.support.PrescriptionIssuance.PROPOSALS, PageRequest.of(0, 20));
         assertThat(ids(all)).containsExactlyInAnyOrder(signedAtA.getId(), stoppedAtA.getId())

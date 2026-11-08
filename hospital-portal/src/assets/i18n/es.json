@@ -1862,7 +1862,9 @@
       "DOSE_LIMITS_DEFAULT": "Límites de dosis pediátricos definidos por defecto, pendientes de aprobación, en el artículo del catálogo {{item}}",
       "RX_SIGN_REAUTH_VERIFIED": "Identidad confirmada para firmar una receta de estupefaciente ({{method}})",
       "RX_SIGN_REAUTH_REFUSED": "Identidad no confirmada para firmar una receta de estupefaciente ({{reason}})",
-      "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} anulado en la factura {{invoice}}, motivo registrado"
+      "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} anulado en la factura {{invoice}}, motivo registrado",
+      "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Regla obstétrica no aplicada a una ecografía de urgencia",
+      "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Regla obstétrica no aplicada a una derivación de ginecoobstetricia de urgencia"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",

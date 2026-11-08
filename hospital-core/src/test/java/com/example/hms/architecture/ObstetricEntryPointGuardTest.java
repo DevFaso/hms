@@ -44,7 +44,7 @@ class ObstetricEntryPointGuardTest {
 
     /** File, and the entry points in it that create an obstetric record: each calls the rule. */
     private static final Map<String, List<String>> ENTRY_POINTS = Map.ofEntries(
-        Map.entry("service/impl/UltrasoundServiceImpl.java", List.of("createOrder", "requireObstetricPatientOnEdit")),
+        Map.entry("service/impl/UltrasoundServiceImpl.java", List.of("judgeOnCreate", "requireObstetricPatientOnEdit")),
         Map.entry("service/impl/ObgynReferralServiceImpl.java", List.of("createReferral")),
         Map.entry("service/impl/LaborServiceImpl.java", List.of("startEpisode")),
         Map.entry("service/impl/PostpartumCareServiceImpl.java", List.of("recordObservation")),
@@ -65,7 +65,7 @@ class ObstetricEntryPointGuardTest {
      * (the class comment of ObstetricEligibility): an ultrasound order's URGENT or STAT, a referral's URGENT.
      */
     private static final Map<String, String> EMERGENCY_ARGUMENT = Map.of(
-        "service/impl/UltrasoundServiceImpl.java#createOrder", "ClinicalPriority.isEmergency(request.getPriority())",
+        "service/impl/UltrasoundServiceImpl.java#judgeOnCreate", "ClinicalPriority.isEmergency(request.getPriority())",
         "service/impl/ObgynReferralServiceImpl.java#createReferral", "request.getUrgency() == com.example.hms.enums.ObgynReferralUrgency.URGENT");
 
     @Test
@@ -87,8 +87,17 @@ class ObstetricEntryPointGuardTest {
                 }
             }
         }
-        String update = SourceScan.methodBody(read("service/impl/UltrasoundServiceImpl.java"), "updateOrder");
-        assertThat(update).as("an edit that lowers an emergency scan is judged again").contains("requireObstetricPatientOnEdit(");
+        String ultrasound = read("service/impl/UltrasoundServiceImpl.java");
+        String update = SourceScan.methodBody(ultrasound, "updateOrder");
+        assertThat(update).as("an edit that leaves an exemption is judged again").contains("requireObstetricPatientOnEdit(");
+        // QA D1538 review: an emergency placed for a patient the rule would refuse is flagged and audited,
+        // never silent: each creating path keeps what the rule returned and records it.
+        String create = SourceScan.methodBody(ultrasound, "createOrder");
+        assertThat(create).contains("judgeOnCreate(").contains("setObstetricRuleSkipped(ruleSkipped)").contains("skipRecorder.record(");
+        assertThat(update).contains("setObstetricRuleSkipped(true)").contains("skipRecorder.record(");
+        String referral = SourceScan.methodBody(read("service/impl/ObgynReferralServiceImpl.java"), "createReferral");
+        assertThat(referral).contains("boolean ruleSkipped = ").contains(".obstetricRuleSkipped(ruleSkipped)")
+            .contains("skipRecorder.record(");
         String enroll = SourceScan.methodBody(read("service/registry/ProgramEnrollmentService.java"), "enroll");
         assertThat(enroll).as("the antenatal programme is the one judged").contains("CareProgram.ANC");
         assertThat(problems).as(SourceScan.MANDATE).isEmpty();

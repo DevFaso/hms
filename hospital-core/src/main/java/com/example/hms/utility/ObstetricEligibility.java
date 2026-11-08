@@ -23,6 +23,12 @@ import java.util.Set;
  *   <li>an ultrasound order placed URGENT or STAT ({@code ClinicalPriority.isEmergency});</li>
  *   <li>an OB/GYN referral placed URGENT ({@code ObgynReferralUrgency} has no EMERGENCY value).</li>
  * </ul>
+ * An emergency placed for a patient the rule would refuse is not silent: the
+ * rule returns true, the order is flagged ({@code obstetricRuleSkipped}) for
+ * review and the skip is audited ({@code OBSTETRIC_RULE_SKIPPED_EMERGENCY},
+ * with the recorded sex and age). Whether the exemption stays is a clinical
+ * decision still pending. An ultrasound order of type OTHER ("not covered by
+ * standard categories") need not be prenatal and is not judged.
  * The labour episode, the postpartum observation and the newborn assessment
  * carry no emergency marker in their requests, nor do the birth plan, the
  * high-risk plan, the maternal history, the prenatal schedule or the antenatal
@@ -81,10 +87,14 @@ public final class ObstetricEligibility {
      * names {@code field}, so the form marks what was picked. Unknown sex or birth date refuses
      * nothing, and an {@code emergency} refuses nothing (the class comment). Provisional, pending
      * clinical approval.
+     *
+     * @return true when the rule was skipped for an emergency although the record makes the patient
+     *     ineligible: the caller flags the record for review and audits the skip (QA D1538 review,
+     *     {@code ObstetricRuleSkipRecorder}). False when the patient is eligible or nothing is known.
      */
-    public static void requireObstetricEligible(Patient patient, String field, boolean emergency) {
+    public static boolean requireObstetricEligible(Patient patient, String field, boolean emergency) {
         if (emergency) {
-            return;
+            return isIneligible(patient);
         }
         if (isRecordedMale(patient)) {
             throw new FieldBusinessException(field, MESSAGE_KEY);
@@ -92,6 +102,20 @@ public final class ObstetricEligibility {
         if (isRecordedChild(patient)) {
             throw new FieldBusinessException(field, TOO_YOUNG_MESSAGE_KEY, MIN_OBSTETRIC_AGE_YEARS);
         }
+        return false;
+    }
+
+    /** The record says male or a child: the rule would refuse an obstetric record that is not an emergency. */
+    public static boolean isIneligible(Patient patient) {
+        return isRecordedMale(patient) || isRecordedChild(patient);
+    }
+
+    /** The recorded age in whole years today, or null when the birth date is unknown (for the skip's audit). */
+    public static Integer recordedAgeYears(Patient patient) {
+        if (patient == null || patient.getDateOfBirth() == null) {
+            return null;
+        }
+        return java.time.Period.between(patient.getDateOfBirth(), java.time.LocalDate.now(java.time.ZoneId.systemDefault())).getYears();
     }
 
     /** True when the recorded birth date makes the patient younger than {@link #MIN_OBSTETRIC_AGE_YEARS}. */

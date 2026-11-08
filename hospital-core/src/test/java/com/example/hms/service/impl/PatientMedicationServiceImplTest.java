@@ -425,9 +425,12 @@ class PatientMedicationServiceImplTest {
             rows.add(p);
         }
         when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        lenient().when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
             .thenReturn(new org.springframework.data.domain.PageImpl<>(rows));
         long expected = rows.stream().filter(com.example.hms.service.support.PrescriptionIssuance::wasIssued).count();
+        // QA D1537 review: the total is the database count of the same rule.
+        when(prescriptionRepository.countIssuedByPatientId(patientId, com.example.hms.service.support.PrescriptionIssuance.PROPOSALS))
+            .thenReturn(expected);
 
         assertThat(service.countMedicationsForPatientPortal(patientId)).isEqualTo(expected).isLessThan(rows.size());
     }
@@ -466,6 +469,8 @@ class PatientMedicationServiceImplTest {
         assertThat(service.getMedicationsPageForPatientPortal(patientId, org.springframework.data.domain.PageRequest.of(0, 20))
             .getContent()).extracting(PatientMedicationResponseDTO::getMedicationName)
             .containsExactlyInAnyOrder("Amoxicilline", "Ibuprofene");
+        when(prescriptionRepository.countIssuedByPatientId(patientId, com.example.hms.service.support.PrescriptionIssuance.PROPOSALS))
+            .thenReturn(2L);
         assertThat(service.countMedicationsForPatientPortal(patientId)).isEqualTo(2);
     }
 

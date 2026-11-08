@@ -1,7 +1,9 @@
 package com.example.hms.fhir.mapper;
 
 import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.model.Admission;
 import com.example.hms.model.Prescription;
+import com.example.hms.service.MedicationCourseStatus;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Dosage;
@@ -13,6 +15,8 @@ import org.springframework.stereotype.Component;
 
 import java.time.ZoneId;
 import java.util.Date;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * Maps {@link com.example.hms.model.Prescription} → FHIR R4 {@code MedicationRequest}.
@@ -27,11 +31,41 @@ public class MedicationRequestFhirMapper {
     private static final String SYSTEM_RXNORM = "http://www.nlm.nih.gov/research/umls/rxnorm";
     private static final String SYSTEM_HMS_LOCAL = "urn:hms:medication:code";
 
+    /**
+     * QA D1537 review: the discharged stays an inpatient order ends with ({@code InpatientOrderEnd}), read
+     * as the portal reads them. Optional so a mapper built by hand (tests) reads no stays.
+     */
+    private com.example.hms.repository.AdmissionRepository admissionRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setAdmissionRepository(com.example.hms.repository.AdmissionRepository admissionRepository) {
+        this.admissionRepository = admissionRepository;
+    }
+
+    /**
+     * The patient's discharged stays, read once per patient by a caller mapping many orders
+     * ({@link #toFhir(Prescription, List)}): the same list the portal's medication list reads.
+     */
+    public List<Admission> closedStaysOf(UUID patientId) {
+        if (patientId == null || admissionRepository == null) {
+            return List.of();
+        }
+        return admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId).stream()
+            .filter(a -> a.getActualDischargeDateTime() != null)
+            .toList();
+    }
+
+    /** One order: its patient's stays are read here. A caller mapping many passes them in. */
     public MedicationRequest toFhir(Prescription src) {
+        if (src == null) return null;
+        return toFhir(src, closedStaysOf(src.getPatient() == null ? null : src.getPatient().getId()));
+    }
+
+    public MedicationRequest toFhir(Prescription src, List<Admission> closedStays) {
         if (src == null) return null;
         MedicationRequest out = new MedicationRequest();
         out.setId(src.getId() == null ? null : src.getId().toString());
-        out.setStatus(statusOf(src));
+        out.setStatus(statusOf(src, closedStays));
         out.setIntent(MedicationRequest.MedicationRequestIntent.ORDER);
 
         if (src.getPatient() != null && src.getPatient().getId() != null) {
@@ -64,45 +98,34 @@ public class MedicationRequestFhirMapper {
     }
 
     /**
-     * QA D1537 review (round 40): the order's own status, never "active" for all. Every value is decided
-     * here (the switch has no default, so a new status does not compile until it is):
+     * QA D1537 review (round 40): the order's own status, never "active" for all, read from the course
+     * status the patient's portal shows ({@code MedicationCourseStatus.of}, with the discharged stays an
+     * inpatient order ends with), so FHIR and the portal agree:
      * <ul>
-     *   <li>draft: a proposal (DRAFT, PENDING_SIGNATURE);</li>
-     *   <li>cancelled: withdrawn as CANCELLED, or withdrawn before anyone signed it (FHIR: withdrawn
-     *       before any administration);</li>
-     *   <li>stopped: a signed order DISCONTINUED;</li>
-     *   <li>completed: the medicine was dispensed (DISPENSED, PARTNER_DISPENSED), or a running order's
-     *       stated duration has passed ({@code MedicationCourseStatus.endDate});</li>
-     *   <li>on-hold: waiting on the pharmacy (PENDING_CLARIFICATION, PENDING_STOCK, TRANSMISSION_FAILED,
-     *       PARTNER_REJECTED);</li>
-     *   <li>active: every other signed order.</li>
+     *   <li>ACTIVE: active (a dispensed order runs until its stated duration ends, as on the portal);</li>
+     *   <li>COMPLETED (its duration passed, or it ended with its stay): completed;</li>
+     *   <li>ON_HOLD: draft for a proposal (DRAFT, PENDING_SIGNATURE), on-hold otherwise
+     *       (TRANSMISSION_FAILED);</li>
+     *   <li>DISCONTINUED: cancelled when withdrawn before anyone signed it or CANCELLED (FHIR: withdrawn
+     *       before any administration), stopped when a signed order was DISCONTINUED.</li>
      * </ul>
      */
-    static MedicationRequest.MedicationRequestStatus statusOf(Prescription src) {
+    static MedicationRequest.MedicationRequestStatus statusOf(Prescription src, List<Admission> closedStays) {
         PrescriptionStatus status = src.getStatus();
         if (status == null) {
             return MedicationRequest.MedicationRequestStatus.UNKNOWN;
         }
-        if (status.isWithdrawn() && src.isWithdrawnBeforeSigning()) {
-            return MedicationRequest.MedicationRequestStatus.CANCELLED;
-        }
-        MedicationRequest.MedicationRequestStatus mapped = switch (status) {
-            case DRAFT, PENDING_SIGNATURE -> MedicationRequest.MedicationRequestStatus.DRAFT;
-            case CANCELLED -> MedicationRequest.MedicationRequestStatus.CANCELLED;
-            case DISCONTINUED -> MedicationRequest.MedicationRequestStatus.STOPPED;
-            case DISPENSED, PARTNER_DISPENSED -> MedicationRequest.MedicationRequestStatus.COMPLETED;
-            case PENDING_CLARIFICATION, PENDING_STOCK, TRANSMISSION_FAILED, PARTNER_REJECTED ->
-                MedicationRequest.MedicationRequestStatus.ONHOLD;
-            case SIGNED, TRANSMITTED, PARTIALLY_FILLED, SENT_TO_PARTNER, PARTNER_ACCEPTED, PRINTED_FOR_PATIENT ->
-                MedicationRequest.MedicationRequestStatus.ACTIVE;
+        String course = MedicationCourseStatus.of(src, closedStays == null ? List.of() : closedStays);
+        return switch (course) {
+            case MedicationCourseStatus.ACTIVE -> MedicationRequest.MedicationRequestStatus.ACTIVE;
+            case MedicationCourseStatus.COMPLETED -> MedicationRequest.MedicationRequestStatus.COMPLETED;
+            case MedicationCourseStatus.ON_HOLD -> status.isProposal()
+                ? MedicationRequest.MedicationRequestStatus.DRAFT : MedicationRequest.MedicationRequestStatus.ONHOLD;
+            case MedicationCourseStatus.DISCONTINUED ->
+                src.isWithdrawnBeforeSigning() || status == PrescriptionStatus.CANCELLED
+                    ? MedicationRequest.MedicationRequestStatus.CANCELLED : MedicationRequest.MedicationRequestStatus.STOPPED;
+            default -> MedicationRequest.MedicationRequestStatus.UNKNOWN;
         };
-        if (mapped == MedicationRequest.MedicationRequestStatus.ACTIVE) {
-            java.time.LocalDate end = com.example.hms.service.MedicationCourseStatus.endDate(src);
-            if (end != null && end.isBefore(java.time.LocalDate.now(ZoneId.systemDefault()))) {
-                return MedicationRequest.MedicationRequestStatus.COMPLETED;
-            }
-        }
-        return mapped;
     }
 
     private static CodeableConcept buildMedicationCode(Prescription src) {

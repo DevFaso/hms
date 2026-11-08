@@ -71,7 +71,10 @@ class CrossHospitalListByIdAgreementTest {
     /** Class -> why its cross-hospital read needs no NeverSentRule. Only shrinks. */
     private static final Map<String, String> RECORDED = Map.of(
         "ObgynReferralServiceImpl.java", "an OB/GYN referral has no never-sent state: it is SUBMITTED on creation"
-            + " (ObgynReferralStatus has no DRAFT)");
+            + " (ObgynReferralStatus has no DRAFT)",
+        // QA D1537 review: the query is the single source; an issued order is a sent one (NeverSentRule.sent).
+        "PatientEverythingService.java", "its prescription section reads issued orders only, chosen in the query"
+            + " (findIssuedByPatientIdAndHospitalIdIn); it reads no imaging order or referral");
 
     private static final Pattern NEVER_SENT_CALL = Pattern.compile("\\bNeverSentRule\\s*+\\.\\s*+\\w++\\s*+\\(");
 

@@ -4606,6 +4606,34 @@ class PrescriptionServiceImplTest {
             .containsExactly(stopped.getId());
     }
 
+    /**
+     * QA D1537 review (round 40): a signed order is never put back to a draft or to awaiting signature by
+     * an edit; a signed, part-dispensed order withdrawn "as a draft" was read as never issued.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "PARTIALLY_FILLED, DRAFT", "TRANSMITTED, PENDING_SIGNATURE", "PENDING_STOCK, DRAFT", "SENT_TO_PARTNER, DRAFT"})
+    void d1537_aSignedOrderIsNeverPutBackToAProposal(com.example.hms.enums.PrescriptionStatus current,
+                                                     com.example.hms.enums.PrescriptionStatus requested) {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        existing.setStatus(current);
+        existing.setSignedAt(java.time.LocalDateTime.now().minusDays(2));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        org.mockito.Mockito.lenient().when(dispenseRepository.sumQuantityDispensedForPrescription(any(), any()))
+            .thenReturn(java.math.BigDecimal.ONE);
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, requestWithStatus(requested), Locale.ENGLISH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("status");
+                assertThat(e.getMessageKey()).isEqualTo("prescription.signed.noReturnToProposal");
+            });
+        assertThat(existing.getStatus()).isEqualTo(current);
+        verify(prescriptionRepository, never()).save(any());
+    }
+
     @Test
     void portalPrescriptionsCarryReadinessOnTheRowWithAFillWaiting() {
         // G15 AC-12

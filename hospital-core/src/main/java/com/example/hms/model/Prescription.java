@@ -451,8 +451,21 @@ public class Prescription extends BaseEntity {
     private boolean withdrawnBeforeSigning = false;
 
     /**
+     * QA D1537 review: evidence that the order was issued whatever status it holds now: a signature
+     * (time, signer or digest), a dispatch to a pharmacy, or a refill used. A signed order put back to a
+     * proposal (the hole PrescriptionServiceImpl now refuses) and then withdrawn is never read as one
+     * that was never issued. The dispense rows themselves are not on the entity; an order is dispensed
+     * only after it was signed, so its signature stands for them.
+     */
+    private boolean carriesIssueEvidence() {
+        return signedAt != null || signedBy != null || signatureValue != null || dispatchedAt != null
+            || (refillsUsed != null && refillsUsed > 0);
+    }
+
+    /**
      * Sets the status, and with it whether a withdrawal came before any signature (QA D1537). A move to
-     * a withdrawn status records whether the order was then still a proposal; a withdrawn order moved
+     * a withdrawn status records whether the order was then still a proposal with no evidence it was
+     * ever issued ({@link #carriesIssueEvidence}); a withdrawn order moved
      * on to another withdrawn status keeps what its withdrawal recorded; any other status clears it
      * (a signed or re-proposed order is not a withdrawn one).
      */
@@ -460,7 +473,7 @@ public class Prescription extends BaseEntity {
         PrescriptionStatus before = this.status;
         if (status != null && status.isWithdrawn()) {
             if (before == null || !before.isWithdrawn()) {
-                this.withdrawnBeforeSigning = before == null || before.isProposal();
+                this.withdrawnBeforeSigning = (before == null || before.isProposal()) && !carriesIssueEvidence();
             }
         } else {
             this.withdrawnBeforeSigning = false;

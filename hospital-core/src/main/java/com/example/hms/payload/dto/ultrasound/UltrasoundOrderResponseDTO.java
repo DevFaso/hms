@@ -60,6 +60,9 @@ public class UltrasoundOrderResponseDTO {
 
     private String priority;
 
+    /** QA D1538 review: placed as an emergency for a patient the obstetric rule would refuse; to review. */
+    private boolean obstetricRuleSkipped;
+
     private Boolean isHighRiskPregnancy;
 
     private String highRiskNotes;

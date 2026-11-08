@@ -93,8 +93,9 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
     @Transactional(readOnly = true)
     public long countMedicationsForPatientPortal(UUID patientId) {
         Patient patient = patientChartAccess.requireOwnRecord(patientId);
-        return prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent()
-            .stream().filter(PrescriptionIssuance::wasIssued).count();
+        // QA D1537 review: counted in the database, by the rule of PrescriptionIssuance.wasIssued, with
+        // no row loaded or decrypted.
+        return prescriptionRepository.countIssuedByPatientId(patient.getId(), PrescriptionIssuance.PROPOSALS);
     }
 
     private List<PatientMedicationResponseDTO> getMedications(UUID patientId, UUID hospitalId, int limit,

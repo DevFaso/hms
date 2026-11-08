@@ -67,6 +67,32 @@ class PrescriptionIssuanceTest {
         }
     }
 
+    /**
+     * QA D1537 review: a signed order put back to a proposal (the hole now refused) and then withdrawn
+     * carries the evidence it was issued: it is not read as never issued.
+     */
+    @Test
+    void aSignedOrderResetToAProposalThenWithdrawnStaysIssued() {
+        Prescription signed = new Prescription();
+        signed.setStatus(PrescriptionStatus.SIGNED);
+        signed.setSignedAt(java.time.LocalDateTime.now().minusDays(1));
+        signed.setStatus(PrescriptionStatus.DRAFT);
+        signed.setStatus(PrescriptionStatus.CANCELLED);
+        assertThat(signed.isWithdrawnBeforeSigning()).isFalse();
+        assertThat(PrescriptionIssuance.wasIssued(signed)).isTrue();
+
+        Prescription dispatched = new Prescription();
+        dispatched.setDispatchedAt(java.time.LocalDateTime.now().minusDays(1));
+        dispatched.setStatus(PrescriptionStatus.PENDING_SIGNATURE);
+        dispatched.setStatus(PrescriptionStatus.DISCONTINUED);
+        assertThat(PrescriptionIssuance.wasIssued(dispatched)).isTrue();
+
+        Prescription refilled = new Prescription();
+        refilled.setRefillsUsed(1);
+        refilled.setStatus(PrescriptionStatus.CANCELLED);
+        assertThat(PrescriptionIssuance.wasIssued(refilled)).isTrue();
+    }
+
     /** A row read from the database keeps what its withdrawal recorded (the builder writes the field, no setter). */
     @Test
     void aRowWithoutTheFactIsShown() {

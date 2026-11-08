@@ -3436,8 +3436,8 @@
     </changeSet>
 
     <!-- V282 is reserved by draft PR #1093. -->
-    <changeSet id="V283-r40-prescription-withdrawn-before-signing" author="hms-team" runOnChange="false">
-        <sqlFile path="V283__r40_prescription_withdrawn_before_signing.sql"
+    <changeSet id="V283-r40-orders-issuance-and-obstetric-review" author="hms-team" runOnChange="false">
+        <sqlFile path="V283__r40_orders_issuance_and_obstetric_review.sql"
                  relativeToChangelogFile="true"
                  splitStatements="true"
                  stripComments="false"/>

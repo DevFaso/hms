@@ -1426,6 +1426,15 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (requested == null) {
             return;
         }
+        // QA D1537 review (round 40): a signed order is never put back to a draft or an unsigned order.
+        // It was the root of a signed, part-dispensed order later withdrawn "as a draft" and read as never
+        // issued. A withdrawn one keeps its own refusal (rejectAnyEditOfWithdrawn), and one awaiting a
+        // clarification its own (409, below: resolve-clarification is the only way back).
+        PrescriptionStatus current = existing.getStatus();
+        if (requested.isProposal() && current != null && !current.isProposal() && !current.isWithdrawn()
+                && current != PrescriptionStatus.PENDING_CLARIFICATION) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "prescription.signed.noReturnToProposal");
+        }
         if (existing.getStatus() != PrescriptionStatus.PENDING_CLARIFICATION) {
             rejectClientAssertedWorkflowStatus(request);
             return;

@@ -44,6 +44,14 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByPatient_Id(UUID patientId, Pageable pageable);
 
+    /**
+     * QA D1537 review: one order with what its course status reads (its encounter, the stay it ends
+     * with: {@code MedicationCourseStatus}, {@code InpatientOrderEnd}), for a read that maps it outside a
+     * transaction (the FHIR MedicationRequest read).
+     */
+    @EntityGraph(attributePaths = {"patient", "encounter", "hospital"})
+    java.util.Optional<Prescription> findWithEncounterById(UUID id);
+
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByStaff_Id(UUID staffId, Pageable pageable);
 
@@ -196,6 +204,12 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     Page<Prescription> findIssuedByPatientId(@Param("patientId") UUID patientId,
                                              @Param("proposals") Collection<PrescriptionStatus> proposals,
                                              Pageable pageable);
+
+    /** QA D1537 review: how many issued orders the patient has, counted in the database (the portal total). */
+    @Query("SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId"
+        + " AND p.status NOT IN :proposals AND p.withdrawnBeforeSigning = false")
+    long countIssuedByPatientId(@Param("patientId") UUID patientId,
+                                @Param("proposals") Collection<PrescriptionStatus> proposals);
 
     /** {@link #findIssuedByPatientId} across a set of hospitals (the FHIR $everything section). */
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})

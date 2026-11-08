@@ -1862,7 +1862,9 @@
       "DOSE_LIMITS_DEFAULT": "Paediatric dose limits set as a default pending approval on the catalogue item {{item}}",
       "RX_SIGN_REAUTH_VERIFIED": "Identity confirmed to sign a controlled-drug prescription ({{method}})",
       "RX_SIGN_REAUTH_REFUSED": "Identity not confirmed to sign a controlled-drug prescription ({{reason}})",
-      "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} undone on invoice {{invoice}}, reason recorded"
+      "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} undone on invoice {{invoice}}, reason recorded",
+      "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Obstetric rule skipped for an emergency ultrasound order",
+      "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Obstetric rule skipped for an emergency OB/GYN referral"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",

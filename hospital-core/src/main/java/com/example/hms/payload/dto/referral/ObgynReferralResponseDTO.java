@@ -33,6 +33,9 @@ public class ObgynReferralResponseDTO {
     private String referralReason;
     private String clinicalIndication;
     private ObgynReferralUrgency urgency;
+
+    /** QA D1538 review: placed as an emergency for a patient the obstetric rule would refuse; to review. */
+    private boolean obstetricRuleSkipped;
     private String historySummary;
     private boolean ongoingMidwiferyCare;
     private ObgynTransferType transferType;

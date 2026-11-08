@@ -23,7 +23,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * medicines ("Prescrit par ... Interrompu") and counted in the health summary and the prescriptions
  * list. The readers excluded DRAFT and PENDING_SIGNATURE by status, and a cancelled draft's status is
  * CANCELLED, the word a signed order takes when it is stopped. {@code PrescriptionIssuance} is the one
- * rule that tells them apart, by the signature.
+ * rule that tells them apart: it reads the withdrawal fact ({@code withdrawnBeforeSigning}) that
+ * {@code Prescription.setStatus} records when an order is withdrawn, from the status it held before and
+ * the evidence it was issued. It does not read the signature columns, which an order signed before
+ * V118 lacks.
  *
  * <p>Every class that reads a patient's (or a visit's) prescription rows is listed with how it treats
  * a never-signed order, and the source must still say so: a new reader is looked at instead of
@@ -68,10 +71,10 @@ class NeverSignedOrderReadersGuardTest {
         Map.entry("service/AdmissionStayEncounterService.java", new Reader("isWithdrawn()",
             "take-home orders: no draft, no withdrawn order")),
         // Staff history that names each row's status.
-        Map.entry("service/PatientServiceImpl.java", new Reader("META_STATUS",
-            "the staff timeline and the doctor's record: history, each row carrying its status")),
-        Map.entry("service/impl/ChartReviewServiceImpl.java", new Reader(".status(p.getStatus() != null ? p.getStatus().name() : null)",
-            "chart review: history, each row carrying its status")),
+        Map.entry("service/PatientServiceImpl.java", new Reader("PrescriptionIssuance.withoutDiscardedProposals(",
+            "the staff timeline and the doctor's record: a live draft with its status, never a discarded one")),
+        Map.entry("service/impl/ChartReviewServiceImpl.java", new Reader("PrescriptionIssuance.withoutDiscardedProposals(",
+            "chart review: a live draft with its status, never a discarded one")),
         // Decision support and pharmacy: orders in force only.
         Map.entry("cdshooks/rules/CdsRuleEngine.java", new Reader("CdsRuleEngine::inForceOrProposed",
             "in force or a live proposal, never a withdrawn order")),
@@ -124,13 +127,27 @@ class NeverSignedOrderReadersGuardTest {
     @DisplayName("each patient-facing read path applies the shared rule, not a status list of its own")
     void thePatientFacingPathsUseTheSharedRule() throws IOException {
         String medications = read("service/impl/PatientMedicationServiceImpl.java");
-        for (String method : List.of("getMedicationsPageForPatientPortal", "countMedicationsForPatientPortal", "getMedications")) {
+        for (String method : List.of("getMedicationsPageForPatientPortal", "getMedications")) {
             assertThat(SourceScan.methodBody(medications, method)).as(method).contains(ISSUED);
         }
+        assertThat(SourceScan.methodBody(medications, "countMedicationsForPatientPortal"))
+            .as("the portal total counts by the same rule, in the database")
+            .contains("countIssuedByPatientId(").contains("PrescriptionIssuance.PROPOSALS");
         assertThat(SourceScan.methodBody(read("service/PrescriptionServiceImpl.java"), "getPrescriptionsForPortalPatient"))
             .contains("PrescriptionIssuance.issuedOnly(")
             .doesNotContain("PrescriptionStatus.DRAFT");
         assertThat(medications).as("the old status-only test is gone").doesNotContain("isIssued(");
+        // QA D1537 review: the staff history readers drop a discarded draft in each read path, not
+        // excused by showing a status (a discarded draft listed as CANCELLED reads as a stopped order).
+        String patients = read("service/PatientServiceImpl.java");
+        for (String method : List.of("collectPrescriptionEntries", "collectDoctorRecordMedications")) {
+            assertThat(SourceScan.methodBody(patients, method)).as(method)
+                .contains("PrescriptionIssuance.withoutDiscardedProposals(");
+        }
+        assertThat(SourceScan.methodBody(read("service/impl/ChartReviewServiceImpl.java"), "loadMedications"))
+            .contains("PrescriptionIssuance.withoutDiscardedProposals(");
+        assertThat(SourceScan.methodBody(read("service/impl/MedicationHistoryServiceImpl.java"), "getMedicationTimeline"))
+            .contains("PrescriptionIssuance.withoutDiscardedProposals(");
     }
 
     /**
@@ -200,18 +217,39 @@ class NeverSignedOrderReadersGuardTest {
     @Test
     @DisplayName("the repository scan finds every patient and visit read, the named queries among them")
     void theRepositoryScanFindsTheReads() throws IOException {
-        assertThat(patientOrVisitReads()).contains("findByPatient_Id", "findByPatient_IdAndHospital_IdIn",
+        assertThat(READS).contains("findByPatient_Id", "countIssuedByPatientId", "findByPatient_IdAndHospital_IdIn",
             "findByEncounter_Id", "findSentAcrossHospitals", "findSentAcrossHospitalsAndStatusIn", "findWrittenSince",
             "findWardMarOrders", "lockUncompletedForReview", "findIssuedByPatientId", "findIssuedByPatientIdAndHospitalIdIn",
             "findIdsByEncounterIdAndStatusNotIn", "findByPatient_IdAndStatusIn");
     }
 
-    private static boolean readsPrescriptionRows(String code) throws IOException {
-        String alternatives = String.join("|", patientOrVisitReads());
+    /** The repository's patient and visit reads, read once for the class (QA D1537 review). */
+    private static final java.util.Set<String> READS = loadReads();
+
+    /** One pattern for every class: any receiver calling one of {@link #READS}; the receiver is then checked. */
+    private static final Pattern READ_CALL = Pattern.compile(
+        "\\b(\\w++)\\s*+\\.\\s*+(?:" + String.join("|", READS) + ")\\s*+\\(");
+
+    private static java.util.Set<String> loadReads() {
+        try {
+            return java.util.Collections.unmodifiableSet(patientOrVisitReads());
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
+    private static boolean readsPrescriptionRows(String code) {
+        java.util.Set<String> fields = new java.util.HashSet<>();
         Matcher field = FIELD.matcher(code);
         while (field.find()) {
-            if (Pattern.compile("\\b" + field.group(1) + "\\s*+\\.\\s*+(?:" + alternatives + ")\\s*+\\(")
-                .matcher(code).find()) {
+            fields.add(field.group(1));
+        }
+        if (fields.isEmpty()) {
+            return false;
+        }
+        Matcher call = READ_CALL.matcher(code);
+        while (call.find()) {
+            if (fields.contains(call.group(1))) {
                 return true;
             }
         }
