@@ -175,9 +175,20 @@ public final class UltrasoundObservations {
         return Stream.concat(FIELDS.stream(), FINDINGS.stream()).map(f -> f.request().apply(request)).toArray();
     }
 
-    /** Every finding of a stored report: the same rule before it is reviewed or the patient told. */
+    /**
+     * Every finding of a stored report: the same rule before it is reviewed or
+     * the patient told. On a legacy report ({@code observations_stated} FALSE)
+     * an observation equal to its old default ({@link #LEGACY_DEFAULTS}) was not
+     * necessarily stated - a reviewed row V282 left alone, or one an older
+     * instance wrote during the rolling deploy - so it does not count.
+     */
     public static Object[] allFindings(UltrasoundReport stored) {
-        return Stream.concat(FIELDS.stream(), FINDINGS.stream()).map(f -> f.stored().apply(stored)).toArray();
+        boolean legacy = Boolean.FALSE.equals(stored.getObservationsStated());
+        Stream<Object> observations = FIELDS.stream().map(f -> {
+            Object value = f.stored().apply(stored);
+            return legacy && value != null && value.equals(LEGACY_DEFAULTS.get(f.name())) ? null : value;
+        });
+        return Stream.concat(observations, FINDINGS.stream().map(f -> f.stored().apply(stored))).toArray();
     }
 
     /** Whether the request answers any observation differently from the stored report. */

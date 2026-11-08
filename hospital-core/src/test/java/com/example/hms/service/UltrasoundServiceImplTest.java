@@ -494,6 +494,51 @@ class UltrasoundServiceImplTest {
         }
     }
 
+    /**
+     * QA D1525 review: a legacy report whose only observations are the old
+     * defaults (flags TRUE, no anomalies, one fetus - left on a row an older
+     * instance wrote during the rolling deploy) records nothing stated, so it
+     * is neither reviewed nor notified. A typed legacy value still counts.
+     */
+    @Test
+    void aLegacyReportWithOnlyOldDefaultsIsNeitherReviewedNorNotified() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.IN_PROGRESS);
+        UltrasoundReport defaultsOnly = new UltrasoundReport();
+        defaultsOnly.setId(reportId);
+        defaultsOnly.setUltrasoundOrder(order);
+        defaultsOnly.setHospital(hospital);
+        defaultsOnly.setReportReviewedByProvider(false);
+        defaultsOnly.setObservationsStated(false);
+        defaultsOnly.setFindingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL);
+        defaultsOnly.setFetalCardiacActivity(true);
+        defaultsOnly.setFetalMovementObserved(true);
+        defaultsOnly.setFetalToneNormal(true);
+        defaultsOnly.setAnomaliesDetected(false);
+        defaultsOnly.setNumberOfFetuses(1);
+        when(reportRepository.findById(reportId)).thenReturn(Optional.of(defaultsOnly));
+
+        assertThatThrownBy(() -> ultrasoundService.markReportReviewed(reportId, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.emptyNotReviewable"));
+        assertThatThrownBy(() -> ultrasoundService.markPatientNotified(reportId))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        verify(reportRepository, never()).save(any());
+
+        // The same values on a stated report are statements, and a typed legacy value counts.
+        defaultsOnly.setObservationsStated(true);
+        assertThat(java.util.Arrays.stream(
+                com.example.hms.service.maternity.UltrasoundObservations.allFindings(defaultsOnly))
+            .anyMatch(com.example.hms.service.support.ClinicalContent::isAnswer)).isTrue();
+        defaultsOnly.setObservationsStated(false);
+        defaultsOnly.setFetalMovementObserved(false);
+        assertThat(java.util.Arrays.stream(
+                com.example.hms.service.maternity.UltrasoundObservations.allFindings(defaultsOnly))
+            .anyMatch(com.example.hms.service.support.ClinicalContent::isAnswer)).isTrue();
+    }
+
     @Test
     void markReportReviewed_throwsWhenAlreadyReviewed() {
         UltrasoundOrder order = new UltrasoundOrder();

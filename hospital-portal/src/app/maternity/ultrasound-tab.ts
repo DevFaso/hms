@@ -189,6 +189,21 @@ export function hasUltrasoundFinding(
   );
 }
 
+/**
+ * QA D1525 review: whether a STORED report records a finding, before it is
+ * reviewed or notified (the server's allFindings(UltrasoundReport)). On a
+ * legacy report (observationsStated === false) an observation equal to its old
+ * default (LEGACY_DEFAULTS) was not necessarily stated, so it does not count.
+ */
+export function storedReportRecordsAFinding(report: UltrasoundReportResponse): boolean {
+  if (report.observationsStated !== false) return hasUltrasoundFinding(report);
+  const record = { ...report } as Record<string, unknown>;
+  for (const [field, legacyDefault] of Object.entries(LEGACY_DEFAULTS)) {
+    if (record[field] === legacyDefault) record[field] = null;
+  }
+  return hasUltrasoundFinding(record as unknown as UltrasoundReportResponse);
+}
+
 /** The categories that claim no clinically significant finding (the server's NO_SIGNIFICANT_FINDING). */
 const NO_SIGNIFICANT_FINDING: readonly string[] = ['NORMAL', 'VARIANT'];
 
@@ -933,7 +948,7 @@ export class UltrasoundTabComponent implements OnInit {
    * neither reviewed nor notified; the server refuses the same.
    */
   private refuseEmptyReport(report: UltrasoundReportResponse): boolean {
-    if (hasUltrasoundFinding(report)) return false;
+    if (storedReportRecordsAFinding(report)) return false;
     this.toast.error(this.translate.instant('ULTRASOUND.REPORT_EMPTY_NOT_REVIEWABLE'));
     return true;
   }

@@ -12,6 +12,7 @@ import {
   normalContradictsObservation,
   noFetusContradictsObservation,
   anomalyDescriptionContradictsAnswer,
+  storedReportRecordsAFinding,
 } from './ultrasound-tab';
 import {
   UltrasoundOrderResponse,
@@ -762,6 +763,31 @@ describe('UltrasoundTabComponent', () => {
       expect(service.reviewReport).not.toHaveBeenCalled();
       expect(service.notifyPatient).not.toHaveBeenCalled();
       expect(toast.error).toHaveBeenCalledTimes(2);
+    });
+
+    it('refuses to review or notify a legacy report whose only observations are old defaults', () => {
+      service.reviewReport = jasmine.createSpy('reviewReport');
+      service.notifyPatient = jasmine.createSpy('notifyPatient');
+      create(['ROLE_DOCTOR']);
+      const cmp = fixture.componentInstance;
+      const defaultsOnly = {
+        id: 'r-1',
+        findingCategory: 'NORMAL',
+        observationsStated: false,
+        fetalCardiacActivity: true,
+        fetalMovementObserved: true,
+        fetalToneNormal: true,
+        anomaliesDetected: false,
+        numberOfFetuses: 1,
+      } as UltrasoundReportResponse;
+      cmp.reviewReport(defaultsOnly);
+      cmp.notifyPatient(defaultsOnly);
+      expect(service.reviewReport).not.toHaveBeenCalled();
+      expect(service.notifyPatient).not.toHaveBeenCalled();
+      expect(storedReportRecordsAFinding({ ...defaultsOnly, observationsStated: true })).toBeTrue();
+      expect(storedReportRecordsAFinding({ ...defaultsOnly, fetalMovementObserved: false }))
+        .withContext('a typed legacy value counts')
+        .toBeTrue();
     });
 
     it('does not count free-text anatomy findings as a sign of a fetus', () => {
