@@ -4,6 +4,7 @@ import { HospitalTypeaheadComponent } from '../shared/hospital-typeahead/hospita
 import {
   Component,
   DestroyRef,
+  ElementRef,
   OnInit,
   inject,
   signal,
@@ -32,6 +33,7 @@ import { refusalReason } from '../shared/refusal-reason';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { refuseFields } from '../shared/forms/invalid-fields';
 /**
  * Ward & bed administration (P0 #4). First writer for the V25 ward/bed
  * schema — makes the dashboard occupancy tiles real.
@@ -54,6 +56,7 @@ import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 })
 export class BedManagementComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
+  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly bedService = inject(BedService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
@@ -111,7 +114,9 @@ export class BedManagementComponent implements OnInit {
   }
   private hasTarget(hospitalId: string | null): boolean {
     if (!this.isNetworkView() || hospitalId) return true;
-    this.toast.error(this.translate.instant('BEDS_NETWORK.TARGET_REQUIRED'));
+    const message = this.translate.instant('BEDS_NETWORK.TARGET_REQUIRED');
+    refuseFields(this.host.nativeElement, ['ward-hospital'], ['ward-hospital'], message);
+    this.toast.error(message);
     return false;
   }
 

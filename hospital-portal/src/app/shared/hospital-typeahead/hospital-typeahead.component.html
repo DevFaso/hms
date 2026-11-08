@@ -8,12 +8,13 @@
     <span class="material-icons hospital-typeahead__icon" aria-hidden="true">search</span>
     <input
       #searchInput
+      [attr.id]="inputId()"
       type="text"
       class="hospital-typeahead__input"
       data-escape-discards
       data-testid="hospital-typeahead-input"
       [placeholder]="'HOSPITAL_SCOPE.FILTER_BY_HOSPITAL' | translate"
-      [attr.aria-label]="'HOSPITAL_SCOPE.FILTER_BY_HOSPITAL' | translate"
+      [attr.aria-label]="ariaLabelKey() | translate"
       [value]="query()"
       (input)="onQueryChange($any($event.target).value)"
       autocomplete="off"
@@ -26,7 +27,7 @@
   <ul
     class="hospital-typeahead__list"
     role="listbox"
-    [attr.aria-label]="'HOSPITAL_SCOPE.FILTER_BY_HOSPITAL' | translate"
+    [attr.aria-label]="ariaLabelKey() | translate"
   >
     @if (!hideAllOption()) {
       <li

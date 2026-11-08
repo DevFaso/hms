@@ -1646,6 +1646,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   navItems = signal<NavItem[]>([]);
   protected readonly networkModuleTitleKey = computed(() => {
+    const explicit = this.scopeGate.moduleTitleKey();
+    if (explicit) return explicit;
     const path = this.scopeGate.routePath();
     return (
       [...this.navItems()]

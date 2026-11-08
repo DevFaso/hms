@@ -1819,6 +1819,7 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: {
           requiresHospitalScope: true,
+          hospitalNetworkTitleKey: 'ORDER_SETS.ADMIN_TITLE',
           roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>

@@ -2,12 +2,14 @@ import { Injectable, computed, effect, inject, signal, untracked } from '@angula
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRouteSnapshot, NavigationEnd, NavigationStart, Router } from '@angular/router';
 import { filter } from 'rxjs';
+import { Location } from '@angular/common';
 
 import { RoleContextService } from './role-context.service';
 
 /** Route `data` key: `{ requiresHospitalScope: true }` marks a page whose data belongs to one facility. */
 export const REQUIRES_HOSPITAL_SCOPE = 'requiresHospitalScope';
 export const SUPPORTS_GLOBAL_HOSPITAL_VIEW = 'supportsGlobalHospitalView';
+export const GLOBAL_HOSPITAL_HISTORY_STATE = 'hmsGlobalHospitalView';
 
 /** True when the activated route, or any route above it, carries the flag. */
 export function routeRequiresHospitalScope(root: ActivatedRouteSnapshot): boolean {
@@ -40,6 +42,7 @@ export function routeRequiresHospitalScope(root: ActivatedRouteSnapshot): boolea
 @Injectable({ providedIn: 'root' })
 export class HospitalScopeGateService {
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
   private readonly roleContext = inject(RoleContextService);
 
   private readonly _required = signal(false);
@@ -62,12 +65,13 @@ export class HospitalScopeGateService {
     () => this.blocked() && this.roleContext.isSuperAdmin() && this.roleContext.globalView(),
   );
   readonly routePath = signal('');
+  readonly moduleTitleKey = signal<string | null>(null);
 
   /** The chip belongs above a gated page only for the one account that can switch: a super-admin. */
   readonly showChip = computed(() => this._required() && this.roleContext.isSuperAdmin());
 
   private readonly _scopeEpoch = signal(0);
-  private historyNavigation = false;
+  private restoreGlobalView = false;
   private lastEffectiveHospitalId: string | null | undefined;
 
   /** Identity of the outlet: advances on a scope change while a gated route is active, never on navigation. */
@@ -88,7 +92,9 @@ export class HospitalScopeGateService {
         takeUntilDestroyed(),
       )
       .subscribe((e) => {
-        this.historyNavigation = e.navigationTrigger === 'popstate';
+        this.restoreGlobalView =
+          e.navigationTrigger === 'popstate' &&
+          e.restoredState?.[GLOBAL_HOSPITAL_HISTORY_STATE] === true;
       });
     this.router.events
       .pipe(
@@ -103,17 +109,28 @@ export class HospitalScopeGateService {
     const root = this.router.routerState.snapshot.root;
     const required = routeRequiresHospitalScope(root);
     let allowsGlobal = false;
+    let titleKey: string | null = null;
     for (let node: ActivatedRouteSnapshot | null = root; node; node = node.firstChild) {
       if (node.data[SUPPORTS_GLOBAL_HOSPITAL_VIEW] === true) allowsGlobal = true;
+      if (typeof node.data['hospitalNetworkTitleKey'] === 'string') {
+        titleKey = node.data['hospitalNetworkTitleKey'];
+      }
     }
+    this.moduleTitleKey.set(titleKey);
     this._allowsGlobal.set(allowsGlobal);
     if (required && this.roleContext.isSuperAdmin()) {
       const fromUrl = root.queryParamMap.get('hospitalId');
       if (fromUrl) {
         this.roleContext.scopeToHospital(fromUrl);
-      } else if (this.historyNavigation) {
+      } else if (this.restoreGlobalView) {
         this.roleContext.enableGlobalView();
       }
+      // Preserve Angular's navigationId and any caller-owned state. Entries
+      // without this explicit marker may have inherited a session hospital.
+      this.location.replaceState(this.location.path(true), '', {
+        ...(this.location.getState() as Record<string, unknown>),
+        [GLOBAL_HOSPITAL_HISTORY_STATE]: this.roleContext.globalView(),
+      });
     }
     this._required.set(required);
   }

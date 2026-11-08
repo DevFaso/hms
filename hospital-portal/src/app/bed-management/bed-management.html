@@ -213,7 +213,7 @@
                         "
                       >
                         <span class="material-symbols-outlined" aria-hidden="true">bed</span
-                        >{{ 'BEDS_NETWORK.VIEW_BEDS' | translate }}
+                        ><span>{{ 'BEDS_NETWORK.VIEW_BEDS' | translate }}</span>
                       </button>
                     }
                     <button
@@ -445,6 +445,8 @@
             } @else {
               <p>{{ 'BEDS_NETWORK.CREATE_HELP' | translate }}</p>
               <app-hospital-typeahead
+                inputId="ward-hospital"
+                ariaLabelKey="BEDS_NETWORK.TARGET_LABEL"
                 [hideAllOption]="true"
                 (selectHospital)="chooseWardHospital($event)"
               />

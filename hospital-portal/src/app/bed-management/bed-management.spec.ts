@@ -137,6 +137,26 @@ describe('BedManagementComponent', () => {
     component.submitWard();
     expect(bedServiceSpy.createWard).toHaveBeenCalledWith(jasmine.any(Object), 'h2');
   });
+  it('marks, describes and focuses the destination input when creation is refused', () => {
+    network();
+    const hospitals = TestBed.inject(HospitalService);
+    Object.assign(hospitals, { searchHospitals: () => of([]) });
+    const fixture = TestBed.createComponent(BedManagementComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openCreateWard();
+    fixture.detectChanges();
+    const input: HTMLInputElement = fixture.nativeElement.querySelector('#ward-hospital');
+    const focus = spyOn(input, 'focus');
+    fixture.componentInstance.submitWard();
+    expect(bedServiceSpy.createWard).not.toHaveBeenCalled();
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(input.getAttribute('aria-describedby')).toContain('ward-hospital-invalid-msg');
+    expect(fixture.nativeElement.querySelector('#ward-hospital-invalid-msg').textContent).toBe(
+      'BEDS_NETWORK.TARGET_REQUIRED',
+    );
+    expect(input.getAttribute('aria-label')).toBe('BEDS_NETWORK.TARGET_LABEL');
+    expect(focus).toHaveBeenCalled();
+  });
   it('keeps the target of a bed form fixed when another ward becomes selected', () => {
     network();
     const w1 = ward('w1', 'MED');
