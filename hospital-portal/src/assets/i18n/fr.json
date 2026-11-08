@@ -13253,5 +13253,24 @@
     "DISPENSE_HINT": "Vérifiez le patient, le médicament et la quantité avant la délivrance.",
     "ROUTING_DECISION": "Choisir une orientation",
     "VISIBLE_INTERACTIONS": "interactions correspondant aux filtres"
+  },
+  "LAB_EVOLUTION": {
+    "TITLE": "Évolution du résultat",
+    "UNIT": "Unité",
+    "LOADING": "Chargement de l’historique…",
+    "ERROR": "Impossible de charger l’historique. Fermez puis rouvrez les détails pour réessayer.",
+    "NOTE": "Les valeurs numériques exactes sont tracées séparément par unité. Les dates sont espacées à l’échelle. L’historique peut inclure des versions antérieures ; les corrections sont signalées. Aucune interprétation clinique n’est déduite.",
+    "TIME_AXIS": "Temps",
+    "CHART_LABEL": "Observations historiques ; les valeurs exactes figurent dans le tableau des observations.",
+    "INSUFFICIENT": "Au moins deux observations numériques datées dans la même unité connue sont nécessaires.",
+    "OBSERVATIONS": "Toutes les observations",
+    "PAGINATION": "Pagination des résultats",
+    "RANGE": "{{start}}–{{end}} sur {{total}} résultats",
+    "ROWS": "Lignes par page",
+    "PREVIOUS": "Page précédente",
+    "PAGE": "Page {{page}} sur {{pages}}",
+    "NEXT": "Page suivante",
+    "AUDIT_TITLE": "Versions enregistrées des résultats",
+    "CORRECTION_NOTE": "Cet historique contient des corrections. Les versions remplacées ne peuvent pas y être identifiées. Les points montrent uniquement les valeurs enregistrées ; les lignes et variations ne sont pas affichées. Consultez les observations et les corrections avant d’interpréter les changements."
   }
 }

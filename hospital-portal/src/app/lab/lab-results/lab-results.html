@@ -130,7 +130,7 @@
           </tr>
         </thead>
         <tbody>
-          @for (r of filtered(); track r.id) {
+          @for (r of pagedResults(); track r.id) {
             <tr class="data-row">
               @if (isSuperAdmin() && globalView()) {
                 <td>
@@ -325,6 +325,42 @@
     </div>
   }
 
+  @if (!loading() && filtered().length > 0) {
+    <nav class="results-pagination" [attr.aria-label]="'LAB_EVOLUTION.PAGINATION' | translate">
+      <span aria-live="polite">{{
+        'LAB_EVOLUTION.RANGE'
+          | translate: { start: pageStart() + 1, end: pageEnd(), total: filtered().length }
+      }}</span>
+      <label
+        >{{ 'LAB_EVOLUTION.ROWS' | translate }}
+        <select [ngModel]="pageSize()" (ngModelChange)="setPageSize($event)">
+          <option [ngValue]="10">10</option>
+          <option [ngValue]="25">25</option>
+          <option [ngValue]="50">50</option>
+        </select>
+      </label>
+      <button
+        class="btn-secondary"
+        [disabled]="currentPage() === 1"
+        (click)="page.set(currentPage() - 1)"
+        [attr.aria-label]="'LAB_EVOLUTION.PREVIOUS' | translate"
+      >
+        <span aria-hidden="true">‹</span>
+      </button>
+      <span>{{
+        'LAB_EVOLUTION.PAGE' | translate: { page: currentPage(), pages: pageCount() }
+      }}</span>
+      <button
+        class="btn-secondary"
+        [disabled]="!hasNextPage()"
+        (click)="page.set(currentPage() + 1)"
+        [attr.aria-label]="'LAB_EVOLUTION.NEXT' | translate"
+      >
+        <span aria-hidden="true">›</span>
+      </button>
+    </nav>
+  }
+
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">biotech</span>
@@ -476,6 +512,14 @@
             }
           </div>
 
+          <app-result-evolution
+            [resultId]="r.id"
+            [history]="detailHistory()"
+            [preferredUnit]="r.resultUnit || ''"
+            [loading]="detailHistoryLoading()"
+            [failed]="detailHistoryError()"
+          />
+
           @if (r.referenceRanges.length) {
             <div class="detail-section">
               <span class="field-label">{{ 'LAB_RESULTS.REFERENCE_RANGES' | translate }}</span>
@@ -525,29 +569,6 @@
                 <div class="detail-list-item">
                   <div class="range-main">{{ r.expectedResult }}</div>
                 </div>
-              </div>
-            </div>
-          }
-
-          @if (sortedTrendHistory(r).length) {
-            <div class="detail-section">
-              <span class="field-label">{{ 'LAB_RESULTS.TREND_HISTORY' | translate }}</span>
-              <div class="trend-table">
-                <div class="trend-row trend-header">
-                  <span>{{ 'LAB_RESULTS.RESULT_DATE' | translate }}</span>
-                  <span>{{ 'LAB_RESULTS.VALUE' | translate }}</span>
-                  <span>{{ 'LAB_RESULTS.DELTA' | translate }}</span>
-                </div>
-                @for (tp of sortedTrendHistory(r); track $index) {
-                  <div class="trend-row">
-                    <span>{{ tp.resultDate | serverTime | dateTime }}</span>
-                    <span
-                      >{{ tp.resultValue | labValue: tp.resultUnit }}
-                      <app-lab-correction-badge [corrected]="tp.corrected"
-                    /></span>
-                    <span>{{ formatTrendDelta(sortedTrendHistory(r), $index) }}</span>
-                  </div>
-                }
               </div>
             </div>
           }
