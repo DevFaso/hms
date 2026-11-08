@@ -105,7 +105,7 @@ class ClinicalTemplatePrefillGuardTest {
      * and cannot go dead the way a possessive {@code \\w*+RequestDTO} did.
      */
     private static final Pattern PUBLIC_METHOD = Pattern.compile(
-            "public\\s++(?:static\\s++)?([A-Z]\\w*+)\\s++(\\w++)\\s*+\\(");
+            "public\\s++(?:(?:static|final|synchronized|abstract)\\s++)*+([A-Za-z][\\w.]*+(?:<[^\\s()]*+)?)\\s++(\\w++)\\s*+\\(");
 
     /**
      * QA D1525: the ultrasound templates were removed (without the findings they
@@ -169,7 +169,7 @@ class ClinicalTemplatePrefillGuardTest {
         List<String> methods = new java.util.ArrayList<>();
         Matcher m = PUBLIC_METHOD.matcher(source);
         while (m.find()) {
-            if (m.group(1).endsWith("RequestDTO") && m.group(2).toLowerCase(java.util.Locale.ROOT).contains("template")) {
+            if (m.group(1).matches(".*RequestDTO>*") && m.group(2).toLowerCase(java.util.Locale.ROOT).contains("template")) {
                 methods.add(m.group(2));
             }
         }
@@ -188,7 +188,11 @@ class ClinicalTemplatePrefillGuardTest {
                     public UltrasoundReportRequestDTO getNuchalTranslucencyTemplate() {
                     public UltrasoundReportResponseDTO getReportById(UUID id) {
                     public static ImagingReportRequestDTO anatomyTemplate(int weeks) {
-                """)).containsExactly("getNuchalTranslucencyTemplate", "anatomyTemplate");
+                    public final ResponseEntity<UltrasoundReportRequestDTO> getAnatomyScanTemplate(Authentication a) {
+                    public static final List<UltrasoundReportResponseDTO> listTemplates() {
+                    public synchronized com.example.hms.payload.dto.ultrasound.UltrasoundReportRequestDTO growthTemplate() {
+                """)).containsExactly("getNuchalTranslucencyTemplate", "anatomyTemplate", "getAnatomyScanTemplate",
+                        "growthTemplate");
         assertThat(TRUE_FIELD.matcher("    private Boolean fetalCardiacActivity = true;").find()).isTrue();
         assertThat(TRUE_FIELD.matcher("    private boolean liveBirth = Boolean.TRUE;").find()).isTrue();
         assertThat(ENUM_FIELD.matcher(

@@ -25,8 +25,17 @@
 -- #1090, so every prod row predates D1525. Edited in place before being applied anywhere shared (dev is paused on
 -- develop 537132bb2, without #1093).
 --
--- Idempotent and re-runnable: the backup skips ids already copied, the data step only touches legacy unreviewed
--- rows and only writes NULLs. Plain statements, no DO block (splitStatements stays true).
+-- Restore: the backup holds the original six values of every row the step changed. To put them back on rows that
+-- were not saved since (a row saved since is TRUE and holds newer values), run
+--   UPDATE clinical.ultrasound_reports r SET fetal_cardiac_activity = b.fetal_cardiac_activity,
+--     fetal_movement_observed = b.fetal_movement_observed, fetal_tone_normal = b.fetal_tone_normal,
+--     anomalies_detected = b.anomalies_detected, number_of_fetuses = b.number_of_fetuses,
+--     gestational_age_at_scan = b.gestational_age_at_scan
+--   FROM clinical.ultrasound_report_legacy_backup b WHERE b.id = r.id AND r.observations_stated = FALSE
+--
+-- Idempotent and re-runnable: the template-signature ids are computed once (a session temp table) and used by both
+-- the backup and the gestational-age update, the backup skips ids already copied, the data step only touches legacy
+-- unreviewed rows and only writes NULLs. Plain statements, no DO block (splitStatements stays true).
 
 ALTER TABLE clinical.ultrasound_reports
     ADD COLUMN IF NOT EXISTS observations_stated BOOLEAN;
@@ -52,66 +61,12 @@ CREATE TABLE IF NOT EXISTS clinical.ultrasound_report_legacy_backup (
     migrated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
 );
 
--- The original values of every row the statements below change, before they change it.
-INSERT INTO clinical.ultrasound_report_legacy_backup (id, fetal_cardiac_activity, fetal_movement_observed,
-        fetal_tone_normal, anomalies_detected, number_of_fetuses, gestational_age_at_scan, migrated_at)
-    SELECT id, fetal_cardiac_activity, fetal_movement_observed, fetal_tone_normal, anomalies_detected,
-           number_of_fetuses, gestational_age_at_scan, NOW()
-    FROM clinical.ultrasound_reports
-    WHERE observations_stated = FALSE
-      AND report_reviewed_by_provider IS NOT TRUE
-      AND (fetal_cardiac_activity = TRUE
-           OR fetal_movement_observed = TRUE
-           OR fetal_tone_normal = TRUE
-           OR anomalies_detected = FALSE
-           OR number_of_fetuses = 1
-           OR (TRUE
-          AND gestational_age_at_scan IN (12, 20)
-          AND gestational_age_days IS NULL
-          AND nuchal_translucency_mm IS NULL
-          AND crown_rump_length_mm IS NULL
-          AND nasal_bone_present IS NULL
-          AND estimated_due_date IS NULL
-          AND (due_date_confirmed IS NULL OR due_date_confirmed = FALSE)
-          AND (number_of_fetuses IS NULL OR number_of_fetuses = 1)
-          AND COALESCE(BTRIM(fetal_position), '') = ''
-          AND biparietal_diameter_mm IS NULL
-          AND head_circumference_mm IS NULL
-          AND abdominal_circumference_mm IS NULL
-          AND femur_length_mm IS NULL
-          AND estimated_fetal_weight_grams IS NULL
-          AND COALESCE(BTRIM(placental_location), '') = ''
-          AND COALESCE(BTRIM(placental_grade), '') = ''
-          AND amniotic_fluid_index IS NULL
-          AND COALESCE(BTRIM(amniotic_fluid_level), '') = ''
-          AND cervical_length_mm IS NULL
-          AND COALESCE(BTRIM(umbilical_artery_doppler), '') = ''
-          AND COALESCE(BTRIM(uterine_artery_doppler), '') = ''
-          AND fetal_heart_rate IS NULL
-          AND (fetal_cardiac_activity IS NULL OR fetal_cardiac_activity = TRUE)
-          AND (fetal_movement_observed IS NULL OR fetal_movement_observed = TRUE)
-          AND (fetal_tone_normal IS NULL OR fetal_tone_normal = TRUE)
-          AND (anatomy_survey_complete IS NULL OR anatomy_survey_complete = FALSE)
-          AND COALESCE(BTRIM(anatomy_findings), '') = ''
-          AND finding_category = 'NORMAL'
-          AND COALESCE(BTRIM(findings_summary), '') = ''
-          AND COALESCE(BTRIM(interpretation), '') = ''
-          AND (anomalies_detected IS NULL OR anomalies_detected = FALSE)
-          AND COALESCE(BTRIM(anomaly_description), '') = ''
-          AND (genetic_screening_recommended IS NULL OR genetic_screening_recommended = FALSE)
-          AND COALESCE(BTRIM(genetic_screening_type), '') = ''
-          AND (follow_up_required IS NULL OR follow_up_required = FALSE)
-          AND COALESCE(BTRIM(follow_up_recommendations), '') = ''
-          AND (specialist_referral_needed IS NULL OR specialist_referral_needed = FALSE)
-          AND COALESCE(BTRIM(specialist_referral_type), '') = ''
-          AND next_ultrasound_recommended_weeks IS NULL
-          AND COALESCE(BTRIM(provider_review_notes), '') = ''))
-    ON CONFLICT (id) DO NOTHING;
+-- The rows whose gestational age is the template's: every clinician-enterable column at its template or empty state.
+-- Computed once, so the backup and the update below cannot drift.
+DROP TABLE IF EXISTS v282_template_ga;
 
--- The template's gestational age, only while every clinician-enterable column is at its template or empty state
--- (checked before the flags are cleared, the tests accept TRUE or NULL, so the order does not matter on a re-run).
-UPDATE clinical.ultrasound_reports
-    SET gestational_age_at_scan = NULL
+CREATE TEMP TABLE v282_template_ga AS
+    SELECT id FROM clinical.ultrasound_reports
     WHERE observations_stated = FALSE
       AND report_reviewed_by_provider IS NOT TRUE
       AND gestational_age_at_scan IN (12, 20)
@@ -155,6 +110,28 @@ UPDATE clinical.ultrasound_reports
       AND next_ultrasound_recommended_weeks IS NULL
       AND COALESCE(BTRIM(provider_review_notes), '') = '';
 
+-- The original values of every row the statements below change, before they change it.
+INSERT INTO clinical.ultrasound_report_legacy_backup (id, fetal_cardiac_activity, fetal_movement_observed,
+        fetal_tone_normal, anomalies_detected, number_of_fetuses, gestational_age_at_scan, migrated_at)
+    SELECT id, fetal_cardiac_activity, fetal_movement_observed, fetal_tone_normal, anomalies_detected,
+           number_of_fetuses, gestational_age_at_scan, NOW()
+    FROM clinical.ultrasound_reports
+    WHERE observations_stated = FALSE
+      AND report_reviewed_by_provider IS NOT TRUE
+      AND (fetal_cardiac_activity = TRUE
+           OR fetal_movement_observed = TRUE
+           OR fetal_tone_normal = TRUE
+           OR anomalies_detected = FALSE
+           OR number_of_fetuses = 1
+           OR id IN (SELECT id FROM v282_template_ga))
+    ON CONFLICT (id) DO NOTHING;
+
+-- The template's gestational age, only while every clinician-enterable column is at its template or empty state
+-- (the ids were computed before any flag was cleared).
+UPDATE clinical.ultrasound_reports
+    SET gestational_age_at_scan = NULL
+    WHERE id IN (SELECT id FROM v282_template_ga);
+
 UPDATE clinical.ultrasound_reports
     SET fetal_cardiac_activity = NULL
     WHERE observations_stated = FALSE
@@ -184,3 +161,5 @@ UPDATE clinical.ultrasound_reports
     WHERE observations_stated = FALSE
       AND report_reviewed_by_provider IS NOT TRUE
       AND number_of_fetuses = 1;
+
+DROP TABLE IF EXISTS v282_template_ga;

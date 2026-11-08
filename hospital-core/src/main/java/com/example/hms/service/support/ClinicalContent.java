@@ -32,9 +32,15 @@ public final class ClinicalContent {
      * @param messageKey the translated refusal, which names what to enter
      */
     public static void requireAny(String field, String messageKey, Object... findings) {
-        if (findings != null) {
-            for (Object finding : findings) {
-                if (isPresent(finding)) {
+        requireAnyMatching(ClinicalContent::isPresent, field, messageKey, findings);
+    }
+
+    /** The one loop of {@link #requireAny} and {@link #requireAnyAnswered}: only the test differs. */
+    private static void requireAnyMatching(java.util.function.Predicate<Object> given, String field,
+                                           String messageKey, Object... values) {
+        if (values != null) {
+            for (Object value : values) {
+                if (given.test(value)) {
                     return;
                 }
             }
@@ -103,14 +109,7 @@ public final class ClinicalContent {
      * itself a finding, unlike an unticked box.
      */
     public static void requireAnyAnswered(String field, String messageKey, Object... answers) {
-        if (answers != null) {
-            for (Object answer : answers) {
-                if (isAnswer(answer)) {
-                    return;
-                }
-            }
-        }
-        throw new FieldBusinessException(field, messageKey);
+        requireAnyMatching(ClinicalContent::isAnswer, field, messageKey, answers);
     }
 
     /** Refuses a required single field that is absent or blank (a consent's signer, a directive's type). */

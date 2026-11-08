@@ -635,8 +635,10 @@ class UltrasoundServiceImplTest {
         legacy.setHospital(hospital);
         legacy.setReportReviewedByProvider(false);
         legacy.setObservationsStated(false);
+        legacy.setNumberOfFetuses(2);
+        // The portal reloads the surviving value and sends it back with the typo fix.
         UltrasoundReportRequestDTO typoFix = UltrasoundReportRequestDTO.builder()
-            .scanDate(LocalDate.now()).findingsSummary("Grossesse évolutive (typo corrigé)")
+            .scanDate(LocalDate.now()).findingsSummary("Grossesse gémellaire (typo corrigé)").numberOfFetuses(2)
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL).build();
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
         when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.of(legacy));

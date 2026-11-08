@@ -251,6 +251,11 @@ class UltrasoundReportFindingsTest {
                 .as("a very early sac with no fetal pole can be normal: no hard rule without a clinician")
                 .doesNotThrowAnyException();
         UltrasoundReportRequestDTO[] signs = {
+            base().nuchalTranslucencyMm(2.1).build(),
+            base().nasalBonePresent(false).build(),
+            base().fetalToneNormal(false).build(),
+            base().anomaliesDetected(true).build(),
+            base().anatomyFindings("Quatre cavités").build(),
             base().fetalCardiacActivity(true).build(),
             base().fetalMovementObserved(true).build(),
             base().fetalHeartRate(140).build(),
@@ -322,13 +327,21 @@ class UltrasoundReportFindingsTest {
         }
     }
 
-    /** QA D1525 review: a save states the observations only when it answers at least one. */
+    /** QA D1525 review: a legacy report flips only when an observation changes; a new report is stated. */
     @Test
-    void onlyAnAnsweredObservationStatesTheReport() {
-        assertThat(UltrasoundServiceImpl.statesAnObservation(base().findingsSummary("Typo corrigé").build())).isFalse();
-        assertThat(UltrasoundServiceImpl.statesAnObservation(base().fetalCardiacActivity(false).build())).isTrue();
-        assertThat(UltrasoundServiceImpl.statesAnObservation(base().nasalBonePresent(true).build())).isTrue();
-        assertThat(UltrasoundServiceImpl.statesAnObservation(base().anomaliesDetected(false).build())).isTrue();
-        assertThat(UltrasoundServiceImpl.statesAnObservation(base().numberOfFetuses(0).build())).isTrue();
+    void onlyAChangedObservationStatesALegacyReport() {
+        UltrasoundReport legacy = new UltrasoundReport();
+        legacy.setObservationsStated(false);
+        legacy.setNumberOfFetuses(2);
+        legacy.setFetalToneNormal(false);
+        assertThat(UltrasoundServiceImpl.statesAnObservation(
+                base().findingsSummary("Typo").numberOfFetuses(2).fetalToneNormal(false).build(), legacy))
+                .as("the surviving values sent back unchanged").isFalse();
+        assertThat(UltrasoundServiceImpl.statesAnObservation(
+                base().numberOfFetuses(2).fetalToneNormal(false).fetalCardiacActivity(true).build(), legacy))
+                .as("a newly answered observation").isTrue();
+        assertThat(UltrasoundServiceImpl.statesAnObservation(
+                base().numberOfFetuses(3).fetalToneNormal(false).build(), legacy)).isTrue();
+        assertThat(UltrasoundServiceImpl.statesAnObservation(base().build(), null)).as("a new report").isTrue();
     }
 }

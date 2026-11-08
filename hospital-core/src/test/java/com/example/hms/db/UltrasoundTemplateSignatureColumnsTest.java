@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * clinician could have typed is at its template or empty state. This test
  * reads the entity's columns and fails when one is neither listed below as
  * metadata (who, when, workflow, the age itself) nor tested in the V282
- * signature, in the backup insert and in the gestational-age update alike. A new
+ * signature (one temp table of ids, used by the backup and the update). A new
  * column on the entity therefore has to be placed here on purpose.
  */
 class UltrasoundTemplateSignatureColumnsTest {
@@ -37,10 +37,15 @@ class UltrasoundTemplateSignatureColumnsTest {
     void everyClinicianEnterableColumnIsInTheTemplateSignature() throws Exception {
         String sql = v282().lines().filter(l -> !l.trim().startsWith("--")).collect(Collectors.joining("\n"));
         List<String> statements = Arrays.asList(sql.split(";"));
+        String signature = statements.stream()
+            .filter(s -> s.contains("CREATE TEMP TABLE v282_template_ga")).findFirst().orElseThrow();
         String gaUpdate = statements.stream()
             .filter(s -> s.contains("SET gestational_age_at_scan = NULL")).findFirst().orElseThrow();
         String backup = statements.stream()
             .filter(s -> s.contains("INSERT INTO clinical.ultrasound_report_legacy_backup")).findFirst().orElseThrow();
+        // One computation of the matching ids, used by both: they cannot drift.
+        assertThat(gaUpdate).contains("FROM v282_template_ga");
+        assertThat(backup).contains("FROM v282_template_ga");
 
         Set<String> enterable = new TreeSet<>();
         for (Field field : UltrasoundReport.class.getDeclaredFields()) {
@@ -52,14 +57,11 @@ class UltrasoundTemplateSignatureColumnsTest {
         assertThat(enterable).as("the entity's enterable columns").hasSizeGreaterThan(30);
         for (String column : enterable) {
             Pattern word = Pattern.compile("\\b" + column + "\\b");
-            assertThat(word.matcher(gaUpdate).find())
-                .as(column + " is enterable but the V282 gestational-age signature does not test it")
-                .isTrue();
-            assertThat(word.matcher(backup).find())
-                .as(column + " is enterable but the V282 backup's signature does not test it")
+            assertThat(word.matcher(signature).find())
+                .as(column + " is enterable but the V282 template signature does not test it")
                 .isTrue();
         }
-        assertThat(gaUpdate).contains("report_reviewed_by_provider IS NOT TRUE");
+        assertThat(signature).contains("report_reviewed_by_provider IS NOT TRUE");
         assertThat(backup).contains("report_reviewed_by_provider IS NOT TRUE");
     }
 

@@ -137,11 +137,26 @@ const FETUS_KEYS = {
   notAssessedKey: 'ULTRASOUND.FETUSES_NOT_COUNTED',
 };
 
-/** The tri-state answers counted as findings when stated (QA D1525). */
-const STATED_ANSWERS: readonly (keyof UltrasoundReportRequest)[] = [
+/** The observations, counted as findings when stated (QA D1525, the server's UltrasoundObservations). */
+export const OBSERVATION_FIELDS: readonly (keyof UltrasoundReportRequest)[] = [
   ...TRI_STATE_FLAGS,
   'anomaliesDetected',
+  'numberOfFetuses',
 ];
+
+/**
+ * QA D1525 review: what the old code filled before D1525 (the server's
+ * UltrasoundObservations.LEGACY_DEFAULTS). On a report that existed before
+ * D1525 such a value reads "recorded before this was asked" — V282 cleared
+ * them on unreviewed reports, but a reviewed (signed) one keeps them.
+ */
+export const LEGACY_DEFAULTS: Partial<Record<keyof UltrasoundReportRequest, boolean | number>> = {
+  fetalCardiacActivity: true,
+  fetalMovementObserved: true,
+  fetalToneNormal: true,
+  anomaliesDetected: false,
+  numberOfFetuses: 1,
+};
 
 /**
  * Whether the report records at least one finding (QA D1150; D1525: a stated
@@ -154,7 +169,10 @@ export function hasUltrasoundFinding(
   const record = form as Record<string, unknown>;
   return (
     hasClinicalContent(form, FINDING_FIELDS) ||
-    STATED_ANSWERS.some((answer) => typeof record[answer] === 'boolean')
+    OBSERVATION_FIELDS.some((field) => {
+      const value = record[field];
+      return typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value));
+    })
   );
 }
 
@@ -188,8 +206,9 @@ export function anomalyDescriptionContradictsAnswer(
 /**
  * QA D1525 review: no fetus seen contradicts every sign of a fetus: cardiac
  * activity or movement present, a heart rate, any fetal biometry (BPD, HC, AC,
- * FL, CRL) or an estimated fetal weight (the server refuses the same, on the
- * fetus count).
+ * FL, CRL), an estimated fetal weight, a nuchal translucency, any nasal-bone
+ * or fetal-tone answer, anomalies detected or written anatomy findings (the
+ * server's requireFetusCountMatchesObservations, on the fetus count).
  */
 const SIGNS_OF_A_FETUS: readonly (keyof UltrasoundReportRequest)[] = [
   'fetalHeartRate',
@@ -199,6 +218,9 @@ const SIGNS_OF_A_FETUS: readonly (keyof UltrasoundReportRequest)[] = [
   'femurLengthMm',
   'crownRumpLengthMm',
   'estimatedFetalWeightGrams',
+  'nuchalTranslucencyMm',
+  'nasalBonePresent',
+  'fetalToneNormal',
 ];
 export function noFetusContradictsObservation(
   form: UltrasoundReportForm | Partial<UltrasoundReportRequest>,
@@ -208,7 +230,9 @@ export function noFetusContradictsObservation(
     form.numberOfFetuses === 0 &&
     (form.fetalCardiacActivity === true ||
       form.fetalMovementObserved === true ||
-      SIGNS_OF_A_FETUS.some((sign) => typeof record[sign] === 'number'))
+      form.anomaliesDetected === true ||
+      (form.anatomyFindings ?? '').trim() !== '' ||
+      SIGNS_OF_A_FETUS.some((sign) => record[sign] !== null && record[sign] !== undefined))
   );
 }
 
@@ -624,39 +648,63 @@ export class UltrasoundTabComponent implements OnInit {
   }
 
   /**
-   * How a stored tri-state answer reads (QA D1525): a value is its answer; a
-   * null on a report that existed before D1525 is "no answer (recorded before
-   * this was asked)"; on a stated report it is "not assessed".
+   * How a stored tri-state answer reads (QA D1525): on a report that existed
+   * before D1525, a null or the value the old code filled is "no answer
+   * (recorded before this was asked)"; otherwise a value is its answer and a
+   * null on a stated report is "not assessed".
    */
   private answerKey(
     value: boolean | null | undefined,
     keys: { trueKey: string; falseKey: string; notAssessedKey: string },
     stated: boolean | undefined,
+    legacyDefault: boolean | number | undefined,
   ): string {
+    // A legacy report's value equal to what the old code filled was not
+    // necessarily stated (a reviewed report keeps it): no answer.
+    if (!stated && (value === null || value === undefined || value === legacyDefault)) {
+      return LEGACY_KEYS.legacyKey;
+    }
     if (value === true) return keys.trueKey;
     if (value === false) return keys.falseKey;
-    return stated ? keys.notAssessedKey : LEGACY_KEYS.legacyKey;
+    return keys.notAssessedKey;
   }
 
   /** One observation as read. */
   observationKey(report: UltrasoundReportResponse, flag: TriStateFlag): string {
-    return this.answerKey(report[flag], FLAG_KEYS[flag], report.observationsStated);
+    return this.answerKey(
+      report[flag],
+      FLAG_KEYS[flag],
+      report.observationsStated,
+      LEGACY_DEFAULTS[flag],
+    );
   }
 
   /** The anomalies answer as read. */
   anomaliesKey(report: UltrasoundReportResponse): string {
-    return this.answerKey(report.anomaliesDetected, ANOMALY_KEYS, report.observationsStated);
+    return this.answerKey(
+      report.anomaliesDetected,
+      ANOMALY_KEYS,
+      report.observationsStated,
+      LEGACY_DEFAULTS.anomaliesDetected,
+    );
   }
 
   /**
    * The stored fetus count as read (QA D1525): the number (0 = no fetus seen);
-   * a null is "not counted" on a stated report and "no answer (recorded before
-   * this was asked)" on one that existed before D1525 (V282 cleared its default 1).
+   * a null is "not counted" on a stated report. On a report that existed
+   * before D1525 a null or the old default 1 (kept on a reviewed report) is
+   * "no answer (recorded before this was asked)".
    */
   fetusCount(report: UltrasoundReportResponse): { count?: number; key?: string } {
     const count = report.numberOfFetuses;
+    if (
+      !report.observationsStated &&
+      (count == null || count === LEGACY_DEFAULTS.numberOfFetuses)
+    ) {
+      return { key: LEGACY_KEYS.legacyKey };
+    }
     if (count != null) return { count };
-    return { key: report.observationsStated ? FETUS_KEYS.notAssessedKey : LEGACY_KEYS.legacyKey };
+    return { key: FETUS_KEYS.notAssessedKey };
   }
 
   /**

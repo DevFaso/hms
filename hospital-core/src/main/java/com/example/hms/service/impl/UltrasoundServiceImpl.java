@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.maternity.UltrasoundObservations;
 import com.example.hms.enums.UltrasoundOrderStatus;
 import com.example.hms.enums.UltrasoundScanType;
 import com.example.hms.exception.BusinessException;
@@ -334,49 +335,34 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     }
 
     /**
-     * QA D1150 (round 21): a report records findings. A blank report was saved
-     * with every value null and read "RAPPORT Normal", with "Notify the
-     * patient" offered: the finding category alone (preselected by the form)
-     * is not a finding. At least one measurement, observation or written
-     * finding must be present.
-     *
-     * <p>QA D1182 (round 22): the yes/no boxes (cardiac activity, movement,
-     * tone, nasal bone, anatomy survey complete, ...) are NOT findings: the
-     * report form pre-fills cardiac activity, movement and tone, so the edit
-     * of a blank report sent them as {@code true} and saved "RAPPORT Normal"
-     * with every value null. Create and edit go through here alike. A scan
-     * with no cardiac activity says so in the findings or the interpretation.
-     * {@code UltrasoundReportFindingsTest} sets every box at once and expects
-     * the refusal.
-     *
-     * <p>QA D1525 (round 38) supersedes the D1182 exclusion. The boxes were
-     * excluded only because they were defaults: the templates pre-filled them,
-     * the entity defaulted them to {@code true}, the mapper turned a missing
-     * one into {@code true}, and the fetus count defaulted to one. None of that
-     * remains (the templates are gone, null stays "not assessed"), so a
-     * non-null observation is something the clinician stated: "cardiac
-     * activity absent" is a finding, and so is a fetus count or "no
-     * anomalies". {@link com.example.hms.service.support.ClinicalContent#isPresent} drops {@code Boolean.FALSE}
-     * (an unticked box), so each tri-state answer is passed through
-     * {@link #stated}. A report whose every observation is "not assessed" and
-     * that states nothing else is still refused.
-     * {@code UltrasoundReportFindingsTest} and
-     * {@code ClinicalTemplatePrefillGuardTest} pin it.
+     * The empty-report rule, for create and edit alike (QA D1150, D1525). A
+     * report must state at least one finding: an observation
+     * ({@link UltrasoundObservations}: cardiac activity, movement, tone, nasal
+     * bone or anomalies answered either way, or a fetus count, 0 included), a
+     * measurement, a date or a written finding. The category alone is not a
+     * report, and neither are the yes/no boxes that are not observations
+     * (anatomy survey complete, due date confirmed). A stated FALSE counts
+     * ({@code ClinicalContent.requireAnyAnswered}): nothing defaults an
+     * observation any more, so "cardiac activity absent" was stated by
+     * someone. A report whose every observation is "not assessed" and that
+     * states nothing else is refused. {@code UltrasoundReportFindingsTest}
+     * pins it.
      */
     static void requireReportFindings(UltrasoundReportRequestDTO request) {
-        com.example.hms.service.support.ClinicalContent.requireAnyAnswered("findingsSummary",
-            "ultrasound.report.findingsRequired",
-            request.getFetalCardiacActivity(), request.getFetalMovementObserved(),
-            request.getFetalToneNormal(), request.getNasalBonePresent(),
-            request.getAnomaliesDetected(), request.getNumberOfFetuses(),
+        Object[] observations = UltrasoundObservations.of(request);
+        Object[] others = {
             request.getGestationalAgeAtScan(), request.getGestationalAgeDays(), request.getNuchalTranslucencyMm(),
             request.getCrownRumpLengthMm(), request.getEstimatedDueDate(),
             request.getFetalPosition(), request.getBiparietalDiameterMm(), request.getHeadCircumferenceMm(),
             request.getAbdominalCircumferenceMm(), request.getFemurLengthMm(), request.getEstimatedFetalWeightGrams(),
             request.getPlacentalLocation(), request.getPlacentalGrade(), request.getAmnioticFluidIndex(),
             request.getAmnioticFluidLevel(), request.getCervicalLengthMm(), request.getUmbilicalArteryDoppler(),
-            request.getUterineArteryDoppler(), request.getFetalHeartRate(), request.getAnatomyFindings(), request.getFindingsSummary(), request.getInterpretation(),
-            request.getAnomalyDescription());
+            request.getUterineArteryDoppler(), request.getFetalHeartRate(), request.getAnatomyFindings(),
+            request.getFindingsSummary(), request.getInterpretation(), request.getAnomalyDescription()};
+        Object[] all = java.util.stream.Stream.concat(java.util.Arrays.stream(observations), java.util.Arrays.stream(others))
+            .toArray();
+        com.example.hms.service.support.ClinicalContent.requireAnyAnswered("findingsSummary",
+            "ultrasound.report.findingsRequired", all);
     }
 
     /**
@@ -421,19 +407,26 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     /**
      * QA D1525 review: no fetus seen contradicts a sign of a fetus: cardiac
      * activity or fetal movement present, a fetal heart rate, any fetal
-     * biometry (BPD, HC, AC, FL, CRL) or an estimated fetal weight. Refused on
-     * the fetus count.
+     * biometry (BPD, HC, AC, FL, CRL), an estimated fetal weight, a nuchal
+     * translucency, any nasal-bone or fetal-tone answer, anomalies detected or
+     * written anatomy findings. Refused on the fetus count. The portal's
+     * SIGNS_OF_A_FETUS mirrors this list.
      */
     static void requireFetusCountMatchesObservations(UltrasoundReportRequestDTO request) {
         if (!Integer.valueOf(0).equals(request.getNumberOfFetuses())) {
             return;
         }
+        String anatomy = request.getAnatomyFindings();
         boolean signOfAFetus = Boolean.TRUE.equals(request.getFetalCardiacActivity())
                 || Boolean.TRUE.equals(request.getFetalMovementObserved())
+                || Boolean.TRUE.equals(request.getAnomaliesDetected())
+                || (anatomy != null && !anatomy.isBlank())
                 || java.util.stream.Stream.of(request.getFetalHeartRate(), request.getBiparietalDiameterMm(),
                     request.getHeadCircumferenceMm(), request.getAbdominalCircumferenceMm(),
                     request.getFemurLengthMm(), request.getCrownRumpLengthMm(),
-                    request.getEstimatedFetalWeightGrams()).anyMatch(java.util.Objects::nonNull);
+                    request.getEstimatedFetalWeightGrams(), request.getNuchalTranslucencyMm(),
+                    request.getNasalBonePresent(), request.getFetalToneNormal())
+                    .anyMatch(java.util.Objects::nonNull);
         if (signOfAFetus) {
             throw new com.example.hms.exception.FieldBusinessException("numberOfFetuses",
                 "ultrasound.report.noFetusContradictsObservation");
@@ -453,15 +446,15 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     }
 
     /**
-     * QA D1525 review: whether the request answers at least one observation
-     * (a flag, the nasal bone, the anomalies answer or the fetus count). Only
-     * such a save turns a legacy report ("not asked") into a stated one ("not
-     * assessed" for what is left null); a summary-only edit does not.
+     * QA D1525 review: whether a save turns a legacy report ("not asked") into a
+     * stated one. A new report is stated already. A legacy one flips only when
+     * the request answers an observation differently from what is stored: the
+     * portal reloads and re-sends the surviving values (a FALSE flag, two
+     * fetuses), so a summary-only edit sends them back unchanged and keeps the
+     * report legacy.
      */
-    static boolean statesAnObservation(UltrasoundReportRequestDTO request) {
-        return java.util.stream.Stream.of(request.getFetalCardiacActivity(), request.getFetalMovementObserved(),
-                request.getFetalToneNormal(), request.getNasalBonePresent(), request.getAnomaliesDetected(),
-                request.getNumberOfFetuses()).anyMatch(com.example.hms.service.support.ClinicalContent::isAnswer);
+    static boolean statesAnObservation(UltrasoundReportRequestDTO request, UltrasoundReport stored) {
+        return stored == null || UltrasoundObservations.differ(request, stored);
     }
 
     @Override
@@ -485,6 +478,8 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         requireCategoryMatchesObservations(request);
         requireFetusCountMatchesObservations(request);
         requireAnomalyDescriptionMatchesAnswer(request);
+        // Decided before the edit is applied: it compares the request to what is stored.
+        boolean statesObservations = statesAnObservation(request, report);
 
         if (report == null) {
             report = ultrasoundMapper.toReportEntity(request, order, order.getHospital());
@@ -496,10 +491,10 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         }
 
         // QA D1525: a new report is stated (entity default). A legacy one
-        // becomes stated when this save answers at least one observation; a
+        // becomes stated when this save changes an observation; a
         // summary-only edit leaves "not asked" as it was. V282 already removed
         // its old defaults, so nothing ambiguous can be echoed back.
-        if (statesAnObservation(request)) {
+        if (statesObservations) {
             report.setObservationsStated(Boolean.TRUE);
         }
 

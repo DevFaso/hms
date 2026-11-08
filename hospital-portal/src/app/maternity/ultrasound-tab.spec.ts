@@ -624,6 +624,35 @@ describe('UltrasoundTabComponent', () => {
       expect(hasUltrasoundFinding({ findingsSummary: 'Grossesse évolutive' })).toBeTrue();
     });
 
+    it('reads a reviewed legacy report’s old defaults as "no answer", and its typed values as recorded', () => {
+      create(['ROLE_DOCTOR']);
+      fixture.componentInstance.openOrder(
+        order({
+          status: 'COMPLETED',
+          report: {
+            id: 'r-1',
+            reportReviewedByProvider: true,
+            observationsStated: false,
+            fetalCardiacActivity: true,
+            fetalMovementObserved: false,
+            fetalToneNormal: true,
+            nasalBonePresent: true,
+            anomaliesDetected: false,
+            numberOfFetuses: 1,
+          } as UltrasoundReportResponse,
+        }),
+      );
+      fixture.detectChanges();
+      expect(texts('[data-testid="ultrasound-observations"] li')).toEqual([
+        jasmine.stringContaining('ULTRASOUND.FLAG_NOT_STATED_LEGACY'),
+        jasmine.stringContaining('ULTRASOUND.FLAG_MOVEMENT_ABSENT'),
+        jasmine.stringContaining('ULTRASOUND.FLAG_NOT_STATED_LEGACY'),
+        jasmine.stringContaining('ULTRASOUND.NASAL_BONE_PRESENT'),
+        jasmine.stringContaining('ULTRASOUND.FLAG_NOT_STATED_LEGACY'),
+        jasmine.stringContaining('ULTRASOUND.FLAG_NOT_STATED_LEGACY'),
+      ]);
+    });
+
     it('refuses no fetus seen with any sign of a fetus on the fetus count, but not with NORMAL', () => {
       create(['ROLE_MIDWIFE']);
       const cmp = fixture.componentInstance;
@@ -639,6 +668,11 @@ describe('UltrasoundTabComponent', () => {
         { femurLengthMm: 32 },
         { crownRumpLengthMm: 55 },
         { estimatedFetalWeightGrams: 320 },
+        { nuchalTranslucencyMm: 2.1 },
+        { nasalBonePresent: false },
+        { fetalToneNormal: true },
+        { anomaliesDetected: true },
+        { anatomyFindings: 'Quatre cavités' },
       ]) {
         cmp.reportForm = {
           ...cmp.emptyReportForm(),
