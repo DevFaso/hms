@@ -1,7 +1,13 @@
-<div class="page-container">
+<div class="diagnostics-workspace page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">{{ 'LAB_RESULTS.TITLE' | translate }}</h1>
+      <p class="diagnostics-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">biotech</span
+        ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+      </p>
+      <h1 class="page-title" id="diagnostics-lab-results-title">
+        {{ 'LAB_RESULTS.TITLE' | translate }}
+      </h1>
       <p class="page-subtitle">{{ 'LAB_RESULTS.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
@@ -47,6 +53,7 @@
       [class.active]="activeTab() === 'all'"
       (click)="setTab('all')"
       [title]="'COMMON.ALL' | translate"
+      [attr.aria-pressed]="activeTab() === 'all'"
     >
       {{ 'COMMON.ALL' | translate }} ({{ results().length }})
     </button>
@@ -55,6 +62,7 @@
       [class.active]="activeTab() === 'released'"
       (click)="setTab('released')"
       [title]="'LAB_RESULTS.RELEASED' | translate"
+      [attr.aria-pressed]="activeTab() === 'released'"
     >
       {{ 'LAB_RESULTS.RELEASED' | translate }} ({{ stats().released }})
     </button>
@@ -63,6 +71,7 @@
       [class.active]="activeTab() === 'pending'"
       (click)="setTab('pending')"
       [title]="'LAB_RESULTS.PENDING_RELEASE' | translate"
+      [attr.aria-pressed]="activeTab() === 'pending'"
     >
       {{ 'LAB_RESULTS.PENDING_RELEASE' | translate }} ({{ stats().pending }})
     </button>
@@ -72,6 +81,7 @@
         [class.active]="activeTab() === 'critical'"
         (click)="setTab('critical')"
         [title]="'LAB_RESULTS.CRITICAL_QUEUE' | translate"
+        [attr.aria-pressed]="activeTab() === 'critical'"
       >
         {{ 'LAB_RESULTS.CRITICAL_QUEUE' | translate }}
       </button>
@@ -84,6 +94,7 @@
       [attr.aria-label]="'LAB_RESULTS.SEARCH' | translate"
       type="text"
       [placeholder]="'LAB_RESULTS.SEARCH' | translate"
+      [attr.aria-label]="'LAB_RESULTS.SEARCH' | translate"
       [(ngModel)]="searchTerm"
       (input)="applyFilter()"
     />
@@ -97,7 +108,12 @@
   }
 
   @if (!loading() && filtered().length > 0) {
-    <div class="data-table">
+    <div
+      class="data-table"
+      tabindex="0"
+      role="region"
+      aria-labelledby="diagnostics-lab-results-title"
+    >
       <table>
         <thead>
           <tr>

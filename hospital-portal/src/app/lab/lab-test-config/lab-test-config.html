@@ -1,9 +1,14 @@
-<div class="lab-test-config-container">
+<div class="diagnostics-workspace lab-test-config-container">
   <header class="page-header">
     <div class="header-left">
-      <span class="material-symbols-outlined header-icon">tune</span>
       <div>
-        <h1 class="page-title">{{ 'LAB_TEST_CONFIG.TITLE' | translate }}</h1>
+        <p class="diagnostics-eyebrow">
+          <span class="material-symbols-outlined" aria-hidden="true">tune</span
+          ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+        </p>
+        <h1 class="page-title" id="diagnostics-lab-test-config-title">
+          {{ 'LAB_TEST_CONFIG.TITLE' | translate }}
+        </h1>
         <p class="page-subtitle">{{ 'LAB_TEST_CONFIG.SUBTITLE' | translate }}</p>
       </div>
     </div>
@@ -37,6 +42,13 @@
       </button>
     </div>
   </header>
+  <div class="diagnostics-context">
+    <p>
+      <strong>{{ loading() ? '—' : definitions().length }}</strong
+      ><span>{{ 'DIAGNOSTICS_WORKSPACE.LOADED_DEFINITIONS' | translate }}</span>
+    </p>
+    <p>{{ 'DIAGNOSTICS_WORKSPACE.CONFIG_NOTE' | translate }}</p>
+  </div>
 
   <!-- Search bar -->
   <div class="search-bar">
@@ -84,7 +96,12 @@
 
   <!-- Table -->
   @if (!loading() && !error() && definitions().length > 0) {
-    <div class="table-wrap">
+    <div
+      class="table-wrap"
+      tabindex="0"
+      role="region"
+      aria-labelledby="diagnostics-lab-test-config-title"
+    >
       <table class="config-table">
         <thead>
           <tr>

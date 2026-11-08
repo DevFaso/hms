@@ -1,395 +1,424 @@
-<section class="page-header">
-  <span class="material-symbols-outlined">monitoring</span>
-  <div>
-    <h1>{{ 'LAB_QC.TITLE' | translate }}</h1>
-    <p>{{ 'LAB_QC.SUBTITLE' | translate }}</p>
-  </div>
-</section>
-
-@if (loading()) {
-  <div class="loading-spinner">
-    <span class="material-symbols-outlined">progress_activity</span>
-    {{ 'LAB_QC.LOADING' | translate }}
-  </div>
-} @else {
-  <!-- ── Summary cards ──────────────────────────────────────── -->
-  <div class="summary-cards">
-    <div class="summary-card">
-      <div class="icon-box bg-purple">
-        <span class="material-symbols-outlined">science</span>
-      </div>
-      <div>
-        <div class="value">{{ totalQcEvents() }}</div>
-        <div class="label">{{ 'LAB_QC.TOTAL_QC_EVENTS' | translate }}</div>
-      </div>
+<div class="diagnostics-workspace diagnostics-qc">
+  <section class="page-header">
+    <div>
+      <p class="diagnostics-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">monitoring</span
+        ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+      </p>
+      <h1 id="diagnostics-lab-qc-dashboard-title">{{ 'LAB_QC.TITLE' | translate }}</h1>
+      <p>{{ 'LAB_QC.SUBTITLE' | translate }}</p>
     </div>
+  </section>
 
-    <div class="summary-card">
-      <div class="icon-box bg-red">
-        <span class="material-symbols-outlined">warning</span>
-      </div>
-      <div>
-        <div class="value">{{ totalQcFailures() }}</div>
-        <div class="label">{{ 'LAB_QC.FAILED_QC_EVENTS' | translate }}</div>
-      </div>
-    </div>
-
-    <div class="summary-card">
-      <div class="icon-box bg-teal">
-        <span class="material-symbols-outlined">biotech</span>
-      </div>
-      <div>
-        <div class="value">{{ totalValidationStudies() }}</div>
-        <div class="label">{{ 'LAB_QC.VALIDATION_STUDIES' | translate }}</div>
-      </div>
-    </div>
-
-    <div class="summary-card">
-      <div
-        class="icon-box"
-        [class.bg-green]="overallPassRate() >= 90"
-        [class.bg-amber]="overallPassRate() < 90"
-      >
-        <span class="material-symbols-outlined">verified</span>
-      </div>
-      <div>
-        <div class="value">{{ overallPassRate() | measure: '%' }}</div>
-        <div class="label">{{ 'LAB_QC.VALIDATION_PASS_RATE' | translate }}</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── QC Summary table ────────────────────────────────── -->
-  <h2 class="section-title">{{ 'LAB_QC.EVENTS_BY_TEST' | translate }}</h2>
-  <p class="section-hint">{{ 'LAB_QC.CLICK_ROW_HINT' | translate }}</p>
-  @if (qcSummary().length === 0) {
-    <div class="empty-state">
-      <span class="material-symbols-outlined">monitoring</span>
-      <p>{{ 'LAB_QC.NO_EVENTS' | translate }}</p>
+  @if (loading()) {
+    <div class="loading-spinner">
+      <span class="material-symbols-outlined">progress_activity</span>
+      {{ 'LAB_QC.LOADING' | translate }}
     </div>
   } @else {
-    <table class="data-table clickable-rows">
-      <thead>
-        <tr>
-          <th></th>
-          <th>{{ 'LAB_QC.COL.TEST_NAME' | translate }}</th>
-          <th>{{ 'LAB_QC.COL.TOTAL_EVENTS' | translate }}</th>
-          <th>{{ 'LAB_QC.COL.FAILED' | translate }}</th>
-          <th>{{ 'LAB_QC.COL.FAILURE_RATE' | translate }}</th>
-          <th>{{ 'LAB_QC.COL.LAST_EVENT' | translate }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (row of qcSummary(); track row.testDefinitionId) {
-          <tr
-            class="qc-row"
-            [class.expanded]="expandedDefinitionId() === row.testDefinitionId"
-            (click)="toggleChart(row.testDefinitionId)"
-            (keydown.enter)="toggleChart(row.testDefinitionId)"
-            tabindex="0"
-          >
-            <td class="chevron-cell">
-              <span class="material-symbols-outlined chevron">
-                {{
-                  expandedDefinitionId() === row.testDefinitionId ? 'expand_less' : 'expand_more'
-                }}
-              </span>
-            </td>
-            <td>{{ row.testName }}</td>
-            <td>{{ row.totalEvents }}</td>
-            <td>{{ row.failedEvents }}</td>
-            <td>
-              <span
-                class="badge"
-                [class.pass]="row.failedEvents === 0"
-                [class.fail]="row.failedEvents > 0"
+    <!-- ── Summary cards ──────────────────────────────────────── -->
+    <div class="summary-cards">
+      <div class="summary-card">
+        <div class="icon-box bg-purple">
+          <span class="material-symbols-outlined">science</span>
+        </div>
+        <div>
+          <div class="value">{{ totalQcEvents() }}</div>
+          <div class="label">{{ 'LAB_QC.TOTAL_QC_EVENTS' | translate }}</div>
+        </div>
+      </div>
+
+      <div class="summary-card">
+        <div class="icon-box bg-red">
+          <span class="material-symbols-outlined">warning</span>
+        </div>
+        <div>
+          <div class="value">{{ totalQcFailures() }}</div>
+          <div class="label">{{ 'LAB_QC.FAILED_QC_EVENTS' | translate }}</div>
+        </div>
+      </div>
+
+      <div class="summary-card">
+        <div class="icon-box bg-teal">
+          <span class="material-symbols-outlined">biotech</span>
+        </div>
+        <div>
+          <div class="value">{{ totalValidationStudies() }}</div>
+          <div class="label">{{ 'LAB_QC.VALIDATION_STUDIES' | translate }}</div>
+        </div>
+      </div>
+
+      <div class="summary-card">
+        <div
+          class="icon-box"
+          [class.bg-green]="overallPassRate() >= 90"
+          [class.bg-amber]="overallPassRate() < 90"
+        >
+          <span class="material-symbols-outlined">verified</span>
+        </div>
+        <div>
+          <div class="value">{{ overallPassRate() | measure: '%' }}</div>
+          <div class="label">{{ 'LAB_QC.VALIDATION_PASS_RATE' | translate }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── QC Summary table ────────────────────────────────── -->
+    <h2 class="section-title" id="diagnostics-qc-events-title">
+      {{ 'LAB_QC.EVENTS_BY_TEST' | translate }}
+    </h2>
+    <p class="section-hint">{{ 'LAB_QC.CLICK_ROW_HINT' | translate }}</p>
+    @if (qcSummary().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined">monitoring</span>
+        <p>{{ 'LAB_QC.NO_EVENTS' | translate }}</p>
+      </div>
+    } @else {
+      <div
+        class="diagnostics-scroll"
+        tabindex="0"
+        role="region"
+        aria-labelledby="diagnostics-qc-events-title"
+      >
+        <table class="data-table clickable-rows">
+          <thead>
+            <tr>
+              <th></th>
+              <th>{{ 'LAB_QC.COL.TEST_NAME' | translate }}</th>
+              <th>{{ 'LAB_QC.COL.TOTAL_EVENTS' | translate }}</th>
+              <th>{{ 'LAB_QC.COL.FAILED' | translate }}</th>
+              <th>{{ 'LAB_QC.COL.FAILURE_RATE' | translate }}</th>
+              <th>{{ 'LAB_QC.COL.LAST_EVENT' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of qcSummary(); track row.testDefinitionId) {
+              <tr
+                class="qc-row"
+                [class.expanded]="expandedDefinitionId() === row.testDefinitionId"
+                (click)="toggleChart(row.testDefinitionId)"
+                (keydown.enter)="toggleChart(row.testDefinitionId)"
+                tabindex="0"
               >
-                {{
-                  (row.totalEvents > 0 ? (row.failedEvents / row.totalEvents) * 100 : 0)
-                    | measure: '%'
-                }}
-              </span>
-            </td>
-            <td>
-              {{ row.lastEventDate ? (row.lastEventDate | serverTime | date: 'mediumDate') : '—' }}
-            </td>
-          </tr>
+                <td class="chevron-cell">
+                  <span class="material-symbols-outlined chevron">
+                    {{
+                      expandedDefinitionId() === row.testDefinitionId
+                        ? 'expand_less'
+                        : 'expand_more'
+                    }}
+                  </span>
+                </td>
+                <td>{{ row.testName }}</td>
+                <td>{{ row.totalEvents }}</td>
+                <td>{{ row.failedEvents }}</td>
+                <td>
+                  <span
+                    class="badge"
+                    [class.pass]="row.failedEvents === 0"
+                    [class.fail]="row.failedEvents > 0"
+                  >
+                    {{
+                      (row.totalEvents > 0 ? (row.failedEvents / row.totalEvents) * 100 : 0)
+                        | measure: '%'
+                    }}
+                  </span>
+                </td>
+                <td>
+                  {{
+                    row.lastEventDate ? (row.lastEventDate | serverTime | date: 'mediumDate') : '—'
+                  }}
+                </td>
+              </tr>
 
-          <!-- ── Levey-Jennings chart drill-down ── -->
-          @if (expandedDefinitionId() === row.testDefinitionId) {
-            <tr class="chart-row">
-              <td colspan="6">
-                @if (loadingChart()) {
-                  <div class="loading-state compact">
-                    <span class="material-symbols-outlined spin">progress_activity</span>
-                    {{ 'LAB_QC.CHART.LOADING' | translate }}
-                  </div>
-                } @else if (qcChartGroups().length === 0) {
-                  <div class="empty-state compact">
-                    <span class="material-symbols-outlined">show_chart</span>
-                    <p>{{ 'LAB_QC.CHART.NO_EVENTS' | translate }}</p>
-                  </div>
-                } @else {
-                  @for (group of qcChartGroups(); track group.level) {
-                    <div class="qc-chart-group">
-                      <div class="qc-chart-title">
-                        <span class="qc-level-badge">
-                          {{
-                            (group.level === 'LOW_CONTROL'
-                              ? 'LAB_QC.CHART.LEVEL_LOW'
-                              : 'LAB_QC.CHART.LEVEL_HIGH'
-                            ) | translate
-                          }}
-                        </span>
-                        @if (!group.insufficient) {
-                          <span class="qc-stats">
-                            {{ 'LAB_QC.CHART.MEAN' | translate }}
-                            {{ group.mean | number: '1.3-3' }} &nbsp;&middot;&nbsp;
-                            {{ 'LAB_QC.CHART.SD' | translate }} {{ group.sd | number: '1.3-3' }}
-                          </span>
-                        }
+              <!-- ── Levey-Jennings chart drill-down ── -->
+              @if (expandedDefinitionId() === row.testDefinitionId) {
+                <tr class="chart-row">
+                  <td colspan="6">
+                    @if (loadingChart()) {
+                      <div class="loading-state compact">
+                        <span class="material-symbols-outlined spin">progress_activity</span>
+                        {{ 'LAB_QC.CHART.LOADING' | translate }}
                       </div>
-
-                      @if (group.insufficient) {
-                        <div class="empty-state compact">
-                          <p>{{ 'LAB_QC.CHART.INSUFFICIENT_DATA' | translate }}</p>
-                        </div>
-                      } @else {
-                        <div class="qc-svg-wrap">
-                          <svg
-                            class="lj-chart"
-                            [attr.viewBox]="'0 0 520 200'"
-                            xmlns="http://www.w3.org/2000/svg"
-                            role="img"
-                            [attr.aria-label]="'LAB_QC.CHART.ARIA_LABEL' | translate"
-                          >
-                            <!-- Zone background bands -->
-                            @for (rect of group.zoneRects; track $index) {
-                              <rect
-                                x="58"
-                                [attr.y]="rect.y"
-                                width="450"
-                                [attr.height]="rect.height"
-                                [attr.fill]="rect.fill"
-                              />
+                    } @else if (qcChartGroups().length === 0) {
+                      <div class="empty-state compact">
+                        <span class="material-symbols-outlined">show_chart</span>
+                        <p>{{ 'LAB_QC.CHART.NO_EVENTS' | translate }}</p>
+                      </div>
+                    } @else {
+                      @for (group of qcChartGroups(); track group.level) {
+                        <div class="qc-chart-group">
+                          <div class="qc-chart-title">
+                            <span class="qc-level-badge">
+                              {{
+                                (group.level === 'LOW_CONTROL'
+                                  ? 'LAB_QC.CHART.LEVEL_LOW'
+                                  : 'LAB_QC.CHART.LEVEL_HIGH'
+                                ) | translate
+                              }}
+                            </span>
+                            @if (!group.insufficient) {
+                              <span class="qc-stats">
+                                {{ 'LAB_QC.CHART.MEAN' | translate }}
+                                {{ group.mean | number: '1.3-3' }} &nbsp;&middot;&nbsp;
+                                {{ 'LAB_QC.CHART.SD' | translate }} {{ group.sd | number: '1.3-3' }}
+                              </span>
                             }
+                          </div>
 
-                            <!-- Chart border -->
-                            <rect
-                              x="58"
-                              y="15"
-                              width="450"
-                              height="143"
-                              fill="none"
-                              stroke="#d1d5db"
-                              stroke-width="1"
-                            />
-
-                            <!-- Reference lines -->
-                            <line
-                              x1="58"
-                              [attr.x2]="520 - 12"
-                              [attr.y1]="group.meanY"
-                              [attr.y2]="group.meanY"
-                              stroke="#374151"
-                              stroke-width="1.5"
-                              stroke-dasharray="6,3"
-                            />
-                            <line
-                              x1="58"
-                              [attr.x2]="520 - 12"
-                              [attr.y1]="group.p1sY"
-                              [attr.y2]="group.p1sY"
-                              stroke="#6b7280"
-                              stroke-width="0.8"
-                              stroke-dasharray="4,3"
-                            />
-                            <line
-                              x1="58"
-                              [attr.x2]="520 - 12"
-                              [attr.y1]="group.m1sY"
-                              [attr.y2]="group.m1sY"
-                              stroke="#6b7280"
-                              stroke-width="0.8"
-                              stroke-dasharray="4,3"
-                            />
-                            <line
-                              x1="58"
-                              [attr.x2]="520 - 12"
-                              [attr.y1]="group.p2sY"
-                              [attr.y2]="group.p2sY"
-                              stroke="#d97706"
-                              stroke-width="0.8"
-                              stroke-dasharray="4,3"
-                            />
-                            <line
-                              x1="58"
-                              [attr.x2]="520 - 12"
-                              [attr.y1]="group.m2sY"
-                              [attr.y2]="group.m2sY"
-                              stroke="#d97706"
-                              stroke-width="0.8"
-                              stroke-dasharray="4,3"
-                            />
-                            <line
-                              x1="58"
-                              [attr.x2]="520 - 12"
-                              [attr.y1]="group.p3sY"
-                              [attr.y2]="group.p3sY"
-                              stroke="#dc2626"
-                              stroke-width="0.8"
-                              stroke-dasharray="4,3"
-                            />
-                            <line
-                              x1="58"
-                              [attr.x2]="520 - 12"
-                              [attr.y1]="group.m3sY"
-                              [attr.y2]="group.m3sY"
-                              stroke="#dc2626"
-                              stroke-width="0.8"
-                              stroke-dasharray="4,3"
-                            />
-
-                            <!-- Y-axis labels -->
-                            @for (lbl of group.yAxisLabels; track lbl.label) {
-                              <text
-                                x="54"
-                                [attr.y]="lbl.y + 3.5"
-                                class="lj-axis-label"
-                                text-anchor="end"
-                                font-size="8"
-                                fill="#6b7280"
+                          @if (group.insufficient) {
+                            <div class="empty-state compact">
+                              <p>{{ 'LAB_QC.CHART.INSUFFICIENT_DATA' | translate }}</p>
+                            </div>
+                          } @else {
+                            <div class="qc-svg-wrap">
+                              <svg
+                                class="lj-chart"
+                                [attr.viewBox]="'0 0 520 200'"
+                                xmlns="http://www.w3.org/2000/svg"
+                                role="img"
+                                [attr.aria-label]="'LAB_QC.CHART.ARIA_LABEL' | translate"
                               >
-                                {{ lbl.label }}
-                              </text>
-                            }
+                                <!-- Zone background bands -->
+                                @for (rect of group.zoneRects; track $index) {
+                                  <rect
+                                    x="58"
+                                    [attr.y]="rect.y"
+                                    width="450"
+                                    [attr.height]="rect.height"
+                                    [attr.fill]="rect.fill"
+                                  />
+                                }
 
-                            <!-- X-axis labels -->
-                            @for (lbl of group.xAxisLabels; track lbl.label) {
-                              <text
-                                [attr.x]="lbl.x"
-                                y="195"
-                                class="lj-axis-label"
-                                text-anchor="middle"
-                                font-size="8"
-                                fill="#6b7280"
-                              >
-                                {{ lbl.label }}
-                              </text>
-                            }
+                                <!-- Chart border -->
+                                <rect
+                                  x="58"
+                                  y="15"
+                                  width="450"
+                                  height="143"
+                                  fill="none"
+                                  stroke="#d1d5db"
+                                  stroke-width="1"
+                                />
 
-                            <!-- Connecting polyline -->
-                            @if (group.points.length > 1) {
-                              <polyline
-                                [attr.points]="group.polyline"
-                                fill="none"
-                                stroke="#9ca3af"
-                                stroke-width="1"
-                                stroke-linejoin="round"
-                              />
-                            }
+                                <!-- Reference lines -->
+                                <line
+                                  x1="58"
+                                  [attr.x2]="520 - 12"
+                                  [attr.y1]="group.meanY"
+                                  [attr.y2]="group.meanY"
+                                  stroke="#374151"
+                                  stroke-width="1.5"
+                                  stroke-dasharray="6,3"
+                                />
+                                <line
+                                  x1="58"
+                                  [attr.x2]="520 - 12"
+                                  [attr.y1]="group.p1sY"
+                                  [attr.y2]="group.p1sY"
+                                  stroke="#6b7280"
+                                  stroke-width="0.8"
+                                  stroke-dasharray="4,3"
+                                />
+                                <line
+                                  x1="58"
+                                  [attr.x2]="520 - 12"
+                                  [attr.y1]="group.m1sY"
+                                  [attr.y2]="group.m1sY"
+                                  stroke="#6b7280"
+                                  stroke-width="0.8"
+                                  stroke-dasharray="4,3"
+                                />
+                                <line
+                                  x1="58"
+                                  [attr.x2]="520 - 12"
+                                  [attr.y1]="group.p2sY"
+                                  [attr.y2]="group.p2sY"
+                                  stroke="#d97706"
+                                  stroke-width="0.8"
+                                  stroke-dasharray="4,3"
+                                />
+                                <line
+                                  x1="58"
+                                  [attr.x2]="520 - 12"
+                                  [attr.y1]="group.m2sY"
+                                  [attr.y2]="group.m2sY"
+                                  stroke="#d97706"
+                                  stroke-width="0.8"
+                                  stroke-dasharray="4,3"
+                                />
+                                <line
+                                  x1="58"
+                                  [attr.x2]="520 - 12"
+                                  [attr.y1]="group.p3sY"
+                                  [attr.y2]="group.p3sY"
+                                  stroke="#dc2626"
+                                  stroke-width="0.8"
+                                  stroke-dasharray="4,3"
+                                />
+                                <line
+                                  x1="58"
+                                  [attr.x2]="520 - 12"
+                                  [attr.y1]="group.m3sY"
+                                  [attr.y2]="group.m3sY"
+                                  stroke="#dc2626"
+                                  stroke-width="0.8"
+                                  stroke-dasharray="4,3"
+                                />
 
-                            <!-- Data points -->
-                            @for (pt of group.points; track $index) {
-                              <circle
-                                [attr.cx]="pt.x"
-                                [attr.cy]="pt.y"
-                                r="4"
-                                [class]="'lj-point lj-point-' + pt.zone"
-                                stroke-width="1.5"
-                              >
-                                <title>{{ pt.title }}</title>
-                              </circle>
-                            }
+                                <!-- Y-axis labels -->
+                                @for (lbl of group.yAxisLabels; track lbl.label) {
+                                  <text
+                                    x="54"
+                                    [attr.y]="lbl.y + 3.5"
+                                    class="lj-axis-label"
+                                    text-anchor="end"
+                                    font-size="8"
+                                    fill="#6b7280"
+                                  >
+                                    {{ lbl.label }}
+                                  </text>
+                                }
 
-                            <!-- Legend -->
-                            <circle
-                              cx="70"
-                              cy="12"
-                              r="4"
-                              class="lj-point lj-point-ok"
-                              stroke-width="1.5"
-                            />
-                            <text x="78" y="15.5" font-size="7" fill="#374151">
-                              {{ 'LAB_QC.CHART.LEGEND_OK' | translate }}
-                            </text>
-                            <circle
-                              cx="130"
-                              cy="12"
-                              r="4"
-                              class="lj-point lj-point-warn"
-                              stroke-width="1.5"
-                            />
-                            <text x="138" y="15.5" font-size="7" fill="#374151">
-                              {{ 'LAB_QC.CHART.LEGEND_WARN' | translate }}
-                            </text>
-                            <circle
-                              cx="210"
-                              cy="12"
-                              r="4"
-                              class="lj-point lj-point-fail"
-                              stroke-width="1.5"
-                            />
-                            <text x="218" y="15.5" font-size="7" fill="#374151">
-                              {{ 'LAB_QC.CHART.LEGEND_FAIL' | translate }}
-                            </text>
-                          </svg>
+                                <!-- X-axis labels -->
+                                @for (lbl of group.xAxisLabels; track lbl.label) {
+                                  <text
+                                    [attr.x]="lbl.x"
+                                    y="195"
+                                    class="lj-axis-label"
+                                    text-anchor="middle"
+                                    font-size="8"
+                                    fill="#6b7280"
+                                  >
+                                    {{ lbl.label }}
+                                  </text>
+                                }
+
+                                <!-- Connecting polyline -->
+                                @if (group.points.length > 1) {
+                                  <polyline
+                                    [attr.points]="group.polyline"
+                                    fill="none"
+                                    stroke="#9ca3af"
+                                    stroke-width="1"
+                                    stroke-linejoin="round"
+                                  />
+                                }
+
+                                <!-- Data points -->
+                                @for (pt of group.points; track $index) {
+                                  <circle
+                                    [attr.cx]="pt.x"
+                                    [attr.cy]="pt.y"
+                                    r="4"
+                                    [class]="'lj-point lj-point-' + pt.zone"
+                                    stroke-width="1.5"
+                                  >
+                                    <title>{{ pt.title }}</title>
+                                  </circle>
+                                }
+
+                                <!-- Legend -->
+                                <circle
+                                  cx="70"
+                                  cy="12"
+                                  r="4"
+                                  class="lj-point lj-point-ok"
+                                  stroke-width="1.5"
+                                />
+                                <text x="78" y="15.5" font-size="7" fill="#374151">
+                                  {{ 'LAB_QC.CHART.LEGEND_OK' | translate }}
+                                </text>
+                                <circle
+                                  cx="130"
+                                  cy="12"
+                                  r="4"
+                                  class="lj-point lj-point-warn"
+                                  stroke-width="1.5"
+                                />
+                                <text x="138" y="15.5" font-size="7" fill="#374151">
+                                  {{ 'LAB_QC.CHART.LEGEND_WARN' | translate }}
+                                </text>
+                                <circle
+                                  cx="210"
+                                  cy="12"
+                                  r="4"
+                                  class="lj-point lj-point-fail"
+                                  stroke-width="1.5"
+                                />
+                                <text x="218" y="15.5" font-size="7" fill="#374151">
+                                  {{ 'LAB_QC.CHART.LEGEND_FAIL' | translate }}
+                                </text>
+                              </svg>
+                            </div>
+                          }
                         </div>
                       }
-                    </div>
-                  }
-                }
-              </td>
-            </tr>
-          }
-        }
-      </tbody>
-    </table>
-  }
+                    }
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    }
 
-  <!-- ── Validation Summary table ────────────────────────── -->
-  <h2 class="section-title">{{ 'LAB_QC.STUDIES_BY_TEST' | translate }}</h2>
-  @if (validationSummary().length === 0) {
-    <div class="empty-state">
-      <span class="material-symbols-outlined">biotech</span>
-      <p>{{ 'LAB_QC.NO_STUDIES' | translate }}</p>
-    </div>
-  } @else {
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>{{ 'LAB_QC.COL.TEST_NAME' | translate }}</th>
-          <th>{{ 'LAB_QC.STUDIES_COL.CODE' | translate }}</th>
-          <th>{{ 'LAB_QC.STUDIES_COL.TOTAL' | translate }}</th>
-          <th>{{ 'LAB_QC.STUDIES_COL.PASSED' | translate }}</th>
-          <th>{{ 'LAB_QC.COL.FAILED' | translate }}</th>
-          <th>{{ 'LAB_QC.STUDIES_COL.PASS_RATE' | translate }}</th>
-          <th>{{ 'LAB_QC.STUDIES_COL.LAST_STUDY' | translate }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (row of validationSummary(); track row.testDefinitionId) {
-          <tr>
-            <td>{{ row.testName }}</td>
-            <td>{{ row.testCode }}</td>
-            <td>{{ row.totalStudies }}</td>
-            <td>{{ row.passedStudies }}</td>
-            <td>{{ row.failedStudies }}</td>
-            <td>
-              <span
-                class="badge"
-                [class.pass]="row.passRate >= 90"
-                [class.fail]="row.passRate < 90"
-              >
-                {{ row.passRate | measure: '%' }}
-              </span>
-            </td>
-            <td>
-              {{ row.lastStudyDate ? (row.lastStudyDate | serverTime | date: 'mediumDate') : '—' }}
-            </td>
-          </tr>
-        }
-      </tbody>
-    </table>
+    <!-- ── Validation Summary table ────────────────────────── -->
+    <h2 class="section-title" id="diagnostics-qc-studies-title">
+      {{ 'LAB_QC.STUDIES_BY_TEST' | translate }}
+    </h2>
+    @if (validationSummary().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined">biotech</span>
+        <p>{{ 'LAB_QC.NO_STUDIES' | translate }}</p>
+      </div>
+    } @else {
+      <div
+        class="diagnostics-scroll"
+        tabindex="0"
+        role="region"
+        aria-labelledby="diagnostics-qc-studies-title"
+      >
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>{{ 'LAB_QC.COL.TEST_NAME' | translate }}</th>
+              <th>{{ 'LAB_QC.STUDIES_COL.CODE' | translate }}</th>
+              <th>{{ 'LAB_QC.STUDIES_COL.TOTAL' | translate }}</th>
+              <th>{{ 'LAB_QC.STUDIES_COL.PASSED' | translate }}</th>
+              <th>{{ 'LAB_QC.COL.FAILED' | translate }}</th>
+              <th>{{ 'LAB_QC.STUDIES_COL.PASS_RATE' | translate }}</th>
+              <th>{{ 'LAB_QC.STUDIES_COL.LAST_STUDY' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of validationSummary(); track row.testDefinitionId) {
+              <tr>
+                <td>{{ row.testName }}</td>
+                <td>{{ row.testCode }}</td>
+                <td>{{ row.totalStudies }}</td>
+                <td>{{ row.passedStudies }}</td>
+                <td>{{ row.failedStudies }}</td>
+                <td>
+                  <span
+                    class="badge"
+                    [class.pass]="row.passRate >= 90"
+                    [class.fail]="row.passRate < 90"
+                  >
+                    {{ row.passRate | measure: '%' }}
+                  </span>
+                </td>
+                <td>
+                  {{
+                    row.lastStudyDate ? (row.lastStudyDate | serverTime | date: 'mediumDate') : '—'
+                  }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
   }
-}
+</div>

@@ -1,3 +1,4 @@
+@use '../../shared/styles/diagnostics-workspace' as diagnostics;
 .release-worklist-container {
   padding: 1.5rem;
   max-width: 1200px;
@@ -350,3 +351,5 @@
     color: #ffffff;
   }
 }
+
+@include diagnostics.workspace;

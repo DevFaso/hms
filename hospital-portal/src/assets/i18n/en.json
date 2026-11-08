@@ -13234,5 +13234,11 @@
     "OPEN_MODULE": "Open module",
     "OPEN_CONTEXT": "Open {{module}} at {{hospital}}",
     "RESULTS": "{{count}} of {{total}} hospitals"
+  },
+  "DIAGNOSTICS_WORKSPACE": {
+    "LABEL": "Diagnostics workspace",
+    "LOADED_DEFINITIONS": "definitions on this page",
+    "APPROVAL_NOTE": "Review each definition and its evidence before an approval decision.",
+    "CONFIG_NOTE": "Test versions, specimen types and reference ranges in one place."
   }
 }

@@ -13234,5 +13234,11 @@
     "OPEN_MODULE": "Ouvrir le module",
     "OPEN_CONTEXT": "Ouvrir {{module}} à {{hospital}}",
     "RESULTS": "{{count}} hôpitaux sur {{total}}"
+  },
+  "DIAGNOSTICS_WORKSPACE": {
+    "LABEL": "Espace diagnostic",
+    "LOADED_DEFINITIONS": "définitions sur cette page",
+    "APPROVAL_NOTE": "Examinez chaque définition et ses justificatifs avant de décider.",
+    "CONFIG_NOTE": "Versions des tests, types de prélèvement et plages de référence."
   }
 }

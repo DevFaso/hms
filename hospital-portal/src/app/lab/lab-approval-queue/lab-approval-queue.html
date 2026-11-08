@@ -1,17 +1,31 @@
-<div class="page-container">
+<div class="diagnostics-workspace page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">{{ 'LAB_APPROVAL.TITLE' | translate }}</h1>
+      <p class="diagnostics-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">fact_check</span
+        ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+      </p>
+      <h1 class="page-title" id="diagnostics-lab-approval-queue-title">
+        {{ 'LAB_APPROVAL.TITLE' | translate }}
+      </h1>
       <p class="page-subtitle">{{ 'LAB_APPROVAL.SUBTITLE' | translate }}</p>
     </div>
   </div>
 
+  <div class="diagnostics-context">
+    <p>
+      <strong>{{ loading() ? '—' : definitions().length }}</strong
+      ><span>{{ 'DIAGNOSTICS_WORKSPACE.LOADED_DEFINITIONS' | translate }}</span>
+    </p>
+    <p>{{ 'DIAGNOSTICS_WORKSPACE.APPROVAL_NOTE' | translate }}</p>
+  </div>
   <!-- Status filter tabs -->
   <div class="tabs">
     <button
       class="tab"
       [class.active]="activeStatusFilter() === 'ALL'"
       (click)="setStatusFilter('ALL')"
+      [attr.aria-pressed]="activeStatusFilter() === 'ALL'"
     >
       {{ 'LAB_APPROVAL.TAB.ALL' | translate }} ({{ definitions().length }})
     </button>
@@ -19,6 +33,7 @@
       class="tab"
       [class.active]="activeStatusFilter() === 'DRAFT'"
       (click)="setStatusFilter('DRAFT')"
+      [attr.aria-pressed]="activeStatusFilter() === 'DRAFT'"
     >
       {{ 'LAB_APPROVAL.TAB.DRAFT' | translate }} ({{ countByStatus('DRAFT') }})
     </button>
@@ -26,6 +41,7 @@
       class="tab"
       [class.active]="activeStatusFilter() === 'PENDING_QA_REVIEW'"
       (click)="setStatusFilter('PENDING_QA_REVIEW')"
+      [attr.aria-pressed]="activeStatusFilter() === 'PENDING_QA_REVIEW'"
     >
       {{ 'LAB_APPROVAL.TAB.PENDING_QA' | translate }} ({{ countByStatus('PENDING_QA_REVIEW') }})
     </button>
@@ -33,6 +49,7 @@
       class="tab"
       [class.active]="activeStatusFilter() === 'PENDING_DIRECTOR_APPROVAL'"
       (click)="setStatusFilter('PENDING_DIRECTOR_APPROVAL')"
+      [attr.aria-pressed]="activeStatusFilter() === 'PENDING_DIRECTOR_APPROVAL'"
     >
       {{ 'LAB_APPROVAL.TAB.PENDING_DIRECTOR' | translate }} ({{
         countByStatus('PENDING_DIRECTOR_APPROVAL')
@@ -42,6 +59,7 @@
       class="tab"
       [class.active]="activeStatusFilter() === 'APPROVED'"
       (click)="setStatusFilter('APPROVED')"
+      [attr.aria-pressed]="activeStatusFilter() === 'APPROVED'"
     >
       {{ 'LAB_APPROVAL.TAB.APPROVED' | translate }} ({{ countByStatus('APPROVED') }})
     </button>
@@ -49,6 +67,7 @@
       class="tab"
       [class.active]="activeStatusFilter() === 'REJECTED'"
       (click)="setStatusFilter('REJECTED')"
+      [attr.aria-pressed]="activeStatusFilter() === 'REJECTED'"
     >
       {{ 'LAB_APPROVAL.TAB.REJECTED' | translate }} ({{ countByStatus('REJECTED') }})
     </button>
@@ -73,7 +92,12 @@
   }
 
   @if (!loading() && filtered().length > 0) {
-    <div class="data-table">
+    <div
+      class="data-table"
+      tabindex="0"
+      role="region"
+      aria-labelledby="diagnostics-lab-approval-queue-title"
+    >
       <table>
         <thead>
           <tr>

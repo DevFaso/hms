@@ -13234,5 +13234,11 @@
     "OPEN_MODULE": "Abrir módulo",
     "OPEN_CONTEXT": "Abrir {{module}} en {{hospital}}",
     "RESULTS": "{{count}} de {{total}} hospitales"
+  },
+  "DIAGNOSTICS_WORKSPACE": {
+    "LABEL": "Espacio de diagnóstico",
+    "LOADED_DEFINITIONS": "definiciones en esta página",
+    "APPROVAL_NOTE": "Revise cada definición y sus evidencias antes de decidir.",
+    "CONFIG_NOTE": "Versiones de pruebas, tipos de muestra e intervalos de referencia."
   }
 }
