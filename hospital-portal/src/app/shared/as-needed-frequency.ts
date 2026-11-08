@@ -517,9 +517,11 @@ const COUNT_DIGITS: ReadonlyMap<string, number> = new Map(
 
 /** What a frequency reads as: `MarDoseSchedule.Reading`. */
 export interface FrequencyReading {
-  kind: 'REPEATING' | 'ONE_OFF' | 'UNREAD' | 'CONTINUOUS' | 'COURSE';
+  kind: 'REPEATING' | 'ONE_OFF' | 'UNREAD' | 'CONTINUOUS' | 'COURSE' | 'TIMES_OF_DAY';
   intervalMinutes?: number;
   courseOffsets?: readonly number[];
+  /** QA D1514: for times of day, the minutes after midnight of each dose, rising. */
+  clockMinutes?: readonly number[];
 }
 
 const ONE_OFF: FrequencyReading = { kind: 'ONE_OFF' };
@@ -542,7 +544,7 @@ function countOver(count: number, period: number): FrequencyReading | null {
 /** `FrequencyCadence.tokensOf`. */
 function tokensOf(upper: string): string[] {
   const joined = upper
-    .replaceAll(/\b(2[0-3]|[01]?\d|24(?=[:H]00))[:H][0-5]\d\b/g, '$1HMIN')
+    .replaceAll(/\b(2[0-3]|[01]?\d|24(?=[:H]00))[:H]([0-5]\d)\b/g, '$1 $2HMIN')
     .replaceAll(/(?<![\d.,])0{1,4}[.,]0{1,3}(?![\d.,])/g, ' 0 ')
     .replaceAll(/(?<![\d.,])\d{1,4}[.,]\d{1,3}(?![\d.,])/g, ` ${DECIMAL} `)
     .replaceAll('VINGT-QUATRE', '24')
@@ -726,9 +728,12 @@ function hourOf(number: number, mark: string): number {
   return mark === 'AM' && number === 12 ? 0 : number;
 }
 
-/** `FrequencyCadence.ClockList`. */
+/**
+ * `FrequencyCadence.ClockList`. QA D1514: clock times are times of day, read as the minutes after
+ * midnight they state, never as a count spread evenly from the signing moment.
+ */
 class ClockList {
-  readonly hours: number[] = [];
+  readonly times: number[] = [];
   private marked = false;
 
   readOneAt(tokens: readonly string[], at: number, mayOpen: boolean): number {
@@ -738,34 +743,41 @@ class ClockList {
     const time = before ? i + 1 : i;
     const number = wholeDigits(tokens[time]);
     if (number === null) return -1;
-    return this.readItsMark(number, tokens[time + 1] ?? '', before, time + 2);
+    const after = tokens[time + 1] ?? '';
+    if (tokens[time + 2] === 'HMIN') {
+      const minutes = wholeDigits(after);
+      if (minutes === null) return -1;
+      return this.add(number, minutes, before !== '' || number >= FIRST_LONE_CLOCK_HOUR, time + 3);
+    }
+    return this.readItsMark(number, after, before, time + 2);
   }
 
   private readItsMark(number: number, after: string, before: string, next: number): number {
     if (after === 'AM' || after === 'PM') {
-      return number < 1 || number > 12 ? -1 : this.add(hourOf(number, after), true, next);
+      return number < 1 || number > 12 ? -1 : this.add(hourOf(number, after), 0, true, next);
     }
-    if (after === 'HMIN') {
-      return this.add(number, before !== '' || number >= FIRST_LONE_CLOCK_HOUR, next);
-    }
-    if (after === 'H') return this.add(number, before !== '', next);
-    return BEFORE_BARE_CLOCK.has(before) ? this.add(number, true, next - 1) : -1;
+    if (after === 'H') return this.add(number, 0, before !== '', next);
+    return BEFORE_BARE_CLOCK.has(before) ? this.add(number, 0, true, next - 1) : -1;
   }
 
-  private add(hour: number, isMarked: boolean, next: number): number {
+  private add(hour: number, minutes: number, isMarked: boolean, next: number): number {
     if (hour > 24) return -1;
-    this.hours.push(hour);
+    this.times.push(hour * MINUTES_PER_HOUR + minutes);
     this.marked = this.marked || isMarked;
     return next;
   }
 
   reading(): FrequencyReading | null {
-    if (this.hours.length === 0 || (this.hours.length === 1 && !this.marked)) return null;
-    if (this.hours[this.hours.length - 1] - this.hours[0] >= 24) return null;
-    const tooClose = this.hours.some(
-      (hour, i) => i > 0 && hour - this.hours[i - 1] < MIN_CLOCK_GAP_HOURS,
-    );
-    return tooClose ? null : countOver(this.hours.length, MINUTES_PER_DAY);
+    if (this.times.length === 0 || (this.times.length === 1 && !this.marked)) return null;
+    const first = this.times[0];
+    const last = this.times[this.times.length - 1];
+    const leastGap = MIN_CLOCK_GAP_HOURS * MINUTES_PER_HOUR;
+    if (last - first >= MINUTES_PER_DAY) return null;
+    if (this.times.length > 1 && first + MINUTES_PER_DAY - last < leastGap) return null;
+    const tooClose = this.times.some((time, i) => i > 0 && time - this.times[i - 1] < leastGap);
+    if (tooClose) return null;
+    const ofDay = this.times.map((time) => time % MINUTES_PER_DAY).sort((x, y) => x - y);
+    return { kind: 'TIMES_OF_DAY', clockMinutes: ofDay };
   }
 }
 
@@ -833,7 +845,8 @@ function sameReading(a: FrequencyReading, b: FrequencyReading | null): boolean {
     b !== null &&
     a.kind === b.kind &&
     a.intervalMinutes === b.intervalMinutes &&
-    (a.courseOffsets ?? []).join() === (b.courseOffsets ?? []).join()
+    (a.courseOffsets ?? []).join() === (b.courseOffsets ?? []).join() &&
+    (a.clockMinutes ?? []).join() === (b.clockMinutes ?? []).join()
   );
 }
 

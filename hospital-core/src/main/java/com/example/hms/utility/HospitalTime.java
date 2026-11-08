@@ -35,6 +35,14 @@ public final class HospitalTime {
         return serverTime.atZone(ZoneId.systemDefault()).withZoneSameInstant(zone).toLocalDateTime();
     }
 
+    /** QA D1514: a time on the wall clock of {@code zone}, back on the server's clock, as the server stores it. */
+    public static LocalDateTime toServer(LocalDateTime wallTime, ZoneId zone) {
+        if (wallTime == null || zone == null) {
+            return wallTime;
+        }
+        return wallTime.atZone(zone).withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+    }
+
     /** A server-written time on the hospital's wall clock. */
     public static LocalDateTime at(LocalDateTime serverTime, Hospital hospital) {
         return at(serverTime, zoneOf(hospital));

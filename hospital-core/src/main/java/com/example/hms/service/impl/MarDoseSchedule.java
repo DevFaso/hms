@@ -1,8 +1,12 @@
 package com.example.hms.service.impl;
 
 import com.example.hms.model.Prescription;
+import com.example.hms.utility.HospitalTime;
 
 import java.text.Normalizer;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -80,29 +84,107 @@ public final class MarDoseSchedule {
          * QA D1419: a course at fixed moments after its first dose ("H0 H8 H24 H36 H48 H60", "J1 J3 J5"),
          * {@link Reading#courseOffsets()}: each dose its own gap, and it ends after the last.
          */
-        COURSE
+        COURSE,
+        /**
+         * QA D1514 (round 37, coordinator rule, provisional): clock times ("7 h 13 h 19 h", "a 9 h", "08:00 et
+         * 20:00"), {@link Reading#clockMinutes()}: each dose at a time it states, every day, never timed from the
+         * signing moment; the gaps between doses are the real ones (6, 6 and 12 hours there).
+         */
+        TIMES_OF_DAY
     }
 
     /**
      * A frequency read: its kind, for a repeat the minutes between doses, for a
-     * course the minutes of each dose after the first (the first is 0).
+     * course the minutes of each dose after the first (the first is 0), for times
+     * of day the minutes after midnight of each, rising (QA D1514).
      */
-    public record Reading(Kind kind, Integer intervalMinutes, List<Integer> courseOffsets) {
-        static final Reading ONE_OFF = new Reading(Kind.ONE_OFF, null, List.of());
-        static final Reading AS_NEEDED = new Reading(Kind.AS_NEEDED, null, List.of());
-        static final Reading UNREAD = new Reading(Kind.UNREAD, null, List.of());
-        static final Reading CONTINUOUS = new Reading(Kind.CONTINUOUS, null, List.of());
+    public record Reading(Kind kind, Integer intervalMinutes, List<Integer> courseOffsets, List<Integer> clockMinutes) {
+        static final Reading ONE_OFF = new Reading(Kind.ONE_OFF, null, List.of(), List.of());
+        static final Reading AS_NEEDED = new Reading(Kind.AS_NEEDED, null, List.of(), List.of());
+        static final Reading UNREAD = new Reading(Kind.UNREAD, null, List.of(), List.of());
+        static final Reading CONTINUOUS = new Reading(Kind.CONTINUOUS, null, List.of(), List.of());
 
         static Reading every(int minutes) {
-            return new Reading(Kind.REPEATING, minutes, List.of());
+            return new Reading(Kind.REPEATING, minutes, List.of(), List.of());
         }
 
         static Reading course(List<Integer> offsets) {
-            return new Reading(Kind.COURSE, null, List.copyOf(offsets));
+            return new Reading(Kind.COURSE, null, List.copyOf(offsets), List.of());
+        }
+
+        /** QA D1514: doses at these minutes after midnight, rising, each under a day. */
+        static Reading timesOfDay(List<Integer> minutesAfterMidnight) {
+            return new Reading(Kind.TIMES_OF_DAY, null, List.of(), List.copyOf(minutesAfterMidnight));
         }
 
         public boolean repeating() {
             return kind == Kind.REPEATING;
+        }
+
+        /**
+         * QA D1514: the first stated time of day at or after {@code moment}. The times are the hospital's wall clock
+         * ({@code zone}); {@code moment} and the answer are on the server's clock, as the MAR stores them. Only for
+         * {@link Kind#TIMES_OF_DAY}.
+         */
+        public LocalDateTime timeOfDayAtOrAfter(LocalDateTime moment, ZoneId zone) {
+            return HospitalTime.toServer(firstTimeOfDay(HospitalTime.at(moment, zone), true), zone);
+        }
+
+        /** QA D1514: the first stated time of day strictly after {@code moment}, as {@link #timeOfDayAtOrAfter}. */
+        public LocalDateTime timeOfDayAfter(LocalDateTime moment, ZoneId zone) {
+            return HospitalTime.toServer(firstTimeOfDay(HospitalTime.at(moment, zone), false), zone);
+        }
+
+        /** On one wall clock: {@code moment} and the answer are both the hospital's. */
+        private LocalDateTime firstTimeOfDay(LocalDateTime moment, boolean orAt) {
+            LocalDate day = moment.toLocalDate();
+            for (int minutes : clockMinutes) {
+                LocalDateTime time = atMinute(day, minutes);
+                if (time.isAfter(moment) || (orAt && time.isEqual(moment))) {
+                    return time;
+                }
+            }
+            // None left today: the first time of the next day.
+            return atMinute(day.plusDays(1), clockMinutes.get(0));
+        }
+
+        private static LocalDateTime atMinute(LocalDate day, int minutesAfterMidnight) {
+            return day.atTime(minutesAfterMidnight / MINUTES_PER_HOUR, minutesAfterMidnight % MINUTES_PER_HOUR);
+        }
+
+        /**
+         * QA D1514: the real gap, in minutes, from the stated time a dose at {@code slotMoment} fills (the last
+         * one at or before it) to the next stated time: "7 h 13 h 19 h" is 360 after 07:00 and 720 after 19:00.
+         * A single time of day is a day apart. {@code slotMoment} is on the server's clock, read on the hospital's
+         * ({@code zone}). Only for {@link Kind#TIMES_OF_DAY}.
+         */
+        public int timeOfDayGapFrom(LocalDateTime slotMoment, ZoneId zone) {
+            LocalDateTime wall = HospitalTime.at(slotMoment, zone);
+            int minute = wall.getHour() * MINUTES_PER_HOUR + wall.getMinute();
+            int filled = clockMinutes.size() - 1;
+            for (int i = 0; i < clockMinutes.size(); i++) {
+                if (clockMinutes.get(i) <= minute) {
+                    filled = i;
+                }
+            }
+            return gapAfterTime(filled);
+        }
+
+        /** QA D1514: the shortest real gap between two stated times of day, the overnight one included. */
+        int shortestTimeOfDayGap() {
+            int shortest = MINUTES_PER_DAY;
+            for (int i = 0; i < clockMinutes.size(); i++) {
+                shortest = Math.min(shortest, gapAfterTime(i));
+            }
+            return shortest;
+        }
+
+        private int gapAfterTime(int index) {
+            if (clockMinutes.size() == 1) {
+                return MINUTES_PER_DAY;
+            }
+            int next = clockMinutes.get((index + 1) % clockMinutes.size());
+            return Math.floorMod(next - clockMinutes.get(index), MINUTES_PER_DAY);
         }
 
         /**
@@ -268,6 +350,10 @@ public final class MarDoseSchedule {
         if (reading.kind() == Kind.COURSE) {
             return (double) mostDosesInADay(reading.courseOffsets());
         }
+        if (reading.kind() == Kind.TIMES_OF_DAY) {
+            // QA D1514: "7 h 13 h 19 h" is three doses a day, what the daily limits count.
+            return (double) reading.clockMinutes().size();
+        }
         return reading.repeating() ? (double) MINUTES_PER_DAY / reading.intervalMinutes() : null;
     }
 
@@ -285,6 +371,10 @@ public final class MarDoseSchedule {
         }
         if (reading.kind() == Kind.UNREAD) {
             return shortestStatedMinutes(frequency);
+        }
+        if (reading.kind() == Kind.TIMES_OF_DAY) {
+            // QA D1514: the real gaps, never the day spread evenly: "7 h 13 h 19 h" allows 6 h, not 8.
+            return reading.shortestTimeOfDayGap();
         }
         if (reading.kind() != Kind.COURSE) {
             return null;
@@ -368,6 +458,19 @@ public final class MarDoseSchedule {
             return null;
         }
         return reading.intervalMinutes() / MINUTES_PER_HOUR;
+    }
+
+    /**
+     * QA D1514: the doses of a whole day, for a count of units per fill: a repeat of whole hours that divides the
+     * day ({@link #intervalHours}), or the times of day stated ("8 h et 20 h" is two); {@code null} otherwise.
+     */
+    public static Integer wholeDosesPerDay(String frequency) {
+        Reading reading = read(frequency);
+        if (reading.kind() == Kind.TIMES_OF_DAY) {
+            return reading.clockMinutes().size();
+        }
+        Integer hours = intervalHours(frequency);
+        return hours == null || HOURS_PER_DAY % hours != 0 ? null : HOURS_PER_DAY / hours;
     }
 
     /** The hours of a "q6h", "every 6 hours", "toutes les heures", "6h/6h" or "tous les 2 jours" frequency. */

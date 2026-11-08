@@ -407,9 +407,18 @@ class MarDoseScheduleTest {
     @CsvSource(delimiter = '|', value = {
         "2/semaine|5040", "2 fois/semaine|5040", "q2d|2880", "tous les mois|43200",
         "cada mes|43200", "every week|10080", "8/8|480", "3f/j|480", "at bedtime|1440", "matin et soir|720",
-        "take 1 tablet twice daily|720", "08:00 14:00 20:00|480"})
+        "take 1 tablet twice daily|720"})
     void d1426_aFormOfTheGrammarIsRead(String frequency, int minutes) {
         assertThat(MarDoseSchedule.read(frequency).intervalMinutes()).as(frequency).isEqualTo(minutes);
+    }
+
+    /** QA D1514 (moved from the case above, declared): "08:00 14:00 20:00" is read as those times of day, not every 8 h. */
+    @Test
+    void d1514_clockTimesAreReadAsTimesOfDay() {
+        MarDoseSchedule.Reading reading = MarDoseSchedule.read("08:00 14:00 20:00");
+        assertThat(reading.kind()).isEqualTo(MarDoseSchedule.Kind.TIMES_OF_DAY);
+        assertThat(reading.clockMinutes()).containsExactly(480, 840, 1200);
+        assertThat(reading.intervalMinutes()).isNull();
     }
 
     /** QA D1426: a single-dose form ends after its dose. */

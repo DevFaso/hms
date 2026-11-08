@@ -49,7 +49,8 @@ describe('as-needed-frequency (QA D1391 / D1395: the mirror of the server rule)'
       const read =
         r.kind +
         (r.intervalMinutes === undefined ? '' : `:${r.intervalMinutes}`) +
-        (r.courseOffsets === undefined ? '' : `:[${r.courseOffsets.join(',')}]`);
+        (r.courseOffsets === undefined ? '' : `:[${r.courseOffsets.join(',')}]`) +
+        (r.clockMinutes === undefined ? '' : `:[${r.clockMinutes.join(',')}]`);
       expect(read).withContext(wording).toBe(readings[wording]);
     }
   });
@@ -84,7 +85,8 @@ describe('as-needed-frequency (QA D1391 / D1395: the mirror of the server rule)'
     return (
       r.kind +
       (r.intervalMinutes === undefined ? '' : `:${r.intervalMinutes}`) +
-      (r.courseOffsets === undefined ? '' : `:[${r.courseOffsets.join(',')}]`)
+      (r.courseOffsets === undefined ? '' : `:[${r.courseOffsets.join(',')}]`) +
+      (r.clockMinutes === undefined ? '' : `:[${r.clockMinutes.join(',')}]`)
     );
   };
 

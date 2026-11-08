@@ -119,11 +119,7 @@ class FrequencyWordingTest {
         JsonNode readings = new ObjectMapper().readTree(Files.readString(MarDoseScheduleTest.AS_NEEDED_CASES))
             .get("readings");
         assertThat(readings.has(wording)).as("the fixture states how \"%s\" is read", wording).isTrue();
-        MarDoseSchedule.Reading reading = MarDoseSchedule.read(wording);
-        String read = reading.kind()
-            + (reading.intervalMinutes() != null ? ":" + reading.intervalMinutes() : "")
-            + (reading.courseOffsets().isEmpty() ? "" : ":" + reading.courseOffsets().toString().replace(" ", ""));
-        assertThat(read).as(wording).isEqualTo(readings.get(wording).asText());
+        assertThat(readingOf(wording)).as(wording).isEqualTo(readings.get(wording).asText());
     }
 
     /**
@@ -397,7 +393,8 @@ class FrequencyWordingTest {
         MarDoseSchedule.Reading reading = MarDoseSchedule.read(wording);
         return reading.kind()
             + (reading.intervalMinutes() != null ? ":" + reading.intervalMinutes() : "")
-            + (reading.courseOffsets().isEmpty() ? "" : ":" + reading.courseOffsets().toString().replace(" ", ""));
+            + (reading.courseOffsets().isEmpty() ? "" : ":" + reading.courseOffsets().toString().replace(" ", ""))
+            + (reading.clockMinutes().isEmpty() ? "" : ":" + reading.clockMinutes().toString().replace(" ", ""));
     }
 
     /** One instance of each line of the grammar, as the fixture writes it: a line added here is a line with no fixture. */
@@ -559,11 +556,12 @@ class FrequencyWordingTest {
         for (String wording : List.of("24/24 H", "24/24h", "24/24 heures", "24 h/24 h", "125 ml/h", "2 mg/h")) {
             assertThat(readingOf(wording)).as(wording).isEqualTo("CONTINUOUS");
         }
-        assertThat(readingOf("8h30")).isEqualTo("REPEATING:1440");
+        // QA D1514 (changed assertions, declared): clock times are read as the times of day they state.
+        assertThat(readingOf("8h30")).isEqualTo("TIMES_OF_DAY:[510]");
         // QA round 36: alone with no word before it, "1h30" may say how long; with one it is a time.
         assertThat(readingOf("1h30")).isEqualTo("UNREAD");
-        assertThat(readingOf("\u00e0 1h30")).isEqualTo("REPEATING:1440");
-        assertThat(readingOf("8h,20h")).isEqualTo("REPEATING:720");
+        assertThat(readingOf("\u00e0 1h30")).isEqualTo("TIMES_OF_DAY:[90]");
+        assertThat(readingOf("8h,20h")).isEqualTo("TIMES_OF_DAY:[480,1200]");
         assertThat(readingOf("ma\u00f1ana y noche")).isEqualTo("REPEATING:720");
         assertThat(readingOf("ma\u00f1ana, tarde y noche")).isEqualTo("REPEATING:480");
         assertThat(MarDoseSchedule.dosesPerDay("1/2/j")).as("a fraction is no count").isNull();

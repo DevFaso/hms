@@ -176,6 +176,10 @@ class AdultParacetamolRuleTest {
         "500 mg | 7 fois par jour | null | IN",
         "250 mg | toutes les 3 heures | null | I",
         "1 g | H0 H2 H4 | null | IR",
+        // QA D1514: times of day count one dose each, and their real gaps, all at least 4 hours here.
+        "1 g | 7 h 13 h 19 h | null | R",
+        "1 g | 6 h 12 h 18 h 24 h | null | N",
+        "1 g | 8 h et 20 h | null | ''",
         // A ticked as-needed order: 24 / interval, and its interval.
         "500 mg | si besoin | 4 | R",
         "500 mg | si besoin | 3 | IN",

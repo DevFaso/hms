@@ -6,6 +6,7 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Prescription;
 import com.example.hms.utility.DisplayDates;
+import com.example.hms.utility.HospitalTime;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -132,7 +133,7 @@ public final class MarDoseInterval {
         if (reading.kind() == MarDoseSchedule.Kind.AS_NEEDED) {
             return requireAsNeededIntervalOrReason(rx, lastGiven.get(), now, reason);
         }
-        Integer gap = reading.gapAfter(closedDoses);
+        Integer gap = gapAfterLastGiven(reading, lastGiven.get(), earlyWindow, closedDoses, rx.getHospital());
         if (gap == null) {
             return null;
         }
@@ -170,6 +171,21 @@ public final class MarDoseInterval {
             DisplayDates.dateTime(com.example.hms.utility.HospitalTime.at(lastGiven, hospital)),
             DisplayDates.dateTime(com.example.hms.utility.HospitalTime.at(earliest, hospital)),
             String.valueOf(hours));
+    }
+
+    /**
+     * The gap, in minutes, the dose after the last one given must keep, or {@code null} when none follows: a
+     * repeat's interval, a course's next step. QA D1514: for times of day, the real gap from the stated time the
+     * last dose filled (the last at or before it, the early window allowed) to the next stated time, so the
+     * 07:00 dose of "7 h 13 h 19 h" keeps 6 hours and the 19:00 dose 12, never an even 8. MarNextDose reads the
+     * same gap, so the screen and the administer call agree.
+     */
+    static Integer gapAfterLastGiven(MarDoseSchedule.Reading reading, LocalDateTime lastGiven, Duration earlyWindow,
+                                     int closedDoses, Hospital hospital) {
+        if (reading.kind() == MarDoseSchedule.Kind.TIMES_OF_DAY) {
+            return reading.timeOfDayGapFrom(lastGiven.plus(earlyWindow), HospitalTime.zoneOf(hospital));
+        }
+        return reading.gapAfter(closedDoses);
     }
 
     /**
