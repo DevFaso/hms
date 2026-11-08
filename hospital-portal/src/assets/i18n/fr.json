@@ -12120,5 +12120,14 @@
     "MATERNITY_GUIDE": "Une vue claire du parcours de soins maternels",
     "CLEAR_SEARCH": "Effacer la recherche",
     "MATERNITY_HINT": "Choisissez un domaine de soins, puis une liste de travail. Les indicateurs de risque et les exigences de revue sont affichés dans chaque dossier."
+  },
+  "VISIT_SUMMARY": {
+    "EYEBROW": "DOCUMENT DE CONSULTATION",
+    "PATIENT": "Nom du patient",
+    "READ_ONLY": "Document de visite en lecture seule",
+    "NOT_PROVIDED": "Non renseigné",
+    "PROVIDER": "Professionnel de santé",
+    "DEPARTMENT": "Service",
+    "NO_SECTIONS": "Aucune section supplémentaire n’a été transmise dans ce résumé de visite."
   }
 }

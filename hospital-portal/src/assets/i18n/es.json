@@ -12120,5 +12120,14 @@
     "MATERNITY_GUIDE": "Una vista clara del recorrido de atención materna",
     "CLEAR_SEARCH": "Borrar la búsqueda",
     "MATERNITY_HINT": "Elija un área de atención y una lista de trabajo. Las alertas de riesgo y los requisitos de revisión se muestran en cada expediente."
+  },
+  "VISIT_SUMMARY": {
+    "EYEBROW": "DOCUMENTO DE LA VISITA",
+    "PATIENT": "Nombre del paciente",
+    "READ_ONLY": "Documento de la visita de solo lectura",
+    "NOT_PROVIDED": "No facilitado",
+    "PROVIDER": "Profesional sanitario",
+    "DEPARTMENT": "Servicio",
+    "NO_SECTIONS": "No se recibieron secciones adicionales en este resumen de la visita."
   }
 }

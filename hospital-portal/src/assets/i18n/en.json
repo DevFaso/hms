@@ -12120,5 +12120,14 @@
     "SELECTED_DOSE_HIDDEN": "Selected dose for {{patient}} · {{medication}} is hidden by your search. The bedside form still applies to this dose.",
     "MATERNITY_GUIDE": "A clear view of the maternal care journey",
     "MATERNITY_HINT": "Choose a care area, then a worklist. Risk flags and review requirements are shown in each record."
+  },
+  "VISIT_SUMMARY": {
+    "EYEBROW": "VISIT DOCUMENT",
+    "PATIENT": "Patient name",
+    "READ_ONLY": "Read-only visit document",
+    "NOT_PROVIDED": "Not provided",
+    "PROVIDER": "Clinician",
+    "DEPARTMENT": "Department",
+    "NO_SECTIONS": "No additional visit-summary sections were returned."
   }
 }
