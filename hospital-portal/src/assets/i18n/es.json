@@ -13253,5 +13253,22 @@
     "DISPENSE_HINT": "Verifique el paciente, el medicamento y la cantidad antes de la entrega.",
     "ROUTING_DECISION": "Elegir una derivación",
     "VISIBLE_INTERACTIONS": "interacciones que coinciden con los filtros"
+  },
+  "LAB_EVOLUTION": {
+    "TITLE": "Evolución del resultado",
+    "UNIT": "Unidad",
+    "LOADING": "Cargando historial…",
+    "ERROR": "No se pudo cargar el historial. Cierre y vuelva a abrir los detalles para reintentar.",
+    "NOTE": "Los valores numéricos exactos se representan por separado según la unidad. Las fechas están a escala. El historial puede incluir versiones anteriores; las correcciones se indican. No se deduce ninguna interpretación clínica.",
+    "TIME_AXIS": "Tiempo",
+    "CHART_LABEL": "Observaciones históricas; los valores exactos figuran en la tabla de observaciones.",
+    "INSUFFICIENT": "Se necesitan al menos dos observaciones numéricas fechadas en la misma unidad conocida.",
+    "OBSERVATIONS": "Todas las observaciones",
+    "PAGINATION": "Paginación de resultados",
+    "RANGE": "{{start}}–{{end}} de {{total}} resultados",
+    "ROWS": "Filas por página",
+    "PREVIOUS": "Página anterior",
+    "PAGE": "Página {{page}} de {{pages}}",
+    "NEXT": "Página siguiente"
   }
 }

@@ -101,6 +101,61 @@ describe('LabResultsComponent', () => {
     assignReq.flush([{ id: 'assign-1', active: true }]);
   }
 
+  it('paginates results and resets the page after filtering', () => {
+    fixture.detectChanges();
+    flushInit(
+      Array.from({ length: 26 }, (_, i) =>
+        mockResult({ id: `result-${i}`, patientFullName: `Patient ${i}` }),
+      ),
+    );
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('tbody .data-row').length).toBe(10);
+    component.page.set(3);
+    expect(component.pagedResults().length).toBe(6);
+    expect(component.pageStart()).toBe(20);
+    component.setPageSize(25);
+    expect(component.currentPage()).toBe(1);
+    expect(component.pagedResults().length).toBe(25);
+    component.page.set(2);
+    component.searchTerm = 'Patient 25';
+    component.applyFilter();
+    expect(component.currentPage()).toBe(1);
+    expect(component.pagedResults().length).toBe(1);
+  });
+
+  it('ignores history received after switching patient details', () => {
+    fixture.detectChanges();
+    flushInit();
+    const first = component.results()[0];
+    component.viewResult(first);
+    const pending = httpMock.expectOne('/lab-results/result-1');
+    component.closeDetail();
+    component.viewResult({ ...first, id: 'result-2', patientId: 'patient-2' });
+    httpMock
+      .expectOne('/lab-results/result-2')
+      .flush({ data: { ...first, id: 'result-2', patientId: 'patient-2', trendHistory: [] } });
+    pending.flush({
+      data: {
+        ...first,
+        trendHistory: [{ resultValue: '999', resultUnit: 'mg/dL', resultDate: first.resultDate }],
+      },
+    });
+    expect(component.detailHistory()[0].resultValue).toBe(first.resultValue);
+    expect(component.selectedResult()?.patientId).toBe('patient-2');
+  });
+
+  it('reports a failed history request', () => {
+    fixture.detectChanges();
+    flushInit();
+    component.viewResult(component.results()[0]);
+    httpMock
+      .expectOne('/lab-results/result-1')
+      .flush({}, { status: 503, statusText: 'Unavailable' });
+    expect(component.detailHistoryError()).toBeTrue();
+    expect(component.detailHistoryLoading()).toBeFalse();
+    expect(component.detailHistory()).toEqual([]);
+  });
+
   it('should create the component', () => {
     expect(component).toBeTruthy();
     fixture.detectChanges();
@@ -209,6 +264,7 @@ describe('LabResultsComponent', () => {
     const trigger = host.querySelector<HTMLButtonElement>('.view-link')!;
     trigger.focus();
     trigger.click();
+    httpMock.expectOne('/lab-results/result-1').flush({ data: component.results()[0] });
     fixture.detectChanges();
     await fixture.whenStable();
     await new Promise((resolve) => setTimeout(resolve));
@@ -295,6 +351,7 @@ describe('LabResultsComponent', () => {
         'LAB_RESULTS.CORRECTED',
       );
       component.viewResult(component.results()[0]);
+      httpMock.expectOne('/lab-results/result-1').flush({ data: component.results()[0] });
       fixture.detectChanges();
       expect(host.querySelector('[data-testid="detail-corrected"]')).not.toBeNull();
     });
@@ -450,6 +507,7 @@ describe('LabResultsComponent', () => {
 
     const result = component.results()[0];
     component.viewResult(result);
+    httpMock.expectOne('/lab-results/result-1').flush({ data: result });
     expect(component.selectedResult()).toBe(result);
 
     component.closeDetail();

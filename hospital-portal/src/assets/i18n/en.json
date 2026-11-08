@@ -13253,5 +13253,22 @@
     "DISPENSE_HINT": "Check the patient, medication and quantity before handover.",
     "ROUTING_DECISION": "Choose a routing option",
     "VISIBLE_INTERACTIONS": "interactions matching the filters"
+  },
+  "LAB_EVOLUTION": {
+    "TITLE": "Result evolution",
+    "UNIT": "Unit",
+    "LOADING": "Loading result history…",
+    "ERROR": "History could not be loaded. Close and reopen the details to retry.",
+    "NOTE": "Exact numeric observations are plotted separately by unit. Dates are spaced to scale. Historical records may include earlier versions; corrected records are marked. No clinical interpretation is inferred.",
+    "TIME_AXIS": "Time",
+    "CHART_LABEL": "Historical observations; exact values are available in the observations table.",
+    "INSUFFICIENT": "At least two dated numeric observations in the same known unit are needed.",
+    "OBSERVATIONS": "All observations",
+    "PAGINATION": "Results pagination",
+    "RANGE": "{{start}}–{{end}} of {{total}} results",
+    "ROWS": "Rows per page",
+    "PREVIOUS": "Previous page",
+    "PAGE": "Page {{page}} of {{pages}}",
+    "NEXT": "Next page"
   }
 }

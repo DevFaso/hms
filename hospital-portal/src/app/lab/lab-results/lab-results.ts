@@ -1,3 +1,4 @@
+import { ResultEvolutionComponent } from '../shared/result-evolution.component';
 import { refusalReason } from '../../shared/refusal-reason';
 import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
 import { textMatches } from '../../shared/person-search';
@@ -88,6 +89,7 @@ export const ORDER_STATUSES_AWAITING_SPECIMEN: ReadonlySet<string> = new Set([
   selector: 'app-lab-results',
   standalone: true,
   imports: [
+    ResultEvolutionComponent,
     DateTimePipe,
     SubmitGuardDirective,
     MeasurePipe,
@@ -170,6 +172,24 @@ export class LabResultsComponent implements OnInit {
   loading = signal(true);
   results = signal<LabResultResponse[]>([]);
   filtered = signal<LabResultResponse[]>([]);
+  pageSize = signal(10);
+  page = signal(1);
+  pageCount = computed(() => Math.max(1, Math.ceil(this.filtered().length / this.pageSize())));
+  hasNextPage = computed(() => this.currentPage() * this.pageSize() < this.filtered().length);
+  currentPage = computed(() => Math.min(this.page(), this.pageCount()));
+  pageStart = computed(() => (this.currentPage() - 1) * this.pageSize());
+  pageEnd = computed(() => Math.min(this.pageStart() + this.pageSize(), this.filtered().length));
+  pagedResults = computed(() => this.filtered().slice(this.pageStart(), this.pageEnd()));
+  detailHistory = signal<LabResultTrendPoint[]>([]);
+  detailHistoryLoading = signal(false);
+  detailHistoryError = signal(false);
+  private detailRequest = 0;
+
+  setPageSize(size: number): void {
+    this.pageSize.set([10, 25, 50].includes(Number(size)) ? Number(size) : 10);
+    this.page.set(1);
+  }
+
   searchTerm = '';
   activeTab = signal<'all' | 'released' | 'pending' | 'critical'>('all');
 
@@ -346,6 +366,7 @@ export class LabResultsComponent implements OnInit {
 
   /** Re-fetch under the new scope when the chip emits. */
   onScopeChange(_hospitalId: string | null): void {
+    this.closeDetail();
     this.loadResults();
   }
 
@@ -683,13 +704,46 @@ export class LabResultsComponent implements OnInit {
       );
     }
     this.filtered.set(list);
+    this.page.set(1);
   }
 
   viewResult(r: LabResultResponse): void {
     this.selectedResult.set(r);
+    const request = ++this.detailRequest;
+    this.detailHistory.set([]);
+    this.detailHistoryLoading.set(true);
+    this.detailHistoryError.set(false);
+    this.labService.getResult(r.id).subscribe({
+      next: (detail) => {
+        if (request !== this.detailRequest) return;
+        this.detailHistoryLoading.set(false);
+        if (detail?.id !== r.id || detail.patientId !== r.patientId) {
+          this.detailHistoryError.set(true);
+          return;
+        }
+        this.detailHistory.set(
+          detail.trendHistory?.length
+            ? detail.trendHistory
+            : [
+                {
+                  resultDate: detail.resultDate,
+                  resultValue: detail.resultValue,
+                  resultUnit: detail.resultUnit,
+                  corrected: !!detail.supersedesResultId,
+                },
+              ],
+        );
+      },
+      error: () => {
+        if (request !== this.detailRequest) return;
+        this.detailHistoryLoading.set(false);
+        this.detailHistoryError.set(true);
+      },
+    });
   }
 
   closeDetail(): void {
+    ++this.detailRequest;
     this.selectedResult.set(null);
   }
 
