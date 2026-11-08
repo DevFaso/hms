@@ -6,7 +6,9 @@
 --      FALSE (NOT NULL) so a row an older application instance writes during a rolling deploy also lands as legacy.
 --      The new code sets TRUE explicitly on every report it creates, and on a legacy row once a save changes one
 --      of its observations,
---   2. copies the original six values of every row the data step changes into ultrasound_report_legacy_backup,
+--   2. copies the original six values (and the hospital) of every row the data step changes into
+--      ultrasound_report_legacy_backup. It cascades with its report and is kept until the prod data has been
+--      checked, then dropped by a later migration (tasklist.md, standing debt),
 --   3. on the legacy rows NOT yet reviewed, sets to NULL exactly the values the old code could have defaulted, so
 --      every reader, export and query sees plain values. A typed value the old code could not have defaulted is
 --      kept: a FALSE flag, anomalies TRUE, two fetuses, a gestational age outside the template signature.
@@ -52,7 +54,8 @@ ALTER TABLE clinical.ultrasound_reports
     ALTER COLUMN observations_stated SET NOT NULL;
 
 CREATE TABLE IF NOT EXISTS clinical.ultrasound_report_legacy_backup (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY REFERENCES clinical.ultrasound_reports (id) ON DELETE CASCADE,
+    hospital_id UUID NOT NULL,
     fetal_cardiac_activity BOOLEAN,
     fetal_movement_observed BOOLEAN,
     fetal_tone_normal BOOLEAN,
@@ -112,9 +115,10 @@ CREATE TEMP TABLE v282_template_ga AS
       AND COALESCE(BTRIM(provider_review_notes), '') = '';
 
 -- The original values of every row the statements below change, before they change it.
-INSERT INTO clinical.ultrasound_report_legacy_backup (id, fetal_cardiac_activity, fetal_movement_observed,
-        fetal_tone_normal, anomalies_detected, number_of_fetuses, gestational_age_at_scan, migrated_at)
-    SELECT id, fetal_cardiac_activity, fetal_movement_observed, fetal_tone_normal, anomalies_detected,
+INSERT INTO clinical.ultrasound_report_legacy_backup (id, hospital_id, fetal_cardiac_activity,
+        fetal_movement_observed, fetal_tone_normal, anomalies_detected, number_of_fetuses, gestational_age_at_scan,
+        migrated_at)
+    SELECT id, hospital_id, fetal_cardiac_activity, fetal_movement_observed, fetal_tone_normal, anomalies_detected,
            number_of_fetuses, gestational_age_at_scan, NOW()
     FROM clinical.ultrasound_reports
     WHERE observations_stated = FALSE

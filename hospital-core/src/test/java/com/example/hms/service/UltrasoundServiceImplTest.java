@@ -675,6 +675,44 @@ class UltrasoundServiceImplTest {
         assertThat(legacy.getObservationsStated()).as("nothing changed: still legacy").isFalse();
     }
 
+    /**
+     * QA D1525 review: an old contradictory legacy report (NORMAL with no cardiac
+     * activity, a description without anomalies detected) can still take a typo
+     * fix: the contradictions are judged only when one of their inputs changes.
+     * Changing the category judges them; a new report always does.
+     */
+    @Test
+    void createOrUpdateReport_aLegacyReportJudgesContradictionsOnlyWhenTheirInputsChange() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.IN_PROGRESS);
+        UltrasoundReport legacy = new UltrasoundReport();
+        legacy.setUltrasoundOrder(order);
+        legacy.setHospital(hospital);
+        legacy.setReportReviewedByProvider(false);
+        legacy.setObservationsStated(false);
+        legacy.setFindingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL);
+        legacy.setFetalCardiacActivity(false);
+        legacy.setAnomalyDescription("Kyste");
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.of(legacy));
+        when(reportRepository.save(legacy)).thenReturn(legacy);
+
+        UltrasoundReportRequestDTO typoFix = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).findingsSummary("Résumé corrigé").fetalCardiacActivity(false)
+            .anomalyDescription("Kyste").findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL).build();
+        ultrasoundService.createOrUpdateReport(orderId, typoFix, null);
+        verify(reportRepository).save(legacy);
+
+        UltrasoundReportRequestDTO recategorised = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).findingsSummary("Résumé corrigé").fetalCardiacActivity(false)
+            .anomalyDescription("Kyste").findingCategory(com.example.hms.enums.UltrasoundFindingCategory.VARIANT).build();
+        assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, recategorised, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("findingCategory"));
+    }
+
     /** QA D1525 review: a new report is stated whatever the client sends; the client flag plays no part. */
     @Test
     void createOrUpdateReport_aNewReportIsStatedWithoutAnyClientFlag() {

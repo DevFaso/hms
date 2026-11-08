@@ -88,6 +88,16 @@ class V282UltrasoundLegacyDataIT {
         runV282(); // idempotent and re-runnable
         assertRows();
 
+        // The backup cascades with its report.
+        try (Connection conn = newConnection(); Statement st = conn.createStatement()) {
+            st.execute("DELETE FROM clinical.ultrasound_reports WHERE id = '" + DEFAULTS + "'");
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM clinical.ultrasound_report_legacy_backup "
+                    + "WHERE id = '" + DEFAULTS + "'")) {
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getInt(1)).isZero();
+            }
+        }
+
         // An insert that does not name the column (an older application instance
         // during a rolling deploy) lands as legacy.
         UUID oldInstance = UUID.randomUUID();
@@ -150,14 +160,16 @@ class V282UltrasoundLegacyDataIT {
     }
 
     private static List<String> backup(Statement st, UUID id) throws Exception {
-        try (ResultSet rs = st.executeQuery("SELECT fetal_cardiac_activity::text, fetal_movement_observed::text, "
-                + "fetal_tone_normal::text, anomalies_detected::text, number_of_fetuses::text, "
-                + "gestational_age_at_scan::text, migrated_at FROM clinical.ultrasound_report_legacy_backup WHERE id = '"
-                + id + "'")) {
+        try (ResultSet rs = st.executeQuery("SELECT b.fetal_cardiac_activity::text, b.fetal_movement_observed::text, "
+                + "b.fetal_tone_normal::text, b.anomalies_detected::text, b.number_of_fetuses::text, "
+                + "b.gestational_age_at_scan::text, b.migrated_at, b.hospital_id = r.hospital_id "
+                + "FROM clinical.ultrasound_report_legacy_backup b JOIN clinical.ultrasound_reports r ON r.id = b.id "
+                + "WHERE b.id = '" + id + "'")) {
             if (!rs.next()) {
                 return null;
             }
             assertThat(rs.getTimestamp(7)).isNotNull();
+            assertThat(rs.getBoolean(8)).as("the hospital is copied").isTrue();
             return Arrays.asList(bool(rs.getString(1)), bool(rs.getString(2)), bool(rs.getString(3)),
                 bool(rs.getString(4)), rs.getString(5), rs.getString(6));
         }

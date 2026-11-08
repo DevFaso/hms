@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
 import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
-import { hasClinicalContent } from '../shared/forms/clinical-content';
+import { hasClinicalContent, isRecorded } from '../shared/forms/clinical-content';
 import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -183,7 +183,8 @@ export function hasUltrasoundFinding(
     hasClinicalContent(form, FINDING_FIELDS) ||
     OBSERVATION_FIELDS.some((field) => {
       const value = record[field];
-      return typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value));
+      // A stated FALSE is an answer; isRecorded counts a ticked box only.
+      return typeof value === 'boolean' || isRecorded(value);
     })
   );
 }
@@ -208,11 +209,14 @@ export function normalContradictsObservation(
   );
 }
 
-/** QA D1525 review: "no anomaly" with a written description contradicts itself (refused on the description). */
+/**
+ * QA D1525 review: an anomaly is described only when anomalies were detected; a
+ * description with "no anomaly" or "not assessed" is refused on the description.
+ */
 export function anomalyDescriptionContradictsAnswer(
   form: UltrasoundReportForm | Partial<UltrasoundReportRequest>,
 ): boolean {
-  return form.anomaliesDetected === false && (form.anomalyDescription ?? '').trim() !== '';
+  return form.anomaliesDetected !== true && isRecorded(form.anomalyDescription);
 }
 
 /**
@@ -254,8 +258,7 @@ export function noFetusContradictsObservation(
     SIGNS_OF_A_FETUS.some((sign) => {
       const value = record[sign];
       if (SIGNS_ONLY_WHEN_TRUE.includes(sign)) return value === true;
-      if (typeof value === 'string') return value.trim() !== '';
-      return value !== null && value !== undefined;
+      return typeof value === 'boolean' || isRecorded(value);
     })
   );
 }
@@ -372,6 +375,39 @@ export class UltrasoundTabComponent implements OnInit {
    * when the count changes (a legacy count outside 0..8 stays editable).
    */
   private loadedFetuses: number | undefined = undefined;
+  /** The stored report being edited, as the server returned it (null for a new report). */
+  private loadedReport: UltrasoundReportResponse | null = null;
+
+  /** One tri-state answer as the form loads it: a legacy report's old default is "not assessed". */
+  private loadAnswer(
+    report: UltrasoundReportResponse,
+    field:
+      'fetalCardiacActivity' | 'fetalMovementObserved' | 'fetalToneNormal' | 'anomaliesDetected',
+  ): boolean | null {
+    const value = report[field] ?? null;
+    return report.observationsStated === false && value === LEGACY_DEFAULTS[field] ? null : value;
+  }
+
+  /**
+   * QA D1525 review: on a legacy report, the contradictions are judged only when
+   * one of their inputs changes from what is stored (the server's
+   * CONTRADICTION_INPUTS), so a typo fix on an old contradictory report saves.
+   * A new or stated report is always judged.
+   */
+  private judgesContradictions(form: UltrasoundReportForm): boolean {
+    const stored = this.loadedReport;
+    if (!stored || stored.observationsStated !== false) return true;
+    const blank = (v: unknown) => (v === undefined || v === null || v === '' ? null : v);
+    const formRecord = form as unknown as Record<string, unknown>;
+    const storedRecord = stored as unknown as Record<string, unknown>;
+    const inputs = new Set<string>([
+      'findingCategory',
+      'anomalyDescription',
+      ...OBSERVATION_FIELDS,
+      ...SIGNS_OF_A_FETUS,
+    ]);
+    return [...inputs].some((field) => blank(formRecord[field]) !== blank(storedRecord[field]));
+  }
   reportActionBusy = signal(false);
 
   ngOnInit(): void {
@@ -759,6 +795,7 @@ export class UltrasoundTabComponent implements OnInit {
     this.reportTargetOrder.set(order);
     const existing = order.report;
     this.loadedFetuses = existing?.numberOfFetuses ?? undefined;
+    this.loadedReport = existing ?? null;
     if (existing) {
       // Strip the response-only bookkeeping fields before reusing as a request.
       const {
@@ -778,18 +815,23 @@ export class UltrasoundTabComponent implements OnInit {
       this.reportForm = {
         ...fields,
         scanDate: existing.scanDate ?? localDateString(),
-        // QA D1525: the server reads a legacy row's possible defaults (true
-        // flags, "no anomalies", one fetus, NORMAL, the template's
-        // gestational age) as unknown and keeps every typed value, so the form
-        // loads what it is given: an unknown is "not assessed" / unchosen and
-        // is never re-sent as the clinician's statement.
+        // QA D1525: the server returns plain stored values. On a legacy report
+        // (observationsStated false) a value equal to what the old code filled
+        // (LEGACY_DEFAULTS, the rule the report view uses) loads as "not
+        // assessed", so it is never re-sent as the clinician's statement. Rows
+        // V282 cleared hold NULLs already; this covers a row an older instance
+        // wrote during the rolling deploy.
         findingCategory: existing.findingCategory ?? '',
-        fetalCardiacActivity: existing.fetalCardiacActivity ?? null,
-        fetalMovementObserved: existing.fetalMovementObserved ?? null,
-        fetalToneNormal: existing.fetalToneNormal ?? null,
-        anomaliesDetected: existing.anomaliesDetected ?? null,
+        fetalCardiacActivity: this.loadAnswer(existing, 'fetalCardiacActivity'),
+        fetalMovementObserved: this.loadAnswer(existing, 'fetalMovementObserved'),
+        fetalToneNormal: this.loadAnswer(existing, 'fetalToneNormal'),
+        anomaliesDetected: this.loadAnswer(existing, 'anomaliesDetected'),
         nasalBonePresent: existing.nasalBonePresent ?? null,
-        numberOfFetuses: existing.numberOfFetuses ?? undefined,
+        numberOfFetuses:
+          existing.observationsStated === false &&
+          existing.numberOfFetuses === LEGACY_DEFAULTS.numberOfFetuses
+            ? undefined
+            : (existing.numberOfFetuses ?? undefined),
         gestationalAgeAtScan: existing.gestationalAgeAtScan ?? undefined,
         reportFinalized: false,
         providerReviewNotes: providerReviewNotes ?? undefined,
@@ -848,15 +890,16 @@ export class UltrasoundTabComponent implements OnInit {
       this.refuseReport('rep-category', 'COMMON.FIELD_REQUIRED');
       return;
     }
-    if (normalContradictsObservation(form)) {
+    const judge = this.judgesContradictions(form);
+    if (judge && normalContradictsObservation(form)) {
       this.refuseReport('rep-category', 'ULTRASOUND.NORMAL_CONTRADICTS_OBSERVATION');
       return;
     }
-    if (noFetusContradictsObservation(form)) {
+    if (judge && noFetusContradictsObservation(form)) {
       this.refuseReport('rep-fetuses', 'ULTRASOUND.NO_FETUS_CONTRADICTS_OBSERVATION');
       return;
     }
-    if (anomalyDescriptionContradictsAnswer(form)) {
+    if (judge && anomalyDescriptionContradictsAnswer(form)) {
       this.refuseReport('rep-anomaly', 'ULTRASOUND.ANOMALY_DESCRIPTION_WITHOUT_ANOMALY');
       return;
     }

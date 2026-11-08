@@ -30,7 +30,11 @@ import java.util.stream.Stream;
  * per report, not per field, so once one observation changes on a legacy
  * report the other cleared ones read "Not assessed" from then on; and on a
  * signed legacy report a value equal to an old default reads "no answer" even
- * if the clinician typed it before signing (the stored value is unchanged).
+ * if the clinician typed it before signing (the stored value is unchanged);
+ * and only the ultrasound tab reads a signed legacy report's old defaults that
+ * way - the timeline, the doctor record, exports and the apps show the stored
+ * signed values as they are (reviewed legacy rows only: V282 cleared the
+ * unreviewed ones).
  */
 public final class UltrasoundObservations {
 
@@ -98,21 +102,43 @@ public final class UltrasoundObservations {
      * ones in {@link #SIGNS_ONLY_WHEN_TRUE}, which count only when TRUE (their
      * FALSE - no cardiac activity, no movement, no anomaly - fits an empty sac).
      */
-    public static final List<Finding> SIGNS_OF_A_FETUS = List.of(
-        new Finding(CARDIAC_ACTIVITY, UltrasoundReportBaseDTO::getFetalCardiacActivity),
-        new Finding(MOVEMENT, UltrasoundReportBaseDTO::getFetalMovementObserved),
-        new Finding(ANOMALIES, UltrasoundReportBaseDTO::getAnomaliesDetected),
-        new Finding("fetalHeartRate", UltrasoundReportBaseDTO::getFetalHeartRate),
-        new Finding("biparietalDiameterMm", UltrasoundReportBaseDTO::getBiparietalDiameterMm),
-        new Finding("headCircumferenceMm", UltrasoundReportBaseDTO::getHeadCircumferenceMm),
-        new Finding("abdominalCircumferenceMm", UltrasoundReportBaseDTO::getAbdominalCircumferenceMm),
-        new Finding("femurLengthMm", UltrasoundReportBaseDTO::getFemurLengthMm),
-        new Finding("crownRumpLengthMm", UltrasoundReportBaseDTO::getCrownRumpLengthMm),
-        new Finding("estimatedFetalWeightGrams", UltrasoundReportBaseDTO::getEstimatedFetalWeightGrams),
-        new Finding("nuchalTranslucencyMm", UltrasoundReportBaseDTO::getNuchalTranslucencyMm),
-        new Finding(NASAL_BONE, UltrasoundReportBaseDTO::getNasalBonePresent),
-        new Finding(TONE, UltrasoundReportBaseDTO::getFetalToneNormal),
-        new Finding("anatomyFindings", UltrasoundReportBaseDTO::getAnatomyFindings));
+    public static final List<Field> SIGNS_OF_A_FETUS = List.of(
+        new Field(CARDIAC_ACTIVITY, UltrasoundReportBaseDTO::getFetalCardiacActivity,
+            UltrasoundReport::getFetalCardiacActivity),
+        new Field(MOVEMENT, UltrasoundReportBaseDTO::getFetalMovementObserved,
+            UltrasoundReport::getFetalMovementObserved),
+        new Field(ANOMALIES, UltrasoundReportBaseDTO::getAnomaliesDetected, UltrasoundReport::getAnomaliesDetected),
+        new Field("fetalHeartRate", UltrasoundReportBaseDTO::getFetalHeartRate, UltrasoundReport::getFetalHeartRate),
+        new Field("biparietalDiameterMm", UltrasoundReportBaseDTO::getBiparietalDiameterMm,
+            UltrasoundReport::getBiparietalDiameterMm),
+        new Field("headCircumferenceMm", UltrasoundReportBaseDTO::getHeadCircumferenceMm,
+            UltrasoundReport::getHeadCircumferenceMm),
+        new Field("abdominalCircumferenceMm", UltrasoundReportBaseDTO::getAbdominalCircumferenceMm,
+            UltrasoundReport::getAbdominalCircumferenceMm),
+        new Field("femurLengthMm", UltrasoundReportBaseDTO::getFemurLengthMm, UltrasoundReport::getFemurLengthMm),
+        new Field("crownRumpLengthMm", UltrasoundReportBaseDTO::getCrownRumpLengthMm,
+            UltrasoundReport::getCrownRumpLengthMm),
+        new Field("estimatedFetalWeightGrams", UltrasoundReportBaseDTO::getEstimatedFetalWeightGrams,
+            UltrasoundReport::getEstimatedFetalWeightGrams),
+        new Field("nuchalTranslucencyMm", UltrasoundReportBaseDTO::getNuchalTranslucencyMm,
+            UltrasoundReport::getNuchalTranslucencyMm),
+        new Field(NASAL_BONE, UltrasoundReportBaseDTO::getNasalBonePresent, UltrasoundReport::getNasalBonePresent),
+        new Field(TONE, UltrasoundReportBaseDTO::getFetalToneNormal, UltrasoundReport::getFetalToneNormal),
+        new Field("anatomyFindings", UltrasoundReportBaseDTO::getAnatomyFindings, UltrasoundReport::getAnatomyFindings));
+
+    /**
+     * What the contradiction rules read: the category, the observations, the
+     * signs of a fetus and the anomaly description. On a legacy report the
+     * rules run only when one of these changes (a typo fix on an old
+     * contradictory report still saves); on a new or stated report, always.
+     */
+    public static final List<Field> CONTRADICTION_INPUTS = Stream.of(
+            Stream.of(new Field("findingCategory", UltrasoundReportBaseDTO::getFindingCategory,
+                    UltrasoundReport::getFindingCategory),
+                new Field("anomalyDescription", UltrasoundReportBaseDTO::getAnomalyDescription,
+                    UltrasoundReport::getAnomalyDescription)),
+            FIELDS.stream(), SIGNS_OF_A_FETUS.stream())
+        .flatMap(f -> f).toList();
 
     public static final Set<String> SIGNS_ONLY_WHEN_TRUE =
         Set.of(CARDIAC_ACTIVITY, MOVEMENT, ANOMALIES);
@@ -141,7 +167,12 @@ public final class UltrasoundObservations {
 
     /** Whether the request answers any observation differently from the stored report. */
     public static boolean differ(UltrasoundReportBaseDTO request, UltrasoundReport stored) {
-        return FIELDS.stream().anyMatch(f -> !Objects.equals(f.request().apply(request), f.stored().apply(stored)));
+        return differ(FIELDS, request, stored);
+    }
+
+    /** Whether the request differs from the stored report on any of {@code fields}. */
+    public static boolean differ(List<Field> fields, UltrasoundReportBaseDTO request, UltrasoundReport stored) {
+        return fields.stream().anyMatch(f -> !Objects.equals(f.request().apply(request), f.stored().apply(stored)));
     }
 
     /** Whether the request carries any sign of a fetus ({@link #SIGNS_OF_A_FETUS}). */

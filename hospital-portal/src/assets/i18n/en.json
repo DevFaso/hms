@@ -10917,7 +10917,7 @@
     "NASAL_BONE_ABSENT": "Absent",
     "NASAL_BONE_NOT_ASSESSED": "Not assessed",
     "NO_FETUS_CONTRADICTS_OBSERVATION": "No fetus seen contradicts a sign of a fetus in this report: cardiac activity or fetal movement present, a fetal heart rate, a fetal measurement (BPD, HC, AC, FL, CRL, nuchal translucency), an estimated fetal weight, a nasal bone or fetal tone answer, anomalies detected or anatomy findings. Correct the count or that entry.",
-    "ANOMALY_DESCRIPTION_WITHOUT_ANOMALY": "The anomaly is described while the report says no anomaly was seen: answer \"anomalies detected\" or clear the description.",
+    "ANOMALY_DESCRIPTION_WITHOUT_ANOMALY": "An anomaly is described while the report does not say anomalies were detected: answer \"anomalies detected\" or clear the description.",
     "ANATOMY_FINDINGS": "Anatomy findings"
   },
   "BIRTH_PLAN": {

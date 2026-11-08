@@ -282,6 +282,12 @@
                 <span class="risk-badge risk-high">{{ 'ULTRASOUND.ANOMALIES' | translate }}</span>
               </p>
             }
+            @if (rep.anatomyFindings) {
+              <p data-testid="ultrasound-anatomy">
+                {{ 'ULTRASOUND.ANATOMY_FINDINGS' | translate }}{{ 'COMMON.COLON' | translate }}
+                {{ rep.anatomyFindings }}
+              </p>
+            }
             @if (rep.anomalyDescription) {
               <p>
                 {{ 'ULTRASOUND.ANOMALY_DESCRIPTION' | translate }}{{ 'COMMON.COLON' | translate }}

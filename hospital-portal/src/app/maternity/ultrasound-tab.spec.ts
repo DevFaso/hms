@@ -692,6 +692,79 @@ describe('UltrasoundTabComponent', () => {
       expect(host().querySelector('#rep-fetuses')?.getAttribute('aria-invalid')).toBe('true');
     });
 
+    it('loads a legacy report’s old defaults as not assessed, and keeps its typed values', () => {
+      create(['ROLE_MIDWIFE']);
+      const cmp = fixture.componentInstance;
+      cmp.openReport(
+        order({
+          report: {
+            id: 'r-1',
+            scanDate: '2026-01-10',
+            findingCategory: 'MONITORING_REQUIRED',
+            observationsStated: false,
+            fetalCardiacActivity: true,
+            fetalMovementObserved: false,
+            fetalToneNormal: true,
+            anomaliesDetected: false,
+            numberOfFetuses: 1,
+            nasalBonePresent: true,
+          } as UltrasoundReportResponse,
+        }),
+      );
+      expect(cmp.reportForm.fetalCardiacActivity).withContext('old default').toBeNull();
+      expect(cmp.reportForm.fetalToneNormal).withContext('old default').toBeNull();
+      expect(cmp.reportForm.anomaliesDetected).withContext('old default').toBeNull();
+      expect(cmp.reportForm.numberOfFetuses).withContext('old default').toBeUndefined();
+      expect(cmp.reportForm.fetalMovementObserved).withContext('typed').toBeFalse();
+      expect(cmp.reportForm.nasalBonePresent).withContext('never defaulted').toBeTrue();
+    });
+
+    it('lets a typo fix save an old contradictory legacy report, and judges a changed category', () => {
+      create(['ROLE_MIDWIFE']);
+      const cmp = fixture.componentInstance;
+      service.submitReport.and.returnValue(of({ id: 'r-1' } as UltrasoundReportResponse));
+      const legacy = {
+        id: 'r-1',
+        scanDate: '2026-01-10',
+        findingCategory: 'NORMAL',
+        observationsStated: false,
+        fetalCardiacActivity: false,
+        anomalyDescription: 'Kyste',
+        findingsSummary: 'Ancien compte rendu',
+      } as UltrasoundReportResponse;
+      cmp.openReport(order({ report: legacy }));
+      fixture.detectChanges();
+      cmp.reportForm.findingsSummary = 'Ancien compte rendu (typo corrigé)';
+      save();
+      expect(service.submitReport).toHaveBeenCalled();
+
+      service.submitReport.calls.reset();
+      cmp.openReport(order({ report: legacy }));
+      fixture.detectChanges();
+      cmp.reportForm.findingCategory = 'VARIANT';
+      save();
+      expect(service.submitReport).not.toHaveBeenCalled();
+      expect(host().querySelector('#rep-category')?.getAttribute('aria-invalid')).toBe('true');
+    });
+
+    it('shows the labelled anatomy findings in the report view', () => {
+      create(['ROLE_DOCTOR']);
+      fixture.componentInstance.openOrder(
+        order({
+          status: 'IN_PROGRESS',
+          report: {
+            id: 'r-1',
+            observationsStated: true,
+            anatomyFindings: 'Quatre cavités',
+          } as UltrasoundReportResponse,
+        }),
+      );
+      fixture.detectChanges();
+      const anatomy = host().querySelector('[data-testid="ultrasound-anatomy"]')?.textContent ?? '';
+      expect(anatomy).toContain('ULTRASOUND.ANATOMY_FINDINGS');
+      expect(anatomy).toContain('Quatre cavités');
+    });
+
     it('shows the anatomy findings on the form, so a refusal they cause is visible', () => {
       create(['ROLE_MIDWIFE']);
       fixture.componentInstance.openReport(order());
@@ -807,6 +880,14 @@ describe('UltrasoundTabComponent', () => {
       expect(
         anomalyDescriptionContradictsAnswer({ anomaliesDetected: false, anomalyDescription: ' ' }),
       ).toBeFalse();
+      expect(
+        anomalyDescriptionContradictsAnswer({
+          anomaliesDetected: null,
+          anomalyDescription: 'Kyste',
+        }),
+      )
+        .withContext('a description with anomalies not assessed')
+        .toBeTrue();
     });
 
     it('shows the red anomalies badge and the labelled description on the report card', () => {

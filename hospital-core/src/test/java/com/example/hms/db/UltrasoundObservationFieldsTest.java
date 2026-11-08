@@ -44,15 +44,17 @@ class UltrasoundObservationFieldsTest {
             .as("portal FINDING_FIELDS (the empty-report rule's other findings)").isEqualTo(serverFindings);
 
         Set<String> serverSigns = UltrasoundObservations.SIGNS_OF_A_FETUS.stream()
-            .map(UltrasoundObservations.Finding::name).collect(Collectors.toCollection(TreeSet::new));
+            .map(UltrasoundObservations.Field::name).collect(Collectors.toCollection(TreeSet::new));
         assertThat(new TreeSet<>(quoted(arrayLiteral(ts, "SIGNS_OF_A_FETUS")))).as("portal SIGNS_OF_A_FETUS")
             .isEqualTo(serverSigns);
         assertThat(new TreeSet<>(quoted(arrayLiteral(ts, "SIGNS_ONLY_WHEN_TRUE")))).as("portal SIGNS_ONLY_WHEN_TRUE")
             .isEqualTo(new TreeSet<>(UltrasoundObservations.SIGNS_ONLY_WHEN_TRUE));
 
-        Set<String> portalDefaults = new TreeSet<>(keys(objectLiteral(ts, "LEGACY_DEFAULTS")));
-        assertThat(portalDefaults).as("portal LEGACY_DEFAULTS")
-            .isEqualTo(new TreeSet<>(UltrasoundObservations.LEGACY_DEFAULTS.keySet()));
+        java.util.Map<String, String> portalDefaults = entries(objectLiteral(ts, "LEGACY_DEFAULTS"));
+        java.util.Map<String, String> serverDefaults = new java.util.TreeMap<>();
+        UltrasoundObservations.LEGACY_DEFAULTS.forEach((k, v) -> serverDefaults.put(k, String.valueOf(v)));
+        assertThat(new java.util.TreeMap<>(portalDefaults)).as("portal LEGACY_DEFAULTS, keys and values")
+            .isEqualTo(serverDefaults);
 
         Set<String> cleared = new TreeSet<>();
         Matcher m = Pattern.compile("SET (\\w+) = NULL").matcher(v282());
@@ -86,9 +88,10 @@ class UltrasoundObservationFieldsTest {
         return names;
     }
 
-    private static Set<String> keys(String body) {
+    private static java.util.Map<String, String> entries(String body) {
         return Arrays.stream(body.split(",")).map(String::trim).filter(e -> e.contains(":"))
-            .map(e -> e.substring(0, e.indexOf(':')).trim()).collect(Collectors.toSet());
+            .collect(Collectors.toMap(e -> e.substring(0, e.indexOf(':')).trim(),
+                e -> e.substring(e.indexOf(':') + 1).trim()));
     }
 
     private static String snake(String camel) {

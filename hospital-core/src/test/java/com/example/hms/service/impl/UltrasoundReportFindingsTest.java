@@ -326,9 +326,14 @@ class UltrasoundReportFindingsTest {
                     assertThat(ex.getField()).isEqualTo("anomalyDescription");
                     assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.anomalyDescriptionWithoutAnomaly");
                 });
+        UltrasoundReportRequestDTO notAssessed = base().anomaliesDetected(null).anomalyDescription("Hygroma").build();
+        assertThatThrownBy(() -> UltrasoundServiceImpl.requireAnomalyDescriptionMatchesAnswer(notAssessed))
+                .as("a description with anomalies not assessed")
+                .isInstanceOfSatisfying(FieldBusinessException.class,
+                        ex -> assertThat(ex.getField()).isEqualTo("anomalyDescription"));
         for (UltrasoundReportRequestDTO ok : new UltrasoundReportRequestDTO[] {
                 base().anomaliesDetected(true).anomalyDescription("Hygroma").build(),
-                base().anomaliesDetected(null).anomalyDescription("Hygroma").build(),
+                base().anomaliesDetected(null).anomalyDescription(" ").build(),
                 base().anomaliesDetected(false).anomalyDescription("  ").build()}) {
             assertThatCode(() -> UltrasoundServiceImpl.requireAnomalyDescriptionMatchesAnswer(ok)).doesNotThrowAnyException();
         }

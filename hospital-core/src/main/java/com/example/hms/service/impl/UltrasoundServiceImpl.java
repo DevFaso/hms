@@ -430,11 +430,12 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     }
 
     /**
-     * QA D1525 review: "no anomaly" with a written anomaly description
+     * QA D1525 review: an anomaly is described only when anomalies were
+     * detected: a written description with "no anomaly" or "not assessed"
      * contradicts itself. Refused on the description.
      */
     static void requireAnomalyDescriptionMatchesAnswer(UltrasoundReportRequestDTO request) {
-        if (Boolean.FALSE.equals(request.getAnomaliesDetected())
+        if (!Boolean.TRUE.equals(request.getAnomaliesDetected())
                 && ClinicalContent.isPresent(request.getAnomalyDescription())) {
             throw new FieldBusinessException("anomalyDescription",
                 "ultrasound.report.anomalyDescriptionWithoutAnomaly");
@@ -473,9 +474,14 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         requireFetusCountInRange(request, report);
         requireReportFindings(request);
         requireFindingCategory(request);
-        requireCategoryMatchesObservations(request);
-        requireFetusCountMatchesObservations(request);
-        requireAnomalyDescriptionMatchesAnswer(request);
+        // On a legacy report, the contradictions are judged only when one of
+        // their inputs changes, so a typo fix on an old report still saves.
+        if (report == null || !Boolean.FALSE.equals(report.getObservationsStated())
+                || UltrasoundObservations.differ(UltrasoundObservations.CONTRADICTION_INPUTS, request, report)) {
+            requireCategoryMatchesObservations(request);
+            requireFetusCountMatchesObservations(request);
+            requireAnomalyDescriptionMatchesAnswer(request);
+        }
         // Decided before the edit is applied: it compares the request to what is stored.
         boolean statesObservations = statesAnObservation(request, report);
 
