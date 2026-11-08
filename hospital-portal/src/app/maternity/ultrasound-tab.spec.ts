@@ -206,6 +206,42 @@ describe('UltrasoundTabComponent', () => {
       }
     });
 
+    it('preserves cleared and stated observations across repeated template applications', () => {
+      create(['ROLE_MIDWIFE']);
+      const cmp = fixture.componentInstance;
+      service.template.and.returnValue(of({ scanDate: '2026-11-08' } as UltrasoundReportRequest));
+      service.submitReport.and.returnValue(of({ id: 'r-1' } as UltrasoundReportResponse));
+      cmp.openReport(
+        order({
+          report: {
+            id: 'r-1',
+            scanDate: '2026-11-08',
+            findingCategory: 'NORMAL',
+            findingsSummary: 'Single intrauterine pregnancy',
+            fetalCardiacActivity: true,
+            fetalMovementObserved: false,
+            fetalToneNormal: true,
+          } as UltrasoundReportResponse,
+        }),
+      );
+      cmp.reportForm.fetalCardiacActivity = null;
+      cmp.reportForm.fetalMovementObserved = true;
+      cmp.reportForm.fetalToneNormal = false;
+
+      for (const kind of ['nuchal-translucency', 'anatomy-scan'] as const) {
+        cmp.applyTemplate(kind);
+        expect(cmp.reportForm.fetalCardiacActivity).toBeNull();
+        expect(cmp.reportForm.fetalMovementObserved).toBeTrue();
+        expect(cmp.reportForm.fetalToneNormal).toBeFalse();
+      }
+
+      cmp.submitReport();
+      const sent = service.submitReport.calls.mostRecent().args[1];
+      expect(sent.fetalCardiacActivity).toBeNull();
+      expect(sent.fetalMovementObserved).toBeTrue();
+      expect(sent.fetalToneNormal).toBeFalse();
+    });
+
     it('counts no yes/no box, one fetus or blank text as a finding', () => {
       expect(
         hasUltrasoundFinding({

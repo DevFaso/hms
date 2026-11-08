@@ -457,6 +457,9 @@ export class UltrasoundTabComponent implements OnInit {
           ...this.reportSeed,
           ...this.stripEmpty(template as UltrasoundReportRequest),
           ...userChanged,
+          // A template must preserve explicit observations, including a return
+          // to "not assessed" and selections retained across template switches.
+          ...Object.fromEntries(TRI_STATE_FLAGS.map((flag) => [flag, this.reportForm[flag]])),
         } as UltrasoundReportForm;
         this.reportBaseline = { ...this.reportForm };
         this.templateLoading.set(false);
