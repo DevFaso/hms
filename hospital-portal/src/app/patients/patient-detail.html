@@ -165,7 +165,7 @@
     }
 
     <!-- Storyboard — allergies / problems / active encounter / code status. Identity is the header above. -->
-    @if (!isFrontDeskOnly()) {
+    @if (!isFrontDeskOnly() && canSeeStoryboard()) {
       <app-storyboard-banner
         [patientId]="p.id"
         [refreshToken]="accessEpoch()"
@@ -184,7 +184,11 @@
     <!-- Best-Practice Advisories — runs the patient-view CDS hook on chart load (clinicians only) -->
     @if (canSeeBpaPanel()) {
       <app-bpa-panel [patientId]="p.id" [hideWhenEmpty]="true" />
-      <!-- QA D1516: what a death entered in error had closed, so the next clinician readmits or rebooks. -->
+    }
+
+    <!-- QA D1516: what a death entered in error had closed, so the next clinician readmits or rebooks.
+         QA D1524: for the roles its endpoint admits (VOIDED_CLOSURES_VIEW_ROLES), not the BPA panel's. -->
+    @if (canSeeVoidedClosures()) {
       <app-voided-death-closures-banner [patientId]="p.id" />
     }
 

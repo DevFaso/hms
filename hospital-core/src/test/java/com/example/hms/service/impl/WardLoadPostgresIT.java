@@ -485,9 +485,10 @@ class WardLoadPostgresIT {
             System.out.println("LOAD|plan|" + sql.substring(0, Math.min(90, sql.length())));
             plan.forEach(line -> System.out.println("EXPLAIN| " + line));
         }
-        assertThat(jdbc.queryForList("SELECT indexname FROM pg_indexes WHERE schemaname = 'clinical' AND tablename = 'prescriptions'", String.class))
-            .isNotEmpty()
-            .allSatisfy(name -> System.out.println("EXPLAIN| index " + name));
+        List<String> indexes = jdbc.queryForList(
+            "SELECT indexname FROM pg_indexes WHERE schemaname = 'clinical' AND tablename = 'prescriptions'", String.class);
+        indexes.forEach(name -> System.out.println("EXPLAIN| index " + name));
+        assertThat(indexes).isNotEmpty().allSatisfy(name -> assertThat(name).isNotBlank());
     }
 
     @Test

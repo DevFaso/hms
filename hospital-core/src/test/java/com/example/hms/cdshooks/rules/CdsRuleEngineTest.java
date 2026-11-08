@@ -81,6 +81,51 @@ class CdsRuleEngineTest {
         assertThat(kept).containsExactly(active);
     }
 
+    /**
+     * QA D1523: the context's other orders hold the proposals (a draft, an order waiting for its signature)
+     * beside the orders in force, for the duplicate and interaction warnings; withdrawn and rejected ones stay out.
+     */
+    @Test
+    void theOtherOrdersHoldProposalsAndLeaveOutWithdrawnOnes() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        List<Prescription> all = new java.util.ArrayList<>();
+        for (PrescriptionStatus status : PrescriptionStatus.values()) {
+            all.add(Prescription.builder().medicationName(status.name()).status(status).build());
+        }
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(all);
+
+        List<String> kept = engineWith(List.of()).loadActivePrescriptions(patientId, hospitalId).stream()
+            .map(Prescription::getMedicationName).toList();
+
+        assertThat(kept).contains("DRAFT", "PENDING_SIGNATURE", "SIGNED", "DISPENSED")
+            .doesNotContain("CANCELLED", "DISCONTINUED", "PARTNER_REJECTED");
+        assertThat(kept).hasSize(PrescriptionStatus.values().length - 3);
+    }
+
+    /** QA D1523: a second draft of a drug is warned about as a duplicate of the first, naming its status. */
+    @Test
+    void aSecondDraftOfTheSameDrugIsADuplicateOfTheFirst() {
+        UUID hospitalId = UUID.randomUUID();
+        Patient patient = Patient.builder().build();
+        patient.setId(UUID.randomUUID());
+        patient.setDateOfBirth(LocalDate.now().minusYears(40));
+        Prescription firstDraft = Prescription.builder()
+            .medicationName("Amoxicilline 500 mg").status(PrescriptionStatus.DRAFT).build();
+        firstDraft.setId(UUID.randomUUID());
+        firstDraft.setCreatedAt(java.time.LocalDateTime.now().minusMinutes(5));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId))
+            .thenReturn(List.of(firstDraft));
+
+        List<CdsCard> cards = engineWith(List.of(new DuplicateMedicationOrderRule()))
+            .evaluateProposedPrescription(patient, hospitalId, "Amoxicilline 500 mg", null, "500 mg", "PO");
+
+        assertThat(cards).singleElement().satisfies(card -> {
+            assertThat(card.indicator()).isEqualTo(CdsCard.Indicator.WARNING);
+            assertThat(card.detail()).containsIgnoringCase("draft");
+        });
+    }
+
     @Test
     void buildContextResolvesRxnormFromCatalog() {
         UUID hospitalId = UUID.randomUUID();

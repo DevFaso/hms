@@ -9,6 +9,8 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 
 /**
@@ -30,9 +32,11 @@ public class OrderReviewHoldGuard implements InitializingBean {
     public static final String FINISHED_KEY = "order.review.finishedUnderEvent";
     public static final String COPY_KEY = "order.review.copyHeld";
 
-    private static volatile BiPredicate<OrderReviewType, UUID> held;
-    private static volatile java.util.function.BiFunction<OrderReviewType, UUID, java.util.Set<UUID>> heldAtHospital;
-    private static volatile com.example.hms.service.OrderReviewHoldService review;
+    /** Sonar S3077: references swapped whole at startup (and by the test hooks), read without a lock. */
+    private static final AtomicReference<BiPredicate<OrderReviewType, UUID>> HELD = new AtomicReference<>();
+    private static final AtomicReference<BiFunction<OrderReviewType, UUID, java.util.Set<UUID>>> HELD_AT_HOSPITAL =
+        new AtomicReference<>();
+    private static final AtomicReference<com.example.hms.service.OrderReviewHoldService> REVIEW = new AtomicReference<>();
 
     private final OrderReviewHoldRepository holds;
 
@@ -40,25 +44,26 @@ public class OrderReviewHoldGuard implements InitializingBean {
     public void afterPropertiesSet() {
         useHolds((type, id) -> holds.existsByOrderTypeAndOrderIdAndStatus(type, id,
             type == OrderReviewType.RUNNING_TRANSFUSION ? OrderReviewStatus.ASSESSMENT_DUE : OrderReviewStatus.HELD));
-        heldAtHospital = (type, hospital) -> {
+        HELD_AT_HOSPITAL.set((type, hospital) -> {
             OrderReviewStatus standing = type == OrderReviewType.RUNNING_TRANSFUSION ? OrderReviewStatus.ASSESSMENT_DUE : OrderReviewStatus.HELD;
             return hospital != null ? holds.findStandingAtHospital(type, standing, hospital) : holds.findStanding(type, standing);
-        };
+        });
     }
 
     /** For the unit tests that walk the rule; Spring sets it at startup. */
     public static void useHolds(BiPredicate<OrderReviewType, UUID> lookup) {
-        held = lookup;
-        heldAtHospital = null;
+        HELD.set(lookup);
+        HELD_AT_HOSPITAL.set(null);
     }
 
     /** Set at startup by the review service, which owns the row; none means a test with no store. */
     public static void useReview(com.example.hms.service.OrderReviewHoldService service) {
-        review = service;
+        REVIEW.set(service);
     }
 
     /** A relevant change after a reconfirmation invalidates it. Called in the transaction of the change. */
     public static void reviewAgainAfterChange(UUID prescriptionId) {
+        com.example.hms.service.OrderReviewHoldService review = REVIEW.get();
         if (review != null) {
             review.reviewAgainAfterChange(OrderReviewType.PRESCRIPTION, prescriptionId);
         }
@@ -66,6 +71,7 @@ public class OrderReviewHoldGuard implements InitializingBean {
 
     /** As {@link #reviewAgainAfterChange}, for a blood request moved onto another blood group screen. */
     public static void reviewRequestAgainAfterChange(UUID requestId) {
+        com.example.hms.service.OrderReviewHoldService review = REVIEW.get();
         if (review != null) {
             review.reviewAgainAfterChange(OrderReviewType.TRANSFUSION_REQUEST, requestId);
         }
@@ -73,6 +79,7 @@ public class OrderReviewHoldGuard implements InitializingBean {
 
     /** A cancelled fill put an existing order back in use: it is held if a death event stands over it. */
     public static void holdIfEventStands(com.example.hms.model.Prescription order) {
+        com.example.hms.service.OrderReviewHoldService review = REVIEW.get();
         if (review != null) {
             review.holdIfEventStands(order);
         }
@@ -86,6 +93,7 @@ public class OrderReviewHoldGuard implements InitializingBean {
         if (orderIds.isEmpty()) {
             return java.util.Set.of();
         }
+        BiFunction<OrderReviewType, UUID, java.util.Set<UUID>> heldAtHospital = HELD_AT_HOSPITAL.get();
         if (heldAtHospital != null) {
             return heldAtHospital.apply(type, hospital);
         }
@@ -106,6 +114,7 @@ public class OrderReviewHoldGuard implements InitializingBean {
         if (order == null) {
             return null;
         }
+        com.example.hms.service.OrderReviewHoldService review = REVIEW.get();
         if (review != null) {
             return review.pendingSince(order);
         }
@@ -133,6 +142,7 @@ public class OrderReviewHoldGuard implements InitializingBean {
 
     /** Charted, on the review list too, so the prescriber sees it. Called in the transaction of the dose. */
     public static void doseGivenBeforeHold(com.example.hms.model.Prescription order, java.time.LocalDateTime at, String why) {
+        com.example.hms.service.OrderReviewHoldService review = REVIEW.get();
         if (review != null) {
             review.doseGivenBeforeHold(order, at, why);
         }
@@ -140,6 +150,7 @@ public class OrderReviewHoldGuard implements InitializingBean {
 
     /** THE rule. A running treatment's row answers whether its assessment is due: its flag, never a refusal. */
     public static boolean isHeld(OrderReviewType type, UUID orderId) {
+        BiPredicate<OrderReviewType, UUID> held = HELD.get();
         return orderId != null && held != null && held.test(type, orderId);
     }
 

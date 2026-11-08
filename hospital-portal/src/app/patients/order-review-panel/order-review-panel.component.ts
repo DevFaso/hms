@@ -17,6 +17,7 @@ import { OrderReviewRow, OrderReviewService } from '../../services/order-review.
 import { BackdropCloseDirective } from '../../shared/a11y/backdrop-close.directive';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { ORDER_REVIEW_VIEW_ROLES } from '../patient-chart/chart-access';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
@@ -35,7 +36,6 @@ const FIELD_IDS = {
 const PRESCRIPTION_ROLES = ['ROLE_DOCTOR'];
 const BLOOD_ROLES = ['ROLE_DOCTOR', 'ROLE_SURGEON', 'ROLE_MIDWIFE'];
 const CLINICIAN_ROLES = [...BLOOD_ROLES, 'ROLE_NURSE'];
-const READER_ROLES = [...CLINICIAN_ROLES, 'ROLE_PHARMACIST'];
 
 /**
  * The review list on a chart: orders that existed when a recorded death was disputed, each continued, replaced or
@@ -83,7 +83,7 @@ export class OrderReviewPanelComponent implements OnInit {
   }
 
   load(): void {
-    if (!this.patientId() || !this.roles.hasAnyActiveRole(READER_ROLES)) return;
+    if (!this.patientId() || !this.roles.hasAnyActiveRole(ORDER_REVIEW_VIEW_ROLES)) return;
     this.reviews.forPatient(this.patientId()).subscribe({
       next: (rows) => {
         this.rows.set(rows);

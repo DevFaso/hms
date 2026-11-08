@@ -2,6 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
+import { backgroundRequestOptions } from './ws-transport';
+
 export type OrderReviewStatus =
   'HELD' | 'CONTINUED' | 'REPLACED' | 'STOPPED' | 'ASSESSMENT_DUE' | 'ASSESSED';
 
@@ -39,7 +41,11 @@ export class OrderReviewService {
   private readonly baseUrl = '/order-review-holds';
 
   forPatient(patientId: string): Observable<OrderReviewRow[]> {
-    return this.http.get<OrderReviewRow[]>(`${this.baseUrl}/patient/${patientId}`);
+    // QA D1524: a side panel's read; a 403 costs the panel, never the chart (background request).
+    return this.http.get<OrderReviewRow[]>(
+      `${this.baseUrl}/patient/${patientId}`,
+      backgroundRequestOptions(),
+    );
   }
 
   decide(
