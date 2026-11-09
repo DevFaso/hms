@@ -25,7 +25,8 @@ export interface UltrasoundReportFields {
   gestationalAgeDays?: number;
   nuchalTranslucencyMm?: number;
   crownRumpLengthMm?: number;
-  nasalBonePresent?: boolean;
+  /** QA D1525: tri-state, null = not assessed. */
+  nasalBonePresent?: boolean | null;
   estimatedDueDate?: string;
   dueDateConfirmed?: boolean;
   numberOfFetuses?: number;
@@ -52,7 +53,8 @@ export interface UltrasoundReportFields {
   findingCategory?: UltrasoundFindingCategory;
   findingsSummary?: string;
   interpretation?: string;
-  anomaliesDetected?: boolean;
+  /** QA D1525: tri-state — null = not stated, never "no anomalies" by default. */
+  anomaliesDetected?: boolean | null;
   anomalyDescription?: string;
   geneticScreeningRecommended?: boolean;
   geneticScreeningType?: string;
@@ -79,6 +81,8 @@ export interface UltrasoundReportResponse extends UltrasoundReportFields {
   reportReviewedByProvider?: boolean;
   providerReviewNotes?: string | null;
   patientNotified?: boolean;
+  /** QA D1525: false for a report saved before D1525, whose observations may be server defaults. */
+  observationsStated?: boolean;
   patientNotifiedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -135,7 +139,7 @@ export interface UltrasoundOrderResponse {
 }
 
 /**
- * Ultrasound orders/reports/templates — /ultrasound. Responses are bare DTOs
+ * Ultrasound orders and reports — /ultrasound. Responses are bare DTOs
  * (no wrapper, no pagination — hospital lists are unbounded). Effective roles
  * (permission authorities are never granted): orders/report writes =
  * DOCTOR/MIDWIFE/SUPER_ADMIN; report review = DOCTOR/SUPER_ADMIN; hospital
@@ -237,10 +241,5 @@ export class UltrasoundService {
     return this.http.get<UltrasoundReportResponse[]>(
       `${this.baseUrl}/reports/hospital/${hospitalId}/anomalies`,
     );
-  }
-
-  /** Prefilled report template for the given scan protocol. */
-  template(kind: 'nuchal-translucency' | 'anatomy-scan'): Observable<UltrasoundReportRequest> {
-    return this.http.get<UltrasoundReportRequest>(`${this.baseUrl}/templates/${kind}`);
   }
 }

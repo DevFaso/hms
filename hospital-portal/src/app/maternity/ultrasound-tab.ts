@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
 import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
-import { hasClinicalContent } from '../shared/forms/clinical-content';
+import { hasClinicalContent, isRecorded } from '../shared/forms/clinical-content';
 import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -47,27 +47,41 @@ export type UltrasoundReportForm = Omit<UltrasoundReportRequest, 'findingCategor
 };
 
 /** The fields the report form may refuse. */
-const REPORT_FIELD_IDS = ['rep-date', 'rep-category', 'rep-summary'];
+const REPORT_FIELD_IDS = ['rep-date', 'rep-category', 'rep-summary', 'rep-fetuses', 'rep-anomaly'];
+/** QA D1525 review: 0 is "no fetus seen" (a finding); the server refuses outside 0..8. */
+export const MAX_FETUSES = 8;
 /** QA D1447: the order form's fields checked before sending. */
 const ORDER_CHECKED_IDS = ['us-date', 'us-scan-count'];
 
-/** The measured or written findings of a report: at least one is required (QA D1150). */
-const FINDING_FIELDS: readonly (keyof UltrasoundReportRequest)[] = [
-  'fetalHeartRate',
+/**
+ * The other findings of a report (measurements, dates, written text): with the
+ * observations, at least one is required (QA D1150). The server's
+ * UltrasoundObservations.FINDINGS; UltrasoundObservationFieldsTest pins both.
+ */
+export const FINDING_FIELDS: readonly (keyof UltrasoundReportRequest)[] = [
   'gestationalAgeAtScan',
   'gestationalAgeDays',
-  'numberOfFetuses',
-  'estimatedFetalWeightGrams',
+  'nuchalTranslucencyMm',
+  'crownRumpLengthMm',
+  'estimatedDueDate',
+  'fetalPosition',
   'biparietalDiameterMm',
   'headCircumferenceMm',
   'abdominalCircumferenceMm',
   'femurLengthMm',
-  'nuchalTranslucencyMm',
-  'crownRumpLengthMm',
+  'estimatedFetalWeightGrams',
+  'placentalLocation',
+  'placentalGrade',
+  'amnioticFluidIndex',
+  'amnioticFluidLevel',
+  'cervicalLengthMm',
+  'umbilicalArteryDoppler',
+  'uterineArteryDoppler',
+  'fetalHeartRate',
+  'anatomyFindings',
   'findingsSummary',
   'interpretation',
   'anomalyDescription',
-  'anatomyFindings',
 ];
 
 /**
@@ -75,23 +89,193 @@ const FINDING_FIELDS: readonly (keyof UltrasoundReportRequest)[] = [
  * observations the clinician states — true present/normal, false
  * absent/abnormal, null "not assessed" (the default). They are shown and
  * sent; the server keeps null as null. Before, the form had no control for
- * them (QA D1182 called them UNSHOWN_DEFAULT_FLAGS and never sent them), and
- * the server then defaulted every missing flag to "yes". They are still not
- * findings on their own (the D1182 rule): hasUltrasoundFinding ignores them.
+ * them (QA D1182 called them UNSHOWN_DEFAULT_FLAGS and never sent them) and
+ * the server defaulted every missing flag to "yes". Nothing defaults them
+ * now, so a stated one — "absent" included — is a finding.
  */
 export const TRI_STATE_FLAGS = [
   'fetalCardiacActivity',
   'fetalMovementObserved',
   'fetalToneNormal',
+  'nasalBonePresent',
 ] as const;
+export type TriStateFlag = (typeof TRI_STATE_FLAGS)[number];
 
-/** Whether the report records at least one finding (QA D1150, D1182). */
+/**
+ * Literal keys in fields the i18n:referenced gate reads (labelKey, trueKey,
+ * falseKey, notAssessedKey, legacyKey), so removing one fails the gate. One
+ * set per observation, so French and Spanish answers agree with their noun
+ * ("Mouvements fœtaux : présents", "Activité cardiaque : non évaluée").
+ */
+const FLAG_KEYS: Record<
+  TriStateFlag,
+  { labelKey: string; trueKey: string; falseKey: string; notAssessedKey: string }
+> = {
+  fetalCardiacActivity: {
+    labelKey: 'ULTRASOUND.FLAG_CARDIAC_ACTIVITY',
+    trueKey: 'ULTRASOUND.FLAG_CARDIAC_PRESENT',
+    falseKey: 'ULTRASOUND.FLAG_CARDIAC_ABSENT',
+    notAssessedKey: 'ULTRASOUND.FLAG_CARDIAC_NOT_ASSESSED',
+  },
+  fetalMovementObserved: {
+    labelKey: 'ULTRASOUND.FLAG_FETAL_MOVEMENT',
+    trueKey: 'ULTRASOUND.FLAG_MOVEMENT_PRESENT',
+    falseKey: 'ULTRASOUND.FLAG_MOVEMENT_ABSENT',
+    notAssessedKey: 'ULTRASOUND.FLAG_MOVEMENT_NOT_ASSESSED',
+  },
+  fetalToneNormal: {
+    labelKey: 'ULTRASOUND.FLAG_FETAL_TONE',
+    trueKey: 'ULTRASOUND.FLAG_TONE_NORMAL',
+    falseKey: 'ULTRASOUND.FLAG_TONE_ABNORMAL',
+    notAssessedKey: 'ULTRASOUND.FLAG_TONE_NOT_ASSESSED',
+  },
+  nasalBonePresent: {
+    labelKey: 'ULTRASOUND.NASAL_BONE',
+    trueKey: 'ULTRASOUND.NASAL_BONE_PRESENT',
+    falseKey: 'ULTRASOUND.NASAL_BONE_ABSENT',
+    notAssessedKey: 'ULTRASOUND.NASAL_BONE_NOT_ASSESSED',
+  },
+};
+/** Noun-neutral: a report saved before D1525 answered nothing. */
+const LEGACY_KEYS = {
+  legacyKey: 'ULTRASOUND.FLAG_NOT_STATED_LEGACY',
+};
+const ANOMALY_KEYS = {
+  trueKey: 'ULTRASOUND.ANOMALIES_YES',
+  falseKey: 'ULTRASOUND.ANOMALIES_NO',
+  notAssessedKey: 'ULTRASOUND.ANOMALIES_NOT_ASSESSED',
+};
+const FETUS_KEYS = {
+  notAssessedKey: 'ULTRASOUND.FETUSES_NOT_COUNTED',
+};
+
+/** The observations, counted as findings when stated (QA D1525, the server's UltrasoundObservations). */
+export const OBSERVATION_FIELDS: readonly (keyof UltrasoundReportRequest)[] = [
+  ...TRI_STATE_FLAGS,
+  'anomaliesDetected',
+  'numberOfFetuses',
+];
+
+/**
+ * QA D1525 review: what the old code filled before D1525 (the server's
+ * UltrasoundObservations.LEGACY_DEFAULTS). On a report that existed before
+ * D1525 such a value reads "recorded before this was asked" — V282 cleared
+ * them on unreviewed reports, but a reviewed (signed) one keeps them.
+ */
+export const LEGACY_DEFAULTS: Partial<Record<keyof UltrasoundReportRequest, boolean | number>> = {
+  fetalCardiacActivity: true,
+  fetalMovementObserved: true,
+  fetalToneNormal: true,
+  anomaliesDetected: false,
+  numberOfFetuses: 1,
+};
+
+/**
+ * Whether the report records at least one finding (QA D1150; D1525: a stated
+ * observation, "absent" included, a fetus count or "no anomalies" count — the
+ * D1182 exclusion only existed because those were defaults).
+ */
 export function hasUltrasoundFinding(
+  form: UltrasoundReportForm | Partial<UltrasoundReportRequest> | UltrasoundReportResponse,
+): boolean {
+  const record = form as Record<string, unknown>;
+  return (
+    hasClinicalContent(form, FINDING_FIELDS) ||
+    OBSERVATION_FIELDS.some((field) => {
+      const value = record[field];
+      // A stated FALSE is an answer; isRecorded counts a ticked box only.
+      return typeof value === 'boolean' || isRecorded(value);
+    })
+  );
+}
+
+/**
+ * QA D1525 review: whether a STORED report records a finding, before it is
+ * reviewed or notified (the server's allFindings(UltrasoundReport)). On a
+ * legacy report (observationsStated === false) an observation equal to its old
+ * default (LEGACY_DEFAULTS) was not necessarily stated, so it does not count.
+ */
+export function storedReportRecordsAFinding(report: UltrasoundReportResponse): boolean {
+  if (report.observationsStated !== false) return hasUltrasoundFinding(report);
+  const record = { ...report } as Record<string, unknown>;
+  for (const [field, legacyDefault] of Object.entries(LEGACY_DEFAULTS)) {
+    if (record[field] === legacyDefault) record[field] = null;
+  }
+  return hasUltrasoundFinding(record as unknown as UltrasoundReportResponse);
+}
+
+/** The categories that claim no clinically significant finding (the server's NO_SIGNIFICANT_FINDING). */
+const NO_SIGNIFICANT_FINDING: readonly string[] = ['NORMAL', 'VARIANT'];
+
+/**
+ * QA D1525: a category that claims no significant finding (NORMAL, VARIANT)
+ * contradicts absent cardiac activity, an abnormal tone or detected anomalies
+ * (the server refuses the same, on the category). Deliberately not, pending a
+ * clinician: absent fetal movement, an absent nasal bone, no fetus seen.
+ */
+export function normalContradictsObservation(
   form: UltrasoundReportForm | Partial<UltrasoundReportRequest>,
 ): boolean {
-  const fields = FINDING_FIELDS.filter((f) => f !== 'numberOfFetuses');
-  const fetuses = form.numberOfFetuses;
-  return hasClinicalContent(form, fields) || (typeof fetuses === 'number' && fetuses > 1);
+  return (
+    NO_SIGNIFICANT_FINDING.includes(form.findingCategory ?? '') &&
+    (form.fetalCardiacActivity === false ||
+      form.fetalToneNormal === false ||
+      form.anomaliesDetected === true)
+  );
+}
+
+/**
+ * QA D1525 review: an anomaly is described only when anomalies were detected; a
+ * description with "no anomaly" or "not assessed" is refused on the description.
+ */
+export function anomalyDescriptionContradictsAnswer(
+  form: UltrasoundReportForm | Partial<UltrasoundReportRequest>,
+): boolean {
+  return form.anomaliesDetected !== true && isRecorded(form.anomalyDescription);
+}
+
+/**
+ * QA D1525 review: no fetus seen contradicts every sign of a fetus: cardiac
+ * activity or movement present, a heart rate, any fetal biometry (BPD, HC, AC,
+ * FL, CRL), an estimated fetal weight, a nuchal translucency, any nasal-bone
+ * or fetal-tone answer or anomalies detected (the server's
+ * UltrasoundObservations.SIGNS_OF_A_FETUS, on the fetus count). Each is shown
+ * and editable on the form. Free text (anatomy findings) is not a sign: "sac
+ * 25 mm, no embryo seen" supports a count of 0.
+ */
+export const SIGNS_OF_A_FETUS: readonly (keyof UltrasoundReportRequest)[] = [
+  'fetalCardiacActivity',
+  'fetalMovementObserved',
+  'anomaliesDetected',
+  'fetalHeartRate',
+  'biparietalDiameterMm',
+  'headCircumferenceMm',
+  'abdominalCircumferenceMm',
+  'femurLengthMm',
+  'crownRumpLengthMm',
+  'estimatedFetalWeightGrams',
+  'nuchalTranslucencyMm',
+  'nasalBonePresent',
+  'fetalToneNormal',
+];
+/** Signs that count only when TRUE (no heart, no movement, no anomaly fit an empty sac). */
+export const SIGNS_ONLY_WHEN_TRUE: readonly (keyof UltrasoundReportRequest)[] = [
+  'fetalCardiacActivity',
+  'fetalMovementObserved',
+  'anomaliesDetected',
+];
+export function noFetusContradictsObservation(
+  form: UltrasoundReportForm | Partial<UltrasoundReportRequest>,
+): boolean {
+  const record = form as Record<string, unknown>;
+  return (
+    form.numberOfFetuses === 0 &&
+    SIGNS_OF_A_FETUS.some((sign) => {
+      const value = record[sign];
+      if (SIGNS_ONLY_WHEN_TRUE.includes(sign)) return value === true;
+      return typeof value === 'boolean' || isRecorded(value);
+    })
+  );
 }
 
 @Component({
@@ -200,7 +384,45 @@ export class UltrasoundTabComponent implements OnInit {
   reportSaving = signal(false);
   reportForm: UltrasoundReportForm = this.emptyReportForm();
   readonly triStateFlags = TRI_STATE_FLAGS;
-  templateLoading = signal(false);
+  readonly maxFetuses = MAX_FETUSES;
+  /**
+   * The stored fetus count of the report being edited: the range is judged only
+   * when the count changes (a legacy count outside 0..8 stays editable).
+   */
+  private loadedFetuses: number | undefined = undefined;
+  /** The stored report being edited, as the server returned it (null for a new report). */
+  private loadedReport: UltrasoundReportResponse | null = null;
+
+  /** One tri-state answer as the form loads it: a legacy report's old default is "not assessed". */
+  private loadAnswer(
+    report: UltrasoundReportResponse,
+    field:
+      'fetalCardiacActivity' | 'fetalMovementObserved' | 'fetalToneNormal' | 'anomaliesDetected',
+  ): boolean | null {
+    const value = report[field] ?? null;
+    return report.observationsStated === false && value === LEGACY_DEFAULTS[field] ? null : value;
+  }
+
+  /**
+   * QA D1525 review: on a legacy report, the contradictions are judged only when
+   * one of their inputs changes from what is stored (the server's
+   * CONTRADICTION_INPUTS), so a typo fix on an old contradictory report saves.
+   * A new or stated report is always judged.
+   */
+  private judgesContradictions(form: UltrasoundReportForm): boolean {
+    const stored = this.loadedReport;
+    if (!stored || stored.observationsStated !== false) return true;
+    const blank = (v: unknown) => (v === undefined || v === null || v === '' ? null : v);
+    const formRecord = form as unknown as Record<string, unknown>;
+    const storedRecord = stored as unknown as Record<string, unknown>;
+    const inputs = new Set<string>([
+      'findingCategory',
+      'anomalyDescription',
+      ...OBSERVATION_FIELDS,
+      ...SIGNS_OF_A_FETUS,
+    ]);
+    return [...inputs].some((field) => blank(formRecord[field]) !== blank(storedRecord[field]));
+  }
   reportActionBusy = signal(false);
 
   ngOnInit(): void {
@@ -490,6 +712,83 @@ export class UltrasoundTabComponent implements OnInit {
 
   /* ── Report ── */
 
+  /** The label key of one observation (literal keys, QA D1525). */
+  flagLabel(flag: TriStateFlag): string {
+    return FLAG_KEYS[flag].labelKey;
+  }
+
+  /** The option key for a stated answer of one observation. */
+  flagAnswer(flag: TriStateFlag, answer: boolean): string {
+    return answer ? FLAG_KEYS[flag].trueKey : FLAG_KEYS[flag].falseKey;
+  }
+
+  /** The not-assessed option of one observation, worded for its noun. */
+  flagNotAssessed(flag: TriStateFlag): string {
+    return FLAG_KEYS[flag].notAssessedKey;
+  }
+
+  /**
+   * How a stored tri-state answer reads (QA D1525): on a report that existed
+   * before D1525, a null or the value the old code filled is "no answer
+   * (recorded before this was asked)"; otherwise a value is its answer and a
+   * null on a stated report is "not assessed".
+   */
+  private answerKey(
+    value: boolean | null | undefined,
+    keys: { trueKey: string; falseKey: string; notAssessedKey: string },
+    stated: boolean | undefined,
+    legacyDefault: boolean | number | undefined,
+  ): string {
+    // A legacy report's value equal to what the old code filled was not
+    // necessarily stated (a reviewed report keeps it): no answer.
+    // Legacy means exactly observationsStated === false: a response without
+    // the field is never read as legacy.
+    if (stated === false && (value === null || value === undefined || value === legacyDefault)) {
+      return LEGACY_KEYS.legacyKey;
+    }
+    if (value === true) return keys.trueKey;
+    if (value === false) return keys.falseKey;
+    return keys.notAssessedKey;
+  }
+
+  /** One observation as read. */
+  observationKey(report: UltrasoundReportResponse, flag: TriStateFlag): string {
+    return this.answerKey(
+      report[flag],
+      FLAG_KEYS[flag],
+      report.observationsStated,
+      LEGACY_DEFAULTS[flag],
+    );
+  }
+
+  /** The anomalies answer as read. */
+  anomaliesKey(report: UltrasoundReportResponse): string {
+    return this.answerKey(
+      report.anomaliesDetected,
+      ANOMALY_KEYS,
+      report.observationsStated,
+      LEGACY_DEFAULTS.anomaliesDetected,
+    );
+  }
+
+  /**
+   * The stored fetus count as read (QA D1525): the number (0 = no fetus seen);
+   * a null is "not counted" on a stated report. On a report that existed
+   * before D1525 a null or the old default 1 (kept on a reviewed report) is
+   * "no answer (recorded before this was asked)".
+   */
+  fetusCount(report: UltrasoundReportResponse): { count?: number; key?: string } {
+    const count = report.numberOfFetuses;
+    if (
+      report.observationsStated === false &&
+      (count == null || count === LEGACY_DEFAULTS.numberOfFetuses)
+    ) {
+      return { key: LEGACY_KEYS.legacyKey };
+    }
+    if (count != null) return { count };
+    return { key: FETUS_KEYS.notAssessedKey };
+  }
+
   /**
    * QA D1150: the finding is never preselected. A blank report saved with the
    * seeded "NORMAL" read back as "Rapport Normal" with "Notify the patient"
@@ -503,6 +802,8 @@ export class UltrasoundTabComponent implements OnInit {
       fetalCardiacActivity: null,
       fetalMovementObserved: null,
       fetalToneNormal: null,
+      anomaliesDetected: null,
+      nasalBonePresent: null,
       reportFinalized: false,
     };
   }
@@ -510,6 +811,8 @@ export class UltrasoundTabComponent implements OnInit {
   openReport(order: UltrasoundOrderResponse): void {
     this.reportTargetOrder.set(order);
     const existing = order.report;
+    this.loadedFetuses = existing?.numberOfFetuses ?? undefined;
+    this.loadedReport = existing ?? null;
     if (existing) {
       // Strip the response-only bookkeeping fields before reusing as a request.
       const {
@@ -523,25 +826,36 @@ export class UltrasoundTabComponent implements OnInit {
         createdAt: _createdAt,
         updatedAt: _updatedAt,
         providerReviewNotes,
+        observationsStated: _stated,
         ...fields
       } = existing;
       this.reportForm = {
         ...fields,
         scanDate: existing.scanDate ?? localDateString(),
+        // QA D1525: the server returns plain stored values. On a legacy report
+        // (observationsStated false) a value equal to what the old code filled
+        // (LEGACY_DEFAULTS, the rule the report view uses) loads as "not
+        // assessed", so it is never re-sent as the clinician's statement. Rows
+        // V282 cleared hold NULLs already; this covers a row an older instance
+        // wrote during the rolling deploy.
         findingCategory: existing.findingCategory ?? '',
-        fetalCardiacActivity: existing.fetalCardiacActivity ?? null,
-        fetalMovementObserved: existing.fetalMovementObserved ?? null,
-        fetalToneNormal: existing.fetalToneNormal ?? null,
+        fetalCardiacActivity: this.loadAnswer(existing, 'fetalCardiacActivity'),
+        fetalMovementObserved: this.loadAnswer(existing, 'fetalMovementObserved'),
+        fetalToneNormal: this.loadAnswer(existing, 'fetalToneNormal'),
+        anomaliesDetected: this.loadAnswer(existing, 'anomaliesDetected'),
+        nasalBonePresent: existing.nasalBonePresent ?? null,
+        numberOfFetuses:
+          existing.observationsStated === false &&
+          existing.numberOfFetuses === LEGACY_DEFAULTS.numberOfFetuses
+            ? undefined
+            : (existing.numberOfFetuses ?? undefined),
+        gestationalAgeAtScan: existing.gestationalAgeAtScan ?? undefined,
         reportFinalized: false,
         providerReviewNotes: providerReviewNotes ?? undefined,
       };
     } else {
       this.reportForm = this.emptyReportForm();
     }
-    // Snapshot the seeded values so applyTemplate can tell defaults apart
-    // from genuine clinician entries.
-    this.reportSeed = { ...this.reportForm };
-    this.reportBaseline = { ...this.reportForm };
     this.showReportModal.set(true);
   }
 
@@ -550,87 +864,66 @@ export class UltrasoundTabComponent implements OnInit {
     this.reportTargetOrder.set(null);
   }
 
-  /** Form values as seeded by openReport — used to distinguish defaults. */
-  private reportSeed: UltrasoundReportForm = this.emptyReportForm();
-  /** Form values after the last template application (or the seed). */
-  private reportBaseline: UltrasoundReportForm = this.emptyReportForm();
+  /*
+   * QA D1525: the nuchal-translucency and anatomy-scan templates are gone. They
+   * pre-filled findings; without them they carried only today's date, which
+   * overwrote a stored scan date.
+   */
 
-  applyTemplate(kind: 'nuchal-translucency' | 'anatomy-scan'): void {
-    this.templateLoading.set(true);
-    this.ultrasoundService.template(kind).subscribe({
-      next: (template) => {
-        // Clinician entries (fields changed since the last template/seed)
-        // win over the template; the template wins over untouched seeded
-        // defaults; fields a previous template filled but this one doesn't
-        // fall back to the seed — so switching templates actually switches.
-        const base = this.reportBaseline as unknown as Record<string, unknown>;
-        const userChanged: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(this.reportForm)) {
-          if (value !== base[key] && value !== undefined && value !== null && value !== '') {
-            userChanged[key] = value;
-          }
-        }
-        this.reportForm = {
-          ...this.reportSeed,
-          ...this.stripEmpty(template as UltrasoundReportRequest),
-          ...userChanged,
-          // A template must preserve explicit observations, including a return
-          // to "not assessed" and selections retained across template switches.
-          ...Object.fromEntries(TRI_STATE_FLAGS.map((flag) => [flag, this.reportForm[flag]])),
-        } as UltrasoundReportForm;
-        this.reportBaseline = { ...this.reportForm };
-        this.templateLoading.set(false);
-      },
-      error: () => {
-        this.toast.error(this.translate.instant('ULTRASOUND.TEMPLATE_ERROR'));
-        this.templateLoading.set(false);
-      },
-    });
-  }
-
-  private stripEmpty(form: UltrasoundReportRequest): Partial<UltrasoundReportRequest> {
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(form)) {
-      if (value !== undefined && value !== null && value !== '') result[key] = value;
-    }
-    return result as Partial<UltrasoundReportRequest>;
+  /** Marks one report field refused with a translated reason (the others cleared). */
+  private refuseReport(fieldId: string, key: string): void {
+    refuseFields(this.host.nativeElement, [fieldId], REPORT_FIELD_IDS, this.translate.instant(key));
   }
 
   submitReport(): void {
     const order = this.reportTargetOrder();
     if (!order) return;
     const form = this.reportForm;
-    // QA D1525: a report with no finding at all (an untouched template) is
-    // refused first, as the server does, before the date and the category.
-    if (!hasUltrasoundFinding(form)) {
-      refuseFields(
-        this.host.nativeElement,
-        ['rep-summary'],
-        REPORT_FIELD_IDS,
-        this.translate.instant('ULTRASOUND.REPORT_NO_FINDINGS'),
-      );
+    // QA D1525 review: the same checks in the server's order, each refused on
+    // the same field with the same message for the same input: the request's
+    // own constraints (fetus count 0..8, the scan date), then the empty
+    // report, the category, the category's contradictions, the fetus
+    // count's, the anomaly description's.
+    const fetuses = form.numberOfFetuses;
+    if (
+      typeof fetuses === 'number' &&
+      fetuses !== this.loadedFetuses &&
+      (fetuses < 0 || fetuses > MAX_FETUSES || !Number.isInteger(fetuses))
+    ) {
+      this.refuseReport('rep-fetuses', 'ULTRASOUND.FETUSES_RANGE');
       return;
     }
-    // QA D1150: the date and the finding are named where they are missing —
-    // a report must never read as "Normal" by default.
-    const missing = blankFields(
-      { 'rep-date': form.scanDate, 'rep-category': form.findingCategory },
-      ['rep-date', 'rep-category'],
-    );
-    if (missing.length > 0) {
-      // QA D1358: name the blank fields, not a fixed list — each blank field
-      // says it is required, not the sentence about both.
-      refuseFields(
-        this.host.nativeElement,
-        missing,
-        REPORT_FIELD_IDS,
-        this.translate.instant('COMMON.FIELD_REQUIRED'),
-      );
+    // QA D1358: each blank field says it is required.
+    if (blankFields({ 'rep-date': form.scanDate }, ['rep-date']).length > 0) {
+      this.refuseReport('rep-date', 'COMMON.FIELD_REQUIRED');
+      return;
+    }
+    if (!hasUltrasoundFinding(form)) {
+      this.refuseReport('rep-summary', 'ULTRASOUND.REPORT_NO_FINDINGS');
+      return;
+    }
+    // QA D1150: the finding is named where it is missing, never read as "Normal".
+    if (blankFields({ 'rep-category': form.findingCategory }, ['rep-category']).length > 0) {
+      this.refuseReport('rep-category', 'COMMON.FIELD_REQUIRED');
+      return;
+    }
+    const judge = this.judgesContradictions(form);
+    if (judge && normalContradictsObservation(form)) {
+      this.refuseReport('rep-category', 'ULTRASOUND.NORMAL_CONTRADICTS_OBSERVATION');
+      return;
+    }
+    if (judge && noFetusContradictsObservation(form)) {
+      this.refuseReport('rep-fetuses', 'ULTRASOUND.NO_FETUS_CONTRADICTS_OBSERVATION');
+      return;
+    }
+    if (judge && anomalyDescriptionContradictsAnswer(form)) {
+      this.refuseReport('rep-anomaly', 'ULTRASOUND.ANOMALY_DESCRIPTION_WITHOUT_ANOMALY');
       return;
     }
     refuseFields(this.host.nativeElement, [], REPORT_FIELD_IDS, '');
-    // QA D1525: the three observations are sent as stated (null = not
-    // assessed); the server no longer turns a missing one into "yes".
+    // QA D1525: the observations are sent as shown (null = not assessed); any
+    // save that changes an observation marks a legacy report stated on the
+    // server (a new report is stated already).
     const request = { ...form } as Partial<UltrasoundReportRequest>;
     this.reportSaving.set(true);
     this.ultrasoundService.submitReport(order.id, request as UltrasoundReportRequest).subscribe({
@@ -649,7 +942,19 @@ export class UltrasoundTabComponent implements OnInit {
     });
   }
 
+  /**
+   * QA D1525 review (the D1150 class): a report that records no finding (an
+   * untouched template V282 emptied, category NORMAL and nothing else) is
+   * neither reviewed nor notified; the server refuses the same.
+   */
+  private refuseEmptyReport(report: UltrasoundReportResponse): boolean {
+    if (storedReportRecordsAFinding(report)) return false;
+    this.toast.error(this.translate.instant('ULTRASOUND.REPORT_EMPTY_NOT_REVIEWABLE'));
+    return true;
+  }
+
   reviewReport(report: UltrasoundReportResponse): void {
+    if (this.refuseEmptyReport(report)) return;
     this.reportActionBusy.set(true);
     this.ultrasoundService.reviewReport(report.id).subscribe({
       next: () => {
@@ -668,6 +973,12 @@ export class UltrasoundTabComponent implements OnInit {
   }
 
   notifyPatient(report: UltrasoundReportResponse): void {
+    // QA D1525 review (provisional): a legacy report already reviewed before
+    // V282 is signed and immutable, so it is notified; the empty-report check
+    // guards the review (the server's isGrandfatheredSignedLegacy).
+    const grandfathered =
+      report.reportReviewedByProvider === true && report.observationsStated === false;
+    if (!grandfathered && this.refuseEmptyReport(report)) return;
     this.reportActionBusy.set(true);
     this.ultrasoundService.notifyPatient(report.id).subscribe({
       next: () => {

@@ -258,9 +258,39 @@
             @if (rep.interpretation) {
               <p class="muted">{{ rep.interpretation }}</p>
             }
-            @if (rep.anomaliesDetected) {
+            <!-- QA D1525: every observation, "not assessed" and the legacy state included -->
+            <ul class="observation-list" data-testid="ultrasound-observations">
+              @for (flag of triStateFlags; track flag) {
+                <li>
+                  {{ flagLabel(flag) | translate }}{{ 'COMMON.COLON' | translate }}
+                  {{ observationKey(rep, flag) | translate }}
+                </li>
+              }
+              <li>
+                {{ 'ULTRASOUND.ANOMALIES' | translate }}{{ 'COMMON.COLON' | translate }}
+                {{ anomaliesKey(rep) | translate }}
+              </li>
+              <li>
+                {{ 'ULTRASOUND.FETUSES' | translate }}{{ 'COMMON.COLON' | translate }}
+                @if (fetusCount(rep); as fetuses) {
+                  {{ fetuses.key ? (fetuses.key | translate) : fetuses.count }}
+                }
+              </li>
+            </ul>
+            @if (rep.anomaliesDetected === true) {
               <p>
                 <span class="risk-badge risk-high">{{ 'ULTRASOUND.ANOMALIES' | translate }}</span>
+              </p>
+            }
+            @if (rep.anatomyFindings) {
+              <p data-testid="ultrasound-anatomy">
+                {{ 'ULTRASOUND.ANATOMY_FINDINGS' | translate }}{{ 'COMMON.COLON' | translate }}
+                {{ rep.anatomyFindings }}
+              </p>
+            }
+            @if (rep.anomalyDescription) {
+              <p>
+                {{ 'ULTRASOUND.ANOMALY_DESCRIPTION' | translate }}{{ 'COMMON.COLON' | translate }}
                 {{ rep.anomalyDescription }}
               </p>
             }
@@ -518,22 +548,6 @@
         </button>
       </div>
       <div class="modal-body">
-        <div class="template-buttons">
-          <button
-            class="btn-secondary btn-sm"
-            [disabled]="templateLoading()"
-            (click)="applyTemplate('nuchal-translucency')"
-          >
-            {{ 'ULTRASOUND.TEMPLATE_NT' | translate }}
-          </button>
-          <button
-            class="btn-secondary btn-sm"
-            [disabled]="templateLoading()"
-            (click)="applyTemplate('anatomy-scan')"
-          >
-            {{ 'ULTRASOUND.TEMPLATE_ANATOMY' | translate }}
-          </button>
-        </div>
         <div class="form-row">
           <div class="field">
             <label for="rep-date">{{ 'ULTRASOUND.SCAN_DATE' | translate }} *</label>
@@ -591,9 +605,15 @@
             <input
               id="rep-fetuses"
               type="number"
-              min="1"
+              min="0"
+              [max]="maxFetuses"
+              step="1"
+              aria-describedby="rep-fetuses-hint"
               [(ngModel)]="reportForm.numberOfFetuses"
             />
+            <small id="rep-fetuses-hint" class="muted">{{
+              'ULTRASOUND.FETUSES_HINT' | translate
+            }}</small>
           </div>
           <div class="field">
             <label for="rep-efw">{{ 'ULTRASOUND.EFW' | translate }}</label>
@@ -610,28 +630,24 @@
         <div class="form-row gtpal-row">
           @for (flag of triStateFlags; track flag) {
             <div class="field">
-              <label [for]="'rep-' + flag">{{ 'ULTRASOUND.FLAG_' + flag | translate }}</label>
+              <label [for]="'rep-' + flag">{{ flagLabel(flag) | translate }}</label>
               <select [id]="'rep-' + flag" [(ngModel)]="reportForm[flag]">
-                <option [ngValue]="null">{{ 'ULTRASOUND.FLAG_NOT_ASSESSED' | translate }}</option>
-                <option [ngValue]="true">
-                  {{
-                    (flag === 'fetalToneNormal'
-                      ? 'ULTRASOUND.FLAG_NORMAL'
-                      : 'ULTRASOUND.FLAG_PRESENT'
-                    ) | translate
-                  }}
-                </option>
-                <option [ngValue]="false">
-                  {{
-                    (flag === 'fetalToneNormal'
-                      ? 'ULTRASOUND.FLAG_ABNORMAL'
-                      : 'ULTRASOUND.FLAG_ABSENT'
-                    ) | translate
-                  }}
-                </option>
+                <option [ngValue]="null">{{ flagNotAssessed(flag) | translate }}</option>
+                <option [ngValue]="true">{{ flagAnswer(flag, true) | translate }}</option>
+                <option [ngValue]="false">{{ flagAnswer(flag, false) | translate }}</option>
               </select>
             </div>
           }
+          <div class="field">
+            <label for="rep-anomalies">{{ 'ULTRASOUND.ANOMALIES' | translate }}</label>
+            <select id="rep-anomalies" [(ngModel)]="reportForm.anomaliesDetected">
+              <option [ngValue]="null">
+                {{ 'ULTRASOUND.ANOMALIES_NOT_ASSESSED' | translate }}
+              </option>
+              <option [ngValue]="true">{{ 'ULTRASOUND.ANOMALIES_YES' | translate }}</option>
+              <option [ngValue]="false">{{ 'ULTRASOUND.ANOMALIES_NO' | translate }}</option>
+            </select>
+          </div>
         </div>
         <h3 class="section-heading">{{ 'ULTRASOUND.BIOMETRY' | translate }}</h3>
         <div class="form-row gtpal-row">
@@ -700,6 +716,11 @@
           <label for="rep-summary">{{ 'ULTRASOUND.SUMMARY' | translate }}</label>
           <textarea id="rep-summary" rows="3" [(ngModel)]="reportForm.findingsSummary"></textarea>
         </div>
+        <!-- QA D1525: anatomy findings count as a finding and a sign of a fetus, so they are editable here -->
+        <div class="field">
+          <label for="rep-anatomy">{{ 'ULTRASOUND.ANATOMY_FINDINGS' | translate }}</label>
+          <textarea id="rep-anatomy" rows="2" [(ngModel)]="reportForm.anatomyFindings"></textarea>
+        </div>
         <div class="field">
           <label for="rep-interpretation">{{ 'ULTRASOUND.INTERPRETATION' | translate }}</label>
           <textarea
@@ -710,10 +731,6 @@
         </div>
         <div class="field checkbox-field">
           <label>
-            <input type="checkbox" [(ngModel)]="reportForm.anomaliesDetected" />
-            {{ 'ULTRASOUND.ANOMALIES' | translate }}
-          </label>
-          <label>
             <input type="checkbox" [(ngModel)]="reportForm.followUpRequired" />
             {{ 'ULTRASOUND.FOLLOW_UP' | translate }}
           </label>
@@ -722,7 +739,8 @@
             {{ 'ULTRASOUND.FINALIZE' | translate }}
           </label>
         </div>
-        @if (reportForm.anomaliesDetected) {
+        <!-- QA D1525: shown while there is a description, so a refusal on it is always visible -->
+        @if (reportForm.anomaliesDetected || reportForm.anomalyDescription) {
           <div class="field">
             <label for="rep-anomaly">{{ 'ULTRASOUND.ANOMALY_DESCRIPTION' | translate }}</label>
             <textarea id="rep-anomaly" rows="2" [(ngModel)]="reportForm.anomalyDescription">
