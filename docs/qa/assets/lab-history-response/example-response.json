@@ -1,5 +1,5 @@
 {
-  "id": "cdx-live-result",
+  "id": "cdx-synthetic-result",
   "labOrderId": "cdx-example-order",
   "labOrderCode": "CDX-LAB-DEMO",
   "patientId": "cdx-example-patient",
@@ -14,6 +14,11 @@
   "released": false,
   "referenceRanges": [],
   "trendHistory": [
+    {
+      "resultValue": "1.0",
+      "resultUnit": "g/L",
+      "resultDate": "2026-01-01T09:00:00Z"
+    },
     {
       "resultValue": "1.2",
       "resultUnit": "g/L",
