@@ -21,3 +21,13 @@ This follow-up corrects the merged PR #1099; it is not a deployment. A clinical 
 The guard now bounds each GET to its own mapping, handles multiline generics and direct DTO returns, and fails on unsupported declarations or unclassified endpoints. It counts every GET and verifies both raw and wrapped response clients. Negative cases cover multiline/direct DTO signatures, an unreadable GET before a POST, and both directions of envelope mismatch. Paths resolve from import.meta.url; the same tests pass from the repository root and portal directory.
 
 Review inspection confirmed that the previous screenshot replaced names, patient identity and hospital labels with Cdx placeholders and displayed no MRN or date of birth. The current image was nevertheless regenerated wholly from a committed synthetic fixture, including independent dates and numeric values. No git history was rewritten.
+
+## Dated reference-range indicator
+
+The requested display adds a Low / Normal / High bar with a result marker, the exact value/unit, and the result date/time. Reference limits stay visible. The fetched detail refreshes the panel only after the existing result/patient identity checks pass, so its current value, date and grading range drive the marker.
+
+The display uses only gradedReferenceRange selected by the backend, including any conversion already performed there. It never picks the first configured age/sex/unit band or performs a clinical unit conversion in the browser. A finite exact value and complete compatible interval are required; bounded/qualitative values, unknown grading, unit mismatches and incomplete intervals do not get a fabricated marker. Min and max are inclusive. The normal interval occupies the middle third of the bar; each outside third spans one interval width. More extreme values are pinned to an edge with an explicit note while retaining their exact value. Existing severity, signing and release rules are unchanged.
+
+[High-result example with date](assets/lab-history-response/range-high-fr.png). All committed screenshots and fixture values are wholly synthetic. Historical observations keep their own dates. The translation allowlist adds only the exact shared word Normal in FR and ES; no thresholds or gate logic change.
+
+Validation: 5,016 frontend tests passed, including low/normal/high positions, inclusive boundaries, extreme clipping, backend-converted units, invalid/unknown ranges and freshness of the fetched date. 541 script tests passed. Twelve synthetic browser/accessibility cases passed in FR/EN/ES and desktop/tablet/mobile, plus nine replay checks against the previously verified dev response shape. Lint, build, formatting, i18n/RBAC checks, guards and coverage floors passed.

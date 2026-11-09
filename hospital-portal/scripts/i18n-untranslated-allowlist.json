@@ -469,7 +469,8 @@
     "inBasket.labColPatient": "Patient",
     "inBasket.labNormal": "Normal",
     "inBasket.messages": "Messages",
-    "inBasket.urgent": "Urgent"
+    "inBasket.urgent": "Urgent",
+    "LAB_RANGE.NORMAL": "Normal"
   },
   "es": {
     "CHART.LAB_STATUS_NORMAL": "Normal",
@@ -494,6 +495,7 @@
     "PROVIDER.COMMON.NO": "No",
     "PROVIDER.STAFF.COL_ROLES": "Roles",
     "SHELL.AVATAR_ALT": "Avatar",
-    "inBasket.labNormal": "Normal"
+    "inBasket.labNormal": "Normal",
+    "LAB_RANGE.NORMAL": "Normal"
   }
 }

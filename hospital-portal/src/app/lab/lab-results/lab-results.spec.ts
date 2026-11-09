@@ -100,6 +100,28 @@ describe('LabResultsComponent', () => {
     expect(fixture.nativeElement.querySelector('app-result-evolution [role="alert"]')).toBeNull();
   });
 
+  it('uses the fetched result date and patient-specific range in the marker', () => {
+    fixture.detectChanges();
+    flushInit();
+    const row = component.results()[0];
+    component.viewResult(row);
+    httpMock.expectOne('/lab-results/result-1').flush({
+      ...row,
+      resultValue: '15',
+      resultUnit: 'cdx-unit',
+      resultDate: '2026-01-02T09:00:00Z',
+      gradedReferenceRange: { minValue: 10, maxValue: 20, unit: 'cdx-unit' },
+    });
+    fixture.detectChanges();
+    expect(component.selectedResult()?.resultDate).toBe('2026-01-02T09:00:00Z');
+    expect(
+      fixture.nativeElement.querySelector('app-result-range time')?.getAttribute('datetime'),
+    ).toBe('2026-01-02T09:00:00Z');
+    expect(
+      fixture.nativeElement.querySelector('app-result-range .marker')?.getAttribute('style'),
+    ).toContain('50%');
+  });
+
   function flushInit(results: Record<string, unknown>[] = [mockResult()]): void {
     // listResults
     const resultsReq = httpMock.expectOne((r) => r.url === '/lab-results' && r.method === 'GET');

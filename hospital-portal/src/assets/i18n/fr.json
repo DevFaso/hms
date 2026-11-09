@@ -13276,5 +13276,14 @@
     "NEXT": "Page suivante",
     "AUDIT_TITLE": "Versions enregistrées des résultats",
     "CORRECTION_NOTE": "Cet historique contient des corrections. Les versions remplacées ne peuvent pas y être identifiées. Les points montrent uniquement les valeurs enregistrées ; les lignes et variations ne sont pas affichées. Consultez les observations et les corrections avant d’interpréter les changements."
+  },
+  "LAB_RANGE": {
+    "TITLE": "Position du résultat",
+    "LOW": "Bas",
+    "NORMAL": "Normal",
+    "HIGH": "Haut",
+    "REFERENCE": "Plage de référence",
+    "OUTSIDE_SCALE": "Le résultat dépasse l’échelle affichée ; le repère se trouve au bord.",
+    "UNAVAILABLE": "Le positionnement nécessite une valeur numérique exacte et une plage de référence compatible."
   }
 }
