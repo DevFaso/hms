@@ -27,6 +27,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.utility.RoleValidator;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -88,8 +89,32 @@ class DepartmentServiceImplTest {
     private User user;
     private Locale locale;
 
+    /**
+     * Refusals now carry their key and resolve it through MessageUtil (#1096): route
+     * MessageUtil to this test's message source, and give the JVM's back afterwards.
+     */
+    private Object previousMessageUtilSource;
+
+    private void routeMessageUtilToTheMock() {
+        previousMessageUtilSource = org.springframework.test.util.ReflectionTestUtils.getField(
+            com.example.hms.utility.MessageUtil.class, "messageSource");
+        com.example.hms.utility.MessageUtil.setMessageSource(messageSource);
+        // A real source never answers null: an unstubbed key reads as itself.
+        org.mockito.Mockito.lenient().when(messageSource.getMessage(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(java.util.Locale.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @AfterEach
+    void restoreMessageUtil() {
+        com.example.hms.utility.MessageUtil.setMessageSource(
+            (org.springframework.context.MessageSource) previousMessageUtilSource);
+    }
+
     @BeforeEach
     void setUp() {
+        routeMessageUtilToTheMock();
         // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
         lenient().when(hospitalRepository.findClinicalById(any()))
             .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
@@ -207,10 +232,10 @@ class DepartmentServiceImplTest {
 
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
         when(staffService.getStaffEntityById(staffId, locale)).thenReturn(staff);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Wrong hospital");
 
         assertThatThrownBy(() -> departmentService.updateDepartmentHead(deptId, staffId, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("department.head.wrongHospital"));
     }
 
     @Test
@@ -332,6 +357,7 @@ class DepartmentServiceImplTest {
 
         assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
                 .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("department.r7.deleteInUse"))
                 .hasMessage("still used");
         verify(departmentRepository, never()).delete(any(Department.class));
     }
@@ -347,6 +373,7 @@ class DepartmentServiceImplTest {
 
         assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
                 .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("department.r7.deleteInUse"))
                 .hasMessage("still used");
     }
 
@@ -354,10 +381,10 @@ class DepartmentServiceImplTest {
     void deleteDepartment_throwsWhenHasStaff() {
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
         when(departmentRepository.hasStaffMembers(deptId)).thenReturn(true);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Has staff");
 
         assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("department.delete.withStaff"));
     }
 
     @Test
@@ -566,7 +593,6 @@ class DepartmentServiceImplTest {
         // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         DepartmentRequestDTO dto = new DepartmentRequestDTO();
         dto.setName("Test");
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Hospital required");
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
             .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
@@ -577,7 +603,6 @@ class DepartmentServiceImplTest {
         // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         DepartmentRequestDTO dto = new DepartmentRequestDTO();
         dto.setHospitalId(hospitalId);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Name required");
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
             .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);

@@ -33,16 +33,13 @@ import java.util.function.Supplier;
 @RequiredArgsConstructor
 public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     private static final String PATIENT_REQUIRED_KEY = "patientinsurance.patient.required";
-    private static final String PATIENT_REQUIRED_MSG = "Patient is required for insurance";
     private static final String ROLE_PATIENT = "PATIENT";
     /** PatientChartAccess's key for a patient id that matches no row (the list read's miss). */
     private static final String CHART_PATIENT_NOT_FOUND_KEY = "patient.notFound";
     private static final String HOSPITAL_REQUIRED_KEY = "hospital.required";
-    private static final String HOSPITAL_REQUIRED_MSG = "Hospital context is required";
     private static final String INSURANCE_LINK_FORBIDDEN_KEY = "insurance.link.forbidden";
     private static final String INSURANCE_LINK_FORBIDDEN_MSG = "You don't have permission to link insurance in this hospital";
     private static final String ASSIGNMENT_REQUIRED_KEY = "assignment.required";
-    private static final String ASSIGNMENT_REQUIRED_MSG = "Valid assignment required";
 
 
     private final PatientInsuranceRepository patientInsuranceRepository;
@@ -66,9 +63,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Transactional
     public PatientInsuranceResponseDTO addInsuranceToPatient(PatientInsuranceRequestDTO dto, Locale locale) {
         if (dto.getPatientId() == null) {
-            throw new FieldBusinessException("patientId",
-                messageSource.getMessage(PATIENT_REQUIRED_KEY,
-                    null, PATIENT_REQUIRED_MSG, locale));
+            throw new FieldBusinessException("patientId", PATIENT_REQUIRED_KEY);
         }
 
         Patient patient = getPatientOrThrow(dto.getPatientId());
@@ -125,9 +120,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             : existing.getPatient();
 
         if (targetPatient == null) {
-            throw new FieldBusinessException("patientId",
-                messageSource.getMessage(PATIENT_REQUIRED_KEY,
-                    null, PATIENT_REQUIRED_MSG, locale));
+            throw new FieldBusinessException("patientId", PATIENT_REQUIRED_KEY);
         }
 
         enforceSelfAccessIfPatient(targetPatient, () -> patientNotFound(targetPatient.getId()));
@@ -173,11 +166,11 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             // answers exactly as the missing id does.
             enforcePatientSelfAccess(patient, () -> patientNotFound(req.getPatientId()));
             enforcePatientSelfAccess(insurance.getPatient(), () -> insuranceNotFound(insuranceId));
-            rejectHospitalLinkForPatient(req, locale);
+            rejectHospitalLinkForPatient(req);
         } else {
             UUID hospitalId = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalId, actorUserId, ctx, locale);
-            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalId, locale));
+            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalId));
         }
 
         // Always attach to patient
@@ -261,8 +254,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         PatientInsurance insurance = getInsuranceOrThrow(insuranceId);
 
         if (req.getPatientId() == null) {
-            throw new FieldBusinessException("patientId", messageSource.getMessage(
-                PATIENT_REQUIRED_KEY, null, PATIENT_REQUIRED_MSG, locale));
+            throw new FieldBusinessException("patientId", PATIENT_REQUIRED_KEY);
         }
         Patient patient = getPatientOrThrow(req.getPatientId());
         enforceSelfAccessIfPatient(patient, () -> patientNotFound(req.getPatientId()));
@@ -281,7 +273,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             insurance.setPatient(patient);
             UUID hospitalId = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalId, actorUserId, ctx, locale);
-            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalId, locale));
+            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalId));
         }
 
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
@@ -295,7 +287,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         ActingContext ctx,
         Locale locale
     ) {
-        validateNaturalKeyParts(req, locale);
+        validateNaturalKeyParts(req);
 
         final UUID patientId = req.getPatientId();
         final String payerCode = req.getPayerCode().trim();
@@ -310,7 +302,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         UUID hospitalIdForStaff = null;
         if (actAsPatient) {
             enforcePatientSelfAccess(patient, () -> patientNotFound(patientId));
-            rejectHospitalLinkForPatient(req, locale);
+            rejectHospitalLinkForPatient(req);
         } else {
             hospitalIdForStaff = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalIdForStaff, actorUserId, ctx, locale);
@@ -320,7 +312,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         applyProviderName(insurance, req.getProviderName(), payerCode);
 
         if (!actAsPatient) {
-            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalIdForStaff, locale));
+            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalIdForStaff));
         }
 
         applyPrimaryFlag(req, actAsPatient, insurance, patient, hospitalIdForStaff);
@@ -366,25 +358,22 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         }
     }
 
-    private void rejectHospitalLinkForPatient(LinkPatientInsuranceRequestDTO req, Locale locale) {
+    private void rejectHospitalLinkForPatient(LinkPatientInsuranceRequestDTO req) {
         if (req.getHospitalId() != null) {
-            throw new com.example.hms.exception.FieldBusinessException("hospitalId", 
-                messageSource.getMessage("patient.cannot.link.hospital", null,
-                    "Patients cannot link insurance to a hospital", locale));
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "patient.cannot.link.hospital");
         }
     }
 
     private void enforceStaffAuthorization(UUID hospitalId, UUID actorUserId, ActingContext ctx, Locale locale) {
         if (hospitalId == null) {
-            throw new BusinessException(
-                messageSource.getMessage(HOSPITAL_REQUIRED_KEY, null, HOSPITAL_REQUIRED_MSG, locale));
+            throw new BusinessException(HOSPITAL_REQUIRED_KEY);
         }
         final boolean hasChosenRole = ctx != null && ctx.roleCode() != null && !ctx.roleCode().isBlank();
         final boolean jwtGlobalOverride = roleValidator.isSuperAdminFromAuth()
             || roleValidator.isHospitalAdminFromAuthGlobalOnly();
 
         if (hasChosenRole) {
-            roleValidator.validateRoleOrThrow(actorUserId, hospitalId, ctx.roleCode().trim(), locale, messageSource);
+            roleValidator.validateRoleOrThrow(actorUserId, hospitalId, ctx.roleCode().trim());
         } else {
             final boolean hasScopedPermission = roleValidator.canLinkInsurance(actorUserId, hospitalId);
             if (!hasScopedPermission && !jwtGlobalOverride) {
@@ -395,22 +384,18 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         }
     }
 
-    private UserRoleHospitalAssignment resolveStaffAssignment(UUID actorUserId, UUID hospitalId, Locale locale) {
+    private UserRoleHospitalAssignment resolveStaffAssignment(UUID actorUserId, UUID hospitalId) {
         return assignmentRepository
             .findFirstByUser_IdAndHospital_IdAndActiveTrue(actorUserId, hospitalId)
-            .orElseThrow(() -> new BusinessException(
-                messageSource.getMessage(ASSIGNMENT_REQUIRED_KEY, null, ASSIGNMENT_REQUIRED_MSG, locale)));
+            .orElseThrow(() -> new BusinessException(ASSIGNMENT_REQUIRED_KEY));
     }
 
-    private void validateNaturalKeyParts(LinkPatientInsuranceRequestDTO req, Locale locale) {
+    private void validateNaturalKeyParts(LinkPatientInsuranceRequestDTO req) {
         // QA D1355 class (round 30): the patient, the payer and the policy named in one refusal.
         com.example.hms.exception.RequiredFields.check()
-            .requireValue(req == null ? null : req.getPatientId(), "patientId", messageSource.getMessage(
-                PATIENT_REQUIRED_KEY, null, PATIENT_REQUIRED_MSG, locale))
-            .requireValue(req == null ? null : req.getPayerCode(), "payerCode", messageSource.getMessage(
-                "patientinsurance.payer.required", null, "Payer code is required", locale))
-            .requireValue(req == null ? null : req.getPolicyNumber(), "policyNumber", messageSource.getMessage(
-                "patientinsurance.policy.required", null, "Policy number is required", locale))
+            .requireValue(req == null ? null : req.getPatientId(), "patientId", PATIENT_REQUIRED_KEY)
+            .requireValue(req == null ? null : req.getPayerCode(), "payerCode", "patientinsurance.payer.required")
+            .requireValue(req == null ? null : req.getPolicyNumber(), "policyNumber", "patientinsurance.policy.required")
             .orThrow();
     }
 

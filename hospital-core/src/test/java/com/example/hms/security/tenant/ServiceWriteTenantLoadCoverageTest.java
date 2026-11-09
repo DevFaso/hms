@@ -67,6 +67,10 @@ class ServiceWriteTenantLoadCoverageTest {
         "\\.equals\\([^;]*getHospital", "Objects\\.equals\\([^;]*[Hh]ospital")));
 
     private static final Pattern SIGNATURE = Pattern.compile("^\\s*(public|private|protected)[^=;(]*\\s(\\w+)\\s*\\([^;]*$");
+    // A PCP assignment-to-hospital comparison proves consistency, not the caller's scope.
+    // Keep the stronger actor check when scanning these newly reachable clinical writes.
+    private static final Pattern PCP_ACTING_CHECK = Pattern.compile(
+        "TenantOwnership|requirePinned|requireActiveHospitalId|currentScope\\(\\)|pinnedHospitalId");
     /**
      * QA D602: a named by-id loader ({@code findDetailedById}, ...) is a by-id load
      * too; the shift PUT loaded through one and nothing saw it. Excluded are the
@@ -223,6 +227,53 @@ class ServiceWriteTenantLoadCoverageTest {
     }
 
     @Test
+    void anAssignmentHospitalComparisonDoesNotScopeAPrimaryCareWrite() {
+        String source = """
+            public void updatePrimaryCare(UUID id, Request req) {
+                var link = pcpRepo.findById(id).orElseThrow();
+                if (!assignment.getHospital().getId().equals(link.getHospital().getId())) {
+                    throw new RuntimeException();
+                }
+            }
+            """;
+        assertThat(scanSource("PatientPrimaryCareServiceImpl", source,
+            Map.of("pcpRepo", "PatientPrimaryCareRepository"), Set.of("PatientPrimaryCareRepository")))
+            .containsExactly("PatientPrimaryCareServiceImpl.updatePrimaryCare#findById");
+    }
+
+    /**
+     * QA r41 (running-app check): hospital A's admin read hospital B's patient's primary-care
+     * links (current and history) by patient id. Every read of a patient's links in the
+     * primary-care service goes through the acting hospital (a global or super-admin context
+     * keeps every link): a method that reads them by patient without it fails here.
+     */
+    @Test
+    void everyPrimaryCareReadByPatientIsScopedToTheActingHospital() throws IOException {
+        String source = Files.readString(MAIN.resolve("service/PatientPrimaryCareServiceImpl.java"),
+            StandardCharsets.UTF_8);
+        Matcher method = Pattern.compile("public [^{;=]*\\s(\\w+)\\s*\\([^)]*\\)\\s*\\{").matcher(source);
+        List<String> unscoped = new java.util.ArrayList<>();
+        int reads = 0;
+        while (method.find()) {
+            int depth = 1;
+            int i = method.end();
+            while (i < source.length() && depth > 0) {
+                char c = source.charAt(i++);
+                depth += c == '{' ? 1 : c == '}' ? -1 : 0;
+            }
+            String body = source.substring(method.end(), i);
+            if (body.contains("pcpRepo.findByPatient_Id")) {
+                reads++;
+                if (!body.contains("actingHospitalIdOrNullForGlobal") && !body.contains("TenantOwnership.require")) {
+                    unscoped.add(method.group(1));
+                }
+            }
+        }
+        assertThat(reads).as("primary-care reads by patient found").isGreaterThanOrEqualTo(2);
+        assertThat(unscoped).as("primary-care reads by patient without the acting hospital").isEmpty();
+    }
+
+    @Test
     @DisplayName("QA D602: the scanner sees a named by-id loader (the shift PUT shape) and accepts the scoped one")
     void scannerSeesTheD602Shape() {
         Set<String> repos = Set.of("StaffShiftRepository");
@@ -307,7 +358,8 @@ class ServiceWriteTenantLoadCoverageTest {
             }
             i = j + 1;
             String text = body.toString();
-            if ((PUBLIC_READ.matcher(name).find() && !isPrivate) || TENANT_CHECKS.matcher(text).find()) {
+            Pattern checks = "PatientPrimaryCareServiceImpl".equals(className) ? PCP_ACTING_CHECK : TENANT_CHECKS;
+            if ((PUBLIC_READ.matcher(name).find() && !isPrivate) || checks.matcher(text).find()) {
                 continue;
             }
             Matcher call = BY_ID_CALL.matcher(text);

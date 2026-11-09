@@ -300,7 +300,6 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
         Map.entry("POST /high-risk-care-plans/{planId}/medication-logs", "role: limited to the care team"),
         Map.entry("POST /patients/{patientId}/postpartum/newborn-assessments",
             "state: no delivery recorded in the last 28 days"),
-        Map.entry("POST /patients/{patientId}/primary-care", "a looked-up reference (the sample role id) not found"),
         Map.entry("POST /mortality/patients/{patientId}/disputes", "state: no death on record for the sample patient"),
         Map.entry("POST /security-policies",
             "the sample code collides with the policy the organization bootstrap seeds (integrity, D1301 standing debt)"),

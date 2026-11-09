@@ -176,7 +176,8 @@ class LabInventoryServiceImplTest {
         when(inventoryRepository.existsByHospitalIdAndItemCode(HOSPITAL_ID, "REA-001")).thenReturn(true);
 
         assertThatThrownBy(() -> service.create(HOSPITAL_ID, requestDto, LOCALE))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOf(BusinessRuleException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("inventory.duplicate.code"));
     }
 
     @Test
@@ -196,7 +197,8 @@ class LabInventoryServiceImplTest {
         when(inventoryRepository.existsByHospitalIdAndItemCode(HOSPITAL_ID, "REA-001")).thenReturn(false);
 
         assertThatThrownBy(() -> service.create(HOSPITAL_ID, requestDto, LOCALE))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOf(BusinessRuleException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("inventory.quantity.negative"));
     }
 
     // ── update ───────────────────────────────────────────────────
@@ -226,7 +228,8 @@ class LabInventoryServiceImplTest {
         when(inventoryRepository.existsByHospitalIdAndItemCode(HOSPITAL_ID, "REA-NEW")).thenReturn(true);
 
         assertThatThrownBy(() -> service.update(ITEM_ID, updateDto, LOCALE))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOf(BusinessRuleException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("inventory.duplicate.code"));
     }
 
     @Test
@@ -239,7 +242,8 @@ class LabInventoryServiceImplTest {
         when(inventoryRepository.findByIdAndActiveTrue(ITEM_ID)).thenReturn(Optional.of(item));
 
         assertThatThrownBy(() -> service.update(ITEM_ID, updateDto, LOCALE))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOf(BusinessRuleException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("inventory.quantity.negative"));
     }
 
     // ── deactivate ───────────────────────────────────────────────

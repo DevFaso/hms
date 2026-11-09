@@ -105,7 +105,6 @@ class PatientInsuranceServiceImplTest {
     void addInsuranceToPatient_nullPatientId_throwsBusinessException() {
         PatientInsuranceRequestDTO dto = new PatientInsuranceRequestDTO();
         dto.setPatientId(null);
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("Patient required");
 
         assertThatThrownBy(() -> service.addInsuranceToPatient(dto, locale))
             .isInstanceOf(BusinessException.class);
@@ -265,7 +264,6 @@ class PatientInsuranceServiceImplTest {
         when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(insurance));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(subjectReadGuard.callerOwns(patient)).thenReturn(true);
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("cannot link");
 
         assertThatThrownBy(() -> service.linkPatientInsurance(insuranceId, req, ctx, locale))
             .isInstanceOf(BusinessException.class);
@@ -304,7 +302,6 @@ class PatientInsuranceServiceImplTest {
 
         when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(insurance));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("hospital required");
 
         assertThatThrownBy(() -> service.linkPatientInsurance(insuranceId, req, ctx, locale))
             .isInstanceOf(BusinessException.class);
@@ -360,7 +357,6 @@ class PatientInsuranceServiceImplTest {
         ActingContext ctx = new ActingContext(userId, hospitalId, ActingMode.STAFF, null);
 
         when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(insurance));
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("Patient required");
 
         assertThatThrownBy(() -> service.upsertAndLinkByInsuranceId(insuranceId, req, ctx, locale))
             .isInstanceOf(BusinessException.class);
@@ -429,7 +425,6 @@ class PatientInsuranceServiceImplTest {
         LinkPatientInsuranceRequestDTO req = LinkPatientInsuranceRequestDTO.builder()
             .patientId(patientId).policyNumber("POL123").build();
         ActingContext ctx = new ActingContext(userId, hospitalId, ActingMode.STAFF, null);
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("payer required");
 
         assertThatThrownBy(() -> service.upsertAndLinkByNaturalKey(req, ctx, locale))
             .isInstanceOf(BusinessException.class);
@@ -445,7 +440,6 @@ class PatientInsuranceServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
         when(subjectReadGuard.callerOwns(patient)).thenReturn(true);
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("cannot link");
 
         assertThatThrownBy(() -> service.upsertAndLinkByNaturalKey(req, ctx, locale))
             .isInstanceOf(BusinessException.class);

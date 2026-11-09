@@ -126,11 +126,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String DEFAULT_ROLE_ASSIGNED_INACTIVE =
         "This role was assigned to this user at this hospital before and is now inactive. Reactivate that assignment instead.";
     private static final String DEFAULT_ROLE_DELETE_CONFLICT = "Cannot delete role. It is assigned to one or more users.";
-    private static final String DEFAULT_USER_NOT_FOUND_PREFIX = "User not found: ";
-    private static final String DEFAULT_ROLE_REQUIRED_MESSAGE = "Role must be specified by either ID or name.";
     private static final String DEFAULT_DOCTOR_CONFLICT_MESSAGE = "An active DOCTOR assignment already exists for this user in the given hospital.";
     private static final String DEFAULT_SUPER_ADMIN_SCOPE_MESSAGE = "assignment.superAdmin.noHospital";
-    private static final String DEFAULT_HOSPITAL_REQUIRED_MESSAGE = "Hospital must be provided for non-SUPER_ADMIN roles.";
     private static final String DEFAULT_INVALID_UUID_MESSAGE = "Invalid UUID value: ";
     private static final String DEFAULT_INVALID_BOOLEAN_MESSAGE = "Invalid boolean value: ";
     private static final String DEFAULT_INVALID_DATE_MESSAGE = "Invalid date value: ";
@@ -141,13 +138,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String MSG_ASSIGNMENT_ALREADY_CONFIRMED = "assignment.confirmation.already";
     private static final String MSG_ASSIGNMENT_ACTOR_MISMATCH = "assignment.confirmation.actor-mismatch";
     private static final String MSG_ASSIGNMENT_NOT_FOUND_BY_CODE = "assignment.notfound.bycode";
-    private static final String DEFAULT_CONFIRMATION_CODE_INVALID = "Invalid confirmation code.";
-    private static final String DEFAULT_ASSIGNMENT_ALREADY_CONFIRMED = "This assignment has already been confirmed.";
     private static final String MSG_ACCOUNT_DISABLED_BY_ADMIN = "assignment.confirmation.accountDisabled";
-    private static final String DEFAULT_ACCOUNT_DISABLED_BY_ADMIN =
-        "This account was disabled by an administrator. Ask them to re-enable it.";
-    private static final String DEFAULT_CONFIRMATION_ACTOR_MISMATCH = "Only the assigner who created this assignment can confirm it.";
-    private static final String DEFAULT_ACTOR_RESOLUTION_FAILURE = "Unable to resolve the current user.";
     private static final String DEFAULT_HOLDER_CHANGE = "assignment.holderChange.superAdminOnly";
     /** QA D915: a key, so the refusal reads in the caller's language. */
     private static final String DEFAULT_ACTIVATION_THROUGH_CODE = "assignment.activation.throughCode";
@@ -287,14 +278,14 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         enforceRoleScopeConstraints(dto, roleCode, adminRequest);
 
-        Hospital hospital = resolveHospitalHumanAware(dto, role, locale);
+        Hospital hospital = resolveHospitalHumanAware(dto, role);
         if (grant != null) {
             requireGrantAt(grant, hospital, roleCode);
         }
         facilityAssignmentGuard.requireCompatible(roleCode, hospital);
         // QA D789: an archived hospital takes no new role (a 409 before anything is saved).
         FacilityAssignmentGuard.requireOpenForAssignment(hospital);
-        User user = resolveUser(dto, locale);
+        User user = resolveUser(dto);
         facilityAssignmentGuard.requireSingleFacilityKind(user, roleCode, hospital, null);
         checkActiveDoctorConflict(dto, user, role, hospital, locale);
         checkExistingAssignment(user, role, hospital, locale);
@@ -311,7 +302,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // creation has one only when an admin registers (none on
         // self-registration or bootstrap).
         assignment.setRegisteredBy(adminRequest
-            ? requireCallerAccount(locale)
+            ? requireCallerAccount()
             : accountAccess.currentUserId().flatMap(userRepository::findById).orElse(null));
 
         UserRoleHospitalAssignment saved = assignmentRepository.save(assignment);
@@ -334,7 +325,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         return saved;
     }
 
-    private User resolveUser(UserRoleHospitalAssignmentRequestDTO dto, Locale locale) {
+    private User resolveUser(UserRoleHospitalAssignmentRequestDTO dto) {
         if (dto.getUserId() != null) {
             return userRepository.findById(dto.getUserId()).orElseThrow(() ->
                 new ResourceNotFoundException(MSG_USER_NOT_FOUND, dto.getUserId()));
@@ -349,11 +340,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_USER_NOT_FOUND, trimmed));
         }
 
-        throw new BusinessException(messageSource.getMessage(
-            MSG_USER_NOT_FOUND,
-            new Object[]{null},
-            DEFAULT_USER_NOT_FOUND_PREFIX + "<unknown>",
-            locale));
+        throw new BusinessException(MSG_USER_NOT_FOUND, (Object) null);
     }
 
     /**
@@ -463,7 +450,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         // Resolved before anything on the row changes: a re-invite with no
         // registrar would leave a row nobody can confirm.
-        User newRegistrar = reinvite ? requireCallerAccount(locale) : null;
+        User newRegistrar = reinvite ? requireCallerAccount() : null;
         boolean wasActive = Boolean.TRUE.equals(target.getActive());
 
         mapper.updateEntity(target, dto, newHospital, newRole);
@@ -520,15 +507,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      *
      * @throws BusinessException when the caller has no resolvable account
      */
-    private User requireCallerAccount(Locale locale) {
+    private User requireCallerAccount() {
         return accountAccess.currentUserId()
             .flatMap(userRepository::findById)
-            .orElseThrow(() -> new BusinessException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_ACTOR_MISMATCH,
-                    null,
-                    DEFAULT_ACTOR_RESOLUTION_FAILURE,
-                    locale)));
+            .orElseThrow(() -> new BusinessException("assignment.actor.unresolved"));
     }
 
     /**
@@ -580,7 +562,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private Hospital resolveHospitalForUpdate(UserRoleHospitalAssignmentRequestDTO dto,
                                               UserRoleHospitalAssignment target, Role newRole, Locale locale) {
         if (dto.getHospitalId() != null) {
-            return resolveHospital(dto, newRole, locale);
+            return resolveHospital(dto, newRole);
         }
         return target.getHospital();
     }
@@ -872,7 +854,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         for (UUID hospitalId : hospitalIds) {
             Hospital hospital;
             try {
-                hospital = resolveHospitalHumanAware(buildSingleAssignmentRequest(requestDTO, hospitalId), role, locale);
+                hospital = resolveHospitalHumanAware(buildSingleAssignmentRequest(requestDTO, hospitalId), role);
             } catch (BusinessException | ResourceNotFoundException unresolved) {
                 continue;
             }
@@ -912,15 +894,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public UserRoleHospitalAssignmentResponseDTO confirmAssignment(UUID assignmentId, String confirmationCode) {
-        Locale locale = LocaleContextHolder.getLocale();
         String sanitizedCode = confirmationCode != null ? confirmationCode.trim() : null;
         if (sanitizedCode == null || sanitizedCode.isBlank()) {
-            throw new BusinessException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_INVALID_CODE,
-                    null,
-                    DEFAULT_CONFIRMATION_CODE_INVALID,
-                    locale));
+            throw new BusinessException(MSG_ASSIGNMENT_INVALID_CODE);
         }
 
         // Confirming activates the row, so it takes the scope every other
@@ -929,12 +905,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         UserRoleHospitalAssignment assignment = findChangeable(assignmentId);
 
         if (assignment.getConfirmationVerifiedAt() != null) {
-            throw new BusinessException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_ALREADY_CONFIRMED,
-                    null,
-                    DEFAULT_ASSIGNMENT_ALREADY_CONFIRMED,
-                    locale));
+            throw new BusinessException(MSG_ASSIGNMENT_ALREADY_CONFIRMED);
         }
 
         // Only the registrar confirms, and that is decided BEFORE the code is
@@ -943,25 +914,15 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         User registrar = assignment.getRegisteredBy();
         // By id, as a re-invite records the registrar (requireCallerAccount):
         // a phone-login registrar's principal name resolves no account.
-        User actor = requireCallerAccount(locale);
+        User actor = requireCallerAccount();
 
         if (registrar == null || registrar.getId() == null || !registrar.getId().equals(actor.getId())) {
-            throw new BusinessException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_ACTOR_MISMATCH,
-                    null,
-                    DEFAULT_CONFIRMATION_ACTOR_MISMATCH,
-                    locale));
+            throw new BusinessException(MSG_ASSIGNMENT_ACTOR_MISMATCH);
         }
 
         String expectedCode = assignment.getConfirmationCode();
         if (expectedCode == null || !expectedCode.equalsIgnoreCase(sanitizedCode)) {
-            throw new BusinessException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_INVALID_CODE,
-                    null,
-                    DEFAULT_CONFIRMATION_CODE_INVALID,
-                    locale));
+            throw new BusinessException(MSG_ASSIGNMENT_INVALID_CODE);
         }
 
         // Registrar confirmation presents the SAME confirmation code the
@@ -1163,9 +1124,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     private BusinessException invalidConfirmationCode() {
-        return new BusinessException(
-            messageSource.getMessage(MSG_ASSIGNMENT_INVALID_CODE, null,
-                DEFAULT_CONFIRMATION_CODE_INVALID, LocaleContextHolder.getLocale()));
+        return new BusinessException(MSG_ASSIGNMENT_INVALID_CODE);
     }
 
     private String sanitizeRequiredInput(String value, String messageKey) {
@@ -1179,9 +1138,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private String sanitizeConfirmationInput(String confirmationCode) {
         String sanitized = confirmationCode != null ? confirmationCode.trim() : null;
         if (sanitized == null || sanitized.isBlank()) {
-            throw new BusinessException(
-                messageSource.getMessage(MSG_ASSIGNMENT_INVALID_CODE, null,
-                    DEFAULT_CONFIRMATION_CODE_INVALID, LocaleContextHolder.getLocale()));
+            throw new BusinessException(MSG_ASSIGNMENT_INVALID_CODE);
         }
         return sanitized;
     }
@@ -1195,9 +1152,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         String expectedCode = assignment.getConfirmationCode();
         if (expectedCode == null || !expectedCode.equalsIgnoreCase(sanitizedConfirmation)) {
-            throw new BusinessException(
-                messageSource.getMessage(MSG_ASSIGNMENT_INVALID_CODE, null,
-                    DEFAULT_CONFIRMATION_CODE_INVALID, LocaleContextHolder.getLocale()));
+            throw new BusinessException(MSG_ASSIGNMENT_INVALID_CODE);
         }
     }
 
@@ -1206,9 +1161,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // from below, and neither is its assignment: the code is refused
         // outright, with nothing confirmed and no credentials handed out.
         if (assignment.getUser() != null && assignment.getUser().getDeactivatedByAdminAt() != null) {
-            throw new BusinessException(messageSource.getMessage(
-                MSG_ACCOUNT_DISABLED_BY_ADMIN, null, DEFAULT_ACCOUNT_DISABLED_BY_ADMIN,
-                org.springframework.context.i18n.LocaleContextHolder.getLocale()));
+            throw new BusinessException(MSG_ACCOUNT_DISABLED_BY_ADMIN);
         }
         // QA D789: an invitation to a hospital archived since is not switched on.
         FacilityAssignmentGuard.requireOpenForAssignment(assignment.getHospital());
@@ -1796,19 +1749,17 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             return roleRepository.findByNameIgnoreCase(dto.getRoleName()).orElseThrow(() ->
                 new ResourceNotFoundException(MSG_ROLE_NOT_FOUND_BY_NAME, dto.getRoleName()));
         }
-        throw new BusinessException(
-            messageSource.getMessage(MSG_ROLE_REQUIRED, null,
-                DEFAULT_ROLE_REQUIRED_MESSAGE, locale));
+        throw new BusinessException(MSG_ROLE_REQUIRED);
     }
 
     /**
      * Hospital is required unless role is global (ROLE_SUPER_ADMIN).
      */
-    private Hospital resolveHospital(UserRoleHospitalAssignmentRequestDTO dto, Role role, Locale locale) {
-        return resolveHospitalHumanAware(dto, role, locale);
+    private Hospital resolveHospital(UserRoleHospitalAssignmentRequestDTO dto, Role role) {
+        return resolveHospitalHumanAware(dto, role);
     }
 
-    private Hospital resolveHospitalHumanAware(UserRoleHospitalAssignmentRequestDTO dto, Role role, Locale locale) {
+    private Hospital resolveHospitalHumanAware(UserRoleHospitalAssignmentRequestDTO dto, Role role) {
         if (dto.getHospitalId() != null) {
             return hospitalRepository.findById(dto.getHospitalId()).orElseThrow(() ->
                 new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND, dto.getHospitalId()));
@@ -1829,9 +1780,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
 
         // All other staff/admin roles require a hospital
-        throw new BusinessException(
-            messageSource.getMessage("hospital.required", null,
-                DEFAULT_HOSPITAL_REQUIRED_MESSAGE, locale));
+        throw new BusinessException("hospital.required");
     }
 
     private void checkActiveDoctorConflict(UserRoleHospitalAssignmentRequestDTO dto,

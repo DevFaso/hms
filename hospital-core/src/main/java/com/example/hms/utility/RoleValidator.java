@@ -2,6 +2,7 @@ package com.example.hms.utility;
 
 import com.example.hms.config.SecurityConstants;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.HospitalScopeRefusedException;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -9,7 +10,6 @@ import com.example.hms.security.PrincipalUserIds;
 import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.MessageSource;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -273,11 +273,45 @@ public class RoleValidator {
     }
     public boolean hasRole(UUID userId, UUID hospitalId, String roleCode) { return hasAnyCode(userId, hospitalId, roleCode); }
 
-    public void validateRoleOrThrow(UUID userId, UUID hospitalId, String roleCode, Locale locale, MessageSource messageSource) {
+    public void validateRoleOrThrow(UUID userId, UUID hospitalId, String roleCode) {
         if (!hasAnyCode(userId, hospitalId, roleCode)) {
-            throw new BusinessException(
-                messageSource.getMessage("role.notfound", new Object[]{userId, hospitalId}, "Role not found", locale));
+            // #1096 review: the user does not hold the role (role.notfound is a role that does not
+            // exist); the role is named by its label in the reader's language, never by its code.
+            throw new BusinessException("role.notHeld", roleLabel(roleCode));
         }
+    }
+
+    /**
+     * The chosen assignment ITSELF holds the role (#1096 review): it is active, it is at
+     * {@code hospitalId}, and its role is {@code roleCode}. Checking the assignment's user
+     * instead accepted an inactive or a non-doctor assignment of a user who holds an active
+     * doctor assignment elsewhere.
+     */
+    public void requireAssignmentHolds(UserRoleHospitalAssignment assignment, UUID hospitalId, String roleCode) {
+        if (assignment == null || !Boolean.TRUE.equals(assignment.getActive())) {
+            throw new FieldBusinessException("assignmentId", "role.assignment.inactive");
+        }
+        String held = assignment.getRole() == null || assignment.getRole().getCode() == null
+            ? "" : assignment.getRole().getCode().trim().toUpperCase(Locale.ROOT);
+        boolean atHospital = assignment.getHospital() != null && hospitalId != null
+            && hospitalId.equals(assignment.getHospital().getId());
+        if (!atHospital || !expandCodes(roleCode).contains(held)) {
+            throw new FieldBusinessException("assignmentId", "role.assignment.wrongRole", roleLabel(roleCode));
+        }
+    }
+
+    /**
+     * "ROLE_DOCTOR" read as the role's label in the reader's language ("Médecin"); a code with
+     * no label reads as itself, never as a raw bundle key (#1096 review).
+     */
+    private static String roleLabel(String roleCode) {
+        String code = roleCode == null ? "" : roleCode.trim();
+        String bare = code.toUpperCase(Locale.ROOT);
+        if (bare.startsWith("ROLE_")) {
+            bare = bare.substring("ROLE_".length());
+        }
+        String label = MessageUtil.resolveOrNull(null, "email.role.label." + bare);
+        return label != null ? label : code;
     }
 
     public boolean isAnyActiveRole(UUID userId) { return assignmentRepository.existsByUserIdAndActiveTrue(userId); }
@@ -337,15 +371,15 @@ public class RoleValidator {
         return LAB_ORDERING_ROLE_CODES.contains(bare);
     }
 
-    public void requireLabScientistOrAdmin(UUID userId, UUID hospitalId, Locale locale, MessageSource messageSource) {
+    public void requireLabScientistOrAdmin(UUID userId, UUID hospitalId) {
         if (!(isLabScientist(userId, hospitalId) || isHospitalAdmin(userId, hospitalId))) {
-            throw new BusinessException(messageSource.getMessage("auth.lab.required", null, "Only Lab Scientist or Hospital Admin allowed", locale));
+            throw new BusinessException("auth.lab.required");
         }
     }
 
-    public void requireLabStaffOrAdmin(UUID userId, UUID hospitalId, Locale locale, MessageSource messageSource) {
+    public void requireLabStaffOrAdmin(UUID userId, UUID hospitalId) {
         if (!(isLabStaff(userId, hospitalId) || isHospitalAdmin(userId, hospitalId))) {
-            throw new BusinessException(messageSource.getMessage("auth.lab.staff.required", null, "Only Lab staff or Hospital Admin allowed", locale));
+            throw new BusinessException("auth.lab.staff.required");
         }
     }
 
