@@ -67,6 +67,10 @@ class ServiceWriteTenantLoadCoverageTest {
         "\\.equals\\([^;]*getHospital", "Objects\\.equals\\([^;]*[Hh]ospital")));
 
     private static final Pattern SIGNATURE = Pattern.compile("^\\s*(public|private|protected)[^=;(]*\\s(\\w+)\\s*\\([^;]*$");
+    // A PCP assignment-to-hospital comparison proves consistency, not the caller's scope.
+    // Keep the stronger actor check when scanning these newly reachable clinical writes.
+    private static final Pattern PCP_ACTING_CHECK = Pattern.compile(
+        "TenantOwnership|requirePinned|requireActiveHospitalId|currentScope\\(\\)|pinnedHospitalId");
     /**
      * QA D602: a named by-id loader ({@code findDetailedById}, ...) is a by-id load
      * too; the shift PUT loaded through one and nothing saw it. Excluded are the
@@ -223,6 +227,21 @@ class ServiceWriteTenantLoadCoverageTest {
     }
 
     @Test
+    void anAssignmentHospitalComparisonDoesNotScopeAPrimaryCareWrite() {
+        String source = """
+            public void updatePrimaryCare(UUID id, Request req) {
+                var link = pcpRepo.findById(id).orElseThrow();
+                if (!assignment.getHospital().getId().equals(link.getHospital().getId())) {
+                    throw new RuntimeException();
+                }
+            }
+            """;
+        assertThat(scanSource("PatientPrimaryCareServiceImpl", source,
+            Map.of("pcpRepo", "PatientPrimaryCareRepository"), Set.of("PatientPrimaryCareRepository")))
+            .containsExactly("PatientPrimaryCareServiceImpl.updatePrimaryCare#findById");
+    }
+
+    @Test
     @DisplayName("QA D602: the scanner sees a named by-id loader (the shift PUT shape) and accepts the scoped one")
     void scannerSeesTheD602Shape() {
         Set<String> repos = Set.of("StaffShiftRepository");
@@ -307,7 +326,8 @@ class ServiceWriteTenantLoadCoverageTest {
             }
             i = j + 1;
             String text = body.toString();
-            if ((PUBLIC_READ.matcher(name).find() && !isPrivate) || TENANT_CHECKS.matcher(text).find()) {
+            Pattern checks = "PatientPrimaryCareServiceImpl".equals(className) ? PCP_ACTING_CHECK : TENANT_CHECKS;
+            if ((PUBLIC_READ.matcher(name).find() && !isPrivate) || checks.matcher(text).find()) {
                 continue;
             }
             Matcher call = BY_ID_CALL.matcher(text);

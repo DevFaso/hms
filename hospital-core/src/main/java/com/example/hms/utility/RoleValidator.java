@@ -296,7 +296,7 @@ public class RoleValidator {
         boolean atHospital = assignment.getHospital() != null && hospitalId != null
             && hospitalId.equals(assignment.getHospital().getId());
         if (!atHospital || !expandCodes(roleCode).contains(held)) {
-            throw new FieldBusinessException("assignmentId", "role.notHeld", roleLabel(roleCode));
+            throw new FieldBusinessException("assignmentId", "role.assignment.wrongRole", roleLabel(roleCode));
         }
     }
 

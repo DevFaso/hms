@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.FieldBusinessException;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PatientPrimaryCareMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
@@ -15,6 +16,7 @@ import com.example.hms.repository.PatientPrimaryCareRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.tenant.ActingScopeResolver;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.service.support.PatientRegistrationGuard;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +38,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * #1096 review: the primary care provider is the CHOSEN assignment, and the real
@@ -79,6 +84,7 @@ class PatientPrimaryCareRoleCheckTest {
         ReflectionTestUtils.setField(service, "roleValidator", new RoleValidator(assignmentRepo, actingScopeResolver));
         hospital = new Hospital();
         hospital.setId(hospitalId);
+        ActingScopeTestSupport.actingAt(UUID.randomUUID(), hospitalId);
         patient = new Patient();
         patient.setId(patientId);
         // Every user holds an active doctor assignment somewhere here: checking the user proves nothing.
@@ -88,6 +94,7 @@ class PatientPrimaryCareRoleCheckTest {
 
     @AfterEach
     void restoreMessages() {
+        ActingScopeTestSupport.clear();
         com.example.hms.utility.MessageUtil.setMessageSource(previousMessageSource);
     }
 
@@ -169,7 +176,7 @@ class PatientPrimaryCareRoleCheckTest {
         assertThatThrownBy(() -> service.assignPrimaryCare(patientId, requestFor(nurse)))
             .isInstanceOfSatisfying(FieldBusinessException.class, ex -> {
                 assertThat(ex.getField()).isEqualTo("assignmentId");
-                assertThat(ex.getMessageKey()).isEqualTo("role.notHeld");
+                assertThat(ex.getMessageKey()).isEqualTo("role.assignment.wrongRole");
             });
     }
 
@@ -187,8 +194,84 @@ class PatientPrimaryCareRoleCheckTest {
         assertThatThrownBy(() -> service.updatePrimaryCare(linkId,
                 PatientPrimaryCareRequestDTO.builder().assignmentId(nurse.getId()).build()))
             .isInstanceOf(FieldBusinessException.class)
-            .extracting("messageKey").isEqualTo("role.notHeld");
+            .extracting("messageKey").isEqualTo("role.assignment.wrongRole");
         assertThat(link.getAssignment()).isEqualTo(previous);
+    }
+
+    @Test
+    void assigningAtAnotherHospitalIsRefusedBeforeAnyLookupOrWrite() {
+        UUID foreignHospital = UUID.randomUUID();
+        PatientPrimaryCareRequestDTO request = PatientPrimaryCareRequestDTO.builder()
+            .hospitalId(foreignHospital).assignmentId(UUID.randomUUID()).build();
+
+        assertThatThrownBy(() -> service.assignPrimaryCare(patientId, request))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class, ex -> {
+                assertThat(ex.getMessageKey()).isEqualTo("hospital.notFound");
+                assertThat(ex.getArgs()).containsExactly(foreignHospital);
+            });
+        verifyNoInteractions(patientRepo, hospitalRepo, assignmentRepo, pcpRepo, mapper, patientRegistrationGuard);
+    }
+
+    @Test
+    void updatingAnotherHospitalsLinkIsIndistinguishableFromAMissingLink() {
+        Hospital foreign = new Hospital();
+        foreign.setId(UUID.randomUUID());
+        PatientPrimaryCare link = PatientPrimaryCare.builder().hospital(foreign).notes("unchanged").build();
+        UUID linkId = UUID.randomUUID();
+        when(pcpRepo.findById(linkId)).thenReturn(Optional.of(link), Optional.empty());
+        PatientPrimaryCareRequestDTO request = PatientPrimaryCareRequestDTO.builder()
+            .notes("changed").assignmentId(UUID.randomUUID()).build();
+
+        for (int attempt = 0; attempt < 2; attempt++) {
+            assertThatThrownBy(() -> service.updatePrimaryCare(linkId, request))
+                .isInstanceOfSatisfying(ResourceNotFoundException.class, ex -> {
+                    assertThat(ex.getMessageKey()).isEqualTo("primaryCare.link.notFound");
+                    assertThat(ex.getArgs()).containsExactly(linkId);
+                });
+        }
+        assertThat(link.getNotes()).isEqualTo("unchanged");
+        verify(pcpRepo, never()).save(any());
+        verifyNoInteractions(hospitalRepo, assignmentRepo, mapper, patientRegistrationGuard);
+    }
+
+    @Test
+    void movingAnOwnedLinkToAnotherHospitalIsRefusedBeforeMutation() {
+        PatientPrimaryCare link = PatientPrimaryCare.builder().hospital(hospital).notes("unchanged").build();
+        UUID linkId = UUID.randomUUID();
+        UUID foreignHospital = UUID.randomUUID();
+        when(pcpRepo.findById(linkId)).thenReturn(Optional.of(link));
+
+        assertThatThrownBy(() -> service.updatePrimaryCare(linkId, PatientPrimaryCareRequestDTO.builder()
+                .hospitalId(foreignHospital).notes("changed").build()))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class, ex -> {
+                assertThat(ex.getMessageKey()).isEqualTo("hospital.notFound");
+                assertThat(ex.getArgs()).containsExactly(foreignHospital);
+            });
+        assertThat(link.getHospital()).isEqualTo(hospital);
+        assertThat(link.getNotes()).isEqualTo("unchanged");
+        verify(pcpRepo, never()).save(any());
+        verifyNoInteractions(hospitalRepo, assignmentRepo, mapper, patientRegistrationGuard);
+    }
+
+    @Test
+    void aKnownRoleIsNamedInTheReadersLocale() {
+        org.springframework.context.support.StaticMessageSource messages =
+            new org.springframework.context.support.StaticMessageSource();
+        messages.addMessage("email.role.label.DOCTOR", java.util.Locale.FRENCH, "Médecin");
+        com.example.hms.utility.MessageUtil.setMessageSource(messages);
+        java.util.Locale previous = org.springframework.context.i18n.LocaleContextHolder.getLocale();
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            UserRoleHospitalAssignment nurse = assignment("ROLE_NURSE", true);
+            assertThatThrownBy(() -> new RoleValidator(assignmentRepo, actingScopeResolver)
+                    .requireAssignmentHolds(nurse, hospitalId, "ROLE_DOCTOR"))
+                .isInstanceOfSatisfying(FieldBusinessException.class, ex -> {
+                    assertThat(ex.getMessageKey()).isEqualTo("role.assignment.wrongRole");
+                    assertThat(ex.getArgs()).containsExactly("Médecin");
+                });
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(previous);
+        }
     }
 
     @Test

@@ -43,6 +43,8 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
     @Override
     @Transactional
     public PatientPrimaryCareResponseDTO assignPrimaryCare(UUID patientId, PatientPrimaryCareRequestDTO req) {
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(
+            req.getHospitalId(), "hospital.notFound", req.getHospitalId());
         Patient patient = patientRepo.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
@@ -80,6 +82,13 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
     public PatientPrimaryCareResponseDTO updatePrimaryCare(UUID pcpId, PatientPrimaryCareRequestDTO req) {
         PatientPrimaryCare entity = pcpRepo.findById(pcpId)
             .orElseThrow(() -> new ResourceNotFoundException(PRIMARY_CARE_LINK_NOT_FOUND_KEY, pcpId));
+
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(
+            entity.getHospital(), PRIMARY_CARE_LINK_NOT_FOUND_KEY, pcpId);
+        if (req.getHospitalId() != null) {
+            com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(
+                req.getHospitalId(), "hospital.notFound", req.getHospitalId());
+        }
 
         // Optional updates
         if (req.getStartDate() != null) entity.setStartDate(req.getStartDate());
