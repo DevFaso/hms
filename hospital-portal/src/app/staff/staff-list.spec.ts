@@ -196,10 +196,7 @@ describe('StaffListComponent — no deactivate on your own card (QA D916)', () =
 describe('joinReasons — one sentence per refused field (QA r41 L2)', () => {
   it('never prints two periods between reasons, whether a reason ends in one or not', () => {
     expect(
-      joinReasons([
-        'Nurses must have a start date',
-        'The end date is before the start date.',
-      ]),
+      joinReasons(['Nurses must have a start date', 'The end date is before the start date.']),
     ).toBe('Nurses must have a start date. The end date is before the start date.');
   });
 
