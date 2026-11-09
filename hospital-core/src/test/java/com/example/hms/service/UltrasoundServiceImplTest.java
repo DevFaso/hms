@@ -539,6 +539,49 @@ class UltrasoundServiceImplTest {
             .anyMatch(com.example.hms.service.support.ClinicalContent::isAnswer)).isTrue();
     }
 
+    /**
+     * QA D1525 review (provisional): a legacy report already reviewed before V282
+     * holding only old defaults is grandfathered: it is signed and immutable, so
+     * its patient can still be notified. An unreviewed empty one still cannot.
+     */
+    @Test
+    void aSignedLegacyReportIsNotifiedButAnUnreviewedEmptyOneIsNot() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.COMPLETED);
+        UltrasoundReport signed = new UltrasoundReport();
+        signed.setId(reportId);
+        signed.setUltrasoundOrder(order);
+        signed.setHospital(hospital);
+        signed.setReportReviewedByProvider(true);
+        signed.setObservationsStated(false);
+        signed.setFindingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL);
+        signed.setFetalCardiacActivity(true);
+        signed.setAnomaliesDetected(false);
+        signed.setNumberOfFetuses(1);
+        UltrasoundReportResponseDTO dto = UltrasoundReportResponseDTO.builder().id(reportId).build();
+        when(reportRepository.findById(reportId)).thenReturn(Optional.of(signed));
+        when(reportRepository.save(signed)).thenReturn(signed);
+        when(ultrasoundMapper.toReportResponseDTO(signed)).thenReturn(dto);
+
+        assertThat(ultrasoundService.markPatientNotified(reportId)).isSameAs(dto);
+        assertThat(signed.getPatientNotifiedAt()).isNotNull();
+
+        UltrasoundReport unreviewed = new UltrasoundReport();
+        unreviewed.setId(reportId);
+        unreviewed.setUltrasoundOrder(order);
+        unreviewed.setHospital(hospital);
+        unreviewed.setReportReviewedByProvider(false);
+        unreviewed.setObservationsStated(false);
+        unreviewed.setFindingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL);
+        unreviewed.setFetalCardiacActivity(true);
+        when(reportRepository.findById(reportId)).thenReturn(Optional.of(unreviewed));
+        assertThatThrownBy(() -> ultrasoundService.markPatientNotified(reportId))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.emptyNotReviewable"));
+    }
+
     @Test
     void markReportReviewed_throwsWhenAlreadyReviewed() {
         UltrasoundOrder order = new UltrasoundOrder();

@@ -790,6 +790,24 @@ describe('UltrasoundTabComponent', () => {
         .toBeTrue();
     });
 
+    it('notifies a signed legacy report holding only old defaults, but not an unreviewed one', () => {
+      service.notifyPatient = jasmine.createSpy('notifyPatient').and.returnValue(of({ id: 'r-1' }));
+      create(['ROLE_DOCTOR']);
+      const cmp = fixture.componentInstance;
+      const legacy = {
+        id: 'r-1',
+        findingCategory: 'NORMAL',
+        observationsStated: false,
+        fetalCardiacActivity: true,
+        anomaliesDetected: false,
+        numberOfFetuses: 1,
+      } as UltrasoundReportResponse;
+      cmp.notifyPatient({ ...legacy, reportReviewedByProvider: true });
+      expect(service.notifyPatient).toHaveBeenCalledTimes(1);
+      cmp.notifyPatient({ ...legacy, reportReviewedByProvider: false });
+      expect(service.notifyPatient).toHaveBeenCalledTimes(1);
+    });
+
     it('does not count free-text anatomy findings as a sign of a fetus', () => {
       expect(
         noFetusContradictsObservation({

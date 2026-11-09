@@ -973,7 +973,12 @@ export class UltrasoundTabComponent implements OnInit {
   }
 
   notifyPatient(report: UltrasoundReportResponse): void {
-    if (this.refuseEmptyReport(report)) return;
+    // QA D1525 review (provisional): a legacy report already reviewed before
+    // V282 is signed and immutable, so it is notified; the empty-report check
+    // guards the review (the server's isGrandfatheredSignedLegacy).
+    const grandfathered =
+      report.reportReviewedByProvider === true && report.observationsStated === false;
+    if (!grandfathered && this.refuseEmptyReport(report)) return;
     this.reportActionBusy.set(true);
     this.ultrasoundService.notifyPatient(report.id).subscribe({
       next: () => {

@@ -459,6 +459,12 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             UltrasoundObservations.allFindings(report));
     }
 
+    /** A legacy report (existed before V282) that was already reviewed: signed, immutable. */
+    static boolean isGrandfatheredSignedLegacy(UltrasoundReport report) {
+        return Boolean.TRUE.equals(report.getReportReviewedByProvider())
+            && Boolean.FALSE.equals(report.getObservationsStated());
+    }
+
     /** QA D1525 review: 0 (no fetus seen) to 8 fetuses. */
     static final int MAX_FETUSES = 8;
 
@@ -653,7 +659,13 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         if (report.getPatientNotifiedAt() != null) {
             throw new BusinessException("ultrasound.report.patientAlreadyNotified");
         }
-        requireStoredFindings(report);
+        // QA D1525 review (provisional, for a clinician): a legacy report already
+        // reviewed before V282 is grandfathered. It is signed and can no longer be
+        // edited or re-reviewed, so refusing its notification would leave it stuck;
+        // the empty-report check guards the review, not this notification.
+        if (!isGrandfatheredSignedLegacy(report)) {
+            requireStoredFindings(report);
+        }
 
         report.setPatientNotifiedAt(LocalDateTime.now());
 
