@@ -1,14 +1,21 @@
 import { expectKeyboardModal } from '../testing/modal-dialog-keyboard';
+import { ChangeDetectorRef } from '@angular/core';
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
-import { UltrasoundTabComponent, hasUltrasoundFinding } from './ultrasound-tab';
+import {
+  UltrasoundTabComponent,
+  hasUltrasoundFinding,
+  normalContradictsObservation,
+  noFetusContradictsObservation,
+  anomalyDescriptionContradictsAnswer,
+  storedReportRecordsAFinding,
+} from './ultrasound-tab';
 import {
   UltrasoundOrderResponse,
-  UltrasoundReportRequest,
   UltrasoundReportResponse,
   UltrasoundService,
 } from '../services/ultrasound.service';
@@ -65,7 +72,6 @@ describe('UltrasoundTabComponent', () => {
       'createOrder',
       'updateOrder',
       'submitReport',
-      'template',
     ]);
     service.pendingOrders.and.returnValue(of([]));
     service.anomalies.and.returnValue(of([]));
@@ -306,22 +312,28 @@ describe('UltrasoundTabComponent', () => {
 
   // QA D1182 (round 22): editing a blank stored report re-sent the server's
   // defaults (cardiac activity yes, one fetus) and saved a blank "Normal".
-  // QA D1525: the flags are now shown, so the edit sends what the form shows.
-  it('QA D1182: editing a blank stored report is refused, and the flags are sent only as shown', () => {
+  // QA D1525 review: the server reads a legacy row's possible defaults as
+  // unknown (null) and keeps a typed FALSE; the form loads exactly that, so a
+  // default is never re-sent and a typed "absent" is never erased.
+  it('QA D1182/D1525: editing a blank legacy report is refused, its unknowns stay unknown and a typed FALSE stays', () => {
     create(['ROLE_MIDWIFE']);
     const cmp = fixture.componentInstance;
     const stored = {
       id: 'rep-1',
       ultrasoundOrderId: 'us-1',
       scanDate: '2026-11-01',
-      findingCategory: 'NORMAL',
-      numberOfFetuses: 1,
-      fetalCardiacActivity: true,
-      fetalMovementObserved: true,
-      fetalToneNormal: true,
+      fetalMovementObserved: false,
+      observationsStated: false,
     };
     cmp.openReport({ ...order(), report: stored } as never);
     fixture.detectChanges();
+    expect(cmp.reportForm.findingCategory).toBe('');
+    expect(cmp.reportForm.fetalCardiacActivity).toBeNull();
+    expect(cmp.reportForm.fetalMovementObserved).withContext('typed, kept').toBeFalse();
+    expect(cmp.reportForm.fetalToneNormal).toBeNull();
+    expect(cmp.reportForm.anomaliesDetected).toBeNull();
+    expect(cmp.reportForm.numberOfFetuses).toBeUndefined();
+    cmp.reportForm.fetalMovementObserved = null;
     const save = () => {
       const buttons = Array.from(
         host().querySelectorAll<HTMLButtonElement>('.modal-actions .btn-primary'),
@@ -335,18 +347,25 @@ describe('UltrasoundTabComponent', () => {
 
     service.submitReport.and.returnValue(of({}) as never);
     cmp.reportForm.findingsSummary = 'Grossesse évolutive, activité cardiaque visible';
+    // The legacy NORMAL read as unknown: the clinician chooses the category.
+    cmp.reportForm.findingCategory = 'NORMAL';
     save();
     const sent = service.submitReport.calls.mostRecent().args[1] as unknown as Record<
       string,
       unknown
     >;
     expect(sent['findingsSummary']).toContain('activité cardiaque');
-    // The stored values are on screen in the tri-state selects and sent as shown.
-    expect(sent['fetalCardiacActivity']).toBeTrue();
-    expect(sent['fetalToneNormal']).toBeTrue();
+    expect(sent['fetalCardiacActivity']).toBeNull();
+    expect(sent['fetalMovementObserved']).toBeNull();
+    expect(sent['fetalToneNormal']).toBeNull();
+    expect(sent['anomaliesDetected']).toBeNull();
+    expect(sent['numberOfFetuses']).toBeUndefined();
+    expect('observationsStated' in sent)
+      .withContext('no client flag: any save states the report on the server')
+      .toBeFalse();
   });
 
-  it('QA D1525: a stored observation is shown, and "not assessed" is sent as null', () => {
+  it('QA D1525: a stated observation is shown, and "not assessed" is sent as null', () => {
     create(['ROLE_MIDWIFE']);
     const cmp = fixture.componentInstance;
     cmp.openReport({
@@ -358,127 +377,649 @@ describe('UltrasoundTabComponent', () => {
         findingsSummary: 'Grossesse évolutive',
         fetalCardiacActivity: true,
         fetalMovementObserved: true,
+        numberOfFetuses: 1,
+        observationsStated: true,
       },
     } as never);
     fixture.detectChanges();
     expect(cmp.reportForm.fetalCardiacActivity).toBeTrue();
     expect(cmp.reportForm.fetalToneNormal).toBeNull();
+    expect(cmp.reportForm.numberOfFetuses).toBe(1);
     service.submitReport.and.returnValue(of({}) as never);
     cmp.reportForm.fetalMovementObserved = null;
     cmp.submitReport();
     const sent = service.submitReport.calls.mostRecent().args[1];
+    expect(sent.fetalCardiacActivity).toBeTrue();
     expect(sent.fetalMovementObserved).toBeNull();
     expect(sent.fetalToneNormal).toBeNull();
-  });
-
-  it('QA D1182: twins are a finding; one fetus alone is not', () => {
-    expect(hasUltrasoundFinding({ numberOfFetuses: 1 })).toBeFalse();
-    expect(hasUltrasoundFinding({ numberOfFetuses: 2 })).toBeTrue();
-    expect(hasUltrasoundFinding({ fetalCardiacActivity: true } as never)).toBeFalse();
+    expect('observationsStated' in sent)
+      .withContext('a stated report needs no flag')
+      .toBeFalse();
   });
 
   describe('QA D1525: a finding is charted only when the clinician states it', () => {
-    it('preselects no category and leaves the three observations not assessed', () => {
+    const save = () => {
+      const buttons = Array.from(
+        host().querySelectorAll<HTMLButtonElement>('.modal-actions .btn-primary'),
+      );
+      buttons[buttons.length - 1].click();
+      fixture.detectChanges();
+    };
+
+    it('preselects no category and leaves every observation not assessed', () => {
       create(['ROLE_MIDWIFE']);
       const form = fixture.componentInstance.emptyReportForm();
       expect(form.findingCategory).toBe('');
       expect(form.fetalCardiacActivity).toBeNull();
       expect(form.fetalMovementObserved).toBeNull();
       expect(form.fetalToneNormal).toBeNull();
+      expect(form.anomaliesDetected).toBeNull();
     });
 
-    it('refuses an untouched template as an empty report, before asking for the category', () => {
+    it('offers no template button: a template stated findings, or overwrote the scan date', () => {
+      create(['ROLE_MIDWIFE']);
+      fixture.componentInstance.openReport(order());
+      fixture.detectChanges();
+      expect(host().querySelector('.template-buttons')).toBeNull();
+    });
+
+    it('refuses a report whose every observation is not assessed, before asking for the category', () => {
       create(['ROLE_MIDWIFE']);
       const cmp = fixture.componentInstance;
-      service.template.and.returnValue(of({ scanDate: '2026-11-08' } as UltrasoundReportRequest));
       cmp.openReport(order());
       fixture.detectChanges();
-      cmp.applyTemplate('nuchal-translucency');
-      fixture.detectChanges();
-      cmp.submitReport();
-      fixture.detectChanges();
+      save();
       expect(service.submitReport).not.toHaveBeenCalled();
       expect(host().querySelector('#rep-summary')?.getAttribute('aria-invalid')).toBe('true');
       expect(host().querySelector('#rep-category')?.getAttribute('aria-invalid')).toBeNull();
     });
 
-    it('sends a stated "absent" as false and an unstated observation as null', () => {
+    it('saves "cardiac activity: absent" with URGENT and nothing else', () => {
       create(['ROLE_MIDWIFE']);
       const cmp = fixture.componentInstance;
       service.submitReport.and.returnValue(of({ id: 'r-1' } as UltrasoundReportResponse));
       cmp.openReport(order());
-      cmp.reportForm.interpretation = 'Pas d’activité cardiaque';
+      fixture.detectChanges();
       cmp.reportForm.fetalCardiacActivity = false;
       cmp.reportForm.findingCategory = 'URGENT';
-      cmp.submitReport();
+      save();
       const sent = service.submitReport.calls.mostRecent().args[1];
       expect(sent.fetalCardiacActivity).toBeFalse();
       expect(sent.fetalMovementObserved).toBeNull();
       expect(sent.findingCategory).toBe('URGENT');
+      expect('observationsStated' in sent)
+        .withContext('a new report needs no flag')
+        .toBeFalse();
     });
 
-    it('renders the three observations as tri-state selects starting at "not assessed"', () => {
+    it('refuses NORMAL with absent cardiac activity, abnormal tone or anomalies, on the category', () => {
       create(['ROLE_MIDWIFE']);
-      fixture.componentInstance.openReport(order());
+      const cmp = fixture.componentInstance;
+      cmp.openReport(order());
       fixture.detectChanges();
-      for (const flag of ['fetalCardiacActivity', 'fetalMovementObserved', 'fetalToneNormal']) {
-        const select = host().querySelector<HTMLSelectElement>(`#rep-${flag}`);
-        expect(select).withContext(flag).not.toBeNull();
-        expect(select!.options.length).withContext(flag).toBe(3);
+      for (const contradiction of [
+        { fetalCardiacActivity: false },
+        { fetalToneNormal: false },
+        { anomaliesDetected: true, anomalyDescription: 'Hygroma' },
+      ]) {
+        cmp.reportForm = {
+          ...cmp.emptyReportForm(),
+          findingCategory: 'NORMAL',
+          ...contradiction,
+        };
+        fixture.detectChanges();
+        save();
+        expect(service.submitReport)
+          .withContext(JSON.stringify(contradiction))
+          .not.toHaveBeenCalled();
+        expect(host().querySelector('#rep-category')?.getAttribute('aria-invalid'))
+          .withContext(JSON.stringify(contradiction))
+          .toBe('true');
       }
     });
 
-    it('preserves cleared and stated observations across repeated template applications', () => {
+    it('renders the observations and the anomalies answer as tri-state selects', () => {
+      create(['ROLE_MIDWIFE']);
+      fixture.componentInstance.openReport(order());
+      fixture.detectChanges();
+      for (const id of [
+        'fetalCardiacActivity',
+        'fetalMovementObserved',
+        'fetalToneNormal',
+        'nasalBonePresent',
+        'anomalies',
+      ]) {
+        const select = host().querySelector<HTMLSelectElement>(`#rep-${id}`);
+        expect(select).withContext(id).not.toBeNull();
+        expect(select!.options.length).withContext(id).toBe(3);
+      }
+    });
+
+    it('shows every observation in the report view, "not assessed" and legacy included', () => {
+      const viewed = (report: Partial<UltrasoundReportResponse>): string[] => {
+        create(['ROLE_DOCTOR']);
+        fixture.componentInstance.openOrder(
+          order({
+            status: 'IN_PROGRESS',
+            report: { id: 'r-1', ...report } as UltrasoundReportResponse,
+          }),
+        );
+        fixture.detectChanges();
+        return texts('[data-testid="ultrasound-observations"] li');
+      };
+      const stated = viewed({
+        observationsStated: true,
+        fetalCardiacActivity: false,
+        fetalToneNormal: true,
+      });
+      expect(stated.length).toBe(6);
+      expect(stated[0]).toContain('ULTRASOUND.FLAG_CARDIAC_ABSENT');
+      expect(stated[1]).toContain('ULTRASOUND.FLAG_MOVEMENT_NOT_ASSESSED');
+      expect(stated[2]).toContain('ULTRASOUND.FLAG_TONE_NORMAL');
+      expect(stated[3]).toContain('ULTRASOUND.NASAL_BONE_NOT_ASSESSED');
+      expect(stated[4]).toContain('ULTRASOUND.ANOMALIES_NOT_ASSESSED');
+      expect(stated[5]).toContain('ULTRASOUND.FETUSES_NOT_COUNTED');
+    });
+
+    it('reads a stated report with every observation and the fetus count null as not assessed', () => {
+      create(['ROLE_DOCTOR']);
+      fixture.componentInstance.openOrder(
+        order({
+          status: 'IN_PROGRESS',
+          report: {
+            id: 'r-1',
+            observationsStated: true,
+            fetalCardiacActivity: null,
+            fetalMovementObserved: null,
+            fetalToneNormal: null,
+            numberOfFetuses: undefined,
+          } as UltrasoundReportResponse,
+        }),
+      );
+      fixture.detectChanges();
+      const items = texts('[data-testid="ultrasound-observations"] li');
+      expect(items).toEqual([
+        jasmine.stringContaining('ULTRASOUND.FLAG_CARDIAC_NOT_ASSESSED'),
+        jasmine.stringContaining('ULTRASOUND.FLAG_MOVEMENT_NOT_ASSESSED'),
+        jasmine.stringContaining('ULTRASOUND.FLAG_TONE_NOT_ASSESSED'),
+        jasmine.stringContaining('ULTRASOUND.NASAL_BONE_NOT_ASSESSED'),
+        jasmine.stringContaining('ULTRASOUND.ANOMALIES_NOT_ASSESSED'),
+        jasmine.stringContaining('ULTRASOUND.FETUSES_NOT_COUNTED'),
+      ]);
+      for (const item of items) {
+        expect(item).not.toContain('ABSENT');
+        expect(item).not.toContain('ABNORMAL');
+      }
+    });
+
+    it('reads a legacy report’s unknowns as "no answer (legacy)" and keeps its typed answers', () => {
+      create(['ROLE_DOCTOR']);
+      fixture.componentInstance.openOrder(
+        order({
+          status: 'IN_PROGRESS',
+          report: {
+            id: 'r-1',
+            fetalToneNormal: false,
+            anomaliesDetected: true,
+            numberOfFetuses: 2,
+            observationsStated: false,
+          } as UltrasoundReportResponse,
+        }),
+      );
+      fixture.detectChanges();
+      const items = texts('[data-testid="ultrasound-observations"] li');
+      expect(items).toEqual([
+        jasmine.stringContaining('ULTRASOUND.FLAG_NOT_STATED_LEGACY'),
+        jasmine.stringContaining('ULTRASOUND.FLAG_NOT_STATED_LEGACY'),
+        jasmine.stringContaining('ULTRASOUND.FLAG_TONE_ABNORMAL'),
+        jasmine.stringContaining('ULTRASOUND.FLAG_NOT_STATED_LEGACY'),
+        jasmine.stringContaining('ULTRASOUND.ANOMALIES_YES'),
+        jasmine.stringContaining('2'),
+      ]);
+    });
+
+    it('refuses a negative or implausible fetus count on the field, and takes 0 as no fetus seen', () => {
       create(['ROLE_MIDWIFE']);
       const cmp = fixture.componentInstance;
-      service.template.and.returnValue(of({ scanDate: '2026-11-08' } as UltrasoundReportRequest));
+      service.submitReport.and.returnValue(of({ id: 'r-1' } as UltrasoundReportResponse));
+      cmp.openReport(order());
+      fixture.detectChanges();
+      for (const bad of [-1, 9, 1.5]) {
+        cmp.reportForm = {
+          ...cmp.emptyReportForm(),
+          findingCategory: 'URGENT',
+          numberOfFetuses: bad,
+        };
+        fixture.detectChanges();
+        save();
+        expect(service.submitReport).withContext(String(bad)).not.toHaveBeenCalled();
+        expect(host().querySelector('#rep-fetuses')?.getAttribute('aria-invalid'))
+          .withContext(String(bad))
+          .toBe('true');
+      }
+      cmp.reportForm = { ...cmp.emptyReportForm(), findingCategory: 'URGENT', numberOfFetuses: 0 };
+      fixture.detectChanges();
+      save();
+      expect(service.submitReport.calls.mostRecent().args[1].numberOfFetuses).toBe(0);
+    });
+
+    it('counts a stated answer as a finding, true or false, and nothing when every answer is unstated', () => {
+      expect(
+        hasUltrasoundFinding({
+          fetalCardiacActivity: null,
+          fetalMovementObserved: null,
+          fetalToneNormal: null,
+          anomaliesDetected: null,
+          findingCategory: 'NORMAL',
+          findingsSummary: '  ',
+        }),
+      ).toBeFalse();
+      expect(hasUltrasoundFinding({ fetalCardiacActivity: false })).toBeTrue();
+      expect(hasUltrasoundFinding({ fetalToneNormal: true })).toBeTrue();
+      expect(hasUltrasoundFinding({ anomaliesDetected: false })).toBeTrue();
+      expect(hasUltrasoundFinding({ numberOfFetuses: 1 })).toBeTrue();
+      expect(hasUltrasoundFinding({ numberOfFetuses: 0 }))
+        .withContext('no fetus seen')
+        .toBeTrue();
+      expect(hasUltrasoundFinding({ fetalHeartRate: 150 })).toBeTrue();
+      expect(hasUltrasoundFinding({ findingsSummary: 'Grossesse évolutive' })).toBeTrue();
+    });
+
+    it('reads a reviewed legacy report’s old defaults as "no answer", and its typed values as recorded', () => {
+      create(['ROLE_DOCTOR']);
+      fixture.componentInstance.openOrder(
+        order({
+          status: 'COMPLETED',
+          report: {
+            id: 'r-1',
+            reportReviewedByProvider: true,
+            observationsStated: false,
+            fetalCardiacActivity: true,
+            fetalMovementObserved: false,
+            fetalToneNormal: true,
+            nasalBonePresent: true,
+            anomaliesDetected: false,
+            numberOfFetuses: 1,
+          } as UltrasoundReportResponse,
+        }),
+      );
+      fixture.detectChanges();
+      expect(texts('[data-testid="ultrasound-observations"] li')).toEqual([
+        jasmine.stringContaining('ULTRASOUND.FLAG_NOT_STATED_LEGACY'),
+        jasmine.stringContaining('ULTRASOUND.FLAG_MOVEMENT_ABSENT'),
+        jasmine.stringContaining('ULTRASOUND.FLAG_NOT_STATED_LEGACY'),
+        jasmine.stringContaining('ULTRASOUND.NASAL_BONE_PRESENT'),
+        jasmine.stringContaining('ULTRASOUND.FLAG_NOT_STATED_LEGACY'),
+        jasmine.stringContaining('ULTRASOUND.FLAG_NOT_STATED_LEGACY'),
+      ]);
+    });
+
+    it('accepts a legacy fetus count out of range sent back unchanged, and refuses changing it out of range', () => {
+      create(['ROLE_MIDWIFE']);
+      const cmp = fixture.componentInstance;
       service.submitReport.and.returnValue(of({ id: 'r-1' } as UltrasoundReportResponse));
       cmp.openReport(
         order({
           report: {
             id: 'r-1',
-            scanDate: '2026-11-08',
-            findingCategory: 'NORMAL',
-            findingsSummary: 'Single intrauterine pregnancy',
-            fetalCardiacActivity: true,
-            fetalMovementObserved: false,
-            fetalToneNormal: true,
+            scanDate: '2026-01-10',
+            findingCategory: 'MONITORING_REQUIRED',
+            numberOfFetuses: 9,
+            observationsStated: false,
           } as UltrasoundReportResponse,
         }),
       );
-      cmp.reportForm.fetalCardiacActivity = null;
-      cmp.reportForm.fetalMovementObserved = true;
-      cmp.reportForm.fetalToneNormal = false;
-
-      for (const kind of ['nuchal-translucency', 'anatomy-scan'] as const) {
-        cmp.applyTemplate(kind);
-        expect(cmp.reportForm.fetalCardiacActivity).toBeNull();
-        expect(cmp.reportForm.fetalMovementObserved).toBeTrue();
-        expect(cmp.reportForm.fetalToneNormal).toBeFalse();
-      }
-
-      cmp.submitReport();
-      const sent = service.submitReport.calls.mostRecent().args[1];
-      expect(sent.fetalCardiacActivity).toBeNull();
-      expect(sent.fetalMovementObserved).toBeTrue();
-      expect(sent.fetalToneNormal).toBeFalse();
+      fixture.detectChanges();
+      cmp.reportForm.findingsSummary = 'Résumé corrigé';
+      save();
+      expect(service.submitReport).toHaveBeenCalled();
+      service.submitReport.calls.reset();
+      // The save closed the modal: open the same legacy report again.
+      cmp.openReport(
+        order({
+          report: {
+            id: 'r-1',
+            scanDate: '2026-01-10',
+            findingCategory: 'MONITORING_REQUIRED',
+            numberOfFetuses: 9,
+            observationsStated: false,
+          } as UltrasoundReportResponse,
+        }),
+      );
+      fixture.detectChanges();
+      cmp.reportForm.numberOfFetuses = 10;
+      save();
+      expect(service.submitReport).not.toHaveBeenCalled();
+      expect(host().querySelector('#rep-fetuses')?.getAttribute('aria-invalid')).toBe('true');
     });
 
-    it('counts no yes/no box, one fetus or blank text as a finding', () => {
+    it('loads a legacy report’s old defaults as not assessed, and keeps its typed values', () => {
+      create(['ROLE_MIDWIFE']);
+      const cmp = fixture.componentInstance;
+      cmp.openReport(
+        order({
+          report: {
+            id: 'r-1',
+            scanDate: '2026-01-10',
+            findingCategory: 'MONITORING_REQUIRED',
+            observationsStated: false,
+            fetalCardiacActivity: true,
+            fetalMovementObserved: false,
+            fetalToneNormal: true,
+            anomaliesDetected: false,
+            numberOfFetuses: 1,
+            nasalBonePresent: true,
+          } as UltrasoundReportResponse,
+        }),
+      );
+      expect(cmp.reportForm.fetalCardiacActivity).withContext('old default').toBeNull();
+      expect(cmp.reportForm.fetalToneNormal).withContext('old default').toBeNull();
+      expect(cmp.reportForm.anomaliesDetected).withContext('old default').toBeNull();
+      expect(cmp.reportForm.numberOfFetuses).withContext('old default').toBeUndefined();
+      expect(cmp.reportForm.fetalMovementObserved).withContext('typed').toBeFalse();
+      expect(cmp.reportForm.nasalBonePresent).withContext('never defaulted').toBeTrue();
+    });
+
+    it('lets a typo fix save an old contradictory legacy report, and judges a changed category', () => {
+      create(['ROLE_MIDWIFE']);
+      const cmp = fixture.componentInstance;
+      service.submitReport.and.returnValue(of({ id: 'r-1' } as UltrasoundReportResponse));
+      const legacy = {
+        id: 'r-1',
+        scanDate: '2026-01-10',
+        findingCategory: 'NORMAL',
+        observationsStated: false,
+        fetalCardiacActivity: false,
+        anomalyDescription: 'Kyste',
+        findingsSummary: 'Ancien compte rendu',
+      } as UltrasoundReportResponse;
+      cmp.openReport(order({ report: legacy }));
+      fixture.detectChanges();
+      cmp.reportForm.findingsSummary = 'Ancien compte rendu (typo corrigé)';
+      save();
+      expect(service.submitReport).toHaveBeenCalled();
+
+      service.submitReport.calls.reset();
+      cmp.openReport(order({ report: legacy }));
+      fixture.detectChanges();
+      cmp.reportForm.findingCategory = 'VARIANT';
+      save();
+      expect(service.submitReport).not.toHaveBeenCalled();
+      expect(host().querySelector('#rep-category')?.getAttribute('aria-invalid')).toBe('true');
+    });
+
+    it('refuses to review or notify a report that records no finding', () => {
+      service.reviewReport = jasmine.createSpy('reviewReport');
+      service.notifyPatient = jasmine.createSpy('notifyPatient');
+      create(['ROLE_DOCTOR']);
+      const cmp = fixture.componentInstance;
+      const emptied = {
+        id: 'r-1',
+        findingCategory: 'NORMAL',
+        observationsStated: false,
+      } as UltrasoundReportResponse;
+      cmp.reviewReport(emptied);
+      cmp.notifyPatient(emptied);
+      expect(service.reviewReport).not.toHaveBeenCalled();
+      expect(service.notifyPatient).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledTimes(2);
+    });
+
+    it('refuses to review or notify a legacy report whose only observations are old defaults', () => {
+      service.reviewReport = jasmine.createSpy('reviewReport');
+      service.notifyPatient = jasmine.createSpy('notifyPatient');
+      create(['ROLE_DOCTOR']);
+      const cmp = fixture.componentInstance;
+      const defaultsOnly = {
+        id: 'r-1',
+        findingCategory: 'NORMAL',
+        observationsStated: false,
+        fetalCardiacActivity: true,
+        fetalMovementObserved: true,
+        fetalToneNormal: true,
+        anomaliesDetected: false,
+        numberOfFetuses: 1,
+      } as UltrasoundReportResponse;
+      cmp.reviewReport(defaultsOnly);
+      cmp.notifyPatient(defaultsOnly);
+      expect(service.reviewReport).not.toHaveBeenCalled();
+      expect(service.notifyPatient).not.toHaveBeenCalled();
+      expect(storedReportRecordsAFinding({ ...defaultsOnly, observationsStated: true })).toBeTrue();
+      expect(storedReportRecordsAFinding({ ...defaultsOnly, fetalMovementObserved: false }))
+        .withContext('a typed legacy value counts')
+        .toBeTrue();
+    });
+
+    it('does not count free-text anatomy findings as a sign of a fetus', () => {
       expect(
-        hasUltrasoundFinding({
-          fetalCardiacActivity: true,
-          fetalMovementObserved: true,
-          fetalToneNormal: true,
-          nasalBonePresent: true,
-          numberOfFetuses: 1,
-          findingCategory: 'NORMAL',
-          findingsSummary: '  ',
+        noFetusContradictsObservation({
+          numberOfFetuses: 0,
+          anatomyFindings: 'Sac gestationnel 25 mm, pas d’embryon visible',
         }),
       ).toBeFalse();
-      expect(hasUltrasoundFinding({ numberOfFetuses: 2 })).toBeTrue();
-      expect(hasUltrasoundFinding({ fetalHeartRate: 150 })).toBeTrue();
-      expect(hasUltrasoundFinding({ findingsSummary: 'Grossesse évolutive' })).toBeTrue();
+    });
+
+    it('never reads a response without observationsStated as legacy', () => {
+      create(['ROLE_DOCTOR']);
+      fixture.componentInstance.openOrder(
+        order({
+          status: 'IN_PROGRESS',
+          report: {
+            id: 'r-1',
+            fetalCardiacActivity: true,
+            numberOfFetuses: 1,
+          } as UltrasoundReportResponse,
+        }),
+      );
+      fixture.detectChanges();
+      const items = texts('[data-testid="ultrasound-observations"] li');
+      expect(items[0]).toContain('ULTRASOUND.FLAG_CARDIAC_PRESENT');
+      expect(items[5]).toContain('1');
+      expect(items.join(' ')).not.toContain('ULTRASOUND.FLAG_NOT_STATED_LEGACY');
+    });
+
+    it('shows the labelled anatomy findings in the report view', () => {
+      create(['ROLE_DOCTOR']);
+      fixture.componentInstance.openOrder(
+        order({
+          status: 'IN_PROGRESS',
+          report: {
+            id: 'r-1',
+            observationsStated: true,
+            anatomyFindings: 'Quatre cavités',
+          } as UltrasoundReportResponse,
+        }),
+      );
+      fixture.detectChanges();
+      const anatomy = host().querySelector('[data-testid="ultrasound-anatomy"]')?.textContent ?? '';
+      expect(anatomy).toContain('ULTRASOUND.ANATOMY_FINDINGS');
+      expect(anatomy).toContain('Quatre cavités');
+    });
+
+    it('shows the anatomy findings on the form, so a refusal they cause is visible', () => {
+      create(['ROLE_MIDWIFE']);
+      fixture.componentInstance.openReport(order());
+      fixture.detectChanges();
+      expect(host().querySelector('#rep-anatomy')).not.toBeNull();
+    });
+
+    it('refuses no fetus seen with any sign of a fetus on the fetus count, but not with NORMAL', () => {
+      create(['ROLE_MIDWIFE']);
+      const cmp = fixture.componentInstance;
+      cmp.openReport(order());
+      fixture.detectChanges();
+      for (const present of [
+        { fetalCardiacActivity: true },
+        { fetalMovementObserved: true },
+        { fetalHeartRate: 140 },
+        { biparietalDiameterMm: 48 },
+        { headCircumferenceMm: 170 },
+        { abdominalCircumferenceMm: 150 },
+        { femurLengthMm: 32 },
+        { crownRumpLengthMm: 55 },
+        { estimatedFetalWeightGrams: 320 },
+        { nuchalTranslucencyMm: 2.1 },
+        { nasalBonePresent: false },
+        { fetalToneNormal: true },
+        { anomaliesDetected: true },
+      ]) {
+        cmp.reportForm = {
+          ...cmp.emptyReportForm(),
+          findingCategory: 'URGENT',
+          numberOfFetuses: 0,
+          ...present,
+        };
+        fixture.detectChanges();
+        save();
+        expect(service.submitReport).withContext(JSON.stringify(present)).not.toHaveBeenCalled();
+        expect(host().querySelector('#rep-fetuses')?.getAttribute('aria-invalid'))
+          .withContext(JSON.stringify(present))
+          .toBe('true');
+      }
+      // A very early sac with no fetal pole can be normal: 0 with NORMAL is not refused.
+      service.submitReport.and.returnValue(of({ id: 'r-1' } as UltrasoundReportResponse));
+      cmp.reportForm = { ...cmp.emptyReportForm(), findingCategory: 'NORMAL', numberOfFetuses: 0 };
+      fixture.detectChanges();
+      save();
+      expect(service.submitReport).toHaveBeenCalled();
+      expect(
+        noFetusContradictsObservation({ numberOfFetuses: 0, fetalCardiacActivity: false }),
+      ).toBeFalse();
+    });
+
+    /**
+     * QA D1525 review: the server's createOrUpdateReport_runsTheContradictionsInThePortalsOrder
+     * runs these two inputs and refuses on the same fields with the same messages.
+     */
+    it('refuses the same input on the same field as the server, in the same order', () => {
+      create(['ROLE_MIDWIFE']);
+      const cmp = fixture.componentInstance;
+      const translate = TestBed.inject(TranslateService);
+      spyOn(translate, 'instant').and.callFake(((key: string) => key) as never);
+      cmp.openReport(order());
+      fixture.detectChanges();
+      cmp.reportForm = {
+        ...cmp.emptyReportForm(),
+        numberOfFetuses: 0,
+        fetalHeartRate: 140,
+        anomaliesDetected: true,
+        findingCategory: 'NORMAL',
+      };
+      fixture.detectChanges();
+      save();
+      expect(host().querySelector('#rep-category')?.getAttribute('aria-invalid')).toBe('true');
+      expect(host().querySelector('#rep-fetuses')?.getAttribute('aria-invalid')).toBeNull();
+      expect(host().textContent).toContain('ULTRASOUND.NORMAL_CONTRADICTS_OBSERVATION');
+      cmp.reportForm = {
+        ...cmp.emptyReportForm(),
+        numberOfFetuses: 0,
+        fetalHeartRate: 140,
+        findingCategory: 'URGENT',
+      };
+      fixture.detectChanges();
+      save();
+      expect(host().querySelector('#rep-fetuses')?.getAttribute('aria-invalid')).toBe('true');
+      expect(host().querySelector('#rep-category')?.getAttribute('aria-invalid')).toBeNull();
+      expect(host().textContent).toContain('ULTRASOUND.NO_FETUS_CONTRADICTS_OBSERVATION');
+      expect(service.submitReport).not.toHaveBeenCalled();
+    });
+
+    it('refuses "no anomaly" with a written description on the description, server message', () => {
+      create(['ROLE_MIDWIFE']);
+      const cmp = fixture.componentInstance;
+      cmp.openReport(order());
+      fixture.detectChanges();
+      cmp.reportForm = {
+        ...cmp.emptyReportForm(),
+        anomaliesDetected: false,
+        anomalyDescription: 'Hygroma',
+        findingCategory: 'URGENT',
+      };
+      // OnPush: the plain form object changed outside a template event.
+      fixture.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+      fixture.detectChanges();
+      expect(host().querySelector('#rep-anomaly'))
+        .withContext('the description stays visible while it has text')
+        .not.toBeNull();
+      save();
+      expect(service.submitReport).not.toHaveBeenCalled();
+      expect(host().querySelector('#rep-anomaly')?.getAttribute('aria-invalid')).toBe('true');
+      expect(
+        anomalyDescriptionContradictsAnswer({ anomaliesDetected: true, anomalyDescription: 'x' }),
+      ).toBeFalse();
+      expect(
+        anomalyDescriptionContradictsAnswer({ anomaliesDetected: false, anomalyDescription: ' ' }),
+      ).toBeFalse();
+      expect(
+        anomalyDescriptionContradictsAnswer({
+          anomaliesDetected: null,
+          anomalyDescription: 'Kyste',
+        }),
+      )
+        .withContext('a description with anomalies not assessed')
+        .toBeTrue();
+    });
+
+    it('shows the red anomalies badge and the labelled description on the report card', () => {
+      create(['ROLE_DOCTOR']);
+      fixture.componentInstance.openOrder(
+        order({
+          status: 'IN_PROGRESS',
+          report: {
+            id: 'r-1',
+            observationsStated: true,
+            anomaliesDetected: true,
+            anomalyDescription: 'Hygroma kystique',
+          } as UltrasoundReportResponse,
+        }),
+      );
+      fixture.detectChanges();
+      expect(host().querySelector('.view-section .risk-badge.risk-high')).not.toBeNull();
+      expect(texts('.view-section p').join(' ')).toContain('ULTRASOUND.ANOMALY_DESCRIPTION');
+      expect(texts('[data-testid="ultrasound-observations"] li')[4]).toContain(
+        'ULTRASOUND.ANOMALIES_YES',
+      );
+    });
+
+    it('NORMAL contradicts only a stated absent heart, abnormal tone, anomaly or no fetus', () => {
+      expect(normalContradictsObservation({ findingCategory: 'NORMAL', numberOfFetuses: 0 }))
+        .withContext('a very early sac with no fetal pole can be normal')
+        .toBeFalse();
+      expect(
+        normalContradictsObservation({ findingCategory: 'VARIANT', fetalCardiacActivity: false }),
+      )
+        .withContext('VARIANT also claims no significant finding')
+        .toBeTrue();
+      expect(
+        normalContradictsObservation({ findingCategory: 'VARIANT', anomaliesDetected: true }),
+      ).toBeTrue();
+      expect(
+        normalContradictsObservation({
+          findingCategory: 'MONITORING_REQUIRED',
+          fetalCardiacActivity: false,
+        }),
+      ).toBeFalse();
+      expect(normalContradictsObservation({ findingCategory: 'NORMAL', nasalBonePresent: false }))
+        .withContext('an isolated absent nasal bone is not a hard contradiction')
+        .toBeFalse();
+      expect(
+        normalContradictsObservation({ findingCategory: 'NORMAL', fetalMovementObserved: false }),
+      )
+        .withContext('absent movement can be normal on a single scan')
+        .toBeFalse();
+      expect(
+        normalContradictsObservation({ findingCategory: 'NORMAL', fetalCardiacActivity: false }),
+      ).toBeTrue();
+      expect(
+        normalContradictsObservation({ findingCategory: 'URGENT', fetalCardiacActivity: false }),
+      ).toBeFalse();
+      expect(
+        normalContradictsObservation({
+          findingCategory: 'NORMAL',
+          fetalCardiacActivity: null,
+          fetalToneNormal: true,
+        }),
+      ).toBeFalse();
     });
   });
 

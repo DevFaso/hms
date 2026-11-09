@@ -32,9 +32,15 @@ public final class ClinicalContent {
      * @param messageKey the translated refusal, which names what to enter
      */
     public static void requireAny(String field, String messageKey, Object... findings) {
-        if (findings != null) {
-            for (Object finding : findings) {
-                if (isPresent(finding)) {
+        requireAnyMatching(ClinicalContent::isPresent, field, messageKey, findings);
+    }
+
+    /** The one loop of {@link #requireAny} and {@link #requireAnyAnswered}: only the test differs. */
+    private static void requireAnyMatching(java.util.function.Predicate<Object> given, String field,
+                                           String messageKey, Object... values) {
+        if (values != null) {
+            for (Object value : values) {
+                if (given.test(value)) {
                     return;
                 }
             }
@@ -89,8 +95,21 @@ public final class ClinicalContent {
         return false;
     }
 
-    private static boolean isAnswer(Object value) {
+    /**
+     * Whether one answer was given: a Boolean either way (a deliberate "no" is
+     * an answer), or any value {@link #isPresent} counts.
+     */
+    public static boolean isAnswer(Object value) {
         return value instanceof Boolean || isPresent(value);
+    }
+
+    /**
+     * Refuses the write when none of {@code answers} was given ({@link #isAnswer}):
+     * for findings where a stated {@code FALSE} ("cardiac activity absent") is
+     * itself a finding, unlike an unticked box.
+     */
+    public static void requireAnyAnswered(String field, String messageKey, Object... answers) {
+        requireAnyMatching(ClinicalContent::isAnswer, field, messageKey, answers);
     }
 
     /** Refuses a required single field that is absent or blank (a consent's signer, a directive's type). */

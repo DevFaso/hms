@@ -164,6 +164,20 @@ public class UltrasoundReport extends BaseEntity implements TenantScoped {
     @Column(name = "fetal_tone_normal")
     private Boolean fetalToneNormal;
 
+    /**
+     * QA D1525 (V282): FALSE on a report that existed before V282 (V282 cleared
+     * its old defaults on unreviewed rows) and on a row an older application
+     * instance writes during a rolling deploy (the column defaults to FALSE).
+     * TRUE on every report this code creates (set explicitly here) and on a
+     * legacy report once a save changes one of its observations. Display only:
+     * a NULL reads "no answer (recorded before this was asked)" on a legacy row,
+     * "not assessed" on a stated one. Per report, not per field (known limit,
+     * tasklist.md). Provenance, not a finding.
+     */
+    @Column(name = "observations_stated", nullable = false)
+    @Builder.Default
+    private Boolean observationsStated = Boolean.TRUE;
+
     @Column(name = "anatomy_survey_complete")
     @Builder.Default
     private Boolean anatomySurveyComplete = false;
@@ -183,9 +197,9 @@ public class UltrasoundReport extends BaseEntity implements TenantScoped {
     @Column(name = "interpretation", length = 3000)
     private String interpretation;
 
+    /** QA D1525: tri-state like the observations; null = not stated, never "no anomalies" by default. */
     @Column(name = "anomalies_detected")
-    @Builder.Default
-    private Boolean anomaliesDetected = false;
+    private Boolean anomaliesDetected;
 
     @Column(name = "anomaly_description", length = 2000)
     private String anomalyDescription;

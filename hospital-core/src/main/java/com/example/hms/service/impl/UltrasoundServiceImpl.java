@@ -1,8 +1,10 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.UltrasoundFindingCategory;
 import com.example.hms.enums.UltrasoundOrderStatus;
 import com.example.hms.enums.UltrasoundScanType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.UltrasoundMapper;
 import com.example.hms.model.Hospital;
@@ -23,11 +25,14 @@ import com.example.hms.repository.UltrasoundReportRepository;
 import com.example.hms.service.UltrasoundService;
 import com.example.hms.service.PatientSubjectReadGuard;
 import com.example.hms.service.PatientSubjectReaderRoles;
+import com.example.hms.service.maternity.UltrasoundObservations;
+import com.example.hms.service.support.ClinicalContent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
@@ -424,43 +429,53 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     }
 
     /**
-     * QA D1150 (round 21): a report records findings. A blank report was saved
-     * with every value null and read "RAPPORT Normal", with "Notify the
-     * patient" offered: the finding category alone (preselected by the form)
-     * is not a finding. At least one measurement, observation or written
-     * finding must be present.
-     *
-     * <p>QA D1182 (round 22): the yes/no boxes (cardiac activity, movement,
-     * tone, nasal bone, anatomy survey complete, ...) are NOT findings: the
-     * report form pre-fills cardiac activity, movement and tone, so the edit
-     * of a blank report sent them as {@code true} and saved "RAPPORT Normal"
-     * with every value null. Create and edit go through here alike. A scan
-     * with no cardiac activity says so in the findings or the interpretation.
-     * {@code UltrasoundReportFindingsTest} sets every box at once and expects
-     * the refusal. One fetus is not a finding either (it was a default for
-     * years); more than one is.
-     *
-     * <p>QA D1525 (round 38): a finding is charted only when the clinician
-     * states it. The templates no longer pre-fill the three flags, the
-     * category, the gestational age or the fetus count, the entity no longer
-     * defaults the flags to {@code true}, and the mapper keeps a missing flag
-     * {@code null} ("not assessed"). So every value counted here was entered by
-     * someone. {@code UltrasoundReportFindingsTest} and
-     * {@code ClinicalTemplatePrefillGuardTest} pin it.
+     * The empty-report rule, for create and edit alike (QA D1150, D1525). A
+     * report must state at least one finding: an observation
+     * ({@link UltrasoundObservations}: cardiac activity, movement, tone, nasal
+     * bone or anomalies answered either way, or a fetus count, 0 included), a
+     * measurement, a date or a written finding. The category alone is not a
+     * report, and neither are the yes/no boxes that are not observations
+     * (anatomy survey complete, due date confirmed). A stated FALSE counts
+     * ({@code ClinicalContent.requireAnyAnswered}): nothing defaults an
+     * observation any more, so "cardiac activity absent" was stated by
+     * someone. A report whose every observation is "not assessed" and that
+     * states nothing else is refused. {@code UltrasoundReportFindingsTest}
+     * pins it.
      */
     static void requireReportFindings(UltrasoundReportRequestDTO request) {
-        Integer fetuses = request.getNumberOfFetuses();
-        com.example.hms.service.support.ClinicalContent.requireAny("findingsSummary",
-            "ultrasound.report.findingsRequired",
-            fetuses != null && fetuses > 1 ? fetuses : null,
-            request.getGestationalAgeAtScan(), request.getGestationalAgeDays(), request.getNuchalTranslucencyMm(),
-            request.getCrownRumpLengthMm(), request.getEstimatedDueDate(),
-            request.getFetalPosition(), request.getBiparietalDiameterMm(), request.getHeadCircumferenceMm(),
-            request.getAbdominalCircumferenceMm(), request.getFemurLengthMm(), request.getEstimatedFetalWeightGrams(),
-            request.getPlacentalLocation(), request.getPlacentalGrade(), request.getAmnioticFluidIndex(),
-            request.getAmnioticFluidLevel(), request.getCervicalLengthMm(), request.getUmbilicalArteryDoppler(),
-            request.getUterineArteryDoppler(), request.getFetalHeartRate(), request.getAnatomyFindings(), request.getFindingsSummary(), request.getInterpretation(),
-            request.getAnomalyDescription());
+        ClinicalContent.requireAnyAnswered("findingsSummary", "ultrasound.report.findingsRequired",
+            UltrasoundObservations.allFindings(request));
+    }
+
+    /**
+     * QA D1525 review (the D1150 class): a stored report that states no finding
+     * - an untouched template V282 emptied, category NORMAL and nothing else -
+     * is neither reviewed nor notified to the patient: a signed "Normal" that
+     * records nothing. The same empty-report rule as a save, on the stored
+     * values.
+     */
+    static void requireStoredFindings(UltrasoundReport report) {
+        ClinicalContent.requireAnyAnswered("findingsSummary", "ultrasound.report.emptyNotReviewable",
+            UltrasoundObservations.allFindings(report));
+    }
+
+    /** QA D1525 review: 0 (no fetus seen) to 8 fetuses. */
+    static final int MAX_FETUSES = 8;
+
+    /**
+     * QA D1525 review: a fetus count is 0 (no fetus seen) to {@link #MAX_FETUSES}.
+     * Judged only when the value changes: a stored count outside the range (a
+     * legacy row) stays editable on its other fields, so the bounds cannot be
+     * bean constraints, which do not see the stored value.
+     */
+    static void requireFetusCountInRange(UltrasoundReportRequestDTO request, UltrasoundReport stored) {
+        Integer count = request.getNumberOfFetuses();
+        if (count == null || (stored != null && count.equals(stored.getNumberOfFetuses()))) {
+            return;
+        }
+        if (count < 0 || count > MAX_FETUSES) {
+            throw new FieldBusinessException("numberOfFetuses", "ultrasoundReport.numberOfFetuses.range");
+        }
     }
 
     /**
@@ -468,8 +483,77 @@ public class UltrasoundServiceImpl implements UltrasoundService {
      * to NORMAL. Asked after {@link #requireReportFindings}.
      */
     static void requireFindingCategory(UltrasoundReportRequestDTO request) {
-        com.example.hms.service.support.ClinicalContent.requirePresent(request.getFindingCategory(),
+        ClinicalContent.requirePresent(request.getFindingCategory(),
             "findingCategory", "ultrasoundReport.findingCategory.required");
+    }
+
+    /**
+     * The categories that claim no clinically significant finding: NORMAL and
+     * VARIANT ("not clinically significant").
+     */
+    static final Set<UltrasoundFindingCategory> NO_SIGNIFICANT_FINDING =
+        EnumSet.of(UltrasoundFindingCategory.NORMAL, UltrasoundFindingCategory.VARIANT);
+
+    /**
+     * QA D1525: a category that claims no significant finding (NORMAL,
+     * VARIANT) cannot stand with absent cardiac activity, an abnormal fetal
+     * tone or detected anomalies. Refused on the category, which the clinician
+     * corrects. Deliberately NOT contradictions, pending a clinician: absent
+     * fetal movement (it can be normal on a single scan), an absent nasal bone
+     * (an isolated absent or hypoplastic nasal bone occurs in euploid fetuses,
+     * more often in African-descent populations) and no fetus seen (a very
+     * early scan with a sac and no fetal pole can be normal).
+     */
+    static void requireCategoryMatchesObservations(UltrasoundReportRequestDTO request) {
+        if (!NO_SIGNIFICANT_FINDING.contains(request.getFindingCategory())) {
+            return;
+        }
+        if (Boolean.FALSE.equals(request.getFetalCardiacActivity())
+                || Boolean.FALSE.equals(request.getFetalToneNormal())
+                || Boolean.TRUE.equals(request.getAnomaliesDetected())) {
+            throw new FieldBusinessException("findingCategory",
+                "ultrasound.report.normalContradictsObservation");
+        }
+    }
+
+    /**
+     * QA D1525 review: no fetus seen contradicts a sign of a fetus: cardiac
+     * activity or fetal movement present, a fetal heart rate, any fetal
+     * biometry (BPD, HC, AC, FL, CRL), an estimated fetal weight, a nuchal
+     * translucency, any nasal-bone or fetal-tone answer or anomalies detected
+     * ({@link UltrasoundObservations#SIGNS_OF_A_FETUS},
+     * which the portal mirrors). Refused on the fetus count.
+     */
+    static void requireFetusCountMatchesObservations(UltrasoundReportRequestDTO request) {
+        if (Integer.valueOf(0).equals(request.getNumberOfFetuses())
+                && UltrasoundObservations.hasSignOfAFetus(request)) {
+            throw new FieldBusinessException("numberOfFetuses", "ultrasound.report.noFetusContradictsObservation");
+        }
+    }
+
+    /**
+     * QA D1525 review: an anomaly is described only when anomalies were
+     * detected: a written description with "no anomaly" or "not assessed"
+     * contradicts itself. Refused on the description.
+     */
+    static void requireAnomalyDescriptionMatchesAnswer(UltrasoundReportRequestDTO request) {
+        if (!Boolean.TRUE.equals(request.getAnomaliesDetected())
+                && ClinicalContent.isPresent(request.getAnomalyDescription())) {
+            throw new FieldBusinessException("anomalyDescription",
+                "ultrasound.report.anomalyDescriptionWithoutAnomaly");
+        }
+    }
+
+    /**
+     * QA D1525 review: whether a save turns a legacy report ("not asked") into a
+     * stated one. A new report is stated already. A legacy one flips only when
+     * the request answers an observation differently from what is stored: the
+     * portal reloads and re-sends the surviving values (a FALSE flag, two
+     * fetuses), so a summary-only edit sends them back unchanged and keeps the
+     * report legacy.
+     */
+    static boolean statesAnObservation(UltrasoundReportRequestDTO request, UltrasoundReport stored) {
+        return stored == null || UltrasoundObservations.differ(request, stored);
     }
 
     @Override
@@ -486,10 +570,22 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         if (report != null && Boolean.TRUE.equals(report.getReportReviewedByProvider())) {
             throw new BusinessException("ultrasound.report.reviewedNoEdit");
         }
-        // QA D1525: the empty report is refused first, so an untouched template
-        // (which no longer pre-selects NORMAL) reads as empty, not "pick a category".
+        // QA D1525: the fetus count's range (judged only when it changes), then
+        // the empty report, the category, the contradictions - the portal runs
+        // the same order.
+        requireFetusCountInRange(request, report);
         requireReportFindings(request);
         requireFindingCategory(request);
+        // On a legacy report, the contradictions are judged only when one of
+        // their inputs changes, so a typo fix on an old report still saves.
+        if (report == null || !Boolean.FALSE.equals(report.getObservationsStated())
+                || UltrasoundObservations.differ(UltrasoundObservations.CONTRADICTION_INPUTS, request, report)) {
+            requireCategoryMatchesObservations(request);
+            requireFetusCountMatchesObservations(request);
+            requireAnomalyDescriptionMatchesAnswer(request);
+        }
+        // Decided before the edit is applied: it compares the request to what is stored.
+        boolean statesObservations = statesAnObservation(request, report);
 
         if (report == null) {
             report = ultrasoundMapper.toReportEntity(request, order, order.getHospital());
@@ -498,6 +594,14 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             }
         } else {
             ultrasoundMapper.updateReportFromRequest(report, request);
+        }
+
+        // QA D1525: a new report is stated (entity default). A legacy one
+        // becomes stated when this save changes an observation; a
+        // summary-only edit leaves "not asked" as it was. V282 already removed
+        // its old defaults, so nothing ambiguous can be echoed back.
+        if (statesObservations) {
+            report.setObservationsStated(Boolean.TRUE);
         }
 
         // Update order status
@@ -521,6 +625,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         if (report.getReportReviewedByProvider() != null && report.getReportReviewedByProvider()) {
             throw new BusinessException("ultrasound.report.alreadyReviewed");
         }
+        requireStoredFindings(report);
 
         UUID hospitalId = report.getUltrasoundOrder().getHospital().getId();
         String reviewerName = resolveStaffName(reviewedByUserId, hospitalId);
@@ -548,6 +653,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         if (report.getPatientNotifiedAt() != null) {
             throw new BusinessException("ultrasound.report.patientAlreadyNotified");
         }
+        requireStoredFindings(report);
 
         report.setPatientNotifiedAt(LocalDateTime.now());
 
@@ -710,31 +816,13 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             .toList();
     }
 
-    /**
-     * QA D1525: a template suggests the form, never a finding. It used to
-     * pre-fill cardiac activity, movement and tone as present, the category as
-     * NORMAL, a gestational age and one fetus, and an untouched template was
-     * charted as all of that. It now carries only the date of the scan (today,
-     * an administrative default the clinician corrects); every observation,
-     * measurement and the category are left for the clinician to state.
-     * {@code ClinicalTemplatePrefillGuardTest} fails if a finding comes back.
+    /*
+     * QA D1525: the nuchal-translucency and anatomy-scan templates were removed.
+     * They pre-filled findings (cardiac activity, movement, tone, NORMAL, a
+     * gestational age, one fetus); without those they carried only today's date,
+     * which overwrote a stored scan date. A template that states nothing has
+     * nothing to offer, so the endpoints and the portal buttons are gone.
      */
-    @Override
-    @Transactional(readOnly = true)
-    public UltrasoundReportRequestDTO getNuchalTranslucencyTemplate() {
-        return UltrasoundReportRequestDTO.builder()
-            .scanDate(java.time.LocalDate.now())
-            .build();
-    }
-
-    /** QA D1525: as {@link #getNuchalTranslucencyTemplate()}, the date only. */
-    @Transactional(readOnly = true)
-    @Override
-    public UltrasoundReportRequestDTO getAnatomyScanTemplate() {
-        return UltrasoundReportRequestDTO.builder()
-            .scanDate(java.time.LocalDate.now())
-            .build();
-    }
 
     // Private helper methods
 
