@@ -1862,7 +1862,10 @@
       "DOSE_LIMITS_DEFAULT": "Limites de dose pédiatriques définies par défaut, en attente de validation, sur l’article du catalogue {{item}}",
       "RX_SIGN_REAUTH_VERIFIED": "Identité confirmée pour signer une ordonnance de stupéfiant ({{method}})",
       "RX_SIGN_REAUTH_REFUSED": "Identité non confirmée pour signer une ordonnance de stupéfiant ({{reason}})",
-      "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} annulé sur la facture {{invoice}}, motif enregistré"
+      "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} annulé sur la facture {{invoice}}, motif enregistré",
+      "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Règle obstétricale non appliquée pour une échographie en urgence",
+      "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Règle obstétricale non appliquée pour une orientation gynéco-obstétricale en urgence",
+      "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Exception à la règle obstétricale levée sur une échographie"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -6599,6 +6602,7 @@
         "PROVIDER_VERIFICATION_REVOKED": "Vérification du prestataire révoquée",
         "PROVIDER_VERIFIED": "Prestataire vérifié",
         "EMERGENCY_BLOOD_RELEASED": "Sang délivré en urgence sans épreuve de compatibilité",
+        "OBSTETRIC_RULE_SKIPPED_EMERGENCY": "Règle obstétricale non appliquée en urgence",
         "PRO_ALERT_ACKNOWLEDGED": "Alerte PRO acquittée",
         "PRO_INSTRUMENT_IMPORTED": "Questionnaire PRO importé",
         "PRO_RESPONSE_RECORDED": "Réponse PRO enregistrée",
@@ -13215,5 +13219,88 @@
     "LOAD_FAILED": "Impossible de charger cette liste. Réessayez.",
     "RETRY": "Réessayer",
     "RX_SCOPE": "Aperçu des ordonnances chargées. Utilisez les onglets de statut pour retrouver les ordonnances nécessitant une attention."
+  },
+  "BEDS_NETWORK": {
+    "SUBTITLE": "Piloter les unités et la capacité des lits de tous les hôpitaux",
+    "HELP": "Consultez tous les établissements ici. Les actions de chaque ligne concernent son hôpital, sans quitter cette vue d’ensemble.",
+    "SEARCH": "Rechercher un hôpital, une unité, un code ou un service",
+    "TARGET_REQUIRED": "Identifiez l’hôpital concerné avant d’enregistrer cette opération.",
+    "TARGET_LABEL": "Hôpital concerné par cette opération",
+    "CREATE_HELP": "Choisissez où créer cette unité. La vue de tous les hôpitaux reste accessible après l’enregistrement.",
+    "CHANGE_TARGET": "Changer l’hôpital de destination",
+    "VIEW_BEDS": "Voir les lits",
+    "VIEW_CONTEXT": "Voir les lits de {{ward}} à {{hospital}}",
+    "NAMES_FAILED": "Les noms des hôpitaux n’ont pas pu être chargés. Leurs identifiants restent affichés en attendant une nouvelle tentative.",
+    "EDIT_CONTEXT": "Modifier {{ward}} à {{hospital}}",
+    "DELETE_CONTEXT": "Supprimer {{ward}} à {{hospital}}"
+  },
+  "HOSPITAL_NETWORK": {
+    "TITLE": "Réseau hospitalier",
+    "EYEBROW": "Super-admin · tous les hôpitaux",
+    "SUBTITLE": "Accédez à ce module dans l’ensemble de votre réseau hospitalier.",
+    "OVERVIEW": "Vue d’ensemble du réseau hospitalier",
+    "HOSPITALS": "Hôpitaux dans l’annuaire",
+    "ACTIVE": "Hôpitaux actifs",
+    "ACTIONS_TITLE": "Des actions pour chaque hôpital",
+    "ACTIONS_HELP": "Ouvrez directement le module depuis la ligne d’un hôpital. L’établissement concerné accompagne automatiquement l’opération.",
+    "DIRECTORY": "Liste de travail par hôpital",
+    "DIRECTORY_HELP": "Ce module est organisé par hôpital. Cet annuaire ne constitue pas une liste fusionnée de ses dossiers cliniques.",
+    "SEARCH": "Rechercher un hôpital, un code, une organisation ou une ville",
+    "ACTIVE_ONLY": "Hôpitaux actifs uniquement",
+    "LOAD_FAILED": "Impossible de charger l’annuaire des hôpitaux.",
+    "NO_MATCHES": "Aucun hôpital ne correspond à ces filtres.",
+    "EMPTY": "Aucun hôpital n’est disponible dans l’annuaire.",
+    "ORGANIZATION": "Organisation",
+    "CITY": "Ville",
+    "OPEN_MODULE": "Ouvrir le module",
+    "OPEN_CONTEXT": "Ouvrir {{module}} à {{hospital}}",
+    "RESULTS": "{{count}} hôpitaux sur {{total}}"
+  },
+  "DIAGNOSTICS_WORKSPACE": {
+    "LABEL": "Espace diagnostic",
+    "LOADED_DEFINITIONS": "sur cette page",
+    "APPROVAL_NOTE": "Examinez chaque définition et ses justificatifs avant de décider.",
+    "CONFIG_NOTE": "Versions des tests, types de prélèvement et plages de référence."
+  },
+  "PHARMACY_WORKSPACE": {
+    "LABEL": "Espace pharmacie",
+    "CLAIMS_SUBTITLE": "Suivre les demandes, les décisions et les remboursements.",
+    "LOADED_CLAIMS": "demandes chargées",
+    "CLAIMS_NONE_HINT": "Aucune demande pour le moment. Actualisez la liste pour vérifier les nouvelles demandes.",
+    "CLAIMS_EMPTY_HINT": "Aucune demande pour ce filtre. Changez de statut ou actualisez la liste.",
+    "LOADED_MOVEMENTS": "mouvements chargés pour ce filtre",
+    "STOCK_HINT": "Consultez le lot, le motif et l’auteur de chaque mouvement.",
+    "LOADED_QUEUE": "ordonnances sur cette page de la file",
+    "DISPENSE_HINT": "Vérifiez le patient, le médicament et la quantité avant la délivrance.",
+    "ROUTING_DECISION": "Choisir une orientation",
+    "VISIBLE_INTERACTIONS": "interactions correspondant aux filtres"
+  },
+  "LAB_EVOLUTION": {
+    "TITLE": "Évolution du résultat",
+    "UNIT": "Unité",
+    "LOADING": "Chargement de l’historique…",
+    "ERROR": "Impossible de charger l’historique. Fermez puis rouvrez les détails pour réessayer.",
+    "NOTE": "Les valeurs numériques exactes sont tracées séparément par unité. Les dates sont espacées à l’échelle. L’historique peut inclure des versions antérieures ; les corrections sont signalées. Aucune interprétation clinique n’est déduite.",
+    "TIME_AXIS": "Temps",
+    "CHART_LABEL": "Observations historiques ; les valeurs exactes figurent dans le tableau des observations.",
+    "INSUFFICIENT": "Au moins deux observations numériques datées dans la même unité connue sont nécessaires.",
+    "OBSERVATIONS": "Toutes les observations",
+    "PAGINATION": "Pagination des résultats",
+    "RANGE": "{{start}}–{{end}} sur {{total}} résultats",
+    "ROWS": "Lignes par page",
+    "PREVIOUS": "Page précédente",
+    "PAGE": "Page {{page}} sur {{pages}}",
+    "NEXT": "Page suivante",
+    "AUDIT_TITLE": "Versions enregistrées des résultats",
+    "CORRECTION_NOTE": "Cet historique contient des corrections. Les versions remplacées ne peuvent pas y être identifiées. Les points montrent uniquement les valeurs enregistrées ; les lignes et variations ne sont pas affichées. Consultez les observations et les corrections avant d’interpréter les changements."
+  },
+  "LAB_RANGE": {
+    "TITLE": "Position du résultat",
+    "LOW": "Bas",
+    "NORMAL": "Normal",
+    "HIGH": "Haut",
+    "REFERENCE": "Plage de référence",
+    "OUTSIDE_SCALE": "Le résultat dépasse l’échelle affichée ; le repère se trouve au bord.",
+    "UNAVAILABLE": "Le positionnement nécessite une valeur numérique exacte et une plage de référence compatible."
   }
 }

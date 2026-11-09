@@ -418,4 +418,24 @@ public class Admission {
     @Enumerated(EnumType.STRING)
     @Column(name = "sensitivity_category", length = 32)
     private SensitivityCategory sensitivityCategory;
+
+    /**
+     * QA D1537 review (round 40): a detached, read-only copy of a discharged stay carrying only what the
+     * course status reads (id, admission and discharge times, hospital id, status), built from a lean
+     * row ({@code ClosedStayRow}). It is never persisted and opens no stay (QA D800).
+     */
+    public static Admission detachedClosedStay(java.util.UUID id, LocalDateTime admittedAt, LocalDateTime dischargedAt,
+                                               java.util.UUID hospitalId, AdmissionStatus status) {
+        Admission stay = new Admission();
+        stay.setId(id);
+        stay.setAdmissionDateTime(admittedAt);
+        stay.setActualDischargeDateTime(dischargedAt);
+        stay.setStatus(status);
+        if (hospitalId != null) {
+            Hospital hospital = new Hospital();
+            hospital.setId(hospitalId);
+            stay.setHospital(hospital);
+        }
+        return stay;
+    }
 }

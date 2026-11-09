@@ -1,3 +1,4 @@
+@use '../../shared/styles/diagnostics-workspace' as diagnostics;
 @use '../../shared/styles/page-common';
 
 // ── Summary Cards ──
@@ -822,4 +823,77 @@
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--primary, #0e7c6b);
+}
+
+@include diagnostics.workspace;
+
+// Keep row actions on one line; the table scrolls horizontally rather than growing tall.
+.diagnostics-workspace > .data-table {
+  table {
+    height: auto;
+  }
+  td {
+    padding: 10px 14px;
+  }
+  th {
+    padding: 12px 14px;
+  }
+  .action-group {
+    flex-wrap: nowrap;
+    width: max-content;
+  }
+  .action-link {
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    padding: 4px;
+    align-items: center;
+    justify-content: center;
+  }
+}
+.diagnostics-workspace {
+  .page-header {
+    margin-bottom: 18px;
+    padding-bottom: 16px;
+  }
+  .summary-cards {
+    margin-bottom: 18px;
+  }
+  .summary-card {
+    padding: 16px 20px;
+  }
+  .results-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 14px 0;
+    color: #405a65;
+    font-size: 13px;
+  }
+  .results-pagination > span:first-child {
+    margin-right: auto;
+  }
+  .results-pagination label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .results-pagination select {
+    border: 1px solid #c4d3df;
+    border-radius: 6px;
+    background: white;
+    padding: 7px;
+  }
+  .results-pagination button {
+    min-width: 36px;
+    min-height: 36px;
+    justify-content: center;
+  }
+}
+
+.detail-panel {
+  width: 640px;
+  max-width: 100vw;
 }

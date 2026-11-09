@@ -1,0 +1,50 @@
+-- V283: QA D1537 and D1538 (round 40). A draft cancelled or discontinued before anyone signed it was shown to the patient as
+-- a past medicine: its status (CANCELLED, DISCONTINUED) is the word a signed order takes when it is stopped, and a
+-- signed order from before V118 carries no signature either, so neither the status nor the signature columns can
+-- tell them apart afterwards. The fact is now recorded when the order is withdrawn (Prescription.setStatus: the
+-- status before was a proposal, DRAFT or PENDING_SIGNATURE).
+--
+-- Backfill: TRUE only where the evidence is unambiguous. The row is withdrawn, carries no signature (no signed_at,
+-- no signer, no digest), was never dispatched, has no dispense, fill, routing decision, transmission, administration
+-- or refill request, and was created after V118 reached production (2026-08-21, promoted to main that afternoon;
+-- every order signed since then carries its signature). Every other row stays FALSE, which means shown: an order
+-- signed before V118 and later stopped stays a past medicine. Idempotent.
+
+ALTER TABLE clinical.prescriptions
+    ADD COLUMN IF NOT EXISTS withdrawn_before_signing BOOLEAN NOT NULL DEFAULT FALSE;
+
+UPDATE clinical.prescriptions p
+   SET withdrawn_before_signing = TRUE
+ WHERE p.status IN ('CANCELLED', 'DISCONTINUED')
+   AND p.withdrawn_before_signing = FALSE
+   AND p.signed_at IS NULL
+   AND p.signed_by_staff_id IS NULL
+   AND p.signature_value IS NULL
+   AND p.dispatched_at IS NULL
+   AND p.created_at >= TIMESTAMP '2026-08-22 00:00:00'
+   AND NOT EXISTS (SELECT 1 FROM clinical.dispenses d WHERE d.prescription_id = p.id)
+   AND NOT EXISTS (SELECT 1 FROM clinical.pharmacy_fills f WHERE f.prescription_id = p.id)
+   AND NOT EXISTS (SELECT 1 FROM clinical.prescription_routing_decisions r WHERE r.prescription_id = p.id)
+   AND NOT EXISTS (SELECT 1 FROM clinical.prescription_transmissions t WHERE t.prescription_id = p.id)
+   AND NOT EXISTS (SELECT 1 FROM clinical.medication_administration_records m WHERE m.prescription_id = p.id)
+   AND NOT EXISTS (SELECT 1 FROM clinical.refill_requests q WHERE q.prescription_id = p.id);
+
+-- Residual (recorded as standing debt in tasklist.md): a draft discarded before 2026-08-22 is not inferred from any other
+-- source and stays FALSE, so it can still show as a stopped medicine.
+
+-- QA D1538 (round 40): a prenatal ultrasound order or an OB/GYN referral placed as an emergency (URGENT, STAT) is
+-- never refused by the obstetric rule. When the patient record says male or a child, the order is flagged for review
+-- and the skip is audited (OBSTETRIC_RULE_SKIPPED_EMERGENCY). Existing rows were never judged: FALSE.
+ALTER TABLE clinical.ultrasound_orders
+    ADD COLUMN IF NOT EXISTS obstetric_rule_skipped BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE clinical.obgyn_referrals
+    ADD COLUMN IF NOT EXISTS obstetric_rule_skipped BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- QA D1538 review: the priority is stored in one form (ROUTINE, URGENT, STAT) so the emergency exemption, the worklists
+-- and the row agree; rows written before in another case or with padding are normalised. Unknown values are left.
+UPDATE clinical.ultrasound_orders
+   SET priority = upper(btrim(priority))
+ WHERE priority IS NOT NULL
+   AND upper(btrim(priority)) IN ('ROUTINE', 'URGENT', 'STAT')
+   AND priority <> upper(btrim(priority));

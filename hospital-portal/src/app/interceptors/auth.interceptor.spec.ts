@@ -46,6 +46,28 @@ describe('apiPrefixInterceptor', () => {
 
   afterEach(() => httpMock.verify());
 
+  it('keeps an explicit row target in global view without leaking it to the next read', () => {
+    effectiveHospitalId = null;
+    auth.getToken.and.returnValue('t1');
+    auth.isExpired.and.returnValue(false);
+    http.put('/wards/w2', {}, { headers: { 'X-Hospital-Id': 'h2' } }).subscribe();
+    const write = httpMock.expectOne('/api/wards/w2');
+    expect(write.request.headers.get('X-Hospital-Id')).toBe('h2');
+    write.flush({});
+    http.get('/wards').subscribe();
+    const read = httpMock.expectOne('/api/wards');
+    expect(read.request.headers.has('X-Hospital-Id')).toBeFalse();
+    read.flush([]);
+  });
+  it('keeps staff writes in their session hospital even when a request supplies another target', () => {
+    auth.getToken.and.returnValue('t1');
+    auth.isExpired.and.returnValue(false);
+    http.put('/wards/w2', {}, { headers: { 'X-Hospital-Id': 'h2' } }).subscribe();
+    const write = httpMock.expectOne('/api/wards/w2');
+    expect(write.request.headers.get('X-Hospital-Id')).toBe('h1');
+    write.flush({});
+  });
+
   it('leaves absolute URLs untouched', () => {
     auth.getToken.and.returnValue('t1');
     auth.isExpired.and.returnValue(false);

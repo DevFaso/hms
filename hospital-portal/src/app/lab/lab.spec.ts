@@ -266,7 +266,8 @@ describe('LabComponent — performing laboratory', () => {
     expect(component.specimenForm.specimenType).toBe('Sang total EDTA');
   });
 
-  it('QA D1428 class: a resulted or cancelled order offers no edit', () => {
+  it('QA D1428 class: a resulted or cancelled order offers no edit', async () => {
+    await setup(['ROLE_LAB_SCIENTIST'], []);
     const row = (status: string) => ({ status }) as unknown as LabOrderResponse;
     for (const status of ['VERIFIED', 'COMPLETED', 'CANCELLED', 'ENTERED_IN_ERROR']) {
       expect(component.isEditable(row(status)))

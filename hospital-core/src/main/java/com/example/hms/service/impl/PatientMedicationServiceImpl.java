@@ -1,7 +1,6 @@
 package com.example.hms.service.impl;
 
 import com.example.hms.service.recordaccess.NeverSentRule;
-import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
@@ -12,6 +11,7 @@ import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.medication.PatientMedicationResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.service.support.PatientChartAccess;
+import com.example.hms.service.support.PrescriptionIssuance;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.service.PatientMedicationService;
@@ -80,7 +80,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
         Patient patient = patientChartAccess.requireOwnRecord(patientId);
         List<Prescription> prescriptions = prescriptionRepository
             .findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent()
-            .stream().filter(p -> isIssued(p.getStatus())).toList();
+            .stream().filter(PrescriptionIssuance::wasIssued).toList();
         List<com.example.hms.model.Admission> closedStays = closedStaysOf(patient, prescriptions);
         List<Prescription> ordered = activeFirst(prescriptions, closedStays, Integer.MAX_VALUE);
         int from = (int) Math.min(pageable.getOffset(), ordered.size());
@@ -93,8 +93,9 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
     @Transactional(readOnly = true)
     public long countMedicationsForPatientPortal(UUID patientId) {
         Patient patient = patientChartAccess.requireOwnRecord(patientId);
-        return prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent()
-            .stream().filter(p -> isIssued(p.getStatus())).count();
+        // QA D1537 review: counted in the database, by the rule of PrescriptionIssuance.wasIssued, with
+        // no row loaded or decrypted.
+        return prescriptionRepository.countIssuedByPatientId(patient.getId(), PrescriptionIssuance.PROPOSALS);
     }
 
     private List<PatientMedicationResponseDTO> getMedications(UUID patientId, UUID hospitalId, int limit,
@@ -124,9 +125,10 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             // QA D152 (D101 on a second endpoint): the D101 fix filtered
             // unsigned work in progress out of /me/patient/prescriptions only;
             // /medications and the dashboard card read here and still listed a
-            // DRAFT as the patient's medication.
+            // DRAFT as the patient's medication. QA D1537: nor a draft that was
+            // cancelled before anyone signed it (PrescriptionIssuance).
             prescriptions = prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent()
-                .stream().filter(p -> isIssued(p.getStatus())).toList();
+                .stream().filter(PrescriptionIssuance::wasIssued).toList();
         } else if (hospitalId != null) {
             Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
@@ -135,8 +137,9 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospital.getId());
             // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
-            prescriptions = NeverSentRule.prescriptionsReadableHere(
-                prescriptionRepository.findByPatient_IdAndHospital_IdIn(patient.getId(), readable), hospital.getId());
+            // QA D1537: a live draft stays (on hold); a discarded one is not a stopped course.
+            prescriptions = PrescriptionIssuance.withoutDiscardedProposals(NeverSentRule.prescriptionsReadableHere(
+                prescriptionRepository.findByPatient_IdAndHospital_IdIn(patient.getId(), readable), hospital.getId()));
             reachRecorder.recordReach(patient.getId(), hospital.getId(), requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(prescriptions.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospital.getId()),
                 "Cross-hospital medication read on the treatment relationship");
@@ -294,11 +297,6 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             return displayName;
         }
         return prescription.getMedicationName();
-    }
-
-    /** Signed or beyond: an order the patient was actually given (D101/D152). */
-    static boolean isIssued(PrescriptionStatus status) {
-        return status != PrescriptionStatus.DRAFT && status != PrescriptionStatus.PENDING_SIGNATURE;
     }
 
 }

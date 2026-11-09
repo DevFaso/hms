@@ -72,6 +72,7 @@ class ObgynReferralServiceImplTest {
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
+    @Mock private com.example.hms.service.support.ObstetricRuleSkipRecorder skipRecorder;
     @InjectMocks private ObgynReferralServiceImpl service;
 
     private UUID patientId, hospitalId, referralId, userId;
@@ -117,6 +118,82 @@ class ObgynReferralServiceImplTest {
 
         ObgynReferralResponseDTO result = service.createReferral(req, "midwife1");
         assertThat(result.getId()).isEqualTo(referralId);
+    }
+
+    /** QA D1538 (round 40): an antenatal referral for a man or a 6-year-old is refused on patientId. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"male", "child"})
+    void d1538_aReferralForAManOrAChildIsRefusedOnThePatient(String who) {
+        if ("male".equals(who)) {
+            patient.setGender("MALE");
+        } else {
+            patient.setGender("FEMALE");
+            patient.setDateOfBirth(java.time.LocalDate.now().minusYears(6));
+        }
+        ObgynReferralCreateRequestDTO req = new ObgynReferralCreateRequestDTO();
+        req.setPatientId(patientId); req.setHospitalId(hospitalId);
+        req.setUrgency(ObgynReferralUrgency.ROUTINE);
+        req.setCareContext(com.example.hms.enums.ObgynReferralCareContext.ANTENATAL);
+        req.setGestationalAgeWeeks(23);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        assertThatThrownBy(() -> service.createReferral(req, "midwife1"))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("patientId");
+                assertThat(e.getMessageKey()).isEqualTo("male".equals(who)
+                    ? com.example.hms.utility.ObstetricEligibility.MESSAGE_KEY
+                    : com.example.hms.utility.ObstetricEligibility.TOO_YOUNG_MESSAGE_KEY);
+            });
+        org.mockito.Mockito.verify(referralRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    private ObgynReferralCreateRequestDTO urgentReferral() throws Exception {
+        ObgynReferralCreateRequestDTO req = new ObgynReferralCreateRequestDTO();
+        req.setPatientId(patientId); req.setHospitalId(hospitalId);
+        req.setUrgency(ObgynReferralUrgency.URGENT);
+        req.setCareContext(com.example.hms.enums.ObgynReferralCareContext.ANTENATAL);
+        com.example.hms.payload.dto.referral.ReferralAttachmentUploadDTO upload =
+            new com.example.hms.payload.dto.referral.ReferralAttachmentUploadDTO();
+        upload.setTempFileId("tmp-1");
+        req.setAttachments(java.util.List.of(upload));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findByUsername("midwife1")).thenReturn(Optional.of(user));
+        when(referralRepository.save(any())).thenAnswer(inv -> { ObgynReferral r = inv.getArgument(0); r.setId(referralId); return r; });
+        when(referralMapper.toResponseDTO(any())).thenReturn(ObgynReferralResponseDTO.builder().id(referralId).build());
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        return req;
+    }
+
+    /**
+     * QA D1538 review: an URGENT referral is never refused by the obstetric rule, but one placed for a man
+     * is flagged for review and the skip is audited.
+     */
+    @Test void d1538_anUrgentReferralForAManIsFlaggedAndAudited() throws Exception {
+        patient.setGender("MALE");
+        ObgynReferralCreateRequestDTO req = urgentReferral();
+
+        service.createReferral(req, "midwife1");
+
+        org.mockito.ArgumentCaptor<ObgynReferral> saved = org.mockito.ArgumentCaptor.forClass(ObgynReferral.class);
+        org.mockito.Mockito.verify(referralRepository).save(saved.capture());
+        assertThat(saved.getValue().isObstetricRuleSkipped()).isTrue();
+        org.mockito.Mockito.verify(skipRecorder).record(patient, "URGENT", "OBGYN_REFERRAL", referralId, hospitalId);
+    }
+
+    /** QA D1538 review: an URGENT referral for a woman skips nothing: no flag, no audit. */
+    @Test void d1538_anUrgentReferralForAWomanIsNotFlagged() throws Exception {
+        patient.setGender("FEMALE");
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(27));
+        ObgynReferralCreateRequestDTO req = urgentReferral();
+
+        service.createReferral(req, "midwife1");
+
+        org.mockito.ArgumentCaptor<ObgynReferral> saved = org.mockito.ArgumentCaptor.forClass(ObgynReferral.class);
+        org.mockito.Mockito.verify(referralRepository).save(saved.capture());
+        assertThat(saved.getValue().isObstetricRuleSkipped()).isFalse();
+        org.mockito.Mockito.verifyNoInteractions(skipRecorder);
     }
 
     @Test void createReferral_patientNotFound() {

@@ -46,6 +46,7 @@ public class UltrasoundMapper {
             .scheduledTime(order.getScheduledTime())
             .appointmentLocation(order.getAppointmentLocation())
             .priority(order.getPriority())
+            .obstetricRuleSkipped(order.isObstetricRuleSkipped())
             .isHighRiskPregnancy(order.getIsHighRiskPregnancy())
             .highRiskNotes(order.getHighRiskNotes())
             .specialInstructions(order.getSpecialInstructions())

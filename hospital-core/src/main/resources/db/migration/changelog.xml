@@ -3442,4 +3442,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V283-r40-orders-issuance-and-obstetric-review" author="hms-team" runOnChange="false">
+        <sqlFile path="V283__r40_orders_issuance_and_obstetric_review.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

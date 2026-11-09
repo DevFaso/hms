@@ -700,6 +700,37 @@ describe('PrescriptionsComponent — signing', () => {
     expect(component.statusOptions().map((s) => s.value)).toEqual(['DRAFT', 'PENDING_SIGNATURE']);
   });
 
+  // QA D1537 review (round 40): the server never puts a signed order back to a draft or to
+  // awaiting signature, whatever status the pharmacy moved it to; the form offers it only a withdrawal.
+  for (const status of [
+    'SIGNED',
+    'TRANSMITTED',
+    'TRANSMISSION_FAILED',
+    'PENDING_CLARIFICATION',
+    'DISPENSED',
+    'PARTIALLY_FILLED',
+    'PENDING_STOCK',
+    'SENT_TO_PARTNER',
+    'PARTNER_ACCEPTED',
+    'PARTNER_REJECTED',
+    'PARTNER_DISPENSED',
+    'PRINTED_FOR_PATIENT',
+  ]) {
+    it(`QA D1537: a ${status} order is offered only the withdrawal statuses`, () => {
+      component.openEdit(rx(`s-${status}`, status));
+      expect(component.statusOptions().map((s) => s.value)).toEqual(['CANCELLED', 'DISCONTINUED']);
+    });
+  }
+
+  it('QA D1537: a draft or an order awaiting signature keeps every editable status', () => {
+    for (const status of ['DRAFT', 'PENDING_SIGNATURE']) {
+      component.openEdit(rx(`p-${status}`, status));
+      expect(component.statusOptions().map((s) => s.value))
+        .withContext(status)
+        .toEqual(['DRAFT', 'PENDING_SIGNATURE', 'CANCELLED', 'DISCONTINUED']);
+    }
+  });
+
   it('offers signing only for a prescription still awaiting a signature', () => {
     expect(component.canSign(rx('a', 'DRAFT'))).toBeTrue();
     expect(component.canSign(rx('b', 'PENDING_SIGNATURE'))).toBeTrue();

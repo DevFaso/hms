@@ -26,6 +26,7 @@ import { ProviderSettings } from '../services/provider.model';
 import { WritableSignal } from '@angular/core';
 import { routes } from '../app.routes';
 import { roleSatisfies } from '../core/role-equivalence';
+import { HospitalScopeGateService } from '../core/hospital-scope-gate.service';
 import en from '../../assets/i18n/en.json';
 import fr from '../../assets/i18n/fr.json';
 import es from '../../assets/i18n/es.json';
@@ -140,6 +141,30 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
   }
 
   afterEach(() => TestBed.resetTestingModule());
+
+  it('names every facility-only network workspace, including routes absent from navigation', () => {
+    const { items, component } = createComponent({
+      activeRole: 'ROLE_SUPER_ADMIN',
+      roles: ['ROLE_SUPER_ADMIN'],
+      wildcardPermission: true,
+    });
+    component.navItems.set(items as never);
+    const gate = TestBed.inject(HospitalScopeGateService);
+    const title = () =>
+      (component as unknown as { networkModuleTitleKey: () => string }).networkModuleTitleKey();
+    function visit(entries: Route[], prefix = ''): void {
+      for (const route of entries) {
+        const path = `${prefix}/${route.path ?? ''}`.replace(/\/+/g, '/');
+        if (route.data?.['requiresHospitalScope'] && !route.data?.['supportsGlobalHospitalView']) {
+          gate.routePath.set(path);
+          gate.moduleTitleKey.set(route.data?.['hospitalNetworkTitleKey'] ?? null);
+          expect(title()).withContext(path).not.toBe('HOSPITAL_NETWORK.TITLE');
+        }
+        if (route.children) visit(route.children, path);
+      }
+    }
+    visit(routes);
+  });
 
   describe('sidebar width controls', () => {
     let previousWidth: string | null;

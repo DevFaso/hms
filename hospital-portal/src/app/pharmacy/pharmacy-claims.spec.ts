@@ -73,4 +73,39 @@ describe('PharmacyClaimsComponent', () => {
     expect(pharmacy.rejectClaim).toHaveBeenCalledWith('c-1', 'Ordonnance illisible');
     expect(reasonDialog(fixture)).toBeNull();
   });
+
+  it('keeps status chips, rendered rows and the mobile select in sync', async () => {
+    const el = await render([
+      claim({ patientName: 'Draft fixture' }),
+      claim({ id: 'c-2', patientName: 'Paid fixture', claimStatus: 'PAID' }),
+    ]);
+    const buttons = Array.from(el.querySelectorAll<HTMLButtonElement>('.claim-status-tabs button'));
+    const paid = buttons.find((b) => b.textContent?.includes('PHARMACY_CLAIMS.STATUS.PAID'))!;
+    paid.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(el.querySelector('tbody')?.textContent).toContain('Paid fixture');
+    expect(el.querySelector('tbody')?.textContent).not.toContain('Draft fixture');
+    expect(paid.getAttribute('aria-pressed')).toBe('true');
+    const select = el.querySelector<HTMLSelectElement>('select[name="filter"]')!;
+    expect(select.value).toBe('PAID');
+    select.value = 'DRAFT';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(paid.getAttribute('aria-pressed')).toBe('false');
+    expect(el.querySelector('tbody')?.textContent).toContain('Draft fixture');
+    expect(el.querySelector('tbody')?.textContent).not.toContain('Paid fixture');
+  });
+
+  it('distinguishes no claims yet from a filter with no matches', async () => {
+    const el = await render([]);
+    expect(el.querySelector('.claims-empty')?.textContent).toContain(
+      'PHARMACY_WORKSPACE.CLAIMS_NONE_HINT',
+    );
+    fixture.componentInstance.filter.set('PAID');
+    fixture.detectChanges();
+    expect(el.querySelector('.claims-empty')?.textContent).toContain(
+      'PHARMACY_WORKSPACE.CLAIMS_EMPTY_HINT',
+    );
+  });
 });

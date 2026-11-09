@@ -1,3 +1,4 @@
+import { HospitalService } from '../services/hospital.service';
 import { TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError, Subject } from 'rxjs';
@@ -77,16 +78,113 @@ describe('BedManagementComponent', () => {
       imports: [BedManagementComponent, TranslateModule.forRoot()],
       providers: [
         { provide: BedService, useValue: bedServiceSpy },
+        { provide: HospitalService, useValue: { list: () => of([]) } },
         { provide: ToastService, useValue: toastSpy },
         { provide: DepartmentLookupService, useValue: deptSpy },
         {
           provide: RoleContextService,
-          useValue: { activeHospitalId: 'h1', effectiveHospitalIdForRequest: () => 'h1' },
+          useValue: {
+            activeHospitalId: 'h1',
+            effectiveHospitalIdForRequest: () => 'h1',
+            isSuperAdmin: () => false,
+            globalView: () => false,
+          },
         },
       ],
     }).compileComponents();
 
     component = TestBed.createComponent(BedManagementComponent).componentInstance;
+  });
+
+  function network(): void {
+    const ctx = TestBed.inject(RoleContextService);
+    spyOn(ctx, 'isSuperAdmin').and.returnValue(true);
+    spyOn(ctx, 'globalView').and.returnValue(true);
+    spyOn(ctx, 'effectiveHospitalIdForRequest').and.returnValue(null);
+  }
+  it('shows wards across hospitals and finds them by hospital name without changing scope', () => {
+    network();
+    const rows = [ward('w1', 'MED'), { ...ward('w2', 'MED'), hospitalId: 'h2' }];
+    bedServiceSpy.getWards.and.returnValue(of(rows));
+    component.ngOnInit();
+    component.hospitals.set([
+      { id: 'h1', name: 'Cdx North' },
+      { id: 'h2', name: 'Cdx South' },
+    ] as any);
+    component.wardSearch.set('south');
+    expect(component.filteredWards().map((w) => w.id)).toEqual(['w2']);
+    expect(component.isNetworkView()).toBeTrue();
+    expect(component.wards().length).toBe(2);
+  });
+  it('edits the row hospital and loads that hospitals departments, preserving global mode', () => {
+    network();
+    bedServiceSpy.updateWard.and.returnValue(of(ward('w2', 'MED')));
+    component.openEditWard({ ...ward('w2', 'MED'), hospitalId: 'h2' });
+    component.submitWard();
+    expect(deptSpy.getActiveDepartments).toHaveBeenCalledWith('h2');
+    expect(bedServiceSpy.updateWard).toHaveBeenCalledWith('w2', jasmine.any(Object), 'h2');
+    expect(component.isNetworkView()).toBeTrue();
+  });
+  it('requires a target for global creation instead of silently using the accounts home hospital', () => {
+    network();
+    component.openCreateWard();
+    component.wardForm = { name: 'Cdx New', code: 'NEW', wardType: 'GENERAL' };
+    component.submitWard();
+    expect(bedServiceSpy.createWard).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('BEDS_NETWORK.TARGET_REQUIRED');
+    bedServiceSpy.createWard.and.returnValue(of(ward('w3', 'NEW')));
+    component.chooseWardHospital({ id: 'h2', name: 'Cdx South' } as any);
+    component.submitWard();
+    expect(bedServiceSpy.createWard).toHaveBeenCalledWith(jasmine.any(Object), 'h2');
+  });
+  it('marks, describes and focuses the destination input when creation is refused', () => {
+    network();
+    const hospitals = TestBed.inject(HospitalService);
+    Object.assign(hospitals, { searchHospitals: () => of([]) });
+    const fixture = TestBed.createComponent(BedManagementComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openCreateWard();
+    fixture.detectChanges();
+    const input: HTMLInputElement = fixture.nativeElement.querySelector('#ward-hospital');
+    const focus = spyOn(input, 'focus');
+    fixture.componentInstance.submitWard();
+    expect(bedServiceSpy.createWard).not.toHaveBeenCalled();
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(input.getAttribute('aria-describedby')).toContain('ward-hospital-invalid-msg');
+    expect(fixture.nativeElement.querySelector('#ward-hospital-invalid-msg').textContent).toBe(
+      'BEDS_NETWORK.TARGET_REQUIRED',
+    );
+    expect(input.getAttribute('aria-label')).toBe('BEDS_NETWORK.TARGET_LABEL');
+    expect(focus).toHaveBeenCalled();
+  });
+  it('keeps the target of a bed form fixed when another ward becomes selected', () => {
+    network();
+    const w1 = ward('w1', 'MED');
+    const w2 = { ...ward('w2', 'MED'), hospitalId: 'h2' };
+    component.wards.set([w1, w2]);
+    component.selectWard(w1);
+    component.openCreateBed();
+    component.bedForm.bedNumber = 'CDX-1';
+    component.selectWard(w2);
+    bedServiceSpy.createBed.and.returnValue(of(bed('b1', 'CDX-1')));
+    component.submitBed();
+    expect(bedServiceSpy.createBed).toHaveBeenCalledWith('w1', jasmine.any(Object), 'h1');
+  });
+  it('refuses a bed status action from a different selected ward', () => {
+    network();
+    component.wards.set([{ ...ward('w2', 'MED'), hospitalId: 'h2' }]);
+    component.selectedWardId.set('w2');
+    component.setBedStatus(bed('b1', 'B1'), 'MAINTENANCE');
+    expect(bedServiceSpy.updateBedStatus).not.toHaveBeenCalled();
+  });
+  it('does not let a late department list replace a newly chosen hospitals departments', () => {
+    network();
+    const late = new Subject<any>();
+    deptSpy.getActiveDepartments.and.returnValues(late, of([{ id: 'south', name: 'Cdx South' }]));
+    component.chooseWardHospital({ id: 'h1', name: 'North' } as any);
+    component.chooseWardHospital({ id: 'h2', name: 'South' } as any);
+    late.next([{ id: 'north', name: 'Cdx North' }]);
+    expect(component.departments().map((d) => d.id)).toEqual(['south']);
   });
 
   it('should create and load wards on init', () => {

@@ -44,12 +44,13 @@ public class UltrasoundOrderRequestDTO {
 
     private String appointmentLocation;
 
-    @Builder.Default
     // QA D1373 class (round 31): one of ClinicalPriority, refused by name otherwise. Upper
     // case only: the mapper stores the value as sent, and the worklists compare codes.
     @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.ClinicalPriority.CODES,
         message = "{validation.priority.invalid}")
-    private String priority = "ROUTINE"; // ROUTINE, URGENT, STAT
+    // QA D1538 review: absent means "keep the order's own" on an edit; a new order defaults to ROUTINE in
+    // UltrasoundServiceImpl.createOrder, never here (an edit without it read as lowering an emergency).
+    private String priority; // ROUTINE, URGENT, STAT
 
     @Builder.Default
     private Boolean isHighRiskPregnancy = false;

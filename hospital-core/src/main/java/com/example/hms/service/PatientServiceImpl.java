@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.service.recordaccess.NeverSentRule;
+import com.example.hms.service.support.PrescriptionIssuance;
 import com.example.hms.service.recordaccess.CrossHospitalRows;
 import com.example.hms.service.recordaccess.WithheldRows;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
@@ -2403,8 +2404,10 @@ public class PatientServiceImpl implements PatientService {
             return List.of();
         }
         // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
-        return NeverSentRule.prescriptionsReadableHere(
-                prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds), actingHospitalId)
+        // QA D1537 review: a live draft stays (its status says so); a draft withdrawn before anyone
+        // signed it was no order, and is not listed as CANCELLED.
+        return PrescriptionIssuance.withoutDiscardedProposals(NeverSentRule.prescriptionsReadableHere(
+                prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds), actingHospitalId))
             .stream()
             // A prescription carries no tag of its own; its category comes
             // from the encounter that wrote it (E8 #51).
@@ -2706,8 +2709,9 @@ public class PatientServiceImpl implements PatientService {
         // #62. It does not flag the section either, which would reveal that it
         // exists. A local one keeps the includeSensitive behaviour.
         // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
-        List<Prescription> prescriptions = NeverSentRule.prescriptionsReadableHere(
-            prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds), hospitalId);
+        // QA D1537 review: and less a draft withdrawn before anyone signed it, never an order.
+        List<Prescription> prescriptions = PrescriptionIssuance.withoutDiscardedProposals(NeverSentRule.prescriptionsReadableHere(
+            prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds), hospitalId));
         Comparator<Prescription> comparator = Comparator
             .comparing((Prescription p) -> coalesce(p.getUpdatedAt(), p.getCreatedAt()),
                 Comparator.nullsLast(Comparator.reverseOrder()));

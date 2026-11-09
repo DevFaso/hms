@@ -1,9 +1,14 @@
-<div class="release-worklist-container">
+<div class="diagnostics-workspace release-worklist-container">
   <header class="page-header">
     <div class="header-left">
-      <span class="material-symbols-outlined header-icon">published_with_changes</span>
       <div>
-        <h1 class="page-title">{{ 'LAB_RELEASE.TITLE' | translate }}</h1>
+        <p class="diagnostics-eyebrow">
+          <span class="material-symbols-outlined" aria-hidden="true">published_with_changes</span
+          ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+        </p>
+        <h1 class="page-title" id="diagnostics-lab-release-worklist-title">
+          {{ 'LAB_RELEASE.TITLE' | translate }}
+        </h1>
         <p class="page-subtitle">{{ 'LAB_RELEASE.SUBTITLE' | translate }}</p>
       </div>
     </div>
@@ -62,7 +67,12 @@
       <p>{{ 'LAB_RELEASE.EMPTY' | translate }}</p>
     </div>
   } @else {
-    <div class="table-wrap">
+    <div
+      class="table-wrap"
+      tabindex="0"
+      role="region"
+      aria-labelledby="diagnostics-lab-release-worklist-title"
+    >
       <table class="release-table">
         <caption class="sr-only">
           {{

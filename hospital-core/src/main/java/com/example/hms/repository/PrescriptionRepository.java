@@ -44,6 +44,14 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByPatient_Id(UUID patientId, Pageable pageable);
 
+    /**
+     * QA D1537 review: one order with what its course status reads (its encounter, the stay it ends
+     * with: {@code MedicationCourseStatus}, {@code InpatientOrderEnd}), for a read that maps it outside a
+     * transaction (the FHIR MedicationRequest read).
+     */
+    @EntityGraph(attributePaths = {"patient", "encounter", "hospital"})
+    java.util.Optional<Prescription> findWithEncounterById(UUID id);
+
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByStaff_Id(UUID staffId, Pageable pageable);
 
@@ -169,25 +177,58 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
      * QA D652 - the paged list across the readable hospitals, less the rows
      * another hospital never sent ({@code NeverSentRule}): a foreign row in
      * {@code unsent} is that hospital's work in progress, and its by-id read
-     * answers 404 here. Rows of the acting hospital are kept whatever their status.
+     * answers 404 here. Rows of the acting hospital are kept whatever their status, but for one
+     * withdrawn before anyone signed it ({@code withdrawnBeforeSigning}, QA D1537), which no hospital
+     * lists: it was never an order (the clinician's list showed it as CANCELLED).
      */
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
     @Query(value = "SELECT p FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
-        + " AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent)",
+        + " AND p.withdrawnBeforeSigning = false AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent)",
         countQuery = "SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
-        + " AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent)")
+        + " AND p.withdrawnBeforeSigning = false AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent)")
     Page<Prescription> findSentAcrossHospitals(@Param("patientId") UUID patientId,
                                                @Param("hospitalIds") Collection<UUID> hospitalIds,
                                                @Param("actingHospitalId") UUID actingHospitalId,
                                                @Param("unsent") Collection<PrescriptionStatus> unsent,
                                                Pageable pageable);
 
+    /**
+     * QA D1537 (round 40): the patient's issued orders, paged in the query, so a capped page is never
+     * thinned after it was fetched: not a proposal ({@code proposals}, {@code PrescriptionIssuance.PROPOSALS})
+     * and not withdrawn as one. The rule of {@code PrescriptionIssuance.wasIssued}.
+     */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
+    @Query(value = "SELECT p FROM Prescription p WHERE p.patient.id = :patientId"
+        + " AND p.status NOT IN :proposals AND p.withdrawnBeforeSigning = false",
+        countQuery = "SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId"
+        + " AND p.status NOT IN :proposals AND p.withdrawnBeforeSigning = false")
+    Page<Prescription> findIssuedByPatientId(@Param("patientId") UUID patientId,
+                                             @Param("proposals") Collection<PrescriptionStatus> proposals,
+                                             Pageable pageable);
+
+    /** QA D1537 review: how many issued orders the patient has, counted in the database (the portal total). */
+    @Query("SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId"
+        + " AND p.status NOT IN :proposals AND p.withdrawnBeforeSigning = false")
+    long countIssuedByPatientId(@Param("patientId") UUID patientId,
+                                @Param("proposals") Collection<PrescriptionStatus> proposals);
+
+    /** {@link #findIssuedByPatientId} across a set of hospitals (the FHIR $everything section). */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
+    @Query(value = "SELECT p FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
+        + " AND p.status NOT IN :proposals AND p.withdrawnBeforeSigning = false",
+        countQuery = "SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
+        + " AND p.status NOT IN :proposals AND p.withdrawnBeforeSigning = false")
+    Page<Prescription> findIssuedByPatientIdAndHospitalIdIn(@Param("patientId") UUID patientId,
+                                                            @Param("hospitalIds") Collection<UUID> hospitalIds,
+                                                            @Param("proposals") Collection<PrescriptionStatus> proposals,
+                                                            Pageable pageable);
+
     /** {@link #findSentAcrossHospitals} restricted to a set of statuses (Gap G12). */
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
     @Query(value = "SELECT p FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
-        + " AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent) AND p.status IN :statuses",
+        + " AND p.withdrawnBeforeSigning = false AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent) AND p.status IN :statuses",
         countQuery = "SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
-        + " AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent) AND p.status IN :statuses")
+        + " AND p.withdrawnBeforeSigning = false AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent) AND p.status IN :statuses")
     Page<Prescription> findSentAcrossHospitalsAndStatusIn(@Param("patientId") UUID patientId,
                                                           @Param("hospitalIds") Collection<UUID> hospitalIds,
                                                           @Param("actingHospitalId") UUID actingHospitalId,

@@ -17,6 +17,16 @@ describe('LabService', () => {
 
   afterEach(() => httpMock.verify());
 
+  it('reads the unwrapped detail DTO returned by GET /lab-results/{id}', () => {
+    const detail = { id: 'result-1', patientId: 'patient-1', trendHistory: [] };
+    service
+      .getResult('result-1')
+      .subscribe((result) => expect(result).toEqual(jasmine.objectContaining(detail)));
+    const request = httpMock.expectOne('/lab-results/result-1');
+    expect(request.request.method).toBe('GET');
+    request.flush(detail);
+  });
+
   // ── Lab Result CRUD ──────────────────────────────────────────────────
 
   describe('createResult', () => {

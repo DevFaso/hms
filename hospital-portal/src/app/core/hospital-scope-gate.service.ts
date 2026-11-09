@@ -1,13 +1,15 @@
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRouteSnapshot, NavigationEnd, Router } from '@angular/router';
+import { ActivatedRouteSnapshot, NavigationEnd, NavigationStart, Router } from '@angular/router';
 import { filter } from 'rxjs';
+import { Location } from '@angular/common';
 
 import { RoleContextService } from './role-context.service';
 
 /** Route `data` key: `{ requiresHospitalScope: true }` marks a page whose data belongs to one facility. */
 export const REQUIRES_HOSPITAL_SCOPE = 'requiresHospitalScope';
 export const SUPPORTS_GLOBAL_HOSPITAL_VIEW = 'supportsGlobalHospitalView';
+export const GLOBAL_HOSPITAL_HISTORY_STATE = 'hmsGlobalHospitalView';
 
 /** True when the activated route, or any route above it, carries the flag. */
 export function routeRequiresHospitalScope(root: ActivatedRouteSnapshot): boolean {
@@ -40,6 +42,7 @@ export function routeRequiresHospitalScope(root: ActivatedRouteSnapshot): boolea
 @Injectable({ providedIn: 'root' })
 export class HospitalScopeGateService {
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
   private readonly roleContext = inject(RoleContextService);
 
   private readonly _required = signal(false);
@@ -57,10 +60,18 @@ export class HospitalScopeGateService {
       !(this._allowsGlobal() && this.roleContext.isSuperAdmin() && this.roleContext.globalView()),
   );
 
+  /** Facility-only APIs stay gated; global super-admins get a useful network directory instead. */
+  readonly showNetworkDirectory = computed(
+    () => this.blocked() && this.roleContext.isSuperAdmin() && this.roleContext.globalView(),
+  );
+  readonly routePath = signal('');
+  readonly moduleTitleKey = signal<string | null>(null);
+
   /** The chip belongs above a gated page only for the one account that can switch: a super-admin. */
   readonly showChip = computed(() => this._required() && this.roleContext.isSuperAdmin());
 
   private readonly _scopeEpoch = signal(0);
+  private restoreGlobalView = false;
   private lastEffectiveHospitalId: string | null | undefined;
 
   /** Identity of the outlet: advances on a scope change while a gated route is active, never on navigation. */
@@ -77,6 +88,16 @@ export class HospitalScopeGateService {
     });
     this.router.events
       .pipe(
+        filter((e): e is NavigationStart => e instanceof NavigationStart),
+        takeUntilDestroyed(),
+      )
+      .subscribe((e) => {
+        this.restoreGlobalView =
+          e.navigationTrigger === 'popstate' &&
+          e.restoredState?.[GLOBAL_HOSPITAL_HISTORY_STATE] === true;
+      });
+    this.router.events
+      .pipe(
         filter((e): e is NavigationEnd => e instanceof NavigationEnd),
         takeUntilDestroyed(),
       )
@@ -84,18 +105,32 @@ export class HospitalScopeGateService {
   }
 
   private onNavigated(): void {
+    this.routePath.set(this.router.url.split(/[?#]/)[0]);
     const root = this.router.routerState.snapshot.root;
     const required = routeRequiresHospitalScope(root);
     let allowsGlobal = false;
+    let titleKey: string | null = null;
     for (let node: ActivatedRouteSnapshot | null = root; node; node = node.firstChild) {
       if (node.data[SUPPORTS_GLOBAL_HOSPITAL_VIEW] === true) allowsGlobal = true;
+      if (typeof node.data['hospitalNetworkTitleKey'] === 'string') {
+        titleKey = node.data['hospitalNetworkTitleKey'];
+      }
     }
+    this.moduleTitleKey.set(titleKey);
     this._allowsGlobal.set(allowsGlobal);
     if (required && this.roleContext.isSuperAdmin()) {
       const fromUrl = root.queryParamMap.get('hospitalId');
       if (fromUrl) {
         this.roleContext.scopeToHospital(fromUrl);
+      } else if (this.restoreGlobalView) {
+        this.roleContext.enableGlobalView();
       }
+      // Preserve Angular's navigationId and any caller-owned state. Entries
+      // without this explicit marker may have inherited a session hospital.
+      this.location.replaceState(this.location.path(true), '', {
+        ...(this.location.getState() as Record<string, unknown>),
+        [GLOBAL_HOSPITAL_HISTORY_STATE]: this.roleContext.globalView(),
+      });
     }
     this._required.set(required);
   }

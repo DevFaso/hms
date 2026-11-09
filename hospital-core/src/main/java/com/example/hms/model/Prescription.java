@@ -438,6 +438,61 @@ public class Prescription extends BaseEntity {
     @Builder.Default
     private PrescriptionStatus status = PrescriptionStatus.DRAFT;
 
+    /**
+     * QA D1537 (round 40): the order was withdrawn (CANCELLED, DISCONTINUED) while it was still a
+     * proposal (DRAFT, PENDING_SIGNATURE): it was never issued, and no reader shows it as a medicine the
+     * patient took ({@code PrescriptionIssuance}). Written only by {@link #setStatus}, the one door
+     * every withdrawal path goes through, from the status the order held before. V283 backfilled it
+     * where the evidence was unambiguous; every other row is FALSE, which means shown.
+     */
+    @Column(name = "withdrawn_before_signing", nullable = false)
+    @Builder.Default
+    @Setter(lombok.AccessLevel.NONE)
+    private boolean withdrawnBeforeSigning = false;
+
+    /**
+     * QA D1537 review: whether the status went through {@link #setStatus}, which derived the fact from
+     * the status before. Only a row built otherwise (the builder, the all-args constructor) derives it
+     * on insert. Not a column.
+     */
+    @jakarta.persistence.Transient
+    @Builder.Default
+    @Setter(lombok.AccessLevel.NONE)
+    @lombok.Getter(lombok.AccessLevel.NONE)
+    private boolean statusSetThroughSetter = false;
+
+    /**
+     * QA D1537 review: evidence that the order was issued whatever status it holds now: a signature
+     * (time, signer or digest), a dispatch to a pharmacy, or a refill used. A signed order put back to a
+     * proposal (the hole PrescriptionServiceImpl now refuses) and then withdrawn is never read as one
+     * that was never issued. The dispense rows themselves are not on the entity; an order is dispensed
+     * only after it was signed, so its signature stands for them.
+     */
+    private boolean carriesIssueEvidence() {
+        return signedAt != null || signedBy != null || signatureValue != null || dispatchedAt != null
+            || (refillsUsed != null && refillsUsed > 0);
+    }
+
+    /**
+     * Sets the status, and with it whether a withdrawal came before any signature (QA D1537). A move to
+     * a withdrawn status records whether the order was then still a proposal with no evidence it was
+     * ever issued ({@link #carriesIssueEvidence}); a withdrawn order moved
+     * on to another withdrawn status keeps what its withdrawal recorded; any other status clears it
+     * (a signed or re-proposed order is not a withdrawn one).
+     */
+    public void setStatus(PrescriptionStatus status) {
+        this.statusSetThroughSetter = true;
+        PrescriptionStatus before = this.status;
+        if (status != null && status.isWithdrawn()) {
+            if (before == null || !before.isWithdrawn()) {
+                this.withdrawnBeforeSigning = (before == null || before.isProposal()) && !carriesIssueEvidence();
+            }
+        } else {
+            this.withdrawnBeforeSigning = false;
+        }
+        this.status = status;
+    }
+
     @Builder.Default
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(
@@ -488,8 +543,36 @@ public class Prescription extends BaseEntity {
         transmission.setPrescription(this);
     }
 
+    /**
+     * QA D1537 review: the builder and the all-args constructor write the status without
+     * {@link #setStatus}. An order inserted already withdrawn had no status before it, so it was never
+     * issued, unless it carries the evidence it was ({@link #carriesIssueEvidence}): the same rule as
+     * the setter, applied on insert.
+     */
+    /**
+     * Named apart from BaseEntity's callbacks (onCreate, onUpdate): a package-private method of the
+     * same name here would override them, and createdAt/updatedAt would stop being stamped
+     * ({@code EntityCallbackShadowingGuardTest}).
+     */
     @PrePersist
+    void prescriptionOnInsert() {
+        deriveWithdrawalFactOnInsert();
+        validate();
+    }
+
+    /** The insert half of the rule, on its own so it can be read and tested without the row's context checks. */
+    public void deriveWithdrawalFactOnInsert() {
+        if (!statusSetThroughSetter && status != null && status.isWithdrawn() && !withdrawnBeforeSigning
+                && !carriesIssueEvidence()) {
+            this.withdrawnBeforeSigning = true;
+        }
+    }
+
     @PreUpdate
+    void prescriptionOnUpdate() {
+        validate();
+    }
+
     private void validate() {
         normalizeQuantities();
         normalizeStrings();

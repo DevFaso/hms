@@ -130,6 +130,11 @@ export class StockRoutingComponent implements OnInit {
   });
   stockResult = signal<StockCheckResult | null>(null);
 
+  currentStep(): number {
+    if (this.stockResult()) return 3;
+    return this.selected() || this.prescriptionId.trim() ? 2 : 1;
+  }
+
   /**
    * QA D913: "not enough" is not "none". A shelf holding 50 of the 60 the
    * order needs was labelled out of stock; only an empty shelf is a stock-out.
