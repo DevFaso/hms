@@ -10,7 +10,7 @@ The client now preserves the raw detail DTO. No backend endpoint, permission, cl
 
 Read-only dev verification on 2026-11-08: login succeeded, downtime was false before and after, and the requested detail returned HTTP 200 with result/patient identity matching the readable list. It has no data envelope and contains one historical observation. Backend deployment `52cfeffc-f035-40f5-b776-b5817d7989d1` stayed unchanged during the check. No clinical records or infrastructure were modified.
 
-The built portal was tested with a sanitized replay of that actual response in FR, EN and ES and at desktop/tablet/mobile sizes. The detail loads and displays the insufficient-history explanation for the single observation. A separately labelled synthetic two-observation case verifies chart rendering. A 503 case still displays the request failure. Nine screenshot/accessibility checks passed without page errors. Local artifacts: C:/dev/hms-qa/designs/lab-history-response/.
+The built portal was tested with a sanitized replay of that actual response in FR, EN and ES and at desktop/tablet/mobile sizes. The detail loads and displays the insufficient-history explanation for the single observation. A separately labelled synthetic two-observation case verifies chart rendering. A 503 case still displays the request failure. Nine screenshot/accessibility checks passed without page errors.
 
 [Sanitized replay of the actual response](assets/lab-history-response/history-fr.png)
 
