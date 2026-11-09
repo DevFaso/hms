@@ -28,9 +28,12 @@ function getContracts(controller) {
     if (mappings[index][0] !== '@GetMapping') continue;
     const block = controller.slice(mappings[index].index, mappings[index + 1]?.index);
     // Bound each signature to its mapping; never search into a later method.
-    const signature = /\bpublic\s+([^{};]+?)\s+(\w+)\s*\(/.exec(block);
-    assert.ok(signature, `Cannot parse GET declaration at ${mappings[index].index}`);
-    contracts.push({ name: signature[2], wrapped: /\bApiResponseWrapper\s*</.test(signature[1]) });
+    const signature = /\b(public|protected|private)\s+([^{};]+?)\s+(\w+)\s*\(/.exec(block);
+    assert.ok(
+      signature && signature[1] === 'public',
+      `Cannot parse GET declaration at ${mappings[index].index}`,
+    );
+    contracts.push({ name: signature[3], wrapped: /\bApiResponseWrapper\s*</.test(signature[2]) });
   }
   assert.equal(contracts.length, [...controller.matchAll(/@GetMapping\b/g)].length);
   assert.equal(new Set(contracts.map((contract) => contract.name)).size, contracts.length);
@@ -93,6 +96,13 @@ test('unreadable GET declarations fail before a following non-GET signature', ()
     () =>
       getContracts(
         '@GetMapping("/raw") private DTO detail() {} @PostMapping public ResponseEntity<ApiResponseWrapper<DTO>> save() {}',
+      ),
+    /Cannot parse GET/,
+  );
+  assert.throws(
+    () =>
+      getContracts(
+        '@GetMapping("/raw") private DTO detail() {} public ResponseEntity<ApiResponseWrapper<DTO>> helper() {}',
       ),
     /Cannot parse GET/,
   );
