@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
-import { StaffListComponent } from './staff-list';
+import { StaffListComponent, joinReasons } from './staff-list';
 import { StaffResponse, StaffService } from '../services/staff.service';
 import { HospitalService } from '../services/hospital.service';
 import { UserService } from '../services/user.service';
@@ -174,5 +174,20 @@ describe('StaffListComponent — no deactivate on your own card (QA D916)', () =
     );
     expect(buttons.length).toBe(1);
     expect(fixture.componentInstance.isOwnCard({ userId: 'me' } as StaffResponse)).toBeTrue();
+  });
+});
+
+describe('joinReasons — one sentence per refused field (QA r41 L2)', () => {
+  it('never prints two periods between reasons, whether a reason ends in one or not', () => {
+    expect(
+      joinReasons([
+        'Nurses must have a start date',
+        'The licence number is required for this job title.',
+      ]),
+    ).toBe('Nurses must have a start date. The licence number is required for this job title.');
+  });
+
+  it('answers empty for no reason', () => {
+    expect(joinReasons([])).toBe('');
   });
 });

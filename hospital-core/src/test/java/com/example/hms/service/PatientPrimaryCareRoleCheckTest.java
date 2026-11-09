@@ -275,6 +275,41 @@ class PatientPrimaryCareRoleCheckTest {
     }
 
     @Test
+    void anotherHospitalsCurrentLinkReadsAsNoLink_QAr41() {
+        // Pinned at hospitalId: only this hospital's current link is looked up.
+        when(pcpRepo.findCurrentByPatientAndHospital(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        assertThat(service.getCurrentPrimaryCare(patientId)).isEmpty();
+        org.mockito.Mockito.verify(pcpRepo, org.mockito.Mockito.never()).findByPatient_IdAndCurrentTrue(any());
+    }
+
+    @Test
+    void theOwnCurrentLinkIsRead_QAr41() {
+        PatientPrimaryCare own = PatientPrimaryCare.builder().patient(patient).hospital(hospital).current(true).build();
+        com.example.hms.payload.dto.PatientPrimaryCareResponseDTO dto =
+            com.example.hms.payload.dto.PatientPrimaryCareResponseDTO.builder().hospitalId(hospitalId).build();
+        when(pcpRepo.findCurrentByPatientAndHospital(patientId, hospitalId)).thenReturn(Optional.of(own));
+        when(mapper.toDto(own)).thenReturn(dto);
+
+        assertThat(service.getCurrentPrimaryCare(patientId)).contains(dto);
+    }
+
+    @Test
+    void theHistoryKeepsOnlyTheActingHospitalsLinks_QAr41() {
+        Hospital foreign = new Hospital();
+        foreign.setId(UUID.randomUUID());
+        PatientPrimaryCare own = PatientPrimaryCare.builder().patient(patient).hospital(hospital).build();
+        PatientPrimaryCare theirs = PatientPrimaryCare.builder().patient(patient).hospital(foreign).build();
+        com.example.hms.payload.dto.PatientPrimaryCareResponseDTO dto =
+            com.example.hms.payload.dto.PatientPrimaryCareResponseDTO.builder().hospitalId(hospitalId).build();
+        when(pcpRepo.findByPatient_IdOrderByStartDateDesc(patientId)).thenReturn(java.util.List.of(theirs, own));
+        when(mapper.toDto(own)).thenReturn(dto);
+
+        assertThat(service.getPrimaryCareHistory(patientId)).containsExactly(dto);
+        org.mockito.Mockito.verify(mapper, org.mockito.Mockito.never()).toDto(theirs);
+    }
+
+    @Test
     void aRoleWithNoLabelIsNamedByItsCodeNeverByARawKey() {
         // #1096 review (P3): an unknown role code read "email.role.label.NO_SUCH_ROLE" to the user.
         RoleValidator validator = new RoleValidator(assignmentRepo, actingScopeResolver);

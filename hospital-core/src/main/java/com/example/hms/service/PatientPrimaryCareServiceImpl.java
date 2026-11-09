@@ -138,13 +138,24 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
     @Override
     @Transactional(readOnly = true)
     public Optional<PatientPrimaryCareResponseDTO> getCurrentPrimaryCare(UUID patientId) {
-        return pcpRepo.findByPatient_IdAndCurrentTrue(patientId).map(mapper::toDto);
+        // QA r41: a hospital reads only its own patients' links; another hospital's link reads as
+        // no link at all (as a missing one does). A verified super-admin in global view reads them all.
+        UUID acting = com.example.hms.security.tenant.TenantOwnership.actingHospitalIdOrNullForGlobal();
+        Optional<PatientPrimaryCare> link = acting == null
+            ? pcpRepo.findByPatient_IdAndCurrentTrue(patientId)
+            : pcpRepo.findCurrentByPatientAndHospital(patientId, acting);
+        return link.map(mapper::toDto);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<PatientPrimaryCareResponseDTO> getPrimaryCareHistory(UUID patientId) {
-        return pcpRepo.findByPatient_IdOrderByStartDateDesc(patientId).stream().map(mapper::toDto).toList();
+        // QA r41: the acting hospital's own links only; global view keeps every link.
+        UUID acting = com.example.hms.security.tenant.TenantOwnership.actingHospitalIdOrNullForGlobal();
+        return pcpRepo.findByPatient_IdOrderByStartDateDesc(patientId).stream()
+            .filter(link -> acting == null || (link.getHospital() != null && acting.equals(link.getHospital().getId())))
+            .map(mapper::toDto)
+            .toList();
     }
 
     @Override

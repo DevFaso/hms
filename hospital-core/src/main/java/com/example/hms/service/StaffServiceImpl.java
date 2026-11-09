@@ -211,7 +211,7 @@ public class StaffServiceImpl implements StaffService {
                 .orElseThrow(() -> BusinessRuleException.ofKey("staff.assignment.required", dto.getUserEmail(), dto.getHospitalName()));
         }
 
-        validateStaffFields(dto, assignment, true);
+        validateStaffFields(dto, assignment, true, true);
         requireEndNotBeforeStart(dto);
 
         Staff staff = staffMapper.toStaff(dto, user, hospital, department, assignment);
@@ -267,7 +267,11 @@ public class StaffServiceImpl implements StaffService {
         String newLic = dto.getLicenseNumber();
         boolean licenceChanged = (existingLic == null && newLic != null)
                 || (existingLic != null && !existingLic.equals(newLic));
-        validateStaffFields(dto, assignment, licenceChanged);
+        // QA r41: a record admin-register made without a licence ("licences are never mandatory")
+        // stays editable; the title's licence and specialization are asked when the edit gives it a
+        // title it never had (Rex's receptionist-to-radiologist case stays refused).
+        boolean titleChanged = existingStaff.getJobTitle() != com.example.hms.mapper.StaffMapper.jobTitle(dto.getJobTitle());
+        validateStaffFields(dto, assignment, licenceChanged, titleChanged);
         requireEndNotBeforeStart(dto);
 
         boolean wasActive = existingStaff.isActive();
@@ -523,21 +527,30 @@ public class StaffServiceImpl implements StaffService {
      * no licence was accepted); and the role's own fields follow the RESOLVED assignment,
      * not the optional roleName of the request (omitting it skipped them).
      *
-     * @param assignment   the assignment the record is saved under
-     * @param checkLicence whether licence uniqueness is checked: always on create, on an
-     *                     update only when the licence number changes
+     * QA r41 (running-app check): admin-register creates clinicians without a licence by
+     * design, so an edit that changes nothing about the title must not demand one. The
+     * title's licence and specialization are required on create, and on an edit only when
+     * the edit gives the record a title it did not have.
+     *
+     * @param assignment     the assignment the record is saved under
+     * @param checkLicence   whether licence uniqueness is checked: always on create, on an
+     *                       update only when the licence number changes
+     * @param titleIsNew     whether the record takes this job title now: always on create, on
+     *                       an update when the title changes
      */
-    private void validateStaffFields(StaffRequestDTO dto, UserRoleHospitalAssignment assignment, boolean checkLicence) {
+    private void validateStaffFields(StaffRequestDTO dto, UserRoleHospitalAssignment assignment, boolean checkLicence,
+                                     boolean titleIsNew) {
         boolean licensed = titleIn(dto, CLINICAL_JOB_TITLES);
+        boolean specialty = titleIsNew && titleIn(dto, SPECIALTY_JOB_TITLES);
         com.example.hms.exception.RequiredFields required = com.example.hms.exception.RequiredFields.check();
-        if (licensed) {
+        if (licensed && titleIsNew) {
             required.requireValue(dto.getLicenseNumber(), "licenseNumber", "staff.license.required");
         }
         String roleName = assignment.getRole() == null || assignment.getRole().getCode() == null
             ? "" : assignment.getRole().getCode().trim().toUpperCase(java.util.Locale.ROOT);
         switch (roleName) {
             case "ROLE_DOCTOR":
-                if (titleIn(dto, SPECIALTY_JOB_TITLES)) {
+                if (specialty) {
                     required.requireValue(dto.getSpecialization(), "specialization",
                         "staff.doctor.specializationRequired");
                 }
@@ -548,7 +561,7 @@ public class StaffServiceImpl implements StaffService {
                 break;
             case "ROLE_RADIOLOGIST":
                 required.requireValue(dto.getStartDate(), "startDate", "staff.radiologist.startDateRequired");
-                if (titleIn(dto, SPECIALTY_JOB_TITLES)) {
+                if (specialty) {
                     required.requireValue(dto.getSpecialization(), "specialization",
                         "staff.radiologist.specializationRequired");
                 }

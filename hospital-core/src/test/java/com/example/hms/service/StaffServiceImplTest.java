@@ -1109,6 +1109,22 @@ class StaffServiceImplTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(strings = {"DOCTOR", "RADIOLOGIST", "NURSE"})
+    void updateStaff_aRecordThatAlreadyHadTheTitleIsEditedWithoutALicence_QAr41(String title) {
+        // admin-register makes clinicians without a licence or specialization; an edit that keeps the
+        // title must not demand them.
+        staff.setLicenseNumber(null);
+        staff.setJobTitle(com.example.hms.enums.JobTitle.valueOf(title));
+        StaffRequestDTO dto = validFor("ROLE_" + title, title).licenseNumber(null).specialization(null).build();
+        stubRoleAssignment("ROLE_" + title);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        assertThat(staffService.updateStaff(staffId, dto, locale)).isNotNull();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"DOCTOR", "RADIOLOGIST", "NURSE"})
     void updateStaff_missingUnchangedLicenceIsStillRefused(String title) {
         staff.setLicenseNumber(null);
         StaffRequestDTO dto = validFor("ROLE_" + title, title).licenseNumber(null).build();

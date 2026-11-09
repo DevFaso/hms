@@ -41,8 +41,8 @@ public class BusinessRuleException extends RuntimeException {
         return messageKey;
     }
 
-    /** The arguments of the key, in order. */
+    /** The arguments of the key, in order; transient arguments are absent after deserialization. */
     public Object[] getArgs() {
-        return args.clone();
+        return args == null ? new Object[0] : args.clone();
     }
 }

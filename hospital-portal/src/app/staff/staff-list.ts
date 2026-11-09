@@ -26,6 +26,21 @@ import { localDateString } from '../shared/date-utils';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
+/**
+ * QA r41 (L2): the field reasons of one refusal as one sentence each. Some reasons end in a
+ * period and some do not, so joining them with ". " printed ".." between two of them.
+ */
+export function joinReasons(reasons: unknown[]): string {
+  const parts = reasons
+    .map((r) =>
+      String(r ?? '')
+        .trim()
+        .replace(/[.!?]+$/, ''),
+    )
+    .filter((r) => r.length > 0);
+  return parts.length ? `${parts.join('. ')}.` : '';
+}
+
 /** A user whose only role is ROLE_PATIENT (a patient portal account). */
 function isPatientOnlyUser(u: Pick<UserSummary, 'roleName'>): boolean {
   return (u.roleName ?? '').toUpperCase().replace(/^ROLE_/, '') === 'PATIENT';
@@ -402,7 +417,7 @@ export class StaffListComponent implements OnInit {
           existing ? 'STAFF.UPDATE_FAILED' : 'STAFF.CREATE_FAILED',
         );
         if (body?.fieldErrors) {
-          msg = Object.values(body.fieldErrors).join('. ');
+          msg = joinReasons(Object.values(body.fieldErrors));
         } else if (body?.message) {
           msg = body.message;
         }

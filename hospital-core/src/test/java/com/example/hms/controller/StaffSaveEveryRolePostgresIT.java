@@ -211,14 +211,24 @@ class StaffSaveEveryRolePostgresIT {
         "es|ROLE_DOCTOR|DOCTOR|specialization|Los médicos deben tener una especialidad",
         "en|ROLE_DOCTOR|DOCTOR|specialization|Doctors must have a specialization"
     })
-    @DisplayName("an edit that really lacks a role value is a 400 naming the field in the reader's language")
+    @DisplayName("a save that really lacks a role value is a 400 naming the field in the reader's language")
     void aMissingRoleValueIsNamed(String language, String roleCode, String jobTitle, String field, String expected)
             throws Exception {
         Map<String, Object> body = formBody(userWithRole(roleCode), roleCode, jobTitle);
-        String id = create(body, language);
-
-        body.remove(field);
-        JsonNode refusal = putExpecting(id, body, language);
+        JsonNode refusal;
+        if ("specialization".equals(field)) {
+            // QA r41: a title's specialization is asked when the record takes the title (create, or
+            // an edit to a new title), not on an edit that keeps it.
+            body.remove(field);
+            MvcResult refused = send(post(API + "/staff"), body, language);
+            String content = refused.getResponse().getContentAsString(StandardCharsets.UTF_8);
+            assertThat(refused.getResponse().getStatus()).as(content).isEqualTo(400);
+            refusal = objectMapper.readTree(content);
+        } else {
+            String id = create(body, language);
+            body.remove(field);
+            refusal = putExpecting(id, body, language);
+        }
 
         assertThat(refusal.path("fieldErrors").path(field).asText()).isEqualTo(expected);
         assertThat(refusal.toString()).doesNotContain("staff.nurse.").doesNotContain("staff.radiologist.")
@@ -326,6 +336,38 @@ class StaffSaveEveryRolePostgresIT {
         JsonNode refusal = putExpecting(id, body, EN);
 
         assertThat(refusal.path("fieldErrors").has("jobTitle")).isTrue();
+    }
+
+    @Test
+    @DisplayName("QA r41: a nurse onboarded without a licence (admin-register) stays editable when the title does not change")
+    void aNurseWithoutALicenceIsEditedWhenTheTitleStays() throws Exception {
+        Map<String, Object> body = formBody(userWithRole("ROLE_NURSE"), "ROLE_NURSE", "NURSE");
+        String id = create(body, EN);
+        // admin-register makes clinicians without a licence ("licences are never mandatory").
+        com.example.hms.model.Staff onboarded = staffRepository.findById(UUID.fromString(id)).orElseThrow();
+        onboarded.setLicenseNumber(null);
+        staffRepository.saveAndFlush(onboarded);
+
+        body.remove("licenseNumber");
+        body.put("employmentType", "PART_TIME");
+        MvcResult edited = send(put(API + "/staff/" + id), body, EN);
+
+        String content = edited.getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertThat(edited.getResponse().getStatus()).as(content).isEqualTo(200);
+        assertThat(objectMapper.readTree(content).path("employmentType").asText()).isEqualTo("PART_TIME");
+    }
+
+    @Test
+    @DisplayName("QA r41: moving a receptionist to nurse without a licence is refused on licenseNumber")
+    void aReceptionistMovedToNurseNeedsALicence() throws Exception {
+        Map<String, Object> body = formBody(userWithRole("ROLE_RECEPTIONIST"), "ROLE_RECEPTIONIST", "RECEPTIONIST");
+        String id = create(body, FR);
+        body.put("jobTitle", "NURSE");
+
+        JsonNode refusal = putExpecting(id, body, FR);
+
+        assertThat(refusal.path("fieldErrors").path("licenseNumber").asText())
+            .isEqualTo("Le numéro de licence est obligatoire pour cet intitulé de poste.");
     }
 
     // ---- helpers ------------------------------------------------------------------------------
