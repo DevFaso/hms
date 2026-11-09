@@ -999,12 +999,8 @@ public class AppointmentServiceImpl implements AppointmentService {
                                                 LocalDateTime requestedEnd, Locale locale) {
         // schedule check
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
-            throw new com.example.hms.exception.FieldBusinessException("appointmentDate", messageSource.getMessage(
-                "appointment.staff.unavailable.schedule",
-                new Object[]{staff.getId(), DisplayDates.date(request.getAppointmentDate(), locale),
-                    DisplayDates.time(request.getStartTime(), locale)},
-                locale
-            ));
+            throw new com.example.hms.exception.FieldBusinessException("appointmentDate", "appointment.staff.unavailable.schedule",
+                staff.getId(), DisplayDates.date(request.getAppointmentDate(), LocaleContextHolder.getLocale()), DisplayDates.time(request.getStartTime(), LocaleContextHolder.getLocale()));
         }
 
         // overlap check
@@ -1014,12 +1010,8 @@ public class AppointmentServiceImpl implements AppointmentService {
             null, requestedStart, requestedEnd);
         if (hasConflict) {
             // QA D1367 (round 31): the time the slot is held at is named, so the form marks it.
-            throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, messageSource.getMessage(
-                "appointment.staff.unavailable",
-                new Object[]{staff.getId(), DisplayDates.date(request.getAppointmentDate(), locale),
-                    DisplayDates.time(request.getStartTime(), locale), DisplayDates.time(requestedEnd.toLocalTime(), locale)},
-                locale
-            ));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, "appointment.staff.unavailable",
+                staff.getId(), DisplayDates.date(request.getAppointmentDate(), LocaleContextHolder.getLocale()), DisplayDates.time(request.getStartTime(), LocaleContextHolder.getLocale()), DisplayDates.time(requestedEnd.toLocalTime(), LocaleContextHolder.getLocale()));
         }
     }
 
@@ -1123,12 +1115,8 @@ public class AppointmentServiceImpl implements AppointmentService {
     private void requireStaffScheduledForEdit(Staff staff, AppointmentRequestDTO request,
                                               LocalDateTime requestedStart, Locale locale) {
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
-            throw new com.example.hms.exception.FieldBusinessException(FIELD_STAFF_ID, messageSource.getMessage(
-                "appointment.staff.unavailable.schedule",
-                new Object[]{staff.getId(), DisplayDates.date(request.getAppointmentDate(), locale),
-                    DisplayDates.time(request.getStartTime(), locale)},
-                locale
-            ));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STAFF_ID, "appointment.staff.unavailable.schedule",
+                staff.getId(), DisplayDates.date(request.getAppointmentDate(), LocaleContextHolder.getLocale()), DisplayDates.time(request.getStartTime(), LocaleContextHolder.getLocale()));
         }
     }
 
@@ -1147,12 +1135,8 @@ public class AppointmentServiceImpl implements AppointmentService {
                 id, requestedStart, requestedEnd);
         if (hasConflict) {
             // QA D1367 (round 31): the time the slot is held at is named, so the form marks it.
-            throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, messageSource.getMessage(
-                "appointment.staff.unavailable",
-                new Object[]{staff.getId(), DisplayDates.date(request.getAppointmentDate(), locale),
-                    DisplayDates.time(request.getStartTime(), locale), DisplayDates.time(request.getEndTime(), locale)},
-                locale
-            ));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, "appointment.staff.unavailable",
+                staff.getId(), DisplayDates.date(request.getAppointmentDate(), LocaleContextHolder.getLocale()), DisplayDates.time(request.getStartTime(), LocaleContextHolder.getLocale()), DisplayDates.time(request.getEndTime(), LocaleContextHolder.getLocale()));
         }
     }
 

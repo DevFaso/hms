@@ -60,7 +60,9 @@ class R29FieldNamedRefusalGuardTest {
     private static final Pattern EMPTY_400 = Pattern.compile("badRequest\\(\\)\\s*+\\.build\\(\\)");
 
     private static final Pattern REQUIRED_KEY_THROWN = Pattern.compile(
-        "new (?:com\\.example\\.hms\\.exception\\.)?(?:BusinessException|BusinessRuleException)\\(\\s*+"
+        "(?:new (?:com\\.example\\.hms\\.exception\\.)?(?:BusinessException|BusinessRuleException)\\(|"
+            // #1096: a rule refusal handed its key (BusinessRuleException.ofKey), not a message resolved first
+            + "BusinessRuleException\\.ofKey\\()\\s*+"
             // the key itself, or the key resolved first (message(...), MessageUtil.resolve(...), getMessage(...))
             + "(?:(?:\\w++\\.)*+(?:message|resolve|resolveOrRaw|getMessage|getLocalizedMessage)\\(\\s*+)?\"([\\w.]++)\"");
     private static final Pattern REQUIRED_SHAPE = Pattern.compile("(?i)required|missing");
@@ -81,6 +83,11 @@ class R29FieldNamedRefusalGuardTest {
         Map.entry("prescription.safeguard.COSIGN_REQUIRED.status", "state: the controlled order awaits its co-signature"),
         Map.entry("prescription.safeguard.COSIGN_REQUIRED.dispense", "state: the controlled order awaits its co-signature"),
         Map.entry("staff.department.required", "state of the staff record: availability needs the staff's department"),
+        // Seen since #1096 taught the scan BusinessRuleException.ofKey: the role a chosen provider holds.
+        Map.entry("generalReferral.referringProvider.prescriber.required",
+            "state: the referring provider is not a doctor, physician, surgeon or midwife"),
+        Map.entry("generalReferral.receivingProvider.physician.required",
+            "state: the receiving provider is not a doctor, physician or surgeon"),
         Map.entry("encounter.note.author.required", "the caller's staff identity, not a request field"),
         Map.entry("auth.lab.required", "the caller's role (lab scientist or hospital admin)"),
         Map.entry("auth.lab.staff.required", "the caller's role (lab staff or hospital admin)"));

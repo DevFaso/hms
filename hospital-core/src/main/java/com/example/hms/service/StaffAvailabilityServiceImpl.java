@@ -15,8 +15,8 @@ import com.example.hms.repository.StaffAvailabilityRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.utility.DisplayDates;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.i18n.LocaleContextHolder;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,7 +35,6 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
     private final HospitalRepository hospitalRepository;
     private final StaffAvailabilityRepository availabilityRepository;
     private final StaffAvailabilityMapper mapper;
-    private final MessageSource messageSource;
     private final DepartmentRepository departmentRepository;
 
     /** A working day has its hours, the end after the start; a day off has none (Sonar S3776, round 30). */
@@ -64,36 +63,34 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
             .orElseThrow(() -> new ResourceNotFoundException("staff.not.found", dto.staffId()));
 
         if (!staff.isActive()) {
-            throw new BusinessRuleException(getLocalizedMessage("staff.inactive", new Object[]{dto.staffId()}, locale));
+            throw BusinessRuleException.ofKey("staff.inactive", dto.staffId());
         }
         if (!staff.getHospital().getId().equals(dto.hospitalId())) {
-            throw new BusinessRuleException(getLocalizedMessage("staff.not.assigned",
-                new Object[]{staff.getFullName() + " (" + dto.staffId() + ")",
-                    hospital.getName() + " (" + dto.hospitalId() + ")"}, locale));
+            throw BusinessRuleException.ofKey("staff.not.assigned",
+                staff.getFullName() + " (" + dto.staffId() + ")", hospital.getName() + " (" + dto.hospitalId() + ")");
         }
 
         Department department = departmentRepository.findById(dto.departmentId())
             .orElseThrow(() -> new ResourceNotFoundException("department.not.found", dto.departmentId()));
 
         if (!department.getHospital().getId().equals(hospital.getId())) {
-            throw new BusinessRuleException(getLocalizedMessage("department.hospital.mismatch", null, locale));
+            throw BusinessRuleException.ofKey("department.hospital.mismatch");
         }
         if (staff.getDepartment() == null) {
-            throw new BusinessRuleException(getLocalizedMessage("staff.department.required", null, locale));
+            throw BusinessRuleException.ofKey("staff.department.required");
         }
         if (!staff.getDepartment().getId().equals(department.getId())) {
-            throw new BusinessRuleException(getLocalizedMessage("staff.department.mismatch", null, locale));
+            throw BusinessRuleException.ofKey("staff.department.mismatch");
         }
 
         if (availabilityRepository.existsByStaff_IdAndDate(dto.staffId(), dto.date())) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("availability.exists", new Object[]{DisplayDates.date(dto.date(), locale)}, locale));
+            throw BusinessRuleException.ofKey("availability.exists", DisplayDates.date(dto.date(), LocaleContextHolder.getLocale()));
         }
 
         requireWorkingHours(dto);
 
         if (dto.date().isBefore(LocalDate.now())) {
-            throw new BusinessRuleException(getLocalizedMessage("availability.date.past", null, locale));
+            throw BusinessRuleException.ofKey("availability.date.past");
         }
 
         StaffAvailability availability = mapper.toEntity(dto, staff, hospital);
@@ -138,17 +135,4 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
             });
     }
 
-    private String getLocalizedMessage(String code, Object[] args, Locale locale) {
-        try { return messageSource.getMessage(code, args, locale); }
-        catch (org.springframework.context.NoSuchMessageException e) {
-            log.warn("Missing translation for code '{}' in locale '{}'", code, locale);
-            if (!Locale.ENGLISH.equals(locale)) {
-                try { return messageSource.getMessage(code, args, Locale.ENGLISH); }
-                catch (org.springframework.context.NoSuchMessageException ignored) {
-                    // English fallback also missing - will use code as default
-                }
-            }
-            return code + (args != null && args.length > 0 ? " " + java.util.Arrays.toString(args) : "");
-        }
-    }
 }

@@ -364,10 +364,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         com.example.hms.model.User signer = signerUserId == null ? null
             : userRepository.findById(signerUserId).orElse(null);
         if (signer == null) {
-            throw new org.springframework.security.access.AccessDeniedException("imaging.signature.signerUnknown");
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException("imaging.signature.signerUnknown");
         }
         if (request.getProviderUserId() != null && !request.getProviderUserId().equals(signer.getId())) {
-            throw new org.springframework.security.access.AccessDeniedException("imaging.signature.otherSigner");
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException("imaging.signature.otherSigner");
         }
         // QA D407: a signed order keeps its signer. A second doctor's signature
         // used to overwrite the ordering provider and the signing time; the

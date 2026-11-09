@@ -42,6 +42,9 @@ public class StaffRequestDTO {
 
     @NotBlank(groups = com.example.hms.validation.OnCreate.class, message = "{staff.jobTitle.required}")
     @Size(max = 100, message = "{staff.jobTitle.size}")
+    // #1096 review: an unknown title is named at the edge with the other refused values (D1371).
+    @com.example.hms.validation.KnownJobTitle(groups = {com.example.hms.validation.OnCreate.class,
+        jakarta.validation.groups.Default.class}, message = "{staff.jobTitle.invalid}")
     @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Job title for the staff")
     private String jobTitle;
 

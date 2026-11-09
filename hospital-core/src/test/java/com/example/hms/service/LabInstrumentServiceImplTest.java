@@ -181,7 +181,8 @@ class LabInstrumentServiceImplTest {
         when(instrumentRepository.existsByHospitalIdAndSerialNumber(HOSPITAL_ID, "SN-001")).thenReturn(true);
 
         assertThatThrownBy(() -> service.create(HOSPITAL_ID, requestDto, LOCALE))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOf(BusinessRuleException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("instrument.duplicate.serial"));
     }
 
     @Test
@@ -239,7 +240,8 @@ class LabInstrumentServiceImplTest {
         when(instrumentRepository.existsByHospitalIdAndSerialNumber(HOSPITAL_ID, "SN-NEW")).thenReturn(true);
 
         assertThatThrownBy(() -> service.update(INSTRUMENT_ID, updateDto, LOCALE))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOf(BusinessRuleException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("instrument.duplicate.serial"));
     }
 
     // ── deactivate ───────────────────────────────────────────────

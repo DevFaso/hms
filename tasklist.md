@@ -6385,6 +6385,8 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **D1516, the in-basket item has no click-through** for reference type `DEATH_ENTERED_IN_ERROR_CLOSURES`; it names the patient, and the chart shows the closures.
 - **D1515 sibling, under-inclusion:** `CdsCheckServiceImpl` (dispense interaction check) and `MtmReviewServiceImpl` (polypharmacy) keep their own "active" lists (SIGNED, TRANSMITTED, PARTIALLY_FILLED, DISPENSED). They already exclude drafts, so D1515 is not there, but they miss other signed statuses (PENDING_STOCK, the partner ones, PENDING_CLARIFICATION, TRANSMISSION_FAILED, PRINTED_FOR_PATIENT). Moving them to `isInForce()` widens a pharmacy check: left for its own change.
 - **D1516, a real death's stay** still has no discharge time (only the voided one gets it); setting it would change which orders end with the stay before `snapshotAtDeath`. Clinical decision.
+- **#1096 leftovers (D1536 class):** about 60 refusals still hand `MessageUtil.resolve(…)`/`resolveOrRaw(…)` to a keyed exception (Inventory, StockTransaction, PatientPortal, UserService, `ClientSafeAccessDeniedException` sites; resolved twice, never a 500); `UserRoleHospitalAssignmentServiceImpl` builds English `DEFAULT_INVALID_UUID/BOOLEAN/DATE_MESSAGE + raw` into a `BusinessException`; Sonar S8786 regex smells in the test-only `MessageKeyScanner`.
+
 
 ## Standing debt — D1525 (fix/d1525-review-followups)
 

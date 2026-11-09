@@ -324,7 +324,6 @@ class EncounterServiceImplTest {
 
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(roleValidator.isEncounterProvider(userId, null)).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("invalid");
 
         assertThatThrownBy(() -> service.getEncountersByDoctorId(staffId, locale))
             .isInstanceOf(BusinessException.class);
@@ -337,7 +336,6 @@ class EncounterServiceImplTest {
         staff.setId(staffId);
 
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("invalid");
 
         assertThatThrownBy(() -> service.getEncountersByDoctorId(staffId, locale))
             .isInstanceOf(BusinessException.class);
