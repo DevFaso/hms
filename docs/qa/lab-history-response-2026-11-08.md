@@ -10,8 +10,14 @@ The client now preserves the raw detail DTO. No backend endpoint, permission, cl
 
 Read-only dev verification on 2026-11-08: login succeeded, downtime was false before and after, and the requested detail returned HTTP 200 with result/patient identity matching the readable list. It has no data envelope and contains one historical observation. Backend deployment `52cfeffc-f035-40f5-b776-b5817d7989d1` stayed unchanged during the check. No clinical records or infrastructure were modified.
 
-The built portal was tested with a sanitized replay of that actual response in FR, EN and ES and at desktop/tablet/mobile sizes. The detail loads and displays the insufficient-history explanation for the single observation. A separately labelled synthetic two-observation case verifies chart rendering. A 503 case still displays the request failure. Nine screenshot/accessibility checks passed without page errors. Local artifacts: C:/dev/hms-qa/designs/lab-history-response/.
+The built portal was tested with a sanitized replay of that actual response in FR, EN and ES and at desktop/tablet/mobile sizes. The detail loads and displays the insufficient-history explanation for the single observation. A separately labelled synthetic two-observation case verifies chart rendering. A 503 case still displays the request failure. Nine screenshot/accessibility checks passed without page errors.
 
-[Sanitized replay of the actual response](assets/lab-history-response/history-fr.png)
+[Wholly synthetic response example](assets/lab-history-response/history-fr.png), generated from [the committed synthetic fixture](assets/lab-history-response/example-response.json). The screenshot contains no dev response values, dates or identifiers.
 
 This follow-up corrects the merged PR #1099; it is not a deployment. A clinical trend requires at least two comparable results for the same patient and test.
+
+## Rex follow-up
+
+The guard now bounds each GET to its own mapping, handles multiline generics and direct DTO returns, and fails on unsupported declarations or unclassified endpoints. It counts every GET and verifies both raw and wrapped response clients. Negative cases cover multiline/direct DTO signatures, an unreadable GET before a POST, and both directions of envelope mismatch. Paths resolve from import.meta.url; the same tests pass from the repository root and portal directory.
+
+Review inspection confirmed that the previous screenshot replaced names, patient identity and hospital labels with Cdx placeholders and displayed no MRN or date of birth. The current image was nevertheless regenerated wholly from a committed synthetic fixture, including independent dates and numeric values. No git history was rewritten.
