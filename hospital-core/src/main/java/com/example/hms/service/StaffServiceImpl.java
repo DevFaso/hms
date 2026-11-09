@@ -211,7 +211,7 @@ public class StaffServiceImpl implements StaffService {
                 .orElseThrow(() -> BusinessRuleException.ofKey("staff.assignment.required", dto.getUserEmail(), dto.getHospitalName()));
         }
 
-        validateStaffFields(dto, assignment, true, true, false);
+        validateStaffFields(dto, assignment, true, true);
         requireEndNotBeforeStart(dto);
 
         Staff staff = staffMapper.toStaff(dto, user, hospital, department, assignment);
@@ -267,12 +267,10 @@ public class StaffServiceImpl implements StaffService {
         String newLic = dto.getLicenseNumber();
         boolean licenceChanged = (existingLic == null && newLic != null)
                 || (existingLic != null && !existingLic.equals(newLic));
-        // QA r41: a record admin-register made without a licence ("licences are never mandatory")
-        // stays editable; the title's licence and specialization are asked when the edit gives it a
-        // title it never had (Rex's receptionist-to-radiologist case stays refused).
+        // The licence is never required; the specialization is asked when the edit gives the
+        // record a title it never had (Rex's receptionist-to-radiologist case stays refused).
         boolean titleChanged = existingStaff.getJobTitle() != com.example.hms.mapper.StaffMapper.jobTitle(dto.getJobTitle());
-        validateStaffFields(dto, assignment, licenceChanged, titleChanged,
-            org.springframework.util.StringUtils.hasText(existingLic));
+        validateStaffFields(dto, assignment, licenceChanged, titleChanged);
         requireEndNotBeforeStart(dto);
 
         boolean wasActive = existingStaff.isActive();
@@ -517,37 +515,30 @@ public class StaffServiceImpl implements StaffService {
      * code hands to the message source against every bundle.
      *
      * A role asks only for what the staff form collects for the job title: a
-     * specialization for a physician title, a licence for a licensed title. A
+     * specialization for a physician title. A
      * doctor or radiologist role on another title could never be saved from the
      * form, which drops both (#1096 review). And every missing value is named in
-     * ONE refusal (QA D1355): the licence of a licensed title, then the role's own
-     * fields, before the duplicate-licence check.
+     * ONE refusal (QA D1355), before the duplicate-licence check.
      *
      * #1096 review (Rex): the licence is required whenever the resulting title is a
      * licensed one, edit included (an edit that moves a record to a licensed title with
      * no licence was accepted); and the role's own fields follow the RESOLVED assignment,
      * not the optional roleName of the request (omitting it skipped them).
      *
-     * QA r41 (running-app check): admin-register creates clinicians without a licence by
-     * design, so an edit that changes nothing about the title must not demand one. The
-     * title's licence and specialization are required on create or a title change. An edit
-     * must also retain a licence the record already had while its title remains licensed.
+     * Decision 2026-11-09: clinicians are credentialed on their diploma, so a licence
+     * number is never required, for any title, on create or edit (and may be cleared). A
+     * non-blank number is still checked for uniqueness.
      *
      * @param assignment     the assignment the record is saved under
      * @param checkLicence   whether licence uniqueness is checked: always on create, on an
      *                       update only when the licence number changes
      * @param titleIsNew     whether the record takes this job title now: always on create, on
      *                       an update when the title changes
-     * @param hadLicence     whether the stored record already had a nonblank licence
      */
     private void validateStaffFields(StaffRequestDTO dto, UserRoleHospitalAssignment assignment, boolean checkLicence,
-                                     boolean titleIsNew, boolean hadLicence) {
-        boolean licensed = titleIn(dto, CLINICAL_JOB_TITLES);
+                                     boolean titleIsNew) {
         boolean specialty = titleIsNew && titleIn(dto, SPECIALTY_JOB_TITLES);
         com.example.hms.exception.RequiredFields required = com.example.hms.exception.RequiredFields.check();
-        if (licensed && (titleIsNew || hadLicence)) {
-            required.requireValue(dto.getLicenseNumber(), "licenseNumber", "staff.license.required");
-        }
         String roleName = assignment.getRole() == null || assignment.getRole().getCode() == null
             ? "" : assignment.getRole().getCode().trim().toUpperCase(java.util.Locale.ROOT);
         switch (roleName) {
@@ -572,7 +563,7 @@ public class StaffServiceImpl implements StaffService {
                 break;
         }
         required.orThrow();
-        if (licensed && checkLicence && org.springframework.util.StringUtils.hasText(dto.getLicenseNumber())
+        if (checkLicence && org.springframework.util.StringUtils.hasText(dto.getLicenseNumber())
                 && staffRepository.existsByLicenseNumber(dto.getLicenseNumber())) {
             // QA D1301 class (round 29): a licence number another record holds is marked on its field.
             throw new com.example.hms.exception.FieldBusinessException("licenseNumber", "staff.license.duplicate",

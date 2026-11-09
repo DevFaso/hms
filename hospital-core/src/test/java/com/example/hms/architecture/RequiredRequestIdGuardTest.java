@@ -550,7 +550,6 @@ class RequiredRequestIdGuardTest {
         Map.entry("CheckInRequestDTO.copayMethod", "only when a copay is taken"),
         Map.entry("StaffRequestDTO.specialization", "only for a doctor or radiologist"),
         Map.entry("StaffRequestDTO.startDate", "only for a nurse or radiologist"),
-        Map.entry("StaffRequestDTO.licenseNumber", "only for a radiologist"),
         Map.entry("ImagingReportStatusUpdateRequestDTO.statusReason", "only for a status that needs a reason"),
         Map.entry("CdsAcknowledgementRequestDTO.reason", "only when the card is overridden"),
         Map.entry("SmartPhraseRequestDTO.hospitalId", "only for a hospital-scoped phrase"),

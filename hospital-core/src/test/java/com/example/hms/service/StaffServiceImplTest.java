@@ -655,34 +655,17 @@ class StaffServiceImplTest {
                     ex -> assertThat(ex.getField()).isEqualTo("licenseNumber"));
     }
 
-    @Test
-    void createStaff_nullLicense_throws() {
-        StaffRequestDTO dto = StaffRequestDTO.builder()
-            .userEmail("doctor@test.com")
-            .hospitalName("Test Hospital")
-            .jobTitle("DOCTOR")
-            .licenseNumber(null)
-            .roleName("ROLE_DOCTOR")
-            .specialization(com.example.hms.enums.Specialization.CARDIOLOGY)
-            .build();
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"NURSE,", "DOCTOR,", "RADIOLOGIST,", "NURSE,' '", "DOCTOR,''"})
+    void createStaff_noLicence_isAccepted_forEveryClinicalRole(String title, String licence) {
+        StaffRequestDTO dto = validFor("ROLE_" + title, title).licenseNumber(licence).build();
+        UserRoleHospitalAssignment assignment = stubRoleAssignment("ROLE_" + title);
+        when(staffMapper.toStaff(eq(dto), eq(user), eq(hospital), any(), eq(assignment))).thenReturn(staff);
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
 
-        Role role = new Role();
-        role.setId(UUID.randomUUID());
-        role.setCode("ROLE_DOCTOR");
-        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
-            .user(user).hospital(hospital).role(role).build();
-        assignment.setId(UUID.randomUUID());
-
-        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
-        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
-        when(roleRepository.findByCode("ROLE_DOCTOR")).thenReturn(Optional.of(role));
-        when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
-            .thenReturn(Optional.of(assignment));
-        // QA round 29 (stub removed, assertion changed): a field refusal on licenseNumber.
-
-        assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
-                    ex -> assertThat(ex.getField()).isEqualTo("licenseNumber"));
+        assertThat(staffService.createStaff(dto, locale)).isNotNull();
+        verify(staffRepository, never()).existsByLicenseNumber(any());
     }
 
     @Test
@@ -1147,35 +1130,31 @@ class StaffServiceImplTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.MethodSource("clearedLicensedTitles")
-    void updateStaff_existingLicenceCannotBeClearedForAnyLicensedTitle(String title, String licence) {
+    void updateStaff_existingLicenceMayBeClearedForAnyLicensedTitle(String title, String licence) {
         staff.setJobTitle(com.example.hms.enums.JobTitle.valueOf(title));
         staff.setLicenseNumber("LIC-001");
         StaffRequestDTO dto = validFor("ROLE_NURSE", title).licenseNumber(licence).build();
         stubRoleAssignment("ROLE_NURSE");
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
 
-        assertThatThrownBy(() -> staffService.updateStaff(staffId, dto, locale))
-            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
-                ex -> assertThat(ex.getFieldErrors()).containsOnlyKeys("licenseNumber")
-                    .containsEntry("licenseNumber", "staff.license.required"));
+        assertThat(staffService.updateStaff(staffId, dto, locale)).isNotNull();
         verify(staffRepository, never()).existsByLicenseNumber(any());
-        verify(staffRepository, never()).save(any());
-        verify(staffMapper, never()).updateStaffFromDto(any(), any(), any(), any(), any(), any());
     }
 
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"DOCTOR", "RADIOLOGIST", "NURSE"})
-    void updateStaff_missingUnchangedLicenceIsStillRefused(String title) {
-        staff.setLicenseNumber(null);
-        StaffRequestDTO dto = validFor("ROLE_" + title, title).licenseNumber(null).build();
-        stubRoleAssignment("ROLE_" + title);
+    @Test
+    void updateStaff_aDuplicateNonBlankLicenceIsStillRefused() {
+        staff.setLicenseNumber("LIC-001");
+        StaffRequestDTO dto = validFor("ROLE_NURSE", "NURSE").licenseNumber("LIC-TAKEN").build();
+        stubRoleAssignment("ROLE_NURSE");
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(staffRepository.existsByLicenseNumber("LIC-TAKEN")).thenReturn(true);
 
         assertThatThrownBy(() -> staffService.updateStaff(staffId, dto, locale))
             .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
-                ex -> assertThat(ex.getFieldErrors()).containsEntry("licenseNumber", "staff.license.required"));
+                ex -> assertThat(ex.getField()).isEqualTo("licenseNumber"));
         verify(staffRepository, never()).save(any());
-        verify(staffMapper, never()).updateStaffFromDto(any(), any(), any(), any(), any(), any());
     }
 
     @org.junit.jupiter.params.ParameterizedTest
@@ -1211,25 +1190,24 @@ class StaffServiceImplTest {
 
     @Test
     void radiologist_everyMissingValueIsNamedInOneRefusal_D1355() {
-        // #1096 review: the licence of a licensed title was refused alone first, before the role's own
-        // fields; one press names them all.
+        // #1096 review: one press names every missing value (the licence is never one of them).
         StaffRequestDTO dto = validFor("ROLE_RADIOLOGIST", "RADIOLOGIST").licenseNumber(null).startDate(null)
             .specialization(null).build();
         stubRoleAssignment("ROLE_RADIOLOGIST");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, Locale.FRENCH))
             .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex ->
-                assertThat(ex.getFieldErrors()).containsOnlyKeys("licenseNumber", "startDate", "specialization"));
+                assertThat(ex.getFieldErrors()).containsOnlyKeys("startDate", "specialization"));
     }
 
     @Test
-    void doctor_missingLicenceAndSpecializationAreNamedTogether() {
+    void doctor_blankLicenceIsIgnoredAndOnlySpecializationIsNamed() {
         StaffRequestDTO dto = validFor("ROLE_DOCTOR", "DOCTOR").licenseNumber(" ").specialization(null).build();
         stubRoleAssignment("ROLE_DOCTOR");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, Locale.FRENCH))
             .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex ->
-                assertThat(ex.getFieldErrors()).containsOnlyKeys("licenseNumber", "specialization"));
+                assertThat(ex.getFieldErrors()).containsOnlyKeys("specialization"));
     }
 
     @org.junit.jupiter.params.ParameterizedTest

@@ -64,6 +64,22 @@ describe('StaffListComponent — specialization only for physicians (QA D195)', 
     });
   }
 
+  for (const title of ['NURSE', 'DOCTOR', 'RADIOLOGIST']) {
+    it(`saves a ${title} with no licence number and sends none`, () => {
+      component.form = {
+        ...component.form,
+        userEmail: 'a@example.test',
+        hospitalName: 'H1',
+        jobTitle: title,
+        licenseNumber: '',
+      } as never;
+      expect(component.needsLicence).toBeTrue();
+      component.submitForm();
+      expect(staffService.create).toHaveBeenCalled();
+      expect(staffService.create.calls.mostRecent().args[0].licenseNumber).toBeUndefined();
+    });
+  }
+
   for (const title of ['DOCTOR', 'RADIOLOGIST']) {
     it(`still asks a ${title} for a specialization`, () => {
       component.form = { ...component.form, jobTitle: title } as never;
@@ -182,9 +198,9 @@ describe('joinReasons — one sentence per refused field (QA r41 L2)', () => {
     expect(
       joinReasons([
         'Nurses must have a start date',
-        'The licence number is required for this job title.',
+        'The end date is before the start date.',
       ]),
-    ).toBe('Nurses must have a start date. The licence number is required for this job title.');
+    ).toBe('Nurses must have a start date. The end date is before the start date.');
   });
 
   it('answers empty for no reason', () => {

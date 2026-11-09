@@ -299,14 +299,42 @@ class StaffSaveEveryRolePostgresIT {
     }
 
     @Test
-    void changingToALicensedTitleRequiresALicenceEvenWhenBothNumbersAreNull() throws Exception {
+    void changingToALicensedTitleNeedsNoLicence() throws Exception {
         Map<String, Object> body = formBody(userWithRole("ROLE_RECEPTIONIST"), "ROLE_RECEPTIONIST", "RECEPTIONIST");
         String id = create(body, EN);
-        body.put("jobTitle", "RADIOLOGIST");
+        body.put("jobTitle", "NURSE");
+        body.put("roleName", "ROLE_RECEPTIONIST");
 
-        JsonNode refusal = putExpecting(id, body, EN);
+        MvcResult edited = send(put(API + "/staff/" + id), body, EN);
 
-        assertThat(refusal.path("fieldErrors").has("licenseNumber")).isTrue();
+        assertThat(edited.getResponse().getStatus())
+            .as(edited.getResponse().getContentAsString(StandardCharsets.UTF_8)).isEqualTo(200);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ROLE_NURSE", "ROLE_DOCTOR", "ROLE_RADIOLOGIST"})
+    void aClinicianIsCreatedWithoutALicence(String roleCode) throws Exception {
+        String title = roleCode.substring("ROLE_".length());
+        Map<String, Object> body = formBody(userWithRole(roleCode), roleCode, title);
+        body.remove("licenseNumber");
+
+        String id = create(body, EN);
+
+        assertThat(staffRepository.findById(UUID.fromString(id)).orElseThrow().getLicenseNumber()).isNull();
+    }
+
+    @Test
+    void aDuplicateNonBlankLicenceIsStillRefused() throws Exception {
+        Map<String, Object> first = formBody(userWithRole("ROLE_NURSE"), "ROLE_NURSE", "NURSE");
+        create(first, EN);
+        Map<String, Object> second = formBody(userWithRole("ROLE_NURSE"), "ROLE_NURSE", "NURSE");
+        second.put("licenseNumber", first.get("licenseNumber"));
+
+        MvcResult refused = send(post(API + "/staff"), second, EN);
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(400);
+        assertThat(objectMapper.readTree(refused.getResponse().getContentAsString(StandardCharsets.UTF_8))
+            .path("fieldErrors").has("licenseNumber")).isTrue();
     }
 
     @Test
@@ -340,7 +368,7 @@ class StaffSaveEveryRolePostgresIT {
     }
 
     @Test
-    @DisplayName("QA r41: a nurse onboarded without a licence (admin-register) stays editable when the title does not change")
+    @DisplayName("a nurse onboarded without a licence stays editable")
     void aNurseWithoutALicenceIsEditedWhenTheTitleStays() throws Exception {
         Map<String, Object> body = formBody(userWithRole("ROLE_NURSE"), "ROLE_NURSE", "NURSE");
         String id = create(body, EN);
@@ -358,34 +386,18 @@ class StaffSaveEveryRolePostgresIT {
         assertThat(objectMapper.readTree(content).path("employmentType").asText()).isEqualTo("PART_TIME");
     }
 
-    @Test
-    @DisplayName("QA r41: moving a receptionist to nurse without a licence is refused on licenseNumber")
-    void aReceptionistMovedToNurseNeedsALicence() throws Exception {
-        Map<String, Object> body = formBody(userWithRole("ROLE_RECEPTIONIST"), "ROLE_RECEPTIONIST", "RECEPTIONIST");
-        String id = create(body, FR);
-        body.put("jobTitle", "NURSE");
-
-        JsonNode refusal = putExpecting(id, body, FR);
-
-        assertThat(refusal.path("fieldErrors").path("licenseNumber").asText())
-            .isEqualTo("Le numéro de licence est obligatoire pour cet intitulé de poste.");
-    }
-
     @ParameterizedTest
     @org.junit.jupiter.params.provider.NullAndEmptySource
     @ValueSource(strings = {" "})
-    void anExistingNurseLicenceCannotBeCleared(String licence) throws Exception {
+    void anExistingNurseLicenceMayBeCleared(String licence) throws Exception {
         Map<String, Object> body = formBody(userWithRole("ROLE_NURSE"), "ROLE_NURSE", "NURSE");
         String id = create(body, EN);
-        String storedLicence = (String) body.get("licenseNumber");
         body.put("licenseNumber", licence);
 
-        JsonNode refusal = putExpecting(id, body, EN);
+        MvcResult edited = send(put(API + "/staff/" + id), body, EN);
 
-        assertThat(refusal.path("fieldErrors").path("licenseNumber").asText())
-            .isEqualTo("A license number is required for this job title.");
-        assertThat(staffRepository.findById(UUID.fromString(id)).orElseThrow().getLicenseNumber())
-            .isEqualTo(storedLicence);
+        assertThat(edited.getResponse().getStatus())
+            .as(edited.getResponse().getContentAsString(StandardCharsets.UTF_8)).isEqualTo(200);
     }
 
     // ---- helpers ------------------------------------------------------------------------------

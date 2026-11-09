@@ -146,7 +146,7 @@ export class StaffListComponent implements OnInit {
    * Grouped by clinical category — no free-text allowed.
    */
   readonly specializations = [
-    // Doctors (all require licence)
+    // Doctors (licence optional)
     'GENERAL_PRACTICE',
     'CARDIOLOGY',
     'NEUROLOGY',
@@ -157,12 +157,12 @@ export class StaffListComponent implements OnInit {
     'ONCOLOGY',
     'RADIOLOGY',
     'PSYCHIATRY',
-    // Nurses (all require licence)
+    // Nurses (licence optional)
     'GENERAL_NURSE',
     'ICU_NURSE',
     'PEDIATRIC_NURSE',
     'SURGICAL_NURSE',
-    // Pharmacists (all require licence)
+    // Pharmacists (licence optional)
     'CLINICAL_PHARMACY',
     'HOSPITAL_PHARMACY',
     // Lab staff (LAB_TECHNICIAN + PATHOLOGY require licence; MICROBIOLOGY role-dependent)
@@ -174,7 +174,9 @@ export class StaffListComponent implements OnInit {
   ];
 
   /**
-   * Job titles that require a medical licence number.
+   * Job titles that take a medical licence number. The number is OPTIONAL for all of them
+   * (clinicians are credentialed on their diploma; decision 2026-11-09): the field is shown for
+   * these titles, never required, and an empty one is simply not sent.
    *
    * Rules (aligned with international medical standards + backend validation):
    *   ✅ ALL doctors/clinicians     — DOCTOR, PHYSICIAN, SURGEON, ANESTHESIOLOGIST,
