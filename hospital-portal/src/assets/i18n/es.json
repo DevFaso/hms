@@ -13276,5 +13276,14 @@
     "NEXT": "Página siguiente",
     "AUDIT_TITLE": "Versiones registradas de los resultados",
     "CORRECTION_NOTE": "Este historial incluye correcciones. No se pueden identificar las versiones sustituidas. Los puntos muestran solo los valores registrados; no se muestran líneas ni diferencias. Consulte las observaciones y las correcciones antes de interpretar los cambios."
+  },
+  "LAB_RANGE": {
+    "TITLE": "Posición del resultado",
+    "LOW": "Bajo",
+    "NORMAL": "Normal",
+    "HIGH": "Alto",
+    "REFERENCE": "Intervalo de referencia",
+    "OUTSIDE_SCALE": "El resultado supera la escala mostrada; el marcador está en el borde.",
+    "UNAVAILABLE": "La posición requiere un resultado numérico exacto y un intervalo de referencia compatible."
   }
 }

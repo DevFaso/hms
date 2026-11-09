@@ -13276,5 +13276,14 @@
     "NEXT": "Next page",
     "AUDIT_TITLE": "Recorded result versions",
     "CORRECTION_NOTE": "This history includes corrections. Superseded versions cannot be identified in this history. Points show recorded values only; connecting lines and deltas are withheld. Consult the observations and correction records before interpreting changes."
+  },
+  "LAB_RANGE": {
+    "TITLE": "Result position",
+    "LOW": "Low",
+    "NORMAL": "Normal",
+    "HIGH": "High",
+    "REFERENCE": "Reference range",
+    "OUTSIDE_SCALE": "The result is beyond the displayed scale; the marker is at the edge.",
+    "UNAVAILABLE": "Position requires an exact numeric result and a compatible reference interval."
   }
 }

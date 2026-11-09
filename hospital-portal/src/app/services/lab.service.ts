@@ -515,9 +515,7 @@ export class LabService {
   }
 
   getResult(id: string): Observable<LabResultResponse> {
-    return this.http
-      .get<ApiWrapper<LabResultResponse>>(`/lab-results/${id}`)
-      .pipe(map((res) => res.data));
+    return this.http.get<LabResultResponse>(`/lab-results/${id}`);
   }
 
   /**

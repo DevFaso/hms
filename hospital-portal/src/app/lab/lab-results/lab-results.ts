@@ -1,4 +1,5 @@
 import { ResultEvolutionComponent } from '../shared/result-evolution.component';
+import { ResultRangeComponent } from '../shared/result-range.component';
 import { refusalReason } from '../../shared/refusal-reason';
 import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
 import { textMatches } from '../../shared/person-search';
@@ -84,6 +85,7 @@ export const ORDER_STATUSES_AWAITING_SPECIMEN: ReadonlySet<string> = new Set([
   standalone: true,
   imports: [
     ResultEvolutionComponent,
+    ResultRangeComponent,
     DateTimePipe,
     SubmitGuardDirective,
     MeasurePipe,
@@ -717,6 +719,7 @@ export class LabResultsComponent implements OnInit {
           this.detailHistoryError.set(true);
           return;
         }
+        this.selectedResult.set(detail);
         this.detailHistory.set(
           detail.trendHistory?.length
             ? detail.trendHistory
