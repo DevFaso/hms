@@ -66,7 +66,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * catalog (the roles Liquibase seeds on a real PostgreSQL, the patient and the
  * global-only super-admin aside, and any role a hospital cannot hold), in
  * French, Spanish and English, through the controller, the real service and the
- * real bundles.
+ * real bundles. Filters are disabled and the scope is a test super-admin:
+ * this proves persistence and localized refusals, not HTTP authorization or tenancy.
  *
  * <p>Each body is what the /staff form sends for the job title
  * (staff-list.ts submitForm): a specialization only for a physician title, a
@@ -368,6 +369,23 @@ class StaffSaveEveryRolePostgresIT {
 
         assertThat(refusal.path("fieldErrors").path("licenseNumber").asText())
             .isEqualTo("Le numéro de licence est obligatoire pour cet intitulé de poste.");
+    }
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.NullAndEmptySource
+    @ValueSource(strings = {" "})
+    void anExistingNurseLicenceCannotBeCleared(String licence) throws Exception {
+        Map<String, Object> body = formBody(userWithRole("ROLE_NURSE"), "ROLE_NURSE", "NURSE");
+        String id = create(body, EN);
+        String storedLicence = (String) body.get("licenseNumber");
+        body.put("licenseNumber", licence);
+
+        JsonNode refusal = putExpecting(id, body, EN);
+
+        assertThat(refusal.path("fieldErrors").path("licenseNumber").asText())
+            .isEqualTo("A license number is required for this job title.");
+        assertThat(staffRepository.findById(UUID.fromString(id)).orElseThrow().getLicenseNumber())
+            .isEqualTo(storedLicence);
     }
 
     // ---- helpers ------------------------------------------------------------------------------

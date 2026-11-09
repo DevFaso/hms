@@ -211,7 +211,7 @@ public class StaffServiceImpl implements StaffService {
                 .orElseThrow(() -> BusinessRuleException.ofKey("staff.assignment.required", dto.getUserEmail(), dto.getHospitalName()));
         }
 
-        validateStaffFields(dto, assignment, true, true);
+        validateStaffFields(dto, assignment, true, true, false);
         requireEndNotBeforeStart(dto);
 
         Staff staff = staffMapper.toStaff(dto, user, hospital, department, assignment);
@@ -271,7 +271,8 @@ public class StaffServiceImpl implements StaffService {
         // stays editable; the title's licence and specialization are asked when the edit gives it a
         // title it never had (Rex's receptionist-to-radiologist case stays refused).
         boolean titleChanged = existingStaff.getJobTitle() != com.example.hms.mapper.StaffMapper.jobTitle(dto.getJobTitle());
-        validateStaffFields(dto, assignment, licenceChanged, titleChanged);
+        validateStaffFields(dto, assignment, licenceChanged, titleChanged,
+            org.springframework.util.StringUtils.hasText(existingLic));
         requireEndNotBeforeStart(dto);
 
         boolean wasActive = existingStaff.isActive();
@@ -529,21 +530,22 @@ public class StaffServiceImpl implements StaffService {
      *
      * QA r41 (running-app check): admin-register creates clinicians without a licence by
      * design, so an edit that changes nothing about the title must not demand one. The
-     * title's licence and specialization are required on create, and on an edit only when
-     * the edit gives the record a title it did not have.
+     * title's licence and specialization are required on create or a title change. An edit
+     * must also retain a licence the record already had while its title remains licensed.
      *
      * @param assignment     the assignment the record is saved under
      * @param checkLicence   whether licence uniqueness is checked: always on create, on an
      *                       update only when the licence number changes
      * @param titleIsNew     whether the record takes this job title now: always on create, on
      *                       an update when the title changes
+     * @param hadLicence     whether the stored record already had a nonblank licence
      */
     private void validateStaffFields(StaffRequestDTO dto, UserRoleHospitalAssignment assignment, boolean checkLicence,
-                                     boolean titleIsNew) {
+                                     boolean titleIsNew, boolean hadLicence) {
         boolean licensed = titleIn(dto, CLINICAL_JOB_TITLES);
         boolean specialty = titleIsNew && titleIn(dto, SPECIALTY_JOB_TITLES);
         com.example.hms.exception.RequiredFields required = com.example.hms.exception.RequiredFields.check();
-        if (licensed && titleIsNew) {
+        if (licensed && (titleIsNew || hadLicence)) {
             required.requireValue(dto.getLicenseNumber(), "licenseNumber", "staff.license.required");
         }
         String roleName = assignment.getRole() == null || assignment.getRole().getCode() == null
@@ -570,7 +572,8 @@ public class StaffServiceImpl implements StaffService {
                 break;
         }
         required.orThrow();
-        if (licensed && checkLicence && staffRepository.existsByLicenseNumber(dto.getLicenseNumber())) {
+        if (licensed && checkLicence && org.springframework.util.StringUtils.hasText(dto.getLicenseNumber())
+                && staffRepository.existsByLicenseNumber(dto.getLicenseNumber())) {
             // QA D1301 class (round 29): a licence number another record holds is marked on its field.
             throw new com.example.hms.exception.FieldBusinessException("licenseNumber", "staff.license.duplicate",
                 dto.getLicenseNumber());

@@ -1124,6 +1124,46 @@ class StaffServiceImplTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullAndEmptySource
+    @org.junit.jupiter.params.provider.ValueSource(strings = {" "})
+    void updateStaff_legacyMissingLicenceDoesNotRunABlankDuplicateQuery(String licence) {
+        staff.setLicenseNumber(null);
+        staff.setJobTitle(com.example.hms.enums.JobTitle.NURSE);
+        StaffRequestDTO dto = validFor("ROLE_NURSE", "NURSE").licenseNumber(licence).build();
+        stubRoleAssignment("ROLE_NURSE");
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        assertThat(staffService.updateStaff(staffId, dto, locale)).isNotNull();
+        verify(staffRepository, never()).existsByLicenseNumber(any());
+    }
+
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> clearedLicensedTitles() {
+        return StaffServiceImpl.CLINICAL_JOB_TITLES.stream().flatMap(title ->
+            java.util.Arrays.asList(null, "", " ").stream().map(licence ->
+                org.junit.jupiter.params.provider.Arguments.of(title, licence)));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("clearedLicensedTitles")
+    void updateStaff_existingLicenceCannotBeClearedForAnyLicensedTitle(String title, String licence) {
+        staff.setJobTitle(com.example.hms.enums.JobTitle.valueOf(title));
+        staff.setLicenseNumber("LIC-001");
+        StaffRequestDTO dto = validFor("ROLE_NURSE", title).licenseNumber(licence).build();
+        stubRoleAssignment("ROLE_NURSE");
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+
+        assertThatThrownBy(() -> staffService.updateStaff(staffId, dto, locale))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getFieldErrors()).containsOnlyKeys("licenseNumber")
+                    .containsEntry("licenseNumber", "staff.license.required"));
+        verify(staffRepository, never()).existsByLicenseNumber(any());
+        verify(staffRepository, never()).save(any());
+        verify(staffMapper, never()).updateStaffFromDto(any(), any(), any(), any(), any(), any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(strings = {"DOCTOR", "RADIOLOGIST", "NURSE"})
     void updateStaff_missingUnchangedLicenceIsStillRefused(String title) {
         staff.setLicenseNumber(null);
