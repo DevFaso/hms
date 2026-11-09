@@ -180,6 +180,20 @@ class MessageKeyResolutionGuardTest {
     }
 
     @Test
+    void scannerFollowsDeepCrossClassWrappers() {
+        Map<String, String> sources = new LinkedHashMap<>();
+        sources.put("fixture/Caller.java", "package fixture; class Caller { void call() { W0.text(\"fix.deep\"); } }");
+        for (int i = 0; i < 12; i++) {
+            String call = i == 11 ? "MessageUtil.resolveOrRaw(key)" : "W" + (i + 1) + ".text(key)";
+            sources.put("fixture/W" + i + ".java", "package fixture; class W" + i
+                + " { static String text(String key) { return " + call + "; } }");
+        }
+
+        assertThat(MessageKeyScanner.scan(sources))
+            .anyMatch(site -> site.kind() == Kind.LITERAL && "fix.deep".equals(site.key()));
+    }
+
+    @Test
     @DisplayName("the scanner sees every shape a key reaches the message source in")
     void scannerSeesEveryShape() {
         // The floor for the scans above: each shape is proven on a fixture, the D1536 one first.

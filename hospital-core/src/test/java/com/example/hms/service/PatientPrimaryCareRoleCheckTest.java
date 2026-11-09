@@ -18,6 +18,7 @@ import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.support.PatientRegistrationGuard;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -63,9 +64,18 @@ class PatientPrimaryCareRoleCheckTest {
     private final UUID patientId = UUID.randomUUID();
     private Hospital hospital;
     private Patient patient;
+    private org.springframework.context.MessageSource previousMessageSource;
 
     @BeforeEach
     void realValidator() {
+        previousMessageSource = (org.springframework.context.MessageSource) ReflectionTestUtils.getField(
+            com.example.hms.utility.MessageUtil.class, "messageSource");
+        // A real source configured as production's (LocaleConfig: no code as default message) and
+        // without the role label: a null static source let the raw-key lookup pass unseen.
+        org.springframework.context.support.StaticMessageSource messages =
+            new org.springframework.context.support.StaticMessageSource();
+        messages.setUseCodeAsDefaultMessage(false);
+        com.example.hms.utility.MessageUtil.setMessageSource(messages);
         ReflectionTestUtils.setField(service, "roleValidator", new RoleValidator(assignmentRepo, actingScopeResolver));
         hospital = new Hospital();
         hospital.setId(hospitalId);
@@ -74,6 +84,11 @@ class PatientPrimaryCareRoleCheckTest {
         // Every user holds an active doctor assignment somewhere here: checking the user proves nothing.
         lenient().when(assignmentRepo.existsActiveByUserAndHospitalAndAnyRoleCode(any(), any(), anySet()))
             .thenReturn(true);
+    }
+
+    @AfterEach
+    void restoreMessages() {
+        com.example.hms.utility.MessageUtil.setMessageSource(previousMessageSource);
     }
 
     private UserRoleHospitalAssignment assignment(String roleCode, boolean active) {

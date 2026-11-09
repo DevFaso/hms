@@ -1107,6 +1107,52 @@ class StaffServiceImplTest {
                     .hasSize(2));
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"DOCTOR", "RADIOLOGIST", "NURSE"})
+    void updateStaff_missingUnchangedLicenceIsStillRefused(String title) {
+        staff.setLicenseNumber(null);
+        StaffRequestDTO dto = validFor("ROLE_" + title, title).licenseNumber(null).build();
+        stubRoleAssignment("ROLE_" + title);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+
+        assertThatThrownBy(() -> staffService.updateStaff(staffId, dto, locale))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getFieldErrors()).containsEntry("licenseNumber", "staff.license.required"));
+        verify(staffRepository, never()).save(any());
+        verify(staffMapper, never()).updateStaffFromDto(any(), any(), any(), any(), any(), any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "NURSE,false", "NURSE,true", "RADIOLOGIST,false", "RADIOLOGIST,true", "DOCTOR,false", "DOCTOR,true"
+    })
+    void resolvedAssignmentRequiresFieldsWhenRoleIsOmitted(String title, boolean update) {
+        StaffRequestDTO dto = validFor(null, title).employmentType(null).startDate(null).specialization(null).build();
+        UserRoleHospitalAssignment assignment = stubRoleAssignment("ROLE_" + title);
+        // This path resolves the assignment directly rather than looking up a role claim.
+        org.mockito.Mockito.reset(roleRepository, assignmentRepository);
+        when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId())).thenReturn(List.of(assignment));
+        if (update) {
+            when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        }
+
+        assertThatThrownBy(() -> {
+            if (update) {
+                staffService.updateStaff(staffId, dto, locale);
+            } else {
+                staffService.createStaff(dto, locale);
+            }
+        }).isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+            String[] fields = switch (title) {
+                case "NURSE" -> new String[] {"employmentType", "startDate"};
+                case "RADIOLOGIST" -> new String[] {"specialization", "startDate"};
+                default -> new String[] {"specialization"};
+            };
+            assertThat(ex.getFieldErrors()).containsOnlyKeys(fields);
+        });
+        verify(staffRepository, never()).save(any());
+    }
+
     @Test
     void radiologist_everyMissingValueIsNamedInOneRefusal_D1355() {
         // #1096 review: the licence of a licensed title was refused alone first, before the role's own

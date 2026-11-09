@@ -339,7 +339,7 @@ final class MessageKeyScanner {
             // To a fixed point across classes: a wrapper may call another class's wrapper, through
             // the class's name or a variable of its type ("guard.requireNotDischargedWithoutVisit").
             units.values().forEach(u -> wrappers.put(u.path(), wrappersIn(u.source())));
-            for (int pass = 0; pass < 4; pass++) {
+            while (true) {
                 boolean changed = false;
                 for (Unit u : units.values()) {
                     Map<String, List<Wrapper>> found = wrappersIn(u.source(), crossWrappers(u));

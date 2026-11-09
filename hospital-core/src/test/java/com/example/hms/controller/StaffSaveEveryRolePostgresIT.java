@@ -287,6 +287,47 @@ class StaffSaveEveryRolePostgresIT {
             .isEqualTo("Cet intitulé de poste ne fait pas partie des intitulés proposés.");
     }
 
+    @Test
+    void changingToALicensedTitleRequiresALicenceEvenWhenBothNumbersAreNull() throws Exception {
+        Map<String, Object> body = formBody(userWithRole("ROLE_RECEPTIONIST"), "ROLE_RECEPTIONIST", "RECEPTIONIST");
+        String id = create(body, EN);
+        body.put("jobTitle", "RADIOLOGIST");
+
+        JsonNode refusal = putExpecting(id, body, EN);
+
+        assertThat(refusal.path("fieldErrors").has("licenseNumber")).isTrue();
+    }
+
+    @Test
+    void omittingTheRoleDoesNotBypassTheResolvedNurseRequirements() throws Exception {
+        Map<String, Object> body = formBody(userWithRole("ROLE_NURSE"), "ROLE_NURSE", "NURSE");
+        String id = create(body, EN);
+        body.remove("roleName");
+        body.remove("employmentType");
+        body.remove("startDate");
+
+        JsonNode refusal = putExpecting(id, body, EN);
+        assertThat(refusal.path("fieldErrors").has("employmentType")).isTrue();
+        assertThat(refusal.path("fieldErrors").has("startDate")).isTrue();
+
+        MvcResult created = send(post(API + "/staff"), body, EN);
+        assertThat(created.getResponse().getStatus()).isEqualTo(400);
+        JsonNode createRefusal = objectMapper.readTree(created.getResponse().getContentAsString(StandardCharsets.UTF_8));
+        assertThat(createRefusal.path("fieldErrors").has("employmentType")).isTrue();
+        assertThat(createRefusal.path("fieldErrors").has("startDate")).isTrue();
+    }
+
+    @Test
+    void anUnknownTitleOnEditIsRefused() throws Exception {
+        Map<String, Object> body = formBody(userWithRole("ROLE_NURSE"), "ROLE_NURSE", "NURSE");
+        String id = create(body, EN);
+        body.put("jobTitle", "Brain surgeon");
+
+        JsonNode refusal = putExpecting(id, body, EN);
+
+        assertThat(refusal.path("fieldErrors").has("jobTitle")).isTrue();
+    }
+
     // ---- helpers ------------------------------------------------------------------------------
 
     private List<String> createThenEdit(String roleCode, String jobTitle, Department department, String language)

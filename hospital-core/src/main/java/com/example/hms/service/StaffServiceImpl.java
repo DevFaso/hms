@@ -211,7 +211,7 @@ public class StaffServiceImpl implements StaffService {
                 .orElseThrow(() -> BusinessRuleException.ofKey("staff.assignment.required", dto.getUserEmail(), dto.getHospitalName()));
         }
 
-        validateStaffFields(dto, true);
+        validateStaffFields(dto, assignment, true);
         requireEndNotBeforeStart(dto);
 
         Staff staff = staffMapper.toStaff(dto, user, hospital, department, assignment);
@@ -267,7 +267,7 @@ public class StaffServiceImpl implements StaffService {
         String newLic = dto.getLicenseNumber();
         boolean licenceChanged = (existingLic == null && newLic != null)
                 || (existingLic != null && !existingLic.equals(newLic));
-        validateStaffFields(dto, licenceChanged);
+        validateStaffFields(dto, assignment, licenceChanged);
         requireEndNotBeforeStart(dto);
 
         boolean wasActive = existingStaff.isActive();
@@ -518,16 +518,23 @@ public class StaffServiceImpl implements StaffService {
      * ONE refusal (QA D1355): the licence of a licensed title, then the role's own
      * fields, before the duplicate-licence check.
      *
-     * @param checkLicence whether the licence is judged: always on create, on an
+     * #1096 review (Rex): the licence is required whenever the resulting title is a
+     * licensed one, edit included (an edit that moves a record to a licensed title with
+     * no licence was accepted); and the role's own fields follow the RESOLVED assignment,
+     * not the optional roleName of the request (omitting it skipped them).
+     *
+     * @param assignment   the assignment the record is saved under
+     * @param checkLicence whether licence uniqueness is checked: always on create, on an
      *                     update only when the licence number changes
      */
-    private void validateStaffFields(StaffRequestDTO dto, boolean checkLicence) {
-        boolean licensed = checkLicence && titleIn(dto, CLINICAL_JOB_TITLES);
+    private void validateStaffFields(StaffRequestDTO dto, UserRoleHospitalAssignment assignment, boolean checkLicence) {
+        boolean licensed = titleIn(dto, CLINICAL_JOB_TITLES);
         com.example.hms.exception.RequiredFields required = com.example.hms.exception.RequiredFields.check();
         if (licensed) {
             required.requireValue(dto.getLicenseNumber(), "licenseNumber", "staff.license.required");
         }
-        String roleName = dto.getRoleName() == null ? "" : dto.getRoleName().trim().toUpperCase(java.util.Locale.ROOT);
+        String roleName = assignment.getRole() == null || assignment.getRole().getCode() == null
+            ? "" : assignment.getRole().getCode().trim().toUpperCase(java.util.Locale.ROOT);
         switch (roleName) {
             case "ROLE_DOCTOR":
                 if (titleIn(dto, SPECIALTY_JOB_TITLES)) {
@@ -550,7 +557,7 @@ public class StaffServiceImpl implements StaffService {
                 break;
         }
         required.orThrow();
-        if (licensed && staffRepository.existsByLicenseNumber(dto.getLicenseNumber())) {
+        if (licensed && checkLicence && staffRepository.existsByLicenseNumber(dto.getLicenseNumber())) {
             // QA D1301 class (round 29): a licence number another record holds is marked on its field.
             throw new com.example.hms.exception.FieldBusinessException("licenseNumber", "staff.license.duplicate",
                 dto.getLicenseNumber());
