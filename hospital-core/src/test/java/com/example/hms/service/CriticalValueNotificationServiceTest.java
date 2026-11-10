@@ -643,10 +643,15 @@ class CriticalValueNotificationServiceTest {
     @Test
     void matchingReadBackResolvesTheResultAndStopsEscalation() {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
-        when(labResultRepository.save(any(LabResult.class))).thenAnswer(i -> i.getArgument(0));
+        when(labResultRepository.confirmReadBackIfUnconfirmed(any(), any(), any(), any(), any())).thenReturn(1);
         UUID actor = UUID.randomUUID();
 
         LabResult updated = service.recordReadBack(result, "7.1", actor, "Dr Diallo");
+
+        // D1553 (Rex P2): written by the conditional UPDATE, never check-then-save.
+        verify(labResultRepository).confirmReadBackIfUnconfirmed(eq(result.getId()), eq("7.1"), eq(actor),
+            eq("Dr Diallo"), any(LocalDateTime.class));
+        verify(labResultRepository, never()).save(any());
 
         assertThat(updated.getCriticalReadBackAt()).isNotNull();
         assertThat(updated.getCriticalReadBackValue()).isEqualTo("7.1");
@@ -659,35 +664,30 @@ class CriticalValueNotificationServiceTest {
 
     @Test
     void mismatchedReadBackIsRejectedButStillRecorded() {
-        // The mismatch is persisted in a REQUIRES_NEW transaction onto a row
-        // RELOADED inside it — never the caller's managed entity, whose
-        // transaction the BusinessException is about to roll back. The previous
-        // version of this test asserted on the in-memory entity against a
-        // mocked repository, which is exactly how the rollback that erased
-        // every mismatch record went unnoticed.
-        LabResult reloaded = new LabResult();
-        reloaded.setId(result.getId());
-        reloaded.setResultValue("7.1");
-        when(labResultRepository.findById(result.getId())).thenReturn(java.util.Optional.of(reloaded));
+        // The mismatch is persisted in a REQUIRES_NEW transaction straight to the
+        // row, never through the caller's managed entity, whose transaction the
+        // BusinessException is about to roll back. An earlier version of this
+        // test asserted on the in-memory entity against a mocked repository,
+        // which is exactly how the rollback that erased every mismatch record
+        // went unnoticed.
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        when(labResultRepository.recordReadBackMismatchIfUnconfirmed(any(), any(), any(), any(), any())).thenReturn(1);
         UUID actor = UUID.randomUUID();
 
-        // 1.7 instead of 7.1 — a transposition, which is the error a read-back
+        // 1.7 instead of 7.1: a transposition, which is the error a read-back
         // exists to catch and the reason it is worth storing the wrong value.
         assertThatThrownBy(() -> service.recordReadBack(result, "1.7", actor, "Dr Diallo"))
-            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("lab.criticalReadBack.mismatch");
 
-        // The inner-transaction row carries the mismatch and was saved…
-        assertThat(reloaded.getCriticalReadBackValue()).isEqualTo("1.7");
-        assertThat(reloaded.getCriticalReadBackByUserId()).isEqualTo(actor);
-        assertThat(reloaded.getCriticalReadBackByDisplay()).isEqualTo("Dr Diallo");
-        verify(labResultRepository).save(reloaded);
-        // …and it went through the separate transaction, not the doomed one.
+        // The mismatch went to the row, only while it has no confirmed read-back,
+        verify(labResultRepository).recordReadBackMismatchIfUnconfirmed(eq(result.getId()), eq("1.7"), eq(actor),
+            eq("Dr Diallo"), any(LocalDateTime.class));
+        // through the separate transaction, not the doomed one.
         verify(transactionManager).getTransaction(any());
 
-        // Nothing on either row claims the read-back succeeded.
-        assertThat(reloaded.getCriticalReadBackAt()).isNull();
-        assertThat(reloaded.isAcknowledged()).isFalse();
+        // Nothing claims the read-back succeeded.
+        verify(labResultRepository, never()).confirmReadBackIfUnconfirmed(any(), any(), any(), any(), any());
         assertThat(result.getCriticalReadBackAt()).isNull();
         assertThat(result.isAcknowledged()).isFalse();
         // QA D726: a wrong read-back answers nothing; the alert stays unread.
@@ -726,32 +726,49 @@ class CriticalValueNotificationServiceTest {
         assertThat(result.getCriticalReadBackByDisplay()).isEqualTo("Dr A");
         assertThat(result.getCriticalReadBackAt()).isEqualTo(confirmedAt);
         assertThat(result.getAcknowledgedByDisplay()).isEqualTo("Dr A");
-        verify(labResultRepository, never()).findById(any());
-        verify(labResultRepository, never()).save(any());
+        verify(labResultRepository, never()).confirmReadBackIfUnconfirmed(any(), any(), any(), any(), any());
+        verify(labResultRepository, never()).recordReadBackMismatchIfUnconfirmed(any(), any(), any(), any(), any());
         verify(transactionManager, never()).getTransaction(any());
     }
 
     /**
-     * D1553, the race: the caller saw no confirmation, but one was committed before the
-     * mismatch record's own transaction loaded the row. The record never lands on it.
+     * D1553 (Rex P2), the race on the mismatch: a read-back confirmed between the caller's
+     * read and the mismatch record's write leaves the conditional UPDATE 0 rows. Nothing
+     * else is written, and the refusal is still the mismatch.
      */
     @Test
     void aMismatchRecordNeverLandsOnARowConfirmedMeanwhile() {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
-        LabResult reloaded = new LabResult();
-        reloaded.setId(result.getId());
-        reloaded.setResultValue("7.1");
-        reloaded.setCriticalReadBackValue("7.1");
-        reloaded.setCriticalReadBackByDisplay("Dr A");
-        reloaded.setCriticalReadBackAt(LocalDateTime.now());
-        when(labResultRepository.findById(result.getId())).thenReturn(java.util.Optional.of(reloaded));
+        when(labResultRepository.recordReadBackMismatchIfUnconfirmed(any(), any(), any(), any(), any())).thenReturn(0);
 
         assertThatThrownBy(() -> service.recordReadBack(result, "1.7", UUID.randomUUID(), "Dr B"))
-            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("lab.criticalReadBack.mismatch");
 
-        assertThat(reloaded.getCriticalReadBackValue()).isEqualTo("7.1");
-        assertThat(reloaded.getCriticalReadBackByDisplay()).isEqualTo("Dr A");
         verify(labResultRepository, never()).save(any());
+        verify(labResultRepository, never()).findById(any());
+    }
+
+    /**
+     * D1553 (Rex P2), the race on the confirmation: two doctors both pass the "not yet
+     * confirmed" check; the second one's conditional UPDATE touches 0 rows. It is refused,
+     * the in-memory row is not stamped with the second author, and the alert is not
+     * answered a second time.
+     */
+    @Test
+    void aReadBackConfirmedConcurrentlyIsRefusedAndKeepsTheFirstAuthor() {
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        when(labResultRepository.confirmReadBackIfUnconfirmed(any(), any(), any(), any(), any())).thenReturn(0);
+
+        assertThatThrownBy(() -> service.recordReadBack(result, "7.1", UUID.randomUUID(), "Dr B"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("lab.criticalReadBack.alreadyConfirmed");
+
+        assertThat(result.getCriticalReadBackByDisplay()).isNull();
+        assertThat(result.getCriticalReadBackAt()).isNull();
+        assertThat(result.isAcknowledged()).isFalse();
+        verify(labResultRepository, never()).save(any());
+        verify(notificationService, never()).markReadForSubject(any(), any());
     }
 
     /**
@@ -771,13 +788,14 @@ class CriticalValueNotificationServiceTest {
         assertThat(result.getCriticalReadBackAt()).isNull();
         assertThat(result.isAcknowledged()).isFalse();
         verify(labResultRepository, never()).save(any());
+        verify(labResultRepository, never()).confirmReadBackIfUnconfirmed(any(), any(), any(), any(), any());
     }
 
     /** A result the sweep still pages (critical when paged, not graded otherwise since) can be read back. */
     @Test
     void aPagedResultThatCannotBeGradedNowCanStillBeReadBack() {
         result.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(40));
-        when(labResultRepository.save(any(LabResult.class))).thenAnswer(i -> i.getArgument(0));
+        when(labResultRepository.confirmReadBackIfUnconfirmed(any(), any(), any(), any(), any())).thenReturn(1);
 
         LabResult updated = service.recordReadBack(result, "7.1", UUID.randomUUID(), "Dr A");
 
@@ -787,7 +805,7 @@ class CriticalValueNotificationServiceTest {
     @Test
     void readBackToleratesTrailingZeroFormatting() {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
-        when(labResultRepository.save(any(LabResult.class))).thenAnswer(i -> i.getArgument(0));
+        when(labResultRepository.confirmReadBackIfUnconfirmed(any(), any(), any(), any(), any())).thenReturn(1);
 
         // A clinician repeating the number correctly must not be told they got
         // it wrong because the lab wrote it with a trailing zero.
