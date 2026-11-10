@@ -64,6 +64,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -527,6 +528,102 @@ class DispenseServiceImplTest {
             verify(dispenseRepository).save(any(Dispense.class));
             verify(prescriptionRepository).save(any(Prescription.class));
             verify(stockLotRepository, never()).save(any());
+        }
+
+        /** QA D1555: the patient's allergies, read by the real re-check (no catalogue, no audit). */
+        private com.example.hms.repository.PatientAllergyRepository allergiesOnRecord(
+                com.example.hms.model.PatientAllergy... allergies) {
+            com.example.hms.repository.PatientAllergyRepository repo =
+                    mock(com.example.hms.repository.PatientAllergyRepository.class);
+            lenient().when(repo.findByPatient_Id(patientId)).thenReturn(List.of(allergies));
+            lenient().when(repo.findByPatient_IdIn(any())).thenReturn(List.of(allergies));
+            service.setAllergyRecheck(new com.example.hms.service.allergy.CurrentAllergyRecheck(repo, null, null));
+            return repo;
+        }
+
+        /** A SEVERE penicillin allergy recorded after the order was signed (QA round 43). */
+        private com.example.hms.model.PatientAllergy severePenicillinAllergy() {
+            com.example.hms.model.PatientAllergy allergy = new com.example.hms.model.PatientAllergy();
+            allergy.setId(UUID.randomUUID());
+            allergy.setActive(true);
+            allergy.setPatient(patient);
+            allergy.setAllergenDisplay("Pénicilline");
+            allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+            return allergy;
+        }
+
+        private Dispense stubTheFill(DispenseRequestDTO dto) {
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            lenient().when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            lenient().when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            lenient().when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            lenient().when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            lenient().when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(BigDecimal.TEN);
+            lenient().when(prescriptionRepository.save(any(Prescription.class))).thenReturn(prescription);
+            lenient().when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
+            lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            return entity;
+        }
+
+        @Test
+        @DisplayName("QA D1555: amoxicillin for a patient whose penicillin allergy was recorded after signing is refused on its field, nothing written")
+        void d1555_aFillOfADrugThePatientIsAllergicToIsRefused() {
+            allergiesOnRecord(severePenicillinAllergy());
+            DispenseRequestDTO dto = buildRequest();
+            stubTheFill(dto);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
+                    .hasFieldOrPropertyWithValue("field", com.example.hms.service.allergy.CurrentAllergyRecheck.ACK_FIELD)
+                    .satisfies(e -> assertThat(((com.example.hms.cdshooks.CdsCriticalBlockException) e).getCards())
+                            .singleElement()
+                            .satisfies(c -> assertThat(c.exceptionKey()).startsWith(
+                                    com.example.hms.service.allergy.CurrentAllergyRecheck.KEY_PREFIX)));
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @Test
+        @DisplayName("QA D1555: the same fill with the allergy acknowledged (the card's token and a reason) is recorded with the reason")
+        void d1555_aFillWithTheAllergyAcknowledgedIsRecorded() {
+            allergiesOnRecord(severePenicillinAllergy());
+            DispenseRequestDTO dto = buildRequest();
+            Dispense entity = stubTheFill(dto);
+            String token;
+            try {
+                service.createDispense(dto);
+                throw new AssertionError("the first fill should have been refused");
+            } catch (com.example.hms.cdshooks.CdsCriticalBlockException refused) {
+                token = refused.getCards().get(0).exceptionKey();
+            }
+
+            dto.setAllergyAcknowledgementReason("Prescriber confirmed: reaction was a rash, graded challenge");
+            dto.setAllergyAcknowledgementToken(token);
+            service.createDispense(dto);
+
+            verify(dispenseRepository).save(any(Dispense.class));
+            assertThat(entity.getNotes()).contains("Pénicilline").contains("graded challenge");
+        }
+
+        @Test
+        @DisplayName("QA D1555: the work-queue row carries the allergy card and ALLERGY as its reason for attention")
+        void d1555_theQueueRowSaysTheAllergy() {
+            allergiesOnRecord(severePenicillinAllergy());
+            Pageable pageable = PageRequest.of(0, 20);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(prescription)));
+
+            com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO row =
+                    service.getWorkQueue(pageable, com.example.hms.enums.QueueClaimFilter.ALL).getContent().get(0);
+
+            assertThat(row.isNeedsAttention()).isTrue();
+            assertThat(row.getAttentionReason()).isEqualTo("ALLERGY");
+            assertThat(row.getAllergyAlerts()).isNotEmpty();
+            assertThat(row.getAllergyAlerts().get(0).summary()).contains("Pénicilline");
         }
 
         @Test

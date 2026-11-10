@@ -6661,7 +6661,9 @@
         "PRESCRIPTION_CDS_OVERRIDDEN": "Alerte d’aide à la décision outrepassée sur une ordonnance",
         "PRESCRIPTION_SIGN_REAUTHENTICATION": "Réauthentification pour signer une ordonnance de stupéfiant",
         "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Revue de dose pédiatrique enregistrée",
-        "ADMISSION_BED_RELEASED": "Lit d’hospitalisation libéré"
+        "ADMISSION_BED_RELEASED": "Lit d’hospitalisation libéré",
+        "MAR_ALLERGY_ACKNOWLEDGED": "Allergie reconnue lors d’une administration",
+        "DISPENSE_ALLERGY_ACKNOWLEDGED": "Allergie reconnue à la pharmacie"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -9572,7 +9574,8 @@
       "CLARIFICATION_RESOLVED": "Le prescripteur a répondu — lire la réponse d'abord",
       "PRESCRIBER_ANSWERED": "Le prescripteur a répondu",
       "UNRECOGNISED": "À revoir — vérifier l'ordonnance avant de délivrer",
-      "READY_UNCOLLECTED": "Prête depuis {{days}} jours et non retirée"
+      "READY_UNCOLLECTED": "Prête depuis {{days}} jours et non retirée",
+      "ALLERGY": "Allergie du patient"
     },
     "ACCEPT": "Accepter",
     "ADDRESS": "Adresse",
@@ -10045,7 +10048,8 @@
     "LOTS_OTHER_FORM": "{{count}} lot(s) de ce médicament sous une autre forme ne sont pas proposés : l'ordonnance est rédigée en « {{unit}} ».",
     "SAVE_PRICE": "Enregistrer le prix",
     "WRITE_OFF_REMOVES_ONLY": "La détérioration et la péremption ne font que retirer du stock : saisissez une quantité négative.",
-    "WRITE_OFF_SIGN_HINT": "Ce motif retire du stock : saisissez une quantité négative (par exemple −2)."
+    "WRITE_OFF_SIGN_HINT": "Ce motif retire du stock : saisissez une quantité négative (par exemple −2).",
+    "ALLERGY_ALERTS_TITLE": "Alertes allergie"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -13305,5 +13309,10 @@
     "REFERENCE": "Plage de référence",
     "OUTSIDE_SCALE": "Le résultat dépasse l’échelle affichée ; le repère se trouve au bord.",
     "UNAVAILABLE": "Le positionnement nécessite une valeur numérique exacte et une plage de référence compatible."
+  },
+  "ALLERGY_ACK": {
+    "TITLE": "Allergie documentée",
+    "REASON_LABEL": "Pourquoi continuer malgré cette allergie",
+    "CONFIRM": "Prendre acte et continuer"
   }
 }

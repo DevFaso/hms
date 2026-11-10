@@ -6695,7 +6695,9 @@
         "PRESCRIPTION_CDS_OVERRIDDEN": "Alerta de apoyo a la decisión anulada en una receta",
         "PRESCRIPTION_SIGN_REAUTHENTICATION": "Reautenticación para firmar una receta de estupefaciente",
         "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Revisión de dosis pediátrica registrada",
-        "ADMISSION_BED_RELEASED": "Cama de hospitalización liberada"
+        "ADMISSION_BED_RELEASED": "Cama de hospitalización liberada",
+        "MAR_ALLERGY_ACKNOWLEDGED": "Alergia reconocida en una administración",
+        "DISPENSE_ALLERGY_ACKNOWLEDGED": "Alergia reconocida en la farmacia"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -9572,7 +9574,8 @@
       "CLARIFICATION_RESOLVED": "El prescriptor ha respondido — lea la respuesta primero",
       "PRESCRIBER_ANSWERED": "El prescriptor ha respondido",
       "UNRECOGNISED": "Requiere una segunda revisión — compruebe la orden antes de dispensar",
-      "READY_UNCOLLECTED": "Lista desde hace {{days}} días y no recogida"
+      "READY_UNCOLLECTED": "Lista desde hace {{days}} días y no recogida",
+      "ALLERGY": "Alergia del paciente"
     },
     "ACCEPT": "Aceptar",
     "ADDRESS": "Dirección",
@@ -10045,7 +10048,8 @@
     "LOTS_OTHER_FORM": "{{count}} lote(s) de este medicamento en otra forma no se ofrecen: la orden está escrita en «{{unit}}».",
     "SAVE_PRICE": "Guardar el precio",
     "WRITE_OFF_REMOVES_ONLY": "El deterioro y la caducidad solo retiran existencias: introduzca una cantidad negativa.",
-    "WRITE_OFF_SIGN_HINT": "Este motivo retira existencias: introduzca una cantidad negativa (por ejemplo −2)."
+    "WRITE_OFF_SIGN_HINT": "Este motivo retira existencias: introduzca una cantidad negativa (por ejemplo −2).",
+    "ALLERGY_ALERTS_TITLE": "Alertas de alergia"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",
@@ -13305,5 +13309,10 @@
     "REFERENCE": "Intervalo de referencia",
     "OUTSIDE_SCALE": "El resultado supera la escala mostrada; el marcador está en el borde.",
     "UNAVAILABLE": "La posición requiere un resultado numérico exacto y un intervalo de referencia compatible."
+  },
+  "ALLERGY_ACK": {
+    "TITLE": "Alergia documentada",
+    "REASON_LABEL": "Por qué continuar a pesar de esta alergia",
+    "CONFIRM": "Reconocer y continuar"
   }
 }

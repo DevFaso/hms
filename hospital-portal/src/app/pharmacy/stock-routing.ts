@@ -32,10 +32,18 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import {
+  AllergyAcknowledgementFields,
+  AllergyAcknowledgementRefusal,
+  allergyAcknowledgementFields,
+  allergyAcknowledgementRefusal,
+} from '../shared/allergy-acknowledgement/allergy-acknowledgement';
+import { AllergyAcknowledgementDialogComponent } from '../shared/allergy-acknowledgement/allergy-acknowledgement-dialog.component';
 @Component({
   selector: 'app-stock-routing',
   standalone: true,
   imports: [
+    AllergyAcknowledgementDialogComponent,
     SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
@@ -422,7 +430,21 @@ export class StockRoutingComponent implements OnInit {
     this.selectedPartner.set(null);
   }
 
-  submitRouteToPartner(): void {
+  /**
+   * QA D1555: the patient's current allergies stop the drug (an allergy recorded after the order was
+   * signed included). The server's refusal with its card; the routing is sent again with the reason.
+   */
+  readonly allergyAck = signal<AllergyAcknowledgementRefusal | null>(null);
+
+  /** QA D1555: the same routing again, with the pharmacist's acknowledgement and reason. */
+  confirmAllergyAck(reason: string): void {
+    const refusal = this.allergyAck();
+    if (!refusal) return;
+    this.allergyAck.set(null);
+    this.submitRouteToPartner(allergyAcknowledgementFields(refusal, reason));
+  }
+
+  submitRouteToPartner(allergyAck?: AllergyAcknowledgementFields): void {
     const partner = this.selectedPartner();
     if (!partner) return;
     this.saving.set(true);
@@ -432,6 +454,7 @@ export class StockRoutingComponent implements OnInit {
         routingType: 'PARTNER',
         targetPharmacyId: partner.pharmacyId,
         reason: this.routingReason || undefined,
+        ...(allergyAck ?? {}),
       })
       .subscribe({
         next: () => {
@@ -441,8 +464,13 @@ export class StockRoutingComponent implements OnInit {
           this.checkStock();
         },
         error: (err) => {
-          this.toast.error(this.errorMessage(err, 'PHARMACY.ROUTING_FAILED'));
           this.saving.set(false);
+          const allergy = allergyAcknowledgementRefusal(err);
+          if (allergy) {
+            this.allergyAck.set(allergy);
+            return;
+          }
+          this.toast.error(this.errorMessage(err, 'PHARMACY.ROUTING_FAILED'));
         },
       });
   }
