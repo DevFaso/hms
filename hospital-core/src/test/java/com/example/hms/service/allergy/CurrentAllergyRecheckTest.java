@@ -18,6 +18,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class CurrentAllergyRecheckTest {
@@ -191,7 +193,7 @@ class CurrentAllergyRecheckTest {
             .isInstanceOf(CdsCriticalBlockException.class)
             .hasMessageContaining("Awa Traore").hasMessageContaining("Issa Kabore");
         var filed = org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.clinical.CreateInBasketItemRequest.class);
-        org.mockito.Mockito.verify(notices, org.mockito.Mockito.times(2)).createItemInNewTransaction(filed.capture());
+        verify(notices, times(2)).createItemInNewTransaction(filed.capture());
         assertThat(filed.getAllValues()).extracting(com.example.hms.payload.dto.clinical.CreateInBasketItemRequest::getRecipientUserId)
             .containsExactly(prescriber.getUser().getId(), clinician.getUser().getId());
         assertThat(filed.getAllValues()).allSatisfy(item -> {

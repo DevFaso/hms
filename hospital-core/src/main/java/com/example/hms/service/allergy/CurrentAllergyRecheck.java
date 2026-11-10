@@ -377,38 +377,14 @@ public class CurrentAllergyRecheck {
      * the hold rolls the gate's back. Returns the names shown on the hold.
      */
     private List<String> notifyPrescribers(Prescription rx, Stop stop) {
-        Map<UUID, String> recipients = new LinkedHashMap<>();
-        for (Staff staff : Arrays.asList(rx.getStaff(), rx.getSignedBy(),
-                rx.getEncounter() != null ? rx.getEncounter().getStaff() : null)) {
-            if (staff != null && staff.getUser() != null && staff.getUser().getId() != null) {
-                String name = staff.getFullName();
-                recipients.putIfAbsent(staff.getUser().getId(), name != null ? name : "");
-            }
-        }
+        Map<UUID, String> recipients = reviewersOf(rx);
         UUID hospitalId = rx.getHospital() != null ? rx.getHospital().getId() : null;
         if (notices != null && hospitalId != null) {
-            UUID patientId = rx.getPatient() != null ? rx.getPatient().getId() : null;
-            String patientName = rx.getPatient() != null ? rx.getPatient().getFullName() : null;
-            Object[] titleArgs = {rx.getMedicationName()};
-            Object[] bodyArgs = {rx.getMedicationName(), patientName, stop.allergen()};
             for (UUID recipient : recipients.keySet()) {
-                CreateInBasketItemRequest item = new CreateInBasketItemRequest();
-                item.setRecipientUserId(recipient);
-                item.setHospitalId(hospitalId);
-                item.setItemType(InBasketItemType.TASK);
-                item.setPriority(InBasketPriority.URGENT);
-                item.setReferenceId(rx.getId());
-                item.setReferenceType(NOTICE_REFERENCE_TYPE);
-                item.setEncounterId(rx.getEncounter() != null ? rx.getEncounter().getId() : null);
-                item.setPatientId(patientId);
-                item.setPatientName(patientName);
-                item.setTitleKey(NOTICE_TITLE_KEY);
-                item.setBodyKey(NOTICE_BODY_KEY);
-                item.setTitleArgs(titleArgs);
-                item.setBodyArgs(bodyArgs);
+                CreateInBasketItemRequest item = noticeFor(rx, stop, recipient, hospitalId);
                 try {
-                    item.setTitle(MessageUtil.resolve(NotificationLocales.STAFF, NOTICE_TITLE_KEY, titleArgs));
-                    item.setBody(MessageUtil.resolve(NotificationLocales.STAFF, NOTICE_BODY_KEY, bodyArgs));
+                    item.setTitle(MessageUtil.resolve(NotificationLocales.STAFF, NOTICE_TITLE_KEY, item.getTitleArgs()));
+                    item.setBody(MessageUtil.resolve(NotificationLocales.STAFF, NOTICE_BODY_KEY, item.getBodyArgs()));
                     notices.createItemInNewTransaction(item);
                 } catch (RuntimeException ex) {
                     log.warn("Allergy review notice not filed for prescription {}: {}", rx.getId(),
@@ -417,6 +393,37 @@ public class CurrentAllergyRecheck {
             }
         }
         return recipients.values().stream().filter(n -> !n.isBlank()).toList();
+    }
+
+    /** The order's prescriber, its signer and the encounter's clinician, once each, with their names. */
+    private static Map<UUID, String> reviewersOf(Prescription rx) {
+        Map<UUID, String> recipients = new LinkedHashMap<>();
+        for (Staff staff : Arrays.asList(rx.getStaff(), rx.getSignedBy(),
+                rx.getEncounter() != null ? rx.getEncounter().getStaff() : null)) {
+            if (staff != null && staff.getUser() != null && staff.getUser().getId() != null) {
+                recipients.putIfAbsent(staff.getUser().getId(), Objects.toString(staff.getFullName(), ""));
+            }
+        }
+        return recipients;
+    }
+
+    private static CreateInBasketItemRequest noticeFor(Prescription rx, Stop stop, UUID recipient, UUID hospitalId) {
+        String patientName = rx.getPatient() != null ? rx.getPatient().getFullName() : null;
+        CreateInBasketItemRequest item = new CreateInBasketItemRequest();
+        item.setRecipientUserId(recipient);
+        item.setHospitalId(hospitalId);
+        item.setItemType(InBasketItemType.TASK);
+        item.setPriority(InBasketPriority.URGENT);
+        item.setReferenceId(rx.getId());
+        item.setReferenceType(NOTICE_REFERENCE_TYPE);
+        item.setEncounterId(rx.getEncounter() != null ? rx.getEncounter().getId() : null);
+        item.setPatientId(rx.getPatient() != null ? rx.getPatient().getId() : null);
+        item.setPatientName(patientName);
+        item.setTitleKey(NOTICE_TITLE_KEY);
+        item.setBodyKey(NOTICE_BODY_KEY);
+        item.setTitleArgs(new Object[] {rx.getMedicationName()});
+        item.setBodyArgs(new Object[] {rx.getMedicationName(), patientName, stop.allergen()});
+        return item;
     }
 
     /** The line the record keeps (a dose's or a fill's note): the allergy and the review it passed under. */

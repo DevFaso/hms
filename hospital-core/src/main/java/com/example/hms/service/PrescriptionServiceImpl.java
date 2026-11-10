@@ -852,8 +852,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             return;
         }
         allergyRecheck.currentConflict(prescription).ifPresent(conflict -> recordAllergyReview(prescription,
-            com.example.hms.enums.AllergyReviewDecision.CONTINUE, null, reason, conflict.reviewToken(),
-            signer.getUser(), conflict.stop().allergy().getId(), "Allergy conflict reviewed at signature"));
+            com.example.hms.enums.AllergyReviewDecision.CONTINUE, null, reason, conflict,
+            signer.getUser(), "Allergy conflict reviewed at signature"));
     }
 
     /** Policy 3: the signer's acknowledgement of one allergy stop, with the token that bound it. */
@@ -1219,23 +1219,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     public com.example.hms.payload.dto.prescription.AllergyConflictDTO reviewAllergyConflict(UUID id,
             com.example.hms.payload.dto.prescription.AllergyConflictReviewRequestDTO request) {
         com.example.hms.enums.AllergyReviewDecision decision = request != null ? request.getDecision() : null;
-        String rationale = request == null || request.getRationale() == null ? "" : request.getRationale().trim();
-        String plan = request == null || request.getPlan() == null ? "" : request.getPlan().trim();
-        if (decision == null) {
-            throw new com.example.hms.exception.FieldBusinessException("decision", "allergy.review.decisionRequired");
-        }
-        if (rationale.isEmpty()) {
-            throw new com.example.hms.exception.FieldBusinessException("rationale", "allergy.review.rationaleRequired");
-        }
-        if (decision == com.example.hms.enums.AllergyReviewDecision.CONTINUE && plan.isEmpty()) {
-            throw new com.example.hms.exception.FieldBusinessException("plan", "allergy.review.planRequired");
-        }
-        if (rationale.length() > 1000) {
-            throw new com.example.hms.exception.FieldBusinessException("rationale", "allergy.review.tooLong", 1000);
-        }
-        if (plan.length() > 1000) {
-            throw new com.example.hms.exception.FieldBusinessException("plan", "allergy.review.tooLong", 1000);
-        }
+        String rationale = trimmedOrEmpty(request != null ? request.getRationale() : null);
+        String plan = trimmedOrEmpty(request != null ? request.getPlan() : null);
+        requireReviewFields(decision, rationale, plan);
         UUID actingHospitalId = roleValidator.requireActiveHospitalId();
         Prescription prescription = lockForUpdateInActingHospital(id, actingHospitalId);
         UUID callerId = roleValidator.getCurrentUserId();
@@ -1266,9 +1252,32 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 com.example.hms.utility.MessageUtil.resolveOrRaw("allergy.review.forbidden"));
         }
         recordAllergyReview(prescription, decision, decision == com.example.hms.enums.AllergyReviewDecision.CONTINUE ? plan : null,
-            rationale, token, reviewer, conflict.get().stop().allergy().getId(), "Allergy conflict reviewed by the prescriber");
+            rationale, conflict.get(), reviewer, "Allergy conflict reviewed by the prescriber");
         Prescription saved = prescriptionRepository.save(prescription);
         return allergyConflictOf(saved);
+    }
+
+    private static String trimmedOrEmpty(String text) {
+        return text == null ? "" : text.trim();
+    }
+
+    /** The review's own fields, by name: a decision, a rationale, a plan to continue, within the column. */
+    private static void requireReviewFields(com.example.hms.enums.AllergyReviewDecision decision, String rationale, String plan) {
+        if (decision == null) {
+            throw new com.example.hms.exception.FieldBusinessException("decision", "allergy.review.decisionRequired");
+        }
+        if (rationale.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("rationale", "allergy.review.rationaleRequired");
+        }
+        if (decision == com.example.hms.enums.AllergyReviewDecision.CONTINUE && plan.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("plan", "allergy.review.planRequired");
+        }
+        if (rationale.length() > 1000) {
+            throw new com.example.hms.exception.FieldBusinessException("rationale", "allergy.review.tooLong", 1000);
+        }
+        if (plan.length() > 1000) {
+            throw new com.example.hms.exception.FieldBusinessException("plan", "allergy.review.tooLong", 1000);
+        }
     }
 
     /**
@@ -1276,8 +1285,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * conflict is told again) and audits it after commit: ids and digests only, the row is not encrypted.
      */
     private void recordAllergyReview(Prescription prescription, com.example.hms.enums.AllergyReviewDecision decision,
-                                     String plan, String rationale, String token, com.example.hms.model.User reviewer,
-                                     UUID allergyId, String description) {
+                                     String plan, String rationale,
+                                     com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict conflict,
+                                     com.example.hms.model.User reviewer, String description) {
+        String token = conflict.reviewToken();
+        UUID allergyId = conflict.stop().allergy().getId();
         LocalDateTime at = LocalDateTime.now(clock);
         prescription.setAllergyReviewDecision(decision);
         prescription.setAllergyReviewPlan(plan);
@@ -1342,12 +1354,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         java.util.Optional<com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict> conflict =
             allergyRecheck == null ? java.util.Optional.empty() : allergyRecheck.currentConflict(prescription);
         com.example.hms.model.User reviewer = prescription.getAllergyReviewedBy();
-        String reviewerName = null;
-        if (reviewer != null) {
-            String first = reviewer.getFirstName() != null ? reviewer.getFirstName().trim() : "";
-            String last = reviewer.getLastName() != null ? reviewer.getLastName().trim() : "";
-            reviewerName = (first + " " + last).trim();
-        }
+        String reviewerName = reviewer == null ? null
+            : (java.util.Objects.toString(reviewer.getFirstName(), "").trim() + " "
+                + java.util.Objects.toString(reviewer.getLastName(), "").trim()).trim();
         String token = conflict.map(com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict::reviewToken).orElse(null);
         return com.example.hms.payload.dto.prescription.AllergyConflictDTO.builder()
             .conflict(conflict.isPresent())
