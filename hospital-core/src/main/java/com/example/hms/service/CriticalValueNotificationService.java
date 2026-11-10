@@ -375,44 +375,76 @@ public class CriticalValueNotificationService {
      * 2026-08-21 reassessment that rollback silently erased the mismatch row this
      * method had just written — the audit record existed only in the log line.
      *
+     * <p>QA D1553 (round 43): a CONFIRMED read-back is immutable. A second
+     * doctor's wrong read-back after the first doctor's correct one used to
+     * overwrite the stored value and author through the mismatch record while
+     * the confirmation time stayed, so the chart read "read-back confirmed
+     * '250' - Dr B" on a glucose of 520. Once {@code criticalReadBackAt} is
+     * set, any further read-back, right or wrong, is refused and writes
+     * nothing. Both writes are conditional UPDATEs ({@code WHERE
+     * critical_readback_at IS NULL}), so neither a concurrent confirmation nor
+     * one committed between a read and the write is ever overwritten.
+     *
+     * <p>A read-back is the critical-value protocol, so it is refused, writing
+     * nothing, on a result that is not critical (QA D1553 asked; it was
+     * accepted with 200 and stamped a normal result "read-back confirmed" and
+     * acknowledged). "Critical" is the escalation sweep's own reading: graded
+     * critical now, or paged as critical and not since graded otherwise. The
+     * portal offers the read-back only on critical results.
+     *
      * @return the updated result
-     * @throws com.example.hms.exception.BusinessException when the repeated
-     *         value does not match the reported one
+     * @throws com.example.hms.exception.BusinessException when the result
+     *         already has a confirmed read-back, is not critical, or the
+     *         repeated value does not match the reported one
      */
     @Transactional
     public LabResult recordReadBack(LabResult result, String repeatedValue,
                                     UUID byUserId, String byDisplay) {
-        result.setCriticalReadBackValue(repeatedValue);
-        result.setCriticalReadBackByUserId(byUserId);
-        result.setCriticalReadBackByDisplay(byDisplay);
+        if (result.getCriticalReadBackAt() != null) {
+            log.warn("Critical-value read-back on lab result {} refused: already confirmed", result.getId());
+            throw new com.example.hms.exception.BusinessException("lab.criticalReadBack.alreadyConfirmed");
+        }
+        if (!readBackApplies(result)) {
+            throw new com.example.hms.exception.BusinessException("lab.criticalReadBack.notCritical");
+        }
 
         // QA D1095: the unit as shown (the test definition's when none was typed).
         if (!readBackMatches(result.getResultValue(), LabResultMapper.unitOf(result), repeatedValue)) {
-            // Copy the mismatch onto a fresh row loaded inside the inner
-            // transaction rather than saving the caller's managed entity: the
-            // outer session still owns `result`, and committing it here while
-            // the outer transaction rolls back would leave the two sessions
-            // disagreeing about the entity's state.
+            // Written by the inner transaction straight to the row, never
+            // through the caller's managed entity, whose transaction rolls back.
+            // D1553 (Rex P2): one conditional UPDATE, so a read-back confirmed
+            // between any read and this write is never overwritten (0 rows).
             UUID resultId = result.getId();
+            LocalDateTime at = LocalDateTime.now(java.time.ZoneId.systemDefault());
             mismatchTx.executeWithoutResult(status ->
-                labResultRepository.findById(resultId).ifPresent(row -> {
-                    row.setCriticalReadBackValue(repeatedValue);
-                    row.setCriticalReadBackByUserId(byUserId);
-                    row.setCriticalReadBackByDisplay(byDisplay);
-                    labResultRepository.save(row);
-                }));
+                labResultRepository.recordReadBackMismatchIfUnconfirmed(
+                    resultId, repeatedValue, byUserId, byDisplay, at));
             log.warn("Critical-value read-back MISMATCH on lab result {}: reported '{}', repeated '{}'",
                 result.getId(), result.getResultValue(), repeatedValue);
             throw new com.example.hms.exception.BusinessException("lab.criticalReadBack.mismatch");
         }
 
         // Only a MATCHING read-back resolves the result and stops escalation.
-        result.setCriticalReadBackAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        // D1553 (Rex P2): a conditional UPDATE, not check-then-save. Of two
+        // concurrent read-backs both past the check above, the second waits on
+        // the row lock, re-reads the WHERE and touches 0 rows: refused, and the
+        // first author stands.
+        LocalDateTime at = LocalDateTime.now(java.time.ZoneId.systemDefault());
+        if (labResultRepository.confirmReadBackIfUnconfirmed(result.getId(), repeatedValue, byUserId, byDisplay, at) == 0) {
+            log.warn("Critical-value read-back on lab result {} refused: confirmed concurrently", result.getId());
+            throw new com.example.hms.exception.BusinessException("lab.criticalReadBack.alreadyConfirmed");
+        }
+        // The managed entity carries exactly what the UPDATE wrote, so the
+        // response shows it and a flush at commit rewrites the same values.
+        result.setCriticalReadBackValue(repeatedValue);
+        result.setCriticalReadBackByUserId(byUserId);
+        result.setCriticalReadBackByDisplay(byDisplay);
+        result.setCriticalReadBackAt(at);
         result.setAcknowledged(true);
-        result.setAcknowledgedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        result.setAcknowledgedAt(at);
         result.setAcknowledgedByUserId(byUserId);
         result.setAcknowledgedByDisplay(byDisplay);
-        LabResult saved = labResultRepository.save(result);
+        LabResult saved = result;
         // QA D726: the alert is answered, so its notifications (to the
         // orderer and to every escalation recipient) no longer read as unread.
         notificationService.markReadForSubject(result.getId(), java.util.List.of(NOTIFICATION_TYPE, ESCALATION_TYPE));
@@ -508,6 +540,19 @@ public class CriticalValueNotificationService {
         } catch (NumberFormatException notNumeric) {
             return prefix + trimmed;
         }
+    }
+
+    /**
+     * QA D1553: whether a read-back may be taken on this result - critical now,
+     * or paged as critical and not positively graded otherwise since (the
+     * sweep's {@link #noLongerCritical} exit), so a result the sweep still
+     * pages can always be read back.
+     */
+    private boolean readBackApplies(LabResult result) {
+        if (isCritical(result, null)) {
+            return true;
+        }
+        return result.getCriticalNotifiedAt() != null && !noLongerCritical(result);
     }
 
     /** Same semantics as the /lab-results/hospital/{id}/critical endpoints. */
