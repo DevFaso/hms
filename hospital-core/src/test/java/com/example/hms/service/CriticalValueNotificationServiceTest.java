@@ -642,6 +642,7 @@ class CriticalValueNotificationServiceTest {
 
     @Test
     void matchingReadBackResolvesTheResultAndStopsEscalation() {
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(i -> i.getArgument(0));
         UUID actor = UUID.randomUUID();
 
@@ -668,6 +669,7 @@ class CriticalValueNotificationServiceTest {
         reloaded.setId(result.getId());
         reloaded.setResultValue("7.1");
         when(labResultRepository.findById(result.getId())).thenReturn(java.util.Optional.of(reloaded));
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
         UUID actor = UUID.randomUUID();
 
         // 1.7 instead of 7.1 — a transposition, which is the error a read-back
@@ -692,8 +694,99 @@ class CriticalValueNotificationServiceTest {
         verify(notificationService, never()).markReadForSubject(any(), any());
     }
 
+    /**
+     * QA D1553 (round 43): DOCTOR_A read back GLY 520 correctly, then DOCTOR2_A read back
+     * "250": the 400 came back, but the mismatch record overwrote the confirmed value and
+     * author while the confirmation time stayed - the chart read "read-back confirmed 250".
+     * A confirmed read-back is immutable: a later one, wrong or right, is refused and
+     * writes nothing, on either transaction's row.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "a later read-back of {0} is refused")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"250", "520"})
+    void aConfirmedReadBackIsNeverOverwritten(String later) {
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        result.setResultValue("520");
+        result.setResultUnit("mg/dL");
+        LocalDateTime confirmedAt = LocalDateTime.now().minusMinutes(5);
+        UUID first = UUID.randomUUID();
+        result.setCriticalReadBackValue("520");
+        result.setCriticalReadBackByUserId(first);
+        result.setCriticalReadBackByDisplay("Dr A");
+        result.setCriticalReadBackAt(confirmedAt);
+        result.setAcknowledged(true);
+        result.setAcknowledgedByUserId(first);
+        result.setAcknowledgedByDisplay("Dr A");
+
+        assertThatThrownBy(() -> service.recordReadBack(result, later, UUID.randomUUID(), "Dr B"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("lab.criticalReadBack.alreadyConfirmed");
+
+        assertThat(result.getCriticalReadBackValue()).isEqualTo("520");
+        assertThat(result.getCriticalReadBackByUserId()).isEqualTo(first);
+        assertThat(result.getCriticalReadBackByDisplay()).isEqualTo("Dr A");
+        assertThat(result.getCriticalReadBackAt()).isEqualTo(confirmedAt);
+        assertThat(result.getAcknowledgedByDisplay()).isEqualTo("Dr A");
+        verify(labResultRepository, never()).findById(any());
+        verify(labResultRepository, never()).save(any());
+        verify(transactionManager, never()).getTransaction(any());
+    }
+
+    /**
+     * D1553, the race: the caller saw no confirmation, but one was committed before the
+     * mismatch record's own transaction loaded the row. The record never lands on it.
+     */
+    @Test
+    void aMismatchRecordNeverLandsOnARowConfirmedMeanwhile() {
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        LabResult reloaded = new LabResult();
+        reloaded.setId(result.getId());
+        reloaded.setResultValue("7.1");
+        reloaded.setCriticalReadBackValue("7.1");
+        reloaded.setCriticalReadBackByDisplay("Dr A");
+        reloaded.setCriticalReadBackAt(LocalDateTime.now());
+        when(labResultRepository.findById(result.getId())).thenReturn(java.util.Optional.of(reloaded));
+
+        assertThatThrownBy(() -> service.recordReadBack(result, "1.7", UUID.randomUUID(), "Dr B"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+
+        assertThat(reloaded.getCriticalReadBackValue()).isEqualTo("7.1");
+        assertThat(reloaded.getCriticalReadBackByDisplay()).isEqualTo("Dr A");
+        verify(labResultRepository, never()).save(any());
+    }
+
+    /**
+     * QA D1553, decided: a read-back is the critical-value protocol. On a result that is
+     * not critical and was never paged it is refused (it was accepted with 200, and
+     * stamped a normal result "read-back confirmed" and acknowledged) and writes nothing.
+     */
+    @Test
+    void aReadBackOnANormalResultIsRefusedAndWritesNothing() {
+        when(labResultMapper.severityFlagOf(result)).thenReturn("NORMAL");
+
+        assertThatThrownBy(() -> service.recordReadBack(result, "7.1", UUID.randomUUID(), "Dr B"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("lab.criticalReadBack.notCritical");
+
+        assertThat(result.getCriticalReadBackValue()).isNull();
+        assertThat(result.getCriticalReadBackAt()).isNull();
+        assertThat(result.isAcknowledged()).isFalse();
+        verify(labResultRepository, never()).save(any());
+    }
+
+    /** A result the sweep still pages (critical when paged, not graded otherwise since) can be read back. */
+    @Test
+    void aPagedResultThatCannotBeGradedNowCanStillBeReadBack() {
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(40));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(i -> i.getArgument(0));
+
+        LabResult updated = service.recordReadBack(result, "7.1", UUID.randomUUID(), "Dr A");
+
+        assertThat(updated.getCriticalReadBackAt()).isNotNull();
+    }
+
     @Test
     void readBackToleratesTrailingZeroFormatting() {
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(i -> i.getArgument(0));
 
         // A clinician repeating the number correctly must not be told they got
