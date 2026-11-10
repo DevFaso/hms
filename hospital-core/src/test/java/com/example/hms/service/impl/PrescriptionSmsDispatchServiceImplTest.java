@@ -704,6 +704,45 @@ class PrescriptionSmsDispatchServiceImplTest {
     }
 
     @Test
+    void failedSmsStillAuditsTheCommittedAllergyAcknowledgementAfterCommit() {
+        rx.getPatient().setId(UUID.randomUUID());
+        rx.setMedicationName("Amoxicillin");
+        var allergy = new com.example.hms.model.PatientAllergy();
+        allergy.setId(UUID.randomUUID());
+        allergy.setActive(true);
+        allergy.setAllergenDisplay("Penicillin");
+        allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        var allergies = mock(com.example.hms.repository.PatientAllergyRepository.class);
+        when(allergies.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
+        var allergyAudit = mock(AuditEventLogService.class);
+        var recheck = new com.example.hms.service.allergy.CurrentAllergyRecheck(allergies, null, allergyAudit);
+        service.setAllergyRecheck(recheck);
+        var request = requestForCurrentPharmacy();
+        request.setAllergyAcknowledgementReason("Prescriber consulted");
+        request.setAllergyAcknowledgementToken(recheck.cardsFor(rx, rx.getMedicationName()).getFirst().exceptionKey());
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        when(transmissionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        doThrow(new IllegalStateException("Provider unavailable")).when(smsService).send(anyString(), anyString());
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, request))
+                .isInstanceOf(PrescriptionDispatchFailedException.class);
+            verifyNoInteractions(allergyAudit);
+            org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+                .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+        var event = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(allergyAudit).logEvent(event.capture());
+        assertThat(event.getValue().getEntityType()).isEqualTo("PRESCRIPTION");
+        assertThat(event.getValue().getResourceId()).isEqualTo(rx.getId().toString());
+        assertThat(event.getValue().getEventType()).isEqualTo(AuditEventType.DISPENSE_ALLERGY_ACKNOWLEDGED);
+    }
+
+    @Test
     @DisplayName("provider failure: FAILED row, cancelled offer, TRANSMISSION_FAILED, prescriber told, caller still gets the error, no number anywhere")
     void dispatch_recordsFailureAndCommitsIt() {
         when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));

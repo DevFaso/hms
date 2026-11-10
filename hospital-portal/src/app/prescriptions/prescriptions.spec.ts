@@ -284,7 +284,12 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
 
     component.submitDispatch();
 
-    expect(prescriptionService.dispatchSms).toHaveBeenCalledWith('rx-1', 'ph-1', undefined);
+    expect(prescriptionService.dispatchSms).toHaveBeenCalledWith(
+      'rx-1',
+      'ph-1',
+      undefined,
+      undefined,
+    );
     expect(prescriptionService.page.calls.count())
       .withContext(
         'without a reload the row keeps its pre-dispatch status and its SMS button, and a second click supersedes the decision just made',
@@ -1883,10 +1888,47 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     expect(prescriptionService.pharmacistVerify).toHaveBeenCalledWith(
       'rx-1',
       'Dose confirmed against the ward protocol.',
+      undefined,
     );
     expect(toast.success).toHaveBeenCalled();
     expect(component.showVerifyModal()).toBeFalse();
     expect(component.verifying()).toBeFalse();
+  });
+
+  it('QA D1555: an allergy refusal asks for the acknowledgement and sends it again with the card token', () => {
+    const refusal = {
+      status: 400,
+      error: {
+        field: 'allergyAcknowledgementReason',
+        message: 'To verify this order, acknowledge the allergy to Penicillin',
+        cdsAdvisories: [
+          {
+            summary: 'Allergy alert',
+            indicator: 'critical',
+            source: { label: 'HMS' },
+            exceptionKey: 'allergy:tok',
+          },
+        ],
+      },
+    };
+    prescriptionService.pharmacistVerify.and.returnValues(
+      throwError(() => refusal as unknown),
+      of({} as PrescriptionResponse),
+    );
+
+    component.openVerifyModal(verifiable());
+    component.submitPharmacistVerify();
+
+    expect(component.allergyAck()?.refusal.token).toBe('allergy:tok');
+    expect(toast.error).not.toHaveBeenCalled();
+
+    component.confirmAllergyAck('Prescriber called, rash only');
+
+    expect(prescriptionService.pharmacistVerify).toHaveBeenCalledWith('rx-1', '', {
+      allergyAcknowledgementReason: 'Prescriber called, rash only',
+      allergyAcknowledgementToken: 'allergy:tok',
+    });
+    expect(component.allergyAck()).toBeNull();
   });
 
   it('surfaces the backend refusal verbatim rather than a generic failure', () => {

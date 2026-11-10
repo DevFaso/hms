@@ -214,6 +214,25 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         this.exposureCheck = exposureCheck;
     }
 
+    /** QA D1563: the allergy check at the dose. Always wired in the application (a required setter). */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck allergyCheck;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setAllergyCheck(com.example.hms.service.allergy.CurrentAllergyRecheck allergyCheck) {
+        this.allergyCheck = allergyCheck;
+    }
+
+    /**
+     * The allergy check; a service built by hand (unit tests) still checks, on the allergies alone,
+     * without the catalogue or the audit. Never no check.
+     */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck allergyCheck() {
+        if (allergyCheck == null) {
+            allergyCheck = new com.example.hms.service.allergy.CurrentAllergyRecheck(patientAllergyRepository, null, null);
+        }
+        return allergyCheck;
+    }
+
     private final NurseDashboardService nurseDashboardService;
     private final PrescriptionRepository prescriptionRepository;
     private final MedicationAdministrationRecordRepository marRepository;
@@ -354,7 +373,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         for (PatientContext ctx : patients) {
             tasks.addAll(buildMedicationTasksForPatient(ctx, statusFilter, now, ward));
         }
-        withAllergyAdvisories(tasks);
+        withAllergyAdvisories(tasks, ward, hospitalId);
 
         // QA D1255: every active order of the scope, soonest due first (a
         // finished course, with no due time, last). The list was cut at 20 rows
@@ -453,30 +472,29 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return result;
     }
 
-    /** QA D799: the allergies are read once per patient, and only when a dose is listed. */
-    private void withAllergyAdvisories(List<NurseMedicationTaskResponseDTO> tasks) {
+    /**
+     * QA D799 / D1563: the allergy cards of every listed dose, against the patients' CURRENT
+     * allergies ({@link com.example.hms.service.allergy.CurrentAllergyRecheck}): the stop on a direct or class
+     * match, or on a name the check cannot resolve, then the cross-reactivity advisory. The
+     * allergies are read once per patient, the catalogue once, and only when someone has an allergy.
+     */
+    private void withAllergyAdvisories(List<NurseMedicationTaskResponseDTO> tasks, WardOrders ward, UUID hospitalId) {
         java.util.Map<UUID, List<PatientAllergy>> allergies = marWardReader.allergiesByPatient(
             tasks.stream().map(NurseMedicationTaskResponseDTO::getPatientId).collect(Collectors.toSet()));
+        if (allergies == null || allergies.values().stream().allMatch(List::isEmpty)) {
+            tasks.forEach(task -> task.setCdsAdvisories(List.of()));
+            return;
+        }
+        java.util.Map<UUID, Prescription> orders = new java.util.HashMap<>();
+        ward.orders().values().forEach(rows -> rows.forEach(rx -> orders.put(rx.getId(), rx)));
+        List<com.example.hms.model.medication.MedicationCatalogItem> catalogue = allergyCheck().catalogueForOrders(hospitalId, orders.values());
         for (NurseMedicationTaskResponseDTO task : tasks) {
-            task.setCdsAdvisories(allergyAdvisories(task.getMedication(),
+            Prescription rx = orders.get(task.getId());
+            task.setCdsAdvisories(com.example.hms.service.allergy.CurrentAllergyRecheck.cards(task.getId(), task.getMedication(),
+                com.example.hms.service.allergy.CurrentAllergyRecheck.itemsFor(task.getMedication(),
+                    rx != null ? rx.getMedicationCatalogItemId() : null, catalogue),
                 allergies.getOrDefault(task.getPatientId(), List.of())));
         }
-    }
-
-    /**
-     * QA D793/D799: the prescriber was warned that this beta-lactam may
-     * cross-react with the patient's documented allergy, but the nurse giving
-     * it saw nothing (no field on the MAR row, allPassed=true at the bedside).
-     * The same non-blocking card, built where the prescriber's is
-     * ({@link com.example.hms.service.allergy.CrossReactivityAdvisory}), on
-     * every eMAR surface. Empty when there is nothing to say.
-     */
-    private static List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> allergyAdvisories(
-        String medicationName, List<PatientAllergy> allergies
-    ) {
-        return com.example.hms.service.allergy.CrossReactivityAdvisory.card(medicationName, allergies)
-            .map(List::of)
-            .orElse(List.of());
     }
 
     /** The order's drug name (the MAR row's copy when the order is gone). */
@@ -488,15 +506,40 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return mar.getMedicationName();
     }
 
-    /** The advisories for the patient a MAR row belongs to (allergies at any hospital count, as for the prescriber). */
-    private List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> allergyAdvisoriesFor(
-        String medicationName, Patient patient
-    ) {
-        if (patient == null || patient.getId() == null) {
+    /**
+     * QA D1563: the allergy cards of one order, its patient's allergies read now (at any hospital, as
+     * for the prescriber): every bedside check and every recorded dose answers with them.
+     */
+    private List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> allergyCardsFor(Prescription rx, String medicationName) {
+        if (rx == null) {
             return List.of();
         }
-        return allergyAdvisories(medicationName, patientAllergyRepository.findByPatient_Id(patient.getId()));
+        return allergyCheck().cardsFor(rx, medicationName);
     }
+
+    /**
+     * QA D1563: a GIVEN dose of a drug the patient's current allergies stop is refused until the
+     * nurse acknowledges that allergy with a reason (provisional default, not a clinical sign-off).
+     * Every write that records an administration calls it (AllergyRecheckGuardTest); HELD and REFUSED
+     * pass.
+     */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement requireAllergyAcknowledged(
+        Prescription rx, String medicationName, MedicationAdministrationStatus status, AdministrationOutcome outcome
+    ) {
+        if (status != MedicationAdministrationStatus.GIVEN) {
+            return null;
+        }
+        return allergyCheck().requireAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.MAR_DOSE,
+            rx, medicationName, outcome.allergyReason(), outcome.allergyToken());
+    }
+
+    /** The dose's chart note with the allergy acknowledgement's line, within the column. */
+    private static String withAllergyLine(String note, com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement ack) {
+        return com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(note, ack, MAR_NOTES_MAX, "note");
+    }
+
+    /** The MAR row's notes column. */
+    private static final int MAR_NOTES_MAX = 2000;
 
     /**
      * QA D514: a patient with no bed here only has eMAR doses while an
@@ -527,6 +570,14 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 && (note == null || note.isBlank())) {
             throw new com.example.hms.exception.FieldBusinessException("note", "nurse.mar.reasonRequired");
         }
+    }
+
+    private static String allergyReasonOf(NurseMedicationAdministrationRequestDTO request) {
+        return request != null ? request.getAllergyAcknowledgementReason() : null;
+    }
+
+    private static String allergyTokenOf(NurseMedicationAdministrationRequestDTO request) {
+        return request != null ? request.getAllergyAcknowledgementToken() : null;
     }
 
     /** DUE or OVERDUE: a dose the nurse can record now (QA D949). */
@@ -580,7 +631,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             User witness = controlledAdministrationWitness.resolve(rx, marStatus, witnessUserId, nurseUserId);
             NurseMedicationTaskResponseDTO recorded = persistMarRecord(rx, nurseUserId, hospitalId,
                 new AdministrationOutcome(marStatus, chartNote(note, givenBeforeHold, request), overrideReason, witness, earlyDoseReason,
-                    givenBeforeHold));
+                    givenBeforeHold, allergyReasonOf(request), allergyTokenOf(request)));
             chartGivenBeforeHold(rx, givenBeforeHold, request);
             return recorded;
         }
@@ -603,19 +654,23 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 marRecord.getPrescription(), marStatus, witnessUserId, nurseUserId));
             // QA D1210: never sooner than the minimum interval since the last GIVEN, without a reason.
             String early = requireDoseInterval(marRecord.getPrescription(), marStatus, marRecord.getId(), earlyDoseReason);
+            // QA D1563: never a drug the patient's current allergies stop, unless the nurse acknowledged it.
+            com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(
+                marRecord.getPrescription(), medicationNameOf(marRecord), marStatus,
+                new AdministrationOutcome(marStatus, note, overrideReason, null, earlyDoseReason, givenBeforeHold,
+                    allergyReasonOf(request), allergyTokenOf(request)));
             marRecord.setStatus(marStatus);
             marRecord.setAdministeredAt(givenBeforeHold != null ? givenBeforeHold : LocalDateTime.now());
-            marRecord.setNotes(chartNote(note, givenBeforeHold, request));
-            if (marStatus == MedicationAdministrationStatus.HELD
-                || marStatus == MedicationAdministrationStatus.REFUSED) {
-                marRecord.setReason(note);
-            }
+            marRecord.setNotes(withAllergyLine(chartNote(note, givenBeforeHold, request), allergyAck));
+            recordWithheldDoseReason(marRecord, marStatus, note);
             if (early != null) {
                 marRecord.setReason(early);
             }
             resolveNurseStaff(nurseUserId, hospitalId).ifPresent(marRecord::setAdministeredByStaff);
             recordOverrideOnAdminister(marRecord, marStatus, overrideReason);
             marRepository.save(marRecord);
+            allergyCheck().auditAfterCommit(allergyAck, nurseUserId, hospitalId,
+                marRecord.getPatient() != null ? marRecord.getPatient().getId() : null, marRecord.getId());
             chartGivenBeforeHold(marRecord.getPrescription(), givenBeforeHold, request);
 
             Patient patient = marRecord.getPatient();
@@ -645,6 +700,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     /* ═══════════════════════════════════════════════════════════════════
        eMAR five-rights verification (P1 #8)
        ═══════════════════════════════════════════════════════════════════ */
+
+    private static void recordWithheldDoseReason(MedicationAdministrationRecord mar,
+                                                  MedicationAdministrationStatus status, String note) {
+        if (status == MedicationAdministrationStatus.HELD || status == MedicationAdministrationStatus.REFUSED) {
+            mar.setReason(note);
+        }
+    }
 
     @Override
     @Transactional
@@ -699,8 +761,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         List<String> failed = result.failedChecks().stream().map(Enum::name).toList();
 
+        // QA D1563: the order's drug against the patient's allergies on record NOW.
         List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> advisories =
-            allergyAdvisoriesFor(medicationNameOf(mar), mar.getPatient());
+            allergyCardsFor(mar.getPrescription(), medicationNameOf(mar));
         MarVerificationResponseDTO verification = MarVerificationResponseDTO.builder()
             .marId(mar.getId())
             .outcomes(outcomes)
@@ -1424,7 +1487,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             withOrderReading(task, rx, MarNextDose.of(rx, now, rows, EARLY_ADMINISTRATION_WINDOW), now,
                 pharmacistVerificationService.isControlledSubstance(rx));
             List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> allergy =
-                allergyAdvisoriesFor(rx.getMedicationName(), rx.getPatient());
+                allergyCardsFor(rx, rx.getMedicationName());
             task.setCdsAdvisories(allergy);
             // CR-03: only a dose given moves the exposure; one held or refused is no warning to give.
             if (recorded == MedicationAdministrationStatus.GIVEN) {
@@ -1680,6 +1743,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         }
         // QA D1210: never sooner than the minimum interval since the last GIVEN, without a reason.
         String early = requireDoseInterval(rx, status, null, outcome.earlyDoseReason());
+        // QA D1563: never a drug the patient's current allergies stop, unless the nurse acknowledged it.
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck =
+            requireAllergyAcknowledged(rx, rx.getMedicationName(), status, outcome);
         MedicationAdministrationRecord marRecord = MedicationAdministrationRecord.builder()
             .prescription(rx)
             .patient(rx.getPatient())
@@ -1692,7 +1758,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .status(status)
             .reason(status == MedicationAdministrationStatus.HELD
                 || status == MedicationAdministrationStatus.REFUSED ? note : early)
-            .notes(note)
+            .notes(withAllergyLine(note, allergyAck))
             .witnessUser(witness)
             .build();
 
@@ -1711,6 +1777,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             marRecord.setScanVerifiedAt(LocalDateTime.now());
         }
         MedicationAdministrationRecord saved = marRepository.save(marRecord);
+        allergyCheck().auditAfterCommit(allergyAck, nurseUserId, hospitalId, rx.getPatient().getId(), saved.getId());
 
         log.info("MAR recorded: prescriptionId={}, status={}, fiveRights={}, nurse={}",
             rx.getId(), status, marRecord.getFiveRightsStatus(), nurseUserId);
@@ -1736,7 +1803,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      */
     private record AdministrationOutcome(
         MedicationAdministrationStatus status, String note, String overrideReason, User witness,
-        String earlyDoseReason, LocalDateTime givenBeforeHold) {
+        String earlyDoseReason, LocalDateTime givenBeforeHold, String allergyReason, String allergyToken) {
 
         LocalDateTime givenAt() {
             return givenBeforeHold != null ? givenBeforeHold : LocalDateTime.now();
@@ -1754,10 +1821,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         requireScanByAdministeringNurse(marRecord, status, nurseUserId, hospitalId);
         // QA D1210: never sooner than the minimum interval since the last GIVEN, without a reason.
         String early = requireDoseInterval(rx, status, marRecord.getId(), outcome.earlyDoseReason());
+        // QA D1563: never a drug the patient's current allergies stop, unless the nurse acknowledged it.
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck =
+            requireAllergyAcknowledged(rx, rx.getMedicationName(), status, outcome);
         marRecord.setWitnessUser(witness);
         marRecord.setStatus(status);
         marRecord.setAdministeredAt(outcome.givenAt());
-        marRecord.setNotes(note);
+        marRecord.setNotes(withAllergyLine(note, allergyAck));
         if (status == MedicationAdministrationStatus.HELD || status == MedicationAdministrationStatus.REFUSED) {
             marRecord.setReason(note);
         } else if (early != null) {
@@ -1766,6 +1836,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         resolveNurseStaff(nurseUserId, hospitalId).ifPresent(marRecord::setAdministeredByStaff);
         recordOverrideOnAdminister(marRecord, status, overrideReason);
         MedicationAdministrationRecord saved = marRepository.save(marRecord);
+        allergyCheck().auditAfterCommit(allergyAck, nurseUserId, hospitalId, rx.getPatient().getId(), saved.getId());
         return answerAfterDose(NurseMedicationTaskResponseDTO.builder()
             .id(saved.getId())
             .patientId(rx.getPatient().getId())

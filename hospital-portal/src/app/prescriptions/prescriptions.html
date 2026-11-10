@@ -1847,3 +1847,13 @@
     </dialog>
   </div>
 }
+
+<!-- QA D1555: the patient's current allergies stop the drug: acknowledge with a reason, or go back. -->
+@if (allergyAck(); as ack) {
+  <app-allergy-acknowledgement-dialog
+    [refusal]="ack.refusal"
+    [busy]="verifying() || dispatching()"
+    (confirmed)="confirmAllergyAck($event)"
+    (cancelled)="allergyAck.set(null)"
+  />
+}

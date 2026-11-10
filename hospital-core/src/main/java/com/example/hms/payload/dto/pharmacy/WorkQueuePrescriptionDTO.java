@@ -95,6 +95,13 @@ public class WorkQueuePrescriptionDTO {
     private Boolean alertOverridden;
 
     /**
+     * QA D1555: the allergy cards of this order against the patient's CURRENT allergies (an allergy
+     * recorded after the signature included): the stop, whose {@code exceptionKey} the fill sends back
+     * with the pharmacist's reason, then any cross-reactivity warning. Absent when there is none.
+     */
+    private java.util.List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> allergyAlerts;
+
+    /**
      * Refill context for the dispensing decision. Null on a prescription that
      * has never had a refill request, which keeps the payload unchanged for
      * first fills.

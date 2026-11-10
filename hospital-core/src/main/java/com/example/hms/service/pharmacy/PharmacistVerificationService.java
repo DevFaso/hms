@@ -143,10 +143,46 @@ public class PharmacistVerificationService {
      * The verification ceremony. Server identity, server clock — a client
      * cannot assert who verified or when, the same stance the signing and
      * co-signing ceremonies take.
+     *
+     * <p>No allergy acknowledgement is supplied by this overload.
      */
     @Transactional
     public Prescription verify(UUID prescriptionId, String note) {
         com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescriptionId, "prescriptionId");
+        return verifyInTransaction(prescriptionId, note, null, null);
+    }
+
+    /**
+     * QA D1555: the one allergy re-check after the signature. A required setter: the application
+     * always wires it; only a service built by hand in a unit test has none.
+     */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setAllergyRecheck(com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck) {
+        this.allergyRecheck = allergyRecheck;
+    }
+
+    /**
+     * QA D1555: a drug the patient's CURRENT allergies stop is verified only with the pharmacist's
+     * acknowledgement of that allergy and a reason (AllergyRecheckGuardTest).
+     */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement requireAllergyAcknowledged(Prescription prescription, String reason, String token) {
+        if (allergyRecheck == null) {
+            return null;
+        }
+        return allergyRecheck.requireAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.PHARMACIST_VERIFICATION, prescription,
+            prescription.getMedicationName(), reason, token);
+    }
+
+    @Transactional
+    public Prescription verify(UUID prescriptionId, String note, String allergyReason, String allergyToken) {
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescriptionId, "prescriptionId");
+        return verifyInTransaction(prescriptionId, note, allergyReason, allergyToken);
+    }
+
+    /** Shared ceremony; both public entry points establish the transaction before delegating. */
+    private Prescription verifyInTransaction(UUID prescriptionId, String note, String allergyReason, String allergyToken) {
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
             .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
 
@@ -195,10 +231,19 @@ public class PharmacistVerificationService {
                 "pharmacy.r7.selfVerification");
         }
 
+        // QA D1555: the order's drug against the patient's CURRENT allergies, before the stamp.
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(prescription, allergyReason, allergyToken);
+
         prescription.setPharmacistVerifiedAt(LocalDateTime.now(clock));
         prescription.setPharmacistVerifiedBy(verifier);
-        prescription.setPharmacistVerificationNote(trimToNull(note));
-        return prescriptionRepository.save(prescription);
+        prescription.setPharmacistVerificationNote(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(trimToNull(note), allergyAck, 1000, "note"));
+        Prescription saved = prescriptionRepository.save(prescription);
+        if (allergyAck != null) {
+            allergyRecheck.auditAfterCommit(allergyAck, currentUserId,
+                prescription.getHospital() != null ? prescription.getHospital().getId() : null,
+                prescription.getPatient() != null ? prescription.getPatient().getId() : null, prescription.getId());
+        }
+        return saved;
     }
 
     /**

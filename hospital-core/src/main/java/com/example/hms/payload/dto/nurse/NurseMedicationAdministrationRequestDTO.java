@@ -44,4 +44,16 @@ public class NurseMedicationAdministrationRequestDTO {
 
     @Size(max = 500)
     private String givenBeforeHoldReason;
+
+    /**
+     * QA D1563: the nurse's reason for giving a drug the patient's current allergies stop, after
+     * reading the allergy card ({@code CurrentAllergyRecheck}). Required only for such a GIVEN dose; kept on
+     * the dose's chart note and audited.
+     */
+    @Size(max = 500)
+    private String allergyAcknowledgementReason;
+
+    /** QA D1563: the token the allergy card carried ({@code exceptionKey}): which allergy was acknowledged. */
+    @Size(max = 200)
+    private String allergyAcknowledgementToken;
 }

@@ -3263,6 +3263,24 @@ class NurseTaskServiceImplTest {
         return allergy;
     }
 
+    /**
+     * QA D1563: the catalogue the allergy check reads names through. A name no item, brand or INN
+     * stem explains meets the safety net for a patient with a class allergy, as at prescribing.
+     */
+    private void catalogueKnows(String... genericNames) {
+        com.example.hms.repository.MedicationCatalogItemRepository repo =
+            mock(com.example.hms.repository.MedicationCatalogItemRepository.class);
+        List<com.example.hms.model.medication.MedicationCatalogItem> items = java.util.Arrays.stream(genericNames)
+            .map(n -> com.example.hms.model.medication.MedicationCatalogItem.builder().genericName(n).nameFr(n).build())
+            .toList();
+        lenient().when(repo.findActivePage(any(), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(items));
+        service.setAllergyCheck(new com.example.hms.service.allergy.CurrentAllergyRecheck(patientAllergyRepository, repo, null));
+    }
+
+    private static com.example.hms.model.medication.MedicationCatalogItem catalogItem(String genericName) {
+        return com.example.hms.model.medication.MedicationCatalogItem.builder().genericName(genericName).nameFr(genericName).build();
+    }
+
     private Prescription signedOrder(UUID patientId, UUID hospitalId, String drug, String dose, String route,
                                      LocalDateTime createdAt) {
         Patient patient = new Patient();
@@ -3296,6 +3314,7 @@ class NurseTaskServiceImplTest {
         Prescription para = signedOrder(patientId, hospitalId, "Paracétamol", "1 g", "PO", LocalDateTime.now().minusMinutes(5));
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(cef, para));
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(penicillinAllergy()));
+        catalogueKnows("Paracétamol", "Ceftriaxone");
 
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
 
@@ -3358,6 +3377,205 @@ class NurseTaskServiceImplTest {
 
         assertThat(resp.isAllPassed()).isTrue();
         assertThat(resp.getCdsAdvisories()).isEmpty();
+    }
+
+    /* ── QA D1563: a drug the patient is allergic to is checked again at the dose ── */
+
+    private static com.example.hms.model.PatientAllergy severePenicillinAllergy() {
+        com.example.hms.model.PatientAllergy allergy = penicillinAllergy();
+        allergy.setId(UUID.randomUUID());
+        allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        allergy.setReaction("Angioedema");
+        return allergy;
+    }
+
+    private static NurseMedicationAdministrationRequestDTO givenWithOverride() {
+        NurseMedicationAdministrationRequestDTO req = new NurseMedicationAdministrationRequestDTO();
+        req.setStatus("GIVEN");
+        req.setOverrideReason("Scanner down; checked by hand.");
+        return req;
+    }
+
+    private static com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard criticalCard(
+        List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cards
+    ) {
+        return cards.stream()
+            .filter(c -> c.indicator() == com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL)
+            .findFirst().orElseThrow();
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D1563: the MAR row of amoxicillin for a patient allergic to penicillin carries the CRITICAL allergy card")
+    void d1563_theMarRowOfADrugThePatientIsAllergicToCarriesTheAllergyCard() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Awa K", "Awa", "K")));
+        Prescription amox = signedOrder(patientId, hospitalId, "Amoxicilline", "500 mg", "PO", LocalDateTime.now().minusMinutes(5));
+        Prescription para = signedOrder(patientId, hospitalId, "Paracétamol", "500 mg", "PO", LocalDateTime.now().minusMinutes(5));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(amox, para));
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(severePenicillinAllergy()));
+        catalogueKnows("Paracétamol", "Amoxicilline");
+
+        List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
+
+        NurseMedicationTaskResponseDTO amoxRow = tasks.stream().filter(t -> "Amoxicilline".equals(t.getMedication())).findFirst().orElseThrow();
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard card = criticalCard(amoxRow.getCdsAdvisories());
+        assertThat(card.summary()).contains("Amoxicilline").contains("Pénicilline");
+        assertThat(card.exceptionKey()).startsWith(com.example.hms.service.allergy.CurrentAllergyRecheck.KEY_PREFIX);
+        NurseMedicationTaskResponseDTO paraRow = tasks.stream().filter(t -> "Paracétamol".equals(t.getMedication())).findFirst().orElseThrow();
+        assertThat(paraRow.getCdsAdvisories()).isEmpty();
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D1563: the bedside verify of that dose returns the allergy card")
+    void d1563_theBedsideVerifyReturnsTheAllergyCard() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription amox = signedOrder(patientId, hospitalId, "Amoxicilline", "500 mg", "PO", LocalDateTime.now());
+        when(prescriptionRepository.findByIdForUpdate(amox.getId())).thenReturn(Optional.of(amox));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(severePenicillinAllergy()));
+
+        MarVerificationRequestDTO req = new MarVerificationRequestDTO();
+        req.setPatientScanValue(patientId.toString());
+        req.setMedicationScanValue("Amoxicilline");
+        req.setDoseScanValue("500 mg");
+        req.setRouteScanValue("PO");
+
+        MarVerificationResponseDTO resp = service.verifyMedicationAdministration(amox.getId(), null, hospitalId, req);
+
+        assertThat(criticalCard(resp.getCdsAdvisories()).summary()).contains("Pénicilline");
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D1563: GIVEN without acknowledging the allergy is refused on its field, nothing written")
+    void d1563_givenWithoutAcknowledgingTheAllergyIsRefused() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription amox = signedOrder(patientId, hospitalId, "Amoxicilline", "500 mg", "PO", LocalDateTime.now());
+        when(prescriptionRepository.findByIdForUpdate(amox.getId())).thenReturn(Optional.of(amox));
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(severePenicillinAllergy()));
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(amox.getId(), null, hospitalId, givenWithOverride()))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
+            .satisfies(e -> {
+                com.example.hms.cdshooks.CdsCriticalBlockException block = (com.example.hms.cdshooks.CdsCriticalBlockException) e;
+                assertThat(block.getField()).isEqualTo(com.example.hms.service.allergy.CurrentAllergyRecheck.ACK_FIELD);
+                assertThat(block.getCards()).singleElement()
+                    .satisfies(c -> assertThat(c.exceptionKey()).startsWith(com.example.hms.service.allergy.CurrentAllergyRecheck.KEY_PREFIX));
+            });
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D1563: GIVEN with the allergy acknowledged, with the card's token and a reason, is recorded with the reason")
+    void d1563_givenWithTheAllergyAcknowledgedIsRecordedWithTheReason() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription amox = signedOrder(patientId, hospitalId, "Amoxicilline", "500 mg", "PO", LocalDateTime.now());
+        when(prescriptionRepository.findByIdForUpdate(amox.getId())).thenReturn(Optional.of(amox));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(severePenicillinAllergy()));
+        String token;
+        try {
+            service.recordMedicationAdministration(amox.getId(), null, hospitalId, givenWithOverride());
+            throw new AssertionError("the first GIVEN should have been refused");
+        } catch (com.example.hms.cdshooks.CdsCriticalBlockException refused) {
+            token = refused.getCards().get(0).exceptionKey();
+        }
+
+        NurseMedicationAdministrationRequestDTO req = givenWithOverride();
+        req.setAllergyAcknowledgementReason("Prescriber called: reaction was a rash, re-challenge ordered");
+        req.setAllergyAcknowledgementToken(token);
+        service.recordMedicationAdministration(amox.getId(), null, hospitalId, req);
+
+        ArgumentCaptor<MedicationAdministrationRecord> captor = ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+        verify(marRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(MedicationAdministrationStatus.GIVEN);
+        assertThat(captor.getValue().getNotes()).contains("Pénicilline").contains("re-challenge ordered");
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D1563: a reason with no token, or a token for another allergy state, is refused as stale")
+    void d1563_aReasonWithoutTheCardsTokenIsRefused() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription amox = signedOrder(patientId, hospitalId, "Amoxicilline", "500 mg", "PO", LocalDateTime.now());
+        when(prescriptionRepository.findByIdForUpdate(amox.getId())).thenReturn(Optional.of(amox));
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(severePenicillinAllergy()));
+
+        NurseMedicationAdministrationRequestDTO req = givenWithOverride();
+        req.setAllergyAcknowledgementReason("Seen");
+        req.setAllergyAcknowledgementToken("allergy:not-this-one");
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(amox.getId(), null, hospitalId, req))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
+            .hasFieldOrPropertyWithValue("field", com.example.hms.service.allergy.CurrentAllergyRecheck.ACK_FIELD)
+            // The stale refusal names the allergy, not the card (the "required" one quotes the card, drug included).
+            .hasMessageContaining("Pénicilline")
+            .satisfies(e -> assertThat(e.getMessage()).doesNotContain("Amoxicilline"));
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D1563: a HELD dose of that drug is always recorded, no acknowledgement asked")
+    void d1563_aHeldDoseIsAlwaysRecorded() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription amox = signedOrder(patientId, hospitalId, "Amoxicilline", "500 mg", "PO", LocalDateTime.now());
+        when(prescriptionRepository.findByIdForUpdate(amox.getId())).thenReturn(Optional.of(amox));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(severePenicillinAllergy()));
+
+        NurseMedicationAdministrationRequestDTO req = new NurseMedicationAdministrationRequestDTO();
+        req.setStatus("HELD");
+        req.setNote("Allergy found on the chart; prescriber called");
+        service.recordMedicationAdministration(amox.getId(), null, hospitalId, req);
+
+        verify(marRepository).save(argThat(m -> m.getStatus() == MedicationAdministrationStatus.HELD));
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D1563: a dose already verified at the bedside (the MAR-row path) is refused the same way")
+    void d1563_theVerifiedRowPathIsRefusedTheSameWay() {
+        UUID marId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        MedicationAdministrationRecord mar = seededMar(patientId, hospitalId, LocalDateTime.now());
+        mar.setPatientScanValue(patientId.toString());
+        mar.setMedicationScanValue("AMOX-500");
+        mar.setDoseScanValue("500 mg");
+        mar.setRouteScanValue("PO");
+        mar.setFiveRightsStatus(FiveRightsStatus.VERIFIED);
+        mar.setScanVerifiedAt(LocalDateTime.now());
+        when(prescriptionRepository.findByIdForUpdate(marId)).thenReturn(Optional.empty());
+        when(marRepository.findById(marId)).thenReturn(Optional.of(mar));
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(severePenicillinAllergy()));
+
+        NurseMedicationAdministrationRequestDTO req = new NurseMedicationAdministrationRequestDTO();
+        req.setStatus("GIVEN");
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(marId, null, hospitalId, req))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
+            .hasFieldOrPropertyWithValue("field", com.example.hms.service.allergy.CurrentAllergyRecheck.ACK_FIELD);
+        assertThat(mar.getStatus()).isEqualTo(MedicationAdministrationStatus.PENDING);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D1563: a brand is read as its class (Clamoxyl for penicillin), and a name nobody knows meets the safety net")
+    void d1563_aBrandIsReadAsItsClass() {
+        List<com.example.hms.model.PatientAllergy> allergies = List.of(severePenicillinAllergy());
+        UUID order = UUID.randomUUID();
+        assertThat(com.example.hms.service.allergy.CurrentAllergyRecheck.stop(order, "Clamoxyl 1 g", List.of(), allergies))
+            .get().extracting(com.example.hms.service.allergy.CurrentAllergyRecheck.Stop::kind).isEqualTo("documented");
+        assertThat(com.example.hms.service.allergy.CurrentAllergyRecheck.stop(order, "Zxqvorin", List.of(), allergies))
+            .get().extracting(com.example.hms.service.allergy.CurrentAllergyRecheck.Stop::kind).isEqualTo("unverifiable");
+        assertThat(com.example.hms.service.allergy.CurrentAllergyRecheck.stop(order, "Paracétamol",
+            List.of(catalogItem("Paracétamol")), allergies)).isEmpty();
+        // Ceftriaxone stays the cross-reactivity WARNING, never a stop.
+        assertThat(com.example.hms.service.allergy.CurrentAllergyRecheck.stop(order, "Ceftriaxone", List.of(), allergies)).isEmpty();
     }
 
     @Test

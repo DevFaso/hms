@@ -140,7 +140,10 @@ public class PrescriptionController {
         @Valid @RequestBody(required = false) PharmacistVerificationRequestDTO request,
         Locale locale) {
         String note = request != null ? request.getNote() : null;
-        pharmacistVerificationService.verify(id, note);
+        // QA D1555: the allergy acknowledgement the re-check asks for, when the patient's allergies stop the drug.
+        pharmacistVerificationService.verify(id, note,
+            request != null ? request.getAllergyAcknowledgementReason() : null,
+            request != null ? request.getAllergyAcknowledgementToken() : null);
         return ResponseEntity.ok(prescriptionService.getPrescriptionAfterWrite(id, locale));
     }
 

@@ -110,6 +110,19 @@
         </span>
       </div>
 
+      <!-- QA D1555: the order's allergy cards against the patient's current allergies. -->
+      @if (selectedPrescription?.allergyAlerts?.length) {
+        <section
+          class="field full-width"
+          role="alert"
+          [attr.aria-label]="'PHARMACY.ALLERGY_ALERTS_TITLE' | translate"
+          data-testid="dispense-allergy-alerts"
+        >
+          <h4>{{ 'PHARMACY.ALLERGY_ALERTS_TITLE' | translate }}</h4>
+          <app-cds-card-list [cards]="selectedPrescription!.allergyAlerts!" />
+        </section>
+      }
+
       <form (ngSubmit)="submitDispense()">
         <div class="form-row">
           <div class="field">
@@ -411,6 +424,15 @@
   }
 
   <!-- G15: hand over a prepared fill, or cancel the preparation -->
+  <!-- QA D1555: the patient's current allergies stop the drug: acknowledge with a reason, or go back. -->
+  @if (allergyAck(); as ack) {
+    <app-allergy-acknowledgement-dialog
+      [refusal]="ack.refusal"
+      [busy]="saving() || readyActionSaving()"
+      (confirmed)="confirmAllergyAck($event)"
+      (cancelled)="allergyAck.set(null)"
+    />
+  }
   @if (readyAction(); as action) {
     <!-- QA D1307 class (round 28): opened from a queue row, the form takes the
          keyboard (its first field), keeps Escape to itself and gives focus back

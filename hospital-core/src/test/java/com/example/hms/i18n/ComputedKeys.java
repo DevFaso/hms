@@ -200,6 +200,13 @@ final class ComputedKeys {
             new Open("a stored in-basket title/body key; written by the order-review and transfusion writers with literal keys"));
         site(r, d, "com/example/hms/service/PrescriptionServiceImpl.java|\"cds.severity.\" + severityStr",
             "PrescriptionServiceImpl.java|cds.severity.");
+        // QA D1563 / D1555: the allergy re-check's card (the allergy's severity, or UNKNOWN) and each gate's refusal.
+        site(r, d, "com/example/hms/service/allergy/CurrentAllergyRecheck.java|\"cds.severity.\" + (allergy.getSeverity() != null ? allergy.getSeverity().name() : \"UNKNOWN\")",
+            "PrescriptionServiceImpl.java|cds.severity.");
+        site(r, d, "com/example/hms/service/allergy/CurrentAllergyRecheck.java|return \"allergy.recheck.required.\" + name()",
+            "CurrentAllergyRecheck.java|allergy.recheck.required.");
+        site(r, d, "com/example/hms/service/allergy/CurrentAllergyRecheck.java|gate.requiredKey()",
+            "CurrentAllergyRecheck.java|allergy.recheck.required.");
         site(r, d, "com/example/hms/service/ResultReviewServiceImpl.java|\"signature.type.\" + type.name()",
             "ResultReviewServiceImpl.java|signature.type.");
         site(r, d, "com/example/hms/service/SecurityRuleGovernanceServiceImpl.java|\"security.template.\" + code + \".\" + field",
@@ -412,6 +419,8 @@ final class ComputedKeys {
             union(enumValues("cds.severity.", AllergySeverity.class), values("cds.severity.", List.of("UNKNOWN"))));
         r.put("PrescriptionServiceImpl.java|cds.severity.",
             union(enumValues("cds.severity.", AllergySeverity.class), values("cds.severity.", List.of("UNKNOWN"))));
+        r.put("CurrentAllergyRecheck.java|allergy.recheck.required.", enumValues("allergy.recheck.required.",
+            com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.class));
         r.put("IsolationServiceImpl.java|isolation.type.", enumValues("isolation.type.", IsolationPrecautionType.class));
         r.put("LabTestDefinitionServiceImpl.java|lab.definition.status.",
             enumValues("lab.definition.status.", LabTestDefinitionApprovalStatus.class));
