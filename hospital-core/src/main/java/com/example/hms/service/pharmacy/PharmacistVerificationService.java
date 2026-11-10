@@ -236,7 +236,7 @@ public class PharmacistVerificationService {
 
         prescription.setPharmacistVerifiedAt(LocalDateTime.now(clock));
         prescription.setPharmacistVerifiedBy(verifier);
-        prescription.setPharmacistVerificationNote(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(trimToNull(note), allergyAck, 1000));
+        prescription.setPharmacistVerificationNote(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(trimToNull(note), allergyAck, 1000, "note"));
         Prescription saved = prescriptionRepository.save(prescription);
         if (allergyAck != null) {
             allergyRecheck.auditAfterCommit(allergyAck, currentUserId,

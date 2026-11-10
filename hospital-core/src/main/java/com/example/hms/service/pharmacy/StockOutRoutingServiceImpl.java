@@ -281,7 +281,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(prescription,
                 dto.getAllergyAcknowledgementReason(), dto.getAllergyAcknowledgementToken());
         if (allergyAck != null) {
-            dto.setReason(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dto.getReason(), allergyAck, 1024));
+            dto.setReason(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dto.getReason(), allergyAck, 1024, "reason"));
         }
 
         User currentUser = resolveCurrentUser();

@@ -61,15 +61,38 @@ class CurrentAllergyRecheckTest {
             CurrentAllergyRecheck.Acknowledgement ack = new CurrentAllergyRecheck.Acknowledgement(
                 gate, stop, "Prescriber consulted: graded challenge ordered");
             for (int limit : List.of(1000, 1024, 2000)) {
-                assertThatThrownBy(() -> CurrentAllergyRecheck.withRecordLine("N".repeat(limit), ack, limit))
-                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
-                    .hasFieldOrPropertyWithValue("field", CurrentAllergyRecheck.ACK_FIELD);
+                assertThatThrownBy(() -> CurrentAllergyRecheck.withRecordLine("N".repeat(limit), ack, limit, "note"))
+                    .isExactlyInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasFieldOrPropertyWithValue("field", "note")
+                    .hasMessage(MessageUtil.resolveOrRaw("allergy.recheck.noteTooLong", limit));
                 String line = CurrentAllergyRecheck.recordLine(ack);
                 String fitting = "N".repeat(limit - line.length() - 1);
-                assertThat(CurrentAllergyRecheck.withRecordLine(fitting, ack, limit))
+                assertThat(CurrentAllergyRecheck.withRecordLine(fitting, ack, limit, "note"))
                     .isEqualTo(line + "\n" + fitting).hasSize(limit);
             }
         }
+    }
+
+    @Test
+    void recordOverflowResponseDoesNotReopenTheAllergyDialog() {
+        MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        CurrentAllergyRecheck.Stop stop = CurrentAllergyRecheck.stop(UUID.randomUUID(),
+            "Amoxicillin", List.of(), List.of(allergy("Penicillin", AllergySeverity.SEVERE))).orElseThrow();
+        CurrentAllergyRecheck.Acknowledgement ack = new CurrentAllergyRecheck.Acknowledgement(
+            CurrentAllergyRecheck.Gate.PHARMACIST_VERIFICATION, stop, "Prescriber consulted");
+        com.example.hms.exception.FieldBusinessException error = org.junit.jupiter.api.Assertions.assertThrows(
+            com.example.hms.exception.FieldBusinessException.class,
+            () -> CurrentAllergyRecheck.withRecordLine("N".repeat(1000), ack, 1000, "note"));
+        var response = new com.example.hms.exception.GlobalExceptionHandler().handleFieldBusinessException(error,
+            new org.springframework.web.context.request.ServletWebRequest(
+                new org.springframework.mock.web.MockHttpServletRequest()));
+        assertThat(response.getStatusCode().value()).isEqualTo(400);
+        assertThat(response.getBody()).isInstanceOfSatisfying(java.util.Map.class, body -> {
+            assertThat(body.get("message")).isEqualTo(error.getMessage());
+            assertThat(body.get("field")).isEqualTo("note");
+            assertThat(body.get("fieldErrors")).isEqualTo(java.util.Map.of("note", error.getMessage()));
+            assertThat(body).doesNotContainKey("cdsAdvisories");
+        });
     }
 
     @Test
@@ -221,12 +244,12 @@ class CurrentAllergyRecheckTest {
     @Test
     void notesWithoutAnAcknowledgementAreUnchangedAndShortNotesRetainBothParts() {
         MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
-        assertThat(CurrentAllergyRecheck.withRecordLine("Existing", null, 1000)).isEqualTo("Existing");
+        assertThat(CurrentAllergyRecheck.withRecordLine("Existing", null, 1000, "note")).isEqualTo("Existing");
         var stop = CurrentAllergyRecheck.stop(UUID.randomUUID(), "Amoxicillin", List.of(),
             List.of(allergy("Penicillin", AllergySeverity.SEVERE))).orElseThrow();
         var ack = new CurrentAllergyRecheck.Acknowledgement(CurrentAllergyRecheck.Gate.DISPENSE, stop, "Reviewed");
-        assertThat(CurrentAllergyRecheck.withRecordLine("Existing", ack, 1000)).contains("Existing", "Reviewed");
-        assertThat(CurrentAllergyRecheck.withRecordLine(null, ack, 1000)).isEqualTo(CurrentAllergyRecheck.recordLine(ack));
+        assertThat(CurrentAllergyRecheck.withRecordLine("Existing", ack, 1000, "note")).contains("Existing", "Reviewed");
+        assertThat(CurrentAllergyRecheck.withRecordLine(null, ack, 1000, "note")).isEqualTo(CurrentAllergyRecheck.recordLine(ack));
     }
 
     @Test

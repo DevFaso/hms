@@ -534,7 +534,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     /** The dose's chart note with the allergy acknowledgement's line, within the column. */
     private static String withAllergyLine(String note, com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement ack) {
-        return com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(note, ack, MAR_NOTES_MAX);
+        return com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(note, ack, MAR_NOTES_MAX, "note");
     }
 
     /** The MAR row's notes column. */

@@ -299,7 +299,7 @@ public class CurrentAllergyRecheck {
     }
 
     /** Keep both the note and acknowledgement intact; refuse overflow instead of losing clinical text. */
-    public static String withRecordLine(String note, Acknowledgement ack, int max) {
+    public static String withRecordLine(String note, Acknowledgement ack, int max, String noteField) {
         if (ack == null) {
             return note;
         }
@@ -307,7 +307,9 @@ public class CurrentAllergyRecheck {
         // Neither the acknowledgement nor the clinical note may be silently truncated.
         String joined = note == null || note.isBlank() ? line : line + "\n" + note;
         if (joined.length() > max) {
-            throw new com.example.hms.exception.FieldBusinessException(ACK_FIELD,
+            // This is a combined record-length error, not a new allergy refusal. Naming ACK_FIELD
+            // would reopen the portal acknowledgement dialog without a card or token.
+            throw new com.example.hms.exception.FieldBusinessException(noteField,
                 MessageUtil.resolveOrRaw("allergy.recheck.noteTooLong", max));
         }
         return joined;

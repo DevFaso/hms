@@ -209,7 +209,7 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
                         .targetPharmacy(pharmacy)
                         .decidedByUser(decidedBy)
                         .decidedForPatient(rx.getPatient())
-                        .reason(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispatchReason(pharmacy, request.getNote()), allergyAck, 1024))
+                        .reason(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispatchReason(pharmacy, request.getNote()), allergyAck, 1024, "note"))
                         .status(RoutingDecisionStatus.PENDING)
                         .decidedAt(LocalDateTime.now())
                         .build());

@@ -438,7 +438,7 @@ public class DispenseServiceImpl implements DispenseService {
         Dispense dispense = dispenseMapper.toEntity(dto, fill.mapperContext());
         dispense.setDispensedAt(LocalDateTime.now(clock));
         recordVerification(dispense, dto, fill.verification());
-        dispense.setNotes(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispense.getNotes(), fill.allergyAck(), DISPENSE_NOTES_MAX));
+        dispense.setNotes(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispense.getNotes(), fill.allergyAck(), DISPENSE_NOTES_MAX, "notes"));
         Dispense saved = dispenseRepository.save(dispense);
         auditAllergyAcknowledged(fill.allergyAck(), prescription, saved.getId());
 
@@ -510,7 +510,7 @@ public class DispenseServiceImpl implements DispenseService {
         // dispensed_by is NOT NULL: the preparer, until hand-over overwrites it.
         dispense.setPreparedByUser(preparer);
         recordVerification(dispense, dto, fill.verification());
-        dispense.setNotes(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispense.getNotes(), fill.allergyAck(), DISPENSE_NOTES_MAX));
+        dispense.setNotes(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispense.getNotes(), fill.allergyAck(), DISPENSE_NOTES_MAX, "notes"));
         Dispense saved = dispenseRepository.save(dispense);
         auditAllergyAcknowledged(fill.allergyAck(), fill.prescription(), saved.getId());
 
@@ -606,7 +606,7 @@ public class DispenseServiceImpl implements DispenseService {
         }
         appendNotes(dispense, request);
         if (allergyAck != null) {
-            dispense.setNotes(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispense.getNotes(), allergyAck, DISPENSE_NOTES_MAX));
+            dispense.setNotes(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispense.getNotes(), allergyAck, DISPENSE_NOTES_MAX, "notes"));
             auditAllergyAcknowledged(allergyAck, prescription, dispense.getId());
         }
 
