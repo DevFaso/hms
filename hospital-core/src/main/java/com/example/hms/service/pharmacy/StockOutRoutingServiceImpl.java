@@ -225,6 +225,26 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 .build();
     }
 
+    /**
+     * QA D1555: the one allergy re-check after the signature. A required setter: the application
+     * always wires it; only a service built by hand in a unit test has none.
+     */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setAllergyRecheck(com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck) {
+        this.allergyRecheck = allergyRecheck;
+    }
+
+    /** QA D1555: the routing gate of the re-check (AllergyRecheckGuardTest). */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement requireAllergyAcknowledged(Prescription prescription, String reason, String token) {
+        if (allergyRecheck == null) {
+            return null;
+        }
+        return allergyRecheck.requireAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.PARTNER_ROUTING, prescription,
+                prescription.getMedicationName(), reason, token);
+    }
+
     @Override
     @Transactional
     public RoutingDecisionResponseDTO routeToPartner(UUID prescriptionId, RoutingDecisionRequestDTO dto) {
@@ -256,6 +276,13 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         if (targetPhone == null || targetPhone.isBlank()) {
             throw new BusinessException("stock.routing.targetNoPhone");
         }
+        // QA D1555: the partner fills it outside, so the order's drug is read against the patient's
+        // CURRENT allergies before it leaves; the acknowledgement is kept on the routing decision.
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(prescription,
+                dto.getAllergyAcknowledgementReason(), dto.getAllergyAcknowledgementToken());
+        if (allergyAck != null) {
+            dto.setReason(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dto.getReason(), allergyAck, 1024, "reason"));
+        }
 
         User currentUser = resolveCurrentUser();
         Patient patient = prescription.getPatient();
@@ -279,6 +306,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         queueClaimService.releaseOnExit(prescription, QueueClaimReleaseReason.ROUTED,
                 currentUser.getId(), QueueClaimExitActor.QUEUE_ROLE);
 
+        if (allergyAck != null && allergyRecheck != null) {
+            allergyRecheck.auditAfterCommit(allergyAck, currentUser.getId(), hospitalId,
+                    patient != null ? patient.getId() : null, prescriptionId);
+        }
         logAudit(AuditEventType.PRESCRIPTION_SENT_TO_PARTNER,
                 PRESCRIPTION_PREFIX + prescriptionId + " routed to partner pharmacy " + targetPharmacy.getName(),
                 prescriptionId.toString());

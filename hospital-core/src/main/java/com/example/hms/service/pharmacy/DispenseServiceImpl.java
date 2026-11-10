@@ -156,6 +156,40 @@ public class DispenseServiceImpl implements DispenseService {
     private DispenseServiceImpl self;
 
     /**
+     * QA D1555: the one allergy re-check after the signature ({@link com.example.hms.service.allergy.CurrentAllergyRecheck}). A required setter: the
+     * application always wires it; only a service built by hand in a unit test has none.
+     */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck;
+
+    @Autowired
+    public void setAllergyRecheck(com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck) {
+        this.allergyRecheck = allergyRecheck;
+    }
+
+    /**
+     * QA D1555: a drug the patient's CURRENT allergies stop (an allergy recorded after the signature
+     * included) passes this gate only with the pharmacist's acknowledgement of that allergy and a
+     * reason. Every verify, fill, hand-over and partner routing calls it (AllergyRecheckGuardTest).
+     */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement requireAllergyAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate gate, Prescription prescription,
+                                                          String reason, String token) {
+        if (allergyRecheck == null) {
+            return null;
+        }
+        return allergyRecheck.requireAcknowledged(gate, prescription,
+            prescription != null ? prescription.getMedicationName() : null, reason, token);
+    }
+
+    private void auditAllergyAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement ack, Prescription prescription, UUID resourceId) {
+        if (ack == null || allergyRecheck == null) {
+            return;
+        }
+        allergyRecheck.auditAfterCommit(ack, roleValidator.getCurrentUserId(),
+            prescription.getHospital() != null ? prescription.getHospital().getId() : null,
+            prescription.getPatient() != null ? prescription.getPatient().getId() : null, resourceId);
+    }
+
+    /**
      * G15: {@code pharmacy.ready-for-collection.enabled}. Gates only
      * {@code POST /ready}; open preparations stay finishable when it is off.
      * Initialised here so a pure-unit test (no Spring) sees the production
@@ -169,6 +203,8 @@ public class DispenseServiceImpl implements DispenseService {
     private java.time.Duration uncollectedAfter = java.time.Duration.ofDays(7);
 
     private static final String AUDIT_ENTITY = "DISPENSE";
+    /** The dispense notes column's limit ({@code Dispense#notes}). */
+    private static final int DISPENSE_NOTES_MAX = 1000;
     private static final String DISPENSE_NOT_FOUND = "dispense.notfound";
     /** QA D1069: the longest cancel reason kept (the column is 500). */
     static final int CANCEL_NOTE_MAX = 500;
@@ -249,6 +285,11 @@ public class DispenseServiceImpl implements DispenseService {
      * call the patient or cancel the preparation.
      */
     static final String ATTENTION_READY_UNCOLLECTED = "READY_UNCOLLECTED";
+    /**
+     * QA D1555: the patient's CURRENT allergies stop the ordered drug (an allergy recorded after the
+     * signature included). The first reason: it is about the patient's safety, the others about the order.
+     */
+    static final String ATTENTION_ALLERGY = "ALLERGY";
 
     /**
      * The fill states a cancellation may recompute from. Every other status
@@ -397,7 +438,9 @@ public class DispenseServiceImpl implements DispenseService {
         Dispense dispense = dispenseMapper.toEntity(dto, fill.mapperContext());
         dispense.setDispensedAt(LocalDateTime.now(clock));
         recordVerification(dispense, dto, fill.verification());
+        dispense.setNotes(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispense.getNotes(), fill.allergyAck(), DISPENSE_NOTES_MAX, "notes"));
         Dispense saved = dispenseRepository.save(dispense);
+        auditAllergyAcknowledged(fill.allergyAck(), prescription, saved.getId());
 
         // Update prescription status based on cumulative dispensed quantity (supports partial fills)
         updatePrescriptionStatusFromHistory(prescription, true);
@@ -467,7 +510,9 @@ public class DispenseServiceImpl implements DispenseService {
         // dispensed_by is NOT NULL: the preparer, until hand-over overwrites it.
         dispense.setPreparedByUser(preparer);
         recordVerification(dispense, dto, fill.verification());
+        dispense.setNotes(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispense.getNotes(), fill.allergyAck(), DISPENSE_NOTES_MAX, "notes"));
         Dispense saved = dispenseRepository.save(dispense);
+        auditAllergyAcknowledged(fill.allergyAck(), fill.prescription(), saved.getId());
 
         // G13 rule 4 / AC-10: preparing ends the claim; a prepared row cannot
         // be claimed until it is handed over or cancelled.
@@ -535,6 +580,10 @@ public class DispenseServiceImpl implements DispenseService {
             throw new BusinessException("pharmacy.prescription.stayEnded");
         }
         controlledSubstanceGuard.requireDispensable(prescription);
+        // QA D1555: an allergy recorded since the fill was prepared is read before it leaves the counter.
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.DISPENSE, prescription,
+            request != null ? request.getAllergyAcknowledgementReason() : null,
+            request != null ? request.getAllergyAcknowledgementToken() : null);
 
         String patientScan = trimToNull(request != null ? request.getPatientScanValue() : null);
         requireHandOverChecksPass(dispenseVerificationService.verify(
@@ -556,6 +605,10 @@ public class DispenseServiceImpl implements DispenseService {
             throw new ConflictException(MessageUtil.resolve(READY_NOT_PENDING));
         }
         appendNotes(dispense, request);
+        if (allergyAck != null) {
+            dispense.setNotes(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispense.getNotes(), allergyAck, DISPENSE_NOTES_MAX, "notes"));
+            auditAllergyAcknowledged(allergyAck, prescription, dispense.getId());
+        }
 
         updatePrescriptionStatusFromHistory(prescription, true);
         if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
@@ -884,6 +937,9 @@ public class DispenseServiceImpl implements DispenseService {
                             String.join(" | ", cdsResult.alerts())),
                     DispenseAlertCards.of(cdsResult));
         }
+        // QA D1555: the order's drug against the patient's CURRENT allergies, every fill (a refill's included).
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.DISPENSE, prescription,
+                dto.getAllergyAcknowledgementReason(), dto.getAllergyAcknowledgementToken());
 
         ActorPair actors = resolveActors(dto);
         requirePharmacistVerification(prescription, actors);
@@ -915,7 +971,7 @@ public class DispenseServiceImpl implements DispenseService {
         }
         recordFefoOverride(dto, stockLot);
 
-        return new FillContext(prescription, patient, pharmacy, actors, catalogItem, stockLot, verification);
+        return new FillContext(prescription, patient, pharmacy, actors, catalogItem, stockLot, verification, allergyAck);
     }
 
     /**
@@ -984,7 +1040,8 @@ public class DispenseServiceImpl implements DispenseService {
     /** What {@link #validateFill} established, for the half that writes. */
     private record FillContext(Prescription prescription, Patient patient, Pharmacy pharmacy,
                                ActorPair actors, MedicationCatalogItem catalogItem, StockLot stockLot,
-                               DispenseVerificationResult verification) {
+                               DispenseVerificationResult verification,
+                               com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck) {
         DispenseMapper.DispenseContext mapperContext() {
             return new DispenseMapper.DispenseContext(prescription, patient, pharmacy, stockLot,
                     actors.dispensedBy(), actors.verifiedBy(), catalogItem);
@@ -1602,6 +1659,7 @@ public class DispenseServiceImpl implements DispenseService {
         Set<UUID> heldForReview = com.example.hms.service.support.OrderReviewHoldGuard.heldAmong(
                 com.example.hms.enums.OrderReviewType.PRESCRIPTION, hospitalId, rows.stream().map(Prescription::getId).toList());
         LocalDateTime uncollectedBefore = LocalDateTime.now(clock).minus(uncollectedAfter);
+        Map<UUID, List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard>> allergyAlerts = allergyAlertsFor(rows, hospitalId);
         return page.map(p -> {
             Dispense prepared = preparedFills.get(p.getId());
             WorkQueuePrescriptionDTO dto = toWorkQueueDTO(p, latestRefills.get(p.getId()),
@@ -1609,6 +1667,7 @@ public class DispenseServiceImpl implements DispenseService {
                     outstandingBackOrders.contains(p.getId()));
             dto.setHeldForReview(heldForReview.contains(p.getId()));
             dto.setClaim(claims.get(p.getId()));
+            withAllergyAlerts(dto, allergyAlerts.get(p.getId()));
             // QA D1001: the same remainder requireWithinPrescribedQuantity caps a fill at.
             dto.setRemainingQuantity(FillAccounting.remaining(p, committed.getOrDefault(p.getId(), BigDecimal.ZERO)));
             if (prepared != null) {
@@ -1647,6 +1706,48 @@ public class DispenseServiceImpl implements DispenseService {
                     queueClaimService.activeAfter(), pageable);
             case ALL -> prescriptionRepository.findWorkQueue(hospitalId, statuses, pageable);
         };
+    }
+
+    /**
+     * QA D1555: the allergy cards of each order on the page against its patient's CURRENT allergies,
+     * the allergies in one query and the catalogue once, and only when a patient on the page has one.
+     */
+    private Map<UUID, List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard>> allergyAlertsFor(
+            List<Prescription> rows, UUID hospitalId) {
+        if (allergyRecheck == null || rows.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, List<com.example.hms.model.PatientAllergy>> allergies = allergyRecheck.currentAllergies(
+                rows.stream().map(Prescription::getPatient).filter(java.util.Objects::nonNull)
+                        .map(Patient::getId).filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toSet()));
+        if (allergies.values().stream().allMatch(List::isEmpty)) {
+            return Map.of();
+        }
+        List<MedicationCatalogItem> catalogue = allergyRecheck.catalogueForOrders(hospitalId, rows);
+        Map<UUID, List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard>> byOrder = new HashMap<>();
+        for (Prescription p : rows) {
+            List<com.example.hms.model.PatientAllergy> patientAllergies = p.getPatient() == null ? List.of()
+                    : allergies.getOrDefault(p.getPatient().getId(), List.of());
+            List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cards = com.example.hms.service.allergy.CurrentAllergyRecheck.cards(p.getId(), p.getMedicationName(),
+                    com.example.hms.service.allergy.CurrentAllergyRecheck.itemsFor(p.getMedicationName(), p.getMedicationCatalogItemId(), catalogue), patientAllergies);
+            if (!cards.isEmpty()) {
+                byOrder.put(p.getId(), cards);
+            }
+        }
+        return byOrder;
+    }
+
+    /** QA D1555: the row carries the cards; a stop is the row's first reason for attention. */
+    private static void withAllergyAlerts(WorkQueuePrescriptionDTO dto,
+                                          List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cards) {
+        if (cards == null || cards.isEmpty()) {
+            return;
+        }
+        dto.setAllergyAlerts(cards);
+        if (cards.stream().anyMatch(c -> c.indicator() == com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL)) {
+            dto.setAttentionReason(ATTENTION_ALLERGY);
+            dto.setNeedsAttention(true);
+        }
     }
 
     /** QA D1001: what each order on the page has committed (fills not cancelled), one query. */

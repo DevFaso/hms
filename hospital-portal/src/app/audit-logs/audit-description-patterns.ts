@@ -963,6 +963,11 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { reason: 'phrase:RX_SIGN_REAUTH' },
   },
   {
+    // QA D1563 / D1555: a nurse or a pharmacist acknowledged a documented allergy, with a reason.
+    key: 'AUDIT.DESC.ALLERGY_ACKNOWLEDGED',
+    re: /^Allergy acknowledged with a reason$/,
+  },
+  {
     key: 'AUDIT.DESC.ALLERGY_OVERRIDE',
     re: /^Allergy override (recorded at creation|recorded on edit|recorded at signature|reason replaced on edit|cleared: the edited order no longer conflicts)$/,
     params: ['what'],

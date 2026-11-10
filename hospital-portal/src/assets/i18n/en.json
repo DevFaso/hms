@@ -1865,7 +1865,8 @@
       "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} undone on invoice {{invoice}}, reason recorded",
       "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Obstetric rule skipped for an emergency ultrasound order",
       "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Obstetric rule skipped for an emergency OB/GYN referral",
-      "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Obstetric rule skip cleared on an ultrasound order"
+      "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Obstetric rule skip cleared on an ultrasound order",
+      "ALLERGY_ACKNOWLEDGED": "Allergy acknowledged with a reason"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -6695,7 +6696,9 @@
         "PRESCRIPTION_CDS_OVERRIDDEN": "Prescription decision-support alert overridden",
         "PRESCRIPTION_SIGN_REAUTHENTICATION": "Re-authentication to sign a controlled-drug prescription",
         "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Paediatric dose review recorded",
-        "ADMISSION_BED_RELEASED": "Inpatient bed released"
+        "ADMISSION_BED_RELEASED": "Inpatient bed released",
+        "MAR_ALLERGY_ACKNOWLEDGED": "Allergy acknowledged at a dose",
+        "DISPENSE_ALLERGY_ACKNOWLEDGED": "Allergy acknowledged at the pharmacy"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -9572,7 +9575,8 @@
       "CLARIFICATION_RESOLVED": "The prescriber has answered — read the answer first",
       "PRESCRIBER_ANSWERED": "The prescriber has answered",
       "UNRECOGNISED": "Needs a second look — check the order before filling",
-      "READY_UNCOLLECTED": "Ready for {{days}} days and not collected"
+      "READY_UNCOLLECTED": "Ready for {{days}} days and not collected",
+      "ALLERGY": "Patient allergy"
     },
     "ACCEPT": "Accept",
     "ADDRESS": "Address",
@@ -10045,7 +10049,8 @@
     "LOTS_OTHER_FORM": "{{count}} lot(s) of this drug in another form are not offered: the order is written in \"{{unit}}\".",
     "SAVE_PRICE": "Save the price",
     "WRITE_OFF_REMOVES_ONLY": "Damage and expiry only take stock off: enter a negative quantity.",
-    "WRITE_OFF_SIGN_HINT": "This reason takes stock off: enter a negative quantity (for example −2)."
+    "WRITE_OFF_SIGN_HINT": "This reason takes stock off: enter a negative quantity (for example −2).",
+    "ALLERGY_ALERTS_TITLE": "Allergy alerts"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
@@ -13305,5 +13310,10 @@
     "REFERENCE": "Reference range",
     "OUTSIDE_SCALE": "The result is beyond the displayed scale; the marker is at the edge.",
     "UNAVAILABLE": "Position requires an exact numeric result and a compatible reference interval."
+  },
+  "ALLERGY_ACK": {
+    "TITLE": "Documented allergy",
+    "REASON_LABEL": "Why you go ahead despite this allergy",
+    "CONFIRM": "Acknowledge and continue"
   }
 }

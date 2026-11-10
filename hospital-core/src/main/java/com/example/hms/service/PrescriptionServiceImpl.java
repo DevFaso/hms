@@ -3000,7 +3000,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /** Higher is worse; an unknown severity ranks above a mild one, below a moderate one. */
-    static int allergySeverityRank(PatientAllergy allergy) {
+    public static int allergySeverityRank(PatientAllergy allergy) {
         if (allergy.getSeverity() == null) {
             return 2;
         }
