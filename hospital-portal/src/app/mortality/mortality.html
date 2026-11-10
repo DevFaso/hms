@@ -246,7 +246,7 @@
   }
 
   <!-- The urgent dispute: the two outcomes, by an administrator, and never by a timeout. -->
-  @if (canCorrect && disputes().length) {
+  @if (canReviewDisputes() && disputes().length) {
     <h2 class="error-list-title">{{ 'MORTALITY.DISPUTES_TITLE' | translate }}</h2>
     <div class="data-table">
       <table>

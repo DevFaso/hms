@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -90,6 +97,14 @@ export class MortalityComponent implements OnInit {
     'ROLE_SUPER_ADMIN',
   ]);
 
+  /**
+   * The disputes to review are one hospital's: a super-admin in global view has none to read
+   * until the scope chip picks a hospital (the server answers "hospital required").
+   */
+  readonly canReviewDisputes = computed(
+    () => this.canCorrect && this.roleContext.hasHospitalScope(),
+  );
+
   readonly placesOfDeath: PlaceOfDeath[] = ['FACILITY', 'HOME', 'IN_TRANSIT', 'OTHER', 'UNKNOWN'];
   readonly mannersOfDeath: MannerOfDeath[] = [
     'NATURAL',
@@ -139,11 +154,20 @@ export class MortalityComponent implements OnInit {
     this.loadDisputes();
   }
 
+  /**
+   * Loaded on its own: its failure never reads as the register's, which loaded. A refusal (403)
+   * means this caller does not review disputes here, so the section stays hidden and nothing is
+   * said; any other failure says the disputes could not be loaded.
+   */
   loadDisputes(): void {
-    if (!this.canCorrect) return;
+    if (!this.canReviewDisputes()) return;
     this.mortality.openDisputes().subscribe({
       next: (list) => this.disputes.set(list),
-      error: () => this.toast.error(this.translate.instant('MORTALITY.LOAD_ERROR')),
+      error: (err: unknown) => {
+        this.disputes.set([]);
+        if ((err as { status?: number } | null)?.status === 403) return;
+        this.toast.error(this.translate.instant('MORTALITY.DISPUTES_LOAD_ERROR'));
+      },
     });
   }
 
