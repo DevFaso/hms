@@ -1535,14 +1535,17 @@ class PrescriptionServiceImplTest {
         PatientAllergy allergy = new PatientAllergy();
         allergy.setActive(true);
         allergy.setAllergenDisplay("Sulfamides");
+        allergy.setId(UUID.randomUUID());
         stubSignable(rx, prescriberUserId);
         when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
         when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
         when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+        String token = policy3_tokenOfARefusal(rx);
 
         prescriptionService.signPrescription(rx.getId(),
             com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
-                .allergyOverrideReason("Tolerated co-trimoxazole in 2025, documented").build(),
+                .allergyOverrideReason("Tolerated co-trimoxazole in 2025, documented")
+                .doseExceptionToken(token).build(),
             Locale.FRENCH);
 
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
@@ -1550,25 +1553,229 @@ class PrescriptionServiceImplTest {
         assertThat(rx.getOverrideReason()).isEqualTo("Tolerated co-trimoxazole in 2025, documented");
         // r23 residual: an acknowledgement given at the signature says so in
         // the audit log (it read "recorded on edit", an edit nobody made).
+        // Policy 3: the row names the signer, the allergy the warning named and the reason's digest.
         verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
             e.getEventType() == com.example.hms.enums.AuditEventType.PRESCRIPTION_ALLERGY_OVERRIDDEN
-                && "Allergy override recorded at signature".equals(e.getEventDescription())));
+                && "Allergy override recorded at signature".equals(e.getEventDescription())
+                && prescriberUserId.equals(e.getUserId())
+                && String.valueOf(e.getDetails()).contains("\"allergyId\":\"" + allergy.getId() + "\"")
+                && String.valueOf(e.getDetails()).contains("\"warning\":\"documented\"")
+                && String.valueOf(e.getDetails()).contains("\"reasonSha256\":")
+                && String.valueOf(e.getDetails()).contains("\"signedAt\":")
+                && !String.valueOf(e.getDetails()).contains("co-trimoxazole")));
     }
 
-    @Test
-    void d1183_anOrderAcknowledgedAtCreationIsSignedWithoutAskingAgain() {
-        UUID prescriberUserId = UUID.randomUUID();
+    /* ── Policy 3 (2026-11-09, provisional): the reason is the signer's, for the allergy named ── */
+
+    /** The token a refused signature put on its allergy card. */
+    private String policy3_tokenOfARefusal(Prescription rx) {
+        com.example.hms.cdshooks.CdsCriticalBlockException refused = catchThrowableOfType(
+            com.example.hms.cdshooks.CdsCriticalBlockException.class,
+            () -> prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH));
+        assertThat(refused).as("the allergy stop refuses a signature with no reason").isNotNull();
+        assertThat(refused.getField()).isEqualTo("allergyOverrideReason");
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        String key = refused.getCards().get(refused.getCards().size() - 1).exceptionKey();
+        assertThat(key).startsWith(PrescriptionServiceImpl.ALLERGY_KEY_PREFIX);
+        return key;
+    }
+
+    private Prescription policy3_acknowledgedAtCreation(UUID prescriberUserId, PatientAllergy allergy) {
         Prescription rx = signablePrescription(prescriberUserId);
         rx.setMedicationName("Totapen 1 g");
+        rx.setVersion(2L);
+        // QA rounds 38-40: acknowledged at creation, then signed with no reason - and it was signed.
         rx.setAllergiesReviewed(true);
         rx.setOverrideReason("reviewed");
         stubSignable(rx, prescriberUserId);
-        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
-        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+        lenient().when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
+        lenient().when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        lenient().when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+        return rx;
+    }
 
-        prescriptionService.signPrescription(rx.getId(), null, Locale.FRENCH);
+    private static PatientAllergy policy3_allergy(String allergen) {
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setId(UUID.randomUUID());
+        allergy.setActive(true);
+        allergy.setAllergenDisplay(allergen);
+        return allergy;
+    }
+
+    @Test
+    void policy3_anOrderAcknowledgedAtCreationIsNotSignedWithoutTheSignersReason() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, policy3_allergy("Pénicilline"));
+        UUID rxId = rx.getId();
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.cdshooks.CdsCriticalBlockException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("allergyOverrideReason");
+                assertThat(ex.getCards()).hasSize(1);
+                assertThat(ex.getCards().get(0).exceptionKey()).startsWith(PrescriptionServiceImpl.ALLERGY_KEY_PREFIX);
+            });
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        assertThat(rx.getSignatureValue()).isNull();
+    }
+
+    @Test
+    void policy3_aBlankReasonWithTheTokenIsRefused() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, policy3_allergy("Pénicilline"));
+        String token = policy3_tokenOfARefusal(rx);
+        UUID rxId = rx.getId();
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO blank =
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                .allergyOverrideReason("   ").doseExceptionToken(token).build();
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, blank, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+    }
+
+    @Test
+    void policy3_aReasonWithoutTheTokenAcknowledgesNoAllergy() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, policy3_allergy("Pénicilline"));
+        UUID rxId = rx.getId();
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO reasonOnly =
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                .allergyOverrideReason("Tolerated amoxicillin last year").build();
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, reasonOnly, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.cdshooks.CdsCriticalBlockException.class, ex ->
+                assertThat(ex.getField()).isEqualTo("allergyOverrideReason"));
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+    }
+
+    @Test
+    void policy3_anAcknowledgementOfOneAllergyDoesNotAnswerAnother() {
+        UUID prescriberUserId = UUID.randomUUID();
+        PatientAllergy first = policy3_allergy("Pénicilline");
+        Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, first);
+        String token = policy3_tokenOfARefusal(rx);
+        // A more severe penicillin allergy recorded since: the warning now names that one.
+        PatientAllergy second = policy3_allergy("Pénicilline");
+        second.setSeverity(com.example.hms.enums.AllergySeverity.LIFE_THREATENING);
+        when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(first, second));
+        UUID rxId = rx.getId();
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO stale =
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                .allergyOverrideReason("Tolerated amoxicillin last year").doseExceptionToken(token).build();
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, stale, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.cdshooks.CdsCriticalBlockException.class, ex ->
+                assertThat(ex.getCards().get(0).exceptionKey()).isNotEqualTo(token));
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+    }
+
+    @Test
+    void rexReview_changedSeverityOfSameAllergyInvalidatesAcknowledgement() {
+        UUID prescriberUserId = UUID.randomUUID();
+        PatientAllergy allergy = policy3_allergy("Pénicilline");
+        allergy.setSeverity(com.example.hms.enums.AllergySeverity.MILD);
+        Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, allergy);
+        String token = policy3_tokenOfARefusal(rx);
+        // Review of #1104 (P1): the same row is edited in place; neither its id nor the order's version moves.
+        allergy.setSeverity(com.example.hms.enums.AllergySeverity.LIFE_THREATENING);
+        UUID rxId = rx.getId();
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO stale =
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                .allergyOverrideReason("Mild rash only, tolerated").doseExceptionToken(token).build();
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, stale, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.cdshooks.CdsCriticalBlockException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("allergyOverrideReason");
+                assertThat(ex.getCards().get(0).exceptionKey()).isNotEqualTo(token);
+            });
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        assertThat(rx.getSignatureValue()).isNull();
+    }
+
+    @Test
+    void policy3_anAllergyEditInvalidatesOnlyThatAllergysAcknowledgement() {
+        UUID prescriberUserId = UUID.randomUUID();
+        PatientAllergy penicillin = policy3_allergy("Pénicilline");
+        PatientAllergy peanut = policy3_allergy("Arachide");
+        Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, penicillin);
+        when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(penicillin, peanut));
+        String first = policy3_tokenOfARefusal(rx);
+        UUID rxId = rx.getId();
+
+        // The allergy the warning names is edited: its acknowledgement no longer answers it.
+        penicillin.setReaction("Anaphylaxie");
+        com.example.hms.cdshooks.CdsCriticalBlockException refused = catchThrowableOfType(
+            com.example.hms.cdshooks.CdsCriticalBlockException.class,
+            () -> prescriptionService.signPrescription(rxId,
+                com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                    .allergyOverrideReason("Tolerated").doseExceptionToken(first).build(), Locale.FRENCH));
+        assertThat(refused).isNotNull();
+        String current = refused.getCards().get(0).exceptionKey();
+        assertThat(current).isNotEqualTo(first);
+
+        // Another allergy the warning does not name is edited: the current acknowledgement still stands.
+        peanut.setReaction("Urticaire");
+        peanut.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        prescriptionService.signPrescription(rxId,
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                .allergyOverrideReason("Tolerated under observation").doseExceptionToken(current).build(),
+            Locale.FRENCH);
 
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+    }
+
+    @Test
+    void policy3_theSignersReasonWithTheTokenSignsAndIsRecorded() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, policy3_allergy("Pénicilline"));
+        String token = policy3_tokenOfARefusal(rx);
+
+        prescriptionService.signPrescription(rx.getId(),
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                .allergyOverrideReason("Skin test negative 2026-10").doseExceptionToken(token).build(),
+            Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(rx.getSignedAt()).isNotNull();
+        assertThat(rx.getSignedBy()).isNotNull();
+        // The creation reason is kept, the signer's is beside it.
+        assertThat(rx.getOverrideReason()).contains("reviewed").contains("Skin test negative 2026-10");
+    }
+
+    @Test
+    void policy3_theUrgentFlagDoesNotSkipTheAllergyReason() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, policy3_allergy("Pénicilline"));
+        UUID rxId = rx.getId();
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO urgent =
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder().urgentDoseException(true).build();
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, urgent, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.cdshooks.CdsCriticalBlockException.class, ex ->
+                assertThat(ex.getField()).isEqualTo("allergyOverrideReason"));
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+    }
+
+    @Test
+    void policy3_aReasonNeverPassesANonOverridableContraindication() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, policy3_allergy("Pénicilline"));
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(),
+            any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
+            .thenReturn(List.of(new com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard("Above the absolute daily maximum",
+                null, com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL,
+                new com.example.hms.cdshooks.dto.CdsHookDtos.Source("Dose", null, null),
+                null, null, null, UUID.randomUUID().toString(), Boolean.TRUE)));
+        UUID rxId = rx.getId();
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO withReason =
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                .allergyOverrideReason("I accept the risk").doseExceptionToken("allergy:anything").build();
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, withReason, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.cdshooks.CdsCriticalBlockException.class, ex ->
+                assertThat(ex.getCards()).anyMatch(com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard::blocksOverride));
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        assertThat(rx.getSignatureValue()).isNull();
     }
 
     @Test

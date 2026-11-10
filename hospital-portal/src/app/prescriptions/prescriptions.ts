@@ -106,6 +106,15 @@ export function isWithdrawnStatus(status: string | null | undefined): boolean {
 }
 
 /**
+ * Policy 3 (2026-11-09, provisional): the allergy card a refused signature answers with carries
+ * the signature's token behind this prefix (PrescriptionServiceImpl.ALLERGY_KEY_PREFIX). It is sent
+ * back with the reason, and it is not a dose exception: the dialog must not call it one.
+ */
+export function isAllergyAcknowledgementKey(key: string | null | undefined): boolean {
+  return !!key && key.startsWith('allergy:');
+}
+
+/**
  * QA D1537 review (round 40): a status a signature led to: not a proposal (DRAFT,
  * PENDING_SIGNATURE) and not withdrawn. The server's rule for refusing a return to a proposal
  * (PrescriptionServiceImpl.rejectStatusChangeOnUpdate).
@@ -1366,11 +1375,18 @@ export class PrescriptionsComponent implements OnInit {
   );
   /** CR-02: the dialog is for an explicit prescribing exception, which a reason answers with its token. */
   readonly signAlertIsException = computed(() =>
-    this.signAllergyCards().some((c) => !!c.exceptionKey),
+    this.signAllergyCards().some(
+      (c) => !!c.exceptionKey && !isAllergyAcknowledgementKey(c.exceptionKey),
+    ),
   );
   /** A child's dose above the limit: the prescriber decides alone, and may mark it urgent so the review follows. */
   readonly signAlertIsAboveLimit = computed(() =>
-    this.signAllergyCards().some((c) => c.indicator === 'critical' && !!c.exceptionKey),
+    this.signAllergyCards().some(
+      (c) =>
+        c.indicator === 'critical' &&
+        !!c.exceptionKey &&
+        !isAllergyAcknowledgementKey(c.exceptionKey),
+    ),
   );
   signAllergyReason = '';
   /** CR-01: this attempt is the prescriber's urgent exception to the second-person dose review. */

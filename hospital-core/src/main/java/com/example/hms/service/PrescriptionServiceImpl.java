@@ -82,6 +82,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     /** Audit details carry a digest of a free-text reason, never the reason itself. */
     private static final String REASON_DIGEST_PREFIX = "{\"reasonSha256\":\"";
     private static final String AUDIT_ENTITY_PRESCRIPTION = "Prescription";
+    /**
+     * Policy 3 (2026-11-09, provisional): the allergy card a refused signature answers with carries
+     * the signature's token behind this prefix, so the dialog can tell an allergy acknowledgement from
+     * a dose exception. The signature accepts the token with or without it.
+     */
+    static final String ALLERGY_KEY_PREFIX = "allergy:";
+    /** The request field a missing or stale allergy acknowledgement is reported on. */
+    static final String FIELD_ALLERGY_OVERRIDE_REASON = "allergyOverrideReason";
 
     private final PrescriptionRepository prescriptionRepository;
     /** QA D1432: whether medicine has left the counter under an order. */
@@ -539,8 +547,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // patients. The allergy stop is re-run on the order being signed, so
         // an order saved before the rule knew its drug, or before the safety
         // net existed, is never signed without the acknowledgement on record.
+        // Policy 3 (2026-11-09, provisional): the acknowledgement is the
+        // signer's, given at this signature for the allergy the warning names;
+        // one recorded at creation or edit no longer passes it.
         // Before the re-authentication, so no code is spent on a refusal.
-        String allergyAcknowledgement = requireAllergyAcknowledgedAtSigning(prescription, reauthentication);
+        AllergyAcknowledgement allergyAcknowledgement =
+            requireAllergyAcknowledgedAtSigning(prescription, reauthentication, signer, signingCards);
 
         if (controlledResolver.isControlled(prescription)) {
             controlledSubstanceGuard.requireCosignedFor(prescription, PrescriptionStatus.SIGNED);
@@ -575,8 +587,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         PrescriptionResponseDTO signed = prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
         if (allergyAcknowledgement != null) {
+            // The warning, the reason, the signer and the time together: this row (actor, its own time,
+            // the allergy the warning named, the reason's digest) beside the order's signer, time and reason.
             auditAllergyOverrideAfterCommit(prescription, signer.getUser() != null ? signer.getUser().getId() : null,
-                allergyAcknowledgement, "Allergy override recorded at signature");
+                allergyAcknowledgement.reason(), "Allergy override recorded at signature",
+                allergyAcknowledgement.auditDetails(versionSigned, signedAt));
         }
         if (contraindicationReason != null) {
             UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
@@ -636,13 +651,19 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         String token = tied ? doseExceptionToken(prescription, signer, cards) : null;
         String reason = request == null || request.getAllergyOverrideReason() == null
             ? "" : request.getAllergyOverrideReason().trim();
-        boolean stale = tied && !reason.isEmpty() && !token.equals(request.getDoseExceptionToken());
+        boolean stale = tied && !reason.isEmpty() && !tokenMatches(request, token);
         if (reason.isEmpty() || stale) {
             throw new CdsCriticalBlockException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw(signatureRefusalKey(tied, stale), held.get(0).summary()),
-                refusedAtSignature(prescription, held, token));
+                refusedAtSignature(prescription, held, token, signer, cards));
         }
         return reason;
+    }
+
+    /** Whether the signature sent back this token, on a dose card or (prefixed) on the allergy card. */
+    private static boolean tokenMatches(com.example.hms.payload.dto.SignPrescriptionRequestDTO request, String token) {
+        String given = request == null ? null : request.getDoseExceptionToken();
+        return given != null && token != null && (given.equals(token) || given.equals(ALLERGY_KEY_PREFIX + token));
     }
 
     private static String signatureRefusalKey(boolean tied, boolean stale) {
@@ -652,11 +673,16 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return tied ? "prescription.cds.exceptionRequired" : "prescription.cds.criticalOverrideRequired";
     }
 
-    /** The cards a refused signature answers with, each tied one carrying the token, and a pending allergy stop. */
-    private List<CdsCard> refusedAtSignature(Prescription prescription, List<CdsCard> held, String token) {
+    /**
+     * The cards a refused signature answers with, each tied one carrying the token, and the allergy
+     * stop carrying it too (Policy 3): one reason and one token answer the whole signature.
+     */
+    private List<CdsCard> refusedAtSignature(Prescription prescription, List<CdsCard> held, String token,
+                                             Staff signer, List<CdsCard> cards) {
         List<CdsCard> refused = new java.util.ArrayList<>(token == null ? held.subList(0, 1)
             : held.stream().map(c -> c.exceptionKey() == null ? c : c.withExceptionKey(token)).toList());
-        pendingAllergyStop(prescription).ifPresent(refused::add);
+        allergyStopAtSigning(prescription).ifPresent(stop -> refused.add(stop.card().withExceptionKey(
+            ALLERGY_KEY_PREFIX + (token != null ? token : doseExceptionToken(prescription, signer, cards)))));
         return refused;
     }
 
@@ -671,8 +697,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             .map(c -> java.util.Objects.toString(c.exceptionKey(), "contraindication"))
             .sorted().collect(java.util.stream.Collectors.joining(";"));
         UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
-        // One reason answers an allergy stop too, so one that appeared since the refusal voids the token and is shown.
-        boolean allergyStop = pendingAllergyStop(prescription).isPresent();
+        // One reason answers an allergy stop too. Policy 3: the token names the allergy the warning
+        // names, so an acknowledgement answers that allergy only; another one since voids it and is shown.
+        String allergyStop = allergyStopAtSigning(prescription).map(AllergyStop::key).orElse("none");
         return computeSignatureDigest(prescription.getId() + "|" + prescription.getVersion() + "|" + signerUserId + "|" + allergyStop + "|" + findings);
     }
 
@@ -724,40 +751,99 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
-     * QA D1183 (round 23): the allergy stop at the signature. An order the
-     * stop applies to is signed only when an allergy acknowledgement is on
-     * record (made at creation or edit), or the signer gives one now in
-     * {@code allergyOverrideReason}; it is then recorded on the order and
-     * audited. Otherwise the same critical card as at creation is returned.
+     * QA D1183 (round 23), Policy 3 (2026-11-09, provisional): the allergy stop at the signature. An
+     * order the stop applies to is signed only when the signer, at this signature, acknowledges the
+     * allergy the warning names and gives the clinical reason in {@code allergyOverrideReason}. An
+     * acknowledgement recorded at creation or edit does not pass it (QA rounds 38-40 signed such an
+     * order with no reason): it may be someone else's, and nothing ties it to this signature.
      *
-     * @return the reason recorded now, or {@code null}
+     * <p>The acknowledgement is bound to that allergy by the CR-02 token: the refusal hands it back
+     * on the allergy card, and it names this order at this version, this signer, the findings and
+     * the allergy ({@link AllergyStop#key}). A reason without it, or with one made for another
+     * allergy or another version, is refused with the current card. The reason is recorded on the
+     * order with the signature and audited with the allergy's id. A hard stop is refused before this
+     * ({@link #refuseHardStopAtSigning}): no reason passes it.
+     *
+     * @return what was acknowledged, or {@code null} when no allergy stop applies
      */
-    private String requireAllergyAcknowledgedAtSigning(
-            Prescription prescription, com.example.hms.payload.dto.SignPrescriptionRequestDTO request) {
-        Optional<CdsCard> block = pendingAllergyStop(prescription);
-        if (block.isEmpty()) {
+    private AllergyAcknowledgement requireAllergyAcknowledgedAtSigning(Prescription prescription,
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO request, Staff signer, List<CdsCard> cards) {
+        Optional<AllergyStop> stop = allergyStopAtSigning(prescription);
+        if (stop.isEmpty()) {
             return null;
         }
+        String token = doseExceptionToken(prescription, signer, cards);
+        CdsCard card = stop.get().card().withExceptionKey(ALLERGY_KEY_PREFIX + token);
+        String allergen = com.example.hms.service.allergy.AllergyDrugIdentity.displayOf(stop.get().allergy());
         String reason = request == null || request.getAllergyOverrideReason() == null
             ? "" : request.getAllergyOverrideReason().trim();
         if (reason.isEmpty()) {
-            String message = block.get().summary();
-            throw new CdsCriticalBlockException(message, List.of(block.get()));
+            throw new CdsCriticalBlockException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.allergy.signatureReasonRequired",
+                    card.summary(), allergen),
+                List.of(card), FIELD_ALLERGY_OVERRIDE_REASON);
         }
-        recordAllergyOverride(prescription, reason);
-        return reason;
+        if (!tokenMatches(request, token)) {
+            throw new CdsCriticalBlockException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.allergy.acknowledgementStale", allergen),
+                List.of(card), FIELD_ALLERGY_OVERRIDE_REASON);
+        }
+        appendSignatureReason(prescription, reason);
+        prescription.setAllergiesReviewed(true);
+        return new AllergyAcknowledgement(reason, stop.get(), token);
     }
 
-    /** The allergy stop this order would meet at its signature, if no acknowledgement is on record. */
-    private Optional<CdsCard> pendingAllergyStop(Prescription prescription) {
-        if (prescription.isAllergiesReviewed() || prescription.getPatient() == null
-                || prescription.getPatient().getId() == null) {
+    /**
+     * The allergy stop this order meets at its signature, acknowledged earlier or not (Policy 3):
+     * the same rule as at creation and edit, read again on the saved order.
+     */
+    private Optional<AllergyStop> allergyStopAtSigning(Prescription prescription) {
+        if (prescription.getPatient() == null || prescription.getPatient().getId() == null) {
             return Optional.empty();
         }
         UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
-        return allergyBlock(prescription.getMedicationName(),
+        return allergyStop(prescription.getMedicationName(),
             allergyItems(prescription.getMedicationName(), savedOrderItem(prescription), hospitalId),
             patientAllergyRepository.findByPatient_Id(prescription.getPatient().getId()));
+    }
+
+    /**
+     * An allergy stop: its card and the allergy it names. {@code kind} says which rule raised it (a
+     * documented allergy covers the drug, or the drug could not be checked against a class allergy).
+     */
+    private record AllergyStop(CdsCard card, PatientAllergy allergy, String kind) {
+        /**
+         * What an acknowledgement answers: the rule, the allergy, and the allergy's warning state as
+         * the prescriber read it. Review of #1104 (P1): an edit of the same allergy row (MILD to
+         * LIFE_THREATENING, another allergen or reaction) changes neither its id nor the order's
+         * version, so every field the warning rests on is part of the key, with the row's last
+         * update. Never the card's random uuid: a retry of the same warning must keep its token.
+         */
+        String key() {
+            Object allergyIdentity = allergy.getId() != null ? allergy.getId()
+                : com.example.hms.service.allergy.AllergyDrugIdentity.displayOf(allergy);
+            return String.join("|", kind, String.valueOf(allergyIdentity),
+                String.valueOf(allergy.getSeverity()), String.valueOf(allergy.getAllergenCode()),
+                String.valueOf(allergy.getAllergenDisplay()), String.valueOf(allergy.getCategory()),
+                String.valueOf(allergy.getReaction()), String.valueOf(allergy.getReactionNotes()),
+                String.valueOf(allergy.getVerificationStatus()), String.valueOf(allergy.isActive()),
+                String.valueOf(allergy.getUpdatedAt()));
+        }
+    }
+
+    /** Policy 3: the signer's acknowledgement of one allergy stop, with the token that bound it. */
+    private record AllergyAcknowledgement(String reason, AllergyStop stop, String token) {
+        /**
+         * The audit details: the warning (its rule and the allergy's id), the reason's digest, the token,
+         * the version signed and the signature's time. Ids and digests only: the row is not encrypted.
+         */
+        String auditDetails(Long version, LocalDateTime signedAt) {
+            UUID allergyId = stop.allergy().getId();
+            return REASON_DIGEST_PREFIX + computeSignatureDigest(reason) + "\",\"warning\":\"" + stop.kind()
+                + "\",\"allergyId\":" + (allergyId == null ? "null" : "\"" + allergyId + "\"")
+                + ",\"exceptionToken\":\"" + token + "\",\"orderVersion\":" + version
+                + ",\"signedAt\":\"" + signedAt + "\"}";
+        }
     }
 
     /**
@@ -945,12 +1031,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                                        com.example.hms.payload.dto.SignPrescriptionRequestDTO request) {
         String token = doseExceptionToken(prescription, signer, cards);
         String reason = request.getAllergyOverrideReason() == null ? "" : request.getAllergyOverrideReason().trim();
-        boolean stale = !reason.isEmpty() && !token.equals(request.getDoseExceptionToken());
+        boolean stale = !reason.isEmpty() && !tokenMatches(request, token);
         if (reason.isEmpty() || stale) {
             List<CdsCard> review = cards.stream().filter(CdsCard::requiresReview).toList();
             throw new CdsCriticalBlockException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw(signatureRefusalKey(true, stale), review.get(0).summary()),
-                refusedAtSignature(prescription, review, token));
+                refusedAtSignature(prescription, review, token, signer, cards));
         }
         return reason;
     }
@@ -1354,7 +1440,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             String.valueOf(signedAt));
     }
 
-    private String computeSignatureDigest(String payload) {
+    private static String computeSignatureDigest(String payload) {
         try {
             MessageDigest digest = MessageDigest.getInstance(SIGNATURE_ALGORITHM);
             return HexFormat.of().formatHex(digest.digest(payload.getBytes(StandardCharsets.UTF_8)));
@@ -2867,16 +2953,23 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private Optional<CdsCard> allergyBlock(String medicationName,
                                            List<com.example.hms.model.medication.MedicationCatalogItem> items,
                                            List<PatientAllergy> allergies) {
+        return allergyStop(medicationName, items, allergies).map(AllergyStop::card);
+    }
+
+    /** {@link #allergyBlock} with the allergy its card names (Policy 3 binds the acknowledgement to it). */
+    private Optional<AllergyStop> allergyStop(String medicationName,
+                                              List<com.example.hms.model.medication.MedicationCatalogItem> items,
+                                              List<PatientAllergy> allergies) {
         com.example.hms.service.allergy.AllergyDrugIdentity identity =
             com.example.hms.service.allergy.AllergyDrugIdentity.of(medicationName, items);
         Optional<PatientAllergy> worst = identity.matchingAllergies(allergies).stream()
             .max(java.util.Comparator.comparingInt(PrescriptionServiceImpl::allergySeverityRank));
         if (worst.isPresent()) {
-            return Optional.of(allergyConflictCard(worst.get(), medicationName));
+            return Optional.of(new AllergyStop(allergyConflictCard(worst.get(), medicationName), worst.get(), "documented"));
         }
         return identity.unverifiableClassAllergy(allergies)
-            .map(allergy -> com.example.hms.service.allergy.UnverifiableAllergyCard.of(medicationName,
-                com.example.hms.service.allergy.AllergyDrugIdentity.displayOf(allergy)));
+            .map(allergy -> new AllergyStop(com.example.hms.service.allergy.UnverifiableAllergyCard.of(medicationName,
+                com.example.hms.service.allergy.AllergyDrugIdentity.displayOf(allergy)), allergy, "unverifiable"));
     }
 
     /**
@@ -3010,11 +3103,22 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      */
     private void auditAllergyOverrideAfterCommit(Prescription prescription, UUID actorId,
                                                  String reason, String description) {
+        auditAllergyOverrideAfterCommit(prescription, actorId, reason, description, null);
+    }
+
+    /** {@code signatureDetails}: the details a signature writes (Policy 3), else the reason's digest alone. */
+    private void auditAllergyOverrideAfterCommit(Prescription prescription, UUID actorId,
+                                                 String reason, String description, String signatureDetails) {
         UUID prescriptionId = prescription.getId();
         UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
         UUID assignmentId = prescription.getAssignment() != null ? prescription.getAssignment().getId() : null;
-        String details = reason == null ? "{\"overrideCleared\":true}"
-            : REASON_DIGEST_PREFIX + computeSignatureDigest(reason) + "\"}";
+        String details;
+        if (signatureDetails != null) {
+            details = signatureDetails;
+        } else {
+            details = reason == null ? "{\"overrideCleared\":true}"
+                : REASON_DIGEST_PREFIX + computeSignatureDigest(reason) + "\"}";
+        }
         com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()

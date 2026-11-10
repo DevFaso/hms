@@ -1134,6 +1134,46 @@ describe('PrescriptionsComponent — signing', () => {
       ]);
     });
 
+    it('Policy 3: an allergy acknowledged at creation is asked again, and the reason goes back with its token', () => {
+      const allergyStop = throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: {
+              message: 'Pour signer, reconnaissez l’allergie',
+              field: 'allergyOverrideReason',
+              cdsAdvisories: [
+                {
+                  summary: 'Alerte allergie : Pénicilline',
+                  indicator: 'critical',
+                  source: { label: 'x' },
+                  exceptionKey: 'allergy:tok-p',
+                },
+              ],
+            },
+          }),
+      );
+      prescriptionService.sign.and.returnValues(allergyStop, of(rx('rx-1', 'SIGNED')));
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+      fixture.detectChanges();
+
+      expect(component.signAllergyCards().length).toBe(1);
+      expect(component.signAlertIsException())
+        .withContext('an allergy, not a dose exception')
+        .toBeFalse();
+      expect(component.signAlertIsAboveLimit())
+        .withContext('no urgent box for an allergy')
+        .toBeFalse();
+      expect(component.signDialogIncomplete()).withContext('the reason is required').toBeTrue();
+      component.signAllergyReason = 'Test cutané négatif';
+      component.submitSignReauth();
+
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual([
+        'rx-1',
+        { allergyOverrideReason: 'Test cutané négatif', doseExceptionToken: 'allergy:tok-p' },
+      ]);
+    });
+
     it('CR-01: the signer of an urgent exception is not offered its review', () => {
       spyOn<any>(component, 'ownPrescriberStaffId').and.returnValue('staff-a');
       spyOn((component as any).roleContext, 'hasAnyActiveRole').and.returnValue(true);

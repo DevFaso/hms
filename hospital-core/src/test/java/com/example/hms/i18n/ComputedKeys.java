@@ -198,8 +198,6 @@ final class ComputedKeys {
             new Open("a CDS block message already rendered by the rule that raised it; CdsCriticalBlockException shows it as written"));
         r.put("com/example/hms/service/PrescriptionServiceImpl.java|item.getBodyKey()",
             new Open("a stored in-basket title/body key; written by the order-review and transfusion writers with literal keys"));
-        r.put("com/example/hms/service/PrescriptionServiceImpl.java|message #2",
-            new Open("a CDS block message already rendered by the rule that raised it; CdsCriticalBlockException shows it as written"));
         site(r, d, "com/example/hms/service/PrescriptionServiceImpl.java|\"cds.severity.\" + severityStr",
             "PrescriptionServiceImpl.java|cds.severity.");
         site(r, d, "com/example/hms/service/ResultReviewServiceImpl.java|\"signature.type.\" + type.name()",

@@ -7705,7 +7705,7 @@
     },
     "SIGN_ALLERGY": {
       "TITLE": "Alerta de alergia: ¿firmar de todos modos?",
-      "REASON": "Motivo para firmar pese a la alerta de alergia"
+      "REASON": "Reconozco esta alergia. Motivo clínico para firmar pese a ella (queda registrado con su firma)"
     },
     "CREATED_WITH_ADVISORIES": "Prescripción creada. Lea las alertas de abajo y luego cierre.",
     "PRN_MIN_INTERVAL": "Intervalo mínimo entre dos dosis (horas)",

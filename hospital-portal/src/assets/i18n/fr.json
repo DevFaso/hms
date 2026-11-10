@@ -7705,7 +7705,7 @@
     },
     "SIGN_ALLERGY": {
       "TITLE": "Alerte allergie : signer malgré tout ?",
-      "REASON": "Motif de la signature malgré l’alerte allergie"
+      "REASON": "Je prends acte de cette allergie. Motif clinique de la signature malgré elle (consigné avec votre signature)"
     },
     "CREATED_WITH_ADVISORIES": "Ordonnance créée. Lisez les alertes ci-dessous, puis fermez.",
     "PRN_MIN_INTERVAL": "Intervalle minimum entre deux doses (heures)",

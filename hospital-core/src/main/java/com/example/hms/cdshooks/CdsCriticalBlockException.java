@@ -20,12 +20,25 @@ public class CdsCriticalBlockException extends BusinessException {
 
     private final transient List<CdsCard> cards;
 
+    /** The request field the refusal is about, or {@code null}: the body then names it under {@code fieldErrors}. */
+    private final String field;
+
     public CdsCriticalBlockException(String message, List<CdsCard> cards) {
+        this(message, cards, null);
+    }
+
+    /** A refusal about one request field (Policy 3: {@code allergyOverrideReason} at the signature). */
+    public CdsCriticalBlockException(String message, List<CdsCard> cards, String field) {
         super(message);
+        this.field = field;
         this.cards = cards == null ? List.of() : List.copyOf(cards);
     }
 
     public List<CdsCard> getCards() {
         return cards;
+    }
+
+    public String getField() {
+        return field;
     }
 }
