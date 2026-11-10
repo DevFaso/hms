@@ -37,11 +37,10 @@ import { MarDoseHistoryComponent } from '../mar-dose-history/mar-dose-history.co
 import { earlyDoseDialogKeys, earlyDoseRefusal } from '../early-dose';
 import { givenBeforeHoldRefusal } from '../given-before-hold';
 import {
-  AllergyAcknowledgementRefusal,
-  allergyAcknowledgementFields,
-  allergyAcknowledgementRefusal,
+  AllergyHold,
+  allergyHoldRefusal,
 } from '../../shared/allergy-acknowledgement/allergy-acknowledgement';
-import { AllergyAcknowledgementDialogComponent } from '../../shared/allergy-acknowledgement/allergy-acknowledgement-dialog.component';
+import { AllergyHoldDialogComponent } from '../../shared/allergy-acknowledgement/allergy-hold-dialog.component';
 import { toServerDateTime } from '../../shared/date-utils';
 import { joinReasons } from '../../shared/required-fields';
 
@@ -91,7 +90,7 @@ const FIVE_RIGHTS_LABEL_KEYS: Record<FiveRightsCheck, string> = {
     WitnessPickerComponent,
     ReasonDialogComponent,
     MarDoseHistoryComponent,
-    AllergyAcknowledgementDialogComponent,
+    AllergyHoldDialogComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './emar.component.html',
@@ -451,24 +450,11 @@ export class EmarComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * QA D1563: the patient's current allergies stop this drug (an allergy recorded after the order
-   * was signed included). The server's refusal, its allergy card, and the dose to send again.
+   * QA D1563 / Policy 4: the patient's current allergies stop this drug (an allergy recorded after the
+   * order was signed included). The server held the dose for an authorized prescriber's review: its
+   * card and who was notified. The nurse's own reason never releases it; the dose can be held.
    */
-  protected readonly allergyAck = signal<{
-    taskId: string;
-    payload: MedicationAdministrationRequest;
-    refusal: AllergyAcknowledgementRefusal;
-  } | null>(null);
-
-  /** QA D1563: the same dose again, with the nurse's acknowledgement of that allergy and the reason. */
-  protected confirmAllergyAck(reason: string): void {
-    const prior = this.allergyAck();
-    if (!prior || this.administerInFlight()) return;
-    this.sendAdministration(prior.taskId, {
-      ...prior.payload,
-      ...allergyAcknowledgementFields(prior.refusal, reason),
-    });
-  }
+  protected readonly allergyHold = signal<AllergyHold | null>(null);
 
   /** QA D1210: the same dose again, with the nurse's reason for giving it early. */
   protected confirmEarlyDose(reason: string): void {
@@ -488,7 +474,7 @@ export class EmarComponent implements OnInit, OnDestroy {
           this.administerInFlight.set(false);
           this.earlyDose.set(null);
           this.givenBeforeHold.set(null);
-          this.allergyAck.set(null);
+          this.allergyHold.set(null);
           this.toast.success(
             this.translate.instant('EMAR.TOAST.RECORDED', {
               status: this.translate.instant(`EMAR.ADMIN_STATUS.${status}`),
@@ -503,13 +489,13 @@ export class EmarComponent implements OnInit, OnDestroy {
         },
         error: (err: HttpErrorResponse) => {
           this.administerInFlight.set(false);
-          // QA D1563: an allergy stops this drug: show the card and ask for the acknowledgement.
-          const allergy = allergyAcknowledgementRefusal(err);
+          // QA D1563 / Policy 4: held for the prescriber's review: show the card and who was notified.
+          const allergy = allergyHoldRefusal(err);
           if (allergy) {
-            this.allergyAck.set({ taskId, payload, refusal: allergy });
+            this.allergyHold.set(allergy);
             return;
           }
-          this.allergyAck.set(null);
+          this.allergyHold.set(null);
           const held = givenBeforeHoldRefusal(err);
           if (held) {
             this.givenBeforeHold.set({ taskId, payload, why: held });

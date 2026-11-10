@@ -357,9 +357,6 @@ export interface DispenseRequest {
    * alerts (`cdsAdvisories`), which the form then shows beside this field.
    */
   cdsOverrideReason?: string;
-  /** QA D1555: why the pharmacist goes ahead although the patient's current allergies stop the drug, and the card's token. */
-  allergyAcknowledgementReason?: string;
-  allergyAcknowledgementToken?: string;
   /**
    * Roadmap row 4 / T-68 — optional client-supplied idempotency key the
    * offline-dispense queue mints when the user clicks Dispense. Allows the
@@ -647,9 +644,6 @@ export interface RoutingDecisionRequest {
   targetPharmacyId?: string;
   reason?: string;
   estimatedRestockDate?: string;
-  /** QA D1555: why the order goes to a partner although the patient's current allergies stop the drug. */
-  allergyAcknowledgementReason?: string;
-  allergyAcknowledgementToken?: string;
 }
 
 export interface RoutingDecisionResponse {
@@ -1229,8 +1223,6 @@ export class PharmacyService {
     body: {
       patientScanValue?: string;
       notes?: string;
-      allergyAcknowledgementReason?: string;
-      allergyAcknowledgementToken?: string;
     } = {},
   ): Observable<ApiResponse<DispenseResponse>> {
     return this.http.post<ApiResponse<DispenseResponse>>(

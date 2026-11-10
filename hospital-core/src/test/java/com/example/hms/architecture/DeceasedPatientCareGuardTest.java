@@ -167,7 +167,7 @@ class DeceasedPatientCareGuardTest {
         PatientPortal#updateMyEducationProgress,submitMyEducationQuestion | education, not care
         PatientPrimaryCare#update,end,delete | an existing assignment
         PatientRecall#close,cancel,linkAppointment | closes a recall; the booking it links is refused itself
-        Prescription#pharmacistVerify,pediatricDoseReview,requestClarification,resolveClarification,update,delete | an order made before the death: nothing goes out, signing and dispensing it are refused
+        Prescription#pharmacistVerify,pediatricDoseReview,allergyReview,requestClarification,resolveClarification,update,delete | an order made before the death: nothing goes out, signing and dispensing it are refused
         ProResponse#acknowledge | closes a response given before the death
         ProcedureOrder#updateProcedureOrder,cancelProcedureOrder | closes an order made before the death
         ProgramEnrollment#updateStatus | how an enrolment is closed, DECEASED included

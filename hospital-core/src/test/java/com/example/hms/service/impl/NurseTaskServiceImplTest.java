@@ -3450,7 +3450,7 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    @org.junit.jupiter.api.DisplayName("QA D1563: GIVEN without acknowledging the allergy is refused on its field, nothing written")
+    @org.junit.jupiter.api.DisplayName("Policy 4: GIVEN of an unreviewed allergy conflict is held for the prescriber, nothing written")
     void d1563_givenWithoutAcknowledgingTheAllergyIsRefused() {
         UUID patientId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
@@ -3462,7 +3462,7 @@ class NurseTaskServiceImplTest {
             .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
             .satisfies(e -> {
                 com.example.hms.cdshooks.CdsCriticalBlockException block = (com.example.hms.cdshooks.CdsCriticalBlockException) e;
-                assertThat(block.getField()).isEqualTo(com.example.hms.service.allergy.CurrentAllergyRecheck.ACK_FIELD);
+                assertThat(block.getField()).isEqualTo(com.example.hms.service.allergy.CurrentAllergyRecheck.HOLD_FIELD);
                 assertThat(block.getCards()).singleElement()
                     .satisfies(c -> assertThat(c.exceptionKey()).startsWith(com.example.hms.service.allergy.CurrentAllergyRecheck.KEY_PREFIX));
             });
@@ -3470,53 +3470,75 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    @org.junit.jupiter.api.DisplayName("QA D1563: GIVEN with the allergy acknowledged, with the card's token and a reason, is recorded with the reason")
-    void d1563_givenWithTheAllergyAcknowledgedIsRecordedWithTheReason() {
+    @org.junit.jupiter.api.DisplayName("Policy 4: GIVEN under the prescriber's CONTINUE review of this conflict is recorded with the review line")
+    void policy4_givenUnderThePrescribersReviewIsRecorded() {
         UUID patientId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
         Prescription amox = signedOrder(patientId, hospitalId, "Amoxicilline", "500 mg", "PO", LocalDateTime.now());
         when(prescriptionRepository.findByIdForUpdate(amox.getId())).thenReturn(Optional.of(amox));
         when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> inv.getArgument(0));
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(severePenicillinAllergy()));
-        String token;
-        try {
-            service.recordMedicationAdministration(amox.getId(), null, hospitalId, givenWithOverride());
-            throw new AssertionError("the first GIVEN should have been refused");
-        } catch (com.example.hms.cdshooks.CdsCriticalBlockException refused) {
-            token = refused.getCards().get(0).exceptionKey();
-        }
+        prescriberReviewed(amox, com.example.hms.enums.AllergyReviewDecision.CONTINUE);
 
-        NurseMedicationAdministrationRequestDTO req = givenWithOverride();
-        req.setAllergyAcknowledgementReason("Prescriber called: reaction was a rash, re-challenge ordered");
-        req.setAllergyAcknowledgementToken(token);
-        service.recordMedicationAdministration(amox.getId(), null, hospitalId, req);
+        service.recordMedicationAdministration(amox.getId(), null, hospitalId, givenWithOverride());
 
         ArgumentCaptor<MedicationAdministrationRecord> captor = ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
         verify(marRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(MedicationAdministrationStatus.GIVEN);
-        assertThat(captor.getValue().getNotes()).contains("Pénicilline").contains("re-challenge ordered");
+        assertThat(captor.getValue().getNotes()).contains("Pénicilline");
     }
 
     @Test
-    @org.junit.jupiter.api.DisplayName("QA D1563: a reason with no token, or a token for another allergy state, is refused as stale")
-    void d1563_aReasonWithoutTheCardsTokenIsRefused() {
+    @org.junit.jupiter.api.DisplayName("Policy 4: a review of an earlier allergy state, or a STOP, never releases GIVEN")
+    void policy4_aStaleReviewOrAStopIsHeld() {
         UUID patientId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
         Prescription amox = signedOrder(patientId, hospitalId, "Amoxicilline", "500 mg", "PO", LocalDateTime.now());
         when(prescriptionRepository.findByIdForUpdate(amox.getId())).thenReturn(Optional.of(amox));
-        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(severePenicillinAllergy()));
+        com.example.hms.model.PatientAllergy allergy = severePenicillinAllergy();
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
+        prescriberReviewed(amox, com.example.hms.enums.AllergyReviewDecision.CONTINUE);
+        allergy.setReaction("Anaphylaxis");
 
-        NurseMedicationAdministrationRequestDTO req = givenWithOverride();
-        req.setAllergyAcknowledgementReason("Seen");
-        req.setAllergyAcknowledgementToken("allergy:not-this-one");
-
-        assertThatThrownBy(() -> service.recordMedicationAdministration(amox.getId(), null, hospitalId, req))
+        assertThatThrownBy(() -> service.recordMedicationAdministration(amox.getId(), null, hospitalId, givenWithOverride()))
             .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
-            .hasFieldOrPropertyWithValue("field", com.example.hms.service.allergy.CurrentAllergyRecheck.ACK_FIELD)
-            // The stale refusal names the allergy, not the card (the "required" one quotes the card, drug included).
-            .hasMessageContaining("Pénicilline")
-            .satisfies(e -> assertThat(e.getMessage()).doesNotContain("Amoxicilline"));
+            .hasFieldOrPropertyWithValue("field", com.example.hms.service.allergy.CurrentAllergyRecheck.HOLD_FIELD);
+
+        prescriberReviewed(amox, com.example.hms.enums.AllergyReviewDecision.STOP);
+        assertThatThrownBy(() -> service.recordMedicationAdministration(amox.getId(), null, hospitalId, givenWithOverride()))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
+            .hasFieldOrPropertyWithValue("field", com.example.hms.service.allergy.CurrentAllergyRecheck.HOLD_FIELD);
         verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("Policy 4: a REFUSED dose of that drug is always recorded, under a STOP too")
+    void policy4_aRefusedDoseIsAlwaysRecorded() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription amox = signedOrder(patientId, hospitalId, "Amoxicilline", "500 mg", "PO", LocalDateTime.now());
+        when(prescriptionRepository.findByIdForUpdate(amox.getId())).thenReturn(Optional.of(amox));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(severePenicillinAllergy()));
+        prescriberReviewed(amox, com.example.hms.enums.AllergyReviewDecision.STOP);
+
+        NurseMedicationAdministrationRequestDTO req = new NurseMedicationAdministrationRequestDTO();
+        req.setStatus("REFUSED");
+        req.setNote("Patient refused after the allergy was explained");
+        service.recordMedicationAdministration(amox.getId(), null, hospitalId, req);
+
+        verify(marRepository).save(argThat(m -> m.getStatus() == MedicationAdministrationStatus.REFUSED));
+    }
+
+    /** A prescriber's review of the conflict the order meets now (PrescriptionServiceImpl#reviewAllergyConflict). */
+    private void prescriberReviewed(Prescription rx, com.example.hms.enums.AllergyReviewDecision decision) {
+        com.example.hms.model.User reviewer = new com.example.hms.model.User();
+        reviewer.setId(UUID.randomUUID());
+        rx.setAllergyReviewDecision(decision);
+        rx.setAllergyReviewToken(new com.example.hms.service.allergy.CurrentAllergyRecheck(patientAllergyRepository, null, null)
+            .currentConflict(rx).orElseThrow().reviewToken());
+        rx.setAllergyReviewedBy(reviewer);
+        rx.setAllergyReviewedAt(LocalDateTime.now());
     }
 
     @Test
@@ -3559,7 +3581,7 @@ class NurseTaskServiceImplTest {
 
         assertThatThrownBy(() -> service.recordMedicationAdministration(marId, null, hospitalId, req))
             .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
-            .hasFieldOrPropertyWithValue("field", com.example.hms.service.allergy.CurrentAllergyRecheck.ACK_FIELD);
+            .hasFieldOrPropertyWithValue("field", com.example.hms.service.allergy.CurrentAllergyRecheck.HOLD_FIELD);
         assertThat(mar.getStatus()).isEqualTo(MedicationAdministrationStatus.PENDING);
     }
 

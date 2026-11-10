@@ -156,6 +156,15 @@ public class InBasketServiceImpl implements InBasketService {
         return removed;
     }
 
+    @Override
+    @Transactional
+    public int removeAllItemsForReference(UUID referenceId, String referenceType) {
+        if (referenceId == null || referenceType == null) {
+            return 0;
+        }
+        return inBasketItemRepository.deleteAllByReference(referenceId, referenceType);
+    }
+
     /** The one body of both entry points; each brings its own transaction. */
     private InBasketItemDTO fileItem(CreateInBasketItemRequest request) {
         // Deduplicate — don't create a second item for the same reference + recipient

@@ -147,11 +147,11 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
     }
 
     /** QA D1555: the dispatch gate of the re-check (AllergyRecheckGuardTest). */
-    private com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement requireAllergyAcknowledged(Prescription rx, String reason, String token) {
+    private com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement requireAllergyAcknowledged(Prescription rx) {
         if (allergyRecheck == null) {
             return null;
         }
-        return allergyRecheck.requireAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.PARTNER_ROUTING, rx, rx.getMedicationName(), reason, token);
+        return allergyRecheck.requirePrescriberReview(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.PARTNER_ROUTING, rx, rx.getMedicationName());
     }
 
     /**
@@ -192,8 +192,7 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
         String phone = requirePharmacyPhone(pharmacy);
         // QA D1555: the outside pharmacy fills it, so the order's drug is read against the patient's
         // CURRENT allergies before the SMS leaves; the acknowledgement is kept on the routing decision.
-        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(rx,
-                request.getAllergyAcknowledgementReason(), request.getAllergyAcknowledgementToken());
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(rx);
         User decidedBy = resolveCurrentUser(auth);
         // Read before the new offer is saved (so it is not among them), but
         // only cancelled once the SMS has gone: if it fails, these pharmacies

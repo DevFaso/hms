@@ -70,4 +70,11 @@ public interface InBasketService {
      * Returns how many were removed.
      */
     int removeOpenItemsForReference(java.util.UUID referenceId, String referenceType);
+
+    /**
+     * Policy 4: removes every item filed for {@code referenceId}, acknowledged ones included, in the
+     * caller's transaction: a notice whose record is kept elsewhere (an allergy conflict's review, on
+     * the order and in the audit), so a later conflict on the same order is told again.
+     */
+    int removeAllItemsForReference(java.util.UUID referenceId, String referenceType);
 }

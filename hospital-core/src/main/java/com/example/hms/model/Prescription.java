@@ -352,6 +352,46 @@ public class Prescription extends BaseEntity {
     @Convert(converter = EncryptedStringConverter.class)
     private String pediatricDoseReviewReason;
 
+    /* ── Allergy conflict prescriber review (Policy 4, V284) ─────────────── */
+
+    /**
+     * Policy 4 (user recommendation 2026-11-10, pending clinical approval): an allergy conflict found
+     * after the signature is released only by an authorized prescriber's review, never by a nurse's or
+     * a pharmacist's own reason. Null while no review is recorded.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "allergy_review_decision", length = 20)
+    private com.example.hms.enums.AllergyReviewDecision allergyReviewDecision;
+
+    /**
+     * The conflict the review answered (CurrentAllergyRecheck#reviewToken: the allergy state and the
+     * order's drug, dose, route and frequency). A gate honours the review only while the current token
+     * equals it, so any change of the allergy or the order needs a renewed review.
+     */
+    @Column(name = "allergy_review_token", length = 64)
+    private String allergyReviewToken;
+
+    /** The plan a CONTINUE decision sets (monitoring, premedication). Clinical narrative, encrypted. */
+    @Size(max = 1000)
+    @Column(name = "allergy_review_plan", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
+    private String allergyReviewPlan;
+
+    /** The prescriber's clinical rationale. Clinical narrative, encrypted. */
+    @Size(max = 1000)
+    @Column(name = "allergy_review_rationale", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
+    private String allergyReviewRationale;
+
+    @Column(name = "allergy_reviewed_at")
+    private LocalDateTime allergyReviewedAt;
+
+    /** The reviewing prescriber. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "allergy_reviewed_by",
+        foreignKey = @ForeignKey(name = "fk_rx_allergy_reviewed_by"))
+    private User allergyReviewedBy;
+
     /* ── Pharmacist clarification (pharmacy flow gap G5, V162) ──────────── */
 
     /**

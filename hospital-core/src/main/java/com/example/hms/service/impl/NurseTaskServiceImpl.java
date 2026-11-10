@@ -518,19 +518,19 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     /**
-     * QA D1563: a GIVEN dose of a drug the patient's current allergies stop is refused until the
-     * nurse acknowledges that allergy with a reason (provisional default, not a clinical sign-off).
-     * Every write that records an administration calls it (AllergyRecheckGuardTest); HELD and REFUSED
-     * pass.
+     * QA D1563 / Policy 4: a GIVEN dose of a drug the patient's current allergies stop is held until
+     * an authorized prescriber reviews the conflict (pending clinical approval); the nurse's own reason
+     * never releases it. Every write that records an administration calls it (AllergyRecheckGuardTest);
+     * HELD and REFUSED pass.
      */
     private com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement requireAllergyAcknowledged(
-        Prescription rx, String medicationName, MedicationAdministrationStatus status, AdministrationOutcome outcome
+        Prescription rx, String medicationName, MedicationAdministrationStatus status
     ) {
         if (status != MedicationAdministrationStatus.GIVEN) {
             return null;
         }
-        return allergyCheck().requireAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.MAR_DOSE,
-            rx, medicationName, outcome.allergyReason(), outcome.allergyToken());
+        return allergyCheck().requirePrescriberReview(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.MAR_DOSE,
+            rx, medicationName);
     }
 
     /** The dose's chart note with the allergy acknowledgement's line, within the column. */
@@ -570,14 +570,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 && (note == null || note.isBlank())) {
             throw new com.example.hms.exception.FieldBusinessException("note", "nurse.mar.reasonRequired");
         }
-    }
-
-    private static String allergyReasonOf(NurseMedicationAdministrationRequestDTO request) {
-        return request != null ? request.getAllergyAcknowledgementReason() : null;
-    }
-
-    private static String allergyTokenOf(NurseMedicationAdministrationRequestDTO request) {
-        return request != null ? request.getAllergyAcknowledgementToken() : null;
     }
 
     /** DUE or OVERDUE: a dose the nurse can record now (QA D949). */
@@ -631,7 +623,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             User witness = controlledAdministrationWitness.resolve(rx, marStatus, witnessUserId, nurseUserId);
             NurseMedicationTaskResponseDTO recorded = persistMarRecord(rx, nurseUserId, hospitalId,
                 new AdministrationOutcome(marStatus, chartNote(note, givenBeforeHold, request), overrideReason, witness, earlyDoseReason,
-                    givenBeforeHold, allergyReasonOf(request), allergyTokenOf(request)));
+                    givenBeforeHold));
             chartGivenBeforeHold(rx, givenBeforeHold, request);
             return recorded;
         }
@@ -654,11 +646,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 marRecord.getPrescription(), marStatus, witnessUserId, nurseUserId));
             // QA D1210: never sooner than the minimum interval since the last GIVEN, without a reason.
             String early = requireDoseInterval(marRecord.getPrescription(), marStatus, marRecord.getId(), earlyDoseReason);
-            // QA D1563: never a drug the patient's current allergies stop, unless the nurse acknowledged it.
+            // QA D1563 / Policy 4: never a drug the patient's current allergies stop, unless a prescriber reviewed it.
             com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(
-                marRecord.getPrescription(), medicationNameOf(marRecord), marStatus,
-                new AdministrationOutcome(marStatus, note, overrideReason, null, earlyDoseReason, givenBeforeHold,
-                    allergyReasonOf(request), allergyTokenOf(request)));
+                marRecord.getPrescription(), medicationNameOf(marRecord), marStatus);
             marRecord.setStatus(marStatus);
             marRecord.setAdministeredAt(givenBeforeHold != null ? givenBeforeHold : LocalDateTime.now());
             marRecord.setNotes(withAllergyLine(chartNote(note, givenBeforeHold, request), allergyAck));
@@ -1743,9 +1733,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         }
         // QA D1210: never sooner than the minimum interval since the last GIVEN, without a reason.
         String early = requireDoseInterval(rx, status, null, outcome.earlyDoseReason());
-        // QA D1563: never a drug the patient's current allergies stop, unless the nurse acknowledged it.
+        // QA D1563 / Policy 4: never a drug the patient's current allergies stop, unless a prescriber reviewed it.
         com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck =
-            requireAllergyAcknowledged(rx, rx.getMedicationName(), status, outcome);
+            requireAllergyAcknowledged(rx, rx.getMedicationName(), status);
         MedicationAdministrationRecord marRecord = MedicationAdministrationRecord.builder()
             .prescription(rx)
             .patient(rx.getPatient())
@@ -1803,7 +1793,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      */
     private record AdministrationOutcome(
         MedicationAdministrationStatus status, String note, String overrideReason, User witness,
-        String earlyDoseReason, LocalDateTime givenBeforeHold, String allergyReason, String allergyToken) {
+        String earlyDoseReason, LocalDateTime givenBeforeHold) {
 
         LocalDateTime givenAt() {
             return givenBeforeHold != null ? givenBeforeHold : LocalDateTime.now();
@@ -1821,9 +1811,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         requireScanByAdministeringNurse(marRecord, status, nurseUserId, hospitalId);
         // QA D1210: never sooner than the minimum interval since the last GIVEN, without a reason.
         String early = requireDoseInterval(rx, status, marRecord.getId(), outcome.earlyDoseReason());
-        // QA D1563: never a drug the patient's current allergies stop, unless the nurse acknowledged it.
+        // QA D1563 / Policy 4: never a drug the patient's current allergies stop, unless a prescriber reviewed it.
         com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck =
-            requireAllergyAcknowledged(rx, rx.getMedicationName(), status, outcome);
+            requireAllergyAcknowledged(rx, rx.getMedicationName(), status);
         marRecord.setWitnessUser(witness);
         marRecord.setStatus(status);
         marRecord.setAdministeredAt(outcome.givenAt());

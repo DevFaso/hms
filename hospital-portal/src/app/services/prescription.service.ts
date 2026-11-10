@@ -29,7 +29,6 @@ export interface SignPrescriptionBody extends SignReauthentication {
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
-import { AllergyAcknowledgementFields } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
 import { ALL_PAGES_SIZE, PageSlice, allRows } from '../shared/all-pages';
 
 export interface PrescriptionResponse {
@@ -430,15 +429,28 @@ export class PrescriptionService {
     });
   }
 
-  /** QA D1555: `allergyAck` answers the server's allergy refusal (shared/allergy-acknowledgement). */
-  pharmacistVerify(
-    id: string,
-    note?: string,
-    allergyAck?: AllergyAcknowledgementFields,
-  ): Observable<PrescriptionResponse> {
+  /** QA D1555 / Policy 4: an allergy conflict is held for the prescriber's review (shared/allergy-acknowledgement). */
+  pharmacistVerify(id: string, note?: string): Observable<PrescriptionResponse> {
     return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/pharmacist-verify`, {
       note: note?.trim() || undefined,
-      ...(allergyAck ?? {}),
+    });
+  }
+
+  /**
+   * Policy 4 (user recommendation 2026-11-10, pending clinical approval): the allergy conflict a
+   * signed order meets now and the prescriber's review on record. Prescribers of the order's hospital.
+   */
+  getAllergyConflict(id: string): Observable<AllergyConflict> {
+    return this.http.get<AllergyConflict>(`${this.baseUrl}/${id}/allergy-conflict`);
+  }
+
+  /** Policy 4: the prescriber's review: CONTINUE with a plan, or STOP, with a rationale, for the conflict shown. */
+  reviewAllergyConflict(id: string, review: AllergyConflictReview): Observable<AllergyConflict> {
+    return this.http.post<AllergyConflict>(`${this.baseUrl}/${id}/allergy-review`, {
+      decision: review.decision,
+      plan: review.decision === 'CONTINUE' ? review.plan.trim() : undefined,
+      rationale: review.rationale.trim(),
+      allergyToken: review.allergyToken,
     });
   }
 
@@ -476,7 +488,6 @@ export class PrescriptionService {
     id: string,
     pharmacyId: string,
     note?: string,
-    allergyAck?: AllergyAcknowledgementFields,
   ): Observable<PrescriptionSmsDispatchResult> {
     return this.http
       .post<{
@@ -484,10 +495,35 @@ export class PrescriptionService {
       }>(`${this.baseUrl}/${id}/dispatch-sms`, {
         pharmacyId,
         note: note ?? null,
-        ...(allergyAck ?? {}),
       })
       .pipe(map((r) => r.data));
   }
+}
+
+/** Policy 4: a prescriber's decision on an allergy conflict. */
+export type AllergyReviewDecision = 'CONTINUE' | 'STOP';
+
+/** Policy 4: the allergy conflict an order meets now, and the review on record (GET .../allergy-conflict). */
+export interface AllergyConflict {
+  conflict: boolean;
+  allergen?: string | null;
+  cards: CdsCard[];
+  /** What the review sends back as `allergyToken`: the conflict as it was shown. */
+  reviewToken?: string | null;
+  decision?: AllergyReviewDecision | null;
+  plan?: string | null;
+  rationale?: string | null;
+  reviewedByName?: string | null;
+  reviewedAt?: string | null;
+  /** The recorded review answers this very conflict. */
+  reviewCurrent: boolean;
+}
+
+export interface AllergyConflictReview {
+  decision: AllergyReviewDecision;
+  plan: string;
+  rationale: string;
+  allergyToken: string;
 }
 
 export interface PrescriptionSmsDispatchResult {

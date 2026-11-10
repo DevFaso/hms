@@ -249,6 +249,12 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'PrescriptionController#cosign',
     roles: ['ROLE_DOCTOR'],
   },
+  // Policy 4: a prescriber reviews an allergy conflict on a signed order (the service narrows it to
+  // a prescriber of the order's hospital).
+  prescriptionAllergyReview: {
+    endpoint: 'PrescriptionController#allergyReview',
+    roles: ['ROLE_DOCTOR'],
+  },
   allergyCreate: {
     endpoint: 'PatientController#createPatientAllergy',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'],

@@ -237,12 +237,12 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     }
 
     /** QA D1555: the routing gate of the re-check (AllergyRecheckGuardTest). */
-    private com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement requireAllergyAcknowledged(Prescription prescription, String reason, String token) {
+    private com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement requireAllergyAcknowledged(Prescription prescription) {
         if (allergyRecheck == null) {
             return null;
         }
-        return allergyRecheck.requireAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.PARTNER_ROUTING, prescription,
-                prescription.getMedicationName(), reason, token);
+        return allergyRecheck.requirePrescriberReview(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.PARTNER_ROUTING, prescription,
+                prescription.getMedicationName());
     }
 
     @Override
@@ -278,8 +278,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         }
         // QA D1555: the partner fills it outside, so the order's drug is read against the patient's
         // CURRENT allergies before it leaves; the acknowledgement is kept on the routing decision.
-        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(prescription,
-                dto.getAllergyAcknowledgementReason(), dto.getAllergyAcknowledgementToken());
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(prescription);
         if (allergyAck != null) {
             dto.setReason(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dto.getReason(), allergyAck, 1024, "reason"));
         }

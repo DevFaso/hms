@@ -145,7 +145,7 @@ class PharmacistVerificationServiceTest {
     }
 
     @Test
-    void d1555_anOrderThePatientsCurrentAllergiesStopIsVerifiedOnlyWithTheAcknowledgement() {
+    void policy4_anOrderThePatientsCurrentAllergiesStopIsVerifiedOnlyUnderThePrescribersReview() {
         // QA D1555: a SEVERE morphine allergy recorded after the signature.
         callerIsPharmacist();
         com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
@@ -159,16 +159,23 @@ class PharmacistVerificationServiceTest {
         com.example.hms.repository.PatientAllergyRepository allergies =
             mock(com.example.hms.repository.PatientAllergyRepository.class);
         when(allergies.findByPatient_Id(patient.getId())).thenReturn(java.util.List.of(allergy));
-        service.setAllergyRecheck(new com.example.hms.service.allergy.CurrentAllergyRecheck(allergies, null, null));
+        var check = new com.example.hms.service.allergy.CurrentAllergyRecheck(allergies, null, null);
+        service.setAllergyRecheck(check);
         UUID id = rx.getId();
 
         com.example.hms.cdshooks.CdsCriticalBlockException refused = org.junit.jupiter.api.Assertions.assertThrows(
             com.example.hms.cdshooks.CdsCriticalBlockException.class, () -> service.verify(id, null));
-        assertThat(refused.getField()).isEqualTo(com.example.hms.service.allergy.CurrentAllergyRecheck.ACK_FIELD);
+        assertThat(refused.getField()).isEqualTo(com.example.hms.service.allergy.CurrentAllergyRecheck.HOLD_FIELD);
         verify(prescriptionRepository, never()).save(any());
 
-        Prescription saved = service.verify(id, null, "Palliative care: prescriber confirmed, antiemetic given",
-            refused.getCards().get(0).exceptionKey());
+        // Policy 4: the pharmacist's own reason releases nothing; the prescriber's CONTINUE review does.
+        com.example.hms.model.User reviewer = new com.example.hms.model.User();
+        reviewer.setId(UUID.randomUUID());
+        rx.setAllergyReviewDecision(com.example.hms.enums.AllergyReviewDecision.CONTINUE);
+        rx.setAllergyReviewToken(check.currentConflict(rx).orElseThrow().reviewToken());
+        rx.setAllergyReviewedBy(reviewer);
+        rx.setAllergyReviewedAt(NOW);
+        Prescription saved = service.verify(id, null);
         assertThat(saved.getPharmacistVerifiedAt()).isEqualTo(NOW);
         // The line is a message key here (no bundle in this unit test); NurseTaskServiceImplTest reads the text.
         assertThat(saved.getPharmacistVerificationNote()).isNotBlank();

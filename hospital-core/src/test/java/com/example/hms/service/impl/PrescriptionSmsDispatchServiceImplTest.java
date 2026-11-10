@@ -704,7 +704,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     }
 
     @Test
-    void failedSmsStillAuditsTheCommittedAllergyAcknowledgementAfterCommit() {
+    void failedSmsStillAuditsThePassUnderThePrescribersReviewAfterCommit() {
         rx.getPatient().setId(UUID.randomUUID());
         rx.setMedicationName("Amoxicillin");
         var allergy = new com.example.hms.model.PatientAllergy();
@@ -718,8 +718,9 @@ class PrescriptionSmsDispatchServiceImplTest {
         var recheck = new com.example.hms.service.allergy.CurrentAllergyRecheck(allergies, null, allergyAudit);
         service.setAllergyRecheck(recheck);
         var request = requestForCurrentPharmacy();
-        request.setAllergyAcknowledgementReason("Prescriber consulted");
-        request.setAllergyAcknowledgementToken(recheck.cardsFor(rx, rx.getMedicationName()).getFirst().exceptionKey());
+        // Policy 4: the order passes under the prescriber's CONTINUE review of this conflict.
+        rx.setAllergyReviewDecision(com.example.hms.enums.AllergyReviewDecision.CONTINUE);
+        rx.setAllergyReviewToken(recheck.currentConflict(rx).orElseThrow().reviewToken());
         when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         stubHappyPathCollaborators();

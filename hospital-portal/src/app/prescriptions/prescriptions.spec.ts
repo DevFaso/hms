@@ -287,12 +287,7 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
 
     component.submitDispatch();
 
-    expect(prescriptionService.dispatchSms).toHaveBeenCalledWith(
-      'rx-1',
-      'ph-1',
-      undefined,
-      undefined,
-    );
+    expect(prescriptionService.dispatchSms).toHaveBeenCalledWith('rx-1', 'ph-1', undefined);
     expect(prescriptionService.page.calls.count())
       .withContext(
         'without a reload the row keeps its pre-dispatch status and its SMS button, and a second click supersedes the decision just made',
@@ -1897,19 +1892,18 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     expect(prescriptionService.pharmacistVerify).toHaveBeenCalledWith(
       'rx-1',
       'Dose confirmed against the ward protocol.',
-      undefined,
     );
     expect(toast.success).toHaveBeenCalled();
     expect(component.showVerifyModal()).toBeFalse();
     expect(component.verifying()).toBeFalse();
   });
 
-  it('QA D1555: an allergy refusal asks for the acknowledgement and sends it again with the card token', () => {
+  it('Policy 4: an allergy hold shows the card and who was notified, and sends no reason of its own', () => {
     const refusal = {
       status: 400,
       error: {
-        field: 'allergyAcknowledgementReason',
-        message: 'To verify this order, acknowledge the allergy to Penicillin',
+        field: 'allergyPrescriberReview',
+        message: 'Allergy conflict awaiting prescriber review. Allergy alert Notified: Awa Traore.',
         cdsAdvisories: [
           {
             summary: 'Allergy alert',
@@ -1920,24 +1914,25 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
         ],
       },
     };
-    prescriptionService.pharmacistVerify.and.returnValues(
-      throwError(() => refusal as unknown),
-      of({} as PrescriptionResponse),
-    );
+    prescriptionService.pharmacistVerify.and.returnValue(throwError(() => refusal as unknown));
 
     component.openVerifyModal(verifiable());
     component.submitPharmacistVerify();
 
-    expect(component.allergyAck()?.refusal.token).toBe('allergy:tok');
+    expect(component.allergyHold()?.why).toContain('Notified: Awa Traore');
+    expect(component.allergyHold()?.cards.length).toBe(1);
     expect(toast.error).not.toHaveBeenCalled();
+    // Nothing on the component sends a staff reason: the only release is the prescriber's review.
+    expect((component as unknown as Record<string, unknown>)['confirmAllergyAck']).toBeUndefined();
+    expect(prescriptionService.pharmacistVerify).toHaveBeenCalledTimes(1);
+  });
 
-    component.confirmAllergyAck('Prescriber called, rash only');
-
-    expect(prescriptionService.pharmacistVerify).toHaveBeenCalledWith('rx-1', '', {
-      allergyAcknowledgementReason: 'Prescriber called, rash only',
-      allergyAcknowledgementToken: 'allergy:tok',
-    });
-    expect(component.allergyAck()).toBeNull();
+  it('Policy 4: the review action is offered on a signed order of this hospital to the prescriber roles only', () => {
+    const signed = verifiable();
+    // A pharmacist is never a reviewer by role (the server checks prescribing authority).
+    expect(component.canReviewAllergy(signed)).toBeFalse();
+    expect(component.canReviewAllergy({ ...signed, status: 'DRAFT' })).toBeFalse();
+    expect(component.canReviewAllergy({ ...signed, status: 'CANCELLED' })).toBeFalse();
   });
 
   it('surfaces the backend refusal verbatim rather than a generic failure', () => {

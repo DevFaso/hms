@@ -591,6 +591,21 @@
             </div>
           }
 
+          <!-- Policy 4 (pending clinical approval): an allergy conflict holds this signed order at the
+               eMAR and the pharmacy until a prescriber of this hospital reviews it. -->
+          @if (canReviewAllergy(rx)) {
+            <div class="detail-notes" data-testid="rx-allergy-review">
+              <button
+                type="button"
+                class="btn-secondary"
+                data-testid="rx-allergy-review-open"
+                (click)="allergyReviewFor.set(rx.id)"
+              >
+                {{ 'ALLERGY_REVIEW.OPEN' | translate }}
+              </button>
+            </div>
+          }
+
           <!-- ═══ WHERE THE ORDER WENT (gap G7) ═══
                Wave 1 put the pharmacy, the dispatch columns and the last
                pharmacy event on the response and no template read any of
@@ -1848,12 +1863,15 @@
   </div>
 }
 
-<!-- QA D1555: the patient's current allergies stop the drug: acknowledge with a reason, or go back. -->
-@if (allergyAck(); as ack) {
-  <app-allergy-acknowledgement-dialog
-    [refusal]="ack.refusal"
-    [busy]="verifying() || dispatching()"
-    (confirmed)="confirmAllergyAck($event)"
-    (cancelled)="allergyAck.set(null)"
+<!-- QA D1555 / Policy 4: held for an authorized prescriber's review. -->
+@if (allergyHold(); as hold) {
+  <app-allergy-hold-dialog [refusal]="hold" (closed)="allergyHold.set(null)" />
+}
+<!-- Policy 4: the prescriber's review of the allergy conflict (CONTINUE with a plan, or STOP). -->
+@if (allergyReviewFor(); as reviewId) {
+  <app-allergy-review-dialog
+    [prescriptionId]="reviewId"
+    (closed)="allergyReviewFor.set(null)"
+    (reviewed)="onAllergyReviewed()"
   />
 }

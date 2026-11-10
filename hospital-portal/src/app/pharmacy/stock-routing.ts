@@ -33,17 +33,15 @@ import { refusalReason } from '../shared/refusal-reason';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import {
-  AllergyAcknowledgementFields,
-  AllergyAcknowledgementRefusal,
-  allergyAcknowledgementFields,
-  allergyAcknowledgementRefusal,
+  AllergyHold,
+  allergyHoldRefusal,
 } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
-import { AllergyAcknowledgementDialogComponent } from '../shared/allergy-acknowledgement/allergy-acknowledgement-dialog.component';
+import { AllergyHoldDialogComponent } from '../shared/allergy-acknowledgement/allergy-hold-dialog.component';
 @Component({
   selector: 'app-stock-routing',
   standalone: true,
   imports: [
-    AllergyAcknowledgementDialogComponent,
+    AllergyHoldDialogComponent,
     SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
@@ -431,20 +429,13 @@ export class StockRoutingComponent implements OnInit {
   }
 
   /**
-   * QA D1555: the patient's current allergies stop the drug (an allergy recorded after the order was
-   * signed included). The server's refusal with its card; the routing is sent again with the reason.
+   * QA D1555 / Policy 4: the patient's current allergies stop the drug (an allergy recorded after the
+   * order was signed included). The server held the routing for an authorized prescriber's review: its
+   * card and who was notified. The pharmacist's own reason never releases it.
    */
-  readonly allergyAck = signal<AllergyAcknowledgementRefusal | null>(null);
+  readonly allergyHold = signal<AllergyHold | null>(null);
 
-  /** QA D1555: the same routing again, with the pharmacist's acknowledgement and reason. */
-  confirmAllergyAck(reason: string): void {
-    const refusal = this.allergyAck();
-    if (!refusal) return;
-    this.allergyAck.set(null);
-    this.submitRouteToPartner(allergyAcknowledgementFields(refusal, reason));
-  }
-
-  submitRouteToPartner(allergyAck?: AllergyAcknowledgementFields): void {
+  submitRouteToPartner(): void {
     const partner = this.selectedPartner();
     if (!partner) return;
     this.saving.set(true);
@@ -454,7 +445,6 @@ export class StockRoutingComponent implements OnInit {
         routingType: 'PARTNER',
         targetPharmacyId: partner.pharmacyId,
         reason: this.routingReason || undefined,
-        ...(allergyAck ?? {}),
       })
       .subscribe({
         next: () => {
@@ -465,9 +455,9 @@ export class StockRoutingComponent implements OnInit {
         },
         error: (err) => {
           this.saving.set(false);
-          const allergy = allergyAcknowledgementRefusal(err);
+          const allergy = allergyHoldRefusal(err);
           if (allergy) {
-            this.allergyAck.set(allergy);
+            this.allergyHold.set(allergy);
             return;
           }
           this.toast.error(this.errorMessage(err, 'PHARMACY.ROUTING_FAILED'));

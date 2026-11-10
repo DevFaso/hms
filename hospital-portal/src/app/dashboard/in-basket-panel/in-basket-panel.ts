@@ -16,13 +16,18 @@ import { RoleContextService } from '../../core/role-context.service';
 import { RovingFocusDirective } from '../../shared/a11y/roving-focus.directive';
 import { currentLocale } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { actionRoles } from '../../core/action-permissions';
+import { AllergyReviewDialogComponent } from '../../shared/allergy-acknowledgement/allergy-review-dialog.component';
+
+/** Policy 4: the notice of an allergy conflict awaiting the prescriber's review (its reference is the order). */
+export const ALLERGY_REVIEW_REFERENCE = 'PRESCRIPTION_ALLERGY_REVIEW';
 
 const SERVER_TIME = new ServerTimePipe();
 
 @Component({
   selector: 'app-in-basket-panel',
   standalone: true,
-  imports: [CommonModule, TranslateModule, RovingFocusDirective],
+  imports: [CommonModule, TranslateModule, RovingFocusDirective, AllergyReviewDialogComponent],
   templateUrl: './in-basket-panel.html',
   styleUrl: './in-basket-panel.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -57,6 +62,29 @@ export class InBasketPanelComponent {
   });
 
   badgeCount = computed(() => this.summary().totalUnread);
+
+  /**
+   * Policy 4 (pending clinical approval): the order whose allergy conflict is reviewed from its notice.
+   * Offered to the roles POST /allergy-review admits; the server decides who may review.
+   */
+  readonly allergyReviewFor = signal<string | null>(null);
+  private readonly canReviewAllergy = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('prescriptionAllergyReview')),
+  );
+
+  isAllergyReview(item: InBasketItem): boolean {
+    return (
+      item.referenceType === ALLERGY_REVIEW_REFERENCE &&
+      !!item.referenceId &&
+      this.canReviewAllergy()
+    );
+  }
+
+  onAllergyReviewed(): void {
+    this.allergyReviewFor.set(null);
+    this.toast.success(this.translate.instant('ALLERGY_REVIEW.RECORDED'));
+    this.loadData();
+  }
 
   constructor() {
     // The load follows the hospital scope, not the mount: the endpoints are

@@ -3,16 +3,24 @@ package com.example.hms.service.allergy;
 import com.example.hms.cdshooks.CdsCriticalBlockException;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
+import com.example.hms.enums.AllergyReviewDecision;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
+import com.example.hms.enums.InBasketItemType;
+import com.example.hms.enums.InBasketPriority;
 import com.example.hms.model.PatientAllergy;
 import com.example.hms.model.Prescription;
+import com.example.hms.model.Staff;
+import com.example.hms.model.User;
 import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
+import com.example.hms.payload.dto.clinical.CreateInBasketItemRequest;
 import com.example.hms.repository.MedicationCatalogItemRepository;
 import com.example.hms.repository.PatientAllergyRepository;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.InBasketService;
 import com.example.hms.service.PrescriptionServiceImpl;
+import com.example.hms.service.i18n.NotificationLocales;
 import com.example.hms.service.pharmacy.DispenseVerificationService;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.TransactionCallbacks;
@@ -28,10 +36,12 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -54,18 +64,32 @@ import java.util.UUID;
  * {@link UnverifiableAllergyCard}), and the cross-reactivity advisory ({@link CrossReactivityAdvisory},
  * a warning that never refuses).
  *
- * <p>A stop (a direct or class match, or the safety net) refuses the gate's write until the
- * clinician acknowledges THAT allergy with a reason, on the request field {@link #ACK_FIELD}. The
- * acknowledgement is bound to the allergy by the token its card carries ({@link Stop#token}): an
- * allergy edited or added since voids it. Provisional default (2026-11-10, not a clinical
- * sign-off): acknowledge with a reason, at each gate.
+ * <p>Policy 4 (user recommendation 2026-11-10, pending clinical approval; it replaces the
+ * provisional "acknowledge with a reason" default of #1108): a stop (a direct or class match, or the
+ * safety net) holds the gate's write until an AUTHORIZED PRESCRIBER reviews the conflict on the order
+ * ({@code PrescriptionService#reviewAllergyConflict}). A nurse's or a pharmacist's own reason never
+ * releases it: no gate reads one. The hold answers on {@link #HOLD_FIELD} with the allergy card and
+ * who was told; the order's prescriber, signer and encounter clinician get one urgent in-basket notice
+ * per order until a review is recorded. A CONTINUE review releases every gate while the conflict's
+ * {@link #reviewToken} still equals the one reviewed (any change of the allergy state or of the
+ * order's drug, dose, route or frequency voids it); a STOP review refuses every gate. Recording a
+ * dose as HELD or REFUSED is never asked. No emergency bypass: none is approved.
  */
 @Slf4j
 @Component
 public class CurrentAllergyRecheck {
 
-    /** The request field the acknowledgement's reason is read from, and the refusal names (every gate). */
-    public static final String ACK_FIELD = "allergyAcknowledgementReason";
+    /**
+     * The field every hold names, so a screen shows the hold card. Not a request field: nothing a
+     * nurse or a pharmacist sends releases the hold (AllergyPrescriberReviewGuardTest).
+     */
+    public static final String HOLD_FIELD = "allergyPrescriberReview";
+
+    /** The in-basket reference type of the prescriber's notice (its reference id is the order). */
+    public static final String NOTICE_REFERENCE_TYPE = "PRESCRIPTION_ALLERGY_REVIEW";
+
+    static final String NOTICE_TITLE_KEY = "allergy.review.notice.title";
+    static final String NOTICE_BODY_KEY = "allergy.review.notice.body";
 
     /** The prefix of the card's exception key; the rest is the token the request sends back. */
     public static final String KEY_PREFIX = "allergy:";
@@ -90,16 +114,19 @@ public class CurrentAllergyRecheck {
             this.auditType = auditType;
             this.entityType = entityType;
         }
-
-        /** The refusal's message key: the card, then what to do at this gate. */
-        String requiredKey() {
-            return "allergy.recheck.required." + name();
-        }
     }
 
     private final PatientAllergyRepository allergyRepository;
     private final MedicationCatalogItemRepository catalogue;
     private final AuditEventLogService audit;
+
+    /** The prescriber's notice; absent in a pure-unit test. */
+    private InBasketService notices;
+
+    @Autowired(required = false)
+    public void setNotices(InBasketService notices) {
+        this.notices = notices;
+    }
 
     @Autowired
     public CurrentAllergyRecheck(PatientAllergyRepository allergies, MedicationCatalogItemRepository catalogue,
@@ -121,8 +148,16 @@ public class CurrentAllergyRecheck {
         }
     }
 
-    /** A clinician's acknowledgement of one stop at one gate. */
-    public record Acknowledgement(Gate gate, Stop stop, String reason) {
+    /**
+     * A gate passing under the prescriber's CONTINUE review of this very conflict: what the record and
+     * the audit keep (the warning, the review's token, who reviewed it and when).
+     */
+    public record Acknowledgement(Gate gate, Stop stop, String reviewToken, UUID reviewerId,
+                                  LocalDateTime reviewedAt) {
+    }
+
+    /** The conflict an order meets now: its stop and the token a prescriber's review answers. */
+    public record Conflict(Stop stop, String reviewToken) {
     }
 
     /* -- Reading ------------------------------------------------------------------------------- */
@@ -261,54 +296,145 @@ public class CurrentAllergyRecheck {
     /* -- At a gate ----------------------------------------------------------------------------- */
 
     /**
-     * The re-check every gate calls before it writes: a drug the patient's current allergies stop
-     * passes only with the clinician's acknowledgement of that allergy and a reason.
-     *
-     * @return the acknowledgement to record and audit, or {@code null} when nothing is to acknowledge
-     * @throws CdsCriticalBlockException on {@link #ACK_FIELD}, with the stop's card, when the reason is
-     *         missing or answers another allergy state
+     * The conflict this order meets now, read on its own drug, or empty: what the prescriber reviews.
      */
-    public Acknowledgement requireAcknowledged(Gate gate, Prescription rx, String medicationName,
-                                               String reason, String token) {
+    public Optional<Conflict> currentConflict(Prescription rx) {
+        return rx == null ? Optional.empty() : currentConflict(rx, rx.getMedicationName());
+    }
+
+    private Optional<Conflict> currentConflict(Prescription rx, String medicationName) {
         List<PatientAllergy> current = currentAllergies(rx);
         if (current.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
-        Optional<Stop> stop = stop(rx != null ? rx.getId() : null, medicationName,
-            itemsFor(rx, medicationName), current);
-        if (stop.isEmpty()) {
-            return null;
-        }
-        String given = reason == null ? "" : reason.trim();
-        if (given.isEmpty()) {
-            throw new CdsCriticalBlockException(
-                MessageUtil.resolveOrRaw(gate.requiredKey(), stop.get().card().summary(), stop.get().allergen()),
-                List.of(stop.get().card()), ACK_FIELD);
-        }
-        if (!stop.get().token().equals(stripPrefix(token))) {
-            throw new CdsCriticalBlockException(
-                MessageUtil.resolveOrRaw("allergy.recheck.acknowledgementStale", stop.get().allergen()),
-                List.of(stop.get().card()), ACK_FIELD);
-        }
-        return new Acknowledgement(gate, stop.get(), given);
+        return stop(rx.getId(), medicationName, itemsFor(rx, medicationName), current)
+            .map(s -> new Conflict(s, reviewToken(rx, s)));
     }
 
-    /** The line the record keeps (a dose's or a fill's note): the allergy acknowledged and the reason. */
+    /**
+     * The re-check every gate calls before it writes (Policy 4): a drug the patient's current allergies
+     * stop passes only under an authorized prescriber's CONTINUE review of this very conflict. It takes
+     * no reason: nothing a nurse or a pharmacist writes releases the hold.
+     *
+     * @return the review the gate passes under, to record and audit, or {@code null} when nothing stops
+     * @throws CdsCriticalBlockException on {@link #HOLD_FIELD}, with the stop's card, when no review of
+     *         this conflict is on record (the prescriber is told) or the prescriber decided STOP
+     */
+    public Acknowledgement requirePrescriberReview(Gate gate, Prescription rx, String medicationName) {
+        Optional<Conflict> conflict = rx == null ? Optional.empty() : currentConflict(rx, medicationName);
+        if (conflict.isEmpty()) {
+            return null;
+        }
+        Stop stop = conflict.get().stop();
+        String token = conflict.get().reviewToken();
+        boolean reviewed = token.equals(rx.getAllergyReviewToken()) && rx.getAllergyReviewDecision() != null;
+        if (reviewed && rx.getAllergyReviewDecision() == AllergyReviewDecision.STOP) {
+            throw new CdsCriticalBlockException(
+                MessageUtil.resolveOrRaw("allergy.recheck.prescriberStopped", stop.allergen()),
+                List.of(stop.card()), HOLD_FIELD);
+        }
+        if (reviewed) {
+            User reviewer = rx.getAllergyReviewedBy();
+            return new Acknowledgement(gate, stop, token, reviewer != null ? reviewer.getId() : null,
+                rx.getAllergyReviewedAt());
+        }
+        List<String> told = notifyPrescribers(rx, stop);
+        String why = told.isEmpty()
+            ? MessageUtil.resolveOrRaw("allergy.recheck.awaitingReviewNobody", stop.card().summary())
+            : MessageUtil.resolveOrRaw("allergy.recheck.awaitingReview", stop.card().summary(),
+                String.join(", ", told));
+        throw new CdsCriticalBlockException(why, List.of(stop.card()), HOLD_FIELD);
+    }
+
+    /**
+     * The token a prescriber's review answers: the stop's token (the order, its drug and the whole
+     * active allergy state) with what the order asks for (dose, unit, route, frequency, PRN, duration).
+     * Any of them changed after the review voids it.
+     */
+    public static String reviewToken(Prescription rx, Stop stop) {
+        // A digest's input, never text a reader sees: the route is the order's own code.
+        List<Object> ordered = Arrays.asList(rx.getMedicationCatalogItemId(), rx.getMedicationCode(),
+            rx.getDosage(), rx.getDoseUnit(), rx.getRoute(), rx.getFrequency(),
+            com.example.hms.service.impl.PrnMinInterval.isAsNeeded(rx), rx.getPrnMinIntervalHours(),
+            rx.getDuration());
+        String order = ordered.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining("|"));
+        return digest(stop.token() + "|" + order);
+    }
+
+    /** The token sent back by a screen, without the card's prefix. */
+    public static String stripPrefix(String token) {
+        if (token == null) {
+            return "";
+        }
+        String t = token.trim();
+        return t.startsWith(KEY_PREFIX) ? t.substring(KEY_PREFIX.length()) : t;
+    }
+
+    /**
+     * Who must review: the order's prescriber, its signer and the encounter's clinician, each told once
+     * per order by an urgent in-basket notice (the in-basket keeps one item per order and recipient; a
+     * recorded review clears them, so a later conflict is told again). Filed in a transaction of its own:
+     * the hold rolls the gate's back. Returns the names shown on the hold.
+     */
+    private List<String> notifyPrescribers(Prescription rx, Stop stop) {
+        Map<UUID, String> recipients = new LinkedHashMap<>();
+        for (Staff staff : Arrays.asList(rx.getStaff(), rx.getSignedBy(),
+                rx.getEncounter() != null ? rx.getEncounter().getStaff() : null)) {
+            if (staff != null && staff.getUser() != null && staff.getUser().getId() != null) {
+                String name = staff.getFullName();
+                recipients.putIfAbsent(staff.getUser().getId(), name != null ? name : "");
+            }
+        }
+        UUID hospitalId = rx.getHospital() != null ? rx.getHospital().getId() : null;
+        if (notices != null && hospitalId != null) {
+            UUID patientId = rx.getPatient() != null ? rx.getPatient().getId() : null;
+            String patientName = rx.getPatient() != null ? rx.getPatient().getFullName() : null;
+            Object[] titleArgs = {rx.getMedicationName()};
+            Object[] bodyArgs = {rx.getMedicationName(), patientName, stop.allergen()};
+            for (UUID recipient : recipients.keySet()) {
+                CreateInBasketItemRequest item = new CreateInBasketItemRequest();
+                item.setRecipientUserId(recipient);
+                item.setHospitalId(hospitalId);
+                item.setItemType(InBasketItemType.TASK);
+                item.setPriority(InBasketPriority.URGENT);
+                item.setReferenceId(rx.getId());
+                item.setReferenceType(NOTICE_REFERENCE_TYPE);
+                item.setEncounterId(rx.getEncounter() != null ? rx.getEncounter().getId() : null);
+                item.setPatientId(patientId);
+                item.setPatientName(patientName);
+                item.setTitleKey(NOTICE_TITLE_KEY);
+                item.setBodyKey(NOTICE_BODY_KEY);
+                item.setTitleArgs(titleArgs);
+                item.setBodyArgs(bodyArgs);
+                try {
+                    item.setTitle(MessageUtil.resolve(NotificationLocales.STAFF, NOTICE_TITLE_KEY, titleArgs));
+                    item.setBody(MessageUtil.resolve(NotificationLocales.STAFF, NOTICE_BODY_KEY, bodyArgs));
+                    notices.createItemInNewTransaction(item);
+                } catch (RuntimeException ex) {
+                    log.warn("Allergy review notice not filed for prescription {}: {}", rx.getId(),
+                        ex.getClass().getSimpleName());
+                }
+            }
+        }
+        return recipients.values().stream().filter(n -> !n.isBlank()).toList();
+    }
+
+    /** The line the record keeps (a dose's or a fill's note): the allergy and the review it passed under. */
     public static String recordLine(Acknowledgement ack) {
-        return MessageUtil.resolveOrRaw("allergy.recheck.recordLine", ack.stop().allergen(), ack.reason());
+        return MessageUtil.resolveOrRaw("allergy.recheck.reviewedLine", ack.stop().allergen(),
+            ack.reviewedAt() != null ? ack.reviewedAt().withNano(0).toString().replace('T', ' ') : "");
     }
 
-    /** Keep both the note and acknowledgement intact; refuse overflow instead of losing clinical text. */
+    /** Keep both the note and the review line intact; refuse overflow instead of losing clinical text. */
     public static String withRecordLine(String note, Acknowledgement ack, int max, String noteField) {
         if (ack == null) {
             return note;
         }
         String line = recordLine(ack);
-        // Neither the acknowledgement nor the clinical note may be silently truncated.
+        // Neither the review line nor the clinical note may be silently truncated.
         String joined = note == null || note.isBlank() ? line : line + "\n" + note;
         if (joined.length() > max) {
-            // This is a combined record-length error, not a new allergy refusal. Naming ACK_FIELD
-            // would reopen the portal acknowledgement dialog without a card or token.
+            // A combined record-length error, not an allergy hold: naming HOLD_FIELD would show a hold card.
             throw new com.example.hms.exception.FieldBusinessException(noteField,
                 MessageUtil.resolveOrRaw("allergy.recheck.noteTooLong", max));
         }
@@ -316,9 +442,8 @@ public class CurrentAllergyRecheck {
     }
 
     /**
-     * After commit: who acknowledged, the allergy, the rule, a digest of the reason, the gate and the
-     * time. Ids and a digest only, as the prescriber's override audit: the audit row is not encrypted,
-     * the reason is kept on the record the gate wrote.
+     * After commit: who passed the gate, the allergy, the rule, the gate, and the prescriber's review it
+     * passed under (reviewer, time, token). Ids only: the audit row is not encrypted.
      */
     public void auditAfterCommit(Acknowledgement ack, UUID actorUserId, UUID hospitalId, UUID patientId,
                                  UUID resourceId) {
@@ -327,10 +452,12 @@ public class CurrentAllergyRecheck {
         }
         UUID allergyId = ack.stop().allergy().getId();
         LocalDateTime at = LocalDateTime.now(ZoneOffset.UTC);
-        String details = "{\"gate\":\"" + ack.gate().name() + "\",\"reasonDigest\":\"" + digest(ack.reason())
-            + "\",\"warning\":\"" + ack.stop().kind()
+        String details = "{\"gate\":\"" + ack.gate().name() + "\",\"warning\":\"" + ack.stop().kind()
             + "\",\"allergyId\":" + (allergyId == null ? "null" : "\"" + allergyId + "\"")
-            + ",\"acknowledgementToken\":\"" + ack.stop().token() + "\",\"acknowledgedAt\":\"" + at + "\"}";
+            + ",\"reviewToken\":\"" + ack.reviewToken() + "\",\"reviewedBy\":"
+            + (ack.reviewerId() == null ? "null" : "\"" + ack.reviewerId() + "\"")
+            + ",\"reviewedAt\":" + (ack.reviewedAt() == null ? "null" : "\"" + ack.reviewedAt() + "\"")
+            + ",\"passedAt\":\"" + at + "\"}";
         TransactionCallbacks.afterCommit(() -> {
             try {
                 audit.logEvent(AuditEventRequestDTO.builder()
@@ -339,13 +466,13 @@ public class CurrentAllergyRecheck {
                     .userId(actorUserId)
                     .hospitalId(hospitalId)
                     .patientId(patientId)
-                    .eventDescription("Allergy acknowledged with a reason")
+                    .eventDescription("Allergy conflict passed under the prescriber's review")
                     .details(details)
                     .entityType(ack.gate().entityType)
                     .resourceId(resourceId != null ? resourceId.toString() : null)
                     .build());
             } catch (RuntimeException ex) {
-                log.warn("Allergy acknowledgement audit not written for {}: {}", resourceId,
+                log.warn("Allergy review pass audit not written for {}: {}", resourceId,
                     ex.getClass().getSimpleName());
             }
         });
@@ -381,14 +508,6 @@ public class CurrentAllergyRecheck {
             String.valueOf(allergy.getReaction()), String.valueOf(allergy.getReactionNotes()),
             String.valueOf(allergy.getVerificationStatus()), String.valueOf(allergy.isActive()),
             String.valueOf(allergy.getUpdatedAt()));
-    }
-
-    private static String stripPrefix(String token) {
-        if (token == null) {
-            return "";
-        }
-        String t = token.trim();
-        return t.startsWith(KEY_PREFIX) ? t.substring(KEY_PREFIX.length()) : t;
     }
 
     private static CdsCard documentedCard(PatientAllergy allergy, String medicationName) {

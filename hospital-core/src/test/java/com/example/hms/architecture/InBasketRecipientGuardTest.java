@@ -79,6 +79,11 @@ class InBasketRecipientGuardTest {
         "PrescriptionServiceImpl.java", union(
             codes(setConstant(com.example.hms.service.PrescriptionServiceImpl.class, "URGENT_REVIEW_PHARMACY_ROLES")),
             codes(setConstant(com.example.hms.service.PrescriptionServiceImpl.class, "URGENT_REVIEW_PHYSICIAN_ROLES"))),
+        // Policy 4: an allergy conflict held at the eMAR or the pharmacy, for the order's prescriber, its
+        // signer and the encounter's clinician (who may be a nurse or a midwife).
+        "CurrentAllergyRecheck.java", union(
+            rolesOf(constant(TransfusionController.class, "PRESCRIBER")),
+            rolesOf(constant(TransfusionController.class, "BEDSIDE"))),
         // The store itself: every sender above reaches it through createItem.
         "InBasketServiceImpl.java", Set.of());
 

@@ -1448,14 +1448,9 @@
     <p class="form-error" role="alert" data-testid="early-dose-why">{{ early.why }}</p>
   </app-reason-dialog>
 }
-<!-- QA D1563: the patient's current allergies stop this drug: acknowledge with a reason, or go back. -->
-@if (allergyAck(); as ack) {
-  <app-allergy-acknowledgement-dialog
-    [refusal]="ack.refusal"
-    [busy]="!!actionInProgress()"
-    (confirmed)="confirmAllergyAck($event)"
-    (cancelled)="allergyAck.set(null)"
-  />
+<!-- QA D1563 / Policy 4: held for an authorized prescriber's review; the dose can still be held. -->
+@if (allergyHold(); as hold) {
+  <app-allergy-hold-dialog [refusal]="hold" (closed)="allergyHold.set(null)" />
 }
 <!-- The order is held for review: only a dose given before the hold can be charted. -->
 @if (givenBeforeHold(); as prior) {

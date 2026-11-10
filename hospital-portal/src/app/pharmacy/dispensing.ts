@@ -49,12 +49,10 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { joinReasons } from '../shared/required-fields';
 import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import {
-  AllergyAcknowledgementFields,
-  AllergyAcknowledgementRefusal,
-  allergyAcknowledgementFields,
-  allergyAcknowledgementRefusal,
+  AllergyHold,
+  allergyHoldRefusal,
 } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
-import { AllergyAcknowledgementDialogComponent } from '../shared/allergy-acknowledgement/allergy-acknowledgement-dialog.component';
+import { AllergyHoldDialogComponent } from '../shared/allergy-acknowledgement/allergy-hold-dialog.component';
 import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 
 /** The viewer's local calendar date as YYYY-MM-DD (not the UTC one). */
@@ -188,7 +186,7 @@ export function sameDispenseUnit(
     DialogFocusDirective,
     InlineSubFormDirective,
     InlineDiscardAskComponent,
-    AllergyAcknowledgementDialogComponent,
+    AllergyHoldDialogComponent,
     CdsCardListComponent,
   ],
   templateUrl: './dispensing.html',
@@ -960,8 +958,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.form.dispensedBy = this.auth.currentProfile()?.id ?? '';
     this.verifyAttested.set(false);
     this.cdsAlerts.set([]);
-    this.allergyAckFields = null;
-    this.allergyAck.set(null);
+    this.allergyHold.set(null);
     this.showForm.set(true);
     this.loadStockLots();
   }
@@ -985,10 +982,6 @@ export class DispensingComponent implements OnInit, OnDestroy {
       body.cdsOverrideReason = this.form.cdsOverrideReason?.trim();
     } else {
       delete body.cdsOverrideReason;
-    }
-    // QA D1555: the pharmacist's acknowledgement of the allergy the server named, once given.
-    if (this.allergyAckFields) {
-      Object.assign(body, this.allergyAckFields);
     }
     // QA D964: the reason travels only when a shorter-dated lot was skipped.
     if (this.earlierLot()) {
@@ -1045,12 +1038,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.saving.set(false);
-        if (
-          this.askAllergyAck(err, (fields) => {
-            this.allergyAckFields = fields;
-            this.submitDispense();
-          })
-        ) {
+        if (this.showAllergyHold(err)) {
           return;
         }
         this.noteCdsAlerts(err);
@@ -1060,35 +1048,18 @@ export class DispensingComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * QA D1555: the patient's current allergies stop the drug (an allergy recorded after the order was
-   * signed included). The server's refusal with its card, and what to send again once the pharmacist
-   * acknowledges that allergy with a reason.
+   * QA D1555 / Policy 4: the patient's current allergies stop the drug (an allergy recorded after the
+   * order was signed included). The server held the action for an authorized prescriber's review: its
+   * card and who was notified. The pharmacist's own reason never releases it.
    */
-  readonly allergyAck = signal<{
-    refusal: AllergyAcknowledgementRefusal;
-    retry: (fields: AllergyAcknowledgementFields) => void;
-  } | null>(null);
+  readonly allergyHold = signal<AllergyHold | null>(null);
 
-  /** The acknowledgement the current fill carries, once given. */
-  private allergyAckFields: AllergyAcknowledgementFields | null = null;
-
-  /** QA D1555: opens the acknowledgement when `err` is the allergy refusal; true when it did. */
-  private askAllergyAck(
-    err: unknown,
-    retry: (fields: AllergyAcknowledgementFields) => void,
-  ): boolean {
-    const refusal = allergyAcknowledgementRefusal(err);
-    if (!refusal) return false;
-    this.allergyAck.set({ refusal, retry });
+  /** QA D1555 / Policy 4: shows the hold when `err` is the allergy hold; true when it did. */
+  private showAllergyHold(err: unknown): boolean {
+    const hold = allergyHoldRefusal(err);
+    if (!hold) return false;
+    this.allergyHold.set(hold);
     return true;
-  }
-
-  /** QA D1555: the same action again, with the pharmacist's acknowledgement and reason. */
-  confirmAllergyAck(reason: string): void {
-    const pending = this.allergyAck();
-    if (!pending) return;
-    this.allergyAck.set(null);
-    pending.retry(allergyAcknowledgementFields(pending.refusal, reason));
   }
 
   /** QA D1102 class: the alerts a refused fill came back with, kept for the override field. */
@@ -1134,14 +1105,8 @@ export class DispensingComponent implements OnInit, OnDestroy {
         this.translate.instant('PHARMACY.DISPENSE_SPLIT_SUCCESS', { count: parts.length }),
       );
     } catch (err) {
-      // QA D1555: refused before any part was recorded: acknowledge the allergy and send all parts again.
-      if (
-        recorded === 0 &&
-        this.askAllergyAck(err, (fields) => {
-          this.allergyAckFields = fields;
-          this.submitSplitDispense(parts);
-        })
-      ) {
+      // QA D1555 / Policy 4: held before any part was recorded: show the hold.
+      if (recorded === 0 && this.showAllergyHold(err)) {
         this.saving.set(false);
         return;
       }
@@ -1179,12 +1144,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.saving.set(false);
-        if (
-          this.askAllergyAck(err, (fields) => {
-            this.allergyAckFields = fields;
-            this.submitReady();
-          })
-        ) {
+        if (this.showAllergyHold(err)) {
           return;
         }
         this.noteCdsAlerts(err);
@@ -1210,24 +1170,22 @@ export class DispensingComponent implements OnInit, OnDestroy {
   }
 
   /** G15 AC-4: the patient is at the counter; the optional scan is checked server-side. */
-  confirmHandOver(allergyAck?: AllergyAcknowledgementFields): void {
+  confirmHandOver(): void {
     const dispenseId = this.readyAction()?.rx.readyForCollection?.dispenseId;
     if (!dispenseId) return;
     const scan = this.handOverScan.trim();
     this.readyActionSaving.set(true);
-    this.svc
-      .handOver(dispenseId, { ...(scan ? { patientScanValue: scan } : {}), ...(allergyAck ?? {}) })
-      .subscribe({
-        next: () => this.afterReadyAction('PHARMACY.HAND_OVER_SUCCESS'),
-        error: (err) => {
-          // QA D1555: an allergy recorded since the fill was prepared stops the hand-over.
-          if (this.askAllergyAck(err, (fields) => this.confirmHandOver(fields))) {
-            this.readyActionSaving.set(false);
-            return;
-          }
-          this.readyActionFailed(err, 'PHARMACY.HAND_OVER_FAILED');
-        },
-      });
+    this.svc.handOver(dispenseId, scan ? { patientScanValue: scan } : {}).subscribe({
+      next: () => this.afterReadyAction('PHARMACY.HAND_OVER_SUCCESS'),
+      error: (err) => {
+        // QA D1555 / Policy 4: an allergy recorded since the fill was prepared holds the hand-over.
+        if (this.showAllergyHold(err)) {
+          this.readyActionSaving.set(false);
+          return;
+        }
+        this.readyActionFailed(err, 'PHARMACY.HAND_OVER_FAILED');
+      },
+    });
   }
 
   /** G15 AC-7: the stock goes back and the patient is told it is no longer ready. */

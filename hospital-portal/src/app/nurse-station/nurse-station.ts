@@ -103,11 +103,10 @@ import { MarDoseHistoryComponent } from './mar-dose-history/mar-dose-history.com
 import { earlyDoseDialogKeys, earlyDoseRefusal } from './early-dose';
 import { givenBeforeHoldRefusal } from './given-before-hold';
 import {
-  AllergyAcknowledgementRefusal,
-  allergyAcknowledgementFields,
-  allergyAcknowledgementRefusal,
+  AllergyHold,
+  allergyHoldRefusal,
 } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
-import { AllergyAcknowledgementDialogComponent } from '../shared/allergy-acknowledgement/allergy-acknowledgement-dialog.component';
+import { AllergyHoldDialogComponent } from '../shared/allergy-acknowledgement/allergy-hold-dialog.component';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
@@ -152,7 +151,7 @@ export function localInputToUtcIso(value: string | undefined | null): string | u
     CdsCardListComponent,
     WitnessPickerComponent,
     ReasonDialogComponent,
-    AllergyAcknowledgementDialogComponent,
+    AllergyHoldDialogComponent,
     MarDoseHistoryComponent,
   ],
   templateUrl: './nurse-station.html',
@@ -749,24 +748,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   }
 
   /**
-   * QA D1563: the patient's current allergies stop this drug (an allergy recorded after the order
-   * was signed included). The server's refusal, its allergy card, and the dose to send again.
+   * QA D1563 / Policy 4: the patient's current allergies stop this drug (an allergy recorded after the
+   * order was signed included). The server held the dose for an authorized prescriber's review: its
+   * card and who was notified. The nurse's own reason never releases it; the dose can be held.
    */
-  readonly allergyAck = signal<{
-    prompt: { taskId: string; action: 'GIVEN' | 'HELD' | 'REFUSED' };
-    payload: MedicationAdministrationRequest;
-    refusal: AllergyAcknowledgementRefusal;
-  } | null>(null);
-
-  /** QA D1563: the same dose again, with the nurse's acknowledgement of that allergy and the reason. */
-  confirmAllergyAck(reason: string): void {
-    const prior = this.allergyAck();
-    if (!prior || this.actionInProgress()) return;
-    this.sendAdministration(prior.prompt, {
-      ...prior.payload,
-      ...allergyAcknowledgementFields(prior.refusal, reason),
-    });
-  }
+  readonly allergyHold = signal<AllergyHold | null>(null);
 
   /** QA D1210: the same dose again, with the nurse's reason for giving it early. */
   confirmEarlyDose(reason: string): void {
@@ -798,19 +784,19 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         this.actionInProgress.set(null);
         this.earlyDose.set(null);
         this.givenBeforeHold.set(null);
-        this.allergyAck.set(null);
+        this.allergyHold.set(null);
         this.reasonPrompt.set(null);
         this.loadAll();
       },
       error: (err: unknown) => {
         this.actionInProgress.set(null);
-        // QA D1563: an allergy stops this drug: show the card and ask for the acknowledgement.
-        const allergy = allergyAcknowledgementRefusal(err);
+        // QA D1563 / Policy 4: held for the prescriber's review: show the card and who was notified.
+        const allergy = allergyHoldRefusal(err);
         if (allergy) {
-          this.allergyAck.set({ prompt, payload, refusal: allergy });
+          this.allergyHold.set(allergy);
           return;
         }
-        this.allergyAck.set(null);
+        this.allergyHold.set(null);
         const held = givenBeforeHoldRefusal(err);
         if (held) {
           this.givenBeforeHold.set({ prompt, payload, why: held });

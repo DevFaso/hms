@@ -1866,7 +1866,10 @@
       "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Obstetric rule skipped for an emergency ultrasound order",
       "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Obstetric rule skipped for an emergency OB/GYN referral",
       "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Obstetric rule skip cleared on an ultrasound order",
-      "ALLERGY_ACKNOWLEDGED": "Allergy acknowledged with a reason"
+      "ALLERGY_ACKNOWLEDGED": "Allergy acknowledged with a reason",
+      "ALLERGY_PASSED_UNDER_REVIEW": "Allergy conflict passed under the prescriber's review",
+      "ALLERGY_REVIEWED_BY_PRESCRIBER": "Allergy conflict reviewed by the prescriber",
+      "ALLERGY_REVIEWED_AT_SIGNATURE": "Allergy conflict reviewed at signature"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -6697,8 +6700,9 @@
         "PRESCRIPTION_SIGN_REAUTHENTICATION": "Re-authentication to sign a controlled-drug prescription",
         "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Paediatric dose review recorded",
         "ADMISSION_BED_RELEASED": "Inpatient bed released",
-        "MAR_ALLERGY_ACKNOWLEDGED": "Allergy acknowledged at a dose",
-        "DISPENSE_ALLERGY_ACKNOWLEDGED": "Allergy acknowledged at the pharmacy"
+        "MAR_ALLERGY_ACKNOWLEDGED": "Allergy conflict passed at a dose",
+        "DISPENSE_ALLERGY_ACKNOWLEDGED": "Allergy conflict passed at the pharmacy",
+        "PRESCRIPTION_ALLERGY_REVIEWED": "Allergy conflict reviewed by a prescriber"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -13315,9 +13319,26 @@
     "OUTSIDE_SCALE": "The result is beyond the displayed scale; the marker is at the edge.",
     "UNAVAILABLE": "Position requires an exact numeric result and a compatible reference interval."
   },
-  "ALLERGY_ACK": {
-    "TITLE": "Documented allergy",
-    "REASON_LABEL": "Why you go ahead despite this allergy",
-    "CONFIRM": "Acknowledge and continue"
+  "ALLERGY_HOLD": {
+    "TITLE": "Allergy conflict awaiting prescriber review",
+    "WHAT_NOW": "An authorized prescriber must review this conflict on the order before it is given or dispensed. You can still record the dose as held or refused."
+  },
+  "ALLERGY_REVIEW": {
+    "OPEN": "Review allergy conflict",
+    "TITLE": "Review the allergy conflict",
+    "LOADING": "Loading the allergy conflict…",
+    "NO_CONFLICT": "This order has no allergy conflict to review.",
+    "ON_RECORD": "On record: {{decision}} by {{name}}, {{at}}.",
+    "OUTDATED": "The review on record answered an earlier allergy state or an earlier version of the order: it no longer applies.",
+    "DECISION": "Decision",
+    "DECISION_CONTINUE": "Continue, with a plan",
+    "DECISION_STOP": "Stop the order",
+    "PLAN": "Plan (monitoring, premedication)",
+    "RATIONALE": "Clinical rationale",
+    "CONFIRM_READ": "I have read the allergy shown ({{allergen}}) and this order as it stands.",
+    "CONFIRM_REQUIRED": "Confirm you have read the allergy shown.",
+    "SUBMIT": "Record the review",
+    "RECORDED": "Allergy review recorded.",
+    "FAILED": "The allergy review could not be recorded."
   }
 }
