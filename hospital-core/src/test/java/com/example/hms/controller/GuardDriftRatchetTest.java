@@ -231,6 +231,9 @@ class GuardDriftRatchetTest {
         listed.put("PatientController.getDoctorRecord", PATIENTCONTROLLER_REASON);
         listed.put("PatientController.getDoctorTimeline", PATIENTCONTROLLER_REASON);
         listed.put("PatientController.updatePatientDiagnosis", PATIENTCONTROLLER_REASON);
+        // Policy 4: a nurse never releases an allergy conflict by role alone; prescribing authority, as /sign.
+        listed.put("PrescriptionController.allergyConflict", PRESCRIPTIONCONTROLLER_REASON);
+        listed.put("PrescriptionController.allergyReview", PRESCRIPTIONCONTROLLER_REASON);
         listed.put("PrescriptionController.cosign", PRESCRIPTIONCONTROLLER_REASON);
         listed.put("PrescriptionController.pediatricDoseReview",
             "QA D1096: the paediatric dose review the decision support asks of 'a pharmacist or physician'; a nurse does not judge a dose");
