@@ -33,4 +33,16 @@ public class RoutingDecisionRequestDTO {
     private String reason;
 
     private LocalDate estimatedRestockDate;
+
+    /**
+     * QA D1563 / D1555: the reason for going ahead although the patient's current allergies stop this
+     * drug, after reading the allergy card ({@code CurrentAllergyRecheck}). Required only then; kept
+     * on the record and audited.
+     */
+    @Size(max = 500)
+    private String allergyAcknowledgementReason;
+
+    /** QA D1563 / D1555: the token the allergy card carried ({@code exceptionKey}): which allergy was acknowledged. */
+    @Size(max = 200)
+    private String allergyAcknowledgementToken;
 }

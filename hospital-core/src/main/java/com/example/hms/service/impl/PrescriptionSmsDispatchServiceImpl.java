@@ -136,6 +136,25 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
             "ROLE_PHARMACIST", "ROLE_PHARMACY_VERIFIER", "ROLE_HOSPITAL_ADMIN", ROLE_SUPER_ADMIN);
 
     /**
+     * QA D1555: the one allergy re-check after the signature. A required setter: the application
+     * always wires it; only a service built by hand in a unit test has none.
+     */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setAllergyRecheck(com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck) {
+        this.allergyRecheck = allergyRecheck;
+    }
+
+    /** QA D1555: the dispatch gate of the re-check (AllergyRecheckGuardTest). */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement requireAllergyAcknowledged(Prescription rx, String reason, String token) {
+        if (allergyRecheck == null) {
+            return null;
+        }
+        return allergyRecheck.requireAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.PARTNER_ROUTING, rx, rx.getMedicationName(), reason, token);
+    }
+
+    /**
      * {@code noRollbackFor}: a provider failure throws
      * {@link PrescriptionDispatchFailedException} only after recording itself,
      * and that record must commit. Every other exception still rolls back,
@@ -171,6 +190,10 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
         validateScope(rx, pharmacy);
         requireDispatchable(rx);
         String phone = requirePharmacyPhone(pharmacy);
+        // QA D1555: the outside pharmacy fills it, so the order's drug is read against the patient's
+        // CURRENT allergies before the SMS leaves; the acknowledgement is kept on the routing decision.
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(rx,
+                request.getAllergyAcknowledgementReason(), request.getAllergyAcknowledgementToken());
         User decidedBy = resolveCurrentUser(auth);
         // Read before the new offer is saved (so it is not among them), but
         // only cancelled once the SMS has gone: if it fails, these pharmacies
@@ -186,11 +209,17 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
                         .targetPharmacy(pharmacy)
                         .decidedByUser(decidedBy)
                         .decidedForPatient(rx.getPatient())
-                        .reason(dispatchReason(pharmacy, request.getNote()))
+                        .reason(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispatchReason(pharmacy, request.getNote()), allergyAck, 1024, "note"))
                         .status(RoutingDecisionStatus.PENDING)
                         .decidedAt(LocalDateTime.now())
                         .build());
 
+        // Provider failures commit the decision too (noRollbackFor), so register before sending.
+        if (allergyAck != null && allergyRecheck != null) {
+            allergyRecheck.auditAfterCommit(allergyAck, decidedBy.getId(),
+                    rx.getHospital() != null ? rx.getHospital().getId() : null,
+                    rx.getPatient() != null ? rx.getPatient().getId() : null, rx.getId());
+        }
         String body = buildSmsBody(decision, rx, request.getNote());
         PrescriptionTransmission transmission = sendAndPersist(rx, pharmacy, phone, body,
                 new DispatchAttempt(decision, openOffers, decidedBy));

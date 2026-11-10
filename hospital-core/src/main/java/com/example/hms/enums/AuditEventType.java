@@ -154,6 +154,10 @@ public enum AuditEventType {
     PRESCRIPTION_CLARIFICATION_RESOLVED,
     /** D83: a prescriber overrode (or an edit cleared) an allergy hard stop. */
     PRESCRIPTION_ALLERGY_OVERRIDDEN,
+    /** QA D1563: a nurse acknowledged a documented allergy, with a reason, to record a GIVEN dose. */
+    MAR_ALLERGY_ACKNOWLEDGED,
+    /** QA D1555: a pharmacist acknowledged a documented allergy, with a reason, to verify, fill or route an order. */
+    DISPENSE_ALLERGY_ACKNOWLEDGED,
 
     // Security & platform configuration
     SECURITY_POLICY_UPDATED,

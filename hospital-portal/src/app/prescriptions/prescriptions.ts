@@ -69,6 +69,13 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import {
+  AllergyAcknowledgementFields,
+  AllergyAcknowledgementRefusal,
+  allergyAcknowledgementFields,
+  allergyAcknowledgementRefusal,
+} from '../shared/allergy-acknowledgement/allergy-acknowledgement';
+import { AllergyAcknowledgementDialogComponent } from '../shared/allergy-acknowledgement/allergy-acknowledgement-dialog.component';
 /**
  * The prescriber's list tabs (gap G10).
  *
@@ -220,6 +227,7 @@ const RX_FREQUENCY_IDS = ['rx-frequency'];
   selector: 'app-prescriptions',
   standalone: true,
   imports: [
+    AllergyAcknowledgementDialogComponent,
     DateTimePipe,
     ListEscapeDirective,
     SubmitGuardDirective,
@@ -1358,11 +1366,28 @@ export class PrescriptionsComponent implements OnInit {
     this.verifyNote = '';
   }
 
-  submitPharmacistVerify(): void {
+  /**
+   * QA D1555: the patient's current allergies stop the drug (an allergy recorded after the order was
+   * signed included). The server's refusal with its card, and what to send again with the reason.
+   */
+  readonly allergyAck = signal<{
+    refusal: AllergyAcknowledgementRefusal;
+    retry: (fields: AllergyAcknowledgementFields) => void;
+  } | null>(null);
+
+  /** QA D1555: the same action again, with the pharmacist's acknowledgement and reason. */
+  confirmAllergyAck(reason: string): void {
+    const pending = this.allergyAck();
+    if (!pending) return;
+    this.allergyAck.set(null);
+    pending.retry(allergyAcknowledgementFields(pending.refusal, reason));
+  }
+
+  submitPharmacistVerify(allergyAck?: AllergyAcknowledgementFields): void {
     const target = this.verifyTarget();
     if (!target || this.verifying()) return;
     this.verifying.set(true);
-    this.prescriptionService.pharmacistVerify(target.id, this.verifyNote).subscribe({
+    this.prescriptionService.pharmacistVerify(target.id, this.verifyNote, allergyAck).subscribe({
       next: () => {
         this.verifying.set(false);
         this.toast.success(this.translate.instant('PRESCRIPTIONS.TOAST.PHARMACIST_VERIFIED'));
@@ -1375,6 +1400,11 @@ export class PrescriptionsComponent implements OnInit {
         // one string would leave them with no idea what to do next — the
         // same reason signPrescription surfaces its message verbatim.
         this.verifying.set(false);
+        const allergy = allergyAcknowledgementRefusal(err);
+        if (allergy) {
+          this.allergyAck.set({ refusal: allergy, retry: (f) => this.submitPharmacistVerify(f) });
+          return;
+        }
         const msg = this.extractErrorMessage(err);
         this.toast.error(
           msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.PHARMACIST_VERIFY_FAILED'),
@@ -2532,12 +2562,12 @@ export class PrescriptionsComponent implements OnInit {
     this.dispatchNote = '';
   }
 
-  submitDispatch(): void {
+  submitDispatch(allergyAck?: AllergyAcknowledgementFields): void {
     const target = this.dispatchTarget();
     if (!target || !this.dispatchPharmacyId || this.dispatching()) return;
     this.dispatching.set(true);
     this.prescriptionService
-      .dispatchSms(target.id, this.dispatchPharmacyId, this.dispatchNote || undefined)
+      .dispatchSms(target.id, this.dispatchPharmacyId, this.dispatchNote || undefined, allergyAck)
       .subscribe({
         next: (result) => {
           this.dispatching.set(false);
@@ -2555,6 +2585,11 @@ export class PrescriptionsComponent implements OnInit {
         },
         error: (err) => {
           this.dispatching.set(false);
+          const allergy = allergyAcknowledgementRefusal(err);
+          if (allergy) {
+            this.allergyAck.set({ refusal: allergy, retry: (f) => this.submitDispatch(f) });
+            return;
+          }
           const msg = err?.error?.message || 'Could not dispatch the prescription SMS';
           this.toast.error(msg);
           // A refused SMS is recorded server-side (TRANSMISSION_FAILED, unless
