@@ -132,6 +132,7 @@ export class AdmissionsComponent implements OnInit {
    * form is narrowed to match: labour and delivery only, and she is the admitting provider.
    */
   protected readonly midwifeAdmitsLabourOnly = computed(
+    // rbac-inline-ok: narrows the form's choices; the admit permission itself is admissionCreate
     () => this.canAdmit() && !this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']),
   );
   protected readonly canEditAdmission = computed(() => this.can('admissionUpdate'));
