@@ -184,9 +184,12 @@ public class VitalSignJudgement {
             return false;
         }
         UUID hospitalId = hospital == null ? null : hospital.getId();
-        return newbornAssessmentRepository.findFirstByPatient_IdAndDeliveryRecordIsNotNullOrderByAssessmentTimeAsc(patient.getId())
-            .filter(a -> hospitalId == null
-                || (a.getHospital() != null && hospitalId.equals(a.getHospital().getId())))
+        // Scoped in the query: an earlier assessment at another hospital must not hide this one's.
+        java.util.Optional<NewbornAssessment> birth = hospitalId == null
+            ? newbornAssessmentRepository.findFirstByPatient_IdAndDeliveryRecordIsNotNullOrderByAssessmentTimeAsc(patient.getId())
+            : newbornAssessmentRepository.findFirstByPatient_IdAndHospital_IdAndDeliveryRecordIsNotNullOrderByAssessmentTimeAsc(
+                patient.getId(), hospitalId);
+        return birth
             .map(NewbornAssessment::getDeliveryRecord)
             .map(DeliveryRecord::getGestationalAgeWeeksAtBirth)
             .filter(weeks -> weeks < NewbornAlertRules.PRETERM_BELOW_WEEKS)

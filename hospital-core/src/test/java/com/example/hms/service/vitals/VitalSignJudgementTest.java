@@ -154,8 +154,8 @@ class VitalSignJudgementTest {
         hospital.setId(UUID.randomUUID());
         NewbornAssessment assessment = NewbornAssessment.builder().hospital(hospital)
             .deliveryRecord(DeliveryRecord.builder().gestationalAgeWeeksAtBirth(33).build()).build();
-        when(assessments.findFirstByPatient_IdAndDeliveryRecordIsNotNullOrderByAssessmentTimeAsc(baby.getId()))
-            .thenReturn(Optional.of(assessment));
+        when(assessments.findFirstByPatient_IdAndHospital_IdAndDeliveryRecordIsNotNullOrderByAssessmentTimeAsc(
+            baby.getId(), hospital.getId())).thenReturn(Optional.of(assessment));
         PatientVitalSign vital = set(baby).hospital(hospital).heartRateBpm(115).build();
         assertThat(codes(judgement.judge(vital))).containsExactly("newborn-reference-heart-rate-preterm");
 
@@ -163,6 +163,30 @@ class VitalSignJudgementTest {
         other.setId(UUID.randomUUID());
         PatientVitalSign elsewhere = set(baby).hospital(other).heartRateBpm(115).build();
         assertThat(codes(judgement.judge(elsewhere))).containsExactly("newborn-reference-heart-rate");
+    }
+
+    @Test
+    @DisplayName("an earlier term assessment at another hospital does not hide this hospital's preterm record")
+    void aForeignEarlierAssessmentDoesNotHideThisHospitalsPretermRecord() {
+        Patient baby = bornDaysAgo(4);
+        Hospital here = new Hospital();
+        here.setId(UUID.randomUUID());
+        Hospital foreign = new Hospital();
+        foreign.setId(UUID.randomUUID());
+        NewbornAssessment foreignTerm = NewbornAssessment.builder().hospital(foreign)
+            .assessmentTime(NOW.minusDays(4))
+            .deliveryRecord(DeliveryRecord.builder().gestationalAgeWeeksAtBirth(39).build()).build();
+        NewbornAssessment localPreterm = NewbornAssessment.builder().hospital(here)
+            .assessmentTime(NOW.minusDays(3))
+            .deliveryRecord(DeliveryRecord.builder().gestationalAgeWeeksAtBirth(33).build()).build();
+        // The unscoped finder answers with the earliest row anywhere: the foreign term one.
+        when(assessments.findFirstByPatient_IdAndDeliveryRecordIsNotNullOrderByAssessmentTimeAsc(baby.getId()))
+            .thenReturn(Optional.of(foreignTerm));
+        when(assessments.findFirstByPatient_IdAndHospital_IdAndDeliveryRecordIsNotNullOrderByAssessmentTimeAsc(
+            baby.getId(), here.getId())).thenReturn(Optional.of(localPreterm));
+
+        PatientVitalSign vital = set(baby).hospital(here).heartRateBpm(115).build();
+        assertThat(codes(judgement.judge(vital))).containsExactly("newborn-reference-heart-rate-preterm");
     }
 
     @Test
