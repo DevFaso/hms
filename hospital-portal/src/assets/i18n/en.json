@@ -7705,7 +7705,7 @@
     },
     "SIGN_ALLERGY": {
       "TITLE": "Allergy warning: sign anyway?",
-      "REASON": "Reason for signing despite the allergy warning"
+      "REASON": "I acknowledge this allergy. Clinical reason for signing despite it (recorded with your signature)"
     },
     "CREATED_WITH_ADVISORIES": "Prescription created. Read the alerts below, then close.",
     "PRN_MIN_INTERVAL": "Minimum interval between doses (hours)",

@@ -184,6 +184,10 @@ public class GlobalExceptionHandler {
         body.put(FIELD_ERROR, "CDS Critical Advisory");
         body.put(FIELD_MESSAGE, ex.getMessage());
         body.put("cdsAdvisories", ex.getCards());
+        if (ex.getField() != null) {
+            body.put(FIELD_FIELD, ex.getField());
+            body.put(FIELD_ERRORS, Map.of(ex.getField(), ex.getMessage()));
+        }
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
