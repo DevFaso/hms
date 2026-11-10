@@ -252,9 +252,73 @@ class OrderedDrugIdentityTest {
 
     /** Review: a slash strength is not a second drug, and a brand keeps its strength reading off paracetamol. */
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.CsvSource({"Augmentin 500/62.5, Amoxicilline", "Bactrim 400/80, Sulfamethoxazole", "Fansidar 500/25, Sulfadoxine"})
+    @org.junit.jupiter.params.provider.CsvSource({
+        "Augmentin 500/62.5, Amoxicilline + acide clavulanique",
+        "Bactrim 400/80, Sulfaméthoxazole + triméthoprime",
+        "Fansidar 500/25, Sulfadoxine + pyriméthamine",
+        "Clamoxyl 500 mg, Amoxicilline"})
     void aCitedBrandWithASlashStrengthStillAgrees(String typed, String generic) {
         org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.agrees(typed, item(generic, generic, null))).isTrue();
+    }
+
+    /**
+     * QA D1554 (round 43): "Augmentin 500 mg" sent with the Amoxicilline item's id agreed on the
+     * first word, and was created, signed and filled from an amoxicillin lot. A combination brand
+     * never names an item that lacks one of its ingredients, and a single-drug brand never names a
+     * combination item.
+     */
+    @ParameterizedTest(name = "\"{0}\" contradicts the {1} item")
+    @CsvSource({
+        "Augmentin 500 mg, Amoxicilline",
+        "Augmentin 1 g, Amoxicillin",
+        "Augmentin 500/62.5, Amoxicilina",
+        "Augmentin, Acide clavulanique",
+        "Bactrim forte, Sulfaméthoxazole",
+        "Bactrim, Triméthoprime",
+        "Fansidar, Sulfadoxine",
+        "Extencilline 2.4 MUI, Benzylpénicilline",
+        "Clamoxyl 500 mg, Amoxicilline + acide clavulanique",
+    })
+    void aCitedBrandNeverNamesAnItemThatIsNotItsDrug(String typed, String generic) {
+        MedicationCatalogItem item = item(generic, generic, null);
+        assertThat(OrderedDrugIdentity.contradicts(typed, item)).isTrue();
+        DispenseVerificationService dispense = new DispenseVerificationService(
+            Clock.fixed(java.time.Instant.parse("2026-11-01T10:00:00Z"), ZoneId.of("UTC")));
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setPatient(new Patient());
+        rx.setMedicationName(typed);
+        rx.setMedicationCatalogItemId(item.getId());
+        assertThat(dispense.matchesPrescribedDrug(rx, item)).as("filled from the item's lot").isFalse();
+        assertThat(dispense.verify(rx, lotOf(item), null, null).failedChecks()).contains(DispenseCheck.DRUG);
+    }
+
+    /**
+     * Class guard for D1554: for EVERY cited brand whose drug has more than one ingredient, an item
+     * carrying only one of them, spelled the way the brand's own INN list spells it, contradicts the
+     * brand. A brand added to the list later is covered without touching this test.
+     */
+    @Test
+    void everyCombinationBrandContradictsAnItemThatLacksAnIngredient() {
+        int checked = 0;
+        for (String pattern : com.example.hms.service.allergy.DrugClassAllergy.brandsWithAKnownDrug()) {
+            String brand = pattern.replace("\\b", "").replaceAll("\\(\\?:[^)]*\\)\\?", "");
+            String inns = com.example.hms.service.allergy.DrugClassAllergy.withGenericNames(brand).substring(brand.length()).trim();
+            for (java.util.Set<String> drug : com.example.hms.service.allergy.DrugClassAllergy.drugsOfCitedBrands(brand)) {
+                if (drug.size() < 2) {
+                    continue;
+                }
+                for (String word : inns.split("\\s+")) {
+                    java.util.Set<String> one = OrderedDrugIdentity.ingredientsOf(word);
+                    if (one.size() == 1 && drug.containsAll(one)) {
+                        assertThat(OrderedDrugIdentity.contradicts(brand + " 500 mg", item(word, word, null)))
+                            .as("%s on a %s item", brand, word).isTrue();
+                        checked++;
+                    }
+                }
+            }
+        }
+        assertThat(checked).as("the guard saw combination brands").isGreaterThanOrEqualTo(6);
     }
 
     @org.junit.jupiter.api.Test

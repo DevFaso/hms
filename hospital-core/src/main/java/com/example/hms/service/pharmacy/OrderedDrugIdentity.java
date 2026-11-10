@@ -92,7 +92,7 @@ public final class OrderedDrugIdentity {
      * A generic name read as its ingredients, whatever joins them and whichever language spells them; strengths are
      * dropped. "Amoxicilline 500 mg + Acide clavulanique 125 mg" and "Amoxicillin/clavulanic acid" read alike.
      */
-    private static Set<String> ingredientsOf(String genericName) {
+    static Set<String> ingredientsOf(String genericName) {
         String generic = DrugClassAllergy.normalize(genericName);
         Set<String> ingredients = new java.util.HashSet<>();
         for (String word : generic.split("[\\s+,/()\\-]+")) {
@@ -166,7 +166,8 @@ public final class OrderedDrugIdentity {
     /**
      * A cited brand ("Clamoxyl 500") whose INN list holds the item's generic
      * ("amoxicilline"): the generic's first word is one of the INN words the
-     * brand adds.
+     * brand adds, and the generic's ingredients are exactly one of the brand's
+     * drugs (QA D1554: Augmentin does not name the Amoxicilline item).
      */
     private static boolean brandNamesGeneric(String typedName, String genericName) {
         // "Efferalgan codéine" is not the Paracétamol item, and plain "Efferalgan" is not the
@@ -188,6 +189,15 @@ public final class OrderedDrugIdentity {
         if (firstWord.isEmpty()) {
             return false;
         }
-        return Arrays.asList(expanded.substring(typed.length()).trim().split("\\s+")).contains(firstWord);
+        if (!Arrays.asList(expanded.substring(typed.length()).trim().split("\\s+")).contains(firstWord)) {
+            return false;
+        }
+        // QA D1554 (round 43): the first word is not the drug. "Augmentin 500 mg" sent with the
+        // Amoxicilline item's id agreed on "amoxicilline", so it was created, signed and filled
+        // from an amoxicillin lot - the clavulanate the prescriber ordered was never given. The
+        // item must BE one of the brand's drugs, ingredient for ingredient: the D1492 reading the
+        // pharmacy already applies to a free-text brand (citedBrandIsThisDrug), so a
+        // combination brand never names an item that lacks one of its ingredients.
+        return DrugClassAllergy.drugsOfCitedBrands(typedName).contains(ingredientsOf(genericName));
     }
 }
