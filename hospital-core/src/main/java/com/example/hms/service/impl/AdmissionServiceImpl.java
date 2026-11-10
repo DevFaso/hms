@@ -120,18 +120,11 @@ public class AdmissionServiceImpl implements AdmissionService {
         }
     }
 
-    /**
-     * Policy 2 (2026-11-09, provisional): the caller holds an active midwife assignment at this
-     * hospital and no physician one, so she admits only under {@link #requireMidwifeLabourAdmission}.
-     * A caller who is also a physician there keeps the physician path.
-     */
-    private boolean actedAsMidwife(UUID hospitalId) {
-        UUID callerId = roleValidator.getCurrentUserId();
-        return callerId != null
-            && roleValidator.isMidwife(callerId, hospitalId)
-            && !roleValidator.isDoctor(callerId, hospitalId)
-            && !roleValidator.isPhysician(callerId, hospitalId)
-            && !roleValidator.isSurgeon(callerId, hospitalId);
+    /** The caller is a doctor, physician or surgeon with an active assignment at {@code hospitalId}. */
+    private boolean isPhysicianAt(UUID callerId, UUID hospitalId) {
+        return roleValidator.isDoctor(callerId, hospitalId)
+            || roleValidator.isPhysician(callerId, hospitalId)
+            || roleValidator.isSurgeon(callerId, hospitalId);
     }
 
     /**
@@ -141,11 +134,10 @@ public class AdmissionServiceImpl implements AdmissionService {
      * The model has no maternity ward or department type to require, so the scope is the
      * admission type and the patient.
      */
-    private void requireMidwifeLabourAdmission(AdmissionRequestDTO request, Patient patient, Staff admittingProvider) {
+    private void requireMidwifeLabourAdmission(AdmissionRequestDTO request, Patient patient, Staff admittingProvider, UUID callerId) {
         if (request.getAdmissionType() != AdmissionType.LABOR_DELIVERY) {
             throw new com.example.hms.exception.FieldBusinessException("admissionType", "admission.midwife.laborOnly");
         }
-        UUID callerId = roleValidator.getCurrentUserId();
         if (admittingProvider.getUser() == null || !callerId.equals(admittingProvider.getUser().getId())) {
             throw new com.example.hms.exception.FieldBusinessException("admittingProviderId", "admission.midwife.selfProvider");
         }
@@ -171,10 +163,17 @@ public class AdmissionServiceImpl implements AdmissionService {
         Staff admittingProvider = staffRepository.findById(request.getAdmittingProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("admission.admittingProvider.notFound", request.getAdmittingProviderId()));
 
-        if (actedAsMidwife(hospital.getId())) {
-            requireMidwifeLabourAdmission(request, patient, admittingProvider);
+        // The caller's role AT THE TARGET hospital decides the path: a physician admits any type,
+        // a midwife (not a physician there) only a woman in labour, anyone else is refused. A role
+        // held at another of her hospitals counts for nothing here.
+        UUID callerId = roleValidator.getCurrentUserId();
+        UUID targetHospitalId = hospital.getId();
+        if (callerId != null && isPhysicianAt(callerId, targetHospitalId)) {
+            requirePhysician(admittingProvider, targetHospitalId);
+        } else if (callerId != null && roleValidator.isMidwife(callerId, targetHospitalId)) {
+            requireMidwifeLabourAdmission(request, patient, admittingProvider, callerId);
         } else {
-            requirePhysician(admittingProvider, hospital.getId());
+            throw new BusinessException("admission.caller.notPermitted");
         }
 
         // QA D304: one open stay per patient. The patient row lock serialises two

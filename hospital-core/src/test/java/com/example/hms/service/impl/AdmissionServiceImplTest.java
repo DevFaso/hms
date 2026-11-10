@@ -92,6 +92,7 @@ class AdmissionServiceImplTest {
         com.example.hms.security.CallerIdentityTestSupport.actAs(staff, hospital);
         // The admitting provider is a doctor unless a test says otherwise.
         org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staffUser.getId(), hospitalId)).thenReturn(true);
+        org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(staffUser.getId());
         // QA D262: the patient is registered at the admitting hospital unless a test says otherwise.
         org.mockito.Mockito.lenient().when(registrationRepository.existsByPatientIdAndHospitalId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
     }
@@ -108,6 +109,10 @@ class AdmissionServiceImplTest {
         request.setPatientId(patientId);
         request.setHospitalId(hospitalId);
         request.setAdmittingProviderId(staffId);
+        // The caller is a doctor; the provider she names is a nurse.
+        UUID doctorCaller = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorCaller);
+        when(roleValidator.isDoctor(doctorCaller, hospitalId)).thenReturn(true);
         when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(false);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
@@ -175,6 +180,19 @@ class AdmissionServiceImplTest {
         patient.setDateOfBirth(java.time.LocalDate.now().minusYears(5));
         assertThatThrownBy(() -> service.admitPatient(request))
             .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    void midwifeAtAnotherHospitalOnly_isRefusedWhenPinnedToTheOtherOne_policy2() {
+        // Midwife at A, only a nurse at B (the hospital the request is pinned to): she is neither
+        // a physician nor a midwife at B, so she is refused and never reaches the physician path.
+        patient.setGender("FEMALE");
+        AdmissionRequestDTO request = midwifeRequest(com.example.hms.enums.AdmissionType.LABOR_DELIVERY);
+        org.mockito.Mockito.when(roleValidator.isMidwife(staff.getUser().getId(), hospitalId)).thenReturn(false);
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("not permitted to admit");
         verify(admissionRepository, never()).save(any());
     }
 
