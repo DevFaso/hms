@@ -181,9 +181,23 @@ describe('AdmissionsComponent', () => {
       expect(Object.values(gates()).every(Boolean)).toBeTrue();
     });
 
-    it('a midwife reads admissions but is offered no write', () => {
+    it('a midwife is offered New admission for labour and delivery only, and no other write (policy 2)', () => {
       activeRoles = ['ROLE_MIDWIFE'];
-      expect(Object.values(gates()).some(Boolean)).toBeFalse();
+      expect(gates()).toEqual({
+        admit: true,
+        edit: false,
+        orderSets: false,
+        assignBed: false,
+        unassignBed: false,
+        discharge: false,
+        cancel: false,
+      });
+      expect(component['formAdmissionTypes']()).toEqual(['LABOR_DELIVERY']);
+    });
+
+    it('a doctor keeps every admission type on the form', () => {
+      activeRoles = ['ROLE_DOCTOR'];
+      expect(component['formAdmissionTypes']().length).toBeGreaterThan(1);
     });
 
     it('a super-admin moves beds only (PUT, discharge, cancel and admit refuse her)', () => {

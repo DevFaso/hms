@@ -120,6 +120,38 @@ public class AdmissionServiceImpl implements AdmissionService {
         }
     }
 
+    /**
+     * Policy 2 (2026-11-09, provisional): the caller holds an active midwife assignment at this
+     * hospital and no physician one, so she admits only under {@link #requireMidwifeLabourAdmission}.
+     * A caller who is also a physician there keeps the physician path.
+     */
+    private boolean actedAsMidwife(UUID hospitalId) {
+        UUID callerId = roleValidator.getCurrentUserId();
+        return callerId != null
+            && roleValidator.isMidwife(callerId, hospitalId)
+            && !roleValidator.isDoctor(callerId, hospitalId)
+            && !roleValidator.isPhysician(callerId, hospitalId)
+            && !roleValidator.isSurgeon(callerId, hospitalId);
+    }
+
+    /**
+     * A midwife admits a woman in labour and nothing else: the type is LABOR_DELIVERY, the patient
+     * is obstetric-eligible (the labour-episode rule: not recorded male, not a child), and she is
+     * the admitting provider herself. A named attending physician is still checked as a physician.
+     * The model has no maternity ward or department type to require, so the scope is the
+     * admission type and the patient.
+     */
+    private void requireMidwifeLabourAdmission(AdmissionRequestDTO request, Patient patient, Staff admittingProvider) {
+        if (request.getAdmissionType() != AdmissionType.LABOR_DELIVERY) {
+            throw new BusinessException("admission.midwife.laborOnly");
+        }
+        UUID callerId = roleValidator.getCurrentUserId();
+        if (admittingProvider.getUser() == null || !callerId.equals(admittingProvider.getUser().getId())) {
+            throw new BusinessException("admission.midwife.selfProvider");
+        }
+        com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(patient);
+    }
+
     @Override
     @Transactional
     public AdmissionResponseDTO admitPatient(AdmissionRequestDTO request) {
@@ -139,7 +171,11 @@ public class AdmissionServiceImpl implements AdmissionService {
         Staff admittingProvider = staffRepository.findById(request.getAdmittingProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("admission.admittingProvider.notFound", request.getAdmittingProviderId()));
 
-        requirePhysician(admittingProvider, hospital.getId());
+        if (actedAsMidwife(hospital.getId())) {
+            requireMidwifeLabourAdmission(request, patient, admittingProvider);
+        } else {
+            requirePhysician(admittingProvider, hospital.getId());
+        }
 
         // QA D304: one open stay per patient. The patient row lock serialises two
         // concurrent admissions, so the second one sees the first and is refused.

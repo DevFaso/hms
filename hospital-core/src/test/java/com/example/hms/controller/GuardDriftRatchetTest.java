@@ -142,7 +142,6 @@ class GuardDriftRatchetTest {
 
     private static Map<String, String> doctorWithoutNurse() {
         Map<String, String> listed = new TreeMap<>();
-        listed.put("AdmissionController.admitPatient", ADMISSIONCONTROLLER_REASON);
         listed.put("AdmissionController.cancelAdmission", ADMISSIONCONTROLLER_REASON);
         listed.put("AdmissionController.createOrderSet", ADMISSIONCONTROLLER_REASON);
         listed.put("AdmissionController.deactivateOrderSet", ADMISSIONCONTROLLER_REASON);

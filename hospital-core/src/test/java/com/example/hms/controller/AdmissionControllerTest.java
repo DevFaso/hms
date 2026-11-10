@@ -206,6 +206,30 @@ class AdmissionControllerTest {
 
             verify(admissionService).admitPatient(any(AdmissionRequestDTO.class));
         }
+
+        @Test
+        @WithMockUser(authorities = "ROLE_MIDWIFE")
+        @DisplayName("policy 2: a midwife reaches the admission (the service narrows it to labour)")
+        void admitPatient_midwifeReachesTheService() throws Exception {
+            when(admissionService.admitPatient(any(AdmissionRequestDTO.class)))
+                .thenReturn(buildAdmissionResponse(UUID.randomUUID()));
+
+            mockMvc.perform(post(BASE)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(buildAdmitRequest())))
+                .andExpect(status().isCreated());
+        }
+
+        @Test
+        @WithMockUser(authorities = "ROLE_NURSE")
+        @DisplayName("a nurse still cannot admit")
+        void admitPatient_nurseForbidden() throws Exception {
+            mockMvc.perform(post(BASE)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(buildAdmitRequest())))
+                .andExpect(status().isForbidden());
+            verify(admissionService, org.mockito.Mockito.never()).admitPatient(any(AdmissionRequestDTO.class));
+        }
     }
 
     @Nested

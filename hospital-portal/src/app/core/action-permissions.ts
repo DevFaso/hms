@@ -100,7 +100,8 @@ export const ACTION_PERMISSIONS = {
   },
   admissionCreate: {
     endpoint: 'AdmissionController#admitPatient',
-    roles: ['ROLE_DOCTOR'],
+    // A midwife admits a woman in labour only (policy 2); the form narrows to it.
+    roles: ['ROLE_DOCTOR', 'ROLE_MIDWIFE'],
   },
   admissionUpdate: {
     endpoint: 'AdmissionController#updateAdmission',

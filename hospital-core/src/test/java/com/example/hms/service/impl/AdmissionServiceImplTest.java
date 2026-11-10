@@ -119,6 +119,77 @@ class AdmissionServiceImplTest {
         verify(admissionRepository, never()).save(any());
     }
 
+    /** Policy 2: the caller is a midwife (not a physician) at the hospital, and is the admitting provider. */
+    private AdmissionRequestDTO midwifeRequest(com.example.hms.enums.AdmissionType type) {
+        UUID midwifeUserId = staff.getUser().getId();
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(midwifeUserId, hospitalId)).thenReturn(false);
+        org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(midwifeUserId);
+        org.mockito.Mockito.lenient().when(roleValidator.isMidwife(midwifeUserId, hospitalId)).thenReturn(true);
+        AdmissionRequestDTO request = new AdmissionRequestDTO();
+        request.setPatientId(patientId);
+        request.setHospitalId(hospitalId);
+        request.setAdmittingProviderId(staffId);
+        request.setAdmissionType(type);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        return request;
+    }
+
+    @Test
+    void midwifeAdmitsAWomanInLabour() {
+        patient.setGender("FEMALE");
+        AdmissionRequestDTO request = midwifeRequest(com.example.hms.enums.AdmissionType.LABOR_DELIVERY);
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        AdmissionResponseDTO response = new AdmissionResponseDTO();
+        when(admissionRepository.save(any(Admission.class))).thenReturn(admission);
+        when(admissionMapper.toResponseDTO(admission)).thenReturn(response);
+
+        assertThat(service.admitPatient(request)).isEqualTo(response);
+    }
+
+    @Test
+    void midwifeIsRefusedAnyNonMaternityAdmission_policy2() {
+        // Round 35 / D84: only a physician admits for the other types.
+        for (com.example.hms.enums.AdmissionType type : com.example.hms.enums.AdmissionType.values()) {
+            if (type == com.example.hms.enums.AdmissionType.LABOR_DELIVERY) {
+                continue;
+            }
+            AdmissionRequestDTO request = midwifeRequest(type);
+            assertThatThrownBy(() -> service.admitPatient(request))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasMessageContaining("only a woman in labour");
+        }
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    void midwifeIsRefusedAMalePatientAndAChild_policy2() {
+        patient.setGender("MALE");
+        AdmissionRequestDTO request = midwifeRequest(com.example.hms.enums.AdmissionType.LABOR_DELIVERY);
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+
+        patient.setGender("FEMALE");
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(5));
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    void midwifeCannotNameAnotherProviderAsAdmitting_policy2() {
+        patient.setGender("FEMALE");
+        AdmissionRequestDTO request = midwifeRequest(com.example.hms.enums.AdmissionType.LABOR_DELIVERY);
+        org.mockito.Mockito.when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        org.mockito.Mockito.when(roleValidator.isMidwife(org.mockito.ArgumentMatchers.any(), eq(hospitalId))).thenReturn(true);
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("admitting provider herself");
+        verify(admissionRepository, never()).save(any());
+    }
+
     @Test
     void admitPatient_refusesASecondOpenAdmissionWith409() {
         // QA D304: POST /api/admissions twice for the same patient answered 201 twice.
