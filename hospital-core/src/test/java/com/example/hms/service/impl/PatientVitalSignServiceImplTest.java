@@ -96,7 +96,10 @@ class PatientVitalSignServiceImplTest {
             patientChartAccess,
             recordAccessPolicy,
             reachRecorder,
-            news2EscalationService,
+            new com.example.hms.service.vitals.VitalSignJudgement(
+            org.mockito.Mockito.mock(com.example.hms.repository.NewbornAssessmentRepository.class), news2EscalationService,
+            org.mockito.Mockito.mock(com.example.hms.service.NotificationService.class),
+            com.example.hms.i18n.TestMessageSources.bundles()),
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository));
     }
 

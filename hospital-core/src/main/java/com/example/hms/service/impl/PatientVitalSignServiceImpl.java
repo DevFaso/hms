@@ -56,7 +56,8 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
     private final PatientChartAccess patientChartAccess;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
-    private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
+    /** QA D1564: the one judgement of a vital set, newborns included. */
+    private final com.example.hms.service.vitals.VitalSignJudgement vitalSignJudgement;
     private final com.example.hms.service.support.DischargedPatientGuard dischargedPatientGuard;
 
     @Override
@@ -108,20 +109,21 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         com.example.hms.service.support.PatientMeasureRules.requireVitalSignApplicable(
             entity, null, java.time.LocalDate.now(java.time.ZoneId.systemDefault()));
 
-        // NEWS2 MEDIUM+ auto-flags the bundle significant (P3 #25b): the
-        // aggregate catches multi-parameter deterioration that no single
-        // caller-supplied flag or per-vital threshold would.
-        if (com.example.hms.utility.NewsScoreCalculator.applies(entity)
-                && com.example.hms.utility.NewsScoreCalculator.score(entity).total() >= 5) {
-            entity.setClinicallySignificant(true);
-        }
+        // QA D1564: the shared judgement. A caller's flag is kept; the per-vital limits
+        // and NEWS2 MEDIUM+ (P3 #25b) flag the bundle too, and a newborn's set is judged
+        // against the newborn bands instead of the adult limits.
+        com.example.hms.service.vitals.VitalSignJudgement.Judgement judgement = vitalSignJudgement.judge(entity);
 
         PatientVitalSign saved = vitalSignRepository.save(entity);
-        // QA D207: the same NEWS2 escalation as the nurse station's capture.
+        // QA D207: the same NEWS2 escalation as the nurse station's capture (and D1564's newborn notices).
         String recorderUsername = staff != null && staff.getUser() != null ? staff.getUser().getUsername() : null;
-        news2EscalationService.escalateIfNeeded(saved, patientId, hospital != null ? hospital.getId() : null,
-            recorderUsername);
-        return vitalSignMapper.toResponse(saved);
+        vitalSignJudgement.escalate(saved, judgement, patientId, hospital != null ? hospital.getId() : null,
+            recorderUsername, null);
+        PatientVitalSignResponseDTO response = vitalSignMapper.toResponse(saved);
+        if (response != null) {
+            response.setNewbornAlerts(vitalSignJudgement.alerts(judgement));
+        }
+        return response;
     }
 
     /**

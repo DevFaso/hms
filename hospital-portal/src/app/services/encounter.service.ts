@@ -4,6 +4,7 @@ import { Observable, defer, map } from 'rxjs';
 
 import { allRows, PageSlice } from '../shared/all-pages';
 import { WithheldResult, recordsWithheld } from './patient.service';
+import { NewbornVitalAlert } from '../shared/newborn-vital-alerts';
 
 export type EncounterStatus =
   | 'SCHEDULED'
@@ -189,6 +190,8 @@ export interface TriageSubmissionResponse {
   roomedTimestamp: string;
   chiefComplaint: string;
   vitalSignId: string;
+  /** QA D1564: the newborn warnings on the triage set; empty for anyone 28 days old or more. */
+  newbornAlerts?: NewbornVitalAlert[];
 }
 
 export interface MedicationReconciliationEntry {

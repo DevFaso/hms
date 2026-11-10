@@ -12972,6 +12972,8 @@
     "VOIDED": "Anulado con la dispensación: a reembolsar"
   },
   "VITAL_LIMITS": {
+    "NEWBORN_WARNING": "Recién nacido (menos de 28 días): la medición se ha guardado y se ha evaluado con los valores del recién nacido (provisionales, pendientes de la aprobación del responsable de neonatología).",
+    "NEWBORN_WARNING_URGENT": "Recién nacido (menos de 28 días): la medición se ha guardado, se ha evaluado con los valores del recién nacido (provisionales, pendientes de la aprobación del responsable de neonatología) y se ha avisado al equipo asistencial.",
     "BP_ORDER": "La presión diastólica debe ser inferior a la presión sistólica.",
     "TEMPERATURE": "La temperatura debe estar entre {{min}} y {{max}} °C.",
     "HEART_RATE": "La frecuencia cardíaca debe estar entre {{min}} y {{max}} lpm.",
