@@ -20,6 +20,42 @@ class CallerIdentityTest {
     @AfterEach
     void clear() {
         CallerIdentityTestSupport.clear();
+        com.example.hms.security.context.HospitalContextHolder.clear();
+    }
+
+    private static void scope(boolean superAdmin, UUID selectedHospital) {
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .principalUserId(UUID.randomUUID())
+                .superAdmin(superAdmin)
+                .activeHospitalId(selectedHospital)
+                .headerOverridden(selectedHospital != null)
+                .build());
+    }
+
+    @Test
+    void aSuperAdminDecidesInGlobalViewAndAtTheSelectedHospitalOnly() {
+        UUID selected = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+
+        scope(true, null);
+        assertThat(CallerIdentity.isSuperAdminFor(selected)).as("global view, unchanged").isTrue();
+        assertThat(CallerIdentity.isSuperAdminFor(null)).as("global view, no hospital").isTrue();
+        com.example.hms.security.context.HospitalContextHolder.clear();
+
+        scope(true, selected);
+        assertThat(CallerIdentity.isGlobalSuperAdmin()).isFalse();
+        assertThat(CallerIdentity.isSuperAdminFor(selected)).as("pinned to the hospital selected").isTrue();
+        assertThat(CallerIdentity.isSuperAdminFor(other)).as("never another hospital").isFalse();
+        assertThat(CallerIdentity.isSuperAdminFor(null)).isFalse();
+    }
+
+    @Test
+    void aPinnedScopeAloneIsNotASuperAdmin() {
+        UUID selected = UUID.randomUUID();
+        scope(false, selected);
+
+        assertThat(CallerIdentity.isSuperAdminFor(selected)).isFalse();
     }
 
     @Test

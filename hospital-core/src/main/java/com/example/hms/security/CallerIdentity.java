@@ -97,6 +97,24 @@ public final class CallerIdentity {
     }
 
     /**
+     * True for a verified super-admin who may decide for {@code hospitalId}: in
+     * global view, or pinned to that very hospital (a hospital selected in the
+     * portal). The admin review deciders ask this instead of
+     * {@link #isGlobalSuperAdmin()} alone, which refused a super-admin as soon
+     * as they selected a hospital although the endpoint's role check admits
+     * SUPER_ADMIN. A super-admin pinned to another hospital is not admitted.
+     * {@code SuperAdminReviewDeciderGuardTest} keeps the mortality review
+     * endpoints on it.
+     */
+    public static boolean isSuperAdminFor(UUID hospitalId) {
+        if (isGlobalSuperAdmin()) {
+            return true;
+        }
+        return hospitalId != null
+            && hospitalId.equals(com.example.hms.security.tenant.ActingScopeResolver.superAdminPinnedHospitalIdOrNull());
+    }
+
+    /**
      * The acting staff member for a write that records who did it (the
      * recorder, the performer, the author, the canceller). A claimed staff id
      * must be a staff record at {@code hospitalId} and, unless the caller is a
