@@ -67,4 +67,33 @@ describe('MedicationHistoryComponent — row provenance', () => {
   it('treats an entry with no hospital id as local rather than foreign', () => {
     expect(component.isForeignRow({})).toBeFalse();
   });
+
+  // D1573: a foreign prescription row names its prescriber, signing date and read-only mark.
+  it('shows prescriber, signing date and a read-only mark on a foreign prescription row', () => {
+    component.patient.set({ id: 'p-1' } as never);
+    component.timeline.set({
+      timeline: [
+        {
+          entryId: 'RX-1',
+          entryType: 'PRESCRIPTION',
+          hospitalId: 'h-2',
+          hospitalName: 'Hôpital A',
+          prescriberName: 'Dr A',
+          signedAt: '2026-11-01T10:00:00',
+          status: 'SIGNED',
+        },
+        { entryId: 'RX-2', entryType: 'PRESCRIPTION', hospitalId: 'h-1', status: 'SIGNED' },
+      ],
+      totalMedications: 2,
+      activeMedications: 0,
+      controlledSubstances: 0,
+      medicationsWithOverlaps: 0,
+    } as never);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-testid="mh-prescriber-RX-1"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="mh-signed-RX-1"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="mh-readonly-RX-1"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="mh-readonly-RX-2"]')).toBeNull();
+  });
 });

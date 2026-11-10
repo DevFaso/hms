@@ -208,7 +208,25 @@
                   }
                 </td>
                 <td>{{ e.source || '—' }}</td>
-                <td class="hospital-cell">{{ e.hospitalName || '—' }}</td>
+                <td class="hospital-cell">
+                  {{ e.hospitalName || '—' }}
+                  @if (e.entryType !== 'PHARMACY_FILL' && e.prescriberName) {
+                    <span class="muted" [attr.data-testid]="'mh-prescriber-' + e.entryId">{{
+                      'MED_TIMELINE.PRESCRIBED_BY' | translate: { name: e.prescriberName }
+                    }}</span>
+                  }
+                  @if (e.entryType !== 'PHARMACY_FILL' && e.signedAt) {
+                    <span class="muted" [attr.data-testid]="'mh-signed-' + e.entryId"
+                      >{{ 'PRESCRIPTIONS.SIGNED_AT' | translate }}
+                      {{ e.signedAt | serverTime | date: 'short' }}</span
+                    >
+                  }
+                  @if (isForeignRow(e)) {
+                    <span class="muted" [attr.data-testid]="'mh-readonly-' + e.entryId">{{
+                      'MED_TIMELINE.READ_ONLY' | translate
+                    }}</span>
+                  }
+                </td>
                 <td>{{ (e.status | enumLabel: 'prescriptionStatus') || '—' }}</td>
                 <td class="flags-cell">
                   @if (e.hasOverlap) {
