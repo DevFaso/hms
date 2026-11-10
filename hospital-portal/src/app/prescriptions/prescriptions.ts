@@ -16,7 +16,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { forkJoin, of, Subject, Subscription } from 'rxjs';
-import { catchError, debounceTime, map, switchMap } from 'rxjs/operators';
+import { catchError, debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 import {
   PrescriptionService,
   PrescriptionResponse,
@@ -427,6 +427,26 @@ export class PrescriptionsComponent implements OnInit {
     // D1573: ?patientId= without ?new=1 opens the list on that patient's orders.
     if (params.get('new') !== '1') this.contextPatientId = params.get('patientId');
     this.load();
+    // Angular reuses this component when navigation only changes query parameters.
+    // Leaving a patient URL must restore the hospital worklist too.
+    this.route.queryParamMap
+      .pipe(
+        map((next) => (next.get('new') === '1' ? null : next.get('patientId'))),
+        distinctUntilChanged(),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((patientId) => {
+        if (patientId === this.contextPatientId) return;
+        this.contextPatientId = patientId;
+        this.searchPatient = null;
+        this.searchTerm = '';
+        this.listPage.set(0);
+        clearTimeout(this.searchDelay);
+        this.rowsBeforeSearch = null;
+        this.prescriptions.set([]);
+        this.filtered.set([]);
+        this.load();
+      });
     this.loadPrescribers();
     this.initPatientSearch();
     this.initCatalogSearch();
@@ -1780,7 +1800,10 @@ export class PrescriptionsComponent implements OnInit {
    */
   private singlePatientNamedBy(rows: PrescriptionResponse[], term: string): string | null {
     const fold = (v: string | undefined): string =>
-      (v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+      (v ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
     const needle = fold(term).trim();
     if (rows.length === 0 || !needle) return null;
     const ids = new Set(rows.map((r) => r.patientId ?? ''));
@@ -1793,9 +1816,31 @@ export class PrescriptionsComponent implements OnInit {
    * signed elsewhere. Exactly one patient answering the term makes the list theirs.
    */
   private resolvePatientByTerm(term: string, statuses: string[]): void {
+    // Of this route's readers, pharmacy verifiers cannot GET /patients. Avoid
+    // that request: its 403 is handled by the global interceptor before a catch here.
+    const active = this.roleContext.activeRole;
+    const roles = expandRoleEquivalents(active ? [active] : this.roleContext.activeRoles);
+    if (
+      !roles.some((role) =>
+        [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_PHARMACIST',
+          'ROLE_SUPER_ADMIN',
+        ].includes(role),
+      )
+    ) {
+      this.showRows([], 0, 0);
+      return;
+    }
     this.listLoad = this.patientService
       .list(this.patientSearchHospitalId(), term)
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(
+        // This lookup only enriches a successful, empty prescription search.
+        catchError(() => of<PatientResponse[]>([])),
+        takeUntilDestroyed(this.destroyRef),
+      )
       .subscribe({
         next: (patients) => {
           if (patients?.length === 1 && patients[0].id) {

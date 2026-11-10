@@ -7,7 +7,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { signal } from '@angular/core';
-import { Observable, of, Subject, throwError } from 'rxjs';
+import { BehaviorSubject, Observable, of, Subject, throwError } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import {
@@ -148,7 +148,10 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
         },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+          useValue: {
+            snapshot: { queryParamMap: convertToParamMap({}) },
+            queryParamMap: of(convertToParamMap({})),
+          },
         },
       ],
     }).compileComponents();
@@ -416,7 +419,10 @@ describe('PrescriptionsComponent — signing', () => {
         },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+          useValue: {
+            snapshot: { queryParamMap: convertToParamMap({}) },
+            queryParamMap: of(convertToParamMap({})),
+          },
         },
       ],
     }).compileComponents();
@@ -1767,7 +1773,10 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
         },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+          useValue: {
+            snapshot: { queryParamMap: convertToParamMap({}) },
+            queryParamMap: of(convertToParamMap({})),
+          },
         },
       ],
     }).compileComponents();
@@ -2202,7 +2211,10 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
         },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+          useValue: {
+            snapshot: { queryParamMap: convertToParamMap({}) },
+            queryParamMap: of(convertToParamMap({})),
+          },
         },
       ],
     }).compileComponents();
@@ -3875,7 +3887,10 @@ describe('PrescriptionsComponent — answering a pharmacist clarification', () =
         },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+          useValue: {
+            snapshot: { queryParamMap: convertToParamMap({}) },
+            queryParamMap: of(convertToParamMap({})),
+          },
         },
       ],
     }).compileComponents();
@@ -3951,7 +3966,8 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
   const PENDING_ID = 'pending-row';
   const DISPENSED_ID = 'f98f8393-bfb5-4d4c-854e-a75c6384bd31';
 
-  async function render(role: string, scope: string | null = 'h-1') {
+  async function render(role: string, scope: string | null = 'h-1', patientId?: string) {
+    const queryParamMap = new BehaviorSubject(convertToParamMap(patientId ? { patientId } : {}));
     const prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
       'page',
@@ -3999,7 +4015,7 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
         },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+          useValue: { snapshot: { queryParamMap: queryParamMap.value }, queryParamMap },
         },
       ],
     }).compileComponents();
@@ -4012,7 +4028,13 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
       { id: DISPENSED_ID, status: 'DISPENSED' } as PrescriptionResponse,
     ]);
     fixture.detectChanges();
-    return { fixture, prescriptionService, el: fixture.nativeElement as HTMLElement };
+    return {
+      fixture,
+      prescriptionService,
+      queryParamMap,
+      toast,
+      el: fixture.nativeElement as HTMLElement,
+    };
   }
 
   for (const role of ['ROLE_NURSE', 'ROLE_MIDWIFE']) {
@@ -4051,6 +4073,68 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
     expect(el.querySelector('.view-link')).not.toBeNull();
   });
 
+  it('updates patient context on reused-route navigation and restores the tenant list when removed', async () => {
+    const { fixture, prescriptionService, queryParamMap } = await render(
+      'ROLE_DOCTOR',
+      'h-1',
+      'p-1',
+    );
+    expect(prescriptionService.list).toHaveBeenCalledWith(
+      jasmine.objectContaining({ patientId: 'p-1' }),
+    );
+    prescriptionService.list.calls.reset();
+    queryParamMap.next(convertToParamMap({ patientId: 'p-2' }));
+    expect(prescriptionService.list).toHaveBeenCalledWith(
+      jasmine.objectContaining({ patientId: 'p-2' }),
+    );
+    prescriptionService.page.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 50, last: true }),
+    );
+    prescriptionService.list.calls.reset();
+    prescriptionService.page.calls.reset();
+    queryParamMap.next(convertToParamMap({}));
+    expect(prescriptionService.list).not.toHaveBeenCalled();
+    expect(prescriptionService.page).toHaveBeenCalledWith(
+      jasmine.objectContaining({ search: '' }),
+      0,
+      50,
+    );
+    expect(fixture.componentInstance.listPage()).toBe(0);
+  });
+
+  it('keeps a successful empty prescription search when a verifier cannot list patient charts', async () => {
+    const { fixture, prescriptionService, toast } = await render('ROLE_PHARMACY_VERIFIER');
+    const patientService = TestBed.inject(PatientService) as jasmine.SpyObj<PatientService>;
+    patientService.list.and.returnValue(throwError(() => new HttpErrorResponse({ status: 403 })));
+    prescriptionService.page.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 50, last: true }),
+    );
+    toast.error.calls.reset();
+    fixture.componentInstance.searchTerm = 'no match';
+    fixture.componentInstance.load();
+    expect(patientService.list).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.filtered()).toEqual([]);
+    expect(fixture.componentInstance.listTotal()).toBe(0);
+    expect(fixture.componentInstance.loading()).toBeFalse();
+  });
+
+  it('keeps an empty prescription result if the optional patient lookup fails', async () => {
+    const { fixture, prescriptionService, toast } = await render('ROLE_DOCTOR');
+    const patientService = TestBed.inject(PatientService) as jasmine.SpyObj<PatientService>;
+    patientService.list.and.returnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
+    prescriptionService.page.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 50, last: true }),
+    );
+    toast.error.calls.reset();
+    fixture.componentInstance.searchTerm = 'no match';
+    fixture.componentInstance.load();
+    expect(patientService.list).toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.filtered()).toEqual([]);
+    expect(fixture.componentInstance.loading()).toBeFalse();
+  });
+
   // D1573: a list filtered to one patient reads the patient's orders, other hospitals' included.
   it('D1573: a search naming one patient reads their orders by patient and shows the foreign signed one read-only', async () => {
     const { fixture, prescriptionService, el } = await render('ROLE_DOCTOR');
@@ -4085,6 +4169,16 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
     expect(el.querySelector('[data-testid="rx-foreign-origin-foreign-rx"]')).not.toBeNull();
     expect(el.querySelector('[data-testid="rx-foreign-signed-foreign-rx"]')).not.toBeNull();
     expect(el.querySelector('[data-testid="rx-foreign-origin-own-rx"]')).toBeNull();
+    const foreignRow = el
+      .querySelector('[data-testid="rx-foreign-origin-foreign-rx"]')
+      ?.closest('tr');
+    expect(foreignRow).not.toBeNull();
+    expect(foreignRow?.querySelector('.edit-link')).toBeNull();
+    expect(
+      foreignRow?.querySelector(
+        '[data-testid^="rx-sign-"], [data-testid^="rx-cosign-"], [data-testid^="rx-dispatch-sms-"], [data-testid^="rx-pharmacist-verify-"]',
+      ),
+    ).toBeNull();
   });
 
   it('keeps the resolved patient when paging through foreign orders and resets on a new search', async () => {
