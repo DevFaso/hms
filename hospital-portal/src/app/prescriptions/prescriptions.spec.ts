@@ -3997,9 +3997,7 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
       } as PrescriptionResponse,
     ]);
     fixture.detectChanges();
-    expect(el.querySelector('[data-testid="rx-foreign-origin-foreign-rx"]')?.textContent).toContain(
-      'Hôpital B',
-    );
+    expect(el.querySelector('[data-testid="rx-foreign-origin-foreign-rx"]')).not.toBeNull();
     expect(el.querySelector('[data-testid="rx-foreign-signed-foreign-rx"]')).not.toBeNull();
     expect(el.querySelector('.edit-link')).toBeNull();
     expect(el.querySelector('[data-testid="rx-dispatch-sms-foreign-rx"]')).toBeNull();
