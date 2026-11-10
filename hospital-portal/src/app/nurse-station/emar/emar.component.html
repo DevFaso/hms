@@ -261,8 +261,8 @@
               </div>
             }
 
-            <!-- QA D799: the prescriber's cross-reactivity advisory, read
-                 before scanning and giving the dose. Advisory only. -->
+            <!-- QA D799 / D1563: the allergy cards (a documented allergy, recorded after signing included, and the cross-reactivity advisory), read
+                 before scanning and giving the dose. A stop is acknowledged with a reason at Give. -->
             @if (allergyAdvisories().length) {
               <section
                 class="emar__advisory"
@@ -541,6 +541,15 @@
               >
                 <p class="form-error" role="alert" data-testid="early-dose-why">{{ early.why }}</p>
               </app-reason-dialog>
+            }
+            <!-- QA D1563: the patient's current allergies stop this drug: acknowledge with a reason, or go back. -->
+            @if (allergyAck(); as ack) {
+              <app-allergy-acknowledgement-dialog
+                [refusal]="ack.refusal"
+                [busy]="administerInFlight()"
+                (confirmed)="confirmAllergyAck($event)"
+                (cancelled)="allergyAck.set(null)"
+              />
             }
             <!-- The order is held for review: only a dose given before the hold can be charted. -->
             @if (givenBeforeHold(); as prior) {

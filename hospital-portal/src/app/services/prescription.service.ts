@@ -29,6 +29,7 @@ export interface SignPrescriptionBody extends SignReauthentication {
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
+import { AllergyAcknowledgementFields } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
 import { ALL_PAGES_SIZE, PageSlice, allRows } from '../shared/all-pages';
 
 export interface PrescriptionResponse {
@@ -429,9 +430,15 @@ export class PrescriptionService {
     });
   }
 
-  pharmacistVerify(id: string, note?: string): Observable<PrescriptionResponse> {
+  /** QA D1555: `allergyAck` answers the server's allergy refusal (shared/allergy-acknowledgement). */
+  pharmacistVerify(
+    id: string,
+    note?: string,
+    allergyAck?: AllergyAcknowledgementFields,
+  ): Observable<PrescriptionResponse> {
     return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/pharmacist-verify`, {
       note: note?.trim() || undefined,
+      ...(allergyAck ?? {}),
     });
   }
 
@@ -469,11 +476,16 @@ export class PrescriptionService {
     id: string,
     pharmacyId: string,
     note?: string,
+    allergyAck?: AllergyAcknowledgementFields,
   ): Observable<PrescriptionSmsDispatchResult> {
     return this.http
       .post<{
         data: PrescriptionSmsDispatchResult;
-      }>(`${this.baseUrl}/${id}/dispatch-sms`, { pharmacyId, note: note ?? null })
+      }>(`${this.baseUrl}/${id}/dispatch-sms`, {
+        pharmacyId,
+        note: note ?? null,
+        ...(allergyAck ?? {}),
+      })
       .pipe(map((r) => r.data));
   }
 }

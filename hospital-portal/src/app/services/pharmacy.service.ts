@@ -1,6 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { CdsCard } from '../shared/cds-card/cds-card.model';
 
 /* ───────────────────────────── Medication Catalog ───────────────────────────── */
 
@@ -356,6 +357,9 @@ export interface DispenseRequest {
    * alerts (`cdsAdvisories`), which the form then shows beside this field.
    */
   cdsOverrideReason?: string;
+  /** QA D1555: why the pharmacist goes ahead although the patient's current allergies stop the drug, and the card's token. */
+  allergyAcknowledgementReason?: string;
+  allergyAcknowledgementToken?: string;
   /**
    * Roadmap row 4 / T-68 — optional client-supplied idempotency key the
    * offline-dispense queue mints when the user clicks Dispense. Allows the
@@ -581,6 +585,11 @@ export interface WorkQueuePrescription {
    * alert with a reason. A cue only; the reason is read on the prescription.
    */
   alertOverridden?: boolean;
+  /**
+   * QA D1555: the order's allergy cards against the patient's CURRENT allergies (an allergy recorded
+   * after the signature included); the stop's `exceptionKey` is the token a fill sends back.
+   */
+  allergyAlerts?: CdsCard[];
   /** Existing when a recorded death was disputed: a prescriber reviews it first. */
   heldForReview?: boolean;
 }
@@ -638,6 +647,9 @@ export interface RoutingDecisionRequest {
   targetPharmacyId?: string;
   reason?: string;
   estimatedRestockDate?: string;
+  /** QA D1555: why the order goes to a partner although the patient's current allergies stop the drug. */
+  allergyAcknowledgementReason?: string;
+  allergyAcknowledgementToken?: string;
 }
 
 export interface RoutingDecisionResponse {
@@ -1214,7 +1226,12 @@ export class PharmacyService {
   /** Hand a prepared fill over; the wristband scan is optional and checked when sent. */
   handOver(
     dispenseId: string,
-    body: { patientScanValue?: string; notes?: string } = {},
+    body: {
+      patientScanValue?: string;
+      notes?: string;
+      allergyAcknowledgementReason?: string;
+      allergyAcknowledgementToken?: string;
+    } = {},
   ): Observable<ApiResponse<DispenseResponse>> {
     return this.http.post<ApiResponse<DispenseResponse>>(
       `/pharmacy/dispense/${dispenseId}/hand-over`,

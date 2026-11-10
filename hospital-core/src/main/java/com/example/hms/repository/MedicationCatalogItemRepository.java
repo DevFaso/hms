@@ -74,6 +74,9 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
 
     Optional<MedicationCatalogItem> findByIdAndHospital_Id(UUID id, UUID hospitalId);
 
+    java.util.List<MedicationCatalogItem> findByHospital_IdAndIdIn(UUID hospitalId,
+            java.util.Collection<UUID> ids);
+
     boolean existsByAtcCodeAndHospital_Id(String atcCode, UUID hospitalId);
 
     Optional<MedicationCatalogItem> findByHospitalIdAndCode(UUID hospitalId, String code);

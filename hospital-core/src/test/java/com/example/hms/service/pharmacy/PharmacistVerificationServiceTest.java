@@ -145,6 +145,36 @@ class PharmacistVerificationServiceTest {
     }
 
     @Test
+    void d1555_anOrderThePatientsCurrentAllergiesStopIsVerifiedOnlyWithTheAcknowledgement() {
+        // QA D1555: a SEVERE morphine allergy recorded after the signature.
+        callerIsPharmacist();
+        com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
+        patient.setId(UUID.randomUUID());
+        rx.setPatient(patient);
+        com.example.hms.model.PatientAllergy allergy = new com.example.hms.model.PatientAllergy();
+        allergy.setId(UUID.randomUUID());
+        allergy.setActive(true);
+        allergy.setAllergenDisplay("Morphine");
+        allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        com.example.hms.repository.PatientAllergyRepository allergies =
+            mock(com.example.hms.repository.PatientAllergyRepository.class);
+        when(allergies.findByPatient_Id(patient.getId())).thenReturn(java.util.List.of(allergy));
+        service.setAllergyRecheck(new com.example.hms.service.allergy.CurrentAllergyRecheck(allergies, null, null));
+        UUID id = rx.getId();
+
+        com.example.hms.cdshooks.CdsCriticalBlockException refused = org.junit.jupiter.api.Assertions.assertThrows(
+            com.example.hms.cdshooks.CdsCriticalBlockException.class, () -> service.verify(id, null));
+        assertThat(refused.getField()).isEqualTo(com.example.hms.service.allergy.CurrentAllergyRecheck.ACK_FIELD);
+        verify(prescriptionRepository, never()).save(any());
+
+        Prescription saved = service.verify(id, null, "Palliative care: prescriber confirmed, antiemetic given",
+            refused.getCards().get(0).exceptionKey());
+        assertThat(saved.getPharmacistVerifiedAt()).isEqualTo(NOW);
+        // The line is a message key here (no bundle in this unit test); NurseTaskServiceImplTest reads the text.
+        assertThat(saved.getPharmacistVerificationNote()).isNotBlank();
+    }
+
+    @Test
     void aBlankNoteIsStoredAsNullRatherThanWhitespace() {
         callerIsPharmacist();
 

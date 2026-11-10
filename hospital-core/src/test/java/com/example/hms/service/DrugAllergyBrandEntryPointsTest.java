@@ -41,7 +41,9 @@ class DrugAllergyBrandEntryPointsTest {
         "service/PrescriptionServiceImpl.java",
         "cdshooks/service/MedicationAllergyCdsService.java",
         "service/allergy/BetaLactamCrossReactivity.java",
-        "service/allergy/AllergyDrugIdentity.java");
+        "service/allergy/AllergyDrugIdentity.java",
+        // QA D1563 / D1555: the re-check after the signature (eMAR, verification, fill, routing).
+        "service/allergy/CurrentAllergyRecheck.java");
 
     /**
      * QA D1183 (round 23): the stops (a block, not only an advisory) must go
@@ -50,7 +52,8 @@ class DrugAllergyBrandEntryPointsTest {
      */
     private static final Set<String> STOPS = Set.of(
         "service/PrescriptionServiceImpl.java",
-        "cdshooks/service/MedicationAllergyCdsService.java");
+        "cdshooks/service/MedicationAllergyCdsService.java",
+        "service/allergy/CurrentAllergyRecheck.java");
 
     /** Files that read an allergy and a medication without comparing them, and why. */
     private static final Map<String, String> NOT_CHECKS = Map.of(
@@ -178,7 +181,9 @@ class DrugAllergyBrandEntryPointsTest {
         "cdshooks/service/MedicationAllergyCdsService.java",
         "cdshooks/rules/OrderedDrugIdentityRule.java",
         "cdshooks/rules/ParacetamolFactsReader.java",
-        "cdshooks/rules/DuplicateMedicationOrderRule.java");
+        "cdshooks/rules/DuplicateMedicationOrderRule.java",
+        // QA D1563 / D1555: the allergy re-check reads the order's item through AllergyDrugIdentity.
+        "service/allergy/CurrentAllergyRecheck.java");
 
     /** Readers of an order's catalogue item that are not an identity decision, and why. */
     private static final Map<String, String> NOT_IDENTITY_CHECKS = Map.ofEntries(
@@ -204,7 +209,10 @@ class DrugAllergyBrandEntryPointsTest {
             + " treating any item its name reaches as controlled; the order it creates goes through the"
             + " prescription service, which refuses a contradiction"),
         Map.entry("service/pharmacy/DispenseServiceImpl.java", "the product the pharmacist dispenses, not the order;"
-            + " the lot is checked against the order by DispenseVerificationService"),
+            + " the lot is checked against the order by DispenseVerificationService. The order's link is read only"
+            + " to hand it to CurrentAllergyRecheck (QA D1555), which decides through AllergyDrugIdentity"),
+        Map.entry("service/impl/NurseTaskServiceImpl.java", "QA D1563: the MAR list reads the order's link only to hand"
+            + " it to CurrentAllergyRecheck, which decides through AllergyDrugIdentity"),
         Map.entry("service/pharmacy/InventoryServiceImpl.java", "a stock item, no order"),
         Map.entry("service/pharmacy/PharmacySaleServiceImpl.java", "an over-the-counter sale line, no order"),
         Map.entry("service/pharmacy/StockOutRoutingServiceImpl.java", "stock availability of a SAVED order; the"
