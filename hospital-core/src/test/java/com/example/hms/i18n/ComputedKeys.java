@@ -267,6 +267,13 @@ final class ComputedKeys {
             "NewbornAssessmentServiceImpl.java|newborn.alert.type.");
         site(r, d, "com/example/hms/service/impl/NewbornAssessmentServiceImpl.java|String messageKey = alert.getCode() == null ? null : ALERT_MSG_PREFIX + alert.getCode()",
             "NewbornAssessmentServiceImpl.java|newborn.alert.msg.");
+        // QA D1564: the shared vitals judgement raises NewbornAlertRules' own codes and types.
+        site(r, d, "com/example/hms/service/vitals/VitalSignJudgement.java|ALERT_MSG_PREFIX + f.code()",
+            "NewbornAssessmentServiceImpl.java|newborn.alert.msg.");
+        site(r, d, "com/example/hms/service/vitals/VitalSignJudgement.java|ALERT_MSG_PREFIX + finding.code()",
+            "NewbornAssessmentServiceImpl.java|newborn.alert.msg.");
+        site(r, d, "com/example/hms/service/vitals/VitalSignJudgement.java|TYPE_PREFIX + finding.type().name()",
+            "NewbornAssessmentServiceImpl.java|newborn.alert.type.");
         r.put("com/example/hms/service/impl/OrderReviewAfterCommit.java|notice.titleKey()",
             new Open("a stored in-basket title/body key; written by the order-review and transfusion writers with literal keys"));
         r.put("com/example/hms/service/impl/OrderReviewAfterCommit.java|notice.bodyKey()",

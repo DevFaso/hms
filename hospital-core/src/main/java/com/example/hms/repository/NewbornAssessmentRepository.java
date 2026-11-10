@@ -34,6 +34,10 @@ public interface NewbornAssessmentRepository extends JpaRepository<NewbornAssess
     /** Earliest assessment with a delivery back-link — the growth chart's birth-weight seed. */
     Optional<NewbornAssessment> findFirstByPatient_IdAndDeliveryRecordIsNotNullOrderByAssessmentTimeAsc(UUID patientId);
 
+    /** QA D1564: the same, at one hospital - another hospital's earlier row never hides this one's. */
+    Optional<NewbornAssessment> findFirstByPatient_IdAndHospital_IdAndDeliveryRecordIsNotNullOrderByAssessmentTimeAsc(
+        UUID patientId, UUID hospitalId);
+
     Optional<NewbornAssessment> findByIdAndPatient_IdAndHospital_Id(UUID id, UUID patientId, UUID hospitalId);
 
     @Query("""

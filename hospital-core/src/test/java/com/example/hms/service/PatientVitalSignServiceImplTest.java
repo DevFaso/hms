@@ -70,6 +70,15 @@ class PatientVitalSignServiceImplTest {
     @InjectMocks
     private PatientVitalSignServiceImpl patientVitalSignService;
 
+    /** QA D1564: the real shared vitals judgement, over the NEWS2 escalation mock. */
+    @org.junit.jupiter.api.BeforeEach
+    void realJudgement() {
+        org.springframework.test.util.ReflectionTestUtils.setField(patientVitalSignService, "vitalSignJudgement", new com.example.hms.service.vitals.VitalSignJudgement(
+            org.mockito.Mockito.mock(com.example.hms.repository.NewbornAssessmentRepository.class), news2EscalationService,
+            org.mockito.Mockito.mock(com.example.hms.service.NotificationService.class),
+            com.example.hms.i18n.TestMessageSources.bundles()));
+    }
+
     @org.junit.jupiter.api.AfterEach
     void clearCallerIdentity() {
         com.example.hms.security.CallerIdentityTestSupport.clear();
