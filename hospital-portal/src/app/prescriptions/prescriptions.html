@@ -176,13 +176,15 @@
               <td>
                 {{ p.staffFullName || '—' }}
                 @if (isForeign(p)) {
+                  {{ ' ' }}
                   <!-- Policy 2026-11-09: another hospital's signed order is read-only
                        here; the row names where it was written and when it was signed. -->
                   <span class="cell-sub" [attr.data-testid]="'rx-foreign-origin-' + p.id">{{
                     'PRESCRIPTIONS.FOREIGN.ORIGIN' | translate: { hospital: p.hospitalName || '—' }
                   }}</span>
                   @if (p.signedAt) {
-                    <span class="cell-sub" [attr.data-testid]="'rx-foreign-signed-' + p.id"
+                    {{ ' '
+                    }}<span class="cell-sub" [attr.data-testid]="'rx-foreign-signed-' + p.id"
                       >{{ 'PRESCRIPTIONS.SIGNED_AT' | translate }}
                       {{ p.signedAt | serverTime | dateTime }}</span
                     >
