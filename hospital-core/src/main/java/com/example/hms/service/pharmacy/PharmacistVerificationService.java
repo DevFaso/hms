@@ -148,6 +148,7 @@ public class PharmacistVerificationService {
      */
     @Transactional
     public Prescription verify(UUID prescriptionId, String note) {
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescriptionId, "prescriptionId");
         return verifyInTransaction(prescriptionId, note, null, null);
     }
 
@@ -176,12 +177,12 @@ public class PharmacistVerificationService {
 
     @Transactional
     public Prescription verify(UUID prescriptionId, String note, String allergyReason, String allergyToken) {
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescriptionId, "prescriptionId");
         return verifyInTransaction(prescriptionId, note, allergyReason, allergyToken);
     }
 
     /** Shared ceremony; both public entry points establish the transaction before delegating. */
     private Prescription verifyInTransaction(UUID prescriptionId, String note, String allergyReason, String allergyToken) {
-        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescriptionId, "prescriptionId");
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
             .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
 
