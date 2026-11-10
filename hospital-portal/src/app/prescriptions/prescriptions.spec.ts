@@ -4051,6 +4051,89 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
     expect(el.querySelector('.view-link')).not.toBeNull();
   });
 
+  // D1573: a list filtered to one patient reads the patient's orders, other hospitals' included.
+  it('D1573: a search naming one patient reads their orders by patient and shows the foreign signed one read-only', async () => {
+    const { fixture, prescriptionService, el } = await render('ROLE_DOCTOR');
+    const own = {
+      id: 'own-rx',
+      patientId: 'p-1',
+      patientFullName: 'Awa Kaboré',
+      status: 'SIGNED',
+      hospitalId: 'h-1',
+    } as PrescriptionResponse;
+    const foreign = {
+      id: 'foreign-rx',
+      patientId: 'p-1',
+      patientFullName: 'Awa Kaboré',
+      status: 'SIGNED',
+      hospitalId: 'h-2',
+      hospitalName: 'Hôpital A',
+      staffFullName: 'Dr A',
+      signedAt: '2026-11-01T10:00:00',
+    } as PrescriptionResponse;
+    prescriptionService.page.and.returnValue(
+      of({ content: [own], totalElements: 1, totalPages: 1, number: 0, size: 50, last: true }),
+    );
+    prescriptionService.list.and.returnValue(of([own, foreign]));
+    prescriptionService.list.calls.reset();
+    fixture.componentInstance.searchTerm = 'awa';
+    fixture.componentInstance.load();
+    fixture.detectChanges();
+    expect(prescriptionService.list).toHaveBeenCalledWith(
+      jasmine.objectContaining({ patientId: 'p-1' }),
+    );
+    expect(el.querySelector('[data-testid="rx-foreign-origin-foreign-rx"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="rx-foreign-signed-foreign-rx"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="rx-foreign-origin-own-rx"]')).toBeNull();
+  });
+
+  it('D1573: a drug search that hits one patient stays a drug search', async () => {
+    const { fixture, prescriptionService } = await render('ROLE_DOCTOR');
+    const own = {
+      id: 'own-rx',
+      patientId: 'p-1',
+      patientFullName: 'Awa Kaboré',
+      medicationName: 'Paracetamol',
+      status: 'SIGNED',
+    } as PrescriptionResponse;
+    prescriptionService.page.and.returnValue(
+      of({ content: [own], totalElements: 1, totalPages: 1, number: 0, size: 50, last: true }),
+    );
+    prescriptionService.list.calls.reset();
+    fixture.componentInstance.searchTerm = 'paracetamol';
+    fixture.componentInstance.load();
+    fixture.detectChanges();
+    expect(prescriptionService.list).not.toHaveBeenCalled();
+  });
+
+  it('D1573: a search with no local row resolves a single patient and lists their foreign orders', async () => {
+    const { fixture, prescriptionService, el } = await render('ROLE_DOCTOR');
+    const patientService = TestBed.inject(PatientService) as jasmine.SpyObj<PatientService>;
+    patientService.list.and.returnValue(of([{ id: 'p-9' } as PatientResponse]));
+    prescriptionService.page.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 50, last: true }),
+    );
+    prescriptionService.list.and.returnValue(
+      of([
+        {
+          id: 'foreign-only',
+          patientId: 'p-9',
+          status: 'SIGNED',
+          hospitalId: 'h-2',
+          hospitalName: 'Hôpital A',
+        } as PrescriptionResponse,
+      ]),
+    );
+    prescriptionService.list.calls.reset();
+    fixture.componentInstance.searchTerm = 'zongo';
+    fixture.componentInstance.load();
+    fixture.detectChanges();
+    expect(prescriptionService.list).toHaveBeenCalledWith(
+      jasmine.objectContaining({ patientId: 'p-9' }),
+    );
+    expect(el.querySelector('[data-testid="rx-foreign-origin-foreign-only"]')).not.toBeNull();
+  });
+
   for (const [label, scope, foreign] of [
     ['a scoped super-admin (home h-1) who selected h-2: h-2 rows are theirs', 'h-2', false],
     ['global view: no row is elsewhere', null, false],

@@ -10229,6 +10229,8 @@
     "REGIMEN": "Regimen",
     "SOURCE": "Source",
     "FLAGS": "Flags",
+    "PRESCRIBED_BY": "Prescribed by {{name}}",
+    "READ_ONLY": "Read only here",
     "OVERLAP_WITH": "Overlaps with:",
     "INTERACTS_WITH": "Interacts with:",
     "FILLS_TITLE": "Pharmacy fills",

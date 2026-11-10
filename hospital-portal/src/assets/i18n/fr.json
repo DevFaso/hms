@@ -10229,6 +10229,8 @@
     "REGIMEN": "Posologie",
     "SOURCE": "Origine",
     "FLAGS": "Indicateurs",
+    "PRESCRIBED_BY": "Prescrite par {{name}}",
+    "READ_ONLY": "Lecture seule ici",
     "OVERLAP_WITH": "Chevauche :",
     "INTERACTS_WITH": "Interagit avec :",
     "FILLS_TITLE": "Délivrances en pharmacie",

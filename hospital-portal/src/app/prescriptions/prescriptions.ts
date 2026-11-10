@@ -423,13 +423,15 @@ export class PrescriptionsComponent implements OnInit {
     // for global view). See docs/super-admin-cross-tenant-design.md.
     this.scopeUrl.applyUrlScopeSync(this.route);
 
+    const params = this.route.snapshot.queryParamMap;
+    // D1573: ?patientId= without ?new=1 opens the list on that patient's orders.
+    if (params.get('new') !== '1') this.contextPatientId = params.get('patientId');
     this.load();
     this.loadPrescribers();
     this.initPatientSearch();
     this.initCatalogSearch();
     this.initPharmacyHistory();
 
-    const params = this.route.snapshot.queryParamMap;
     if (params.get('new') === '1') {
       const patientId = params.get('patientId');
       this.openCreate();
@@ -1716,12 +1718,31 @@ export class PrescriptionsComponent implements OnInit {
     // QA D1314: the search box asks the server for one page of matches. It read
     // every row of the tab into the browser (42 to 90 s on 15,800 rows, about
     // 3 GB allocated on the server, per search) and filtered them here.
+    // D1573: a list filtered to one patient (the URL's patientId, or a search that names
+    // exactly one) is read by patient, so the patient's signed orders from the other
+    // hospitals appear too, read-only. The hospital's own list never holds them.
+    const term = this.searchTerm.trim();
+    if (this.contextPatientId && !term) {
+      this.loadPatientRows(this.contextPatientId, statuses, page);
+      return;
+    }
     this.listLoad = this.prescriptionService
       .page({ statuses, search: this.searchTerm }, page, PrescriptionsComponent.PAGE_ROWS)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (slice) => {
           const rows = slice?.content ?? [];
+          if (term && page === 0) {
+            const named = this.singlePatientNamedBy(rows, term);
+            if (named) {
+              this.loadPatientRows(named, statuses, 0);
+              return;
+            }
+            if (rows.length === 0) {
+              this.resolvePatientByTerm(term, statuses);
+              return;
+            }
+          }
           // The last row of the last page went (a withdrawal elsewhere): show the page before.
           if (rows.length === 0 && page > 0) {
             this.loadRows(page - 1);
@@ -1738,6 +1759,70 @@ export class PrescriptionsComponent implements OnInit {
         },
         error: () => this.refuseLoad(),
       });
+  }
+
+  /** D1573: the patient the URL pinned the list to (`?patientId=`), if any. */
+  private contextPatientId: string | null = null;
+
+  /**
+   * The one patient every row belongs to AND the term names (a drug or prescriber
+   * search that happens to hit one patient's rows must stay a drug search).
+   */
+  private singlePatientNamedBy(rows: PrescriptionResponse[], term: string): string | null {
+    const fold = (v: string | undefined): string =>
+      (v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const needle = fold(term).trim();
+    if (rows.length === 0 || !needle) return null;
+    const ids = new Set(rows.map((r) => r.patientId ?? ''));
+    if (ids.size !== 1 || ids.has('')) return null;
+    return rows.every((r) => fold(r.patientFullName).includes(needle)) ? [...ids][0] : null;
+  }
+
+  /**
+   * D1573: a search with no match here can still name a patient whose orders were
+   * signed elsewhere. Exactly one patient answering the term makes the list theirs.
+   */
+  private resolvePatientByTerm(term: string, statuses: string[]): void {
+    this.listLoad = this.patientService
+      .list(this.patientSearchHospitalId(), term)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (patients) => {
+          if (patients?.length === 1 && patients[0].id) {
+            this.loadPatientRows(patients[0].id, statuses, 0);
+            return;
+          }
+          this.showRows([], 0, 0);
+        },
+        error: () => this.refuseLoad(),
+      });
+  }
+
+  /** D1573: every order of one patient across the hospitals the caller may read, one page shown. */
+  private loadPatientRows(patientId: string, statuses: string[], page: number): void {
+    this.listLoad?.unsubscribe();
+    this.listLoad = this.prescriptionService
+      .list({ patientId, statuses })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (all) => {
+          const rows = Array.isArray(all) ? all : [];
+          const size = PrescriptionsComponent.PAGE_ROWS;
+          const shown = Math.min(page, Math.max(0, Math.ceil(rows.length / size) - 1));
+          this.showRows(rows.slice(shown * size, (shown + 1) * size), rows.length, shown);
+        },
+        error: () => this.refuseLoad(),
+      });
+  }
+
+  private showRows(rows: PrescriptionResponse[], total: number, page: number): void {
+    this.loading.set(false);
+    this.wholeTabRead = false;
+    this.rowsBeforeSearch = null;
+    this.listPage.set(page);
+    this.prescriptions.set(rows);
+    this.listTotal.set(total);
+    this.filtered.set(rows);
   }
 
   private refuseLoad(): void {

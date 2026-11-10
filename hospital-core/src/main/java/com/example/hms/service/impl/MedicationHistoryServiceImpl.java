@@ -319,6 +319,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .hasInteraction(false)
             .interactingWith(new ArrayList<>())
             .prescriptionId(rx.getId())
+            .signedAt(rx.getSignedAt())
             .documentedAt(rx.getCreatedAt())
             .hospitalId(CrossHospitalReachRecorder.hospitalIdOf(rx.getHospital()))
             .hospitalName(rx.getHospital() != null ? rx.getHospital().getName() : null)

@@ -10229,6 +10229,8 @@
     "REGIMEN": "Pauta",
     "SOURCE": "Fuente",
     "FLAGS": "Indicadores",
+    "PRESCRIBED_BY": "Prescrita por {{name}}",
+    "READ_ONLY": "Solo lectura aquí",
     "OVERLAP_WITH": "Se superpone con:",
     "INTERACTS_WITH": "Interactúa con:",
     "FILLS_TITLE": "Dispensaciones de farmacia",
