@@ -221,14 +221,14 @@ class AdmissionControllerTest {
         }
 
         @Test
-        @WithMockUser(authorities = "ROLE_NURSE")
-        @DisplayName("a nurse still cannot admit")
-        void admitPatient_nurseForbidden() throws Exception {
-            mockMvc.perform(post(BASE)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(buildAdmitRequest())))
-                .andExpect(status().isForbidden());
-            verify(admissionService, org.mockito.Mockito.never()).admitPatient(any(AdmissionRequestDTO.class));
+        @DisplayName("a nurse still cannot admit: the guard names the doctor and the midwife only (this slice has no method security)")
+        void admitPatient_guardAdmitsDoctorAndMidwifeOnly() throws Exception {
+            org.springframework.security.access.prepost.PreAuthorize guard = AdmissionController.class
+                .getMethod("admitPatient", AdmissionRequestDTO.class)
+                .getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class);
+            org.assertj.core.api.Assertions.assertThat(
+                    com.example.hms.config.PreAuthorizeMatcherPairingTest.rolesAdmittedBy(guard.value()))
+                .containsExactlyInAnyOrder("ROLE_DOCTOR", "ROLE_MIDWIFE");
         }
     }
 

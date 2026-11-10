@@ -143,11 +143,11 @@ public class AdmissionServiceImpl implements AdmissionService {
      */
     private void requireMidwifeLabourAdmission(AdmissionRequestDTO request, Patient patient, Staff admittingProvider) {
         if (request.getAdmissionType() != AdmissionType.LABOR_DELIVERY) {
-            throw new BusinessException("admission.midwife.laborOnly");
+            throw new com.example.hms.exception.FieldBusinessException("admissionType", "admission.midwife.laborOnly");
         }
         UUID callerId = roleValidator.getCurrentUserId();
         if (admittingProvider.getUser() == null || !callerId.equals(admittingProvider.getUser().getId())) {
-            throw new BusinessException("admission.midwife.selfProvider");
+            throw new com.example.hms.exception.FieldBusinessException("admittingProviderId", "admission.midwife.selfProvider");
         }
         com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(patient);
     }
