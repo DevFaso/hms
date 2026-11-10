@@ -1189,7 +1189,12 @@ describe('NurseStationComponent — two-tier polling', () => {
       of({
         clinicallySignificant: true,
         newbornAlerts: [
-          { code: 'newborn-heart-rate', severity: 'URGENT', type: 'CARDIOVASCULAR', message: 'Recheck now.' },
+          {
+            code: 'newborn-heart-rate',
+            severity: 'URGENT',
+            type: 'CARDIOVASCULAR',
+            message: 'Recheck now.',
+          },
         ],
       }),
     );

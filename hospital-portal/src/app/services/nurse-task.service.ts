@@ -514,8 +514,14 @@ export class NurseTaskService {
     return this.http.get<NurseFlowBoard>(`${this.baseUrl}/patient-flow`, { params: httpParams });
   }
 
-  captureVitals(patientId: string, data: NurseVitalCaptureRequest): Observable<NurseVitalCaptureResponse> {
-    return this.http.post<NurseVitalCaptureResponse>(`${this.baseUrl}/patients/${patientId}/vitals`, data);
+  captureVitals(
+    patientId: string,
+    data: NurseVitalCaptureRequest,
+  ): Observable<NurseVitalCaptureResponse> {
+    return this.http.post<NurseVitalCaptureResponse>(
+      `${this.baseUrl}/patients/${patientId}/vitals`,
+      data,
+    );
   }
 
   getPendingAdmissions(params?: {

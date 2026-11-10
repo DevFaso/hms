@@ -1,10 +1,25 @@
-import { announceNewbornWarning, NEWBORN_WARNING_MS, NewbornVitalAlert, newbornVitalWarning } from './newborn-vital-alerts';
+import {
+  announceNewbornWarning,
+  NEWBORN_WARNING_MS,
+  NewbornVitalAlert,
+  newbornVitalWarning,
+} from './newborn-vital-alerts';
 
 /** QA D1564: the newborn warning after a vitals save; the bands are the server's, never the portal's. */
 describe('newborn vital alerts', () => {
   const alerts: NewbornVitalAlert[] = [
-    { code: 'newborn-reference-heart-rate', severity: 'INFO', type: 'CARDIOVASCULAR', message: 'Outside the range.' },
-    { code: 'newborn-heart-rate', severity: 'URGENT', type: 'CARDIOVASCULAR', message: 'Recheck now.' },
+    {
+      code: 'newborn-reference-heart-rate',
+      severity: 'INFO',
+      type: 'CARDIOVASCULAR',
+      message: 'Outside the range.',
+    },
+    {
+      code: 'newborn-heart-rate',
+      severity: 'URGENT',
+      type: 'CARDIOVASCULAR',
+      message: 'Recheck now.',
+    },
   ];
 
   it('says nothing when the set raised nothing', () => {
@@ -24,12 +39,18 @@ describe('newborn vital alerts', () => {
 
   it('shows one long-lived warning toast with the heading and the lines', () => {
     const pushes: [string, string, number | undefined][] = [];
-    const toast = { push: (type: 'warning', message: string, ms?: number) => pushes.push([type, message, ms]) };
+    const toast = {
+      push: (type: 'warning', message: string, ms?: number) => pushes.push([type, message, ms]),
+    };
     const translate = { instant: (key: string) => `[${key}]` };
 
     expect(announceNewbornWarning(alerts, toast, translate)).toBeTrue();
     expect(pushes).toEqual([
-      ['warning', '[VITAL_LIMITS.NEWBORN_WARNING_URGENT] Recheck now. Outside the range.', NEWBORN_WARNING_MS],
+      [
+        'warning',
+        '[VITAL_LIMITS.NEWBORN_WARNING_URGENT] Recheck now. Outside the range.',
+        NEWBORN_WARNING_MS,
+      ],
     ]);
     expect(announceNewbornWarning(undefined, toast, translate)).toBeFalse();
     expect(pushes.length).toBe(1);
