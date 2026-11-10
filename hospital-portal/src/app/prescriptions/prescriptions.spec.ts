@@ -137,6 +137,7 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
             isSuperAdmin: signal(false),
             globalView: signal(false),
             activeHospitalId: 'h-1',
+            effectiveHospitalIdForRequest: signal('h-1'),
             hasAnyActiveRole: () => true,
             // The real service exposes these too, and the clarification
             // control reads them for doctor equivalence. A stub carrying only
@@ -404,6 +405,7 @@ describe('PrescriptionsComponent — signing', () => {
             isSuperAdmin: signal(false),
             globalView: signal(false),
             activeHospitalId: 'h-1',
+            effectiveHospitalIdForRequest: signal('h-1'),
             hasAnyActiveRole: () => true,
             // The real service exposes these too, and the clarification
             // control reads them for doctor equivalence. A stub carrying only
@@ -1710,6 +1712,7 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
             isSuperAdmin: signal(false),
             globalView: signal(false),
             activeHospitalId: 'h-1',
+            effectiveHospitalIdForRequest: signal('h-1'),
             // Mirrors the real service: the caller's active role decides.
             hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
             get activeRoles() {
@@ -2140,6 +2143,7 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
             isSuperAdmin: signal(opts.superAdmin ?? false),
             globalView: signal(opts.globalView ?? false),
             activeHospitalId: opts.globalView ? null : 'h-1',
+            effectiveHospitalIdForRequest: signal(opts.globalView ? null : 'h-1'),
             // Mirrors RoleContextService.hasAnyActiveRole: when an active
             // role is set, only THAT role counts. A stub answering off the
             // whole held set makes every active-role gate on this page
@@ -3819,6 +3823,7 @@ describe('PrescriptionsComponent — answering a pharmacist clarification', () =
             isSuperAdmin: signal(false),
             globalView: signal(false),
             activeHospitalId: 'h-1',
+            effectiveHospitalIdForRequest: signal('h-1'),
             hasAnyActiveRole: (wanted: string[]) => wanted.some((r) => activeRoles.includes(r)),
             get activeRoles() {
               return activeRoles;
@@ -3906,7 +3911,7 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
   const PENDING_ID = 'pending-row';
   const DISPENSED_ID = 'f98f8393-bfb5-4d4c-854e-a75c6384bd31';
 
-  async function render(role: string) {
+  async function render(role: string, scope: string | null = 'h-1') {
     const prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
       'page',
@@ -3946,6 +3951,7 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
             isSuperAdmin: signal(false),
             globalView: signal(false),
             activeHospitalId: 'h-1',
+            effectiveHospitalIdForRequest: signal(scope),
             hasAnyActiveRole: (roles: string[]) => roles.includes(role),
             activeRoles: [role],
             activeRole: role,
@@ -4004,6 +4010,19 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
     expect(el.querySelector('[data-testid="rx-pharmacist-verify-foreign-rx"]')).toBeNull();
     expect(el.querySelector('.view-link')).not.toBeNull();
   });
+
+  for (const [label, scope, foreign] of [
+    ['a scoped super-admin (home h-1) who selected h-2: h-2 rows are theirs', 'h-2', false],
+    ['global view: no row is elsewhere', null, false],
+    ['a normal user at h-1: an h-2 row is foreign', 'h-1', true],
+  ] as const) {
+    it(`isForeign for an h-2 row: ${label}`, async () => {
+      const { fixture } = await render('ROLE_DOCTOR', scope);
+      expect(
+        fixture.componentInstance.isForeign({ id: 'x', hospitalId: 'h-2' } as PrescriptionResponse),
+      ).toBe(foreign);
+    });
+  }
 
   it('ROLE_DOCTOR keeps Sign on draft and pending rows', async () => {
     const { el } = await render('ROLE_DOCTOR');
