@@ -308,7 +308,8 @@ public class EncounterServiceImpl implements EncounterService {
     private final com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
     private final com.example.hms.repository.ProcedureOrderRepository procedureOrderRepository;
     private final PatientTrackerEventPublisher trackerEventPublisher;
-    private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
+    /** QA D1564: the one judgement of a vital set, newborns included. */
+    private final com.example.hms.service.vitals.VitalSignJudgement vitalSignJudgement;
     private final com.example.hms.repository.scheduling.PatientRecallRepository patientRecallRepository;
 
     /**
@@ -2222,11 +2223,14 @@ public class EncounterServiceImpl implements EncounterService {
         // adult: the one rule every vitals write goes through before it is saved.
         com.example.hms.service.support.PatientMeasureRules.requireVitalSignApplicable(
             vital, request.getFundalHeightCm(), java.time.LocalDate.now(java.time.ZoneId.systemDefault()));
+        // QA D1564: triage judged nothing; the shared judgement now flags the set, a
+        // newborn's against the newborn bands. It warns and escalates, never refuses.
+        com.example.hms.service.vitals.VitalSignJudgement.Judgement judgement = vitalSignJudgement.judge(vital);
         com.example.hms.model.PatientVitalSign savedVital = patientVitalSignRepository.save(vital);
         // QA D265 (D207 on the triage path): a triage set scoring MEDIUM/HIGH
         // alerts the triage nurse and the visit's clinician, through the same
         // escalation every other vitals path uses.
-        news2EscalationService.escalateIfNeeded(vital,
+        vitalSignJudgement.escalate(vital, judgement,
                 encounter.getPatient() != null ? encounter.getPatient().getId() : null,
                 encounter.getHospital() != null ? encounter.getHospital().getId() : null,
                 actorUsername, visitPhysicianUsername(encounter));
@@ -2269,6 +2273,7 @@ public class EncounterServiceImpl implements EncounterService {
                 .roomedTimestamp(saved.getRoomedTimestamp())
                 .chiefComplaint(saved.getChiefComplaint())
                 .vitalSignId(savedVital.getId())
+                .newbornAlerts(vitalSignJudgement.alerts(judgement))
                 .build();
     }
 

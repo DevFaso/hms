@@ -97,6 +97,7 @@ import { offersHeadCircumference } from '../shared/patient-measures';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { announceNewbornWarning } from '../shared/newborn-vital-alerts';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { MarDoseHistoryComponent } from './mar-dose-history/mar-dose-history.component';
 import { earlyDoseDialogKeys, earlyDoseRefusal } from './early-dose';
@@ -982,10 +983,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.markVitalRefusals([]);
     this.vitalsCapturing.set(true);
     this.nurseService.captureVitals(target.patientId, form).subscribe({
-      next: () => {
+      next: (response) => {
         this.toast.success(
           this.translate.instant('NURSE.TOAST.VITALS_RECORDED', { patient: target.patientName }),
         );
+        // QA D1564: a newborn's set is judged against the newborn bands; saved, and warned.
+        announceNewbornWarning(response?.newbornAlerts, this.toast, this.translate);
         this.vitalsCapturing.set(false);
         this.closeVitalsDialog();
         this.loadAll();

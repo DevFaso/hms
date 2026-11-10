@@ -182,7 +182,10 @@ class NurseTaskServiceImplTest {
             admissionRepository, encounterRepository, patientRepository, nursingTaskRepository,
             nursingNoteRepository, pharmacistVerificationService, notificationRepository, userRepository,
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
-            fiveRightsService, objectMapper, news2EscalationService,
+            fiveRightsService, objectMapper, new com.example.hms.service.vitals.VitalSignJudgement(
+            org.mockito.Mockito.mock(com.example.hms.repository.NewbornAssessmentRepository.class), news2EscalationService,
+            org.mockito.Mockito.mock(com.example.hms.service.NotificationService.class),
+            com.example.hms.i18n.TestMessageSources.bundles()),
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
             assignmentRepository, patientAllergyRepository, administrationWitness, notificationLocalizer, marWardReader));
 
@@ -2267,6 +2270,31 @@ class NurseTaskServiceImplTest {
         assertThat(captor.getValue().getRecordedByAssignment()).isSameAs(assignment);
     }
 
+    /** QA D1564 (round 43): a 4-day-old's HR 80 passed the adult limits; the newborn bands flag it. */
+    @Test
+    void captureVitalsJudgesANewbornWithTheNewbornBands_D1564() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient baby = Patient.builder().build();
+        baby.setId(patientId);
+        baby.setDateOfBirth(java.time.LocalDate.now().minusDays(4));
+        Hospital hospital = Hospital.builder().build();
+        hospital.setId(hospitalId);
+        registerPatientAtHospital(baby, hospital);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(baby));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        com.example.hms.payload.dto.NurseVitalCaptureResponseDTO response = service.captureVitals(patientId,
+            UUID.randomUUID(), hospitalId, NurseVitalCaptureRequestDTO.builder().heartRateBpm(80).build());
+
+        ArgumentCaptor<PatientVitalSign> captor = ArgumentCaptor.forClass(PatientVitalSign.class);
+        verify(vitalSignRepository).save(captor.capture());
+        assertThat(captor.getValue().isClinicallySignificant()).isTrue();
+        assertThat(response.isClinicallySignificant()).isTrue();
+        assertThat(response.getNewbornAlerts()).extracting(com.example.hms.payload.dto.NewbornVitalAlertDTO::getCode)
+            .contains("newborn-heart-rate");
+    }
+
     @Test
     void captureVitalsFlagsClinicallySignificantWhenHeartRateHigh() {
         UUID patientId = UUID.randomUUID();
@@ -3806,7 +3834,10 @@ class NurseTaskServiceImplTest {
             admissionRepository, encounterRepository, patientRepository, nursingTaskRepository,
             nursingNoteRepository, pharmacistVerificationService, notificationRepository, userRepository,
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
-            fiveRightsService, failingMapper, news2EscalationService,
+            fiveRightsService, failingMapper, new com.example.hms.service.vitals.VitalSignJudgement(
+            org.mockito.Mockito.mock(com.example.hms.repository.NewbornAssessmentRepository.class), news2EscalationService,
+            org.mockito.Mockito.mock(com.example.hms.service.NotificationService.class),
+            com.example.hms.i18n.TestMessageSources.bundles()),
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
             assignmentRepository, patientAllergyRepository, administrationWitness, notificationLocalizer, marWardReader);
 
