@@ -136,12 +136,6 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
             "ROLE_PHARMACIST", "ROLE_PHARMACY_VERIFIER", "ROLE_HOSPITAL_ADMIN", ROLE_SUPER_ADMIN);
 
     /**
-     * {@code noRollbackFor}: a provider failure throws
-     * {@link PrescriptionDispatchFailedException} only after recording itself,
-     * and that record must commit. Every other exception still rolls back,
-     * including the validation refusals thrown before anything is written.
-     */
-    /**
      * QA D1555: the one allergy re-check after the signature. A required setter: the application
      * always wires it; only a service built by hand in a unit test has none.
      */
@@ -160,6 +154,12 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
         return allergyRecheck.requireAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.PARTNER_ROUTING, rx, rx.getMedicationName(), reason, token);
     }
 
+    /**
+     * {@code noRollbackFor}: a provider failure throws
+     * {@link PrescriptionDispatchFailedException} only after recording itself,
+     * and that record must commit. Every other exception still rolls back,
+     * including the validation refusals thrown before anything is written.
+     */
     @Override
     @Transactional(noRollbackFor = PrescriptionDispatchFailedException.class)
     public PrescriptionSmsDispatchResponseDTO dispatch(Authentication auth,

@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -69,16 +70,18 @@ public class CurrentAllergyRecheck {
     /** The prefix of the card's exception key; the rest is the token the request sends back. */
     public static final String KEY_PREFIX = "allergy:";
 
+    private static final String PRESCRIPTION_ENTITY = "PRESCRIPTION";
+
     /** The gates that re-check, each with its refusal wording and its audit. */
     public enum Gate {
         /** A GIVEN dose on the eMAR (HELD and REFUSED are never asked). */
         MAR_DOSE(AuditEventType.MAR_ALLERGY_ACKNOWLEDGED, "MEDICATION_ADMINISTRATION"),
         /** The pharmacist's verification of the order. */
-        PHARMACIST_VERIFICATION(AuditEventType.DISPENSE_ALLERGY_ACKNOWLEDGED, "PRESCRIPTION"),
+        PHARMACIST_VERIFICATION(AuditEventType.DISPENSE_ALLERGY_ACKNOWLEDGED, PRESCRIPTION_ENTITY),
         /** A fill (one-step or prepared, a refill's included) or the hand-over of a prepared fill. */
-        DISPENSE(AuditEventType.DISPENSE_ALLERGY_ACKNOWLEDGED, "PRESCRIPTION"),
+        DISPENSE(AuditEventType.DISPENSE_ALLERGY_ACKNOWLEDGED, PRESCRIPTION_ENTITY),
         /** Sending the order to a partner pharmacy, which fills it outside. */
-        PARTNER_ROUTING(AuditEventType.DISPENSE_ALLERGY_ACKNOWLEDGED, "PRESCRIPTION");
+        PARTNER_ROUTING(AuditEventType.DISPENSE_ALLERGY_ACKNOWLEDGED, PRESCRIPTION_ENTITY);
 
         private final AuditEventType auditType;
         private final String entityType;
@@ -213,10 +216,10 @@ public class CurrentAllergyRecheck {
         Optional<PatientAllergy> worst = identity.matchingAllergies(allergies).stream()
             .max(Comparator.comparingInt(PrescriptionServiceImpl::allergySeverityRank));
         if (worst.isPresent()) {
-            return Optional.of(bind(orderId, documentedCard(worst.get(), medicationName), worst.get(), "documented"));
+            return Optional.of(bind(orderId, documentedCard(worst.get(), medicationName), worst.get(), "documented", allergies));
         }
         return identity.unverifiableClassAllergy(allergies)
-            .map(allergy -> bind(orderId, unverifiableCard(medicationName, allergy), allergy, "unverifiable"));
+            .map(allergy -> bind(orderId, unverifiableCard(medicationName, allergy), allergy, "unverifiable", allergies));
     }
 
     /**
@@ -282,7 +285,8 @@ public class CurrentAllergyRecheck {
             return note;
         }
         String line = recordLine(ack);
-        String joined = note == null || note.isBlank() ? line : note + "\n" + line;
+        // Reserve the charted reason before any optional note: a full note must not erase it.
+        String joined = note == null || note.isBlank() ? line : line + "\n" + note;
         return joined.length() > max ? joined.substring(0, max) : joined;
     }
 
@@ -297,7 +301,7 @@ public class CurrentAllergyRecheck {
             return;
         }
         UUID allergyId = ack.stop().allergy().getId();
-        LocalDateTime at = LocalDateTime.now();
+        LocalDateTime at = LocalDateTime.now(ZoneOffset.UTC);
         String details = "{\"gate\":\"" + ack.gate().name() + "\",\"reasonDigest\":\"" + digest(ack.reason())
             + "\",\"warning\":\"" + ack.stop().kind()
             + "\",\"allergyId\":" + (allergyId == null ? "null" : "\"" + allergyId + "\"")
@@ -324,8 +328,13 @@ public class CurrentAllergyRecheck {
 
     /* -- Cards and the token ------------------------------------------------------------------- */
 
-    private static Stop bind(UUID orderId, CdsCard card, PatientAllergy allergy, String kind) {
-        String token = digest(orderId + "|" + key(kind, allergy));
+    private static Stop bind(UUID orderId, CdsCard card, PatientAllergy allergy, String kind,
+                             List<PatientAllergy> allergies) {
+        // Bind the whole active allergy state, not just the most severe displayed row.
+        // A second allergy may be added or edited while that row remains the same.
+        String state = allergies.stream().filter(Objects::nonNull).filter(PatientAllergy::isActive)
+            .map(a -> digest(key(kind, a))).sorted().collect(java.util.stream.Collectors.joining("|"));
+        String token = digest(orderId + "|" + key(kind, allergy) + "|" + state);
         return new Stop(card.withExceptionKey(KEY_PREFIX + token), allergy, kind, token);
     }
 

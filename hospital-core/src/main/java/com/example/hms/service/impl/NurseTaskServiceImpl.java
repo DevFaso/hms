@@ -661,10 +661,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             marRecord.setStatus(marStatus);
             marRecord.setAdministeredAt(givenBeforeHold != null ? givenBeforeHold : LocalDateTime.now());
             marRecord.setNotes(withAllergyLine(chartNote(note, givenBeforeHold, request), allergyAck));
-            if (marStatus == MedicationAdministrationStatus.HELD
-                || marStatus == MedicationAdministrationStatus.REFUSED) {
-                marRecord.setReason(note);
-            }
+            recordWithheldDoseReason(marRecord, marStatus, note);
             if (early != null) {
                 marRecord.setReason(early);
             }
@@ -702,6 +699,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     /* ═══════════════════════════════════════════════════════════════════
        eMAR five-rights verification (P1 #8)
        ═══════════════════════════════════════════════════════════════════ */
+
+    private static void recordWithheldDoseReason(MedicationAdministrationRecord mar,
+                                                  MedicationAdministrationStatus status, String note) {
+        if (status == MedicationAdministrationStatus.HELD || status == MedicationAdministrationStatus.REFUSED) {
+            mar.setReason(note);
+        }
+    }
 
     @Override
     @Transactional

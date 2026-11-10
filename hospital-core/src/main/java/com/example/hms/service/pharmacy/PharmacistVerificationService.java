@@ -143,11 +143,12 @@ public class PharmacistVerificationService {
      * The verification ceremony. Server identity, server clock — a client
      * cannot assert who verified or when, the same stance the signing and
      * co-signing ceremonies take.
+     *
+     * <p>No allergy acknowledgement is supplied by this overload.
      */
-    /** {@link #verify(UUID, String, String, String)} with no allergy acknowledgement. */
     @Transactional
     public Prescription verify(UUID prescriptionId, String note) {
-        return verify(prescriptionId, note, null, null);
+        return verifyInTransaction(prescriptionId, note, null, null);
     }
 
     /**
@@ -175,6 +176,11 @@ public class PharmacistVerificationService {
 
     @Transactional
     public Prescription verify(UUID prescriptionId, String note, String allergyReason, String allergyToken) {
+        return verifyInTransaction(prescriptionId, note, allergyReason, allergyToken);
+    }
+
+    /** Shared ceremony; both public entry points establish the transaction before delegating. */
+    private Prescription verifyInTransaction(UUID prescriptionId, String note, String allergyReason, String allergyToken) {
         com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescriptionId, "prescriptionId");
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
             .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));

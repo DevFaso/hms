@@ -100,7 +100,7 @@ class AllergyRecheckGuardTest {
 
     /** Each gate: the methods whose body must run the re-check (or delegate to the overload that does). */
     private static final Map<String, List<String>> GATES = Map.of(
-        "service/pharmacy/PharmacistVerificationService.java", List.of("verify"),
+        "service/pharmacy/PharmacistVerificationService.java", List.of("verify", "verifyInTransaction"),
         "service/pharmacy/DispenseServiceImpl.java", List.of("validateFill", "handOver"),
         "service/pharmacy/StockOutRoutingServiceImpl.java", List.of("routeToPartner"),
         "service/impl/PrescriptionSmsDispatchServiceImpl.java", List.of("dispatch"));
@@ -136,7 +136,9 @@ class AllergyRecheckGuardTest {
                     problems.add(file + "#" + method + " is gone: take it off the list");
                 }
                 for (String body : bodies) {
-                    if (!body.contains(CHECK) && !body.contains(method + "(")) {
+                    boolean delegatesVerification = file.equals("service/pharmacy/PharmacistVerificationService.java")
+                        && method.equals("verify") && body.contains("verifyInTransaction(");
+                    if (!body.contains(CHECK) && !body.contains(method + "(") && !delegatesVerification) {
                         problems.add(file + "#" + method + " writes without " + CHECK);
                     }
                 }
