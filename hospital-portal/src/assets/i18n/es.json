@@ -7688,6 +7688,9 @@
       "STATE": "Revisión de dosis pediátrica",
       "REVIEWED_BY": "Revisada por"
     },
+    "FOREIGN": {
+      "ORIGIN": "Redactada en {{hospital}}, solo lectura aquí"
+    },
     "OVERRIDE": {
       "ALLERGY_REASON": "Motivo de la excepción por alergia",
       "CDS_REASON": "Motivo de excepción a la alerta crítica"

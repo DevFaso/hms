@@ -3983,6 +3983,30 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
     });
   }
 
+  it("policy 2026-11-09: another hospital's signed order names its origin and offers no write action", async () => {
+    const { fixture, el } = await render('ROLE_DOCTOR');
+    fixture.componentInstance.filtered.set([
+      {
+        id: 'foreign-rx',
+        status: 'SIGNED',
+        hospitalId: 'h-2',
+        hospitalName: 'Hôpital B',
+        staffFullName: 'Dr B',
+        signedAt: '2026-11-01T10:00:00',
+        requiresPharmacistVerification: true,
+      } as PrescriptionResponse,
+    ]);
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="rx-foreign-origin-foreign-rx"]')?.textContent).toContain(
+      'Hôpital B',
+    );
+    expect(el.querySelector('[data-testid="rx-foreign-signed-foreign-rx"]')).not.toBeNull();
+    expect(el.querySelector('.edit-link')).toBeNull();
+    expect(el.querySelector('[data-testid="rx-dispatch-sms-foreign-rx"]')).toBeNull();
+    expect(el.querySelector('[data-testid="rx-pharmacist-verify-foreign-rx"]')).toBeNull();
+    expect(el.querySelector('.view-link')).not.toBeNull();
+  });
+
   it('ROLE_DOCTOR keeps Sign on draft and pending rows', async () => {
     const { el } = await render('ROLE_DOCTOR');
     expect(el.querySelector(`[data-testid="rx-sign-${DRAFT_ID}"]`)).not.toBeNull();

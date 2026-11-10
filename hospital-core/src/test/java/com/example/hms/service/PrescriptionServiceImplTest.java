@@ -2305,6 +2305,70 @@ class PrescriptionServiceImplTest {
             .isInstanceOf(BusinessException.class);
     }
 
+    // ═══════════════ Policy 2026-11-09: another hospital's SIGNED prescription is read-only here ═══════════════
+
+    @Test
+    void sharedRx_aForeignOrderWithdrawnBeforeSigningStaysHome_byIdAndInTheUnpagedList() {
+        UUID hospitalA = UUID.randomUUID();
+        Prescription thrownAway = foreignPrescription(hospitalA, com.example.hms.enums.PrescriptionStatus.DRAFT);
+        thrownAway.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        assertThat(thrownAway.isWithdrawnBeforeSigning()).isTrue();
+        UUID id = thrownAway.getId();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(id)).thenReturn(Optional.of(thrownAway));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, hospitalA));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId, hospitalA)))
+            .thenReturn(List.of(thrownAway));
+
+        assertThatThrownBy(() -> prescriptionService.getPrescriptionById(id, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(prescriptionService.getPrescriptionsByPatientId(patientId, Locale.ENGLISH)).isEmpty();
+    }
+
+    @Test
+    void sharedRx_aForeignSignedOrderIsReadAndEveryReadWritesTheDisclosureAudit() {
+        UUID hospitalA = UUID.randomUUID();
+        Prescription signedAtA = foreignPrescription(hospitalA, com.example.hms.enums.PrescriptionStatus.SIGNED);
+        UUID id = signedAtA.getId();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(id)).thenReturn(Optional.of(signedAtA));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, hospitalA));
+        when(prescriptionMapper.toResponseDTO(signedAtA))
+            .thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+
+        prescriptionService.getPrescriptionById(id, Locale.ENGLISH);
+        prescriptionService.getPrescriptionById(id, Locale.ENGLISH);
+
+        verify(reachRecorder, org.mockito.Mockito.times(2)).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(hospitalA.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void sharedRx_aForeignOrderCannotBeCosignedAtTheReadingHospital() {
+        Prescription foreign = foreignPrescription(UUID.randomUUID(), com.example.hms.enums.PrescriptionStatus.SIGNED);
+        UUID id = foreign.getId();
+        when(prescriptionRepository.findById(id)).thenReturn(Optional.of(foreign));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> prescriptionService.cosignPrescription(id, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void sharedRx_aForeignOrderCannotBeDoseReviewedAtTheReadingHospital() {
+        UUID id = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        // The lock is taken inside the acting hospital, so another hospital's row is simply not found.
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> prescriptionService.recordPediatricDoseReview(id, "reviewed", Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(prescriptionRepository, never()).save(any());
+    }
+
     // ═══════════════ updatePrescription is held to the acting hospital ═══════════════
 
     @Test

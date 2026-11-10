@@ -93,6 +93,23 @@ class PrescriptionClarificationServiceTest {
     class Request {
 
         @Test
+        @DisplayName("policy 2026-11-09: another hospital's prescription can be neither questioned nor resolved here (404)")
+        void aForeignPrescriptionIsNotFound() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.empty());
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            prescription.setHospital(other);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.requestClarification(prescriptionId, "why"))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.resolveClarification(prescriptionId, "ok"))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            verify(prescriptionRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("moves a SIGNED order to PENDING_CLARIFICATION with the reason, audits without it, and notifies the prescriber")
         void happyPath() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);

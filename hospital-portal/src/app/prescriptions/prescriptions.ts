@@ -504,6 +504,17 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   /**
+   * Policy 2026-11-09: a prescription another hospital wrote is read-only here.
+   * The server refuses every write on it (404); the row offers no write action.
+   * A super-admin in global view reads the whole platform and is not "reading elsewhere".
+   */
+  isForeign(p: PrescriptionResponse): boolean {
+    if (this.roleContext.isSuperAdmin() && this.roleContext.globalView()) return false;
+    const active = this.roleContext.activeHospitalId;
+    return !!p.hospitalId && !!active && p.hospitalId !== active;
+  }
+
+  /**
    * QA D660/D670: the Edit action a row offers. A withdrawn order is
    * read-only, every field; a signed one only to whoever may withdraw it.
    */

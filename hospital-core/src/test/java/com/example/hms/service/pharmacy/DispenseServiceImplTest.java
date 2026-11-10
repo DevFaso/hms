@@ -1282,6 +1282,20 @@ class DispenseServiceImplTest {
         }
 
         @Test
+        @DisplayName("policy 2026-11-09: another hospital's signed prescription cannot be dispensed here (404, nothing written)")
+        void aForeignPrescriptionCannotBeDispensed() {
+            DispenseRequestDTO dto = buildRequest();
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            // The lock is taken inside the acting hospital: the foreign row is not found.
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(dto.getPrescriptionId(), hospitalId))
+                    .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(dispenseRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("a super-admin in GLOBAL view is refused: recording a fill is a write")
         void globalViewSuperAdminCannotRecordAFill() {
             DispenseRequestDTO dto = buildRequest();
