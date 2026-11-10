@@ -1670,6 +1670,61 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
+    void rexReview_changedSeverityOfSameAllergyInvalidatesAcknowledgement() {
+        UUID prescriberUserId = UUID.randomUUID();
+        PatientAllergy allergy = policy3_allergy("Pénicilline");
+        allergy.setSeverity(com.example.hms.enums.AllergySeverity.MILD);
+        Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, allergy);
+        String token = policy3_tokenOfARefusal(rx);
+        // Review of #1104 (P1): the same row is edited in place; neither its id nor the order's version moves.
+        allergy.setSeverity(com.example.hms.enums.AllergySeverity.LIFE_THREATENING);
+        UUID rxId = rx.getId();
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO stale =
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                .allergyOverrideReason("Mild rash only, tolerated").doseExceptionToken(token).build();
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, stale, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.cdshooks.CdsCriticalBlockException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("allergyOverrideReason");
+                assertThat(ex.getCards().get(0).exceptionKey()).isNotEqualTo(token);
+            });
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        assertThat(rx.getSignatureValue()).isNull();
+    }
+
+    @Test
+    void policy3_anAllergyEditInvalidatesOnlyThatAllergysAcknowledgement() {
+        UUID prescriberUserId = UUID.randomUUID();
+        PatientAllergy penicillin = policy3_allergy("Pénicilline");
+        PatientAllergy peanut = policy3_allergy("Arachide");
+        Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, penicillin);
+        when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(penicillin, peanut));
+        String first = policy3_tokenOfARefusal(rx);
+        UUID rxId = rx.getId();
+
+        // The allergy the warning names is edited: its acknowledgement no longer answers it.
+        penicillin.setReaction("Anaphylaxie");
+        com.example.hms.cdshooks.CdsCriticalBlockException refused = catchThrowableOfType(
+            com.example.hms.cdshooks.CdsCriticalBlockException.class,
+            () -> prescriptionService.signPrescription(rxId,
+                com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                    .allergyOverrideReason("Tolerated").doseExceptionToken(first).build(), Locale.FRENCH));
+        assertThat(refused).isNotNull();
+        String current = refused.getCards().get(0).exceptionKey();
+        assertThat(current).isNotEqualTo(first);
+
+        // Another allergy the warning does not name is edited: the current acknowledgement still stands.
+        peanut.setReaction("Urticaire");
+        peanut.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        prescriptionService.signPrescription(rxId,
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                .allergyOverrideReason("Tolerated under observation").doseExceptionToken(current).build(),
+            Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+    }
+
+    @Test
     void policy3_theSignersReasonWithTheTokenSignsAndIsRecorded() {
         UUID prescriberUserId = UUID.randomUUID();
         Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, policy3_allergy("Pénicilline"));

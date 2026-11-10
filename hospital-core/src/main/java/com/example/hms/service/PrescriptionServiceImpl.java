@@ -812,11 +812,22 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * documented allergy covers the drug, or the drug could not be checked against a class allergy).
      */
     private record AllergyStop(CdsCard card, PatientAllergy allergy, String kind) {
-        /** What an acknowledgement answers: the rule and the allergy, by its id when it has one. */
+        /**
+         * What an acknowledgement answers: the rule, the allergy, and the allergy's warning state as
+         * the prescriber read it. Review of #1104 (P1): an edit of the same allergy row (MILD to
+         * LIFE_THREATENING, another allergen or reaction) changes neither its id nor the order's
+         * version, so every field the warning rests on is part of the key, with the row's last
+         * update. Never the card's random uuid: a retry of the same warning must keep its token.
+         */
         String key() {
             Object allergyIdentity = allergy.getId() != null ? allergy.getId()
                 : com.example.hms.service.allergy.AllergyDrugIdentity.displayOf(allergy);
-            return kind + ":" + allergyIdentity;
+            return String.join("|", kind, String.valueOf(allergyIdentity),
+                String.valueOf(allergy.getSeverity()), String.valueOf(allergy.getAllergenCode()),
+                String.valueOf(allergy.getAllergenDisplay()), String.valueOf(allergy.getCategory()),
+                String.valueOf(allergy.getReaction()), String.valueOf(allergy.getReactionNotes()),
+                String.valueOf(allergy.getVerificationStatus()), String.valueOf(allergy.isActive()),
+                String.valueOf(allergy.getUpdatedAt()));
         }
     }
 
