@@ -120,6 +120,30 @@ public class AdmissionServiceImpl implements AdmissionService {
         }
     }
 
+    /** The caller is a doctor, physician or surgeon with an active assignment at {@code hospitalId}. */
+    private boolean isPhysicianAt(UUID callerId, UUID hospitalId) {
+        return roleValidator.isDoctor(callerId, hospitalId)
+            || roleValidator.isPhysician(callerId, hospitalId)
+            || roleValidator.isSurgeon(callerId, hospitalId);
+    }
+
+    /**
+     * A midwife admits a woman in labour and nothing else: the type is LABOR_DELIVERY, the patient
+     * is obstetric-eligible (the labour-episode rule: not recorded male, not a child), and she is
+     * the admitting provider herself. A named attending physician is still checked as a physician.
+     * The model has no maternity ward or department type to require, so the scope is the
+     * admission type and the patient.
+     */
+    private void requireMidwifeLabourAdmission(AdmissionRequestDTO request, Patient patient, Staff admittingProvider, UUID callerId) {
+        if (request.getAdmissionType() != AdmissionType.LABOR_DELIVERY) {
+            throw new com.example.hms.exception.FieldBusinessException("admissionType", "admission.midwife.laborOnly");
+        }
+        if (admittingProvider.getUser() == null || !callerId.equals(admittingProvider.getUser().getId())) {
+            throw new com.example.hms.exception.FieldBusinessException("admittingProviderId", "admission.midwife.selfProvider");
+        }
+        com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(patient);
+    }
+
     @Override
     @Transactional
     public AdmissionResponseDTO admitPatient(AdmissionRequestDTO request) {
@@ -139,7 +163,18 @@ public class AdmissionServiceImpl implements AdmissionService {
         Staff admittingProvider = staffRepository.findById(request.getAdmittingProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("admission.admittingProvider.notFound", request.getAdmittingProviderId()));
 
-        requirePhysician(admittingProvider, hospital.getId());
+        // The caller's role AT THE TARGET hospital decides the path: a physician admits any type,
+        // a midwife (not a physician there) only a woman in labour, anyone else is refused. A role
+        // held at another of her hospitals counts for nothing here.
+        UUID callerId = roleValidator.getCurrentUserId();
+        UUID targetHospitalId = hospital.getId();
+        if (callerId != null && isPhysicianAt(callerId, targetHospitalId)) {
+            requirePhysician(admittingProvider, targetHospitalId);
+        } else if (callerId != null && roleValidator.isMidwife(callerId, targetHospitalId)) {
+            requireMidwifeLabourAdmission(request, patient, admittingProvider, callerId);
+        } else {
+            throw new BusinessException("admission.caller.notPermitted");
+        }
 
         // QA D304: one open stay per patient. The patient row lock serialises two
         // concurrent admissions, so the second one sees the first and is refused.

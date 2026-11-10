@@ -92,6 +92,7 @@ class AdmissionServiceImplTest {
         com.example.hms.security.CallerIdentityTestSupport.actAs(staff, hospital);
         // The admitting provider is a doctor unless a test says otherwise.
         org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staffUser.getId(), hospitalId)).thenReturn(true);
+        org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(staffUser.getId());
         // QA D262: the patient is registered at the admitting hospital unless a test says otherwise.
         org.mockito.Mockito.lenient().when(registrationRepository.existsByPatientIdAndHospitalId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
     }
@@ -108,6 +109,10 @@ class AdmissionServiceImplTest {
         request.setPatientId(patientId);
         request.setHospitalId(hospitalId);
         request.setAdmittingProviderId(staffId);
+        // The caller is a doctor; the provider she names is a nurse.
+        UUID doctorCaller = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorCaller);
+        when(roleValidator.isDoctor(doctorCaller, hospitalId)).thenReturn(true);
         when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(false);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
@@ -116,6 +121,90 @@ class AdmissionServiceImplTest {
         assertThatThrownBy(() -> service.admitPatient(request))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
             .hasMessageContaining("The admitting and attending providers must be physicians at this hospital.");
+        verify(admissionRepository, never()).save(any());
+    }
+
+    /** Policy 2: the caller is a midwife (not a physician) at the hospital, and is the admitting provider. */
+    private AdmissionRequestDTO midwifeRequest(com.example.hms.enums.AdmissionType type) {
+        UUID midwifeUserId = staff.getUser().getId();
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(midwifeUserId, hospitalId)).thenReturn(false);
+        org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(midwifeUserId);
+        org.mockito.Mockito.lenient().when(roleValidator.isMidwife(midwifeUserId, hospitalId)).thenReturn(true);
+        AdmissionRequestDTO request = new AdmissionRequestDTO();
+        request.setPatientId(patientId);
+        request.setHospitalId(hospitalId);
+        request.setAdmittingProviderId(staffId);
+        request.setAdmissionType(type);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        return request;
+    }
+
+    @Test
+    void midwifeAdmitsAWomanInLabour() {
+        patient.setGender("FEMALE");
+        AdmissionRequestDTO request = midwifeRequest(com.example.hms.enums.AdmissionType.LABOR_DELIVERY);
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        AdmissionResponseDTO response = new AdmissionResponseDTO();
+        when(admissionRepository.save(any(Admission.class))).thenReturn(admission);
+        when(admissionMapper.toResponseDTO(admission)).thenReturn(response);
+
+        assertThat(service.admitPatient(request)).isEqualTo(response);
+    }
+
+    @Test
+    void midwifeIsRefusedAnyNonMaternityAdmission_policy2() {
+        // Round 35 / D84: only a physician admits for the other types.
+        for (com.example.hms.enums.AdmissionType type : com.example.hms.enums.AdmissionType.values()) {
+            if (type == com.example.hms.enums.AdmissionType.LABOR_DELIVERY) {
+                continue;
+            }
+            AdmissionRequestDTO request = midwifeRequest(type);
+            assertThatThrownBy(() -> service.admitPatient(request))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasMessageContaining("only a woman in labour");
+        }
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    void midwifeIsRefusedAMalePatientAndAChild_policy2() {
+        patient.setGender("MALE");
+        AdmissionRequestDTO request = midwifeRequest(com.example.hms.enums.AdmissionType.LABOR_DELIVERY);
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+
+        patient.setGender("FEMALE");
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(5));
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    void midwifeAtAnotherHospitalOnly_isRefusedWhenPinnedToTheOtherOne_policy2() {
+        // Midwife at A, only a nurse at B (the hospital the request is pinned to): she is neither
+        // a physician nor a midwife at B, so she is refused and never reaches the physician path.
+        patient.setGender("FEMALE");
+        AdmissionRequestDTO request = midwifeRequest(com.example.hms.enums.AdmissionType.LABOR_DELIVERY);
+        org.mockito.Mockito.when(roleValidator.isMidwife(staff.getUser().getId(), hospitalId)).thenReturn(false);
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("not permitted to admit");
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    void midwifeCannotNameAnotherProviderAsAdmitting_policy2() {
+        patient.setGender("FEMALE");
+        AdmissionRequestDTO request = midwifeRequest(com.example.hms.enums.AdmissionType.LABOR_DELIVERY);
+        org.mockito.Mockito.when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        org.mockito.Mockito.when(roleValidator.isMidwife(org.mockito.ArgumentMatchers.any(), eq(hospitalId))).thenReturn(true);
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("admitting provider herself");
         verify(admissionRepository, never()).save(any());
     }
 

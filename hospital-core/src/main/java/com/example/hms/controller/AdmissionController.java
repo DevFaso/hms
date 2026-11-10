@@ -43,8 +43,11 @@ public class AdmissionController {
     private final AdmissionService admissionService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
-    @Operation(summary = "Admit a patient", description = "Create a new hospital admission for a patient")
+    // Policy 2 (2026-11-09, provisional): a midwife may admit a woman in labour only; the
+    // service refuses every other admission for her (AdmissionServiceImpl.requireMidwifeLabourAdmission).
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_MIDWIFE')")
+    @Operation(summary = "Admit a patient", description = "Create a new hospital admission for a patient. "
+        + "A physician admits any type; a midwife only a woman in labour (LABOR_DELIVERY).")
     public ResponseEntity<AdmissionResponseDTO> admitPatient(@Valid @RequestBody AdmissionRequestDTO request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(admissionService.admitPatient(request));
     }

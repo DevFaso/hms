@@ -206,6 +206,30 @@ class AdmissionControllerTest {
 
             verify(admissionService).admitPatient(any(AdmissionRequestDTO.class));
         }
+
+        @Test
+        @WithMockUser(authorities = "ROLE_MIDWIFE")
+        @DisplayName("policy 2: a midwife reaches the admission (the service narrows it to labour)")
+        void admitPatient_midwifeReachesTheService() throws Exception {
+            when(admissionService.admitPatient(any(AdmissionRequestDTO.class)))
+                .thenReturn(buildAdmissionResponse(UUID.randomUUID()));
+
+            mockMvc.perform(post(BASE)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(buildAdmitRequest())))
+                .andExpect(status().isCreated());
+        }
+
+        @Test
+        @DisplayName("a nurse still cannot admit: the guard names the doctor and the midwife only (this slice has no method security)")
+        void admitPatient_guardAdmitsDoctorAndMidwifeOnly() throws Exception {
+            org.springframework.security.access.prepost.PreAuthorize guard = AdmissionController.class
+                .getMethod("admitPatient", AdmissionRequestDTO.class)
+                .getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class);
+            org.assertj.core.api.Assertions.assertThat(
+                    com.example.hms.config.PreAuthorizeMatcherPairingTest.rolesAdmittedBy(guard.value()))
+                .containsExactlyInAnyOrder("ROLE_DOCTOR", "ROLE_MIDWIFE");
+        }
     }
 
     @Nested

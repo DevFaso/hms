@@ -108,6 +108,14 @@ class AdmissionCreationGuardTest {
             .contains(PATIENT_REPOSITORY + "#lockByIdUnscoped");
     }
 
+    @Test
+    @DisplayName("Policy 2: the midwife path of the in-app admission checks the caller's midwife role and the obstetric eligibility")
+    void midwifeLabourAdmissionIsCheckedServerSide() throws IOException {
+        assertThat(scan().get("AdmissionServiceImpl").calls())
+            .contains("com/example/hms/utility/RoleValidator#isMidwife",
+                "com/example/hms/utility/ObstetricEligibility#requireObstetricEligible");
+    }
+
     // ── bytecode scan ───────────────────────────────────────────────────────
 
     private static Map<String, Usage> scan() throws IOException {

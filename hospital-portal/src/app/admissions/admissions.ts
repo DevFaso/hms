@@ -126,6 +126,15 @@ export class AdmissionsComponent implements OnInit {
    * discharges or cancels; she was offered Delete and got a 403.
    */
   protected readonly canAdmit = computed(() => this.can('admissionCreate'));
+  /**
+   * Policy 2 (2026-11-09, provisional): a midwife who is not also a doctor may admit a
+   * woman in labour, nothing else. The server enforces it (AdmissionServiceImpl); the
+   * form is narrowed to match: labour and delivery only, and she is the admitting provider.
+   */
+  protected readonly midwifeAdmitsLabourOnly = computed(
+    // rbac-inline-ok: narrows the form's choices; the admit permission itself is admissionCreate
+    () => this.canAdmit() && !this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']),
+  );
   protected readonly canEditAdmission = computed(() => this.can('admissionUpdate'));
   protected readonly canApplyOrderSets = computed(() => this.can('admissionApplyOrderSets'));
   protected readonly canAssignBed = computed(() => this.can('admissionAssignBed'));
@@ -388,6 +397,11 @@ export class AdmissionsComponent implements OnInit {
     { value: 'OTHER', labelKey: 'ADMISSIONS.DISPOSITION_OTHER' },
   ];
 
+  /** The types the New admission form offers: a midwife's is labour and delivery alone. */
+  protected readonly formAdmissionTypes = computed<AdmissionType[]>(() =>
+    this.midwifeAdmitsLabourOnly() ? ['LABOR_DELIVERY'] : this.admissionTypes,
+  );
+
   admissionTypes: AdmissionType[] = [
     'EMERGENCY',
     'ELECTIVE',
@@ -444,7 +458,13 @@ export class AdmissionsComponent implements OnInit {
         this.allStaff = s ?? [];
         // Physicians only: the server refuses a nurse or a midwife as admitting,
         // attending or discharging provider (QA D84, D176).
-        this.staffMembers.set((s ?? []).filter(isPhysician));
+        // A midwife admitting a woman in labour is her own admitting provider.
+        const myStaffId = this.auth.getUserProfile()?.staffId;
+        this.staffMembers.set(
+          this.midwifeAdmitsLabourOnly()
+            ? (s ?? []).filter((m) => !!myStaffId && m.id === myStaffId)
+            : (s ?? []).filter(isPhysician),
+        );
       });
     this.loadStaffFor(
       this.roleContext.effectiveHospitalIdForRequest() ?? this.roleContext.activeHospitalId,
@@ -597,6 +617,10 @@ export class AdmissionsComponent implements OnInit {
 
   openCreate(): void {
     this.form = this.emptyForm();
+    if (this.midwifeAdmitsLabourOnly()) {
+      this.form.admissionType = 'LABOR_DELIVERY';
+      this.form.admittingProviderId = this.auth.getUserProfile()?.staffId ?? '';
+    }
     this.editing.set(false);
     this.editingId.set(null);
     this.selectedPatient.set(null);
