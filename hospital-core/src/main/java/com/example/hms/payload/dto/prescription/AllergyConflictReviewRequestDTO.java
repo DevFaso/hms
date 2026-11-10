@@ -1,6 +1,8 @@
 package com.example.hms.payload.dto.prescription;
 
 import com.example.hms.enums.AllergyReviewDecision;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,6 +23,7 @@ import lombok.Setter;
 public class AllergyConflictReviewRequestDTO {
 
     /** CONTINUE (with a plan) or STOP. Mandatory. */
+    @NotNull
     private AllergyReviewDecision decision;
 
     /** The plan a CONTINUE sets (monitoring, premedication). Mandatory for CONTINUE. */
@@ -28,6 +31,7 @@ public class AllergyConflictReviewRequestDTO {
     private String plan;
 
     /** The clinical rationale. Mandatory. */
+    @NotBlank
     @Size(max = 1000)
     private String rationale;
 

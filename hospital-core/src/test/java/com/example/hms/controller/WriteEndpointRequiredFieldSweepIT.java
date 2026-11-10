@@ -321,7 +321,9 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
         // the ask-once question of a frequency nobody can read as a schedule, not a required field (round 35)
         Map.entry("POST /prescriptions", Set.of("frequencyConfirmed")),
         // only when the chosen time is not a published free slot (QA D1429, round 34)
-        Map.entry("POST /appointments", Set.of("overbookReason"))
+        Map.entry("POST /appointments", Set.of("overbookReason")),
+        // Policy 4: the plan only for CONTINUE (the sample decision is the first constant)
+        Map.entry("POST /prescriptions/{id}/allergy-review", Set.of("plan"))
     );
 
     private final AtomicInteger sequence = new AtomicInteger();
