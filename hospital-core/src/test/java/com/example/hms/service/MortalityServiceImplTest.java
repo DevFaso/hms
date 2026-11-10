@@ -290,6 +290,42 @@ class MortalityServiceImplTest {
         assertThat(patient.isDeceased()).isFalse();
     }
 
+    @Test
+    void aSuperAdminWithTheRecordsHospitalSelectedMayMarkIt() {
+        DeathRecord existing = recordedDeath();
+        when(roleValidator.isHospitalAdmin(callerUserId, hospitalId)).thenReturn(false);
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().superAdmin(true)
+                .activeHospitalId(hospitalId).headerOverridden(true).build());
+        try {
+            service.markEnteredInError(existing.getId(),
+                com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong").build());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+
+        assertThat(patient.isDeceased()).isFalse();
+    }
+
+    @Test
+    void aSuperAdminWithAnotherHospitalSelectedIsRefused() {
+        DeathRecord existing = recordedDeath();
+        UUID id = existing.getId();
+        when(roleValidator.isHospitalAdmin(callerUserId, hospitalId)).thenReturn(false);
+        var body = com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong").build();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().superAdmin(true)
+                .activeHospitalId(UUID.randomUUID()).headerOverridden(true).build());
+        try {
+            assertThatThrownBy(() -> service.markEnteredInError(id, body))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+
+        assertThat(patient.isDeceased()).isTrue();
+    }
+
     private DeathRecord recordedDeath() {
         when(roleValidator.isHospitalAdmin(callerUserId, hospitalId)).thenReturn(true);
         patient.setDeceasedAt(LocalDateTime.now().minusDays(1));

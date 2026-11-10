@@ -200,9 +200,13 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
         return filed;
     }
 
-    /** The role at the acting hospital: the controller's check reads the union of the caller's assignments. */
+    /**
+     * The role at the acting hospital: the controller's check reads the union of the caller's assignments. A
+     * verified super-admin decides in global view or at the hospital they selected, never at another one.
+     */
     private void requireDecider(UUID actorId, UUID scope) {
-        if (!com.example.hms.security.CallerIdentity.isGlobalSuperAdmin() && (scope == null || !roleValidator.isHospitalAdmin(actorId, scope))) {
+        if (!com.example.hms.security.CallerIdentity.isSuperAdminFor(scope)
+                && (scope == null || !roleValidator.isHospitalAdmin(actorId, scope))) {
             throw new AccessDeniedException("Only a hospital administrator of this hospital can review a dispute.");
         }
     }
