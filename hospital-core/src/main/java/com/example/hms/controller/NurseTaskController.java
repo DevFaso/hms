@@ -312,7 +312,7 @@ public class NurseTaskController {
     @PostMapping("/patients/{patientId}/vitals")
     @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Inline vital sign capture from the nurse station")
-    public ResponseEntity<Void> captureVitals(
+    public ResponseEntity<com.example.hms.payload.dto.NurseVitalCaptureResponseDTO> captureVitals(
         @PathVariable UUID patientId,
         @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
         @Valid @RequestBody NurseVitalCaptureRequestDTO request,
@@ -322,8 +322,8 @@ public class NurseTaskController {
         UUID nurseUserId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(NURSE_IDENTITY_ERROR));
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
-        nurseTaskService.captureVitals(patientId, nurseUserId, scopedHospital, request);
-        return ResponseEntity.noContent().build();
+        // QA D1564: the nurse is told what the set raised (a newborn's warnings), so 200 with a body.
+        return ResponseEntity.ok(nurseTaskService.captureVitals(patientId, nurseUserId, scopedHospital, request));
     }
 
     @GetMapping("/admissions/pending")

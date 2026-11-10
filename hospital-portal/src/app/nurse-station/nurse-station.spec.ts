@@ -63,6 +63,7 @@ describe('NurseStationComponent — two-tier polling', () => {
       'error',
       'warn',
       'warning',
+      'push',
     ]);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
     encounterSpy = jasmine.createSpyObj('EncounterService', ['list']);
@@ -1127,7 +1128,7 @@ describe('NurseStationComponent — two-tier polling', () => {
     });
 
     it('one reading is enough: the guard lets the save through (negative control)', () => {
-      nurseServiceSpy.captureVitals.and.returnValue(of(undefined));
+      nurseServiceSpy.captureVitals.and.returnValue(of({}));
       component.recordVitals('p1', 'Awa');
       component.updateVitalsField('heartRateBpm', '80');
       fixture.detectChanges();
@@ -1176,11 +1177,39 @@ describe('NurseStationComponent — two-tier polling', () => {
     );
     expect(root.querySelector('#vf-hr-invalid-msg')?.textContent).toBe('VITAL_LIMITS.HEART_RATE');
     // Fixed and sent again: the marks go.
-    nurseServiceSpy.captureVitals.and.returnValue(of(undefined));
+    nurseServiceSpy.captureVitals.and.returnValue(of({}));
     component.updateVitalsField('temperatureCelsius', '37');
     component.updateVitalsField('heartRateBpm', '80');
     component.submitVitals();
     expect(root.querySelector('[aria-invalid="true"]')).toBeNull();
+  });
+
+  it('QA D1564: a newborn set is saved and the newborn warning from the server is shown', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(
+      of({
+        clinicallySignificant: true,
+        newbornAlerts: [
+          { code: 'newborn-heart-rate', severity: 'URGENT', type: 'CARDIOVASCULAR', message: 'Recheck now.' },
+        ],
+      }),
+    );
+    component.recordVitals('p1', 'Bebe');
+    component.updateVitalsField('heartRateBpm', '80');
+    component.submitVitals();
+    expect(toastSpy.success).toHaveBeenCalled();
+    expect(toastSpy.push).toHaveBeenCalledWith(
+      'warning',
+      jasmine.stringMatching(/NEWBORN_WARNING_URGENT.*Recheck now\./),
+      jasmine.any(Number),
+    );
+  });
+
+  it('a set with no newborn warning shows none', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(of({ newbornAlerts: [] }));
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsField('heartRateBpm', '80');
+    component.submitVitals();
+    expect(toastSpy.push).not.toHaveBeenCalled();
   });
 
   it('sends plausible vitals and shows the server field message on a 400', () => {
@@ -1209,7 +1238,7 @@ describe('NurseStationComponent — two-tier polling', () => {
   });
 
   it('QA D1045: the ward pain score is sent with the vitals', () => {
-    nurseServiceSpy.captureVitals.and.returnValue(of(undefined));
+    nurseServiceSpy.captureVitals.and.returnValue(of({}));
     component.recordVitals('p1', 'Awa');
     component.updateVitalsField('painScale', '6');
     component.submitVitals();
@@ -1241,7 +1270,7 @@ describe('NurseStationComponent — two-tier polling', () => {
   });
 
   it('QA D530: glucose is typed in mmol/L like the lab and sent in mg/dL', () => {
-    nurseServiceSpy.captureVitals.and.returnValue(of(undefined));
+    nurseServiceSpy.captureVitals.and.returnValue(of({}));
     component.recordVitals('p1', 'Awa');
     component.updateGlucoseMmol('5.6');
     component.submitVitals();

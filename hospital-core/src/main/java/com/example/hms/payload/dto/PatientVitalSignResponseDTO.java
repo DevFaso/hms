@@ -60,4 +60,7 @@ public class PatientVitalSignResponseDTO {
     private LocalDateTime recordedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    /** QA D1564: on a write only, the newborn warnings on this set; null on a read. */
+    private java.util.List<NewbornVitalAlertDTO> newbornAlerts;
 }

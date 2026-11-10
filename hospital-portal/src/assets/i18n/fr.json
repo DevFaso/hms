@@ -12965,6 +12965,8 @@
     "VOIDED": "Annulé avec la délivrance : à rembourser"
   },
   "VITAL_LIMITS": {
+    "NEWBORN_WARNING": "Nouveau-né (moins de 28 jours) : la mesure est enregistrée et a été évaluée selon les valeurs du nouveau-né (provisoires, en attente de l'approbation du responsable de néonatologie).",
+    "NEWBORN_WARNING_URGENT": "Nouveau-né (moins de 28 jours) : la mesure est enregistrée, évaluée selon les valeurs du nouveau-né (provisoires, en attente de l'approbation du responsable de néonatologie), et l'équipe soignante a été prévenue.",
     "BP_ORDER": "La pression diastolique doit être inférieure à la pression systolique.",
     "TEMPERATURE": "La température doit être comprise entre {{min}} et {{max}} °C.",
     "HEART_RATE": "La fréquence cardiaque doit être comprise entre {{min}} et {{max}} bpm.",

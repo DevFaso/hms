@@ -101,7 +101,8 @@ public interface NurseTaskService {
 
     NurseFlowBoardDTO getPatientFlow(UUID hospitalId, UUID departmentId);
 
-    void captureVitals(UUID patientId, UUID nurseUserId, UUID hospitalId, NurseVitalCaptureRequestDTO request);
+    com.example.hms.payload.dto.NurseVitalCaptureResponseDTO captureVitals(UUID patientId, UUID nurseUserId,
+                                                                          UUID hospitalId, NurseVitalCaptureRequestDTO request);
 
     List<NurseAdmissionSummaryDTO> getPendingAdmissions(UUID hospitalId, UUID departmentId);
 

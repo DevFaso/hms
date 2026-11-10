@@ -236,7 +236,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private final ProcedureOrderRepository procedureOrderRepository;
     private final FiveRightsVerificationService fiveRightsVerificationService;
     private final ObjectMapper objectMapper;
-    private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
+    /** QA D1564: the one judgement of a vital set, newborns included. */
+    private final com.example.hms.service.vitals.VitalSignJudgement vitalSignJudgement;
     private final com.example.hms.service.support.DischargedPatientGuard dischargedPatientGuard;
     private final com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
     /** QA D799: the eMAR row and the bedside verify carry the cross-reactivity advisory. */
@@ -2172,8 +2173,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     @Override
     @Transactional
-    public void captureVitals(UUID patientId, UUID nurseUserId, UUID hospitalId,
-                              NurseVitalCaptureRequestDTO request) {
+    public com.example.hms.payload.dto.NurseVitalCaptureResponseDTO captureVitals(UUID patientId, UUID nurseUserId,
+                              UUID hospitalId, NurseVitalCaptureRequestDTO request) {
         if (patientId == null) throw new BusinessException("nurse.patient.idRequired");
         if (hospitalId == null) throw new BusinessException("nurse.hospital.required");
         if (request == null) throw new BusinessException("nurse.vitals.required");
@@ -2215,13 +2216,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .painScore(request.getPainScale())
             .build();
 
-        // Significant when the legacy per-vital thresholds fire OR the
-        // NEWS2 aggregate reaches MEDIUM (P3 #25b) — the aggregate catches
-        // the multi-parameter deterioration the per-vital ranges miss.
-        boolean clinicallySig = isClinicallySignificant(request)
-            || (com.example.hms.utility.NewsScoreCalculator.applies(vital)
-                && com.example.hms.utility.NewsScoreCalculator.score(vital).total() >= 5);
-        vital.setClinicallySignificant(clinicallySig);
+        // QA D1564: the shared judgement - a newborn's set against the newborn bands, every
+        // other age against the per-vital limits and NEWS2 (P3 #25b), as this station had.
+        com.example.hms.service.vitals.VitalSignJudgement.Judgement judgement = vitalSignJudgement.judge(vital);
+        boolean clinicallySig = vital.isClinicallySignificant();
 
         resolveNurseStaff(nurseUserId, hospitalId).ifPresent(staff -> {
             vital.setRecordedByStaff(staff);
@@ -2234,8 +2232,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             }
         });
         vitalSignRepository.save(vital);
-        // QA D207: MEDIUM/HIGH NEWS2 alerts the nurse and the responsible physician.
-        news2EscalationService.escalateIfNeeded(vital, patientId, hospitalId, usernameOf(nurseUserId));
+        // QA D207: MEDIUM/HIGH NEWS2 alerts the nurse and the responsible physician;
+        // QA D1564: so does an urgent newborn finding.
+        vitalSignJudgement.escalate(vital, judgement, patientId, hospitalId, usernameOf(nurseUserId), null);
 
         // Advance encounter status after vitals are captured.
         // ARRIVED → WAITING_FOR_PHYSICIAN  (vitals captured = triage complete)
@@ -2261,33 +2260,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             });
 
         log.info("Vitals captured: patientId={}, nurse={}, significant={}", patientId, nurseUserId, clinicallySig);
-    }
-
-    /** Auto-flag a vital set as clinically significant when values fall outside safe ranges. */
-    private boolean isClinicallySignificant(NurseVitalCaptureRequestDTO req) {
-        return isOutOfRange(req.getHeartRateBpm(), 40, 150)
-                || isBelow(req.getSpo2Percent(), 90)
-                || isOutOfRange(req.getRespiratoryRateBpm(), 8, 30)
-                || isOutOfRange(req.getSystolicBpMmHg(), 80, 200)
-                || isAbove(req.getDiastolicBpMmHg(), 120)
-                || isOutOfDoubleRange(req.getTemperatureCelsius(), 35.0, 40.0)
-                || isOutOfRange(req.getBloodGlucoseMgDl(), 50, 400);
-    }
-
-    private static boolean isOutOfRange(Integer value, int min, int max) {
-        return value != null && (value < min || value > max);
-    }
-
-    private static boolean isBelow(Integer value, int min) {
-        return value != null && value < min;
-    }
-
-    private static boolean isAbove(Integer value, int max) {
-        return value != null && value > max;
-    }
-
-    private static boolean isOutOfDoubleRange(Double value, double min, double max) {
-        return value != null && (value < min || value > max);
+        return com.example.hms.payload.dto.NurseVitalCaptureResponseDTO.builder()
+            .vitalSignId(vital.getId())
+            .clinicallySignificant(clinicallySig)
+            .newbornAlerts(vitalSignJudgement.alerts(judgement))
+            .build();
     }
 
     @Override

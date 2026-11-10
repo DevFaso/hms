@@ -28,4 +28,7 @@ public class TriageSubmissionResponseDTO {
 
     /** ID of the created PatientVitalSign record. */
     private UUID vitalSignId;
+
+    /** QA D1564: the newborn warnings on the triage set; empty for anyone 28 days old or more. */
+    private java.util.List<NewbornVitalAlertDTO> newbornAlerts;
 }

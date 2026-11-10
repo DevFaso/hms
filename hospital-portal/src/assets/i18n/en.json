@@ -12965,6 +12965,8 @@
     "VOIDED": "Cancelled with the dispense: to be refunded"
   },
   "VITAL_LIMITS": {
+    "NEWBORN_WARNING": "Newborn (under 28 days): the reading is saved and was judged against the newborn ranges (provisional, pending the neonatal lead's approval).",
+    "NEWBORN_WARNING_URGENT": "Newborn (under 28 days): the reading is saved, judged against the newborn ranges (provisional, pending the neonatal lead's approval), and the care team has been notified.",
     "BP_ORDER": "The diastolic pressure must be lower than the systolic pressure.",
     "TEMPERATURE": "Temperature must be between {{min}} and {{max}} °C.",
     "HEART_RATE": "Heart rate must be between {{min}} and {{max}} bpm.",

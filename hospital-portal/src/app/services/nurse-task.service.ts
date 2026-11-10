@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { CdsCard } from '../shared/cds-card/cds-card.model';
+import { NewbornVitalAlert } from '../shared/newborn-vital-alerts';
 
 export interface NurseVitalTask {
   id: string;
@@ -257,6 +258,14 @@ export interface NurseAdmissionSummary {
   admissionType: string;
 }
 
+/** QA D1564: what a nurse-station vitals save reports back. */
+export interface NurseVitalCaptureResponse {
+  vitalSignId?: string;
+  clinicallySignificant?: boolean;
+  /** The newborn warnings on the set; empty for anyone 28 days old or more. */
+  newbornAlerts?: NewbornVitalAlert[];
+}
+
 export interface NurseVitalCaptureRequest {
   temperatureCelsius?: number;
   heartRateBpm?: number;
@@ -505,8 +514,8 @@ export class NurseTaskService {
     return this.http.get<NurseFlowBoard>(`${this.baseUrl}/patient-flow`, { params: httpParams });
   }
 
-  captureVitals(patientId: string, data: NurseVitalCaptureRequest): Observable<void> {
-    return this.http.post<void>(`${this.baseUrl}/patients/${patientId}/vitals`, data);
+  captureVitals(patientId: string, data: NurseVitalCaptureRequest): Observable<NurseVitalCaptureResponse> {
+    return this.http.post<NurseVitalCaptureResponse>(`${this.baseUrl}/patients/${patientId}/vitals`, data);
   }
 
   getPendingAdmissions(params?: {

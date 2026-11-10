@@ -1138,7 +1138,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .build();
 
         log.info("Patient {} recording home vital", patient.getId());
-        return vitalSignService.recordVital(patient.getId(), vitalRequest, userId);
+        PatientVitalSignResponseDTO recorded = vitalSignService.recordVital(patient.getId(), vitalRequest, userId);
+        // QA D1564: the newborn warnings are written for clinicians (and reach them as notices);
+        // a parent's home reading does not get the clinical wording back.
+        if (recorded != null) {
+            recorded.setNewbornAlerts(null);
+        }
+        return recorded;
     }
 
     // ── Request medication refill ────────────────────────────────────────
