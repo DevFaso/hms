@@ -111,10 +111,7 @@ public final class CallerIdentity {
             return true;
         }
         return hospitalId != null
-            && com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().isSuperAdmin()
-            && com.example.hms.security.tenant.ActingScopeResolver.currentScope()
-                instanceof com.example.hms.security.tenant.ActingScope.Pinned pinned
-            && hospitalId.equals(pinned.hospitalId());
+            && hospitalId.equals(com.example.hms.security.tenant.ActingScopeResolver.superAdminPinnedHospitalIdOrNull());
     }
 
     /**
