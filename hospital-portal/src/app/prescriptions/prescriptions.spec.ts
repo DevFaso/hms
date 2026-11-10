@@ -1158,8 +1158,12 @@ describe('PrescriptionsComponent — signing', () => {
       fixture.detectChanges();
 
       expect(component.signAllergyCards().length).toBe(1);
-      expect(component.signAlertIsException()).withContext('an allergy, not a dose exception').toBeFalse();
-      expect(component.signAlertIsAboveLimit()).withContext('no urgent box for an allergy').toBeFalse();
+      expect(component.signAlertIsException())
+        .withContext('an allergy, not a dose exception')
+        .toBeFalse();
+      expect(component.signAlertIsAboveLimit())
+        .withContext('no urgent box for an allergy')
+        .toBeFalse();
       expect(component.signDialogIncomplete()).withContext('the reason is required').toBeTrue();
       component.signAllergyReason = 'Test cutané négatif';
       component.submitSignReauth();

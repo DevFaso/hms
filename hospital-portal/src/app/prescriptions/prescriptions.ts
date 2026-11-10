@@ -1375,7 +1375,9 @@ export class PrescriptionsComponent implements OnInit {
   );
   /** CR-02: the dialog is for an explicit prescribing exception, which a reason answers with its token. */
   readonly signAlertIsException = computed(() =>
-    this.signAllergyCards().some((c) => !!c.exceptionKey && !isAllergyAcknowledgementKey(c.exceptionKey)),
+    this.signAllergyCards().some(
+      (c) => !!c.exceptionKey && !isAllergyAcknowledgementKey(c.exceptionKey),
+    ),
   );
   /** A child's dose above the limit: the prescriber decides alone, and may mark it urgent so the review follows. */
   readonly signAlertIsAboveLimit = computed(() =>
