@@ -1568,6 +1568,7 @@ export class PrescriptionsComponent implements OnInit {
    * because nothing re-asked.
    */
   onScopeChange(_hospitalId: string | null): void {
+    this.searchPatient = null;
     this.listPage.set(0);
     // Never another hospital's rows under the new chip, even while it reads or if it fails.
     clearTimeout(this.searchDelay);
@@ -1722,8 +1723,13 @@ export class PrescriptionsComponent implements OnInit {
     // exactly one) is read by patient, so the patient's signed orders from the other
     // hospitals appear too, read-only. The hospital's own list never holds them.
     const term = this.searchTerm.trim();
+    if (page === 0 || this.searchPatient?.term !== term) this.searchPatient = null;
     if (this.contextPatientId && !term) {
       this.loadPatientRows(this.contextPatientId, statuses, page);
+      return;
+    }
+    if (this.searchPatient) {
+      this.loadPatientRows(this.searchPatient.patientId, statuses, page);
       return;
     }
     this.listLoad = this.prescriptionService
@@ -1733,7 +1739,9 @@ export class PrescriptionsComponent implements OnInit {
         next: (slice) => {
           const rows = slice?.content ?? [];
           if (term && page === 0) {
-            const named = this.singlePatientNamedBy(rows, term);
+            // One page cannot establish that all matches belong to one patient.
+            const named =
+              slice.totalElements === rows.length ? this.singlePatientNamedBy(rows, term) : null;
             if (named) {
               this.loadPatientRows(named, statuses, 0);
               return;
@@ -1763,6 +1771,8 @@ export class PrescriptionsComponent implements OnInit {
 
   /** D1573: the patient the URL pinned the list to (`?patientId=`), if any. */
   private contextPatientId: string | null = null;
+  /** Keep a resolved search on the same patient's cross-hospital list when paging. */
+  private searchPatient: { term: string; patientId: string } | null = null;
 
   /**
    * The one patient every row belongs to AND the term names (a drug or prescriber
@@ -1800,6 +1810,8 @@ export class PrescriptionsComponent implements OnInit {
 
   /** D1573: every order of one patient across the hospitals the caller may read, one page shown. */
   private loadPatientRows(patientId: string, statuses: string[], page: number): void {
+    const term = this.searchTerm.trim();
+    if (term) this.searchPatient = { term, patientId };
     this.listLoad?.unsubscribe();
     this.listLoad = this.prescriptionService
       .list({ patientId, statuses })

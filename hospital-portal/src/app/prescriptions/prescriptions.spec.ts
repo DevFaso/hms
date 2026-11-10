@@ -4087,6 +4087,65 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
     expect(el.querySelector('[data-testid="rx-foreign-origin-own-rx"]')).toBeNull();
   });
 
+  it('keeps the resolved patient when paging through foreign orders and resets on a new search', async () => {
+    const { fixture, prescriptionService } = await render('ROLE_DOCTOR');
+    const component = fixture.componentInstance;
+    const own = {
+      id: 'own',
+      patientId: 'p-1',
+      patientFullName: 'Awa Kaboré',
+      status: 'SIGNED',
+      hospitalId: 'h-1',
+    } as PrescriptionResponse;
+    const foreign = Array.from({ length: 50 }, (_, i) => ({
+      ...own,
+      id: `foreign-${i}`,
+      hospitalId: 'h-2',
+    }));
+    prescriptionService.page.and.returnValue(
+      of({ content: [own], totalElements: 1, totalPages: 1, number: 0, size: 50, last: true }),
+    );
+    prescriptionService.list.and.returnValue(of([own, ...foreign]));
+    component.searchTerm = 'awa';
+    component.load();
+    prescriptionService.page.calls.reset();
+    component.onListPage(1);
+    expect(prescriptionService.page).not.toHaveBeenCalled();
+    expect(component.listPage()).toBe(1);
+    expect(component.listTotal()).toBe(51);
+    expect(component.filtered().map((row) => row.id)).toEqual(['foreign-49']);
+
+    component.searchTerm = 'paracetamol';
+    component.load();
+    expect(prescriptionService.page).toHaveBeenCalled();
+    prescriptionService.page.calls.reset();
+    component.searchTerm = 'awa';
+    component.onScopeChange('h-3');
+    expect(prescriptionService.page).toHaveBeenCalled();
+  });
+
+  it('does not narrow a multi-page name search to the patient on its first page', async () => {
+    const { fixture, prescriptionService } = await render('ROLE_DOCTOR');
+    const rows = Array.from(
+      { length: 50 },
+      (_, i) =>
+        ({
+          id: `rx-${i}`,
+          patientId: 'p-1',
+          patientFullName: 'Awa Kaboré',
+          status: 'SIGNED',
+        }) as PrescriptionResponse,
+    );
+    prescriptionService.page.and.returnValue(
+      of({ content: rows, totalElements: 51, totalPages: 2, number: 0, size: 50, last: false }),
+    );
+    prescriptionService.list.calls.reset();
+    fixture.componentInstance.searchTerm = 'awa';
+    fixture.componentInstance.load();
+    expect(prescriptionService.list).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.listTotal()).toBe(51);
+  });
+
   it('D1573: a drug search that hits one patient stays a drug search', async () => {
     const { fixture, prescriptionService } = await render('ROLE_DOCTOR');
     const own = {
