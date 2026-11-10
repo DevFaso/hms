@@ -1865,7 +1865,8 @@
       "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} anulado en la factura {{invoice}}, motivo registrado",
       "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Regla obstétrica no aplicada a una ecografía de urgencia",
       "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Regla obstétrica no aplicada a una derivación de ginecoobstetricia de urgencia",
-      "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Excepción a la regla obstétrica retirada en una ecografía"
+      "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Excepción a la regla obstétrica retirada en una ecografía",
+      "ALLERGY_ACKNOWLEDGED": "Alergia reconocida con un motivo"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",

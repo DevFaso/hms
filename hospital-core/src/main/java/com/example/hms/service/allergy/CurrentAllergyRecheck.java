@@ -310,7 +310,7 @@ public class CurrentAllergyRecheck {
                     .userId(actorUserId)
                     .hospitalId(hospitalId)
                     .patientId(patientId)
-                    .eventDescription("Allergy acknowledged with a reason: " + ack.gate().name())
+                    .eventDescription("Allergy acknowledged with a reason")
                     .details(details)
                     .entityType(ack.gate().entityType)
                     .resourceId(resourceId != null ? resourceId.toString() : null)

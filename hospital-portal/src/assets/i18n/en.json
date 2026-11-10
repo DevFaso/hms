@@ -1865,7 +1865,8 @@
       "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} undone on invoice {{invoice}}, reason recorded",
       "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Obstetric rule skipped for an emergency ultrasound order",
       "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Obstetric rule skipped for an emergency OB/GYN referral",
-      "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Obstetric rule skip cleared on an ultrasound order"
+      "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Obstetric rule skip cleared on an ultrasound order",
+      "ALLERGY_ACKNOWLEDGED": "Allergy acknowledged with a reason"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
