@@ -7688,6 +7688,9 @@
       "STATE": "Revue de dose pédiatrique",
       "REVIEWED_BY": "Revue par"
     },
+    "FOREIGN": {
+      "ORIGIN": "Rédigée à {{hospital}}, lecture seule ici"
+    },
     "OVERRIDE": {
       "ALLERGY_REASON": "Motif de dérogation à l’alerte d’allergie",
       "CDS_REASON": "Motif du passage outre l’alerte critique"

@@ -7688,6 +7688,9 @@
       "STATE": "Paediatric dose review",
       "REVIEWED_BY": "Reviewed by"
     },
+    "FOREIGN": {
+      "ORIGIN": "Written at {{hospital}}, read only here"
+    },
     "OVERRIDE": {
       "ALLERGY_REASON": "Allergy override reason",
       "CDS_REASON": "Reason for overriding the critical alert"

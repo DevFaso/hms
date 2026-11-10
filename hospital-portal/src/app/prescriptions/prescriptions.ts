@@ -513,6 +513,19 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   /**
+   * Policy 2026-11-09: a prescription another hospital wrote is read-only here.
+   * The server refuses every write on it (404); the row offers no write action.
+   * Judged against the hospital the requests are pinned to (RoleContextService.effectiveHospitalIdForRequest),
+   * not the home hospital: a scoped super-admin's selected hospital's own rows are not foreign.
+   */
+  isForeign(p: PrescriptionResponse): boolean {
+    // The hospital the requests are pinned to: a scoped super-admin's selected hospital, a
+    // staff member's own; null in global view, where no row is "elsewhere".
+    const scope = this.roleContext.effectiveHospitalIdForRequest();
+    return !!p.hospitalId && !!scope && p.hospitalId !== scope;
+  }
+
+  /**
    * QA D660/D670: the Edit action a row offers. A withdrawn order is
    * read-only, every field; a signed one only to whoever may withdraw it.
    */

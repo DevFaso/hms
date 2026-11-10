@@ -173,7 +173,24 @@
                 }
               </td>
               <td>{{ p.duration || '—' }}</td>
-              <td>{{ p.staffFullName || '—' }}</td>
+              <td>
+                {{ p.staffFullName || '—' }}
+                @if (isForeign(p)) {
+                  {{ ' ' }}
+                  <!-- Policy 2026-11-09: another hospital's signed order is read-only
+                       here; the row names where it was written and when it was signed. -->
+                  <span class="cell-sub" [attr.data-testid]="'rx-foreign-origin-' + p.id">{{
+                    'PRESCRIPTIONS.FOREIGN.ORIGIN' | translate: { hospital: p.hospitalName || '—' }
+                  }}</span>
+                  @if (p.signedAt) {
+                    {{ ' '
+                    }}<span class="cell-sub" [attr.data-testid]="'rx-foreign-signed-' + p.id"
+                      >{{ 'PRESCRIPTIONS.SIGNED_AT' | translate }}
+                      {{ p.signedAt | serverTime | dateTime }}</span
+                    >
+                  }
+                }
+              </td>
               <td>
                 <span class="status-badge {{ getStatusClass(p.status) }}">{{
                   p.status | enumLabel: 'prescriptionStatus'
@@ -210,106 +227,108 @@
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  @if (canEditRow(p)) {
-                    <button
-                      class="action-link edit-link"
-                      (click)="openEdit(p)"
-                      [title]="'COMMON.EDIT' | translate"
-                      [attr.aria-label]="'COMMON.EDIT' | translate"
-                    >
-                      <span class="material-symbols-outlined">edit</span>
-                    </button>
-                  }
-                  @if (canSign(p)) {
-                    <button
-                      class="action-link sign-link"
-                      (click)="signPrescription(p)"
-                      [disabled]="signingId() === p.id"
-                      [title]="'PRESCRIPTIONS.SIGN' | translate"
-                      [attr.aria-label]="'PRESCRIPTIONS.SIGN' | translate"
-                      [attr.data-testid]="'rx-sign-' + p.id"
-                    >
-                      <span class="material-symbols-outlined">draw</span>
-                    </button>
-                  }
-                  @if (canSignUrgently(p)) {
-                    <button
-                      class="action-link sign-link"
-                      (click)="signUrgently(p)"
-                      [disabled]="signingId() === p.id"
-                      [title]="'PRESCRIPTIONS.SIGN_EXCEPTION.URGENT' | translate"
-                      [attr.aria-label]="'PRESCRIPTIONS.SIGN_EXCEPTION.URGENT' | translate"
-                      [attr.data-testid]="'rx-sign-urgent-' + p.id"
-                    >
-                      <span class="material-symbols-outlined">emergency</span>
-                    </button>
-                  }
-                  @if (canCosign(p)) {
-                    <button
-                      class="action-link sign-link"
-                      (click)="cosignPrescription(p)"
-                      [disabled]="signingId() === p.id"
-                      [title]="'PRESCRIPTIONS.COSIGN' | translate"
-                      [attr.aria-label]="'PRESCRIPTIONS.COSIGN' | translate"
-                      [attr.data-testid]="'rx-cosign-' + p.id"
-                    >
-                      <span class="material-symbols-outlined">approval</span>
-                    </button>
-                  }
-                  @if (canRecordDoseReview(p)) {
-                    <button
-                      class="action-link sign-link"
-                      (click)="openDoseReview(p)"
-                      [title]="'PRESCRIPTIONS.DOSE_REVIEW.ACTION' | translate"
-                      [attr.aria-label]="'PRESCRIPTIONS.DOSE_REVIEW.ACTION' | translate"
-                      [attr.data-testid]="'rx-dose-review-' + p.id"
-                    >
-                      <span class="material-symbols-outlined">fact_check</span>
-                    </button>
-                  }
-                  @if (canPharmacistVerify(p)) {
-                    <button
-                      class="action-link sign-link"
-                      (click)="openVerifyModal(p)"
-                      [title]="'PRESCRIPTIONS.PHARMACIST_VERIFY' | translate"
-                      [attr.aria-label]="'PRESCRIPTIONS.PHARMACIST_VERIFY' | translate"
-                      [attr.data-testid]="'rx-pharmacist-verify-' + p.id"
-                    >
-                      <span class="material-symbols-outlined">verified_user</span>
-                    </button>
-                  }
-                  <!-- Gap G5 — the prescriber's half of the pharmacist's
+                  @if (!isForeign(p)) {
+                    @if (canEditRow(p)) {
+                      <button
+                        class="action-link edit-link"
+                        (click)="openEdit(p)"
+                        [title]="'COMMON.EDIT' | translate"
+                        [attr.aria-label]="'COMMON.EDIT' | translate"
+                      >
+                        <span class="material-symbols-outlined">edit</span>
+                      </button>
+                    }
+                    @if (canSign(p)) {
+                      <button
+                        class="action-link sign-link"
+                        (click)="signPrescription(p)"
+                        [disabled]="signingId() === p.id"
+                        [title]="'PRESCRIPTIONS.SIGN' | translate"
+                        [attr.aria-label]="'PRESCRIPTIONS.SIGN' | translate"
+                        [attr.data-testid]="'rx-sign-' + p.id"
+                      >
+                        <span class="material-symbols-outlined">draw</span>
+                      </button>
+                    }
+                    @if (canSignUrgently(p)) {
+                      <button
+                        class="action-link sign-link"
+                        (click)="signUrgently(p)"
+                        [disabled]="signingId() === p.id"
+                        [title]="'PRESCRIPTIONS.SIGN_EXCEPTION.URGENT' | translate"
+                        [attr.aria-label]="'PRESCRIPTIONS.SIGN_EXCEPTION.URGENT' | translate"
+                        [attr.data-testid]="'rx-sign-urgent-' + p.id"
+                      >
+                        <span class="material-symbols-outlined">emergency</span>
+                      </button>
+                    }
+                    @if (canCosign(p)) {
+                      <button
+                        class="action-link sign-link"
+                        (click)="cosignPrescription(p)"
+                        [disabled]="signingId() === p.id"
+                        [title]="'PRESCRIPTIONS.COSIGN' | translate"
+                        [attr.aria-label]="'PRESCRIPTIONS.COSIGN' | translate"
+                        [attr.data-testid]="'rx-cosign-' + p.id"
+                      >
+                        <span class="material-symbols-outlined">approval</span>
+                      </button>
+                    }
+                    @if (canRecordDoseReview(p)) {
+                      <button
+                        class="action-link sign-link"
+                        (click)="openDoseReview(p)"
+                        [title]="'PRESCRIPTIONS.DOSE_REVIEW.ACTION' | translate"
+                        [attr.aria-label]="'PRESCRIPTIONS.DOSE_REVIEW.ACTION' | translate"
+                        [attr.data-testid]="'rx-dose-review-' + p.id"
+                      >
+                        <span class="material-symbols-outlined">fact_check</span>
+                      </button>
+                    }
+                    @if (canPharmacistVerify(p)) {
+                      <button
+                        class="action-link sign-link"
+                        (click)="openVerifyModal(p)"
+                        [title]="'PRESCRIPTIONS.PHARMACIST_VERIFY' | translate"
+                        [attr.aria-label]="'PRESCRIPTIONS.PHARMACIST_VERIFY' | translate"
+                        [attr.data-testid]="'rx-pharmacist-verify-' + p.id"
+                      >
+                        <span class="material-symbols-outlined">verified_user</span>
+                      </button>
+                    }
+                    <!-- Gap G5 — the prescriber's half of the pharmacist's
                        clarification. Renders only for a doctor on a
                        PENDING_CLARIFICATION row; the component decides. -->
-                  <app-prescription-clarification
-                    mode="PRESCRIBER"
-                    [prescriptionId]="p.id"
-                    [status]="p.status"
-                    [medicationLabel]="p.medicationDisplayName || p.medicationName"
-                    [question]="p.clarificationReason ?? null"
-                    [askedAt]="p.clarificationRequestedAt ?? null"
-                    (changed)="load()"
-                  />
-                  @if (canDispatchSms(p)) {
-                    <button
-                      class="action-link"
-                      (click)="openDispatchModal(p)"
-                      [title]="'PRESCRIPTIONS.DISPATCH_SMS' | translate"
-                      [attr.aria-label]="'PRESCRIPTIONS.DISPATCH_SMS' | translate"
-                      [attr.data-testid]="'rx-dispatch-sms-' + p.id"
-                    >
-                      <span class="material-symbols-outlined">sms</span>
-                    </button>
-                  }
-                  @if (canHardDelete()) {
-                    <button
-                      class="action-link delete-link"
-                      (click)="confirmDelete(p)"
-                      [title]="'COMMON.DELETE' | translate"
-                      [attr.aria-label]="'COMMON.DELETE' | translate"
-                    >
-                      <span class="material-symbols-outlined">delete</span>
-                    </button>
+                    <app-prescription-clarification
+                      mode="PRESCRIBER"
+                      [prescriptionId]="p.id"
+                      [status]="p.status"
+                      [medicationLabel]="p.medicationDisplayName || p.medicationName"
+                      [question]="p.clarificationReason ?? null"
+                      [askedAt]="p.clarificationRequestedAt ?? null"
+                      (changed)="load()"
+                    />
+                    @if (canDispatchSms(p)) {
+                      <button
+                        class="action-link"
+                        (click)="openDispatchModal(p)"
+                        [title]="'PRESCRIPTIONS.DISPATCH_SMS' | translate"
+                        [attr.aria-label]="'PRESCRIPTIONS.DISPATCH_SMS' | translate"
+                        [attr.data-testid]="'rx-dispatch-sms-' + p.id"
+                      >
+                        <span class="material-symbols-outlined">sms</span>
+                      </button>
+                    }
+                    @if (canHardDelete()) {
+                      <button
+                        class="action-link delete-link"
+                        (click)="confirmDelete(p)"
+                        [title]="'COMMON.DELETE' | translate"
+                        [attr.aria-label]="'COMMON.DELETE' | translate"
+                      >
+                        <span class="material-symbols-outlined">delete</span>
+                      </button>
+                    }
                   }
                 </div>
               </td>
@@ -420,6 +439,14 @@
               <span class="field-label">{{ 'PRESCRIPTIONS.PRESCRIBED_BY' | translate }}</span
               ><span class="field-value">{{ rx.staffFullName || '—' }}</span>
             </div>
+            @if (rx.hospitalName) {
+              <div class="detail-field">
+                <span class="field-label">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</span
+                ><span class="field-value" data-testid="rx-detail-hospital">{{
+                  rx.hospitalName
+                }}</span>
+              </div>
+            }
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.CREATED' | translate }}</span
               ><span class="field-value">{{
