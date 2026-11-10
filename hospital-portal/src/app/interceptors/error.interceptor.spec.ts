@@ -395,6 +395,34 @@ describe('errorInterceptor', () => {
     expect(error?.status).toBe(403);
   });
 
+  it('a refused mortality disputes read keeps the register and propagates the refusal to the section', () => {
+    let error: HttpErrorResponse | undefined;
+    http.get('/api/mortality/disputes').subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/api/mortality/disputes')
+      .flush(null, { status: 403, statusText: 'Forbidden' });
+    const audit = httpMock.expectOne('/frontend-audit');
+    expect(audit.request.body.type).toBe('SILENT_403');
+    audit.flush({});
+
+    expect(error?.status).toBe(403);
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(noteRefusal).not.toHaveBeenCalled();
+  });
+
+  it('a refused mortality register read still redirects to the forbidden page', () => {
+    let error: HttpErrorResponse | undefined;
+    http.get('/api/mortality/register').subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/api/mortality/register')
+      .flush(null, { status: 403, statusText: 'Forbidden' });
+
+    expect(error?.status).toBe(403);
+    expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
+    expect(noteRefusal).toHaveBeenCalledWith(null);
+    httpMock.expectNone('/frontend-audit');
+  });
+
   it('on a 403 from a CDS Hooks invocation (a POST), degrades quietly and does not redirect', () => {
     let error: HttpErrorResponse | undefined;
     http.post('/cds-services/hms-bpa-protocols', {}).subscribe({ error: (e) => (error = e) });

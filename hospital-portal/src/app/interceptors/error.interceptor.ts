@@ -46,6 +46,9 @@ const SILENT_403_PATTERNS = [
   // The bed board's held-bed overlay (QA D188): a role the server keeps off
   // the transfer worklist (decision D5) still keeps the board it is reading.
   /\/transfers\/pending(\?|$)/,
+  // The optional dispute review list handles refusals in the mortality page;
+  // a caller who cannot review here must still keep the loaded register.
+  /\/mortality\/disputes(\?|$)/,
 ];
 
 /**
