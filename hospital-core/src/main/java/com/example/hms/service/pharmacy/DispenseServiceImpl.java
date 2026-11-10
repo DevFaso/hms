@@ -1723,7 +1723,7 @@ public class DispenseServiceImpl implements DispenseService {
         if (allergies.values().stream().allMatch(List::isEmpty)) {
             return Map.of();
         }
-        List<MedicationCatalogItem> catalogue = allergyRecheck.activeCatalogue(hospitalId);
+        List<MedicationCatalogItem> catalogue = allergyRecheck.catalogueForOrders(hospitalId, rows);
         Map<UUID, List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard>> byOrder = new HashMap<>();
         for (Prescription p : rows) {
             List<com.example.hms.model.PatientAllergy> patientAllergies = p.getPatient() == null ? List.of()

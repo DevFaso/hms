@@ -79,7 +79,7 @@ public class CurrentAllergyRecheck {
         /** The pharmacist's verification of the order. */
         PHARMACIST_VERIFICATION(AuditEventType.DISPENSE_ALLERGY_ACKNOWLEDGED, PRESCRIPTION_ENTITY),
         /** A fill (one-step or prepared, a refill's included) or the hand-over of a prepared fill. */
-        DISPENSE(AuditEventType.DISPENSE_ALLERGY_ACKNOWLEDGED, PRESCRIPTION_ENTITY),
+        DISPENSE(AuditEventType.DISPENSE_ALLERGY_ACKNOWLEDGED, "DISPENSE"),
         /** Sending the order to a partner pharmacy, which fills it outside. */
         PARTNER_ROUTING(AuditEventType.DISPENSE_ALLERGY_ACKNOWLEDGED, PRESCRIPTION_ENTITY);
 
@@ -158,6 +158,21 @@ public class CurrentAllergyRecheck {
         return page == null ? List.of() : page.getContent();
     }
 
+    /** Page resolution keeps inactive linked items too, just as the write gate does. */
+    public List<MedicationCatalogItem> catalogueForOrders(UUID hospitalId, Collection<Prescription> orders) {
+        List<MedicationCatalogItem> items = new ArrayList<>(activeCatalogue(hospitalId));
+        if (catalogue == null || hospitalId == null) {
+            return items;
+        }
+        List<UUID> missing = orders.stream().map(Prescription::getMedicationCatalogItemId)
+            .filter(Objects::nonNull).distinct()
+            .filter(id -> items.stream().noneMatch(item -> id.equals(item.getId()))).toList();
+        if (!missing.isEmpty()) {
+            items.addAll(catalogue.findByHospital_IdAndIdIn(hospitalId, missing));
+        }
+        return items;
+    }
+
     /** {@link #itemsFor(String, UUID, List)} on the order's own hospital catalogue, its linked item first. */
     public List<MedicationCatalogItem> itemsFor(Prescription rx, String medicationName) {
         UUID hospitalId = rx != null && rx.getHospital() != null ? rx.getHospital().getId() : null;
@@ -189,7 +204,7 @@ public class CurrentAllergyRecheck {
                 continue;
             }
             boolean linked = linkedItemId != null && linkedItemId.equals(item.getId());
-            if (linked || (medicationName != null && !medicationName.isBlank()
+            if (linked || (item.isActive() && medicationName != null && !medicationName.isBlank()
                     && DispenseVerificationService.namesCatalogItem(medicationName, item))) {
                 items.add(item);
             }
@@ -216,10 +231,10 @@ public class CurrentAllergyRecheck {
         Optional<PatientAllergy> worst = identity.matchingAllergies(allergies).stream()
             .max(Comparator.comparingInt(PrescriptionServiceImpl::allergySeverityRank));
         if (worst.isPresent()) {
-            return Optional.of(bind(orderId, documentedCard(worst.get(), medicationName), worst.get(), "documented", allergies));
+            return Optional.of(bind(orderId, medicationName, items, documentedCard(worst.get(), medicationName), worst.get(), "documented", allergies));
         }
         return identity.unverifiableClassAllergy(allergies)
-            .map(allergy -> bind(orderId, unverifiableCard(medicationName, allergy), allergy, "unverifiable", allergies));
+            .map(allergy -> bind(orderId, medicationName, items, unverifiableCard(medicationName, allergy), allergy, "unverifiable", allergies));
     }
 
     /**
@@ -255,8 +270,12 @@ public class CurrentAllergyRecheck {
      */
     public Acknowledgement requireAcknowledged(Gate gate, Prescription rx, String medicationName,
                                                String reason, String token) {
+        List<PatientAllergy> current = currentAllergies(rx);
+        if (current.isEmpty()) {
+            return null;
+        }
         Optional<Stop> stop = stop(rx != null ? rx.getId() : null, medicationName,
-            itemsFor(rx, medicationName), currentAllergies(rx));
+            itemsFor(rx, medicationName), current);
         if (stop.isEmpty()) {
             return null;
         }
@@ -279,15 +298,19 @@ public class CurrentAllergyRecheck {
         return MessageUtil.resolveOrRaw("allergy.recheck.recordLine", ack.stop().allergen(), ack.reason());
     }
 
-    /** {@code note} with the acknowledgement's line, within {@code max} characters; {@code note} when none. */
+    /** Keep both the note and acknowledgement intact; refuse overflow instead of losing clinical text. */
     public static String withRecordLine(String note, Acknowledgement ack, int max) {
         if (ack == null) {
             return note;
         }
         String line = recordLine(ack);
-        // Reserve the charted reason before any optional note: a full note must not erase it.
+        // Neither the acknowledgement nor the clinical note may be silently truncated.
         String joined = note == null || note.isBlank() ? line : line + "\n" + note;
-        return joined.length() > max ? joined.substring(0, max) : joined;
+        if (joined.length() > max) {
+            throw new com.example.hms.exception.FieldBusinessException(ACK_FIELD,
+                MessageUtil.resolveOrRaw("allergy.recheck.noteTooLong", max));
+        }
+        return joined;
     }
 
     /**
@@ -328,13 +351,19 @@ public class CurrentAllergyRecheck {
 
     /* -- Cards and the token ------------------------------------------------------------------- */
 
-    private static Stop bind(UUID orderId, CdsCard card, PatientAllergy allergy, String kind,
+    private static Stop bind(UUID orderId, String medicationName, List<MedicationCatalogItem> items,
+                             CdsCard card, PatientAllergy allergy, String kind,
                              List<PatientAllergy> allergies) {
         // Bind the whole active allergy state, not just the most severe displayed row.
         // A second allergy may be added or edited while that row remains the same.
         String state = allergies.stream().filter(Objects::nonNull).filter(PatientAllergy::isActive)
             .map(a -> digest(key(kind, a))).sorted().collect(java.util.stream.Collectors.joining("|"));
-        String token = digest(orderId + "|" + key(kind, allergy) + "|" + state);
+        String drug = items == null ? "" : items.stream().filter(Objects::nonNull)
+            .map(item -> digest(String.join("|", String.valueOf(item.getId()),
+                String.valueOf(item.getGenericName()), String.valueOf(item.getBrandName()),
+                String.valueOf(item.getNameFr()), String.valueOf(item.getAtcCode()))))
+            .sorted().collect(java.util.stream.Collectors.joining("|"));
+        String token = digest(orderId + "|" + medicationName + "|" + drug + "|" + key(kind, allergy) + "|" + state);
         return new Stop(card.withExceptionKey(KEY_PREFIX + token), allergy, kind, token);
     }
 

@@ -214,17 +214,18 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
                         .decidedAt(LocalDateTime.now())
                         .build());
 
+        // Provider failures commit the decision too (noRollbackFor), so register before sending.
+        if (allergyAck != null && allergyRecheck != null) {
+            allergyRecheck.auditAfterCommit(allergyAck, decidedBy.getId(),
+                    rx.getHospital() != null ? rx.getHospital().getId() : null,
+                    rx.getPatient() != null ? rx.getPatient().getId() : null, rx.getId());
+        }
         String body = buildSmsBody(decision, rx, request.getNote());
         PrescriptionTransmission transmission = sendAndPersist(rx, pharmacy, phone, body,
                 new DispatchAttempt(decision, openOffers, decidedBy));
 
         supersedeOpenDecisions(rx, openOffers, pharmacy);
         applyDispatchToPrescription(rx, pharmacy, phone, transmission);
-        if (allergyAck != null && allergyRecheck != null) {
-            allergyRecheck.auditAfterCommit(allergyAck, decidedBy.getId(),
-                    rx.getHospital() != null ? rx.getHospital().getId() : null,
-                    rx.getPatient() != null ? rx.getPatient().getId() : null, rx.getId());
-        }
         queueClaimService.releaseOnExit(rx, QueueClaimReleaseReason.DISPATCHED, decidedBy.getId(),
                 queueExitActor(auth));
         log.info("Dispatched prescription {} via SMS to pharmacy {} ({}); routing decision {}",

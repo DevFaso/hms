@@ -52,7 +52,7 @@ class CurrentAllergyRecheckTest {
     }
 
     @Test
-    void aFullNoteCannotEraseTheChartedReasonAtAnyGate() {
+    void overflowingNotesAreRefusedWithoutDiscardingEitherPartAtAnyGate() {
         MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
         PatientAllergy allergy = allergy("Penicillin", AllergySeverity.SEVERE);
         CurrentAllergyRecheck.Stop stop = CurrentAllergyRecheck.stop(UUID.randomUUID(),
@@ -61,8 +61,13 @@ class CurrentAllergyRecheckTest {
             CurrentAllergyRecheck.Acknowledgement ack = new CurrentAllergyRecheck.Acknowledgement(
                 gate, stop, "Prescriber consulted: graded challenge ordered");
             for (int limit : List.of(1000, 1024, 2000)) {
-                String note = CurrentAllergyRecheck.withRecordLine("N".repeat(limit), ack, limit);
-                assertThat(note).hasSize(limit).contains(ack.reason()).contains("Penicillin");
+                assertThatThrownBy(() -> CurrentAllergyRecheck.withRecordLine("N".repeat(limit), ack, limit))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasFieldOrPropertyWithValue("field", CurrentAllergyRecheck.ACK_FIELD);
+                String line = CurrentAllergyRecheck.recordLine(ack);
+                String fitting = "N".repeat(limit - line.length() - 1);
+                assertThat(CurrentAllergyRecheck.withRecordLine(fitting, ack, limit))
+                    .isEqualTo(line + "\n" + fitting).hasSize(limit);
             }
         }
     }
@@ -190,6 +195,7 @@ class CurrentAllergyRecheckTest {
         assertThat(event.getHospitalId()).isEqualTo(hospital);
         assertThat(event.getPatientId()).isEqualTo(patient);
         assertThat(event.getResourceId()).isEqualTo(resource.toString());
+        assertThat(event.getEntityType()).isEqualTo("DISPENSE");
         assertThat(event.getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.DISPENSE_ALLERGY_ACKNOWLEDGED);
         assertThat(event.getDetails().toString()).contains("reasonDigest", stop.token()).doesNotContain(ack.reason());
     }
@@ -221,6 +227,68 @@ class CurrentAllergyRecheckTest {
         var ack = new CurrentAllergyRecheck.Acknowledgement(CurrentAllergyRecheck.Gate.DISPENSE, stop, "Reviewed");
         assertThat(CurrentAllergyRecheck.withRecordLine("Existing", ack, 1000)).contains("Existing", "Reviewed");
         assertThat(CurrentAllergyRecheck.withRecordLine(null, ack, 1000)).isEqualTo(CurrentAllergyRecheck.recordLine(ack));
+    }
+
+    @Test
+    void noAllergiesSkipCatalogueWorkAtEveryGate() {
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Prescription rx = new Prescription();
+        rx.setPatient(patient);
+        var hospital = new com.example.hms.model.Hospital();
+        hospital.setId(UUID.randomUUID());
+        rx.setHospital(hospital);
+        rx.setMedicationCatalogItemId(UUID.randomUUID());
+        var repository = mock(PatientAllergyRepository.class);
+        var catalogue = mock(com.example.hms.repository.MedicationCatalogItemRepository.class);
+        when(repository.findByPatient_Id(patient.getId())).thenReturn(List.of());
+        CurrentAllergyRecheck check = new CurrentAllergyRecheck(repository, catalogue, null);
+        for (var gate : CurrentAllergyRecheck.Gate.values()) {
+            assertThat(check.requireAcknowledged(gate, rx, "Amoxicillin", null, null)).isNull();
+        }
+        org.mockito.Mockito.verifyNoInteractions(catalogue);
+    }
+
+    @Test
+    void drugChangesInvalidateTokensEvenWhenTheSameAllergyStillMatches() {
+        UUID order = UUID.randomUUID();
+        var allergies = List.of(allergy("Penicillin", AllergySeverity.SEVERE));
+        var original = CurrentAllergyRecheck.stop(order, "Amoxicillin", List.of(), allergies).orElseThrow();
+        var edited = CurrentAllergyRecheck.stop(order, "Ampicillin", List.of(), allergies).orElseThrow();
+        assertThat(edited.token()).isNotEqualTo(original.token());
+        var item = new com.example.hms.model.medication.MedicationCatalogItem();
+        item.setId(UUID.randomUUID());
+        item.setGenericName("Amoxicillin");
+        var linked = CurrentAllergyRecheck.stop(order, "Amoxicillin", List.of(item), allergies).orElseThrow();
+        item.setGenericName("Ampicillin");
+        assertThat(CurrentAllergyRecheck.stop(order, "Amoxicillin", List.of(item), allergies).orElseThrow().token())
+            .isNotEqualTo(linked.token());
+    }
+
+    @Test
+    void pageAndGateUseTheSameInactiveLinkedIdentityWithoutMatchingOtherInactiveItems() {
+        var hospital = new com.example.hms.model.Hospital();
+        hospital.setId(UUID.randomUUID());
+        var item = new com.example.hms.model.medication.MedicationCatalogItem();
+        item.setId(UUID.randomUUID());
+        item.setNameFr("Local product");
+        item.setGenericName("Amoxicillin");
+        item.setActive(false);
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setHospital(hospital);
+        rx.setMedicationCatalogItemId(item.getId());
+        var catalogue = mock(com.example.hms.repository.MedicationCatalogItemRepository.class);
+        when(catalogue.findByIdAndHospital_Id(item.getId(), hospital.getId())).thenReturn(java.util.Optional.of(item));
+        when(catalogue.findByHospital_IdAndIdIn(hospital.getId(), List.of(item.getId()))).thenReturn(List.of(item));
+        CurrentAllergyRecheck check = new CurrentAllergyRecheck(null, catalogue, null);
+        var page = check.catalogueForOrders(hospital.getId(), List.of(rx));
+        var pageItems = CurrentAllergyRecheck.itemsFor("Local product", item.getId(), page);
+        var gateItems = check.itemsFor(rx, "Local product");
+        var allergies = List.of(allergy("Penicillin", AllergySeverity.SEVERE));
+        assertThat(CurrentAllergyRecheck.cards(rx.getId(), "Local product", pageItems, allergies).getFirst().exceptionKey())
+            .isEqualTo(CurrentAllergyRecheck.cards(rx.getId(), "Local product", gateItems, allergies).getFirst().exceptionKey());
+        assertThat(CurrentAllergyRecheck.itemsFor("Local product", null, page)).isEmpty();
     }
 
     private static void assertStale(CurrentAllergyRecheck check, Prescription rx, String token) {

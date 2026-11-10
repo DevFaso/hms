@@ -45,6 +45,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -589,7 +590,9 @@ class DispenseServiceImplTest {
         @Test
         @DisplayName("QA D1555: the same fill with the allergy acknowledged (the card's token and a reason) is recorded with the reason")
         void d1555_aFillWithTheAllergyAcknowledgedIsRecorded() {
-            allergiesOnRecord(severePenicillinAllergy());
+            var allergies = allergiesOnRecord(severePenicillinAllergy());
+            var audit = mock(com.example.hms.service.AuditEventLogService.class);
+            service.setAllergyRecheck(new com.example.hms.service.allergy.CurrentAllergyRecheck(allergies, null, audit));
             DispenseRequestDTO dto = buildRequest();
             Dispense entity = stubTheFill(dto);
             String token;
@@ -604,6 +607,10 @@ class DispenseServiceImplTest {
             dto.setAllergyAcknowledgementToken(token);
             service.createDispense(dto);
 
+            var event = ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(audit).logEvent(event.capture());
+            assertThat(event.getValue().getEntityType()).isEqualTo("DISPENSE");
+            assertThat(event.getValue().getResourceId()).isEqualTo(entity.getId().toString());
             verify(dispenseRepository).save(any(Dispense.class));
             assertThat(entity.getNotes()).contains("Pénicilline").contains("graded challenge");
         }

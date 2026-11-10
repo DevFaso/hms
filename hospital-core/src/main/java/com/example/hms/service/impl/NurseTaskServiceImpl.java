@@ -486,7 +486,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         }
         java.util.Map<UUID, Prescription> orders = new java.util.HashMap<>();
         ward.orders().values().forEach(rows -> rows.forEach(rx -> orders.put(rx.getId(), rx)));
-        List<com.example.hms.model.medication.MedicationCatalogItem> catalogue = allergyCheck().activeCatalogue(hospitalId);
+        List<com.example.hms.model.medication.MedicationCatalogItem> catalogue = allergyCheck().catalogueForOrders(hospitalId, orders.values());
         for (NurseMedicationTaskResponseDTO task : tasks) {
             Prescription rx = orders.get(task.getId());
             task.setCdsAdvisories(com.example.hms.service.allergy.CurrentAllergyRecheck.cards(task.getId(), task.getMedication(),
