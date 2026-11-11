@@ -13322,7 +13322,20 @@
   },
   "ALLERGY_HOLD": {
     "TITLE": "Conflicto alérgico pendiente de revisión por el prescriptor",
-    "WHAT_NOW": "Un prescriptor autorizado debe revisar este conflicto en la orden antes de administrarla o dispensarla. Aún puede registrar la dosis como suspendida o rechazada."
+    "WHAT_NOW": "Un prescriptor autorizado debe revisar este conflicto en la orden antes de administrarla o dispensarla. Aún puede registrar la dosis como suspendida o rechazada.",
+    "TITLE_STOP": "El prescriptor decidió detenerla: contacte al prescriptor",
+    "WHAT_NOW_STOP": "El prescriptor revisó este conflicto alérgico y detuvo la orden. No la administre ni la dispense; contacte al prescriptor. Aún puede registrar la dosis como suspendida o rechazada."
+  },
+  "ALLERGY_REVIEW_STATE": {
+    "TITLE_AWAITING": "Pendiente de revisión por el prescriptor",
+    "TITLE_CONTINUE": "Revisado por el prescriptor: continuar según el plan",
+    "TITLE_STOP": "El prescriptor decidió detenerla: contacte al prescriptor",
+    "BY": "Revisado por el Dr. {{name}}, {{at}}: {{decision}}",
+    "BY_UNKNOWN": "Revisado por el prescriptor, {{at}}: {{decision}}",
+    "DECISION_CONTINUE": "continuar",
+    "DECISION_STOP": "detener",
+    "PLAN": "Plan",
+    "RATIONALE": "Justificación"
   },
   "ALLERGY_REVIEW": {
     "OPEN": "Revisar conflicto alérgico",

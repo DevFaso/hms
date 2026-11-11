@@ -102,3 +102,51 @@ test('Policy 4: the prescriber review is reachable from the order detail and fro
     assert.ok(REVIEW_DIALOG.test(template), `${component} renders <app-allergy-review-dialog>`);
   }
 });
+
+// QA D1584 / D1585: a gate's allergy card says where the conflict stands (awaiting review, the
+// prescriber's CONTINUE with its plan, or STOP), from the review state the server reads on the gate's
+// own token. Every card list bound to a gate response's allergy cards renders
+// `<app-allergy-review-state>` right beside it, and so does the nurse-station row's allergy badge.
+const GATE_CARD_LIST =
+  /<app-cds-card-list\s+\[cards\]="[^"]*(?:allergyAlerts|allergyAdvisories|promptAdvisories)[^"]*"/g;
+const ROW_BADGE = /\.cdsAdvisories!\[0\]\.summary/g;
+const REVIEW_STATE = /<app-allergy-review-state\b/;
+/** How far after a card list (or a row badge) its review state may sit. */
+const NEAR = 400;
+
+export function gateCardsWithoutReviewState() {
+  const missing = [];
+  const seen = [];
+  for (const file of walk(appDir, ['.html', '.ts'])) {
+    if (file.endsWith('.spec.ts')) continue;
+    const source = readFileSync(file, 'utf8');
+    const rel = relative(appDir, file).replaceAll('\\', '/');
+    for (const pattern of [GATE_CARD_LIST, ROW_BADGE]) {
+      for (const match of source.matchAll(pattern)) {
+        seen.push(rel);
+        const after = source.slice(match.index, match.index + match[0].length + NEAR);
+        if (!REVIEW_STATE.test(after)) {
+          const line = source.slice(0, match.index).split('\n').length;
+          missing.push(`${rel}:${line}`);
+        }
+      }
+    }
+  }
+  return { seen, missing };
+}
+
+test('QA D1584: every gate allergy card shows the prescriber review state beside it', () => {
+  const { seen, missing } = gateCardsWithoutReviewState();
+  for (const expected of [
+    'nurse-station/emar/emar.component.html',
+    'nurse-station/nurse-station.html',
+    'pharmacy/dispensing.html',
+  ]) {
+    assert.ok(seen.includes(expected), `the scan must see ${expected}; saw ${seen.join(', ')}`);
+  }
+  assert.deepEqual(
+    missing,
+    [],
+    'render <app-allergy-review-state [review]="…allergyReview"> beside the gate allergy cards',
+  );
+});

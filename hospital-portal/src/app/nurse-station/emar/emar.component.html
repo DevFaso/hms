@@ -274,6 +274,8 @@
                   {{ 'EMAR.ALLERGY_ADVISORY_TITLE' | translate }}
                 </h3>
                 <app-cds-card-list [cards]="allergyAdvisories()" />
+                <!-- QA D1584: reviewed or not, and the prescriber's plan to give it under. -->
+                <app-allergy-review-state [review]="allergyReview()" />
               </section>
             }
 

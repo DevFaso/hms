@@ -107,6 +107,8 @@ import {
   allergyHoldRefusal,
 } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
 import { AllergyHoldDialogComponent } from '../shared/allergy-acknowledgement/allergy-hold-dialog.component';
+import { AllergyReviewStateComponent } from '../shared/allergy-acknowledgement/allergy-review-state.component';
+import type { AllergyReviewState } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
@@ -152,6 +154,7 @@ export function localInputToUtcIso(value: string | undefined | null): string | u
     WitnessPickerComponent,
     ReasonDialogComponent,
     AllergyHoldDialogComponent,
+    AllergyReviewStateComponent,
     MarDoseHistoryComponent,
   ],
   templateUrl: './nurse-station.html',
@@ -624,6 +627,13 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     const prompt = this.reasonPrompt();
     if (prompt?.action !== 'GIVEN') return [];
     return this.medications().find((m) => m.id === prompt.taskId)?.cdsAdvisories ?? [];
+  }
+
+  /** QA D1584: the allergy stop's review state of the dose the prompt is about (the plan to give it under). */
+  promptAllergyReview(): AllergyReviewState | null {
+    const prompt = this.reasonPrompt();
+    if (prompt?.action !== 'GIVEN') return null;
+    return this.medications().find((m) => m.id === prompt.taskId)?.allergyReview ?? null;
   }
 
   /** Translation key naming the action the reason prompt is for. */

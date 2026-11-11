@@ -1431,6 +1431,83 @@ describe('NurseStationComponent — two-tier polling', () => {
       expect(component.promptAdvisories()).toEqual([]);
     });
 
+    /** QA D1584 / D1585: the allergy stop's review state in its three forms, as the server reads it. */
+    const stopCard = {
+      summary:
+        'Allergy alert: Amoxicillin is ordered and the patient has a documented allergy to Penicillin',
+      indicator: 'critical' as const,
+      source: { label: 'HMS allergy check' },
+    };
+    const reviewStates = {
+      AWAITING_REVIEW: { state: 'AWAITING_REVIEW' as const },
+      CONTINUE: {
+        state: 'CONTINUE' as const,
+        reviewedByName: 'Aminata Ouedraogo',
+        reviewedAt: '2026-11-10T09:30:00',
+        plan: 'Surveillance 30 min après chaque dose, adrénaline au chevet',
+        rationale: 'Éruption cutanée ancienne',
+      },
+      STOP: {
+        state: 'STOP' as const,
+        reviewedByName: 'Aminata Ouedraogo',
+        reviewedAt: '2026-11-10T09:30:00',
+      },
+    };
+    function expectReviewState(container: Element | null, state: keyof typeof reviewStates): void {
+      const box = container?.querySelector('[data-testid="allergy-review-state"]');
+      expect(box?.classList).toContain(
+        `allergy-review-state--${({ AWAITING_REVIEW: 'awaiting', CONTINUE: 'continue', STOP: 'stop' } as const)[state]}`,
+      );
+      const title =
+        box?.querySelector('[data-testid="allergy-review-state-title"]')?.textContent ?? '';
+      const plan = box?.querySelector('[data-testid="allergy-review-state-plan"]');
+      const by = box?.querySelector('[data-testid="allergy-review-state-by"]');
+      if (state === 'AWAITING_REVIEW') {
+        expect(title).toContain('ALLERGY_REVIEW_STATE.TITLE_AWAITING');
+        expect(by).toBeNull();
+        expect(plan).toBeNull();
+      } else if (state === 'CONTINUE') {
+        expect(title).toContain('ALLERGY_REVIEW_STATE.TITLE_CONTINUE');
+        expect(by).not.toBeNull();
+        expect(plan?.textContent).toContain('adrénaline au chevet');
+        expect(box?.textContent).toContain('Éruption cutanée ancienne');
+      } else {
+        expect(title).toContain('ALLERGY_REVIEW_STATE.TITLE_STOP');
+        expect(by).not.toBeNull();
+        expect(plan).toBeNull();
+      }
+    }
+
+    for (const state of ['AWAITING_REVIEW', 'CONTINUE', 'STOP'] as const) {
+      it(`QA D1584: the MAR row and the Give prompt show the review state (${state})`, () => {
+        const rows = [
+          {
+            id: 'rx-amox',
+            medication: 'Amoxicillin',
+            dose: '500 mg',
+            route: 'PO',
+            status: 'DUE',
+            dueTime: '2026-11-10T10:00:00',
+            cdsAdvisories: [stopCard],
+            allergyReview: reviewStates[state],
+          },
+        ] as any;
+        nurseServiceSpy.getMedicationMAR.and.returnValue(of(rows));
+        component.refresh();
+        component.activeSection.set('medications');
+        component['pendingLoads'].set(0);
+        fixture.detectChanges();
+        const row = fixture.nativeElement.querySelector('[data-testid="med-advisory-rx-amox"]')
+          ?.parentElement as Element | null;
+        expectReviewState(row, state);
+
+        component.administerMedication('rx-amox');
+        expect(component.promptAllergyReview()).toEqual(reviewStates[state]);
+        component.promptHoldRefuse('rx-amox', 'HELD');
+        expect(component.promptAllergyReview()).toBeNull();
+      });
+    }
+
     it('D130: Escape closes the nurse task modal', () => {
       component.taskCreateOpen.set(true);
       component.onEscapeKey();

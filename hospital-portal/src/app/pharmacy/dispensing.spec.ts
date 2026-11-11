@@ -972,6 +972,75 @@ describe('DispensingComponent', () => {
     const row = cell.parent!;
     expect(row.query(By.css('.btn-action.danger'))).not.toBeNull();
   });
+
+  /** QA D1584 / D1585: the allergy stop's review state in its three forms, as the server reads it. */
+  const stopCard = {
+    summary:
+      'Allergy alert: Amoxicillin is ordered and the patient has a documented allergy to Penicillin',
+    indicator: 'critical' as const,
+    source: { label: 'HMS allergy check' },
+  };
+  const reviewStates = {
+    AWAITING_REVIEW: { state: 'AWAITING_REVIEW' as const },
+    CONTINUE: {
+      state: 'CONTINUE' as const,
+      reviewedByName: 'Aminata Ouedraogo',
+      reviewedAt: '2026-11-10T09:30:00',
+      plan: 'Surveillance 30 min après chaque dose, adrénaline au chevet',
+      rationale: 'Éruption cutanée ancienne',
+    },
+    STOP: {
+      state: 'STOP' as const,
+      reviewedByName: 'Aminata Ouedraogo',
+      reviewedAt: '2026-11-10T09:30:00',
+    },
+  };
+  function expectReviewState(container: Element | null, state: keyof typeof reviewStates): void {
+    const box = container?.querySelector('[data-testid="allergy-review-state"]');
+    expect(box?.classList).toContain(
+      `allergy-review-state--${({ AWAITING_REVIEW: 'awaiting', CONTINUE: 'continue', STOP: 'stop' } as const)[state]}`,
+    );
+    const title =
+      box?.querySelector('[data-testid="allergy-review-state-title"]')?.textContent ?? '';
+    const plan = box?.querySelector('[data-testid="allergy-review-state-plan"]');
+    const by = box?.querySelector('[data-testid="allergy-review-state-by"]');
+    if (state === 'AWAITING_REVIEW') {
+      expect(title).toContain('ALLERGY_REVIEW_STATE.TITLE_AWAITING');
+      expect(by).toBeNull();
+      expect(plan).toBeNull();
+    } else if (state === 'CONTINUE') {
+      expect(title).toContain('ALLERGY_REVIEW_STATE.TITLE_CONTINUE');
+      expect(by).not.toBeNull();
+      expect(plan?.textContent).toContain('adrénaline au chevet');
+      expect(box?.textContent).toContain('Éruption cutanée ancienne');
+    } else {
+      expect(title).toContain('ALLERGY_REVIEW_STATE.TITLE_STOP');
+      expect(by).not.toBeNull();
+      expect(plan).toBeNull();
+    }
+  }
+
+  for (const state of ['AWAITING_REVIEW', 'CONTINUE', 'STOP'] as const) {
+    it(`QA D1584: the verify/dispense panel and the hand-over show the review state (${state})`, () => {
+      const rx = {
+        ...mockWorkQueue.data.content[0],
+        allergyAlerts: [stopCard],
+        allergyReview: reviewStates[state],
+      };
+      component.selectPrescription(rx as any);
+      fixture.detectChanges();
+      expectReviewState(byTestId('dispense-allergy-alerts'), state);
+
+      component.closeForm();
+      component.openHandOver({
+        ...preparedRow,
+        allergyAlerts: [stopCard],
+        allergyReview: reviewStates[state],
+      } as any);
+      fixture.detectChanges();
+      expectReviewState(byTestId('hand-over-allergy-alerts'), state);
+    });
+  }
 });
 
 /**

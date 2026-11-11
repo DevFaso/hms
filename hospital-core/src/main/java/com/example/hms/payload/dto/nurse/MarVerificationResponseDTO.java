@@ -21,7 +21,7 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class MarVerificationResponseDTO {
+public class MarVerificationResponseDTO implements com.example.hms.payload.dto.prescription.AllergyReviewCarrier {
 
     private UUID marId;
 
@@ -46,4 +46,16 @@ public class MarVerificationResponseDTO {
      * make {@code allPassed} false: the five rights are about the scan.
      */
     private List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cdsAdvisories;
+
+
+    /**
+     * QA D1584: the allergy stop's review state, read with the cards from the same re-check the gate
+     * runs (awaiting review, CONTINUE with the plan, or STOP). Null when no card stops the drug.
+     */
+    private com.example.hms.payload.dto.prescription.AllergyReviewStateDTO allergyReview;
+
+    @Override
+    public void setAllergyCards(List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cards) {
+        this.cdsAdvisories = cards;
+    }
 }

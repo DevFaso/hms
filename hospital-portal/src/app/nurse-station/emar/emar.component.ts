@@ -41,6 +41,8 @@ import {
   allergyHoldRefusal,
 } from '../../shared/allergy-acknowledgement/allergy-acknowledgement';
 import { AllergyHoldDialogComponent } from '../../shared/allergy-acknowledgement/allergy-hold-dialog.component';
+import { AllergyReviewStateComponent } from '../../shared/allergy-acknowledgement/allergy-review-state.component';
+import type { AllergyReviewState } from '../../shared/allergy-acknowledgement/allergy-acknowledgement';
 import { toServerDateTime } from '../../shared/date-utils';
 import { joinReasons } from '../../shared/required-fields';
 
@@ -91,6 +93,7 @@ const FIVE_RIGHTS_LABEL_KEYS: Record<FiveRightsCheck, string> = {
     ReasonDialogComponent,
     MarDoseHistoryComponent,
     AllergyHoldDialogComponent,
+    AllergyReviewStateComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './emar.component.html',
@@ -165,6 +168,16 @@ export class EmarComponent implements OnInit, OnDestroy {
     const fromVerify = this.verification()?.cdsAdvisories;
     if (fromVerify) return fromVerify;
     return this.activeTask()?.cdsAdvisories ?? [];
+  });
+
+  /**
+   * QA D1584: the allergy stop's review state, from the same answer as the cards above (the bedside
+   * verify's when it ran, else the row's): the plan a CONTINUE gives the dose under, or the STOP.
+   */
+  protected readonly allergyReview = computed<AllergyReviewState | null>(() => {
+    const verification = this.verification();
+    if (verification?.cdsAdvisories) return verification.allergyReview ?? null;
+    return this.activeTask()?.allergyReview ?? null;
   });
 
   protected readonly needsOverride = computed(() => {

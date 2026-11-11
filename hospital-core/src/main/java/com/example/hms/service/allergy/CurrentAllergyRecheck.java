@@ -15,6 +15,8 @@ import com.example.hms.model.User;
 import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.clinical.CreateInBasketItemRequest;
+import com.example.hms.payload.dto.prescription.AllergyReviewCarrier;
+import com.example.hms.payload.dto.prescription.AllergyReviewStateDTO;
 import com.example.hms.repository.MedicationCatalogItemRepository;
 import com.example.hms.repository.PatientAllergyRepository;
 import com.example.hms.service.AuditEventLogService;
@@ -22,12 +24,16 @@ import com.example.hms.service.InBasketService;
 import com.example.hms.service.PrescriptionServiceImpl;
 import com.example.hms.service.i18n.NotificationLocales;
 import com.example.hms.service.pharmacy.DispenseVerificationService;
+import com.example.hms.utility.DisplayDates;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.TransactionCallbacks;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -46,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -160,6 +167,54 @@ public class CurrentAllergyRecheck {
     public record Conflict(Stop stop, String reviewToken) {
     }
 
+    /**
+     * QA D1584 / D1585: what a gate's screen shows for one order, its cards and the stop's review state,
+     * read on the very token {@link #requirePrescriberReview} checks: a card can never say "awaiting
+     * review" while the gate passes the dose, or the reverse. The cards reach a response only with their
+     * state ({@link #applyTo}): no public method hands them out alone (AllergyReviewStateGuardTest).
+     */
+    public static final class Reading {
+
+        static final Reading NONE = new Reading(List.of(), null);
+
+        private final List<CdsCard> cards;
+        private final AllergyReviewStateDTO review;
+
+        Reading(List<CdsCard> cards, AllergyReviewStateDTO review) {
+            this.cards = List.copyOf(cards);
+            this.review = review;
+        }
+
+        /** Sets the cards and the stop's review state together on a gate response. */
+        public void applyTo(AllergyReviewCarrier response) {
+            response.setAllergyCards(cards);
+            response.setAllergyReview(review);
+        }
+
+        /** Whether there is nothing to show. */
+        public boolean isEmpty() {
+            return cards.isEmpty();
+        }
+
+        /** For the tests of this package: the cards. */
+        List<CdsCard> cards() {
+            return cards;
+        }
+
+        /** For the tests of this package: the state. */
+        AllergyReviewStateDTO review() {
+            return review;
+        }
+    }
+
+    /**
+     * The roles that read a prescription's clinical content ({@code GET /prescriptions/{id}}, the patient
+     * aside): only they see a review's plan and rationale. A hospital administrator or a super-admin on
+     * the work queue or the MAR sees the state, never the narrative.
+     */
+    static final Set<String> PLAN_READERS = Set.of("ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
+        "ROLE_PHARMACIST", "ROLE_PHARMACY_VERIFIER");
+
     /* -- Reading ------------------------------------------------------------------------------- */
 
     /** The patient's allergies on record at any hospital (the prescriber's rule). */
@@ -273,10 +328,10 @@ public class CurrentAllergyRecheck {
     }
 
     /**
-     * Every card a gate shows for this drug: the stop first (with the token its acknowledgement
-     * sends back), then the cross-reactivity advisory. Empty when there is nothing to say.
+     * The cards of this drug as no review answers them (the stop first, with its token, then the
+     * cross-reactivity advisory). A gate's screen reads {@link #read} instead, which says the review.
      */
-    public static List<CdsCard> cards(UUID orderId, String medicationName, List<MedicationCatalogItem> items,
+    static List<CdsCard> cards(UUID orderId, String medicationName, List<MedicationCatalogItem> items,
                                       List<PatientAllergy> allergies) {
         List<CdsCard> cards = new ArrayList<>();
         stop(orderId, medicationName, items, allergies).ifPresent(s -> cards.add(s.card()));
@@ -284,13 +339,92 @@ public class CurrentAllergyRecheck {
         return cards;
     }
 
-    /** {@link #cards(UUID, String, List, List)} for one order, its allergies read now. */
-    public List<CdsCard> cardsFor(Prescription rx, String medicationName) {
+    /** {@link #readFor}'s cards, for the tests of this package. */
+    List<CdsCard> cardsFor(Prescription rx, String medicationName) {
+        return readFor(rx, medicationName, false).cards();
+    }
+
+    /**
+     * QA D1584: what a gate's screen shows for this order: the stop's card worded for its review state
+     * (awaiting review, CONTINUE by whom and when, or STOP), the state itself, then the cross-reactivity
+     * advisory. The state is read on {@link #reviewToken}, as {@link #requirePrescriberReview} reads it.
+     *
+     * @param showPlan whether the reader may see the review's plan and rationale
+     *                 ({@link #mayReadReviewPlan}); the state, the reviewer and the time are always said
+     */
+    public static Reading read(Prescription rx, String medicationName, List<MedicationCatalogItem> items,
+                               List<PatientAllergy> allergies, boolean showPlan) {
+        Objects.requireNonNull(rx, "rx");
+        List<CdsCard> cards = new ArrayList<>();
+        AllergyReviewStateDTO review = null;
+        Optional<Stop> stop = stop(rx.getId(), medicationName, items, allergies);
+        if (stop.isPresent()) {
+            review = reviewState(rx, reviewToken(rx, stop.get()), showPlan);
+            cards.add(cardFor(stop.get(), medicationName, review));
+        }
+        CrossReactivityAdvisory.card(medicationName, allergies).ifPresent(cards::add);
+        return cards.isEmpty() ? Reading.NONE : new Reading(cards, review);
+    }
+
+    /** {@link #read} for one order, its allergies read now (at any hospital, as the gate reads them). */
+    public Reading readFor(Prescription rx, String medicationName, boolean showPlan) {
         List<PatientAllergy> current = currentAllergies(rx);
         if (rx == null || current.isEmpty()) {
-            return List.of();
+            return Reading.NONE;
         }
-        return cards(rx.getId(), medicationName, itemsFor(rx, medicationName), current);
+        return read(rx, medicationName, itemsFor(rx, medicationName), current, showPlan);
+    }
+
+    /**
+     * Whether the caller may read a review's plan and rationale: a clinical reader of the order
+     * ({@link #PLAN_READERS}) acting at the order's own hospital. A shared patient's order read from
+     * another hospital never shows it: it is never that hospital's dose.
+     */
+    public static boolean mayReadReviewPlan(Prescription rx, UUID actingHospitalId) {
+        UUID own = rx != null && rx.getHospital() != null ? rx.getHospital().getId() : null;
+        if (own == null || !own.equals(actingHospitalId)) {
+            return false;
+        }
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            return false;
+        }
+        return auth.getAuthorities().stream().map(GrantedAuthority::getAuthority).anyMatch(PLAN_READERS::contains);
+    }
+
+    /**
+     * The decision on record that answers this very conflict, or null: a review of an earlier allergy
+     * state or an earlier version of the order no longer answers it. The gate and the screens read it here.
+     */
+    static AllergyReviewDecision decisionFor(Prescription rx, String token) {
+        return token != null && token.equals(rx.getAllergyReviewToken()) ? rx.getAllergyReviewDecision() : null;
+    }
+
+    /** The stop's review state as {@link #decisionFor} reads it. */
+    static AllergyReviewStateDTO reviewState(Prescription rx, String token, boolean showPlan) {
+        AllergyReviewDecision decision = decisionFor(rx, token);
+        if (decision == null) {
+            return AllergyReviewStateDTO.builder().state(AllergyReviewStateDTO.State.AWAITING_REVIEW).build();
+        }
+        boolean continued = decision == AllergyReviewDecision.CONTINUE;
+        return AllergyReviewStateDTO.builder()
+            .state(continued ? AllergyReviewStateDTO.State.CONTINUE : AllergyReviewStateDTO.State.STOP)
+            .reviewedByName(reviewerName(rx.getAllergyReviewedBy()))
+            .reviewedAt(rx.getAllergyReviewedAt())
+            // Decrypted by the entity's converter on read; never logged, never put in a card's text.
+            .plan(showPlan && continued ? rx.getAllergyReviewPlan() : null)
+            .rationale(showPlan ? rx.getAllergyReviewRationale() : null)
+            .build();
+    }
+
+    /** The reviewer's name as the screens show it, or null. */
+    public static String reviewerName(User reviewer) {
+        if (reviewer == null) {
+            return null;
+        }
+        String name = (Objects.toString(reviewer.getFirstName(), "").trim() + " "
+            + Objects.toString(reviewer.getLastName(), "").trim()).trim();
+        return name.isEmpty() ? null : name;
     }
 
     /* -- At a gate ----------------------------------------------------------------------------- */
@@ -327,13 +461,15 @@ public class CurrentAllergyRecheck {
         }
         Stop stop = conflict.get().stop();
         String token = conflict.get().reviewToken();
-        boolean reviewed = token.equals(rx.getAllergyReviewToken()) && rx.getAllergyReviewDecision() != null;
-        if (reviewed && rx.getAllergyReviewDecision() == AllergyReviewDecision.STOP) {
+        AllergyReviewDecision decision = decisionFor(rx, token);
+        if (decision == AllergyReviewDecision.STOP) {
+            // QA D1585: the hold says it is the prescriber's STOP, its card worded so, not "awaiting review".
+            AllergyReviewStateDTO state = reviewState(rx, token, false);
             throw new CdsCriticalBlockException(
                 MessageUtil.resolveOrRaw("allergy.recheck.prescriberStopped", stop.allergen()),
-                List.of(stop.card()), HOLD_FIELD);
+                List.of(cardFor(stop, medicationName, state)), HOLD_FIELD, state.getState().name());
         }
-        if (reviewed) {
+        if (decision == AllergyReviewDecision.CONTINUE) {
             User reviewer = rx.getAllergyReviewedBy();
             return new Acknowledgement(gate, stop, token, reviewer != null ? reviewer.getId() : null,
                 rx.getAllergyReviewedAt());
@@ -343,7 +479,8 @@ public class CurrentAllergyRecheck {
             ? MessageUtil.resolveOrRaw("allergy.recheck.awaitingReviewNobody", stop.card().summary())
             : MessageUtil.resolveOrRaw("allergy.recheck.awaitingReview", stop.card().summary(),
                 String.join(", ", told));
-        throw new CdsCriticalBlockException(why, List.of(stop.card()), HOLD_FIELD);
+        throw new CdsCriticalBlockException(why, List.of(stop.card()), HOLD_FIELD,
+            AllergyReviewStateDTO.State.AWAITING_REVIEW.name());
     }
 
     /**
@@ -529,9 +666,49 @@ public class CurrentAllergyRecheck {
             String.valueOf(allergy.getUpdatedAt()));
     }
 
-    private static CdsCard documentedCard(PatientAllergy allergy, String medicationName) {
-        String severity = MessageUtil.resolveOrRaw("cds.severity."
+    /**
+     * QA D1584 / D1585: the stop's card worded for its review state. Awaiting review keeps the card as
+     * the gate raises it; a CONTINUE names who reviewed it and when, a STOP says to contact the
+     * prescriber. The card's token (its exception key) is kept. Never the plan or the rationale: a card's
+     * text reaches readers the narrative must not ({@link #PLAN_READERS}).
+     */
+    static CdsCard cardFor(Stop stop, String medicationName, AllergyReviewStateDTO review) {
+        if (review == null || review.getState() == AllergyReviewStateDTO.State.AWAITING_REVIEW) {
+            return stop.card();
+        }
+        boolean continued = review.getState() == AllergyReviewStateDTO.State.CONTINUE;
+        String who = review.getReviewedByName() != null
+            ? MessageUtil.resolveOrRaw("allergy.recheck.reviewerName", review.getReviewedByName())
+            : MessageUtil.resolveOrRaw("allergy.recheck.reviewerUnknown");
+        String when = DisplayDates.shortDateTime(review.getReviewedAt());
+        String allergen = stop.allergen();
+        String summary;
+        if ("unverifiable".equals(stop.kind())) {
+            summary = continued
+                ? MessageUtil.resolveOrRaw("allergy.recheck.unverifiable.continued", medicationName, allergen, who, when)
+                : MessageUtil.resolveOrRaw("allergy.recheck.unverifiable.stopped", medicationName, allergen, who, when);
+        } else {
+            String severity = severityLabel(stop.allergy());
+            summary = continued
+                ? MessageUtil.resolveOrRaw("allergy.recheck.documented.continued", medicationName, allergen, severity, who, when)
+                : MessageUtil.resolveOrRaw("allergy.recheck.documented.stopped", medicationName, allergen, severity, who, when);
+        }
+        String detail = continued
+            ? MessageUtil.resolveOrRaw("allergy.recheck.detail.continued")
+            : MessageUtil.resolveOrRaw("allergy.recheck.detail.stopped");
+        CdsCard card = stop.card();
+        return new CdsCard(summary, detail,
+            card.indicator(), card.source(), card.links(), card.suggestions(), card.selectionBehavior(),
+            card.uuid(), card.hardStop(), card.reviewRequired(), card.reasonAtSignature(), card.exceptionKey());
+    }
+
+    private static String severityLabel(PatientAllergy allergy) {
+        return MessageUtil.resolveOrRaw("cds.severity."
             + (allergy.getSeverity() != null ? allergy.getSeverity().name() : "UNKNOWN"));
+    }
+
+    private static CdsCard documentedCard(PatientAllergy allergy, String medicationName) {
+        String severity = severityLabel(allergy);
         return new CdsCard(
             MessageUtil.resolveOrRaw("allergy.recheck.documented", medicationName,
                 AllergyDrugIdentity.displayOf(allergy), severity),

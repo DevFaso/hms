@@ -181,6 +181,102 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     });
   });
 
+  /** QA D1584 / D1585: the allergy stop's review state in its three forms, as the server reads it. */
+  const stopCard = {
+    summary:
+      'Allergy alert: Amoxicillin is ordered and the patient has a documented allergy to Penicillin',
+    indicator: 'critical' as const,
+    source: { label: 'HMS allergy check' },
+  };
+  const reviewStates = {
+    AWAITING_REVIEW: { state: 'AWAITING_REVIEW' as const },
+    CONTINUE: {
+      state: 'CONTINUE' as const,
+      reviewedByName: 'Aminata Ouedraogo',
+      reviewedAt: '2026-11-10T09:30:00',
+      plan: 'Surveillance 30 min après chaque dose, adrénaline au chevet',
+      rationale: 'Éruption cutanée ancienne',
+    },
+    STOP: {
+      state: 'STOP' as const,
+      reviewedByName: 'Aminata Ouedraogo',
+      reviewedAt: '2026-11-10T09:30:00',
+    },
+  };
+  function expectReviewState(container: Element | null, state: keyof typeof reviewStates): void {
+    const box = container?.querySelector('[data-testid="allergy-review-state"]');
+    expect(box?.classList).toContain(
+      `allergy-review-state--${({ AWAITING_REVIEW: 'awaiting', CONTINUE: 'continue', STOP: 'stop' } as const)[state]}`,
+    );
+    const title =
+      box?.querySelector('[data-testid="allergy-review-state-title"]')?.textContent ?? '';
+    const plan = box?.querySelector('[data-testid="allergy-review-state-plan"]');
+    const by = box?.querySelector('[data-testid="allergy-review-state-by"]');
+    if (state === 'AWAITING_REVIEW') {
+      expect(title).toContain('ALLERGY_REVIEW_STATE.TITLE_AWAITING');
+      expect(by).toBeNull();
+      expect(plan).toBeNull();
+    } else if (state === 'CONTINUE') {
+      expect(title).toContain('ALLERGY_REVIEW_STATE.TITLE_CONTINUE');
+      expect(by).not.toBeNull();
+      expect(plan?.textContent).toContain('adrénaline au chevet');
+      expect(box?.textContent).toContain('Éruption cutanée ancienne');
+    } else {
+      expect(title).toContain('ALLERGY_REVIEW_STATE.TITLE_STOP');
+      expect(by).not.toBeNull();
+      expect(plan).toBeNull();
+    }
+  }
+
+  for (const state of ['AWAITING_REVIEW', 'CONTINUE', 'STOP'] as const) {
+    it(`QA D1584: the eMAR card shows the prescriber review state (${state})`, () => {
+      const task: NurseMedicationTask = {
+        ...sampleTask,
+        id: 'task-amox',
+        medication: 'Amoxicillin',
+        cdsAdvisories: [stopCard],
+        allergyReview: reviewStates[state],
+      };
+      nurseSpy.getMedicationMAR.and.returnValue(of([task]));
+      fixture.detectChanges();
+      component['selectTask'](task);
+      fixture.detectChanges();
+      expectReviewState(root().querySelector('[data-testid="emar-allergy-advisory"]'), state);
+    });
+  }
+
+  it("QA D1584: the bedside verify's review state replaces the row's", () => {
+    const task: NurseMedicationTask = {
+      ...sampleTask,
+      id: 'task-amox',
+      medication: 'Amoxicillin',
+      cdsAdvisories: [stopCard],
+      allergyReview: reviewStates.AWAITING_REVIEW,
+    };
+    nurseSpy.getMedicationMAR.and.returnValue(of([task]));
+    nurseSpy.verifyMedication.and.returnValue(
+      of({
+        marId: task.id,
+        outcomes: { PATIENT: true, DRUG: true, DOSE: true, ROUTE: true, TIME: true },
+        failedChecks: [],
+        failureReasons: {},
+        allPassed: true,
+        verifiedAt: '2026-11-10T10:01:00',
+        cdsAdvisories: [stopCard],
+        allergyReview: reviewStates.CONTINUE,
+      } as MarVerificationResponse),
+    );
+    fixture.detectChanges();
+    component['selectTask'](task);
+    component['patientScan'].set('CHW7809');
+    component['medicationScan'].set('Amoxicillin');
+    component['doseScan'].set(task.dose);
+    component['routeScan'].set(task.route);
+    component['verify']();
+    fixture.detectChanges();
+    expectReviewState(root().querySelector('[data-testid="emar-allergy-advisory"]'), 'CONTINUE');
+  });
+
   it('QA D1225: the chosen dose shows the doses already recorded, with their reasons', () => {
     const task = {
       ...sampleTask,

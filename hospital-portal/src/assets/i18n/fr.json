@@ -13322,7 +13322,20 @@
   },
   "ALLERGY_HOLD": {
     "TITLE": "Conflit allergique en attente de revue par le prescripteur",
-    "WHAT_NOW": "Un prescripteur habilité doit revoir ce conflit sur la prescription avant toute administration ou délivrance. Vous pouvez toujours noter la dose comme suspendue ou refusée."
+    "WHAT_NOW": "Un prescripteur habilité doit revoir ce conflit sur la prescription avant toute administration ou délivrance. Vous pouvez toujours noter la dose comme suspendue ou refusée.",
+    "TITLE_STOP": "Le prescripteur a décidé d’arrêter : contactez le prescripteur",
+    "WHAT_NOW_STOP": "Le prescripteur a revu ce conflit allergique et arrêté la prescription. Ne pas administrer ni délivrer ; contactez le prescripteur. Vous pouvez toujours enregistrer la dose comme suspendue ou refusée."
+  },
+  "ALLERGY_REVIEW_STATE": {
+    "TITLE_AWAITING": "En attente de revue par le prescripteur",
+    "TITLE_CONTINUE": "Revu par le prescripteur : poursuivre selon le plan",
+    "TITLE_STOP": "Le prescripteur a décidé d’arrêter : contactez le prescripteur",
+    "BY": "Revu par le Dr {{name}}, {{at}} : {{decision}}",
+    "BY_UNKNOWN": "Revu par le prescripteur, {{at}} : {{decision}}",
+    "DECISION_CONTINUE": "poursuivre",
+    "DECISION_STOP": "arrêter",
+    "PLAN": "Conduite à tenir",
+    "RATIONALE": "Justification"
   },
   "ALLERGY_REVIEW": {
     "OPEN": "Revoir le conflit allergique",

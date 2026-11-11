@@ -1389,8 +1389,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             allergyRecheck == null ? java.util.Optional.empty() : allergyRecheck.currentConflict(prescription);
         com.example.hms.model.User reviewer = prescription.getAllergyReviewedBy();
         String reviewerName = reviewer == null ? null
-            : (java.util.Objects.toString(reviewer.getFirstName(), "").trim() + " "
-                + java.util.Objects.toString(reviewer.getLastName(), "").trim()).trim();
+            : java.util.Objects.toString(com.example.hms.service.allergy.CurrentAllergyRecheck.reviewerName(reviewer), "");
         String token = conflict.map(com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict::reviewToken).orElse(null);
         return com.example.hms.payload.dto.prescription.AllergyConflictDTO.builder()
             .conflict(conflict.isPresent())
