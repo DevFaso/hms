@@ -53,6 +53,7 @@ import {
   allergyHoldRefusal,
 } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
 import { AllergyHoldDialogComponent } from '../shared/allergy-acknowledgement/allergy-hold-dialog.component';
+import { AllergyReviewStateComponent } from '../shared/allergy-acknowledgement/allergy-review-state.component';
 import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 
 /** The viewer's local calendar date as YYYY-MM-DD (not the UTC one). */
@@ -187,6 +188,7 @@ export function sameDispenseUnit(
     InlineSubFormDirective,
     InlineDiscardAskComponent,
     AllergyHoldDialogComponent,
+    AllergyReviewStateComponent,
     CdsCardListComponent,
   ],
   templateUrl: './dispensing.html',

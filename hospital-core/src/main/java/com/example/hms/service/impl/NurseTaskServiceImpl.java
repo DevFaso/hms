@@ -490,10 +490,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         List<com.example.hms.model.medication.MedicationCatalogItem> catalogue = allergyCheck().catalogueForOrders(hospitalId, orders.values());
         for (NurseMedicationTaskResponseDTO task : tasks) {
             Prescription rx = orders.get(task.getId());
-            task.setCdsAdvisories(com.example.hms.service.allergy.CurrentAllergyRecheck.cards(task.getId(), task.getMedication(),
+            if (rx == null) {
+                task.setCdsAdvisories(List.of());
+                continue;
+            }
+            // QA D1584: the cards with the stop's review state (CONTINUE with its plan, STOP), as the gate reads it.
+            com.example.hms.service.allergy.CurrentAllergyRecheck.read(rx, task.getMedication(),
                 com.example.hms.service.allergy.CurrentAllergyRecheck.itemsFor(task.getMedication(),
-                    rx != null ? rx.getMedicationCatalogItemId() : null, catalogue),
-                allergies.getOrDefault(task.getPatientId(), List.of())));
+                    rx.getMedicationCatalogItemId(), catalogue),
+                allergies.getOrDefault(task.getPatientId(), List.of()),
+                com.example.hms.service.allergy.CurrentAllergyRecheck.mayReadReviewPlan(rx, hospitalId)).applyTo(task);
         }
     }
 
@@ -508,13 +514,14 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     /**
      * QA D1563: the allergy cards of one order, its patient's allergies read now (at any hospital, as
-     * for the prescriber): every bedside check and every recorded dose answers with them.
+     * for the prescriber): every bedside check and every recorded dose answers with them. QA D1584:
+     * with the stop's review state, the plan for a clinical reader at the order's own hospital.
      */
-    private List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> allergyCardsFor(Prescription rx, String medicationName) {
-        if (rx == null) {
-            return List.of();
-        }
-        return allergyCheck().cardsFor(rx, medicationName);
+    private com.example.hms.service.allergy.CurrentAllergyRecheck.Reading allergyCardsFor(
+        Prescription rx, String medicationName, UUID actingHospitalId
+    ) {
+        return allergyCheck().readFor(rx, medicationName,
+            com.example.hms.service.allergy.CurrentAllergyRecheck.mayReadReviewPlan(rx, actingHospitalId));
     }
 
     /**
@@ -675,7 +682,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 .dueTime(marRecord.getScheduledTime())
                 .status(normalizedStatus)
                 .witnessName(witnessName(marRecord.getWitnessUser()))
-                .build(), marRecord.getPrescription(), marStatus);
+                .build(), marRecord.getPrescription(), marStatus, hospitalId);
         }
 
         // Last resort: work with synthetic task list (backward-compatible)
@@ -752,8 +759,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         List<String> failed = result.failedChecks().stream().map(Enum::name).toList();
 
         // QA D1563: the order's drug against the patient's allergies on record NOW.
-        List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> advisories =
-            allergyCardsFor(mar.getPrescription(), medicationNameOf(mar));
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Reading allergy =
+            allergyCardsFor(mar.getPrescription(), medicationNameOf(mar), hospitalId);
         MarVerificationResponseDTO verification = MarVerificationResponseDTO.builder()
             .marId(mar.getId())
             .outcomes(outcomes)
@@ -761,11 +768,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .failureReasons(reasons)
             .allPassed(result.allPassed())
             .verifiedAt(verifiedAt)
-            // QA D799: the five rights can all pass and the dose still need a
-            // second look; the advisory never turns allPassed false.
-            .cdsAdvisories(advisories)
             .build();
-        withParacetamolExposureAfterCommit(mar.getPrescription(), hospitalId, false, advisories,
+        // QA D799: the five rights can all pass and the dose still need a
+        // second look; the advisory never turns allPassed false.
+        allergy.applyTo(verification);
+        withParacetamolExposureAfterCommit(mar.getPrescription(), hospitalId, false, verification.getCdsAdvisories(),
             verification::setCdsAdvisories);
         return verification;
     }
@@ -1469,20 +1476,19 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * copy.
      */
     private NurseMedicationTaskResponseDTO answerAfterDose(NurseMedicationTaskResponseDTO task, Prescription rx,
-                                                           MedicationAdministrationStatus recorded) {
+                                                           MedicationAdministrationStatus recorded,
+                                                           UUID actingHospitalId) {
         List<MedicationAdministrationRecord> rows = doseRows(rx);
         if (rx != null) {
             // The same server clock the list reads (Sonar: the zone made explicit).
             LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
             withOrderReading(task, rx, MarNextDose.of(rx, now, rows, EARLY_ADMINISTRATION_WINDOW), now,
                 pharmacistVerificationService.isControlledSubstance(rx));
-            List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> allergy =
-                allergyCardsFor(rx, rx.getMedicationName());
-            task.setCdsAdvisories(allergy);
+            allergyCardsFor(rx, rx.getMedicationName(), actingHospitalId).applyTo(task);
             // CR-03: only a dose given moves the exposure; one held or refused is no warning to give.
             if (recorded == MedicationAdministrationStatus.GIVEN) {
                 withParacetamolExposureAfterCommit(rx, rx.getHospital() != null ? rx.getHospital().getId() : null,
-                    true, allergy, task::setCdsAdvisories);
+                    true, task.getCdsAdvisories(), task::setCdsAdvisories);
             }
         }
         return withDoseHistory(task, closedDoses(rows));
@@ -1783,7 +1789,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .dueTime(saved.getScheduledTime())
             .status(status.name())
             .witnessName(witnessName(saved.getWitnessUser()))
-            .build(), rx, status);
+            .build(), rx, status, hospitalId);
     }
 
     /**
@@ -1838,7 +1844,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .dueTime(saved.getScheduledTime())
             .status(status.name())
             .witnessName(witnessName(saved.getWitnessUser()))
-            .build(), rx, status);
+            .build(), rx, status, hospitalId);
     }
 
     /**

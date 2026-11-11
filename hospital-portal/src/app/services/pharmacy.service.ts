@@ -1,6 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import type { AllergyReviewState } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
 
 /* ───────────────────────────── Medication Catalog ───────────────────────────── */
@@ -587,6 +588,8 @@ export interface WorkQueuePrescription {
    * after the signature included); the stop's `exceptionKey` is the token a fill sends back.
    */
   allergyAlerts?: CdsCard[];
+  /** QA D1584: the allergy stop's review state (awaiting, CONTINUE with the plan, STOP). */
+  allergyReview?: AllergyReviewState | null;
   /** Existing when a recorded death was disputed: a prescriber reviews it first. */
   heldForReview?: boolean;
 }

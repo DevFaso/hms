@@ -22,7 +22,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class WorkQueuePrescriptionDTO {
+public class WorkQueuePrescriptionDTO implements com.example.hms.payload.dto.prescription.AllergyReviewCarrier {
 
     /** Existing when a recorded death was disputed: a prescriber's review comes first. */
     private boolean heldForReview;
@@ -100,6 +100,19 @@ public class WorkQueuePrescriptionDTO {
      * with the pharmacist's reason, then any cross-reactivity warning. Absent when there is none.
      */
     private java.util.List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> allergyAlerts;
+
+
+    /**
+     * QA D1584: the allergy stop's review state, read with the cards from the same re-check the gate
+     * runs (awaiting review, CONTINUE with the plan, or STOP). Null when no card stops the drug.
+     */
+    private com.example.hms.payload.dto.prescription.AllergyReviewStateDTO allergyReview;
+
+    /** The cards travel as {@code allergyAlerts}; absent (null) when there is none. */
+    @Override
+    public void setAllergyCards(java.util.List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cards) {
+        this.allergyAlerts = cards == null || cards.isEmpty() ? null : cards;
+    }
 
     /**
      * Refill context for the dispensing decision. Null on a prescription that

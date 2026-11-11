@@ -2,6 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
+import type { AllergyReviewState } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
 import { NewbornVitalAlert } from '../shared/newborn-vital-alerts';
 
@@ -109,6 +110,8 @@ export interface NurseMedicationTask {
    * given. Empty when there is nothing to say.
    */
   cdsAdvisories?: CdsCard[];
+  /** QA D1584: the allergy stop's review state (awaiting, CONTINUE with the plan, STOP). */
+  allergyReview?: AllergyReviewState | null;
 }
 
 /** Bedside five-rights barcode-scan check (P1 #8). */
@@ -131,6 +134,8 @@ export interface MarVerificationResponse {
   verifiedAt: string;
   /** QA D799: advisories that never fail a right (allPassed stays true). */
   cdsAdvisories?: CdsCard[];
+  /** QA D1584: the allergy stop's review state, read with the cards. */
+  allergyReview?: AllergyReviewState | null;
 }
 
 export interface NurseOrderTask {

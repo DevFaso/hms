@@ -17,10 +17,26 @@ export const ALLERGY_HOLD_FIELD = 'allergyPrescriberReview';
 /** The prefix of the allergy card's `exceptionKey`. */
 export const ALLERGY_KEY_PREFIX = 'allergy:';
 
+/**
+ * QA D1584 / D1585: where an allergy conflict stands at the gates, read by the server on the same token
+ * the gates check. `plan` and `rationale` come only to a clinical reader of the order at its own hospital.
+ */
+export type AllergyReviewStatus = 'AWAITING_REVIEW' | 'CONTINUE' | 'STOP';
+
+export interface AllergyReviewState {
+  state: AllergyReviewStatus;
+  reviewedByName?: string | null;
+  reviewedAt?: string | null;
+  plan?: string | null;
+  rationale?: string | null;
+}
+
 /** What the server held: its sentence (awaiting review, who was notified, or the prescriber's STOP) and the card(s). */
 export interface AllergyHold {
   why: string;
   cards: CdsCard[];
+  /** QA D1585: `STOP` when the prescriber stopped the order; otherwise it awaits review. */
+  state?: AllergyReviewStatus;
 }
 
 /** The server's allergy hold when `err` is one, else `null` (any other refusal keeps its own handling). */
@@ -33,6 +49,7 @@ export function allergyHoldRefusal(err: unknown): AllergyHold | null {
         fieldErrors?: Record<string, unknown> | null;
         message?: unknown;
         cdsAdvisories?: CdsCard[] | null;
+        reviewState?: unknown;
       }
     | null
     | undefined;
@@ -46,5 +63,6 @@ export function allergyHoldRefusal(err: unknown): AllergyHold | null {
         : '';
   if (!why) return null;
   const cards = Array.isArray(body.cdsAdvisories) ? body.cdsAdvisories : [];
-  return { why, cards };
+  const state: AllergyReviewStatus = body.reviewState === 'STOP' ? 'STOP' : 'AWAITING_REVIEW';
+  return { why, cards, state };
 }

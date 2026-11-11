@@ -1656,7 +1656,7 @@ public class DispenseServiceImpl implements DispenseService {
         Set<UUID> heldForReview = com.example.hms.service.support.OrderReviewHoldGuard.heldAmong(
                 com.example.hms.enums.OrderReviewType.PRESCRIPTION, hospitalId, rows.stream().map(Prescription::getId).toList());
         LocalDateTime uncollectedBefore = LocalDateTime.now(clock).minus(uncollectedAfter);
-        Map<UUID, List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard>> allergyAlerts = allergyAlertsFor(rows, hospitalId);
+        Map<UUID, com.example.hms.service.allergy.CurrentAllergyRecheck.Reading> allergyAlerts = allergyAlertsFor(rows, hospitalId);
         return page.map(p -> {
             Dispense prepared = preparedFills.get(p.getId());
             WorkQueuePrescriptionDTO dto = toWorkQueueDTO(p, latestRefills.get(p.getId()),
@@ -1709,7 +1709,7 @@ public class DispenseServiceImpl implements DispenseService {
      * QA D1555: the allergy cards of each order on the page against its patient's CURRENT allergies,
      * the allergies in one query and the catalogue once, and only when a patient on the page has one.
      */
-    private Map<UUID, List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard>> allergyAlertsFor(
+    private Map<UUID, com.example.hms.service.allergy.CurrentAllergyRecheck.Reading> allergyAlertsFor(
             List<Prescription> rows, UUID hospitalId) {
         if (allergyRecheck == null || rows.isEmpty()) {
             return Map.of();
@@ -1721,26 +1721,30 @@ public class DispenseServiceImpl implements DispenseService {
             return Map.of();
         }
         List<MedicationCatalogItem> catalogue = allergyRecheck.catalogueForOrders(hospitalId, rows);
-        Map<UUID, List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard>> byOrder = new HashMap<>();
+        Map<UUID, com.example.hms.service.allergy.CurrentAllergyRecheck.Reading> byOrder = new HashMap<>();
         for (Prescription p : rows) {
             List<com.example.hms.model.PatientAllergy> patientAllergies = p.getPatient() == null ? List.of()
                     : allergies.getOrDefault(p.getPatient().getId(), List.of());
-            List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cards = com.example.hms.service.allergy.CurrentAllergyRecheck.cards(p.getId(), p.getMedicationName(),
-                    com.example.hms.service.allergy.CurrentAllergyRecheck.itemsFor(p.getMedicationName(), p.getMedicationCatalogItemId(), catalogue), patientAllergies);
-            if (!cards.isEmpty()) {
-                byOrder.put(p.getId(), cards);
+            // QA D1584: the cards with the stop's review state (CONTINUE with its plan, STOP), as the gate reads it.
+            com.example.hms.service.allergy.CurrentAllergyRecheck.Reading reading = com.example.hms.service.allergy.CurrentAllergyRecheck.read(
+                    p, p.getMedicationName(),
+                    com.example.hms.service.allergy.CurrentAllergyRecheck.itemsFor(p.getMedicationName(), p.getMedicationCatalogItemId(), catalogue),
+                    patientAllergies, com.example.hms.service.allergy.CurrentAllergyRecheck.mayReadReviewPlan(p, hospitalId));
+            if (!reading.isEmpty()) {
+                byOrder.put(p.getId(), reading);
             }
         }
         return byOrder;
     }
 
-    /** QA D1555: the row carries the cards; a stop is the row's first reason for attention. */
+    /** QA D1555: the row carries the cards and their review state; a stop is the row's first reason for attention. */
     private static void withAllergyAlerts(WorkQueuePrescriptionDTO dto,
-                                          List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cards) {
-        if (cards == null || cards.isEmpty()) {
+                                          com.example.hms.service.allergy.CurrentAllergyRecheck.Reading reading) {
+        if (reading == null || reading.isEmpty()) {
             return;
         }
-        dto.setAllergyAlerts(cards);
+        reading.applyTo(dto);
+        List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cards = dto.getAllergyAlerts();
         if (cards.stream().anyMatch(c -> c.indicator() == com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL)) {
             dto.setAttentionReason(ATTENTION_ALLERGY);
             dto.setNeedsAttention(true);

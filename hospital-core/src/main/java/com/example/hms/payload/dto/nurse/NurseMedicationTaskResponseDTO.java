@@ -12,7 +12,7 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-public class NurseMedicationTaskResponseDTO {
+public class NurseMedicationTaskResponseDTO implements com.example.hms.payload.dto.prescription.AllergyReviewCarrier {
 
     /** Existing when a recorded death was disputed: a prescriber's review comes first. */
     private boolean heldForReview;
@@ -109,4 +109,16 @@ public class NurseMedicationTaskResponseDTO {
      * there is nothing to say; never a block.
      */
     private java.util.List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cdsAdvisories;
+
+
+    /**
+     * QA D1584: the allergy stop's review state, read with the cards from the same re-check the gate
+     * runs (awaiting review, CONTINUE with the plan, or STOP). Null when no card stops the drug.
+     */
+    private com.example.hms.payload.dto.prescription.AllergyReviewStateDTO allergyReview;
+
+    @Override
+    public void setAllergyCards(java.util.List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cards) {
+        this.cdsAdvisories = cards;
+    }
 }

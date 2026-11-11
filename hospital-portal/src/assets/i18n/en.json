@@ -13322,7 +13322,20 @@
   },
   "ALLERGY_HOLD": {
     "TITLE": "Allergy conflict awaiting prescriber review",
-    "WHAT_NOW": "An authorized prescriber must review this conflict on the order before it is given or dispensed. You can still record the dose as held or refused."
+    "WHAT_NOW": "An authorized prescriber must review this conflict on the order before it is given or dispensed. You can still record the dose as held or refused.",
+    "TITLE_STOP": "Prescriber decided to stop: contact the prescriber",
+    "WHAT_NOW_STOP": "The prescriber reviewed this allergy conflict and stopped the order. Do not give or dispense it; contact the prescriber. You can still record the dose as held or refused."
+  },
+  "ALLERGY_REVIEW_STATE": {
+    "TITLE_AWAITING": "Awaiting prescriber review",
+    "TITLE_CONTINUE": "Prescriber reviewed: continue under the plan",
+    "TITLE_STOP": "Prescriber decided to stop: contact the prescriber",
+    "BY": "Reviewed by Dr {{name}}, {{at}}: {{decision}}",
+    "BY_UNKNOWN": "Reviewed by the prescriber, {{at}}: {{decision}}",
+    "DECISION_CONTINUE": "continue",
+    "DECISION_STOP": "stop",
+    "PLAN": "Plan",
+    "RATIONALE": "Rationale"
   },
   "ALLERGY_REVIEW": {
     "OPEN": "Review allergy conflict",

@@ -513,6 +513,8 @@
                             [title]="m.cdsAdvisories![0].summary"
                             >{{ 'EMAR.ALLERGY_ADVISORY_CHIP' | translate }}</span
                           >
+                          <!-- QA D1584: the row says whether the prescriber reviewed it, and the plan. -->
+                          <app-allergy-review-state [review]="m.allergyReview" />
                         }
                       </td>
                       <td>{{ m.dose }}</td>
@@ -1381,6 +1383,7 @@
         @if (promptAdvisories().length) {
           <div role="alert" data-testid="give-prompt-advisory">
             <app-cds-card-list [cards]="promptAdvisories()" />
+            <app-allergy-review-state [review]="promptAllergyReview()" />
           </div>
         }
         <p>{{ 'NURSE.OVERRIDE_EXPLAIN' | translate }}</p>

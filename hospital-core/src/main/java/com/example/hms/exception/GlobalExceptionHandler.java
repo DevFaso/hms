@@ -188,6 +188,9 @@ public class GlobalExceptionHandler {
             body.put(FIELD_FIELD, ex.getField());
             body.put(FIELD_ERRORS, Map.of(ex.getField(), ex.getMessage()));
         }
+        if (ex.getReviewState() != null) {
+            body.put("reviewState", ex.getReviewState());
+        }
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }

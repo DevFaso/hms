@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 
 import { ModalDialogDirective } from '../a11y/modal-dialog.directive';
@@ -37,13 +37,17 @@ let nextId = 0;
         (keydown.escape)="$event.stopPropagation()"
         data-testid="allergy-hold-dialog"
       >
-        <h2 [id]="titleId">{{ 'ALLERGY_HOLD.TITLE' | translate }}</h2>
+        <h2 [id]="titleId" data-testid="allergy-hold-title">
+          {{ (stopped() ? 'ALLERGY_HOLD.TITLE_STOP' : 'ALLERGY_HOLD.TITLE') | translate }}
+        </h2>
         <div class="dialog-body">
           <p class="form-error" role="alert" [id]="whyId" data-testid="allergy-hold-why">
             {{ refusal().why }}
           </p>
           <app-cds-card-list [cards]="refusal().cards" />
-          <p>{{ 'ALLERGY_HOLD.WHAT_NOW' | translate }}</p>
+          <p>
+            {{ (stopped() ? 'ALLERGY_HOLD.WHAT_NOW_STOP' : 'ALLERGY_HOLD.WHAT_NOW') | translate }}
+          </p>
         </div>
         <div class="modal-actions">
           <button
@@ -63,6 +67,9 @@ let nextId = 0;
 export class AllergyHoldDialogComponent {
   readonly refusal = input.required<AllergyHold>();
   readonly closed = output<void>();
+
+  /** QA D1585: the prescriber stopped the order; the hold no longer awaits a review. */
+  protected readonly stopped = computed(() => this.refusal().state === 'STOP');
 
   private readonly uid = ++nextId;
   protected readonly titleId = `allergy-hold-title-${this.uid}`;

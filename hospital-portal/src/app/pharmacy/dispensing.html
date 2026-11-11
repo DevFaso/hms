@@ -120,6 +120,8 @@
         >
           <h4>{{ 'PHARMACY.ALLERGY_ALERTS_TITLE' | translate }}</h4>
           <app-cds-card-list [cards]="selectedPrescription!.allergyAlerts!" />
+          <!-- QA D1584: reviewed or not, and the prescriber's plan to verify and dispense it under. -->
+          <app-allergy-review-state [review]="selectedPrescription!.allergyReview" />
         </section>
       }
 
@@ -467,6 +469,17 @@
         </span>
       </div>
       @if (action.kind === 'handOver') {
+        <!-- QA D1584: the hand-over shows the allergy cards and the prescriber's review too. -->
+        @if (action.rx.allergyAlerts?.length) {
+          <section
+            role="alert"
+            [attr.aria-label]="'PHARMACY.ALLERGY_ALERTS_TITLE' | translate"
+            data-testid="hand-over-allergy-alerts"
+          >
+            <app-cds-card-list [cards]="action.rx.allergyAlerts!" />
+            <app-allergy-review-state [review]="action.rx.allergyReview" />
+          </section>
+        }
         <p>{{ 'PHARMACY.HAND_OVER_CONFIRM' | translate }}</p>
         <div class="form-row">
           <div class="field full-width">
