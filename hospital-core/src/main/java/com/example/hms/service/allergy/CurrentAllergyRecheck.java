@@ -299,7 +299,7 @@ public class CurrentAllergyRecheck {
      * The conflict this order meets now, read on its own drug, or empty: what the prescriber reviews.
      */
     public Optional<Conflict> currentConflict(Prescription rx) {
-        return rx == null ? Optional.empty() : currentConflict(rx, rx.getMedicationName());
+        return currentConflict(Objects.requireNonNull(rx, "rx"), rx.getMedicationName());
     }
 
     private Optional<Conflict> currentConflict(Prescription rx, String medicationName) {
