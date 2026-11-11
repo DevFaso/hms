@@ -36,7 +36,7 @@ describe('AllergyReviewStateComponent (QA D1584)', () => {
 
   it('unreviewed: awaiting the prescriber review, with no reviewer and no plan', () => {
     show({ state: 'AWAITING_REVIEW' });
-    expect(el('allergy-review-state')?.getAttribute('data-state')).toBe('AWAITING_REVIEW');
+    expect(el('allergy-review-state')?.classList).toContain('allergy-review-state--awaiting');
     expect(el('allergy-review-state-title')?.textContent).toContain(
       'ALLERGY_REVIEW_STATE.TITLE_AWAITING',
     );
@@ -77,7 +77,7 @@ describe('AllergyReviewStateComponent (QA D1584)', () => {
 
   it('STOP: the prescriber decided to stop, contact the prescriber', () => {
     show({ state: 'STOP', reviewedByName: null, reviewedAt: '2026-11-10T09:30:00' });
-    expect(el('allergy-review-state')?.getAttribute('data-state')).toBe('STOP');
+    expect(el('allergy-review-state')?.classList).toContain('allergy-review-state--stop');
     expect(el('allergy-review-state-title')?.textContent).toContain(
       'ALLERGY_REVIEW_STATE.TITLE_STOP',
     );

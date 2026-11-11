@@ -28,7 +28,6 @@ import { AllergyReviewState } from './allergy-acknowledgement';
         [class.allergy-review-state--continue]="r.state === 'CONTINUE'"
         [class.allergy-review-state--stop]="r.state === 'STOP'"
         [class.allergy-review-state--awaiting]="r.state === 'AWAITING_REVIEW'"
-        [attr.data-state]="r.state"
         data-testid="allergy-review-state"
       >
         <p class="allergy-review-state__title" data-testid="allergy-review-state-title">
@@ -42,11 +41,7 @@ import { AllergyReviewState } from './allergy-acknowledgement';
                   : {
                       name: r.reviewedByName,
                       at: r.reviewedAt | serverTime | dateTime,
-                      decision:
-                        (r.state === 'CONTINUE'
-                          ? 'ALLERGY_REVIEW_STATE.DECISION_CONTINUE'
-                          : 'ALLERGY_REVIEW_STATE.DECISION_STOP'
-                        ) | translate,
+                      decision: decisionKey() | translate,
                     }
             }}
           </p>
@@ -88,6 +83,13 @@ import { AllergyReviewState } from './allergy-acknowledgement';
 })
 export class AllergyReviewStateComponent {
   readonly review = input<AllergyReviewState | null | undefined>(null);
+
+  /** The decision word of the "reviewed by" line. */
+  protected readonly decisionKey = computed(() =>
+    this.review()?.state === 'CONTINUE'
+      ? 'ALLERGY_REVIEW_STATE.DECISION_CONTINUE'
+      : 'ALLERGY_REVIEW_STATE.DECISION_STOP',
+  );
 
   protected readonly titleKey = computed(() => {
     switch (this.review()?.state) {

@@ -205,7 +205,9 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
   };
   function expectReviewState(container: Element | null, state: keyof typeof reviewStates): void {
     const box = container?.querySelector('[data-testid="allergy-review-state"]');
-    expect(box?.getAttribute('data-state')).toBe(state);
+    expect(box?.classList).toContain(
+      `allergy-review-state--${({ AWAITING_REVIEW: 'awaiting', CONTINUE: 'continue', STOP: 'stop' } as const)[state]}`,
+    );
     const title =
       box?.querySelector('[data-testid="allergy-review-state-title"]')?.textContent ?? '';
     const plan = box?.querySelector('[data-testid="allergy-review-state-plan"]');
