@@ -206,6 +206,63 @@ class CurrentAllergyRecheckTest {
         });
     }
 
+    /** Review of #1110 (P2): only those actually told are named; a failed notice never reads as delivered. */
+    @Test
+    void aFailedNoticeIsNotNamedAndTheOthersAreStillTold() {
+        MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        Prescription rx = notifiableOrder();
+        var notices = mock(com.example.hms.service.InBasketService.class);
+        // The prescriber's notice fails; the signer already holds one (the in-basket answers null).
+        when(notices.createItemInNewTransaction(org.mockito.ArgumentMatchers.any()))
+            .thenThrow(new IllegalStateException("boom")).thenReturn(null);
+        CurrentAllergyRecheck check = new CurrentAllergyRecheck(penicillinOnRecord(rx), null, null);
+        check.setNotices(notices);
+
+        assertThatThrownBy(() -> check.requirePrescriberReview(CurrentAllergyRecheck.Gate.DISPENSE, rx, "Amoxicillin"))
+            .isInstanceOf(CdsCriticalBlockException.class)
+            .hasMessageContaining("Issa Kabore")
+            .satisfies(e -> assertThat(e.getMessage()).doesNotContain("Awa Traore"));
+        verify(notices, times(2)).createItemInNewTransaction(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void whenNobodyWasToldTheHoldSaysToContactThePrescriber() {
+        MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        Prescription rx = notifiableOrder();
+        var failing = mock(com.example.hms.service.InBasketService.class);
+        when(failing.createItemInNewTransaction(org.mockito.ArgumentMatchers.any()))
+            .thenThrow(new IllegalStateException("boom"));
+        CurrentAllergyRecheck allFail = new CurrentAllergyRecheck(penicillinOnRecord(rx), null, null);
+        allFail.setNotices(failing);
+        CurrentAllergyRecheck noService = new CurrentAllergyRecheck(penicillinOnRecord(rx), null, null);
+
+        for (CurrentAllergyRecheck check : List.of(allFail, noService)) {
+            assertThatThrownBy(() -> check.requirePrescriberReview(CurrentAllergyRecheck.Gate.MAR_DOSE, rx, "Amoxicillin"))
+                .isInstanceOf(CdsCriticalBlockException.class)
+                .hasFieldOrPropertyWithValue("field", CurrentAllergyRecheck.HOLD_FIELD)
+                .hasMessageContaining("No prescriber could be notified")
+                .satisfies(e -> assertThat(e.getMessage()).doesNotContain("Awa Traore").doesNotContain("Issa Kabore"));
+        }
+        verify(failing, times(2)).createItemInNewTransaction(org.mockito.ArgumentMatchers.any());
+    }
+
+    private static Prescription notifiableOrder() {
+        Prescription rx = order();
+        var hospital = new com.example.hms.model.Hospital();
+        hospital.setId(UUID.randomUUID());
+        rx.setHospital(hospital);
+        rx.setStaff(staff("Awa", "Traore"));
+        rx.setSignedBy(staff("Issa", "Kabore"));
+        return rx;
+    }
+
+    private static PatientAllergyRepository penicillinOnRecord(Prescription rx) {
+        PatientAllergyRepository repository = mock(PatientAllergyRepository.class);
+        when(repository.findByPatient_Id(rx.getPatient().getId()))
+            .thenReturn(List.of(allergy("Penicillin", AllergySeverity.SEVERE)));
+        return repository;
+    }
+
     @Test
     void inactiveAllergiesDoNotBlockAndUnrecognisedDrugsRequireReview() {
         PatientAllergy penicillin = allergy("Penicillin", AllergySeverity.SEVERE);

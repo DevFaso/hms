@@ -8055,6 +8055,64 @@ class PrescriptionServiceImplTest {
         assertThat(rx.getAllergyReviewDecision()).isNull();
     }
 
+    /** Review of #1110 (P1): the signing acknowledgement answers the WHOLE conflict it was shown, not its worst allergy. */
+    @Test
+    void policy4_aLessSevereAllergyAddedBeforeTheRetryVoidsTheSigningAcknowledgement() {
+        UUID prescriberUserId = UUID.randomUUID();
+        PatientAllergy shown = policy3_allergy("Pénicilline");
+        shown.setSeverity(com.example.hms.enums.AllergySeverity.LIFE_THREATENING);
+        Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, shown);
+        prescriptionService.setAllergyRecheck(
+            new com.example.hms.service.allergy.CurrentAllergyRecheck(patientAllergyRepository, null, null));
+        String token = policy3_tokenOfARefusal(rx);
+        PatientAllergy added = policy3_allergy("Amoxicilline");
+        added.setSeverity(com.example.hms.enums.AllergySeverity.MILD);
+        when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(shown, added));
+        UUID rxId = rx.getId();
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO retry =
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                .allergyOverrideReason("Tolerated amoxicillin last year").doseExceptionToken(token).build();
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, retry, Locale.ENGLISH))
+            .isInstanceOfSatisfying(com.example.hms.cdshooks.CdsCriticalBlockException.class, ex ->
+                assertThat(ex.getField()).isEqualTo("allergyOverrideReason"));
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        assertThat(rx.getAllergyReviewDecision()).isNull();
+    }
+
+    /** Review of #1110 (P1): an allergy recorded during the re-authentication is never released by the signature. */
+    @Test
+    void policy4_anAllergyRecordedDuringTheReauthenticationStaysHeldAtTheGates() {
+        UUID prescriberUserId = UUID.randomUUID();
+        PatientAllergy shown = policy3_allergy("Pénicilline");
+        shown.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, shown);
+        var gates = new com.example.hms.service.allergy.CurrentAllergyRecheck(patientAllergyRepository, null, null);
+        prescriptionService.setAllergyRecheck(gates);
+        String token = policy3_tokenOfARefusal(rx);
+        PatientAllergy added = policy3_allergy("Amoxicilline");
+        added.setSeverity(com.example.hms.enums.AllergySeverity.MILD);
+        when(controlledResolver.isControlled(rx)).thenReturn(true);
+        when(prescriberReauthentication.requireForControlledSigning(any(), any(), any(), any())).thenAnswer(inv -> {
+            // Another user records an allergy while the prescriber re-authenticates.
+            when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(shown, added));
+            return new PrescriberReauthenticationService.Verified("TOTP", java.time.LocalDateTime.now());
+        });
+
+        prescriptionService.signPrescription(rx.getId(),
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                .allergyOverrideReason("Tolerated penicillin since").doseExceptionToken(token).build(),
+            Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(rx.getAllergyReviewDecision()).as("no review of a conflict the signer never saw").isNull();
+        for (var gate : com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.values()) {
+            assertThatThrownBy(() -> gates.requirePrescriberReview(gate, rx, rx.getMedicationName()))
+                .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
+                .hasFieldOrPropertyWithValue("field", com.example.hms.service.allergy.CurrentAllergyRecheck.HOLD_FIELD);
+        }
+    }
+
     @Test
     void policy4_theSignersOwnAcknowledgementAtTheSignatureIsTheReviewOfThatConflict() {
         UUID prescriberUserId = UUID.randomUUID();

@@ -590,7 +590,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         appendSignatureReason(prescription, contraindicationReason);
         appendSignatureReason(prescription, urgentReason);
         if (allergyAcknowledgement != null) {
-            recordSigningAllergyReview(prescription, signer, allergyAcknowledgement.reason());
+            recordSigningAllergyReview(prescription, signer, allergyAcknowledgement);
         }
         if (urgentReason != null || urgentAboveLimit) {
             prescription.setPediatricDoseReviewRequired(true);
@@ -702,8 +702,26 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return cards.stream().anyMatch(c -> c.needsReasonAtSignature() && c.exceptionKey() != null);
     }
 
-    /** CR-02: what an exception answers: this order at this version, these findings, this signer. */
-    private String doseExceptionToken(Prescription prescription, Staff signer, List<CdsCard> cards) {
+    /**
+     * Policy 4 (review of #1110, P1): the whole allergy conflict as it stands now (every active allergy,
+     * not only the most severe one the card names, and what the order asks for), or "none".
+     */
+    private String allergyReviewTokenNow(Prescription prescription) {
+        return allergyConflictNow(prescription).map(com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict::reviewToken).orElse("none");
+    }
+
+    private Optional<com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict> allergyConflictNow(Prescription prescription) {
+        com.example.hms.service.allergy.CurrentAllergyRecheck recheck = allergyRecheck;
+        return recheck == null ? Optional.empty() : recheck.currentConflict(prescription);
+    }
+
+    /**
+     * CR-02: what an exception answers (this order at this version, these findings, this signer). The token
+     * is bound to a conflict read once: the acknowledgement answers exactly that conflict, so an
+     * allergy added before a retry (even a less severe one) voids it and the card is shown again.
+     */
+    private String doseExceptionToken(Prescription prescription, Staff signer, List<CdsCard> cards,
+                                      String allergyReviewToken) {
         String findings = cards.stream().filter(c -> c.needsReasonAtSignature() || (c.requiresReview() && c.exceptionKey() != null))
             .map(c -> java.util.Objects.toString(c.exceptionKey(), "contraindication"))
             .sorted().collect(java.util.stream.Collectors.joining(";"));
@@ -711,7 +729,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // One reason answers an allergy stop too. Policy 3: the token names the allergy the warning
         // names, so an acknowledgement answers that allergy only; another one since voids it and is shown.
         String allergyStop = allergyStopAtSigning(prescription).map(AllergyStop::key).orElse("none");
-        return computeSignatureDigest(prescription.getId() + "|" + prescription.getVersion() + "|" + signerUserId + "|" + allergyStop + "|" + findings);
+        return computeSignatureDigest(prescription.getId() + "|" + prescription.getVersion() + "|" + signerUserId + "|" + allergyStop + "|" + findings
+            + "|" + allergyReviewToken);
+    }
+
+    /** CR-02: what an exception answers: this order at this version, these findings, this signer, the conflict now. */
+    private String doseExceptionToken(Prescription prescription, Staff signer, List<CdsCard> cards) {
+        return doseExceptionToken(prescription, signer, cards, allergyReviewTokenNow(prescription));
     }
 
     /** CR-02, after commit: ids, digests and counts only, as the CDS override's audit (the row is not encrypted). */
@@ -779,11 +803,15 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      */
     private AllergyAcknowledgement requireAllergyAcknowledgedAtSigning(Prescription prescription,
             com.example.hms.payload.dto.SignPrescriptionRequestDTO request, Staff signer, List<CdsCard> cards) {
+        // Review of #1110 (P1): the whole conflict is read ONCE, before the acknowledgement is checked,
+        // and bound into its token: the review recorded at the signature is exactly that conflict.
+        Optional<com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict> reviewed = allergyConflictNow(prescription);
         Optional<AllergyStop> stop = allergyStopAtSigning(prescription);
         if (stop.isEmpty()) {
             return null;
         }
-        String token = doseExceptionToken(prescription, signer, cards);
+        String token = doseExceptionToken(prescription, signer, cards,
+            reviewed.map(com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict::reviewToken).orElse("none"));
         CdsCard card = stop.get().card().withExceptionKey(ALLERGY_KEY_PREFIX + token);
         String allergen = com.example.hms.service.allergy.AllergyDrugIdentity.displayOf(stop.get().allergy());
         String reason = request == null || request.getAllergyOverrideReason() == null
@@ -801,7 +829,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         appendSignatureReason(prescription, reason);
         prescription.setAllergiesReviewed(true);
-        return new AllergyAcknowledgement(reason, stop.get(), token);
+        return new AllergyAcknowledgement(reason, stop.get(), token, reviewed.orElse(null));
     }
 
     /**
@@ -847,17 +875,23 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * conflict as it stands now is a prescriber-reviewed CONTINUE (the plan is the signed order itself).
      * A later change of the allergy or the order voids it at the gates, as any review.
      */
-    private void recordSigningAllergyReview(Prescription prescription, Staff signer, String reason) {
-        if (allergyRecheck == null || signer == null || signer.getUser() == null) {
+    private void recordSigningAllergyReview(Prescription prescription, Staff signer, AllergyAcknowledgement acknowledgement) {
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict seen = acknowledgement.reviewedConflict();
+        if (seen == null || signer == null || signer.getUser() == null) {
             return;
         }
-        allergyRecheck.currentConflict(prescription).ifPresent(conflict -> recordAllergyReview(prescription,
-            com.example.hms.enums.AllergyReviewDecision.CONTINUE, null, reason, conflict,
-            signer.getUser(), "Allergy conflict reviewed at signature"));
+        // Review of #1110 (P1): only the conflict the signer acknowledged. One that changed since (an
+        // allergy recorded during the re-authentication) gets no review: the gates hold it for one.
+        if (!seen.reviewToken().equals(allergyReviewTokenNow(prescription))) {
+            return;
+        }
+        recordAllergyReview(prescription, com.example.hms.enums.AllergyReviewDecision.CONTINUE, null,
+            acknowledgement.reason(), seen, signer.getUser(), "Allergy conflict reviewed at signature");
     }
 
     /** Policy 3: the signer's acknowledgement of one allergy stop, with the token that bound it. */
-    private record AllergyAcknowledgement(String reason, AllergyStop stop, String token) {
+    private record AllergyAcknowledgement(String reason, AllergyStop stop, String token,
+                                          com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict reviewedConflict) {
         /**
          * The audit details: the warning (its rule and the allergy's id), the reason's digest, the token,
          * the version signed and the signature's time. Ids and digests only: the row is not encrypted.

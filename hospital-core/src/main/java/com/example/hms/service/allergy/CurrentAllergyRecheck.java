@@ -377,22 +377,34 @@ public class CurrentAllergyRecheck {
      * the hold rolls the gate's back. Returns the names shown on the hold.
      */
     private List<String> notifyPrescribers(Prescription rx, Stop stop) {
-        Map<UUID, String> recipients = reviewersOf(rx);
+        InBasketService service = notices;
         UUID hospitalId = rx.getHospital() != null ? rx.getHospital().getId() : null;
-        if (notices != null && hospitalId != null) {
-            for (UUID recipient : recipients.keySet()) {
-                CreateInBasketItemRequest item = noticeFor(rx, stop, recipient, hospitalId);
-                try {
-                    item.setTitle(MessageUtil.resolve(NotificationLocales.STAFF, NOTICE_TITLE_KEY, item.getTitleArgs()));
-                    item.setBody(MessageUtil.resolve(NotificationLocales.STAFF, NOTICE_BODY_KEY, item.getBodyArgs()));
-                    notices.createItemInNewTransaction(item);
-                } catch (RuntimeException ex) {
-                    log.warn("Allergy review notice not filed for prescription {}: {}", rx.getId(),
-                        ex.getClass().getSimpleName());
-                }
-            }
+        List<String> reached = new ArrayList<>();
+        if (service == null || hospitalId == null) {
+            return reached;
         }
-        return recipients.values().stream().filter(n -> !n.isBlank()).toList();
+        // Review of #1110 (P2): only those actually told (filed, or already holding the notice) are named;
+        // a failed notice never reads as delivered, and the others are still tried.
+        reviewersOf(rx).forEach((recipient, name) -> {
+            if (fileNotice(service, noticeFor(rx, stop, recipient, hospitalId), rx) && !name.isBlank()) {
+                reached.add(name);
+            }
+        });
+        return reached;
+    }
+
+    /** True when the notice was filed, or the in-basket already held it (it answers null for a duplicate). */
+    private static boolean fileNotice(InBasketService service, CreateInBasketItemRequest item, Prescription rx) {
+        try {
+            item.setTitle(MessageUtil.resolve(NotificationLocales.STAFF, NOTICE_TITLE_KEY, item.getTitleArgs()));
+            item.setBody(MessageUtil.resolve(NotificationLocales.STAFF, NOTICE_BODY_KEY, item.getBodyArgs()));
+            service.createItemInNewTransaction(item);
+            return true;
+        } catch (RuntimeException ex) {
+            log.warn("Allergy review notice not filed for prescription {}: {}", rx.getId(),
+                ex.getClass().getSimpleName());
+            return false;
+        }
     }
 
     /** The order's prescriber, its signer and the encounter's clinician, once each, with their names. */
