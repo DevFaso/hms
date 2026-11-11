@@ -87,6 +87,7 @@ describe('MortalityComponent, QA D1488 / D1490', () => {
           useValue: {
             hasAnyActiveRole: () => true,
             isSuperAdmin: () => false,
+            hasHospitalScope: () => true,
             activeHospitalId: 'h1',
           },
         },
@@ -180,8 +181,10 @@ describe('MortalityComponent', () => {
   let component: MortalityComponent;
   let mortalitySpy: jasmine.SpyObj<MortalityService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
+  let scopeReady: boolean;
 
   beforeEach(async () => {
+    scopeReady = true;
     mortalitySpy = jasmine.createSpyObj('MortalityService', [
       'getRegister',
       'recordDeath',
@@ -196,6 +199,7 @@ describe('MortalityComponent', () => {
     const roleCtx = {
       hasAnyActiveRole: () => true,
       isSuperAdmin: () => false,
+      hasHospitalScope: () => scopeReady,
       activeHospitalId: 'h1',
     } as unknown as RoleContextService;
 
@@ -232,6 +236,37 @@ describe('MortalityComponent', () => {
     component.ngOnInit();
     expect(toastSpy.error).toHaveBeenCalled();
     expect(component.register()).toBeNull();
+  });
+
+  it('a refused disputes list (403) says nothing, hides its section and the register rows still render', () => {
+    mortalitySpy.openDisputes.and.returnValue(throwError(() => ({ status: 403 })));
+    const fixture = TestBed.createComponent(MortalityComponent);
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    expect(toastSpy.error).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.register()?.totalDeaths).toBe(1);
+    expect(root.textContent).toContain('Awa Traoré');
+    expect(root.querySelector('[data-testid="dispute-uphold"]')).toBeNull();
+  });
+
+  it('any other disputes failure says so in its own words, never as the register failing', () => {
+    mortalitySpy.openDisputes.and.returnValue(throwError(() => ({ status: 500 })));
+    const fixture = TestBed.createComponent(MortalityComponent);
+    fixture.detectChanges();
+
+    expect(toastSpy.error).toHaveBeenCalledOnceWith('MORTALITY.DISPUTES_LOAD_ERROR');
+    expect(toastSpy.error).not.toHaveBeenCalledWith('MORTALITY.LOAD_ERROR');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Awa Traoré');
+  });
+
+  it('a super-admin in global view does not ask for disputes until a hospital is selected', () => {
+    scopeReady = false;
+    const fixture = TestBed.createComponent(MortalityComponent);
+    fixture.detectChanges();
+
+    expect(mortalitySpy.openDisputes).not.toHaveBeenCalled();
+    expect(mortalitySpy.getRegister).toHaveBeenCalled();
   });
 
   it('QA D1451: the three boxes answer a real click, and the backdrop still closes the dialog', async () => {

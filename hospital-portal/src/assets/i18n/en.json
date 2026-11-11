@@ -12255,6 +12255,7 @@
     "DISPUTE_FAILED": "The death could not be disputed.",
     "DISPUTED": "Disputed",
     "DISPUTED_COUNT": "Under dispute, still counted until the outcome",
+    "DISPUTES_LOAD_ERROR": "Could not load the disputes to review",
     "DISPUTES_TITLE": "Open disputes to review",
     "DISPUTED_BY": "Disputed by",
     "DISPUTED_ON": "Disputed on",

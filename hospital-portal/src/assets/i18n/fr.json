@@ -12255,6 +12255,7 @@
     "DISPUTE_FAILED": "Le décès n’a pas pu être contesté.",
     "DISPUTED": "Contesté",
     "DISPUTED_COUNT": "En contestation, comptés jusqu’à la décision",
+    "DISPUTES_LOAD_ERROR": "Impossible de charger les contestations à examiner",
     "DISPUTES_TITLE": "Contestations à examiner",
     "DISPUTED_BY": "Contesté par",
     "DISPUTED_ON": "Contesté le",

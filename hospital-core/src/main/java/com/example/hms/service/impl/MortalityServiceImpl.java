@@ -305,8 +305,9 @@ public class MortalityServiceImpl implements MortalityService {
         }
         UUID actorId = roleValidator.getCurrentUserId();
         // The controller's role check reads the union of the caller's assignments: an administrator of
-        // hospital A who is a nurse at B, acting at B, must not reach B's records through it.
-        if (!com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()
+        // hospital A who is a nurse at B, acting at B, must not reach B's records through it. A verified
+        // super-admin may, in global view or with the record's hospital selected.
+        if (!com.example.hms.security.CallerIdentity.isSuperAdminFor(deathRecord.getHospital().getId())
                 && !roleValidator.isHospitalAdmin(actorId, deathRecord.getHospital().getId())) {
             throw new org.springframework.security.access.AccessDeniedException(
                 "Only a hospital administrator of this hospital can mark a death record entered in error.");

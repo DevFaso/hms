@@ -12255,6 +12255,7 @@
     "DISPUTE_FAILED": "No se pudo impugnar el fallecimiento.",
     "DISPUTED": "Impugnado",
     "DISPUTED_COUNT": "En impugnación, se cuentan hasta la decisión",
+    "DISPUTES_LOAD_ERROR": "No se pudieron cargar las impugnaciones por revisar",
     "DISPUTES_TITLE": "Impugnaciones por revisar",
     "DISPUTED_BY": "Impugnado por",
     "DISPUTED_ON": "Impugnado el",

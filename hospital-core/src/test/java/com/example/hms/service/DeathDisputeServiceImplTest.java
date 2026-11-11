@@ -367,4 +367,74 @@ class DeathDisputeServiceImplTest {
         verify(audit).logEvent(event.capture());
         assertThat(event.getValue().getHospitalId()).isEqualTo(hospitalA);
     }
+
+    // ── QA: a super-admin with a hospital selected was refused the review list (403) ──
+
+    @org.junit.jupiter.api.AfterEach
+    void clearScope() {
+        com.example.hms.security.context.HospitalContextHolder.clear();
+    }
+
+    /** The scope as the resolver builds it: a super-admin is pinned only once a hospital is selected. */
+    private static void scope(boolean superAdmin, UUID selected) {
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .principalUserId(UUID.randomUUID())
+                .superAdmin(superAdmin)
+                .activeHospitalId(selected)
+                .headerOverridden(selected != null)
+                .build());
+    }
+
+    @Test
+    @DisplayName("a super-admin with a hospital selected reviews that hospital's disputes: the list and the outcome")
+    void aPinnedSuperAdminReviewsTheSelectedHospital() {
+        scope(true, hospitalB);
+        when(disputes.findOpenForReview(hospitalB)).thenReturn(List.of());
+        DeathDispute open = openDispute();
+
+        assertThat(service.openForReview()).isEmpty();
+        service.uphold(open.getId(), DeathDisputeOutcomeDTO.builder().reason("x").build());
+        assertThat(open.getStatus()).isEqualTo(DeathDisputeStatus.UPHELD);
+    }
+
+    @Test
+    @DisplayName("an administrator of another hospital, acting here, is still refused")
+    void anAdministratorOfAnotherHospitalIsRefused() {
+        scope(false, hospitalB);
+        when(roles.isHospitalAdmin(doctor, hospitalA)).thenReturn(true);
+        DeathDispute open = openDispute();
+        UUID id = open.getId();
+        DeathDisputeOutcomeDTO outcome = DeathDisputeOutcomeDTO.builder().reason("x").build();
+
+        assertThatThrownBy(() -> service.openForReview()).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> service.uphold(id, outcome)).isInstanceOf(AccessDeniedException.class);
+        assertThat(open.isOpen()).isTrue();
+    }
+
+    @Test
+    @DisplayName("a doctor, pinned here, is still refused")
+    void aPinnedDoctorIsRefused() {
+        scope(false, hospitalB);
+        DeathDispute open = openDispute();
+        UUID id = open.getId();
+        DeathDisputeOutcomeDTO outcome = DeathDisputeOutcomeDTO.builder().reason("x").build();
+
+        assertThatThrownBy(() -> service.openForReview()).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> service.uphold(id, outcome)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("a super-admin in global view: unchanged, the list needs a hospital and an outcome is allowed")
+    void aGlobalSuperAdminIsUnchanged() {
+        scope(true, null);
+        when(roles.requireActiveHospitalId()).thenReturn(null);
+        DeathDispute open = openDispute();
+
+        assertThatThrownBy(() -> service.openForReview())
+            .isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.getMessage()).isNotBlank());
+        service.uphold(open.getId(), DeathDisputeOutcomeDTO.builder().reason("x").build());
+        assertThat(open.getStatus()).isEqualTo(DeathDisputeStatus.UPHELD);
+    }
 }
