@@ -65,7 +65,7 @@ class OrderReviewHoldGuardTest {
     /** {@code Controller#endpoint,endpoint | why it does not use a held order}. */
     private static final String NOT_A_USE = """
         Prescription#create | a new order written after the dispute follows the normal workflow
-        Prescription#pediatricDoseReview,requestClarification,resolveClarification | a review note: nothing leaves, signing and dispensing are refused
+        Prescription#pediatricDoseReview,allergyReview,requestClarification,resolveClarification | a review note: nothing leaves, signing and dispensing are refused
         Prescription#update,delete | an edit holds the order again (reviewAgainAfterChange, pinned below); a withdrawal stops the order
         Dispense#claimQueueRow,takeOverQueueRow,releaseQueueRow | the work queue: nothing leaves the pharmacy
         Dispense#cancelReady,cancelDispense | hands stock back

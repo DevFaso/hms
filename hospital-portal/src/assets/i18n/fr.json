@@ -1866,7 +1866,10 @@
       "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Règle obstétricale non appliquée pour une échographie en urgence",
       "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Règle obstétricale non appliquée pour une orientation gynéco-obstétricale en urgence",
       "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Exception à la règle obstétricale levée sur une échographie",
-      "ALLERGY_ACKNOWLEDGED": "Allergie reconnue avec un motif"
+      "ALLERGY_ACKNOWLEDGED": "Allergie reconnue avec un motif",
+      "ALLERGY_PASSED_UNDER_REVIEW": "Conflit allergique franchi selon la revue du prescripteur",
+      "ALLERGY_REVIEWED_BY_PRESCRIBER": "Conflit allergique revu par le prescripteur",
+      "ALLERGY_REVIEWED_AT_SIGNATURE": "Conflit allergique revu à la signature"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -6663,8 +6666,9 @@
         "PRESCRIPTION_SIGN_REAUTHENTICATION": "Réauthentification pour signer une ordonnance de stupéfiant",
         "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Revue de dose pédiatrique enregistrée",
         "ADMISSION_BED_RELEASED": "Lit d’hospitalisation libéré",
-        "MAR_ALLERGY_ACKNOWLEDGED": "Allergie reconnue lors d’une administration",
-        "DISPENSE_ALLERGY_ACKNOWLEDGED": "Allergie reconnue à la pharmacie"
+        "MAR_ALLERGY_ACKNOWLEDGED": "Conflit allergique franchi lors d’une administration",
+        "DISPENSE_ALLERGY_ACKNOWLEDGED": "Conflit allergique franchi à la pharmacie",
+        "PRESCRIPTION_ALLERGY_REVIEWED": "Conflit allergique revu par un prescripteur"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -13316,9 +13320,26 @@
     "OUTSIDE_SCALE": "Le résultat dépasse l’échelle affichée ; le repère se trouve au bord.",
     "UNAVAILABLE": "Le positionnement nécessite une valeur numérique exacte et une plage de référence compatible."
   },
-  "ALLERGY_ACK": {
-    "TITLE": "Allergie documentée",
-    "REASON_LABEL": "Pourquoi continuer malgré cette allergie",
-    "CONFIRM": "Prendre acte et continuer"
+  "ALLERGY_HOLD": {
+    "TITLE": "Conflit allergique en attente de revue par le prescripteur",
+    "WHAT_NOW": "Un prescripteur habilité doit revoir ce conflit sur la prescription avant toute administration ou délivrance. Vous pouvez toujours noter la dose comme suspendue ou refusée."
+  },
+  "ALLERGY_REVIEW": {
+    "OPEN": "Revoir le conflit allergique",
+    "TITLE": "Revue du conflit allergique",
+    "LOADING": "Chargement du conflit allergique…",
+    "NO_CONFLICT": "Cette prescription n'a aucun conflit allergique à revoir.",
+    "ON_RECORD": "Au dossier : {{decision}} par {{name}}, {{at}}.",
+    "OUTDATED": "La revue au dossier répondait à un état antérieur des allergies ou de la prescription : elle ne s'applique plus.",
+    "DECISION": "Décision",
+    "DECISION_CONTINUE": "Poursuivre, avec un plan",
+    "DECISION_STOP": "Arrêter la prescription",
+    "PLAN": "Plan (surveillance, prémédication)",
+    "RATIONALE": "Justification clinique",
+    "CONFIRM_READ": "J'ai lu l'allergie affichée ({{allergen}}) et cette prescription telle qu'elle est.",
+    "CONFIRM_REQUIRED": "Confirmez avoir lu l'allergie affichée.",
+    "SUBMIT": "Enregistrer la revue",
+    "RECORDED": "Revue allergique enregistrée.",
+    "FAILED": "La revue allergique n'a pas pu être enregistrée."
   }
 }

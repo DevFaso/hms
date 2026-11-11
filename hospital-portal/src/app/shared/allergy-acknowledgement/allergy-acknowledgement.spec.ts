@@ -1,10 +1,6 @@
-import {
-  ALLERGY_ACK_FIELD,
-  allergyAcknowledgementFields,
-  allergyAcknowledgementRefusal,
-} from './allergy-acknowledgement';
+import { ALLERGY_HOLD_FIELD, allergyHoldRefusal } from './allergy-acknowledgement';
 
-describe('allergy acknowledgement (QA D1563 / D1555)', () => {
+describe('allergy hold (QA D1563 / D1555, Policy 4)', () => {
   const card = {
     summary: 'Allergy alert: Amoxicilline and penicillin',
     indicator: 'critical' as const,
@@ -12,38 +8,38 @@ describe('allergy acknowledgement (QA D1563 / D1555)', () => {
     exceptionKey: 'allergy:abc123',
   };
 
-  it('reads the refusal on its field, with the card and its token', () => {
-    const refusal = allergyAcknowledgementRefusal({
+  it('reads the hold on its field, with the card and who was notified', () => {
+    const hold = allergyHoldRefusal({
       status: 400,
       error: {
-        field: ALLERGY_ACK_FIELD,
-        message: 'To dispense this order, acknowledge the allergy',
-        fieldErrors: { [ALLERGY_ACK_FIELD]: 'To dispense this order, acknowledge the allergy' },
+        field: ALLERGY_HOLD_FIELD,
+        message: 'Allergy conflict awaiting prescriber review. Notified: Awa Traore.',
+        fieldErrors: {
+          [ALLERGY_HOLD_FIELD]:
+            'Allergy conflict awaiting prescriber review. Notified: Awa Traore.',
+        },
         cdsAdvisories: [card],
       },
     });
-    expect(refusal?.why).toContain('acknowledge the allergy');
-    expect(refusal?.cards.length).toBe(1);
-    expect(refusal?.token).toBe('allergy:abc123');
-    expect(allergyAcknowledgementFields(refusal!, '  rash only  ')).toEqual({
-      allergyAcknowledgementReason: 'rash only',
-      allergyAcknowledgementToken: 'allergy:abc123',
-    });
+    expect(hold?.why).toContain('awaiting prescriber review');
+    expect(hold?.why).toContain('Awa Traore');
+    expect(hold?.cards.length).toBe(1);
   });
 
-  it('leaves every other refusal to its own handling', () => {
+  it('is not the old staff acknowledgement field, and leaves every other refusal to its own handling', () => {
+    expect(ALLERGY_HOLD_FIELD).not.toBe('allergyAcknowledgementReason');
     expect(
-      allergyAcknowledgementRefusal({
+      allergyHoldRefusal({
         status: 400,
-        error: { field: 'earlyDoseReason', message: 'x' },
+        error: { field: 'allergyAcknowledgementReason', message: 'x' },
       }),
     ).toBeNull();
     expect(
-      allergyAcknowledgementRefusal({
+      allergyHoldRefusal({
         status: 409,
-        error: { field: ALLERGY_ACK_FIELD, message: 'x' },
+        error: { field: ALLERGY_HOLD_FIELD, message: 'x' },
       }),
     ).toBeNull();
-    expect(allergyAcknowledgementRefusal(null)).toBeNull();
+    expect(allergyHoldRefusal(null)).toBeNull();
   });
 });

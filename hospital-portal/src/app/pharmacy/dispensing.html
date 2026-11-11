@@ -424,14 +424,9 @@
   }
 
   <!-- G15: hand over a prepared fill, or cancel the preparation -->
-  <!-- QA D1555: the patient's current allergies stop the drug: acknowledge with a reason, or go back. -->
-  @if (allergyAck(); as ack) {
-    <app-allergy-acknowledgement-dialog
-      [refusal]="ack.refusal"
-      [busy]="saving() || readyActionSaving()"
-      (confirmed)="confirmAllergyAck($event)"
-      (cancelled)="allergyAck.set(null)"
-    />
+  <!-- QA D1555 / Policy 4: held for an authorized prescriber's review. -->
+  @if (allergyHold(); as hold) {
+    <app-allergy-hold-dialog [refusal]="hold" (closed)="allergyHold.set(null)" />
   }
   @if (readyAction(); as action) {
     <!-- QA D1307 class (round 28): opened from a queue row, the form takes the

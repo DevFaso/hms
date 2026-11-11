@@ -7888,4 +7888,256 @@ class PrescriptionServiceImplTest {
         verify(auditEventLogService, never()).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
             "Signature exception ended: what is ordered was changed".equals(e.getEventDescription())));
     }
+
+    /* ── Policy 4 (2026-11-10, pending clinical approval): the prescriber's review of an allergy conflict ── */
+
+    /** A signed amoxicillin order at its hospital, a SEVERE penicillin allergy on record, the re-check wired. */
+    private Prescription policy4_conflictingOrder(UUID callerUserId) {
+        Prescription rx = signablePrescription(UUID.randomUUID());
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        UUID rxHospitalId = rx.getHospital().getId();
+        PatientAllergy allergy = policy3_allergy("Pénicilline");
+        allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        lenient().when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
+        lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
+        lenient().when(roleValidator.getCurrentUserId()).thenReturn(callerUserId);
+        lenient().when(prescriptionRepository.findByIdAndHospitalIdForUpdate(rx.getId(), rxHospitalId)).thenReturn(Optional.of(rx));
+        lenient().when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        prescriptionService.setAllergyRecheck(
+            new com.example.hms.service.allergy.CurrentAllergyRecheck(patientAllergyRepository, null, null));
+        com.example.hms.repository.UserRepository users = mock(com.example.hms.repository.UserRepository.class);
+        User caller = new User();
+        caller.setId(callerUserId);
+        lenient().when(users.findById(callerUserId)).thenReturn(Optional.of(caller));
+        prescriptionService.setDoseReviewUsers(users);
+        return rx;
+    }
+
+    private com.example.hms.payload.dto.prescription.AllergyConflictReviewRequestDTO policy4_review(
+            com.example.hms.enums.AllergyReviewDecision decision, String plan, String rationale, String token) {
+        return com.example.hms.payload.dto.prescription.AllergyConflictReviewRequestDTO.builder()
+            .decision(decision).plan(plan).rationale(rationale).allergyToken(token).build();
+    }
+
+    private String policy4_currentToken(Prescription rx) {
+        return new com.example.hms.service.allergy.CurrentAllergyRecheck(patientAllergyRepository, null, null)
+            .currentConflict(rx).orElseThrow().reviewToken();
+    }
+
+    @Test
+    void policy4_aSigningPhysicianOfTheOrdersHospitalReviewsAndTheGatesPassUnderIt() {
+        UUID doctorUserId = UUID.randomUUID();
+        Prescription rx = policy4_conflictingOrder(doctorUserId);
+        when(roleValidator.isSigningPhysician(doctorUserId, rx.getHospital().getId())).thenReturn(true);
+        InBasketService notices = mock(InBasketService.class);
+        prescriptionService.setUrgentReviewBasket(notices);
+
+        var answer = prescriptionService.reviewAllergyConflict(rx.getId(), policy4_review(
+            com.example.hms.enums.AllergyReviewDecision.CONTINUE, "Observe 30 min after each dose",
+            "  Reaction was a rash in 2019; graded challenge tolerated  ", policy4_currentToken(rx)));
+
+        assertThat(rx.getAllergyReviewDecision()).isEqualTo(com.example.hms.enums.AllergyReviewDecision.CONTINUE);
+        assertThat(rx.getAllergyReviewRationale()).isEqualTo("Reaction was a rash in 2019; graded challenge tolerated");
+        assertThat(rx.getAllergyReviewPlan()).isEqualTo("Observe 30 min after each dose");
+        assertThat(rx.getAllergyReviewedBy().getId()).isEqualTo(doctorUserId);
+        assertThat(rx.getAllergyReviewedAt()).isNotNull();
+        assertThat(answer.isReviewCurrent()).isTrue();
+        verify(notices).removeAllItemsForReference(rx.getId(),
+            com.example.hms.service.allergy.CurrentAllergyRecheck.NOTICE_REFERENCE_TYPE);
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+            e.getEventType() == com.example.hms.enums.AuditEventType.PRESCRIPTION_ALLERGY_REVIEWED
+                && doctorUserId.equals(e.getUserId())
+                && String.valueOf(e.getDetails()).contains("\"decision\":\"CONTINUE\"")
+                && !String.valueOf(e.getDetails()).contains("graded challenge")));
+        // Every gate passes under it, with no reason from anybody.
+        var gates = new com.example.hms.service.allergy.CurrentAllergyRecheck(patientAllergyRepository, null, null);
+        for (var gate : com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.values()) {
+            assertThat(gates.requirePrescriberReview(gate, rx, rx.getMedicationName())).isNotNull();
+        }
+    }
+
+    @Test
+    void policy4_aStopIsRecordedAndEveryGateRefusesTheOrder() {
+        UUID doctorUserId = UUID.randomUUID();
+        Prescription rx = policy4_conflictingOrder(doctorUserId);
+        when(roleValidator.isSigningPhysician(doctorUserId, rx.getHospital().getId())).thenReturn(true);
+
+        prescriptionService.reviewAllergyConflict(rx.getId(), policy4_review(
+            com.example.hms.enums.AllergyReviewDecision.STOP, "ignored", "Anaphylaxis risk; switch to a macrolide",
+            policy4_currentToken(rx)));
+
+        assertThat(rx.getAllergyReviewDecision()).isEqualTo(com.example.hms.enums.AllergyReviewDecision.STOP);
+        assertThat(rx.getAllergyReviewPlan()).as("a STOP sets no plan").isNull();
+        var gates = new com.example.hms.service.allergy.CurrentAllergyRecheck(patientAllergyRepository, null, null);
+        for (var gate : com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.values()) {
+            assertThatThrownBy(() -> gates.requirePrescriberReview(gate, rx, rx.getMedicationName()))
+                .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
+                .hasFieldOrPropertyWithValue("field", com.example.hms.service.allergy.CurrentAllergyRecheck.HOLD_FIELD);
+        }
+    }
+
+    @Test
+    void policy4_aNurseOrAPharmacistWithoutPrescribingAuthorityCannotReview() {
+        UUID nurseUserId = UUID.randomUUID();
+        Prescription rx = policy4_conflictingOrder(nurseUserId);
+        lenient().when(roleValidator.isSigningPhysician(nurseUserId, rx.getHospital().getId())).thenReturn(false);
+        lenient().when(roleValidator.hasAnyAuthority(any(String[].class))).thenReturn(true);
+        UUID rxId = rx.getId();
+        var request = policy4_review(com.example.hms.enums.AllergyReviewDecision.CONTINUE, "Observe",
+            "Seen by the nurse", policy4_currentToken(rx));
+
+        assertThatThrownBy(() -> prescriptionService.reviewAllergyConflict(rxId, request))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        // The order's own drafter (a nurse or a midwife) is no reviewer either: her draft is signed by a doctor.
+        rx.getStaff().getUser().setId(nurseUserId);
+        when(roleValidator.draftsForPhysicianSignature(nurseUserId, rx.getHospital().getId())).thenReturn(true);
+        assertThatThrownBy(() -> prescriptionService.reviewAllergyConflict(rxId, request))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(rx.getAllergyReviewDecision()).isNull();
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void policy4_theReviewNeedsADecisionARationaleAndForContinueAPlan() {
+        UUID doctorUserId = UUID.randomUUID();
+        Prescription rx = policy4_conflictingOrder(doctorUserId);
+        UUID rxId = rx.getId();
+        String token = policy4_currentToken(rx);
+
+        assertThatThrownBy(() -> prescriptionService.reviewAllergyConflict(rxId, policy4_review(null, "p", "r", token)))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class).hasFieldOrPropertyWithValue("field", "decision");
+        assertThatThrownBy(() -> prescriptionService.reviewAllergyConflict(rxId, policy4_review(
+                com.example.hms.enums.AllergyReviewDecision.STOP, null, "   ", token)))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class).hasFieldOrPropertyWithValue("field", "rationale");
+        assertThatThrownBy(() -> prescriptionService.reviewAllergyConflict(rxId, policy4_review(
+                com.example.hms.enums.AllergyReviewDecision.CONTINUE, " ", "Tolerated before", token)))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class).hasFieldOrPropertyWithValue("field", "plan");
+        assertThat(rx.getAllergyReviewDecision()).isNull();
+    }
+
+    @Test
+    void policy4_aReviewOfAConflictThatChangedSinceItWasShownIsRefused() {
+        UUID doctorUserId = UUID.randomUUID();
+        Prescription rx = policy4_conflictingOrder(doctorUserId);
+        when(roleValidator.isSigningPhysician(doctorUserId, rx.getHospital().getId())).thenReturn(true);
+        String shown = policy4_currentToken(rx);
+        rx.setDosage("1 g");
+        UUID rxId = rx.getId();
+
+        assertThatThrownBy(() -> prescriptionService.reviewAllergyConflict(rxId, policy4_review(
+                com.example.hms.enums.AllergyReviewDecision.CONTINUE, "Observe", "Tolerated before", shown)))
+            .isInstanceOfSatisfying(com.example.hms.cdshooks.CdsCriticalBlockException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("allergyToken");
+                assertThat(ex.getCards()).hasSize(1);
+            });
+        assertThat(rx.getAllergyReviewDecision()).isNull();
+    }
+
+    @Test
+    void policy4_anOrderOfAnotherHospitalOrADraftIsNotReviewedHere() {
+        UUID doctorUserId = UUID.randomUUID();
+        Prescription rx = policy4_conflictingOrder(doctorUserId);
+        when(roleValidator.isSigningPhysician(doctorUserId, rx.getHospital().getId())).thenReturn(true);
+        String token = policy4_currentToken(rx);
+        UUID rxId = rx.getId();
+        var request = policy4_review(com.example.hms.enums.AllergyReviewDecision.CONTINUE, "Observe", "Tolerated", token);
+
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        assertThatThrownBy(() -> prescriptionService.reviewAllergyConflict(rxId, request))
+            .isInstanceOf(BusinessException.class).extracting("messageKey").isEqualTo("allergy.review.wrongStatus");
+
+        // A shared patient's order elsewhere: the acting hospital's lock never finds it.
+        UUID elsewhere = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(elsewhere);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(rxId, elsewhere)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> prescriptionService.reviewAllergyConflict(rxId, request))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThat(rx.getAllergyReviewDecision()).isNull();
+    }
+
+    /** Review of #1110 (P1): the signing acknowledgement answers the WHOLE conflict it was shown, not its worst allergy. */
+    @Test
+    void policy4_aLessSevereAllergyAddedBeforeTheRetryVoidsTheSigningAcknowledgement() {
+        UUID prescriberUserId = UUID.randomUUID();
+        PatientAllergy shown = policy3_allergy("Pénicilline");
+        shown.setSeverity(com.example.hms.enums.AllergySeverity.LIFE_THREATENING);
+        Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, shown);
+        prescriptionService.setAllergyRecheck(
+            new com.example.hms.service.allergy.CurrentAllergyRecheck(patientAllergyRepository, null, null));
+        String token = policy3_tokenOfARefusal(rx);
+        PatientAllergy added = policy3_allergy("Amoxicilline");
+        added.setSeverity(com.example.hms.enums.AllergySeverity.MILD);
+        when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(shown, added));
+        UUID rxId = rx.getId();
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO retry =
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                .allergyOverrideReason("Tolerated amoxicillin last year").doseExceptionToken(token).build();
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, retry, Locale.ENGLISH))
+            .isInstanceOfSatisfying(com.example.hms.cdshooks.CdsCriticalBlockException.class, ex ->
+                assertThat(ex.getField()).isEqualTo("allergyOverrideReason"));
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        assertThat(rx.getAllergyReviewDecision()).isNull();
+    }
+
+    /** Review of #1110 (P1): an allergy recorded during the re-authentication is never released by the signature. */
+    @Test
+    void policy4_anAllergyRecordedDuringTheReauthenticationStaysHeldAtTheGates() {
+        UUID prescriberUserId = UUID.randomUUID();
+        PatientAllergy shown = policy3_allergy("Pénicilline");
+        shown.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, shown);
+        var gates = new com.example.hms.service.allergy.CurrentAllergyRecheck(patientAllergyRepository, null, null);
+        prescriptionService.setAllergyRecheck(gates);
+        String token = policy3_tokenOfARefusal(rx);
+        PatientAllergy added = policy3_allergy("Amoxicilline");
+        added.setSeverity(com.example.hms.enums.AllergySeverity.MILD);
+        when(controlledResolver.isControlled(rx)).thenReturn(true);
+        when(prescriberReauthentication.requireForControlledSigning(any(), any(), any(), any())).thenAnswer(inv -> {
+            // Another user records an allergy while the prescriber re-authenticates.
+            when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(shown, added));
+            return new PrescriberReauthenticationService.Verified("TOTP", java.time.LocalDateTime.now());
+        });
+
+        prescriptionService.signPrescription(rx.getId(),
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                .allergyOverrideReason("Tolerated penicillin since").doseExceptionToken(token).build(),
+            Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(rx.getAllergyReviewDecision()).as("no review of a conflict the signer never saw").isNull();
+        for (var gate : com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.values()) {
+            assertThatThrownBy(() -> gates.requirePrescriberReview(gate, rx, rx.getMedicationName()))
+                .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
+                .hasFieldOrPropertyWithValue("field", com.example.hms.service.allergy.CurrentAllergyRecheck.HOLD_FIELD);
+        }
+    }
+
+    @Test
+    void policy4_theSignersOwnAcknowledgementAtTheSignatureIsTheReviewOfThatConflict() {
+        UUID prescriberUserId = UUID.randomUUID();
+        PatientAllergy allergy = policy3_allergy("Pénicilline");
+        allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        Prescription rx = policy3_acknowledgedAtCreation(prescriberUserId, allergy);
+        prescriptionService.setAllergyRecheck(
+            new com.example.hms.service.allergy.CurrentAllergyRecheck(patientAllergyRepository, null, null));
+        String token = policy3_tokenOfARefusal(rx);
+
+        prescriptionService.signPrescription(rx.getId(),
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                .allergyOverrideReason("Tolerated amoxicillin in 2025, documented").doseExceptionToken(token).build(),
+            Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(rx.getAllergyReviewDecision()).isEqualTo(com.example.hms.enums.AllergyReviewDecision.CONTINUE);
+        assertThat(rx.getAllergyReviewedBy().getId()).isEqualTo(prescriberUserId);
+        assertThat(rx.getAllergyReviewToken()).isEqualTo(policy4_currentToken(rx));
+        // A new allergy recorded after the signature holds the order again.
+        PatientAllergy later = policy3_allergy("Céphalosporines");
+        when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy, later));
+        var gates = new com.example.hms.service.allergy.CurrentAllergyRecheck(patientAllergyRepository, null, null);
+        assertThatThrownBy(() -> gates.requirePrescriberReview(
+                com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.DISPENSE, rx, rx.getMedicationName()))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+    }
 }

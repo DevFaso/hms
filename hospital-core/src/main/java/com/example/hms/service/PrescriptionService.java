@@ -88,6 +88,20 @@ public interface PrescriptionService {
     PrescriptionResponseDTO recordPediatricDoseReview(UUID id, String reason, Locale locale);
 
     /**
+     * Policy 4 (pending clinical approval): the allergy conflict a signed order meets now and the
+     * prescriber's review on record, for an authorized prescriber of the order's hospital.
+     */
+    com.example.hms.payload.dto.prescription.AllergyConflictDTO getAllergyConflict(UUID id);
+
+    /**
+     * Policy 4 (pending clinical approval): an authorized prescriber of the order's hospital reviews its
+     * allergy conflict: CONTINUE with a plan, or STOP, with a rationale. The gates honour it while the
+     * conflict stays the one reviewed.
+     */
+    com.example.hms.payload.dto.prescription.AllergyConflictDTO reviewAllergyConflict(UUID id,
+        com.example.hms.payload.dto.prescription.AllergyConflictReviewRequestDTO request);
+
+    /**
      * The prescription list, hospital-scoped.
      *
      * @param statuses gap G12 — restrict the page to these {@code PrescriptionStatus}

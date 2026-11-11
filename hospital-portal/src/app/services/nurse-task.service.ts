@@ -360,9 +360,6 @@ export interface MedicationAdministrationRequest {
   /** A dose given before an order was held for review: when, and why it is charted now. */
   givenBeforeHoldAt?: string;
   givenBeforeHoldReason?: string;
-  /** QA D1563: why a drug the patient's current allergies stop is given, and the allergy card's token. */
-  allergyAcknowledgementReason?: string;
-  allergyAcknowledgementToken?: string;
 }
 
 @Injectable({ providedIn: 'root' })

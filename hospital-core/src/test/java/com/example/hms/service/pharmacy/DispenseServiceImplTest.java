@@ -571,7 +571,7 @@ class DispenseServiceImplTest {
         }
 
         @Test
-        @DisplayName("QA D1555: amoxicillin for a patient whose penicillin allergy was recorded after signing is refused on its field, nothing written")
+        @DisplayName("Policy 4: amoxicillin for a patient whose penicillin allergy was recorded after signing is held for the prescriber, nothing written")
         void d1555_aFillOfADrugThePatientIsAllergicToIsRefused() {
             allergiesOnRecord(severePenicillinAllergy());
             DispenseRequestDTO dto = buildRequest();
@@ -579,7 +579,7 @@ class DispenseServiceImplTest {
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
-                    .hasFieldOrPropertyWithValue("field", com.example.hms.service.allergy.CurrentAllergyRecheck.ACK_FIELD)
+                    .hasFieldOrPropertyWithValue("field", com.example.hms.service.allergy.CurrentAllergyRecheck.HOLD_FIELD)
                     .satisfies(e -> assertThat(((com.example.hms.cdshooks.CdsCriticalBlockException) e).getCards())
                             .singleElement()
                             .satisfies(c -> assertThat(c.exceptionKey()).startsWith(
@@ -588,31 +588,47 @@ class DispenseServiceImplTest {
         }
 
         @Test
-        @DisplayName("QA D1555: the same fill with the allergy acknowledged (the card's token and a reason) is recorded with the reason")
-        void d1555_aFillWithTheAllergyAcknowledgedIsRecorded() {
+        @DisplayName("Policy 4: the same fill under the prescriber's CONTINUE review is recorded with the review line and audited")
+        void policy4_aFillUnderThePrescribersReviewIsRecorded() {
             var allergies = allergiesOnRecord(severePenicillinAllergy());
             var audit = mock(com.example.hms.service.AuditEventLogService.class);
-            service.setAllergyRecheck(new com.example.hms.service.allergy.CurrentAllergyRecheck(allergies, null, audit));
+            var check = new com.example.hms.service.allergy.CurrentAllergyRecheck(allergies, null, audit);
+            service.setAllergyRecheck(check);
             DispenseRequestDTO dto = buildRequest();
             Dispense entity = stubTheFill(dto);
-            String token;
-            try {
-                service.createDispense(dto);
-                throw new AssertionError("the first fill should have been refused");
-            } catch (com.example.hms.cdshooks.CdsCriticalBlockException refused) {
-                token = refused.getCards().get(0).exceptionKey();
-            }
+            com.example.hms.model.User reviewer = new com.example.hms.model.User();
+            reviewer.setId(UUID.randomUUID());
+            prescription.setAllergyReviewDecision(com.example.hms.enums.AllergyReviewDecision.CONTINUE);
+            prescription.setAllergyReviewToken(check.currentConflict(prescription).orElseThrow().reviewToken());
+            prescription.setAllergyReviewedBy(reviewer);
+            prescription.setAllergyReviewedAt(java.time.LocalDateTime.now());
 
-            dto.setAllergyAcknowledgementReason("Prescriber confirmed: reaction was a rash, graded challenge");
-            dto.setAllergyAcknowledgementToken(token);
             service.createDispense(dto);
 
             var event = ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
             verify(audit).logEvent(event.capture());
             assertThat(event.getValue().getEntityType()).isEqualTo("DISPENSE");
             assertThat(event.getValue().getResourceId()).isEqualTo(entity.getId().toString());
+            assertThat(event.getValue().getDetails().toString()).contains(reviewer.getId().toString());
             verify(dispenseRepository).save(any(Dispense.class));
-            assertThat(entity.getNotes()).contains("Pénicilline").contains("graded challenge");
+            assertThat(entity.getNotes()).contains("Pénicilline");
+        }
+
+        @Test
+        @DisplayName("Policy 4: a fill the prescriber STOPPED is refused, nothing written")
+        void policy4_aStoppedOrderIsNeverFilled() {
+            var allergies = allergiesOnRecord(severePenicillinAllergy());
+            var check = new com.example.hms.service.allergy.CurrentAllergyRecheck(allergies, null, null);
+            service.setAllergyRecheck(check);
+            DispenseRequestDTO dto = buildRequest();
+            stubTheFill(dto);
+            prescription.setAllergyReviewDecision(com.example.hms.enums.AllergyReviewDecision.STOP);
+            prescription.setAllergyReviewToken(check.currentConflict(prescription).orElseThrow().reviewToken());
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
+                    .hasFieldOrPropertyWithValue("field", com.example.hms.service.allergy.CurrentAllergyRecheck.HOLD_FIELD);
+            verify(dispenseRepository, never()).save(any(Dispense.class));
         }
 
         @Test

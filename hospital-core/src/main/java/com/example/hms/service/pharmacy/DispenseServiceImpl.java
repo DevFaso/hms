@@ -167,17 +167,17 @@ public class DispenseServiceImpl implements DispenseService {
     }
 
     /**
-     * QA D1555: a drug the patient's CURRENT allergies stop (an allergy recorded after the signature
-     * included) passes this gate only with the pharmacist's acknowledgement of that allergy and a
-     * reason. Every verify, fill, hand-over and partner routing calls it (AllergyRecheckGuardTest).
+     * QA D1555 / Policy 4: a drug the patient's CURRENT allergies stop (an allergy recorded after the
+     * signature included) passes this gate only under an authorized prescriber's review of that conflict;
+     * the pharmacist's own reason never releases it. Every verify, fill, hand-over and partner routing
+     * calls it (AllergyRecheckGuardTest).
      */
-    private com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement requireAllergyAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate gate, Prescription prescription,
-                                                          String reason, String token) {
+    private com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement requireAllergyAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate gate, Prescription prescription) {
         if (allergyRecheck == null) {
             return null;
         }
-        return allergyRecheck.requireAcknowledged(gate, prescription,
-            prescription != null ? prescription.getMedicationName() : null, reason, token);
+        return allergyRecheck.requirePrescriberReview(gate, prescription,
+            prescription != null ? prescription.getMedicationName() : null);
     }
 
     private void auditAllergyAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement ack, Prescription prescription, UUID resourceId) {
@@ -581,9 +581,7 @@ public class DispenseServiceImpl implements DispenseService {
         }
         controlledSubstanceGuard.requireDispensable(prescription);
         // QA D1555: an allergy recorded since the fill was prepared is read before it leaves the counter.
-        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.DISPENSE, prescription,
-            request != null ? request.getAllergyAcknowledgementReason() : null,
-            request != null ? request.getAllergyAcknowledgementToken() : null);
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.DISPENSE, prescription);
 
         String patientScan = trimToNull(request != null ? request.getPatientScanValue() : null);
         requireHandOverChecksPass(dispenseVerificationService.verify(
@@ -938,8 +936,7 @@ public class DispenseServiceImpl implements DispenseService {
                     DispenseAlertCards.of(cdsResult));
         }
         // QA D1555: the order's drug against the patient's CURRENT allergies, every fill (a refill's included).
-        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.DISPENSE, prescription,
-                dto.getAllergyAcknowledgementReason(), dto.getAllergyAcknowledgementToken());
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.DISPENSE, prescription);
 
         ActorPair actors = resolveActors(dto);
         requirePharmacistVerification(prescription, actors);

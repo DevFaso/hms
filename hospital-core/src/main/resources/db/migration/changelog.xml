@@ -3449,4 +3449,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V284-allergy-conflict-prescriber-review" author="hms-team" runOnChange="false">
+        <sqlFile path="V284__allergy_conflict_prescriber_review.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

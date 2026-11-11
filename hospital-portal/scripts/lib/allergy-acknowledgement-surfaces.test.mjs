@@ -1,14 +1,21 @@
-// QA D1563 / D1555 guard (round 43): an allergy recorded after the order was
-// signed is read again by the server at every gate (the eMAR dose, the
-// pharmacist's verification, the fill and the hand-over, the routing to an
-// outside pharmacy), which refuses a drug the patient's current allergies stop
-// until the clinician acknowledges that allergy with a reason
-// (`allergyAcknowledgementReason`, with the card's token).
+// QA D1563 / D1555 guard (round 43), Policy 4 (user recommendation 2026-11-10,
+// pending clinical approval): an allergy recorded after the order was signed is
+// read again by the server at every gate (the eMAR dose, the pharmacist's
+// verification, the fill and the hand-over, the routing to an outside
+// pharmacy), which HOLDS a drug the patient's current allergies stop until an
+// authorized prescriber reviews the conflict on the order. A nurse's or a
+// pharmacist's own reason never releases it.
 //
-// Rule: every component that calls one of those gates (its `.ts` calls the
-// service method) reads the refusal with `allergyAcknowledgementRefusal(` and
-// renders `<app-allergy-acknowledgement-dialog>`, so the card is shown and the
-// reason asked for instead of a dead-end toast. Allowlist: none.
+// Rules:
+// - every component that calls one of those gates (its `.ts` calls the service
+//   method) reads the hold with `allergyHoldRefusal(` and renders
+//   `<app-allergy-hold-dialog>`, so the card and who was notified are shown
+//   instead of a dead-end toast;
+// - no source sends `allergyAcknowledgementReason` (or its token): the staff
+//   release is gone;
+// - the prescriber's review is reachable from the order detail and from the
+//   in-basket notice (`<app-allergy-review-dialog>`).
+// Allowlist: none.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -20,8 +27,10 @@ import { walk } from './walk.mjs';
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'app');
 const GATES =
   /\.(administerMedication|createDispense|markReady|handOver|pharmacistVerify|dispatchSms|routeToPartner)\(/;
-const READS_REFUSAL = /\ballergyAcknowledgementRefusal\(/;
-const DIALOG = /<app-allergy-acknowledgement-dialog\b/;
+const READS_REFUSAL = /\ballergyHoldRefusal\(/;
+const DIALOG = /<app-allergy-hold-dialog\b/;
+const STAFF_REASON = /allergyAcknowledgement(Reason|Token)/;
+const REVIEW_DIALOG = /<app-allergy-review-dialog\b/;
 
 /** The component's template: its templateUrl file, or its inline template. */
 function templateOf(file, source) {
@@ -47,7 +56,7 @@ export function gateSurfacesWithoutAcknowledgement() {
   return { surfaces, missing };
 }
 
-test('QA D1563 / D1555: every screen that gives, verifies, fills or routes an order asks for the allergy acknowledgement', () => {
+test('QA D1563 / D1555, Policy 4: every screen that gives, verifies, fills or routes an order shows the allergy hold', () => {
   const { surfaces, missing } = gateSurfacesWithoutAcknowledgement();
   for (const expected of [
     'nurse-station/nurse-station.ts',
@@ -64,6 +73,32 @@ test('QA D1563 / D1555: every screen that gives, verifies, fills or routes an or
   assert.deepEqual(
     missing,
     [],
-    'read the refusal with allergyAcknowledgementRefusal(err) and render <app-allergy-acknowledgement-dialog>',
+    'read the hold with allergyHoldRefusal(err) and render <app-allergy-hold-dialog>',
   );
+});
+
+test('Policy 4: no screen sends a staff allergy reason as a release', () => {
+  const senders = [];
+  for (const file of walk(appDir, ['.ts', '.html'])) {
+    if (file.endsWith('.spec.ts')) continue;
+    if (STAFF_REASON.test(readFileSync(file, 'utf8'))) {
+      senders.push(relative(appDir, file).replaceAll('\\', '/'));
+    }
+  }
+  assert.deepEqual(
+    senders,
+    [],
+    'only the prescriber review releases an allergy conflict (Policy 4)',
+  );
+});
+
+test('Policy 4: the prescriber review is reachable from the order detail and from its in-basket notice', () => {
+  for (const component of [
+    'prescriptions/prescriptions.ts',
+    'dashboard/in-basket-panel/in-basket-panel.ts',
+  ]) {
+    const file = join(appDir, component);
+    const template = templateOf(file, readFileSync(file, 'utf8'));
+    assert.ok(REVIEW_DIALOG.test(template), `${component} renders <app-allergy-review-dialog>`);
+  }
 });

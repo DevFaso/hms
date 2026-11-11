@@ -119,6 +119,16 @@
             </span>
           </button>
           <span class="item-actions">
+            @if (isAllergyReview(item)) {
+              <button
+                type="button"
+                class="btn-review"
+                data-testid="in-basket-allergy-review"
+                (click)="allergyReviewFor.set(item.referenceId)"
+              >
+                {{ 'ALLERGY_REVIEW.OPEN' | translate }}
+              </button>
+            }
             @if (item.status !== 'ACKNOWLEDGED') {
               <button
                 class="btn-acknowledge"
@@ -140,3 +150,11 @@
     </ul>
   }
 </section>
+<!-- Policy 4: the prescriber reviews the allergy conflict the notice is about. -->
+@if (allergyReviewFor(); as reviewId) {
+  <app-allergy-review-dialog
+    [prescriptionId]="reviewId"
+    (closed)="allergyReviewFor.set(null)"
+    (reviewed)="onAllergyReviewed()"
+  />
+}

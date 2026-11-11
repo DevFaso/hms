@@ -140,10 +140,8 @@ public class PrescriptionController {
         @Valid @RequestBody(required = false) PharmacistVerificationRequestDTO request,
         Locale locale) {
         String note = request != null ? request.getNote() : null;
-        // QA D1555: the allergy acknowledgement the re-check asks for, when the patient's allergies stop the drug.
-        pharmacistVerificationService.verify(id, note,
-            request != null ? request.getAllergyAcknowledgementReason() : null,
-            request != null ? request.getAllergyAcknowledgementToken() : null);
+        // QA D1555 / Policy 4: an allergy conflict is held for the prescriber's review; nothing sent here releases it.
+        pharmacistVerificationService.verify(id, note);
         return ResponseEntity.ok(prescriptionService.getPrescriptionAfterWrite(id, locale));
     }
 
@@ -167,6 +165,36 @@ public class PrescriptionController {
         Locale locale) {
         String reason = request != null ? request.getReason() : null;
         return ResponseEntity.ok(prescriptionService.recordPediatricDoseReview(id, reason, locale));
+    }
+
+    /**
+     * Policy 4 (user recommendation 2026-11-10, pending clinical approval): the allergy conflict a signed
+     * order meets now, for the prescriber who reviews it. The signing authority, as for /sign; the
+     * service requires a signing physician of the order's hospital, or its own prescriber.
+     */
+    @GetMapping("/{id}/allergy-conflict")
+    @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
+    @Operation(summary = "Read the allergy conflict a signed prescription meets",
+        description = "The allergy card, the token the review sends back, and the prescriber's review on record.")
+    public ResponseEntity<com.example.hms.payload.dto.prescription.AllergyConflictDTO> allergyConflict(@PathVariable UUID id) {
+        return ResponseEntity.ok(prescriptionService.getAllergyConflict(id));
+    }
+
+    /**
+     * Policy 4 (pending clinical approval): an authorized prescriber reviews the allergy conflict that
+     * holds a signed order at the eMAR and the pharmacy. A nurse's or a pharmacist's reason never
+     * releases it. Only at the order's own hospital (a shared patient's order elsewhere is read-only).
+     */
+    @PostMapping("/{id}/allergy-review")
+    @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
+    @Operation(summary = "Review the allergy conflict of a signed prescription",
+        description = "CONTINUE (with a plan) or STOP, with a mandatory rationale and the token of the conflict "
+            + "shown. Recorded on the order with the reviewer and the time, and audited. The eMAR and pharmacy "
+            + "gates honour a CONTINUE while the allergy and the order stay as reviewed; STOP refuses them.")
+    public ResponseEntity<com.example.hms.payload.dto.prescription.AllergyConflictDTO> allergyReview(
+        @PathVariable UUID id,
+        @Valid @RequestBody com.example.hms.payload.dto.prescription.AllergyConflictReviewRequestDTO request) {
+        return ResponseEntity.ok(prescriptionService.reviewAllergyConflict(id, request));
     }
 
     /**

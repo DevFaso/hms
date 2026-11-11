@@ -119,6 +119,20 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
         @Param("referenceId") UUID referenceId,
         @Param("referenceType") String referenceType);
 
+    /**
+     * Policy 4: deletes every item filed for a reference, acknowledged or not. For a notice whose record
+     * is kept elsewhere (an allergy conflict's review is recorded on the order and audited), so a later
+     * conflict on the same order can be told again (the one-item-per-reference-and-recipient rule).
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("""
+        DELETE FROM InBasketItem i
+        WHERE i.referenceId = :referenceId AND i.referenceType = :referenceType
+        """)
+    int deleteAllByReference(
+        @Param("referenceId") UUID referenceId,
+        @Param("referenceType") String referenceType);
+
     /** Check if a duplicate in-basket item already exists for a reference. */
     boolean existsByReferenceIdAndReferenceTypeAndRecipientUser_Id(
         UUID referenceId, String referenceType, UUID recipientUserId);

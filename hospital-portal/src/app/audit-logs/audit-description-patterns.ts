@@ -963,9 +963,25 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { reason: 'phrase:RX_SIGN_REAUTH' },
   },
   {
-    // QA D1563 / D1555: a nurse or a pharmacist acknowledged a documented allergy, with a reason.
+    // QA D1563 / D1555: a nurse or a pharmacist acknowledged a documented allergy, with a reason
+    // (rows written before Policy 4, which replaced that release by the prescriber's review).
     key: 'AUDIT.DESC.ALLERGY_ACKNOWLEDGED',
     re: /^Allergy acknowledged with a reason$/,
+  },
+  {
+    // Policy 4: a gate passed an allergy conflict under the prescriber's CONTINUE review.
+    key: 'AUDIT.DESC.ALLERGY_PASSED_UNDER_REVIEW',
+    re: /^Allergy conflict passed under the prescriber's review$/,
+  },
+  {
+    // Policy 4: a prescriber reviewed an allergy conflict on a signed order.
+    key: 'AUDIT.DESC.ALLERGY_REVIEWED_BY_PRESCRIBER',
+    re: /^Allergy conflict reviewed by the prescriber$/,
+  },
+  {
+    // Policy 4: the signer's acknowledgement at the signature is the review of that conflict.
+    key: 'AUDIT.DESC.ALLERGY_REVIEWED_AT_SIGNATURE',
+    re: /^Allergy conflict reviewed at signature$/,
   },
   {
     key: 'AUDIT.DESC.ALLERGY_OVERRIDE',

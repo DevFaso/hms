@@ -135,6 +135,11 @@ const NESTED_DIALOGS = new Map([
     'src/app/billing/billing.html::div.detail-panel[bill-detail-title] => div.modal[bill-adj-reversal-title]',
     SPEC_SHAPES,
   ],
+  // Policy 4: the prescriber's allergy review, opened from the order's detail panel.
+  [
+    'src/app/prescriptions/prescriptions.html::div.detail-panel[prescriptions-panel-1-title] => app-allergy-review-dialog',
+    SPEC_SHAPES,
+  ],
   [
     'src/app/billing/billing.html::div.detail-panel[bill-detail-title] => div.modal[bill-reversal-title]',
     SPEC_SHAPES,
