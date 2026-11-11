@@ -32,9 +32,16 @@ class ReadOnlyModeFilterTest {
 
     private ReadOnlyModeFilter filter;
 
+    @Mock private org.springframework.beans.factory.ObjectProvider<org.springframework.web.servlet.HandlerMapping> mappings;
+    @Mock private org.springframework.web.servlet.LocaleResolver localeResolver;
+    private final org.springframework.context.support.StaticMessageSource messages =
+        new org.springframework.context.support.StaticMessageSource();
+
     @BeforeEach
     void setUp() {
-        filter = new ReadOnlyModeFilter(downtimeStateService);
+        messages.addMessage(ReadOnlyModeFilter.DEFAULT_MESSAGE_KEY, java.util.Locale.FRENCH, "Lecture seule : la consultation reste possible.");
+        messages.addMessage(ReadOnlyModeFilter.DEFAULT_MESSAGE_KEY, java.util.Locale.of("es"), "Solo lectura: la consulta sigue disponible.");
+        filter = new ReadOnlyModeFilter(downtimeStateService, mappings, messages, localeResolver);
         when(downtimeStateService.snapshot())
             .thenReturn(new DowntimeStateService.DowntimeSnapshot(true, "Maintenance window", null));
     }
@@ -80,6 +87,18 @@ class ReadOnlyModeFilterTest {
     }
 
     @Test
+    void anAccountActionADowntimeCanWaitForIsRefused() throws Exception {
+        for (String uri : new String[] {
+            "/api/auth/register", "/api/auth/bootstrap-signup", "/api/auth/me/change-username",
+            "/api/auth/me/change-email", "/api/auth/credentials/recovery", "/api/auth/credentials/mfa"}) {
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            filter.doFilter(request("POST", uri), response, chain);
+            assertThat(response.getStatus()).as(uri).isEqualTo(503);
+            assertThat(response.getHeader("X-Readonly-Mode")).as(uri).isEqualTo("true");
+        }
+    }
+
+    @Test
     void allowlistIsContextPrefixed_aContextStrippedPathIsStillBlocked() throws Exception {
         // Servlet filters see /api/...; a SecurityConfig-style "/auth/login"
         // does NOT match the allowlist. This pins the convention that has
@@ -90,6 +109,39 @@ class ReadOnlyModeFilterTest {
         filter.doFilter(request("POST", "/auth/login"), response, chain);
 
         assertThat(response.getStatus()).isEqualTo(503);
+    }
+
+    @Test
+    void d1407_theDefaultMessageIsInTheReadersLanguageAndNotMarkedCustom() throws Exception {
+        when(downtimeStateService.snapshot())
+            .thenReturn(new DowntimeStateService.DowntimeSnapshot(true, null, null));
+        for (java.util.Map.Entry<java.util.Locale, String> reader : java.util.Map.of(
+            java.util.Locale.FRENCH, "Lecture seule", java.util.Locale.of("es"), "Solo lectura").entrySet()) {
+            when(localeResolver.resolveLocale(org.mockito.ArgumentMatchers.any())).thenReturn(reader.getKey());
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            filter.doFilter(request("POST", "/api/patients"), response, chain);
+            assertThat(response.getContentAsString()).contains(reader.getValue()).contains("\"customMessage\":false");
+        }
+    }
+
+    @Test
+    void d1407_anAdministratorsOwnMessageIsKeptAndMarkedCustomAndStaysValidJson() throws Exception {
+        when(downtimeStateService.snapshot())
+            .thenReturn(new DowntimeStateService.DowntimeSnapshot(true, "Say \"stop\"\nC:\\now", null));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        filter.doFilter(request("POST", "/api/patients"), response, chain);
+        assertThat(response.getContentAsString()).contains("\"customMessage\":true");
+        assertThat(new tools.jackson.databind.ObjectMapper().readTree(response.getContentAsString()).get("message").asString())
+            .isEqualTo("Say 'stop' C:\\now");
+    }
+
+    @Test
+    void d1404_theFhirReadFormsPassAndItsWritesAndExportDoNot() {
+        assertThat(ReadOnlyModeFilter.isFhirRead("/api/fhir/Patient/_search")).isTrue();
+        assertThat(ReadOnlyModeFilter.isFhirRead("/api/fhir/Patient/123/$everything")).isTrue();
+        assertThat(ReadOnlyModeFilter.isFhirRead("/api/fhir/Patient")).isFalse();
+        assertThat(ReadOnlyModeFilter.isFhirRead("/api/fhir/$export")).isFalse();
+        assertThat(ReadOnlyModeFilter.isFhirRead("/api/patients/_search")).isFalse();
     }
 
     @Test

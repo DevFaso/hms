@@ -59,8 +59,15 @@ public interface PrescriptionService {
      * is the only path that can set it: it verifies the signer is the
      * prescription's own prescriber, applies the controlled-substance gates, and
      * records who signed, when, and a SHA-256 digest of what they signed.
+     *
+     * <p>Round 18: the one signature entry point. It signs with the
+     * prescriber's re-authentication, which a
+     * controlled-drug prescription requires (the password, or the TOTP code
+     * when an authenticator is enrolled), checked on this call only.
      */
-    PrescriptionResponseDTO signPrescription(UUID id, Locale locale);
+    PrescriptionResponseDTO signPrescription(UUID id,
+                                             com.example.hms.payload.dto.SignPrescriptionRequestDTO reauthentication,
+                                             Locale locale);
 
     /**
      * Co-sign a prescription that declared it needs one (P2 #15).
@@ -74,6 +81,27 @@ public interface PrescriptionService {
     PrescriptionResponseDTO cosignPrescription(UUID id, Locale locale);
 
     /**
+     * Round 19 (QA D1096): a pharmacist or a physician other than the
+     * prescriber records the paediatric dose review the decision support asked
+     * for, with a reason; the order is not signed until then.
+     */
+    PrescriptionResponseDTO recordPediatricDoseReview(UUID id, String reason, Locale locale);
+
+    /**
+     * Policy 4 (pending clinical approval): the allergy conflict a signed order meets now and the
+     * prescriber's review on record, for an authorized prescriber of the order's hospital.
+     */
+    com.example.hms.payload.dto.prescription.AllergyConflictDTO getAllergyConflict(UUID id);
+
+    /**
+     * Policy 4 (pending clinical approval): an authorized prescriber of the order's hospital reviews its
+     * allergy conflict: CONTINUE with a plan, or STOP, with a rationale. The gates honour it while the
+     * conflict stays the one reviewed.
+     */
+    com.example.hms.payload.dto.prescription.AllergyConflictDTO reviewAllergyConflict(UUID id,
+        com.example.hms.payload.dto.prescription.AllergyConflictReviewRequestDTO request);
+
+    /**
      * The prescription list, hospital-scoped.
      *
      * @param statuses gap G12 — restrict the page to these {@code PrescriptionStatus}
@@ -83,6 +111,16 @@ public interface PrescriptionService {
     Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId,
                                        List<PrescriptionStatus> statuses,
                                        Pageable pageable, Locale locale);
+
+    /**
+     * QA D1314: one page of the hospital's list narrowed by what the search box
+     * holds: the drug, the patient's name or the prescriber's name, accents
+     * ignored. A blank term is the plain list.
+     */
+    Page<PrescriptionResponseDTO> search(String term, List<PrescriptionStatus> statuses, Pageable pageable, Locale locale);
+
+    /** A held order stopped from the order review: by a prescriber of its hospital, with a reason, audited. */
+    void stopHeldOrder(UUID id, String reason);
 
     PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale);
 

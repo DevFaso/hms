@@ -1,9 +1,13 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ReferralsComponent } from './referrals';
+import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
@@ -95,6 +99,19 @@ describe('ReferralsComponent', () => {
   it('should create', () => {
     flushInitRequests();
     expect(component).toBeTruthy();
+  });
+
+  // QA D903/D912: the chip showed the email, or an empty line for a
+  // phone-only patient, instead of this hospital's MRN.
+  it('names the patient by MRN in the chip and the options (QA D912)', () => {
+    flushInitRequests();
+    fixture.detectChanges();
+    flushInitRequests();
+    component.openCreate();
+    // The form loads the locked hospital's departments as it opens.
+    flushInitRequests();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, component)).toEqual(EXPECTED_PICKER_SUBLINES);
   });
 
   it('QA D427: a nurse is not offered New referral, which the API refuses', () => {
@@ -216,6 +233,29 @@ describe('ReferralsComponent', () => {
     expect(component.isReceivingSide({ id: 'r-5', hospitalId: 'h-A' } as any)).toBeTrue();
   });
 
+  it('QA D998: a chart that does not open here is explained in the referral, not a silent bounce', () => {
+    flushInitRequests();
+    const router = TestBed.inject(Router);
+    const nav = spyOn(router, 'navigate');
+    component.viewDetail({ id: 'r-7', patientId: 'p-9', hospitalId: 'h-B' } as any);
+    component.openPatientChart({ id: 'r-7', patientId: 'p-9' } as any);
+    httpMock
+      .expectOne((req) => req.url.includes('/patients/p-9'))
+      .flush({}, { status: 404, statusText: 'Not Found' });
+    expect(component.chartCheck()).toBe('unavailable');
+    expect(nav).not.toHaveBeenCalled();
+    component.openPatientChart({ id: 'r-7', patientId: 'p-9' } as any);
+    httpMock.expectOne((req) => req.url.includes('/patients/p-9')).flush({ id: 'p-9' });
+    expect(nav).toHaveBeenCalledWith(['/patients', 'p-9']);
+  });
+
+  it('QA D955: the referrer is offered no receiving step on her own internal referral', () => {
+    const own = { id: 'r-6', hospitalId: 'h-A', referringProviderId: 'staff-1' } as any;
+    expect(component.isReceivingSide(own)).toBeFalse();
+    const el = showAsDoctor({ ...own, status: 'SUBMITTED' });
+    expect(el.querySelector('.action-link.acknowledge')).toBeNull();
+  });
+
   it('QA D611: a refused cancel shows the server reason in the dialog', () => {
     roleContextStub.hasAnyActiveRole.and.callFake((roles: string[]) =>
       roles.includes('ROLE_DOCTOR'),
@@ -224,6 +264,8 @@ describe('ReferralsComponent', () => {
     fixture.detectChanges();
     flushInitRequests();
     component.confirmCancel({ id: 'r-3', status: 'DRAFT', referringProviderId: 'staff-1' } as any);
+    // QA D1098: the cancel states its reason (it sent "Cancelled by admin" before).
+    component.cancelReason.set('Orientation en double');
     component.executeCancel();
     const reason = "Seul le soignant qui a rédigé cette orientation peut l'annuler.";
     httpMock

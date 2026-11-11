@@ -47,6 +47,14 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class IntakeOutputServiceImplTest {
 
+    // QA D1232 (round 24): the refusals are message keys now; the assertions
+    // read them in English through the real bundles (set up in setUp).
+    @org.junit.jupiter.api.AfterEach
+    void resetRefusalLocale() {
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
@@ -62,6 +70,8 @@ class IntakeOutputServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         service = new IntakeOutputServiceImpl(
             patientChartAccess, hospitalRepository, staffRepository, userRepository, entryRepository);
 

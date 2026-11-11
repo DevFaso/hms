@@ -1,15 +1,25 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import {
   DeathClosureSummary,
+  DeathDispute,
+  DeathRecordRequest,
   DeathRecordResponse,
   MannerOfDeath,
   MaternalDeathTiming,
   MortalityRegister,
   MortalityService,
+  PerinatalBirthStatus,
   PerinatalDeathType,
   PlaceOfDeath,
 } from '../services/mortality.service';
@@ -20,19 +30,32 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { toServerDateTime } from '../shared/date-utils';
+import { BackdropCloseDirective } from '../shared/a11y/backdrop-close.directive';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { isRecordedMale } from '../shared/patient-measures';
 /**
  * The mortality register (Tier 2 item 29) — the first and only caller of every
  * `/mortality` endpoint.
  *
- * <p>Recording a death is irreversible and cascades: it closes admissions,
- * encounters, future appointments and recalls. So the form confirms first, and
- * the result reports exactly what was closed rather than doing it silently.
+ * <p>Recording a death cascades: it closes admissions, encounters, future
+ * appointments and recalls, and refuses new care. So the form confirms first, and
+ * the result reports exactly what was closed rather than doing it silently. The one
+ * way back (QA D1488) is an administrator's "entered in error", which leaves what
+ * was closed closed.
  */
 @Component({
   selector: 'app-mortality',
   standalone: true,
   imports: [
+    DateTimePipe,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    BackdropCloseDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -49,6 +72,8 @@ export class MortalityComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
 
   loading = signal(false);
   register = signal<MortalityRegister | null>(null);
@@ -66,6 +91,20 @@ export class MortalityComponent implements OnInit {
     'ROLE_SUPER_ADMIN',
   ]);
 
+  /** QA D1488: who may mark a record entered in error; the server holds them to their own hospital. */
+  readonly canCorrect = this.roleContext.hasAnyActiveRole([
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ]);
+
+  /**
+   * The disputes to review are one hospital's: a super-admin in global view has none to read
+   * until the scope chip picks a hospital (the server answers "hospital required").
+   */
+  readonly canReviewDisputes = computed(
+    () => this.canCorrect && this.roleContext.hasHospitalScope(),
+  );
+
   readonly placesOfDeath: PlaceOfDeath[] = ['FACILITY', 'HOME', 'IN_TRANSIT', 'OTHER', 'UNKNOWN'];
   readonly mannersOfDeath: MannerOfDeath[] = [
     'NATURAL',
@@ -82,6 +121,7 @@ export class MortalityComponent implements OnInit {
     'LATE_MATERNAL',
   ];
   readonly perinatalTypes: PerinatalDeathType[] = ['STILLBIRTH', 'EARLY_NEONATAL', 'LATE_NEONATAL'];
+  readonly birthStatuses: PerinatalBirthStatus[] = ['UNKNOWN', 'LIVE_BIRTH', 'STILLBIRTH'];
 
   /* ── Record modal ── */
   showRecordModal = signal(false);
@@ -94,12 +134,94 @@ export class MortalityComponent implements OnInit {
   amending = signal(false);
   amendForm = { amendmentReason: '', immediateCause: '', underlyingCause: '', notes: '' };
 
+  /* ── Entered in error (QA D1488) ── */
+  errorRecord = signal<DeathRecordResponse | null>(null);
+  errorSubmitting = signal(false);
+  errorReason = '';
+
+  /* ── Disputes to review ── */
+  disputes = signal<DeathDispute[]>([]);
+  upholdTarget = signal<DeathDispute | null>(null);
+  upholdReason = '';
+  upholding = signal(false);
+
   ngOnInit(): void {
     const today = new Date();
     const start = new Date(today.getFullYear(), today.getMonth(), 1);
     this.from = this.toIsoDate(start);
     this.to = this.toIsoDate(today);
     this.loadRegister();
+    this.loadDisputes();
+  }
+
+  /**
+   * Loaded on its own: its failure never reads as the register's, which loaded. A refusal (403)
+   * means this caller does not review disputes here, so the section stays hidden and nothing is
+   * said; any other failure says the disputes could not be loaded.
+   */
+  loadDisputes(): void {
+    if (!this.canReviewDisputes()) return;
+    this.mortality.openDisputes().subscribe({
+      next: (list) => this.disputes.set(list),
+      error: (err: unknown) => {
+        this.disputes.set([]);
+        if ((err as { status?: number } | null)?.status === 403) return;
+        this.toast.error(this.translate.instant('MORTALITY.DISPUTES_LOAD_ERROR'));
+      },
+    });
+  }
+
+  openUphold(dispute: DeathDispute): void {
+    this.upholdReason = '';
+    this.upholdTarget.set(dispute);
+  }
+
+  closeUphold(): void {
+    this.upholdTarget.set(null);
+  }
+
+  async submitUphold(): Promise<void> {
+    const dispute = this.upholdTarget();
+    const reason = this.upholdReason.trim();
+    if (!dispute || !reason) return;
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'MORTALITY.UPHOLD_CONFIRM',
+        confirmKey: 'MORTALITY.UPHOLD',
+      }))
+    )
+      return;
+    this.upholding.set(true);
+    this.mortality.upholdDeath(dispute.id, reason).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('MORTALITY.UPHOLD_DONE'));
+        this.upholding.set(false);
+        this.upholdTarget.set(null);
+        this.loadDisputes();
+        this.loadRegister();
+      },
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('MORTALITY.UPHOLD_FAILED'));
+        this.upholding.set(false);
+      },
+    });
+  }
+
+  /** Entered in error from a dispute: the row it needs is on the register, when this hospital recorded the death. */
+  openEnteredInErrorFor(dispute: DeathDispute): void {
+    const record = this.register()?.deaths.find((d) => d.id === dispute.deathRecordId);
+    if (record) {
+      this.openEnteredInError(record);
+      return;
+    }
+    // A death outside the period shown: the same action, on its own record.
+    this.mortality.getForPatient(dispute.patientId).subscribe({
+      next: (found) => this.openEnteredInError(found),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MORTALITY.ENTERED_IN_ERROR_FAILED'),
+        ),
+    });
   }
 
   loadRegister(): void {
@@ -131,12 +253,27 @@ export class MortalityComponent implements OnInit {
   onPatientPicked(patient: PatientResponse | null): void {
     this.selectedPatient.set(patient);
     this.form.patientId = patient?.id ?? '';
+    // QA D1490: the maternal fields are hidden for a patient recorded male, so nothing stays ticked behind them.
+    if (this.maternalHidden()) {
+      this.form.maternalDeath = false;
+    }
   }
 
-  submitRecord(): void {
+  /** QA D1490: a maternal death is not offered for a patient recorded male; unknown sex keeps it. */
+  maternalHidden(): boolean {
+    return isRecordedMale(this.selectedPatient()?.gender);
+  }
+
+  async submitRecord(): Promise<void> {
     if (!this.form.patientId || !this.form.diedAt || !this.form.immediateCause.trim()) return;
-    // Irreversible and cascading — there is no un-death path, so ask first.
-    if (!window.confirm(this.translate.instant('MORTALITY.RECORD_CONFIRM'))) return;
+    // Cascading, and only an administrator can correct it, so ask first.
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'MORTALITY.RECORD_CONFIRM',
+        confirmKey: 'MORTALITY.RECORD_DEATH',
+      }))
+    )
+      return;
 
     this.recording.set(true);
     this.mortality
@@ -156,6 +293,8 @@ export class MortalityComponent implements OnInit {
         maternalDeathTiming: this.form.maternalDeath ? this.form.maternalDeathTiming : undefined,
         perinatalDeath: this.form.perinatalDeath,
         perinatalType: this.form.perinatalDeath ? this.form.perinatalType : undefined,
+        // CR-08: optional facts, sent only with the classification they support.
+        ...(this.form.perinatalDeath ? this.birthFacts() : {}),
         autopsyRequested: this.form.autopsyRequested,
         notes: this.form.notes.trim() || undefined,
       })
@@ -169,11 +308,20 @@ export class MortalityComponent implements OnInit {
           this.selected.set(result.deathRecord);
           this.loadRegister();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('MORTALITY.RECORD_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('MORTALITY.RECORD_ERROR'));
           this.recording.set(false);
         },
       });
+  }
+
+  /** Empty stays absent, which the server reads as unknown. */
+  private birthFacts(): Pick<DeathRecordRequest, 'bornAt' | 'birthStatus' | 'gestationalAgeWeeks'> {
+    return {
+      bornAt: this.form.bornAt ? toServerDateTime(this.form.bornAt) : undefined,
+      birthStatus: this.form.birthStatus,
+      gestationalAgeWeeks: this.form.gestationalAgeWeeks ?? undefined,
+    };
   }
 
   openDetail(record: DeathRecordResponse): void {
@@ -218,11 +366,50 @@ export class MortalityComponent implements OnInit {
           this.selected.set(updated);
           this.loadRegister();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('MORTALITY.AMEND_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('MORTALITY.AMEND_ERROR'));
           this.amending.set(false);
         },
       });
+  }
+
+  openEnteredInError(record: DeathRecordResponse): void {
+    this.errorReason = '';
+    this.errorRecord.set(record);
+  }
+
+  closeEnteredInError(): void {
+    this.errorRecord.set(null);
+  }
+
+  async submitEnteredInError(): Promise<void> {
+    const record = this.errorRecord();
+    const reason = this.errorReason.trim();
+    if (!record || !reason) return;
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'MORTALITY.ENTERED_IN_ERROR_CONFIRM',
+        confirmKey: 'MORTALITY.MARK_ENTERED_IN_ERROR',
+      }))
+    )
+      return;
+    this.errorSubmitting.set(true);
+    this.mortality.markEnteredInError(record.id, reason).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('MORTALITY.ENTERED_IN_ERROR_DONE'));
+        this.errorSubmitting.set(false);
+        this.errorRecord.set(null);
+        this.selected.set(null);
+        this.loadRegister();
+        this.loadDisputes();
+      },
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MORTALITY.ENTERED_IN_ERROR_FAILED'),
+        );
+        this.errorSubmitting.set(false);
+      },
+    });
   }
 
   dismissClosure(): void {
@@ -262,6 +449,9 @@ export class MortalityComponent implements OnInit {
       maternalDeathTiming: 'WITHIN_42_DAYS_POSTPARTUM' as MaternalDeathTiming,
       perinatalDeath: false,
       perinatalType: 'STILLBIRTH' as PerinatalDeathType,
+      birthStatus: 'UNKNOWN' as PerinatalBirthStatus,
+      gestationalAgeWeeks: null as number | null,
+      bornAt: '',
       autopsyRequested: false,
       notes: '',
     };

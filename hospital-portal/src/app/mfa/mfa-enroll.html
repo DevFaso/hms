@@ -58,10 +58,14 @@
     <!-- STEP: Verify -->
     @if (step() === 'verify') {
       <div class="step-content">
-        <p>{{ 'MFA.ENROLL_ENTER_CODE' | translate }}</p>
+        <p>
+          <label for="mfa-enroll-code">{{ 'MFA.ENROLL_ENTER_CODE' | translate }} *</label>
+        </p>
         <form (ngSubmit)="submitVerification()" class="verify-form">
           <input
+            id="mfa-enroll-code"
             type="text"
+            required
             [(ngModel)]="totpCode"
             name="totpCode"
             maxlength="6"

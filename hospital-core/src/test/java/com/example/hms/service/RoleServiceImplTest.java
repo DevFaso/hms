@@ -8,6 +8,7 @@ import com.example.hms.payload.dto.RoleRequestDTO;
 import com.example.hms.payload.dto.RoleResponseDTO;
 import com.example.hms.repository.PermissionRepository;
 import com.example.hms.repository.RoleRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,11 +40,14 @@ class RoleServiceImplTest {
     @Mock
     private PermissionRepository permissionRepository;
 
+    @Mock
+    private UserRoleHospitalAssignmentRepository assignmentRepository;
+
     private RoleServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new RoleServiceImpl(roleRepository, permissionRepository, new RoleMapper());
+        service = new RoleServiceImpl(roleRepository, permissionRepository, new RoleMapper(), assignmentRepository);
     }
 
     @Test
@@ -170,5 +175,112 @@ class RoleServiceImplTest {
     @Test
     void listBlueprintsExposesAllDefinitions() {
         assertThat(service.listBlueprints()).hasSize(RoleBlueprint.values().length);
+    }
+
+    private Role storedRole(String code) {
+        Role role = Role.builder().name(code).code(code).permissions(new LinkedHashSet<>()).build();
+        role.setId(UUID.randomUUID());
+        when(roleRepository.findById(role.getId())).thenReturn(Optional.of(role));
+        return role;
+    }
+
+    @Test
+    void aBuiltInRolesCodeIsNeverChanged() {
+        // QA D902 (#968 review): a new code stripped the role from every holder.
+        Role superAdmin = storedRole("ROLE_SUPER_ADMIN");
+        RoleRequestDTO request = RoleRequestDTO.builder().name("ROLE_SUPER_ADMIN").code("ROLE_OWNER").build();
+        UUID id = superAdmin.getId();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.update(id, request))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThat(superAdmin.getCode()).isEqualTo("ROLE_SUPER_ADMIN");
+        verify(roleRepository, never()).save(any(Role.class));
+    }
+
+    @Test
+    void aBlankCodeOnABuiltInRoleKeepsItsCodeInsteadOfDerivingOneFromTheName() {
+        Role doctor = storedRole("ROLE_DOCTOR");
+        when(roleRepository.findByCode("ROLE_DOCTOR")).thenReturn(Optional.of(doctor));
+        when(roleRepository.findByNameIgnoreCase("Medecin")).thenReturn(Optional.empty());
+        when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0, Role.class));
+
+        RoleResponseDTO response = service.update(doctor.getId(),
+            RoleRequestDTO.builder().name("Medecin").code(" ").build());
+
+        assertThat(response.getCode()).isEqualTo("ROLE_DOCTOR");
+        assertThat(response.isBuiltIn()).isTrue();
+        assertThat(response.getName()).isEqualTo("Medecin");
+    }
+
+    @Test
+    void noCustomRoleTakesABuiltInCode() {
+        Role custom = storedRole("CLINICAL_ADMIN");
+        RoleRequestDTO request = RoleRequestDTO.builder().name("Clinical Admin").code("SUPER_ADMIN").build();
+        UUID id = custom.getId();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.update(id, request))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThat(custom.getCode()).isEqualTo("CLINICAL_ADMIN");
+    }
+
+    @Test
+    void aCustomRolesCodeStaysEditable() {
+        Role custom = storedRole("CLINICAL_ADMIN");
+        when(roleRepository.findByCode("CLINICAL_LEAD")).thenReturn(Optional.empty());
+        when(roleRepository.findByNameIgnoreCase("Clinical Lead")).thenReturn(Optional.empty());
+        when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0, Role.class));
+
+        RoleResponseDTO response = service.update(custom.getId(),
+            RoleRequestDTO.builder().name("Clinical Lead").code("clinical lead").build());
+
+        assertThat(response.getCode()).isEqualTo("CLINICAL_LEAD");
+        assertThat(response.isBuiltIn()).isFalse();
+    }
+
+    @Test
+    void noNewRoleTakesABuiltInCode() {
+        // #968 review: a custom SUPER_ADMIN row, once assigned, counted as
+        // "another super-admin remains". The legacy spelling and a code given
+        // in lower case with a space are normalised before the check.
+        for (String code : List.of("SUPER_ADMIN", "role physician", "role lab manager")) {
+            RoleRequestDTO request = RoleRequestDTO.builder().name("Custom " + code).code(code).build();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.create(request))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        }
+        verify(roleRepository, never()).save(any(Role.class));
+    }
+
+    @Test
+    void aBuiltInRoleIsNeverDeleted() {
+        // QA D902 (#968 review): DELETE /roles/{id} removed the super-admin
+        // role and left every super-admin assignment pointing at nothing.
+        Role superAdmin = storedRole("ROLE_SUPER_ADMIN");
+        UUID id = superAdmin.getId();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.delete(id))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        verify(roleRepository, never()).delete(any(Role.class));
+        verify(roleRepository, never()).deleteById(any(UUID.class));
+    }
+
+    @Test
+    void aCustomRoleStillAssignedIsNotDeleted() {
+        Role custom = storedRole("CLINICAL_ADMIN");
+        UUID id = custom.getId();
+        when(assignmentRepository.existsByRoleId(id)).thenReturn(true);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.delete(id))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        verify(roleRepository, never()).delete(any(Role.class));
+    }
+
+    @Test
+    void anUnusedCustomRoleIsDeleted() {
+        Role custom = storedRole("CLINICAL_ADMIN");
+        when(assignmentRepository.existsByRoleId(custom.getId())).thenReturn(false);
+
+        service.delete(custom.getId());
+
+        verify(roleRepository).delete(custom);
     }
 }

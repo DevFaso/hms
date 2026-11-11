@@ -115,6 +115,27 @@ class MedicationHistoryServiceImplTest {
         assertThat(result.getTimeline().get(0).getMedicationName()).isEqualTo("Aspirin");
     }
 
+    @Test void getMedicationTimeline_prescriptionCarriesSigningDate() {
+        // D1573: a signed order names when it was signed, so a foreign row can say so.
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setMedicationName("Aspirin");
+        rx.setCreatedAt(LocalDateTime.now().minusDays(5));
+        LocalDateTime signed = LocalDateTime.now().minusDays(4);
+        rx.setSignedAt(signed);
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+
+        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(rx));
+        when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of());
+        when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
+
+        MedicationTimelineResponseDTO result = service.getMedicationTimeline(patientId, hospitalId, null, null, Locale.ENGLISH);
+
+        assertThat(result.getTimeline().get(0).getSignedAt()).isEqualTo(signed);
+    }
+
     @Test void getMedicationTimeline_patientNotFound() {
         when(patientChartAccess.require(patientId, hospitalId))
             .thenThrow(new ResourceNotFoundException("patient.notFound", patientId));

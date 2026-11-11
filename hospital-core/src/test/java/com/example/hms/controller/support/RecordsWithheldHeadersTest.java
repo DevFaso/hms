@@ -111,7 +111,8 @@ class RecordsWithheldHeadersTest {
     void encounters() {
         EncounterService service = mock(EncounterService.class);
         when(service.list(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(Page.empty());
-        EncounterController controller = new EncounterController(service, authUtils, headers);
+        EncounterController controller = new EncounterController(service, authUtils, headers,
+            mock(com.example.hms.service.MedicalCertificateService.class));
         withheld(true);
         assertThat(header(controller.list(patient, null, null, null, null, null,
             PageRequest.of(0, 20), Locale.ENGLISH, auth))).isEqualTo("OTHER_HOSPITALS");

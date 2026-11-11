@@ -1,9 +1,9 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 import { AppointmentFormComponent } from './appointment-form';
 import { AppointmentService } from '../services/appointment.service';
@@ -13,6 +13,10 @@ import { HospitalResponse, HospitalService } from '../services/hospital.service'
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { localDateString } from '../shared/date-utils';
+import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
 
 /**
  * QA D810: the prenatal calendar's "Book" action opens the appointment form
@@ -20,6 +24,7 @@ import { localDateString } from '../shared/date-utils';
  */
 describe('AppointmentFormComponent — prefill from the prenatal calendar', () => {
   let patients: jasmine.SpyObj<PatientService>;
+  let fixture: ComponentFixture<AppointmentFormComponent>;
 
   function create(params: Record<string, string>): AppointmentFormComponent {
     patients = jasmine.createSpyObj<PatientService>('PatientService', ['list', 'getById']);
@@ -50,7 +55,14 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
         },
         {
           provide: AppointmentService,
-          useValue: jasmine.createSpyObj('AppointmentService', ['create']),
+          useValue: (() => {
+            const service = jasmine.createSpyObj('AppointmentService', [
+              'create',
+              'bookingTimeCheck',
+            ]);
+            service.bookingTimeCheck.and.returnValue(of({}));
+            return service;
+          })(),
         },
         { provide: PatientService, useValue: patients },
         { provide: StaffService, useValue: staff },
@@ -71,7 +83,8 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
         },
       ],
     });
-    const component = TestBed.createComponent(AppointmentFormComponent).componentInstance;
+    fixture = TestBed.createComponent(AppointmentFormComponent);
+    const component = fixture.componentInstance;
     component.ngOnInit();
     return component;
   }
@@ -96,7 +109,8 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
     expect(component.form.patientId).toBe('11111111-2222-3333-4444-555555555555');
     expect(component.form.appointmentDate).toBe(day);
     expect(component.form.startTime).toBe('09:30');
-    expect(component.form.endTime).toBe('10:00');
+    // QA D1060: no end time is computed or sent; the server sets it from the slot rules.
+    expect(component.form.endTime).toBeUndefined();
     expect(component.form.reason).toBe('Consultation prénatale (CPN) — 24 SA');
   });
 
@@ -108,6 +122,14 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
     expect(component.form.startTime).toBe('');
   });
 
+  // QA D903/D912: the chip and the options led with the email, so a phone-only
+  // patient read ' · MRN CHW1444'; both now give this hospital's MRN alone.
+  it('names the patient by MRN in the chip and the options (QA D912)', () => {
+    const component = create({});
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, component)).toEqual(EXPECTED_PICKER_SUBLINES);
+  });
+
   it('opens blank with no query parameters', () => {
     const component = create({});
 
@@ -115,5 +137,322 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
     expect(component.form.appointmentDate).toBe('');
     expect(component.form.reason).toBe('');
     expect(component.selectedPatient()).toBeNull();
+  });
+
+  it('QA D947: ArrowDown then Enter picks a suggestion from the keyboard', () => {
+    const component = create({});
+    const awa = { id: 'p-awa', firstName: 'Awa', lastName: 'Traoré' } as PatientResponse;
+    const moumouni = {
+      id: 'p-mou',
+      firstName: 'Moumouni',
+      lastName: 'Sawadogo',
+    } as PatientResponse;
+    component.patientSuggestions.set([awa, moumouni]);
+    component.patientDropdownOpen.set(true);
+
+    component.onPatientKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    component.onPatientKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    expect(component.patientActive()).toBe(1);
+    component.onPatientKeydown(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+    expect(component.form.patientId).toBe('p-mou');
+    expect(component.patientDropdownOpen()).toBeFalse();
+  });
+
+  it('QA D947 review round 11: a new list drops the highlight, so Tab never picks a stranger', fakeAsync(() => {
+    const component = create({});
+    const awa = { id: 'p-awa', firstName: 'Awa', lastName: 'Traoré' } as PatientResponse;
+    const moumouni = {
+      id: 'p-mou',
+      firstName: 'Moumouni',
+      lastName: 'Sawadogo',
+    } as PatientResponse;
+    const issa = { id: 'p-issa', firstName: 'Issa', lastName: 'Ouédraogo' } as PatientResponse;
+    component.patientSuggestions.set([awa, moumouni]);
+    component.patientDropdownOpen.set(true);
+    component.onPatientKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    component.onPatientKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    expect(component.patientActive()).toBe(1);
+
+    // She keeps typing: the list is replaced.
+    patients.list.and.returnValue(of([issa, awa]));
+    component.onPatientQueryChange('Oued');
+    tick(250);
+    expect(component.patientActive()).toBe(-1);
+
+    component.onPatientKeydown(new KeyboardEvent('keydown', { key: 'Tab' }));
+    expect(component.form.patientId).toBeUndefined();
+  }));
+
+  it('QA D984: a refused date names the field and its reason, not the generic text', () => {
+    const component = create({});
+    const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+    const appointments = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+    appointments.create.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          error: 'Validation Failed',
+          message: 'La demande contient des erreurs de validation',
+          fieldErrors: { appointmentDate: 'doit être une date dans le présent ou le futur' },
+        },
+      })),
+    );
+    component.form.appointmentDate = '2020-01-01';
+    component.form.startTime = '09:00';
+    component.form.endTime = '09:30';
+    component.form.patientId = 'p-1';
+    component.form.staffId = 's-1';
+
+    component.submit();
+
+    // The labelled field reason ("{{field}}: {{reason}}"); the test loads no
+    // translations, so the key itself comes back.
+    const shown = toast.error.calls.mostRecent().args[0] as string;
+    expect(shown).toBe('FIELD_LIMITS.FIELD_REASON');
+    expect(shown).not.toBe('La demande contient des erreurs de validation');
+  });
+
+  it('QA D985 review round 14: picking another patient drops the recall; the same one keeps it', () => {
+    const component = create({
+      recallId: '11111111-2222-3333-4444-555555555555',
+      patientId: '11111111-2222-3333-4444-555555555555',
+    });
+    expect(component.form.recallId).toBe('11111111-2222-3333-4444-555555555555');
+    component.selectPatient({
+      id: '11111111-2222-3333-4444-555555555555',
+      firstName: 'Awa',
+    } as PatientResponse);
+    expect(component.form.recallId).toBe('11111111-2222-3333-4444-555555555555');
+    component.selectPatient({ id: 'p-other', firstName: 'Issa' } as PatientResponse);
+    expect(component.form.recallId).toBeUndefined();
+  });
+
+  it('QA D985: a refused recall is dropped, so the next submit books without it', () => {
+    const component = create({ recallId: '11111111-2222-3333-4444-555555555555' });
+    expect(component.form.recallId).toBe('11111111-2222-3333-4444-555555555555');
+    const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+    const appointments = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+    appointments.create.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          error: 'Bad Request',
+          message:
+            'Ce rappel n’est plus ouvert. Validez de nouveau pour prendre le rendez-vous sans lui.',
+          field: 'recallId',
+          fieldErrors: { recallId: 'Ce rappel n’est plus ouvert.' },
+        },
+      })),
+    );
+    component.form.appointmentDate = '2099-01-01';
+    component.form.startTime = '09:00';
+    component.form.endTime = '09:30';
+    component.form.patientId = 'p-1';
+    component.form.staffId = 's-1';
+
+    component.submit();
+
+    expect(component.form.recallId).toBeUndefined();
+    expect(toast.error.calls.mostRecent().args[0]).toContain('Ce rappel n’est plus ouvert');
+
+    // Any other refusal keeps the recall the desk booked from.
+    component.form.recallId = '11111111-2222-3333-4444-555555555555';
+    appointments.create.and.returnValue(
+      throwError(() => ({ status: 400, error: { error: 'Bad Request', message: 'slot taken' } })),
+    );
+    component.submit();
+    expect(component.form.recallId).toBe('11111111-2222-3333-4444-555555555555');
+  });
+
+  it('QA D1060: the calendar duration is not turned into an end time, and none is sent', () => {
+    const component = create({ date: inDays(5), time: '08:20', duration: '240' });
+    const appointments = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+    // A refusal keeps the test on the page (no navigation); the payload is what matters.
+    appointments.create.and.returnValue(throwError(() => ({ status: 409, error: {} })));
+    component.form.patientId = 'p-1';
+    component.form.staffId = 's-1';
+
+    component.submit();
+
+    const payload = appointments.create.calls.mostRecent().args[0];
+    expect(payload.startTime).toBe('08:20');
+    expect('endTime' in payload).toBeFalse();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('#end')).toBeNull();
+    expect(el.querySelector('[data-testid="appt-duration-note"]')).not.toBeNull();
+  });
+
+  it('QA D1072: a refused booking marks the missing fields and focuses the first', () => {
+    const component = create({});
+    document.body.appendChild(fixture.nativeElement);
+    try {
+      fixture.detectChanges();
+      component.form.appointmentDate = inDays(3);
+      component.submit();
+      const el = fixture.nativeElement as HTMLElement;
+      const start = el.querySelector<HTMLInputElement>('#start')!;
+      expect(start.getAttribute('aria-invalid')).toBe('true');
+      expect(el.querySelector('#start-invalid-msg')).not.toBeNull();
+      expect(el.querySelector('#apptPatientSearch')?.getAttribute('aria-invalid')).toBe('true');
+      expect(el.querySelector('#date')?.hasAttribute('aria-invalid')).toBeFalse();
+      expect(document.activeElement).toBe(start);
+    } finally {
+      fixture.nativeElement.remove();
+    }
+  });
+
+  it('QA D1036: the picked-patient chip shows the middle name', () => {
+    const component = create({});
+    component.selectedPatient.set({
+      id: 'p-1',
+      firstName: 'Pélagie',
+      middleName: 'Wendkouni',
+      lastName: 'Kiemdé',
+    } as PatientResponse);
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'Pélagie Wendkouni Kiemdé',
+    );
+  });
+
+  describe('QA D1429: the desk may overbook, with a reason', () => {
+    const offerAt = (component: AppointmentFormComponent, slotTimes: string[]): void => {
+      const http = TestBed.inject(HttpTestingController);
+      component.form.staffId = 's-1';
+      component.form.appointmentDate = inDays(5);
+      component.form.startTime = '23:15';
+      component.checkSlot();
+      tick(300);
+      const asked = http.expectOne((r) => r.url === '/slots/search/page');
+      expect(asked.request.params.get('staffId')).toBe('s-1');
+      asked.flush({
+        content: slotTimes.map((t, i) => ({ id: 's' + i, startAt: `${inDays(5)}T${t}:00` })),
+        totalElements: slotTimes.length,
+        totalPages: 1,
+        number: 0,
+        last: true,
+      });
+    };
+
+    it('a time that is no slot opens the reason; a slot asks nothing', fakeAsync(() => {
+      const component = create({});
+      offerAt(component, ['09:00']);
+      expect(component.offSlot()).toBeTrue();
+
+      offerAt(component, ['23:15']);
+      expect(component.offSlot()).toBeFalse();
+    }));
+
+    it('a failed read asks for nothing: the server decides', fakeAsync(() => {
+      const component = create({});
+      const http = TestBed.inject(HttpTestingController);
+      component.form.staffId = 's-1';
+      component.form.appointmentDate = inDays(5);
+      component.form.startTime = '09:00';
+      component.checkSlot();
+      tick(300);
+      http
+        .expectOne((r) => r.url === '/slots/search/page')
+        .flush('no', { status: 403, statusText: 'Forbidden' });
+      expect(component.offSlot()).toBeFalse();
+    }));
+
+    it("the server's refusal opens the field", fakeAsync(() => {
+      const component = create({});
+      const service = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+      service.create.and.returnValue(
+        throwError(() => ({ status: 400, error: { field: 'overbookReason', message: 'x' } })),
+      );
+      component.form.appointmentDate = inDays(5);
+      component.form.startTime = '09:00';
+      component.form.patientId = 'p';
+      component.form.staffId = 's';
+      component.submit();
+      tick(300);
+      TestBed.inject(HttpTestingController)
+        .match((r) => r.url === '/slots/search/page')
+        .forEach((r) =>
+          r.flush({ content: [], totalElements: 0, totalPages: 1, number: 0, last: true }),
+        );
+      expect(component.offSlot()).toBeTrue();
+    }));
+
+    it('off the slots, the reason is required before the request', fakeAsync(() => {
+      const component = create({});
+      const service = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+      component.offSlot.set(true);
+      component.form.appointmentDate = inDays(5);
+      component.form.startTime = '23:15';
+      component.form.patientId = 'p';
+      component.form.staffId = 's';
+      component.submit();
+      expect(service.create).not.toHaveBeenCalled();
+      tick(300);
+      TestBed.inject(HttpTestingController).match(() => true);
+    }));
+  });
+
+  describe('QA D1474 / D1475: what the desk sees while it chooses a time', () => {
+    const askAt = (
+      component: AppointmentFormComponent,
+      refusal: string | undefined,
+      slotTimes: string[],
+    ): void => {
+      const http = TestBed.inject(HttpTestingController);
+      const service = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+      service.bookingTimeCheck.and.returnValue(of(refusal ? { refusal } : {}));
+      component.form.staffId = 's-1';
+      component.form.appointmentDate = inDays(5);
+      component.form.startTime = '09:07';
+      component.checkSlot();
+      tick(300);
+      const page = {
+        content: slotTimes.map((t, i) => ({ id: 's' + i, startAt: `${inDays(5)}T${t}:00` })),
+        totalElements: slotTimes.length,
+        totalPages: 1,
+        number: 0,
+        last: true,
+      };
+      http.expectOne((r) => r.url === '/slots/search/page').flush(page);
+      tick();
+    };
+
+    it('a time typed before the clinician is chosen asks no reason (no clinician yet)', fakeAsync(() => {
+      const component = create({});
+      component.form.startTime = '09:07';
+      component.checkSlot();
+      tick(300);
+      expect(component.offSlot()).toBeFalse();
+    }));
+
+    it('a taken time says so at once and asks no overbook reason', fakeAsync(() => {
+      const component = create({});
+      askAt(component, 'Le personnel n’est pas disponible', ['09:20']);
+      expect(component.timeRefusal()).toContain('pas disponible');
+      expect(component.needsOverbookReason()).toBeFalse();
+    }));
+
+    it('a free off-slot time still asks its reason', fakeAsync(() => {
+      const component = create({});
+      askAt(component, undefined, ['09:20']);
+      expect(component.timeRefusal()).toBeNull();
+      expect(component.needsOverbookReason()).toBeTrue();
+    }));
+
+    it('the free slots of the day are listed, in order; picking one is the time', fakeAsync(() => {
+      const component = create({});
+      askAt(component, undefined, ['10:00', '09:20']);
+      expect(component.freeSlots()).toEqual(['09:20', '10:00']);
+      component.pickFreeSlot('09:20');
+      expect(component.form.startTime).toBe('09:20');
+      tick(300);
+      TestBed.inject(HttpTestingController)
+        .match(() => true)
+        .forEach((r) =>
+          r.flush({ content: [], totalElements: 0, totalPages: 1, number: 0, last: true }),
+        );
+    }));
   });
 });

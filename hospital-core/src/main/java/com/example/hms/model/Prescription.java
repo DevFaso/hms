@@ -64,7 +64,8 @@ import java.util.Objects;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString(exclude = {"patient", "staff", "encounter", "assignment", "hospital", "structuredInstructions", "alerts", "transmissions"})
+@ToString(exclude = {"patient", "staff", "encounter", "assignment", "hospital", "structuredInstructions", "alerts", "transmissions",
+    "pediatricDoseReviewedBy", "pediatricDoseReviewReason"})
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class Prescription extends BaseEntity {
 
@@ -128,6 +129,29 @@ public class Prescription extends BaseEntity {
     @Size(max = 100)
     @Column(name = "frequency", length = 100)
     private String frequency;
+
+    /**
+     * QA round 30 (user decision 2026-11-02): the minimum time, in hours,
+     * between two doses of an as-needed (PRN, "si besoin") order, as the
+     * prescriber wrote it (V261). Required on a new as-needed order, null on
+     * any other; never defaulted per drug. The MAR offers the next dose once
+     * it has passed since the last dose given ({@code MarNextDose}).
+     */
+    @Column(name = "prn_min_interval_hours")
+    private Integer prnMinIntervalHours;
+
+    /**
+     * QA D1378 / D1360 (round 32, coordinator decision 2026-11-03): an
+     * as-needed (PRN) order is the prescriber's explicit choice, ticked on the
+     * order (V260), never guessed from the frequency text. True requires
+     * {@link #prnMinIntervalHours}; false refuses one. The MAR, the nurse
+     * counts, the early-dose rule and order sets read this flag
+     * ({@code PrnMinInterval.isAsNeeded}); the frequency text only feeds the
+     * safety net that asks the prescriber to confirm.
+     */
+    @Builder.Default
+    @Column(name = "as_needed", nullable = false)
+    private boolean asNeeded = false;
 
     @Size(max = 100)
     @Column(name = "duration", length = 100)
@@ -292,6 +316,82 @@ public class Prescription extends BaseEntity {
     @Column(name = "cosigned_at")
     private LocalDateTime cosignedAt;
 
+    /* ── Paediatric manual dose review (round 19, QA D1096, V253) ──────── */
+
+    /**
+     * The paediatric dose check could not give an automatic verdict (a child
+     * under the item's manual-review age, or outside every weight band) and
+     * asked for a pharmacist or physician review. Set from the decision-support
+     * cards on every create, edit and signature; the order is not signed while
+     * it is set and no review is recorded.
+     */
+    @Builder.Default
+    @Column(name = "pediatric_dose_review_required", nullable = false)
+    private boolean pediatricDoseReviewRequired = false;
+
+    /** When the review was recorded; null while none is, and cleared by any edit of the order. */
+    @Column(name = "pediatric_dose_reviewed_at")
+    private LocalDateTime pediatricDoseReviewedAt;
+
+    /**
+     * CR-01 (provisional): when the prescriber signed this order as an urgent exception to the review
+     * (V279). The review stays due, after the fact; any edit of the order clears this.
+     */
+    @Column(name = "pediatric_dose_urgent_exception_at")
+    private LocalDateTime pediatricDoseUrgentExceptionAt;
+
+    /** The reviewing pharmacist or physician. Never the prescriber, nor later the signer. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pediatric_dose_reviewed_by",
+        foreignKey = @ForeignKey(name = "fk_rx_pediatric_dose_reviewed_by"))
+    private User pediatricDoseReviewedBy;
+
+    /** Why the reviewer accepts the dose. Clinical narrative, encrypted like {@code withdrawalReason}. */
+    @Size(max = 1000)
+    @Column(name = "pediatric_dose_review_reason", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
+    private String pediatricDoseReviewReason;
+
+    /* ── Allergy conflict prescriber review (Policy 4, V284) ─────────────── */
+
+    /**
+     * Policy 4 (user recommendation 2026-11-10, pending clinical approval): an allergy conflict found
+     * after the signature is released only by an authorized prescriber's review, never by a nurse's or
+     * a pharmacist's own reason. Null while no review is recorded.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "allergy_review_decision", length = 20)
+    private com.example.hms.enums.AllergyReviewDecision allergyReviewDecision;
+
+    /**
+     * The conflict the review answered (CurrentAllergyRecheck#reviewToken: the allergy state and the
+     * order's drug, dose, route and frequency). A gate honours the review only while the current token
+     * equals it, so any change of the allergy or the order needs a renewed review.
+     */
+    @Column(name = "allergy_review_token", length = 64)
+    private String allergyReviewToken;
+
+    /** The plan a CONTINUE decision sets (monitoring, premedication). Clinical narrative, encrypted. */
+    @Size(max = 1000)
+    @Column(name = "allergy_review_plan", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
+    private String allergyReviewPlan;
+
+    /** The prescriber's clinical rationale. Clinical narrative, encrypted. */
+    @Size(max = 1000)
+    @Column(name = "allergy_review_rationale", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
+    private String allergyReviewRationale;
+
+    @Column(name = "allergy_reviewed_at")
+    private LocalDateTime allergyReviewedAt;
+
+    /** The reviewing prescriber. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "allergy_reviewed_by",
+        foreignKey = @ForeignKey(name = "fk_rx_allergy_reviewed_by"))
+    private User allergyReviewedBy;
+
     /* ── Pharmacist clarification (pharmacy flow gap G5, V162) ──────────── */
 
     /**
@@ -378,6 +478,61 @@ public class Prescription extends BaseEntity {
     @Builder.Default
     private PrescriptionStatus status = PrescriptionStatus.DRAFT;
 
+    /**
+     * QA D1537 (round 40): the order was withdrawn (CANCELLED, DISCONTINUED) while it was still a
+     * proposal (DRAFT, PENDING_SIGNATURE): it was never issued, and no reader shows it as a medicine the
+     * patient took ({@code PrescriptionIssuance}). Written only by {@link #setStatus}, the one door
+     * every withdrawal path goes through, from the status the order held before. V283 backfilled it
+     * where the evidence was unambiguous; every other row is FALSE, which means shown.
+     */
+    @Column(name = "withdrawn_before_signing", nullable = false)
+    @Builder.Default
+    @Setter(lombok.AccessLevel.NONE)
+    private boolean withdrawnBeforeSigning = false;
+
+    /**
+     * QA D1537 review: whether the status went through {@link #setStatus}, which derived the fact from
+     * the status before. Only a row built otherwise (the builder, the all-args constructor) derives it
+     * on insert. Not a column.
+     */
+    @jakarta.persistence.Transient
+    @Builder.Default
+    @Setter(lombok.AccessLevel.NONE)
+    @lombok.Getter(lombok.AccessLevel.NONE)
+    private boolean statusSetThroughSetter = false;
+
+    /**
+     * QA D1537 review: evidence that the order was issued whatever status it holds now: a signature
+     * (time, signer or digest), a dispatch to a pharmacy, or a refill used. A signed order put back to a
+     * proposal (the hole PrescriptionServiceImpl now refuses) and then withdrawn is never read as one
+     * that was never issued. The dispense rows themselves are not on the entity; an order is dispensed
+     * only after it was signed, so its signature stands for them.
+     */
+    private boolean carriesIssueEvidence() {
+        return signedAt != null || signedBy != null || signatureValue != null || dispatchedAt != null
+            || (refillsUsed != null && refillsUsed > 0);
+    }
+
+    /**
+     * Sets the status, and with it whether a withdrawal came before any signature (QA D1537). A move to
+     * a withdrawn status records whether the order was then still a proposal with no evidence it was
+     * ever issued ({@link #carriesIssueEvidence}); a withdrawn order moved
+     * on to another withdrawn status keeps what its withdrawal recorded; any other status clears it
+     * (a signed or re-proposed order is not a withdrawn one).
+     */
+    public void setStatus(PrescriptionStatus status) {
+        this.statusSetThroughSetter = true;
+        PrescriptionStatus before = this.status;
+        if (status != null && status.isWithdrawn()) {
+            if (before == null || !before.isWithdrawn()) {
+                this.withdrawnBeforeSigning = (before == null || before.isProposal()) && !carriesIssueEvidence();
+            }
+        } else {
+            this.withdrawnBeforeSigning = false;
+        }
+        this.status = status;
+    }
+
     @Builder.Default
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(
@@ -428,8 +583,36 @@ public class Prescription extends BaseEntity {
         transmission.setPrescription(this);
     }
 
+    /**
+     * QA D1537 review: the builder and the all-args constructor write the status without
+     * {@link #setStatus}. An order inserted already withdrawn had no status before it, so it was never
+     * issued, unless it carries the evidence it was ({@link #carriesIssueEvidence}): the same rule as
+     * the setter, applied on insert.
+     */
+    /**
+     * Named apart from BaseEntity's callbacks (onCreate, onUpdate): a package-private method of the
+     * same name here would override them, and createdAt/updatedAt would stop being stamped
+     * ({@code EntityCallbackShadowingGuardTest}).
+     */
     @PrePersist
+    void prescriptionOnInsert() {
+        deriveWithdrawalFactOnInsert();
+        validate();
+    }
+
+    /** The insert half of the rule, on its own so it can be read and tested without the row's context checks. */
+    public void deriveWithdrawalFactOnInsert() {
+        if (!statusSetThroughSetter && status != null && status.isWithdrawn() && !withdrawnBeforeSigning
+                && !carriesIssueEvidence()) {
+            this.withdrawnBeforeSigning = true;
+        }
+    }
+
     @PreUpdate
+    void prescriptionOnUpdate() {
+        validate();
+    }
+
     private void validate() {
         normalizeQuantities();
         normalizeStrings();

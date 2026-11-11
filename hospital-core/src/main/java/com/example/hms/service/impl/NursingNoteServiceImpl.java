@@ -36,7 +36,6 @@ import com.example.hms.service.NursingNoteService;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,7 +69,6 @@ public class NursingNoteServiceImpl implements NursingNoteService {
     private final StaffRepository staffRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final UserRepository userRepository;
-    private final MessageSource messageSource;
     private final RoleValidator roleValidator;
     private final AuditEventLogService auditEventLogService;
     private final NursingNoteMapper nursingNoteMapper;
@@ -82,10 +80,9 @@ public class NursingNoteServiceImpl implements NursingNoteService {
     @Override
     @Transactional
     public NursingNoteResponseDTO createNote(NursingNoteCreateRequestDTO request, Locale locale) {
-        Locale effectiveLocale = locale != null ? locale : Locale.getDefault();
         UUID actorUserId = requireCurrentUser();
         UUID hospitalId = resolveHospitalId(request.getHospitalId());
-        ensureCanDocument(actorUserId, hospitalId, effectiveLocale);
+        ensureCanDocument(actorUserId, hospitalId);
 
         User author = userRepository.findById(actorUserId)
             .orElseThrow(() -> new ResourceNotFoundException("nursingNote.author.notFound", actorUserId));
@@ -93,7 +90,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
-        ensurePatientRegistration(patient.getId(), hospitalId, effectiveLocale);
+        ensurePatientRegistration(patient.getId(), hospitalId);
 
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
@@ -128,15 +125,14 @@ public class NursingNoteServiceImpl implements NursingNoteService {
     @Override
     @Transactional
     public NursingNoteResponseDTO appendAddendum(UUID noteId, UUID hospitalId, NursingNoteAddendumRequestDTO request, Locale locale) {
-        Locale effectiveLocale = locale != null ? locale : Locale.getDefault();
         UUID actorUserId = requireCurrentUser();
         UUID resolvedHospitalId = resolveHospitalId(hospitalId);
-        ensureCanDocument(actorUserId, resolvedHospitalId, effectiveLocale);
+        ensureCanDocument(actorUserId, resolvedHospitalId);
 
         NursingNote note = nursingNoteRepository.findByIdAndHospital_Id(noteId, resolvedHospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("nursingNote.notFound", noteId));
 
-        ensurePatientRegistration(note.getPatient().getId(), resolvedHospitalId, effectiveLocale);
+        ensurePatientRegistration(note.getPatient().getId(), resolvedHospitalId);
 
         User author = userRepository.findById(actorUserId)
             .orElseThrow(() -> new ResourceNotFoundException("nursingNote.author.notFound", actorUserId));
@@ -171,11 +167,11 @@ public class NursingNoteServiceImpl implements NursingNoteService {
     @Override
     public List<NursingNoteResponseDTO> getRecentNotes(UUID patientId, UUID hospitalId, int limit, Locale locale) {
         if (patientId == null) {
-            throw new BusinessException("Patient identifier is required to load nursing notes.");
+            throw new BusinessException("nursingNote.patientRequired");
         }
         UUID actorUserId = requireCurrentUser();
         UUID resolvedHospitalId = resolveHospitalId(hospitalId);
-        ensureCanView(actorUserId, resolvedHospitalId, locale != null ? locale : Locale.getDefault());
+        ensureCanView(actorUserId, resolvedHospitalId);
 
         int effectiveLimit = limit <= 0 || limit > MAX_RESULTS ? MAX_RESULTS : limit;
         // E9 #59 — notes follow the patient across the readable hospitals; a
@@ -200,7 +196,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
     public NursingNoteResponseDTO getNote(UUID noteId, UUID hospitalId, Locale locale) {
         UUID actorUserId = requireCurrentUser();
         UUID resolvedHospitalId = resolveHospitalId(hospitalId);
-        ensureCanView(actorUserId, resolvedHospitalId, locale != null ? locale : Locale.getDefault());
+        ensureCanView(actorUserId, resolvedHospitalId);
 
         NursingNote note = nursingNoteRepository.findByIdAndHospital_Id(noteId, resolvedHospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("nursingNote.notFound", noteId));
@@ -298,56 +294,41 @@ public class NursingNoteServiceImpl implements NursingNoteService {
             .toList();
     }
 
-    private void ensurePatientRegistration(UUID patientId, UUID hospitalId, Locale locale) {
+    private void ensurePatientRegistration(UUID patientId, UUID hospitalId) {
         boolean registered = registrationRepository
             .findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId)
             .isPresent();
         if (!registered) {
-            throw new BusinessException(messageSource.getMessage(
-                "patient.notRegisteredInHospital",
-                new Object[]{patientId, hospitalId},
-                "Patient is not registered in the specified hospital.",
-                locale
-            ));
+            throw new BusinessException("patient.notRegisteredInHospital");
         }
     }
 
-    private void ensureCanDocument(UUID userId, UUID hospitalId, Locale locale) {
+    private void ensureCanDocument(UUID userId, UUID hospitalId) {
         boolean allowed = roleValidator.isNurse(userId, hospitalId)
             || roleValidator.isMidwife(userId, hospitalId)
             || roleValidator.isHospitalAdmin(userId, hospitalId)
             || roleValidator.isDoctor(userId, hospitalId)
             || roleValidator.isSuperAdminFromAuth();
         if (!allowed) {
-            throw new BusinessException(messageSource.getMessage(
-                "nursing.note.permission.denied",
-                null,
-                "You do not have permission to document nursing notes in this hospital.",
-                locale
-            ));
+            throw new BusinessException("nursing.note.permission.denied");
         }
     }
 
-    private void ensureCanView(UUID userId, UUID hospitalId, Locale locale) {
+    private void ensureCanView(UUID userId, UUID hospitalId) {
         boolean allowed = roleValidator.isNurse(userId, hospitalId)
             || roleValidator.isMidwife(userId, hospitalId)
             || roleValidator.isDoctor(userId, hospitalId)
             || roleValidator.isHospitalAdmin(userId, hospitalId)
             || roleValidator.isSuperAdminFromAuth();
         if (!allowed) {
-            throw new BusinessException(messageSource.getMessage(
-                "nursing.note.view.denied",
-                null,
-                "You do not have permission to view nursing notes in this hospital.",
-                locale
-            ));
+            throw new BusinessException("nursing.note.view.denied");
         }
     }
 
     private UUID requireCurrentUser() {
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
-            throw new BusinessException("Authenticated user context required.");
+            throw new BusinessException("nursingNote.userRequired");
         }
         return userId;
     }
@@ -358,7 +339,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
         }
         UUID resolved = roleValidator.getCurrentHospitalId();
         if (resolved == null) {
-            throw new BusinessException("Hospital context is required for nursing documentation.");
+            throw new BusinessException("nursingNote.hospitalRequired");
         }
         return resolved;
     }
@@ -506,8 +487,10 @@ public class NursingNoteServiceImpl implements NursingNoteService {
         if (staff == null) {
             return null;
         }
+        // QA D1136: stored as the job title's code, labelled in the reader's
+        // language by the portal; the English words were stored before.
         if (staff.getJobTitle() != null) {
-            return formatJobTitle(staff.getJobTitle().name());
+            return staff.getJobTitle().name();
         }
         return staff.getLicenseNumber();
     }
@@ -517,18 +500,6 @@ public class NursingNoteServiceImpl implements NursingNoteService {
         String l = last != null ? last.trim() : "";
         String combined = (f + " " + l).trim();
         return combined.isEmpty() ? null : combined;
-    }
-
-    private String formatJobTitle(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        String normalized = raw.replace('_', ' ').toLowerCase(Locale.ROOT);
-        String[] parts = normalized.split(" ");
-        return java.util.Arrays.stream(parts)
-            .filter(part -> !part.isBlank())
-            .map(part -> part.substring(0, 1).toUpperCase(Locale.ROOT) + part.substring(1))
-            .collect(Collectors.joining(" "));
     }
 
     private String resolvePatientName(Patient patient) {

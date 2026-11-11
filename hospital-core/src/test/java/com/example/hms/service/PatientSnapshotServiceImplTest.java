@@ -100,8 +100,9 @@ class PatientSnapshotServiceImplTest {
     private Patient stubPatient(UUID patientId) {
         Patient p = mock(Patient.class);
         when(p.getId()).thenReturn(patientId);
-        when(p.getFirstName()).thenReturn("Alice");
-        when(p.getLastName()).thenReturn("Wong");
+        lenient().when(p.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(p.getFirstName()).thenReturn("Alice");
+        lenient().when(p.getLastName()).thenReturn("Wong");
         when(p.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
         when(p.getGender()).thenReturn("F");
         when(p.getChronicConditions()).thenReturn(null);
@@ -155,6 +156,7 @@ class PatientSnapshotServiceImplTest {
     void getSnapshot_basicDemographics_shouldPopulateCorrectly() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
+        when(patient.getMrnForHospital(HOSPITAL_ID)).thenReturn("MRN-A-0042");
         givenPatient(patientId, patient);
         stubEmptySubQueries(patientId);
 
@@ -165,7 +167,8 @@ class PatientSnapshotServiceImplTest {
         assertEquals("Alice Wong", result.getName());
         assertEquals("F", result.getSex());
         assertTrue(result.getAge() > 0);
-        assertEquals(patientId.toString(), result.getMrn());
+        // QA D1040 class: the hospital's MRN, never the patient's UUID (was asserted as the UUID).
+        assertEquals("MRN-A-0042", result.getMrn());
     }
 
     @Test
@@ -175,6 +178,7 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
 
         PatientAllergy allergy = mock(PatientAllergy.class);
+        when(allergy.isActive()).thenReturn(true);
         when(allergy.getAllergenDisplay()).thenReturn("Penicillin");
 
         when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(allergy));
@@ -198,6 +202,7 @@ class PatientSnapshotServiceImplTest {
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
         PatientAllergy allergy = mock(PatientAllergy.class);
+        when(allergy.isActive()).thenReturn(true);
         when(allergy.getAllergenDisplay()).thenReturn("Peanuts");
         when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
         when(patientAllergyRepository.findVisibleAt(patientId, HOSPITAL_ID)).thenReturn(List.of(allergy));
@@ -229,6 +234,7 @@ class PatientSnapshotServiceImplTest {
             com.example.hms.security.context.HospitalContext.builder().principalUserId(doctorB).build());
         try {
             PatientAllergy allergy = mock(PatientAllergy.class);
+            when(allergy.isActive()).thenReturn(true);
             when(allergy.getAllergenDisplay()).thenReturn("Penicillin");
             when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
             when(recordAccessPolicy.decide(doctorB, patientId, HOSPITAL_ID)).thenReturn(
@@ -265,6 +271,7 @@ class PatientSnapshotServiceImplTest {
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
         PatientAllergy allergy = mock(PatientAllergy.class);
+        when(allergy.isActive()).thenReturn(true);
         when(allergy.getAllergenDisplay()).thenReturn("Penicillin");
         when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(allergy));
         when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
@@ -556,6 +563,49 @@ class PatientSnapshotServiceImplTest {
         PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertTrue(result.getPendingOrders().isEmpty());
+    }
+
+    /** CX-003 class (round 33): the snapshot stopped at 10 of each with no total. */
+    @Test
+    void getSnapshot_everyMedicationPendingOrderAndCareTeamMemberIsAnswered() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+        int count = 25;
+        List<com.example.hms.model.Prescription> running = new java.util.ArrayList<>();
+        List<LabOrder> orders = new java.util.ArrayList<>();
+        List<Encounter> visits = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            com.example.hms.model.Prescription rx = new com.example.hms.model.Prescription();
+            rx.setMedicationName("Med " + i);
+            rx.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+            running.add(rx);
+            LabOrder order = mock(LabOrder.class);
+            when(order.getStatus()).thenReturn(LabOrderStatus.PENDING);
+            orders.add(order);
+            Staff clinician = mock(Staff.class);
+            when(clinician.getFullName()).thenReturn("Dr " + i);
+            Encounter visit = mock(Encounter.class);
+            when(visit.getStaff()).thenReturn(clinician);
+            visits.add(visit);
+        }
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
+                .thenReturn(Collections.emptyList());
+        org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> read =
+                org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), read.capture()))
+                .thenReturn(new PageImpl<>(running));
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(orders);
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(visits);
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+        assertEquals(count, result.getActiveMedications().size());
+        assertEquals(count, result.getPendingOrders().size());
+        assertEquals(count, result.getCareTeam().size());
+        assertTrue(read.getValue().isUnpaged(), "every prescription of the chart is read, not the newest 200");
     }
 
     @Test
@@ -959,8 +1009,9 @@ class PatientSnapshotServiceImplTest {
         // is never called when structured diagnoses are non-empty (short-circuit)
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(patientId);
-        when(patient.getFirstName()).thenReturn("Alice");
-        when(patient.getLastName()).thenReturn("Wong");
+        lenient().when(patient.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Alice");
+        lenient().when(patient.getLastName()).thenReturn("Wong");
         when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
         givenPatient(patientId, patient);
 
@@ -994,8 +1045,9 @@ class PatientSnapshotServiceImplTest {
         UUID patientId = UUID.randomUUID();
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(patientId);
-        when(patient.getFirstName()).thenReturn("Alice");
-        when(patient.getLastName()).thenReturn("Wong");
+        lenient().when(patient.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Alice");
+        lenient().when(patient.getLastName()).thenReturn("Wong");
         when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
         givenPatient(patientId, patient);
 
@@ -1034,8 +1086,9 @@ class PatientSnapshotServiceImplTest {
         UUID patientId = UUID.randomUUID();
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(patientId);
-        when(patient.getFirstName()).thenReturn("Alice");
-        when(patient.getLastName()).thenReturn("Wong");
+        lenient().when(patient.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Alice");
+        lenient().when(patient.getLastName()).thenReturn("Wong");
         when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
         givenPatient(patientId, patient);
 
@@ -1195,6 +1248,7 @@ class PatientSnapshotServiceImplTest {
         // an NPE on a half-built mock, which would prove nothing.
         Patient patient = mock(Patient.class);
         lenient().when(patient.getId()).thenReturn(patientId);
+        lenient().when(patient.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
         lenient().when(patient.getFirstName()).thenReturn("Alice");
         lenient().when(patient.getLastName()).thenReturn("Wong");
         lenient().when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
@@ -1253,6 +1307,7 @@ class PatientSnapshotServiceImplTest {
         // than on a stubbing miss or an NPE inside a half-built mock.
         Patient reachable = mock(Patient.class);
         lenient().when(reachable.getId()).thenReturn(patientId);
+        lenient().when(reachable.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
         lenient().when(reachable.getFirstName()).thenReturn("Alice");
         lenient().when(reachable.getLastName()).thenReturn("Wong");
         lenient().when(reachable.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
@@ -1433,5 +1488,27 @@ class PatientSnapshotServiceImplTest {
         } finally {
             HospitalContextHolder.clear();
         }
+    }
+
+    @Test
+    void d1423_aDeactivatedAllergyIsNotOnTheSnapshotAndTheSummaryTextDoesNotStandInForIt() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        lenient().when(patient.getAllergies()).thenReturn("Sesame");
+        givenPatient(patientId, patient);
+
+        PatientAllergy active = new PatientAllergy();
+        active.setAllergenDisplay("Penicillin");
+        active.setActive(true);
+        PatientAllergy removed = new PatientAllergy();
+        removed.setAllergenDisplay("Sesame");
+        removed.setActive(false);
+        when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(removed, active));
+
+        assertEquals(List.of("Penicillin"), service.getSnapshot(patientId, HOSPITAL_ID).getAllergies());
+
+        when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(removed));
+        assertTrue(service.getSnapshot(patientId, HOSPITAL_ID).getAllergies().isEmpty(),
+            "every allergy deactivated: nothing is listed, and the old summary text does not come back");
     }
 }

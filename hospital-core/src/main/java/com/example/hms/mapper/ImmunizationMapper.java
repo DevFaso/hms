@@ -93,7 +93,7 @@ public class ImmunizationMapper {
                 .administeredBy(administeredBy)
                 .encounter(encounter)
                 // Vaccine
-                .vaccineCode(dto.getVaccineCode())
+                .vaccineCode(cvxOrNull(dto.getVaccineCode()))
                 .vaccineDisplay(dto.getVaccineDisplay())
                 .vaccineType(dto.getVaccineType())
                 .targetDisease(dto.getTargetDisease())
@@ -111,7 +111,7 @@ public class ImmunizationMapper {
                 .expirationDate(dto.getExpirationDate())
                 .ndcCode(dto.getNdcCode())
                 // Status
-                .status(dto.getStatus())
+                .status(dto.getStatus() == null ? null : dto.getStatus().name())
                 .statusReason(dto.getStatusReason())
                 .verified(dto.getVerified())
                 .sourceOfRecord(dto.getSourceOfRecord())
@@ -149,7 +149,7 @@ public class ImmunizationMapper {
         }
 
         // Vaccine
-        entity.setVaccineCode(dto.getVaccineCode());
+        entity.setVaccineCode(cvxOrNull(dto.getVaccineCode()));
         entity.setVaccineDisplay(dto.getVaccineDisplay());
         entity.setVaccineType(dto.getVaccineType());
         entity.setTargetDisease(dto.getTargetDisease());
@@ -167,7 +167,7 @@ public class ImmunizationMapper {
         entity.setExpirationDate(dto.getExpirationDate());
         entity.setNdcCode(dto.getNdcCode());
         // Status
-        entity.setStatus(dto.getStatus());
+        entity.setStatus(dto.getStatus() == null ? null : dto.getStatus().name());
         entity.setStatusReason(dto.getStatusReason());
         entity.setVerified(dto.getVerified());
         entity.setSourceOfRecord(dto.getSourceOfRecord());
@@ -198,5 +198,18 @@ public class ImmunizationMapper {
         if (dto.getActive() != null) {
             entity.setActive(dto.getActive());
         }
+    }
+
+    /**
+     * QA D1003: the CVX code is optional. A blank one is stored as null, so
+     * the DHIS2 count ({@code vaccineCode IS NOT NULL}) and the FHIR mapper
+     * see "no code" one way only; a typed code is kept trimmed.
+     */
+    static String cvxOrNull(String code) {
+        if (code == null) {
+            return null;
+        }
+        String trimmed = code.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

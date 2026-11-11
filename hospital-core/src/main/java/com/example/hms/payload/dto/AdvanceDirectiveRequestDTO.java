@@ -33,7 +33,12 @@ public class AdvanceDirectiveRequestDTO {
     @NotNull(message = "{advanceDirective.directiveType.required}")
     private AdvanceDirectiveType directiveType;
 
-    /** Defaults to ACTIVE when omitted — a newly recorded directive is in force. */
+    /**
+     * Required to record a directive (QA D1148: never from defaults); an edit
+     * leaves it unchanged when absent. QA D1318 (round 29): declared here, so an
+     * empty create names it with the type in one answer.
+     */
+    @NotNull(groups = com.example.hms.validation.OnCreate.class, message = "{advanceDirective.status.required}")
     private AdvanceDirectiveStatus status;
 
     @Size(max = 2000)

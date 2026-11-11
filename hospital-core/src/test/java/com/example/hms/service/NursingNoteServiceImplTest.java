@@ -429,8 +429,6 @@ class NursingNoteServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
             .thenReturn(Optional.empty());
-        when(messageSource.getMessage(eq("patient.notRegisteredInHospital"), any(), anyString(), any(Locale.class)))
-            .thenReturn("Patient not registered");
 
         assertThrows(BusinessException.class, () -> nursingNoteService.createNote(request, locale));
         verifyNoInteractions(nursingNoteRepository);

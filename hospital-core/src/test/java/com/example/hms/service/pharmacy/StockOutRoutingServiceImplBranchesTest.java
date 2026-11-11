@@ -83,6 +83,12 @@ class StockOutRoutingServiceImplBranchesTest {
     @Mock private com.example.hms.service.StayOrderDiscontinuation stayOrderDiscontinuation;
 
 
+
+    /** QA D899: the real dispense DRUG rule, so the stock check is tested against the matcher the fill uses. */
+    @org.mockito.Spy
+    private DispenseVerificationService dispenseVerificationService =
+        new DispenseVerificationService(java.time.Clock.systemUTC());
+
     @InjectMocks
     private StockOutRoutingServiceImpl service;
 
@@ -404,6 +410,7 @@ class StockOutRoutingServiceImplBranchesTest {
 
         assertThatThrownBy(() -> service.partnerRespond(decisionId, true))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("PENDING");
+                // QA D1090 class: the refusal reads as people do, never the raw code.
+                .extracting("messageKey").isEqualTo("stock.routing.notPending");
     }
 }

@@ -15,6 +15,8 @@ export interface UserSummary {
   roleName: string;
   profileType: string;
   roleCount: number;
+  /** QA D914: may the caller edit or delete this account (absent: yes). */
+  manageable?: boolean;
 }
 
 /**

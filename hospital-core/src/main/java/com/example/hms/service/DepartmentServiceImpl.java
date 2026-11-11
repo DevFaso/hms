@@ -125,7 +125,7 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         Locale effectiveLocale = determineEffectiveLocale(locale);
         enforceHospitalScopeOnDto(dto);
-        validateDepartmentRequest(dto, effectiveLocale);
+        validateDepartmentRequest(dto);
 
         Hospital hospital = resolveHospitalAndSyncDto(dto);
         ensureDepartmentUniqueness(dto, hospital, effectiveLocale);
@@ -152,7 +152,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         Staff newHead = staffService.getStaffEntityById(staffId, locale);
 
         if (!newHead.getHospital().getId().equals(department.getHospital().getId())) {
-            throw new BusinessRuleException(messageSource.getMessage("department.head.wrongHospital", null, locale));
+            throw BusinessRuleException.ofKey("department.head.wrongHospital");
         }
 
         department.setHeadOfDepartment(newHead);
@@ -275,7 +275,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         Department department = findDepartmentOrThrow(id);
         enforceHospitalScopeOnEntity(department);
         enforceHospitalScopeOnDto(dto);
-        validateDepartmentRequest(dto, locale);
+        validateDepartmentRequest(dto);
 
         Hospital hospital = resolveHospital(dto);
         dto.setHospitalName(hospital.getName());
@@ -382,16 +382,13 @@ public class DepartmentServiceImpl implements DepartmentService {
         enforceHospitalScopeOnEntity(department);
 
         if (departmentRepository.hasStaffMembers(id)) {
-            throw new BusinessRuleException(
-                    messageSource.getMessage("department.delete.withStaff", new Object[]{id}, locale)
-            );
+            throw BusinessRuleException.ofKey("department.delete.withStaff", id);
         }
 
         // QA D601: refuse before the delete whenever anything points at the
         // department; the FK catch below only helps where a constraint exists.
         if (departmentRepository.existsByClinicalReference(id)) {
-            throw new BusinessRuleException(
-                    messageSource.getMessage("department.r7.deleteInUse", null, locale));
+            throw BusinessRuleException.ofKey("department.r7.deleteInUse");
         }
 
         // QA D435: a department still referenced elsewhere (wards, beds,
@@ -401,8 +398,7 @@ public class DepartmentServiceImpl implements DepartmentService {
             departmentRepository.delete(department);
             departmentRepository.flush();
         } catch (org.springframework.dao.DataIntegrityViolationException inUse) {
-            throw new BusinessRuleException(
-                    messageSource.getMessage("department.r7.deleteInUse", null, locale));
+            throw BusinessRuleException.ofKey("department.r7.deleteInUse");
         }
     }
 
@@ -515,10 +511,11 @@ public class DepartmentServiceImpl implements DepartmentService {
         return roleValidator.requireActiveHospitalId();
     }
 
+    // QA D1367 class (round 31): a duplicate name or code is a 409 naming its field ("name:", "code:").
     private void ensureDepartmentUniqueness(DepartmentRequestDTO dto, Hospital hospital, Locale locale) {
         boolean exists = departmentRepository.existsByNameIgnoreCaseAndHospitalId(dto.getName(), hospital.getId());
         if (exists) {
-            throw new ConflictException(messageSource.getMessage(
+            throw new ConflictException("name:" + messageSource.getMessage(
                 "department.duplicate",
                 new Object[]{dto.getName(), hospital.getName()},
                 locale
@@ -527,7 +524,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         // QA D281: the code is unique per hospital too.
         if (StringUtils.hasText(dto.getCode())
                 && departmentRepository.existsByCodeIgnoreCaseAndHospitalId(dto.getCode(), hospital.getId())) {
-            throw new ConflictException(messageSource.getMessage(
+            throw new ConflictException("code:" + messageSource.getMessage(
                 "department.code.duplicate", new Object[]{dto.getCode(), hospital.getName()}, locale));
         }
     }
@@ -536,12 +533,12 @@ public class DepartmentServiceImpl implements DepartmentService {
     private void ensureRenameUniqueness(UUID id, DepartmentRequestDTO dto, Hospital hospital, Locale locale) {
         if (StringUtils.hasText(dto.getName())
                 && departmentRepository.existsByNameIgnoreCaseAndHospitalIdAndIdNot(dto.getName(), hospital.getId(), id)) {
-            throw new ConflictException(messageSource.getMessage(
+            throw new ConflictException("name:" + messageSource.getMessage(
                 "department.duplicate", new Object[]{dto.getName(), hospital.getName()}, locale));
         }
         if (StringUtils.hasText(dto.getCode())
                 && departmentRepository.existsByCodeIgnoreCaseAndHospitalIdAndIdNot(dto.getCode(), hospital.getId(), id)) {
-            throw new ConflictException(messageSource.getMessage(
+            throw new ConflictException("code:" + messageSource.getMessage(
                 "department.code.duplicate", new Object[]{dto.getCode(), hospital.getName()}, locale));
         }
     }
@@ -714,21 +711,17 @@ public class DepartmentServiceImpl implements DepartmentService {
     }
 
 
-    private void validateDepartmentRequest(DepartmentRequestDTO dto, Locale locale) {
+    private void validateDepartmentRequest(DepartmentRequestDTO dto) {
         if (dto == null) {
             throw new IllegalArgumentException("Department request cannot be null");
         }
 
         if (dto.getHospitalId() == null && !StringUtils.hasText(dto.getHospitalName())) {
-            throw new IllegalArgumentException(
-                    messageSource.getMessage("department.hospital.required", null, locale)
-            );
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "department.hospital.required");
         }
 
         if (!StringUtils.hasText(dto.getName())) {
-            throw new IllegalArgumentException(
-                    messageSource.getMessage("department.name.required", null, locale)
-            );
+            throw new com.example.hms.exception.FieldBusinessException("name", "department.name.required");
         }
     }
 

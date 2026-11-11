@@ -19,7 +19,8 @@ $sidebar-active-text: #23b79c; // 6.2:1 on the active row
 
 // ---------- Sidebar ----------
 .sidebar {
-  width: $sidebar-width;
+  position: relative;
+  width: var(--sidebar-expanded-width, #{$sidebar-width});
   background: $sidebar-bg;
   color: $sidebar-text;
   display: flex;
@@ -333,14 +334,17 @@ $sidebar-active-text: #23b79c; // 6.2:1 on the active row
   text-overflow: ellipsis;
 }
 
+// QA D1010: no text-transform. The role label is a translated sentence-case
+// label ("Spécialiste de la facturation", "Patient(e)"); capitalize turned it
+// into "Spécialiste De La Facturation" and "Patient(E)".
 .user-role-mini {
   font-size: 0.6875rem;
   color: $sidebar-text-dim;
-  text-transform: capitalize;
 }
 
 // ---------- Main Area ----------
 .main-area {
+  min-width: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -813,7 +817,6 @@ $sidebar-active-text: #23b79c; // 6.2:1 on the active row
   margin: 0;
   font-size: 0.75rem;
   color: #64748b;
-  text-transform: capitalize;
 }
 
 .profile-menu hr {
@@ -1038,4 +1041,86 @@ $sidebar-active-text: #23b79c; // 6.2:1 on the active row
 
 .scope-bar {
   margin-bottom: 1rem;
+}
+
+// Desktop width adjustment is independent of the mobile drawer and icon rail.
+.sidebar-resize-handle {
+  position: absolute;
+  inset: 0 -4px 0 auto;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 3;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 40%;
+    bottom: 40%;
+    left: 4px;
+    width: 3px;
+    border-radius: 4px;
+    background: #8a9bb3;
+    opacity: 0.5;
+  }
+
+  &:hover::after,
+  &:focus-visible::after {
+    top: 0;
+    bottom: 0;
+    background: #23b79c;
+    opacity: 1;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #23b79c;
+    outline-offset: -2px;
+  }
+}
+
+.sidebar-resizing {
+  cursor: col-resize;
+  user-select: none;
+
+  .sidebar {
+    transition: none;
+  }
+}
+
+.shell.collapsed .sidebar-header {
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 4px;
+
+  .toggle-btn {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 32px;
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar-resize-handle {
+    display: none;
+  }
+}
+
+.scope-gate {
+  background: #fff;
+  border: 1px solid #dfe7ef;
+  border-radius: 16px;
+  padding: 28px;
+  box-sizing: border-box;
+  margin: 24px auto;
+  min-width: 0;
+  width: 100%;
+}
+.scope-gate__icon {
+  order: -1;
+  color: #08685b;
+  background: #def3ec;
+  padding: 14px;
+  border-radius: 14px;
+  font-size: 32px;
 }

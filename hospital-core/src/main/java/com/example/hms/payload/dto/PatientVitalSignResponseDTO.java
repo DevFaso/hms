@@ -34,7 +34,15 @@ public class PatientVitalSignResponseDTO {
     private Double heightCm;
     private Double headCircumferenceCm;
     private String bodyPosition;
+    /**
+     * QA D1169: the nurse's note with the pain score and the fundal height
+     * in front of it, in the reader's language (VitalSignNotes).
+     */
     private String notes;
+    /** QA D1169: the 0-10 pain score as a number. */
+    private Integer painScore;
+    /** QA D1169: the fundal height in cm as a number. */
+    private Integer fundalHeightCm;
     private boolean clinicallySignificant;
 
     /* ── NEWS2 (P3 #25b) ─────────────────────────────────────────────
@@ -52,4 +60,7 @@ public class PatientVitalSignResponseDTO {
     private LocalDateTime recordedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    /** QA D1564: on a write only, the newborn warnings on this set; null on a read. */
+    private java.util.List<NewbornVitalAlertDTO> newbornAlerts;
 }

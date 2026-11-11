@@ -1,3 +1,4 @@
+import { refusalReason } from '../../shared/refusal-reason';
 import {
   Component,
   OnInit,
@@ -35,6 +36,8 @@ export class MyCareTeamComponent implements OnInit {
   private readonly team = signal<CareTeamDTO | null>(null);
   loading = signal(true);
   failed = signal(false);
+  /** QA D1212: the server's reason the read failed (a 4xx), when it gave one. */
+  failureReason = signal<string | null>(null);
 
   readonly current = computed(() => this.team()?.primaryCare ?? null);
   /** Earlier links only: the history also carries the current one. */
@@ -58,7 +61,8 @@ export class MyCareTeamComponent implements OnInit {
         this.team.set(team);
         this.loading.set(false);
       },
-      error: () => {
+      error: (err: unknown) => {
+        this.failureReason.set(refusalReason(err));
         this.failed.set(true);
         this.loading.set(false);
       },

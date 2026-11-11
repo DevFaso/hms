@@ -116,6 +116,46 @@ describe('RoiComponent', () => {
     expect(component.rows().length).toBe(1);
   });
 
+  it('filters loaded requests without changing server totals or requester counts', () => {
+    roiService.worklist.and.returnValue(
+      of({
+        ...page([
+          request(),
+          request({ id: 'r2', patientName: 'Cdx Patient', requesterType: 'PATIENT' }),
+        ]),
+        totalElements: 240,
+      }),
+    );
+    fixture.detectChanges();
+    roiService.worklist.calls.reset();
+    component.searchTerm.set('cdx');
+    component.requesterFilter.set('PATIENT');
+    expect(component.visibleRows().map((row) => row.id)).toEqual(['r2']);
+    expect(component.total()).toBe(240);
+    expect(component.patientRequestsLoaded()).toBe(1);
+    expect(component.thirdPartyRequestsLoaded()).toBe(1);
+    expect(component.truncated()).toBeTrue();
+    expect(roiService.worklist).not.toHaveBeenCalled();
+    component.setStatus('DENIED');
+    expect(component.searchTerm()).toBe('');
+    expect(component.requesterFilter()).toBe('');
+  });
+
+  it('offers filter recovery rather than claiming the queue is empty', () => {
+    fixture.detectChanges();
+    component.searchTerm.set('cdx-missing');
+    fixture.detectChanges();
+    const empty = fixture.nativeElement.querySelector('.queue-empty');
+    expect(empty.textContent).toContain('ROI.NO_MATCHES');
+    empty.querySelector('button').click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('tbody tr').length).toBe(1);
+    roiService.worklist.and.returnValue(of(page([])));
+    component.load();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.queue-empty').textContent).toContain('ROI.EMPTY');
+  });
+
   it('carries no scope chip or hint of its own: the route gate owns them', () => {
     // The route is flagged requiresHospitalScope: the shell shows the one
     // chip and builds this page only with a hospital pinned.

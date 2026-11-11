@@ -115,7 +115,7 @@ class ReferenceCatalogServiceImplTest {
 
         assertThatThrownBy(() -> service.createCatalog(req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("already exists");
+                .extracting("messageKey").isEqualTo("referenceCatalog.codeExists");
     }
 
     @Test
@@ -126,7 +126,7 @@ class ReferenceCatalogServiceImplTest {
 
         assertThatThrownBy(() -> service.createCatalog(req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("cannot be blank");
+                .extracting("messageKey").isEqualTo("referenceCatalog.codeRequired");
     }
 
     @Test

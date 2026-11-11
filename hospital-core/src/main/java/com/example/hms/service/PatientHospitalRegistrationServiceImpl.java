@@ -4,6 +4,7 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.PatientStayStatus;
 import com.example.hms.exception.PatientAlreadyRegisteredException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PatientHospitalRegistrationMapper;
 import com.example.hms.model.Hospital;
@@ -63,12 +64,19 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
             // unscoped, like the username path above; the write is authorised
             // below: the caller may only register at their own acting hospital,
             // and the link is audited.
+            // QA D1258: no patient named at all is a 400 naming the field.
+            if (dto.getPatientId() == null) {
+                throw new FieldBusinessException("patientId", "registration.patient.required");
+            }
             patient = patientRepository.findByIdUnscoped(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", dto.getPatientId()));
         }
 
         // A patient registers at a hospital only; a provider facility answers as
         // an unknown one (provider plan AC-10, AC-11; the entity refuses it too).
+        if (isBlank(dto.getHospitalName()) && dto.getHospitalId() == null) {
+            throw new FieldBusinessException("hospitalId", "registration.hospital.required");
+        }
         final Hospital hospital = !isBlank(dto.getHospitalName())
             ? hospitalRepository.findClinicalByName(dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()))
@@ -98,7 +106,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
             && (isBlank(patient.getEmergencyContactName())
                 || isBlank(patient.getEmergencyContactPhone())
                 || isBlank(patient.getEmergencyContactRelationship()))) {
-            throw new IllegalArgumentException("Minor patients must have a guardian's contact information.");
+            throw new IllegalArgumentException("registration.minor.guardianRequired");
         }
 
         // Generate mrn server-side (immutable) - QA D763: the same hospital
@@ -117,6 +125,44 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         emitRegistrationAudit(saved, patient, hospital);
 
         return mapper.toResponseDTO(saved);
+    }
+
+    /**
+     * QA D1430: deactivating takes a reason, refused on its field, and the reason is shown on the
+     * row; reactivating clears it. A row that stays inactive keeps the reason it was given.
+     */
+    private void applyActive(PatientHospitalRegistration registration, PatientHospitalRegistrationRequestDTO dto) {
+        if (registration.isActive() && !dto.isActive()) {
+            String reason = dto.getDeactivationReason();
+            if (reason == null || reason.isBlank()) {
+                throw new com.example.hms.exception.FieldBusinessException("deactivationReason",
+                    "registration.deactivation.reasonRequired");
+            }
+            registration.setDeactivationReason(reason.trim());
+        } else if (dto.isActive()) {
+            registration.setDeactivationReason(null);
+        }
+        registration.setActive(dto.isActive());
+    }
+
+    /** QA D1430: ending a patient's registration is on the audit trail; the reason stays on the row. */
+    private void auditIfDeactivated(PatientHospitalRegistration saved, boolean wasActive) {
+        if (!wasActive || saved.isActive()) {
+            return;
+        }
+        try {
+            auditService.logEvent(AuditEventRequestDTO.builder()
+                .eventType(AuditEventType.PATIENT_UPDATE)
+                .status(AuditStatus.SUCCESS)
+                .entityType("PatientHospitalRegistration")
+                .resourceId(saved.getId() != null ? saved.getId().toString() : null)
+                .userName(HospitalContextHolder.getContextOrEmpty().getPrincipalUsername())
+                .hospitalName(saved.getHospital() != null ? saved.getHospital().getName() : null)
+                .eventDescription("Patient registration deactivated")
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("Failed to emit audit for registration {}: {}", saved.getId(), ex.getMessage());
+        }
     }
 
     /** Linking a patient grants this hospital ongoing chart access — auditable. */
@@ -290,6 +336,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         applyEditableFields(registration, dto, true);
         requireClinicalOnReactivation(registration, wasActive);
         PatientHospitalRegistration updated = registrationRepository.save(registration);
+        auditIfDeactivated(updated, wasActive);
         log.info("✅ Patched registration mrn: {}", mrn);
         return mapper.toResponseDTO(updated);
     }
@@ -318,7 +365,9 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         boolean wasActive = registration.isActive();
         applyEditableFields(registration, dto, false);
         requireClinicalOnReactivation(registration, wasActive);
-        return mapper.toResponseDTO(registrationRepository.save(registration));
+        PatientHospitalRegistration saved = registrationRepository.save(registration);
+        auditIfDeactivated(saved, wasActive);
+        return mapper.toResponseDTO(saved);
     }
 
     // -------------------- helpers --------------------
@@ -342,8 +391,14 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     private void validateRequest(PatientHospitalRegistrationRequestDTO dto) {
         boolean hasUserRef = !isBlank(dto.getPatientUsername()) || dto.getPatientId() != null;
         boolean hasHospitalRef = !isBlank(dto.getHospitalName()) || dto.getHospitalId() != null;
-        if (!hasUserRef) throw new IllegalArgumentException("Patient username or patientId is required.");
-        if (!hasHospitalRef) throw new IllegalArgumentException("Hospital name or hospitalId is required.");
+        // QA D1299 (round 28): an IllegalArgumentException carrying the key
+        // answered "Choisissez le patient à enregistrer." with no field, before
+        // the field-named check in applyEditableFields was ever reached. Both
+        // missing references are named in one refusal.
+        com.example.hms.exception.RequiredFields.check()
+            .require(hasUserRef, "patientId", "registration.patient.required")
+            .require(hasHospitalRef, "hospitalId", "registration.hospital.required")
+            .orThrow();
     }
 
     private boolean isBlank(String s) {
@@ -356,7 +411,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         }
 
         if (!isPatch || dto.isActive() != registration.isActive()) {
-            registration.setActive(dto.isActive());
+            applyActive(registration, dto);
         }
 
         if (!isPatch || dto.getCurrentRoom() != null) {
@@ -376,7 +431,10 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
             registration.setStayStatus(status);
         }
 
-        if (!isPatch || dto.getReadyForDischargeNote() != null) {
+        // RCPT-CLIN: the desk neither reads this note nor sees its box, and its PUT carries the
+        // whole registration back: it kept emptying what an administrator had written.
+        boolean deskCaller = com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly();
+        if (!deskCaller && (!isPatch || dto.getReadyForDischargeNote() != null)) {
             registration.setReadyForDischargeNote(trim(dto.getReadyForDischargeNote()));
         }
     }

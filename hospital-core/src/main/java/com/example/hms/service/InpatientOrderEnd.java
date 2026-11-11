@@ -8,7 +8,10 @@ import com.example.hms.model.Prescription;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.Objects;
 
@@ -20,6 +23,18 @@ import java.util.Objects;
  * between the admission and the discharge of a stay that has since ended.
  */
 public final class InpatientOrderEnd {
+
+    /**
+     * The admissions that have ended, for the rule below and for the lookup
+     * that files a new order (QA D1393): an encounter of one of these is never
+     * where a new order goes. A cancelled stay ends its orders (refused at the
+     * pharmacy and on the ward) without the discharge's meaning: no summary,
+     * no bill, and the patient simply is not an inpatient any more.
+     */
+    public static final Set<AdmissionStatus> ENDED_STAY_STATUSES = Collections.unmodifiableSet(
+        EnumSet.of(AdmissionStatus.DISCHARGED, AdmissionStatus.CANCELLED,
+            // QA D1516: a stay a voided death closed ended then; a readmission is a new stay.
+            AdmissionStatus.CLOSED_IN_ERROR));
 
     private InpatientOrderEnd() {
     }
@@ -125,8 +140,7 @@ public final class InpatientOrderEnd {
         for (Admission stay : stays) {
             if (stay != null && admissionId.equals(stay.getId())
                 && sameHospital(rx, stay)
-                && (stay.getStatus() == AdmissionStatus.DISCHARGED
-                    || stay.getStatus() == AdmissionStatus.CANCELLED)) {
+                && ENDED_STAY_STATUSES.contains(stay.getStatus())) {
                 return true;
             }
         }

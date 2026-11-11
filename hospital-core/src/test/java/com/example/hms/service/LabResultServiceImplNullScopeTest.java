@@ -277,7 +277,9 @@ class LabResultServiceImplNullScopeTest {
             PageRequest page = PageRequest.of(0, 20);
             UUID patientId = UUID.randomUUID();
             result.setReleased(true);
-            when(labResultRepository.findAllForReader(true, false, patientId, true, new UUID(0L, 0L), page))
+            // QA D1361: an unsorted list read reaches the query newest result first.
+            when(labResultRepository.findAllForReader(true, false, patientId, true, new UUID(0L, 0L),
+                    LabResultServiceImpl.newestResultFirst(page)))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(result)));
 
             assertThat(service.getLabResultsPage(page, Locale.ENGLISH, patientId, false).getContent())

@@ -14,7 +14,7 @@
   } @else if (failed()) {
     <div class="portal-empty" role="alert" data-testid="care-team-error">
       <span class="material-symbols-outlined">error</span>
-      <p>{{ 'PORTAL.CARE_TEAM.LOAD_ERROR' | translate }}</p>
+      <p>{{ failureReason() ?? ('PORTAL.CARE_TEAM.LOAD_ERROR' | translate) }}</p>
     </div>
   } @else if (empty()) {
     <div class="portal-empty" data-testid="care-team-empty">

@@ -14,6 +14,7 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@com.example.hms.validation.RecentDeliveryOverrideGiven(message = "{labor.episode.recentDelivery}")
 public class LaborEpisodeRequestDTO {
 
     private UUID hospitalId;

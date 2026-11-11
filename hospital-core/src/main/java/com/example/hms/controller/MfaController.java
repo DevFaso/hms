@@ -53,13 +53,14 @@ import java.util.OptionalLong;
 public class MfaController {
 
     private static final String AUTHENTICATED_USER_NOT_FOUND = "Authenticated user not found";
-    private static final String NOT_FULLY_AUTHENTICATED =
-            "MFA enrollment requires a fully authenticated session — partial mfaToken is not sufficient.";
+    private static final String NOT_FULLY_AUTHENTICATED = "mfa.enrollment.partialSession";
 
-    private static final String INVALID_MFA_TOKEN = "Invalid or expired MFA token.";
+    /** QA D911 (re-test 3): every answer here is shown as it is, so it is a bundle key. */
+    private static final String INVALID_MFA_TOKEN = "mfa.token.invalid";
     private static final String PICK_NOT_HONOURED = "auth.mfa.pickNotHonoured";
 
     private final MfaService mfaService;
+    private final org.springframework.context.MessageSource messageSource;
     private final UserRepository userRepository;
     private final AuditEventLogService auditEventLogService;
     private final JwtTokenProvider jwtTokenProvider;
@@ -73,6 +74,9 @@ public class MfaController {
     private final com.example.hms.security.LoginAttemptService loginAttemptService;
     /** The source the login offered roles from, so a picked role is re-checked against the same list. */
     private final com.example.hms.security.HospitalUserDetailsService userDetailsService;
+    /** Providers, like {@code AuthController}'s gate: a {@code @WebMvcTest} slice has neither bean. */
+    private final org.springframework.beans.factory.ObjectProvider<com.example.hms.security.DowntimeStateService> downtimeState;
+    private final org.springframework.beans.factory.ObjectProvider<com.example.hms.security.provider.ProviderMfaGate> providerMfaGate;
 
     /**
      * Why {@link #honouredPick} refused, told apart: a challenge that no longer
@@ -81,7 +85,7 @@ public class MfaController {
      */
     private ResponseEntity<Object> pickRefusal(String mfaToken, User user) {
         if (jwtTokenProvider.mfaTokenSelectedRoles(mfaToken).isEmpty()) {
-            return ResponseEntity.status(401).body(new MessageResponse(INVALID_MFA_TOKEN));
+            return ResponseEntity.status(401).body(new MessageResponse(message(INVALID_MFA_TOKEN)));
         }
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .userId(user.getId())
@@ -127,7 +131,7 @@ public class MfaController {
 
     /** 401 for a caller holding only a partial mfaToken, not a full access token. */
     private ResponseEntity<Object> notFullyAuthenticated() {
-        return ResponseEntity.status(401).body(new MessageResponse(NOT_FULLY_AUTHENTICATED));
+        return ResponseEntity.status(401).body(new MessageResponse(message(NOT_FULLY_AUTHENTICATED)));
     }
 
     /**
@@ -151,6 +155,38 @@ public class MfaController {
     }
 
     /**
+     * User decision 2026-11-06: in read-only mode an enrolment goes through only when it is what
+     * stands between the user and reading: the login's challenge session (a required role with no
+     * authenticator yet), or a provider user the second-factor gate refuses everything else to. Any
+     * other enrolment is an optional change, refused like the filter refuses a write. The filter
+     * cannot tell them apart: it runs before authentication.
+     */
+    private Optional<ResponseEntity<Object>> readOnlyRefusal(User user, Authentication authentication) {
+        com.example.hms.security.DowntimeStateService downtime = downtimeState.getIfAvailable();
+        com.example.hms.security.DowntimeStateService.DowntimeSnapshot snapshot =
+            downtime == null ? com.example.hms.security.DowntimeStateService.DowntimeSnapshot.NORMAL : downtime.snapshot();
+        if (!snapshot.readOnly()
+                || com.example.hms.security.MfaChallengeScope.isChallengeSession(authentication)
+                || blockedByTheProviderGate(user, authentication)) {
+            return Optional.empty();
+        }
+        boolean custom = snapshot.message() != null;
+        return Optional.of(ResponseEntity.status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
+            .header("X-Readonly-Mode", "true")
+            .header("Retry-After", "300")
+            .<Object>body(Map.of("error", "READ_ONLY_MODE",
+                "message", custom ? snapshot.message()
+                    : message(com.example.hms.security.ReadOnlyModeFilter.DEFAULT_MESSAGE_KEY),
+                "customMessage", custom)));
+    }
+
+    private boolean blockedByTheProviderGate(User user, Authentication authentication) {
+        com.example.hms.security.provider.ProviderMfaGate gate = providerMfaGate.getIfAvailable();
+        return gate != null && gate.isProviderUser(user.getId(), user.getUsername())
+            && !gate.secondFactorPresented(authentication);
+    }
+
+    /**
      * Start TOTP enrollment — returns secret, otpauth URI, and backup codes.
      * With an active authenticator this starts its replacement, which needs a
      * full session and the step-up in {@code X-Mfa-Token} (a current code or
@@ -164,6 +200,8 @@ public class MfaController {
         Optional<User> authenticated = resolveFullyAuthenticatedUser(principal);
         if (authenticated.isEmpty()) return notFullyAuthenticated();
         User user = authenticated.get();
+        Optional<ResponseEntity<Object>> readOnly = readOnlyRefusal(user, authentication);
+        if (readOnly.isPresent()) return readOnly.get();
 
         MfaService.MfaEnrollmentResult result = mfaService.enrollTotp(user, authentication, stepUpCode);
 
@@ -197,6 +235,8 @@ public class MfaController {
         Optional<User> authenticated = resolveFullyAuthenticatedUser(principal);
         if (authenticated.isEmpty()) return notFullyAuthenticated();
         User user = authenticated.get();
+        Optional<ResponseEntity<Object>> readOnly = readOnlyRefusal(user, authentication);
+        if (readOnly.isPresent()) return readOnly.get();
 
         boolean verified = mfaService.verifyEnrollment(user.getId(), request.code(), authentication);
 
@@ -208,7 +248,9 @@ public class MfaController {
                     .status(AuditStatus.SUCCESS)
                     .eventDescription("TOTP enrollment verified")
                     .build());
-            return ResponseEntity.ok(new MessageResponse("MFA enrollment verified successfully."));
+            // QA D911: in the reader's language.
+            return ResponseEntity.ok(new MessageResponse(
+                message("mfa.enrollment.verified")));
         }
 
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
@@ -218,7 +260,7 @@ public class MfaController {
                 .status(AuditStatus.FAILURE)
                 .eventDescription("Invalid TOTP code during enrollment verification")
                 .build());
-        return ResponseEntity.badRequest().body(new MessageResponse("Invalid TOTP code."));
+        return ResponseEntity.badRequest().body(new MessageResponse(message("mfa.enrollment.invalidCode")));
     }
 
     /**
@@ -245,7 +287,7 @@ public class MfaController {
         // Validate the mfaToken
         if (!jwtTokenProvider.isMfaToken(request.mfaToken()) || isSpentOrRevoked(request.mfaToken())) {
             return ResponseEntity.status(401)
-                    .body(new MessageResponse(INVALID_MFA_TOKEN));
+                    .body(new MessageResponse(message(INVALID_MFA_TOKEN)));
         }
 
         String username = jwtTokenProvider.getUsernameFromJWT(request.mfaToken());
@@ -273,7 +315,7 @@ public class MfaController {
                     .eventDescription("MFA code refused during login: too many wrong codes")
                     .build());
             return ResponseEntity.status(429)
-                    .body(new MessageResponse("Too many wrong codes. Try again in a few minutes."));
+                    .body(new MessageResponse(message("mfa.login.tooManyCodes")));
         }
 
         // Check the code without writing anything yet: TOTP first, then a
@@ -294,7 +336,7 @@ public class MfaController {
                     .eventDescription("Invalid MFA code during login")
                     .build());
             return ResponseEntity.status(401)
-                    .body(new MessageResponse("Invalid MFA code."));
+                    .body(new MessageResponse(message("mfa.login.invalidCode")));
         }
 
         // The code is right. Claim the challenge atomically BEFORE anything is
@@ -303,7 +345,7 @@ public class MfaController {
         // and gets a session; the other spends nothing.
         if (!claim(request.mfaToken())) {
             return ResponseEntity.status(401)
-                    .body(new MessageResponse(INVALID_MFA_TOKEN));
+                    .body(new MessageResponse(message(INVALID_MFA_TOKEN)));
         }
         boolean spent = totp
                 ? mfaService.claimTotpStep(user.getId(), totpStep.getAsLong())
@@ -313,7 +355,7 @@ public class MfaController {
             // and its challenge is already spent, so it must start again. The
             // attempt still counts (never a way to reset the lockout).
             return ResponseEntity.status(401)
-                    .body(new MessageResponse("That code was just used. Sign in again."));
+                    .body(new MessageResponse(message("mfa.login.codeJustUsed")));
         }
         mfaService.clearCodeAttempts(user.getId());
 
@@ -436,4 +478,9 @@ public class MfaController {
             @jakarta.validation.constraints.NotBlank String mfaToken,
             @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(min = 6, max = 8) String code
     ) {}
+
+    /** A bundle message in the reader's language (the request's Accept-Language). */
+    private String message(String key) {
+        return messageSource.getMessage(key, null, org.springframework.context.i18n.LocaleContextHolder.getLocale());
+    }
 }

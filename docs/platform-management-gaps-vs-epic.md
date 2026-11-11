@@ -21,7 +21,7 @@ Foundation, Cogito/Caboodle, Application Manager). It is descriptive of
 | Integration SPI | `PlatformIntegrationAdapter`, `EligibilityProvider`, `IntegrationConnectivityProbe`, `Resyncable`, `PartnerConnector` (stubs) | adapters: EHR, billing, inventory; partner stubs: NHIS / NHIA / CNAMGS / mutuelle |
 | Health monitoring | [`IntegrationHealthSnapshot`](../hospital-core/src/main/java/com/example/hms/model/integration/IntegrationHealthSnapshot.java) + [`IntegrationHealthEvent`](../hospital-core/src/main/java/com/example/hms/model/integration/IntegrationHealthEvent.java) + [`SuperAdminIntegrationHealthController`](../hospital-core/src/main/java/com/example/hms/controller/SuperAdminIntegrationHealthController.java) | 24 h rolling counters; HEALTHY / DEGRADED / FAILING / NO_HISTORY; probe + resync + 24 h history endpoints |
 | Snapshot export | `GET /super-admin/platform/registry/snapshot` | one-shot JSON dump |
-| Public ops endpoints | Spring Actuator | `/actuator/health`, `/actuator/info`, `/actuator/prometheus` |
+| Public ops endpoints | Spring Actuator | `/actuator/health`, `/actuator/info`. `/actuator/prometheus` is **not** public — it is token-gated via `METRICS_SCRAPE_TOKEN` and closed by default, because Railway serves the management port on the public API hostname. |
 
 ### Frontend surface
 

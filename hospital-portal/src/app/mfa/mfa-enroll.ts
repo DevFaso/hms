@@ -1,10 +1,13 @@
-import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ElementRef, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { AuthService } from '../auth/auth.service';
 import { MFA_STEP_UP_MESSAGES, MfaService } from '../auth/mfa.service';
+import { refuseFields } from '../shared/forms/invalid-fields';
+
+const TOTP_FIELD_IDS = ['mfa-enroll-code'];
 
 /**
  * T-32: MFA Enrollment page.
@@ -24,6 +27,7 @@ export class MfaEnrollComponent {
   private readonly mfaService = inject(MfaService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /** Wizard step: 'start' | 'qr' | 'verify' | 'backup' */
   step = signal<'start' | 'qr' | 'verify' | 'backup'>('start');
@@ -82,9 +86,13 @@ export class MfaEnrollComponent {
 
   submitVerification(): void {
     if (!this.totpCode || this.totpCode.length < 6) {
-      this.error.set(this.translate.instant('MFA.ENROLL_INVALID_CODE'));
+      // QA D1306 (round 28): the field is marked, not only the banner.
+      const message = this.translate.instant('MFA.ENROLL_INVALID_CODE');
+      refuseFields(this.host.nativeElement, TOTP_FIELD_IDS, TOTP_FIELD_IDS, message);
+      this.error.set(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], TOTP_FIELD_IDS, '');
     this.loading.set(true);
     this.error.set('');
     this.mfaService.verifyEnrollment(this.totpCode).subscribe({

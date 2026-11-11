@@ -43,6 +43,46 @@ class BpaRuleEngineTest {
             new Source("test", null, null), null, null, null, UUID.randomUUID().toString());
     }
 
+    /**
+     * QA D1194 (round 22): a card's id is its rule and level - the same on
+     * every evaluation and in every language - so the 24-hour acknowledgement
+     * never falls back to the card's text. Every rule goes through the engine.
+     */
+    @Test
+    void everyCardGetsAnIdFromItsRuleAndLevelNotARandomOne_D1194() {
+        BpaRule rule = new BpaRule() {
+            @Override public String id() { return "pregnancy-htn"; }
+            @Override public List<CdsCard> evaluate(BpaRuleContext context) {
+                return List.of(card("Hypertension"));
+            }
+        };
+        BpaRuleEngine engine = new BpaRuleEngine(List.of(rule), vitals, problems, prescriptions);
+        BpaRuleContext ctx = new BpaRuleContext(patient(UUID.randomUUID()), UUID.randomUUID(), null, null, null);
+
+        String first = engine.evaluate(ctx).get(0).uuid();
+        String second = engine.evaluate(ctx).get(0).uuid();
+        assertThat(first).isEqualTo(second).isEqualTo(BpaRuleEngine.stableCardUuid("pregnancy-htn", card("x")));
+        CdsCard critical = new CdsCard("x", null, CdsCard.Indicator.CRITICAL, new Source("t", null, null),
+            null, null, null, null);
+        assertThat(BpaRuleEngine.stableCardUuid("pregnancy-htn", critical))
+            .as("a warning acknowledged does not hide the critical card").isNotEqualTo(first);
+    }
+
+    /** The guard: no BPA rule mints a random card id (the engine's id is the only one). */
+    @Test
+    void noBpaRuleMintsARandomCardId_D1194() throws java.io.IOException {
+        java.nio.file.Path dir = java.nio.file.Path.of("src/main/java/com/example/hms/cdshooks/bpa");
+        java.util.List<String> offenders = new java.util.ArrayList<>();
+        try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.list(dir)) {
+            for (java.nio.file.Path f : files.filter(p -> p.toString().endsWith(".java")).toList()) {
+                if (java.nio.file.Files.readString(f).contains("randomUUID")) {
+                    offenders.add(f.getFileName().toString());
+                }
+            }
+        }
+        assertThat(offenders).as("a BPA card id must be stable (QA D1194)").isEmpty();
+    }
+
     @Test
     void evaluateNullContextReturnsEmpty() {
         BpaRuleEngine engine = new BpaRuleEngine(List.of(), vitals, problems, prescriptions);

@@ -205,6 +205,15 @@
     resize: vertical;
     font-family: inherit;
   }
+  input[readonly] {
+    background: #f1f5f9;
+    color: var(--text-primary);
+    cursor: not-allowed;
+  }
+  .field-hint {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+  }
 }
 
 .perm-list {

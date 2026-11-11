@@ -53,6 +53,22 @@ public final class TenantOwnership {
     }
 
     /**
+     * QA r41: the hospital a READ of a patient's own records is confined to. As
+     * {@link #actingHospitalIdOrNullForGlobal()}, except that a patient reading their own
+     * records (a patient-owned scope, e.g. the portal's care team) is not confined to one
+     * hospital: the caller already resolved the patient from the authenticated account.
+     */
+    public static UUID actingHospitalIdOrNullForGlobalOrOwnPatient() {
+        if (HospitalContextHolder.getContext().isEmpty() && RequestContextHolder.getRequestAttributes() == null) {
+            return null;
+        }
+        if (ActingScopeResolver.currentScope() instanceof ActingScope.PatientOwned) {
+            return null;
+        }
+        return actingHospitalIdOrNullForGlobal();
+    }
+
+    /**
      * The hospital this request acts at, or {@code null} for a verified
      * super-admin in global view. Every other scope is refused.
      */

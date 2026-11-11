@@ -39,12 +39,44 @@ describe('PatientPickerComponent', () => {
       expect(patientSpy.search).toHaveBeenCalledWith({
         name: 'do',
         hospitalId: 'h1',
-        size: 8,
+        size: 20,
         includeInactive: true,
       });
       expect(patientSpy.lookup).not.toHaveBeenCalled();
       expect(component.suggestions().map((p) => p.id)).toEqual(['p1', 'p2']);
       expect(component.dropdownOpen()).toBeTrue();
+      done();
+    }, 400);
+  });
+
+  // QA D1274 (D1253 sibling, round 27): a birth date found nobody, in any format.
+  it('QA D1274: a typed birth date is searched by birth date, never as a name or a phone', (done) => {
+    component.hospitalId = 'h1';
+    patientSpy.search.and.returnValue(of([mockPatient('p1', 'Awa')]));
+    component.ngOnInit();
+    component.onQueryChange('15/03/2020');
+    setTimeout(() => {
+      expect(patientSpy.search).toHaveBeenCalledOnceWith({
+        hospitalId: 'h1',
+        size: 20,
+        includeInactive: true,
+        dob: '2020-03-15',
+        email: undefined,
+      });
+      expect(patientSpy.lookup).not.toHaveBeenCalled();
+      expect(component.suggestions().map((p) => p.id)).toEqual(['p1']);
+      done();
+    }, 400);
+  });
+
+  it('QA D1274: a piece of an e-mail is searched by e-mail within the hospital', (done) => {
+    component.hospitalId = 'h1';
+    component.ngOnInit();
+    component.onQueryChange('awa.kabore');
+    setTimeout(() => {
+      expect(patientSpy.search).toHaveBeenCalledWith(
+        jasmine.objectContaining({ email: 'awa.kabore', hospitalId: 'h1' }),
+      );
       done();
     }, 400);
   });
@@ -126,10 +158,124 @@ describe('PatientPickerComponent', () => {
     }, 400);
   });
 
+  // QA D903: the re-test typed 'CHW5448' on /pharmacy/mtm and the option read
+  // 'FZ Fatimata Zongo 70001003' — the phone, not the MRN the server returned.
+  function zongo(extra: Partial<PatientResponse> = {}): PatientResponse {
+    return {
+      id: 'pz',
+      firstName: 'Fatimata',
+      lastName: 'Zongo',
+      phoneNumberPrimary: '70001003',
+      email: 'fz@example.test',
+      active: true,
+      ...extra,
+    } as PatientResponse;
+  }
+
+  it('shows the hospital MRN, not the phone or email, under each option (QA D903)', (done) => {
+    const fixture = TestBed.createComponent(PatientPickerComponent);
+    const picker = fixture.componentInstance;
+    picker.hospitalId = 'h1';
+    patientSpy.search.and.returnValue(of([zongo({ mrn: 'CHW5448' })]));
+    patientSpy.lookup.and.returnValue(of([zongo({ mrn: 'CHW5448' })]));
+    picker.ngOnInit();
+    picker.onQueryChange('CHW5448');
+    setTimeout(() => {
+      fixture.detectChanges();
+      const el: HTMLElement = fixture.nativeElement;
+      const option = el.querySelector('.picker-option') as HTMLElement;
+      expect(option.querySelector('.opt-name')?.textContent?.trim()).toBe('Fatimata Zongo');
+      expect(option.querySelector('.opt-meta')?.textContent?.trim()).toBe('CHW5448');
+      expect(option.textContent).not.toContain('70001003');
+      expect(option.textContent).not.toContain('fz@example.test');
+      done();
+    }, 400);
+  });
+
+  it('shows the MRN on the chip once a patient is picked (QA D903)', () => {
+    const fixture = TestBed.createComponent(PatientPickerComponent);
+    fixture.componentInstance.select(zongo({ mrn: 'CHW5448' }));
+    fixture.detectChanges();
+    const chip = (fixture.nativeElement as HTMLElement).querySelector(
+      '.picker-chip',
+    ) as HTMLElement;
+    expect(chip.querySelector('.chip-sub')?.textContent?.trim()).toBe('CHW5448');
+    expect(chip.textContent).not.toContain('70001003');
+  });
+
+  it('takes the scoped search MRN when the exact hit came back without one (QA D903)', (done) => {
+    component.hospitalId = 'h1';
+    patientSpy.lookup.and.returnValue(of([zongo()]));
+    patientSpy.search.and.returnValue(of([zongo({ mrn: 'CHW5448' })]));
+    component.ngOnInit();
+    component.onQueryChange('CHW5448');
+    setTimeout(() => {
+      expect(component.suggestions().length).toBe(1);
+      expect(component.subline(component.suggestions()[0])).toBe('CHW5448');
+      done();
+    }, 400);
+  });
+
+  it('falls back to the email, then the phone, only when no MRN is known (QA D903)', () => {
+    expect(component.subline(zongo({ mrn: '  ' }))).toBe('fz@example.test');
+    expect(component.subline(zongo({ email: '' }))).toBe('70001003');
+    expect(component.subline(zongo({ email: undefined, phoneNumberPrimary: undefined }))).toBe('');
+  });
+
+  it('renders no empty second line for a patient with nothing to show (QA D903)', () => {
+    const fixture = TestBed.createComponent(PatientPickerComponent);
+    fixture.componentInstance.select({
+      id: 'p0',
+      firstName: 'Awa',
+      lastName: '',
+      active: true,
+    } as PatientResponse);
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.chip-sub')).toBeNull();
+  });
+
   it('does not search for queries shorter than two characters', () => {
     component.ngOnInit();
     component.onQueryChange('a');
     expect(component.suggestions()).toEqual([]);
     expect(component.dropdownOpen()).toBeFalse();
+  });
+  it('ranks a name that starts with the query before eight that only contain it (QA D1239)', (done) => {
+    const sawadogos = Array.from({ length: 12 }, (_, i) => ({
+      id: `s${i}`,
+      firstName: `Prénom${i}`,
+      lastName: 'Sawadogo',
+      active: true,
+    })) as PatientResponse[];
+    const awa = {
+      id: 'awa',
+      firstName: 'Awa',
+      lastName: 'Kaboré',
+      active: true,
+    } as PatientResponse;
+    patientSpy.search.and.returnValue(of([...sawadogos, awa]));
+    component.ngOnInit();
+    component.onQueryChange('Awa');
+    setTimeout(() => {
+      expect(component.suggestions().length).toBe(8);
+      expect(component.suggestions()[0].id).toBe('awa');
+      done();
+    }, 400);
+  });
+
+  it('a required picker marks its input required and blank while no patient is picked (QA D1245)', () => {
+    const fixture = TestBed.createComponent(PatientPickerComponent);
+    fixture.componentRef.setInput('required', true);
+    fixture.componentRef.setInput('inputId', 'rx-patient');
+    fixture.detectChanges();
+    const input = (fixture.nativeElement as HTMLElement).querySelector(
+      '#rx-patient',
+    ) as HTMLInputElement;
+    expect(input.required).toBeTrue();
+    expect(input.getAttribute('aria-required')).toBe('true');
+    expect(input.getAttribute('data-submit-blank')).toBe('true');
+    fixture.componentRef.setInput('selected', mockPatient('p1', 'Anna'));
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('#rx-patient')).toBeNull();
   });
 });

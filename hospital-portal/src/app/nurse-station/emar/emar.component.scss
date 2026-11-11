@@ -1,8 +1,17 @@
+@use '../../shared/styles/care-workspace' as care;
 .emar {
   display: flex;
   flex-direction: column;
   padding: 1.5rem;
   gap: 1rem;
+}
+
+/* QA D1392: the open panel closed because its order was withdrawn. */
+.emar__notice {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-danger, #c53030);
+  border-radius: 0.5rem;
+  color: var(--color-danger, #c53030);
 }
 
 .emar__title {
@@ -95,6 +104,13 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+.emar__queue-chip--controlled {
+  /* QA D922: a controlled substance, in the queue as in the detail. */
+  border: 1px solid #5b21b6;
+  color: #5b21b6;
+  background: #ede9fe;
 }
 
 .emar__queue-chip--blocked {
@@ -314,4 +330,151 @@
   padding: 2rem;
   text-align: center;
   color: var(--color-text-muted, #4a5568);
+}
+
+/* QA D1025: the dose and route inputs carry their own labels; the prescription is read beside them. */
+.emar__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.emar__prescribed {
+  margin: 0 0 0.5rem;
+  color: var(--text-secondary, #555);
+}
+
+/* QA D1329: a submit scope only; the scan and verify sections keep their layout. */
+.emar__verify-scope {
+  display: contents;
+}
+
+.review-hold-flag {
+  display: inline-block;
+  margin: 2px 0 2px 6px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #fff3e0;
+  color: #b45309;
+}
+
+@include care.workspace;
+
+.emar__queue-chip--blocked {
+  color: #80500d;
+  background: transparent;
+  border: 1px solid #80500d;
+}
+.emar__blocked-title {
+  color: #80500d;
+}
+
+.emar__notice {
+  color: #163247;
+  background: #edf8f4;
+  border: 1px solid #80c6b5;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+}
+
+.emar__layout {
+  grid-template-columns: minmax(290px, 360px) minmax(0, 1fr);
+  align-items: start;
+}
+.emar__queue-workspace {
+  min-width: 0;
+  background: #fff;
+  border: 1px solid #dce6ef;
+  border-radius: 16px;
+  padding: 18px;
+  h2 {
+    font-size: 18px;
+    margin: 0 0 16px;
+  }
+  .care-toolbar {
+    padding: 0 0 16px;
+    margin: 0 0 16px;
+    border: 0;
+    border-bottom: 1px solid #e5edf3;
+    border-radius: 0;
+  }
+  .care-search {
+    min-width: 0;
+    flex-basis: 100%;
+    > .material-symbols-outlined {
+      display: none;
+    }
+  }
+}
+.emar__queue {
+  max-height: 65vh;
+  padding: 3px;
+}
+.emar__queue-item {
+  border-color: #d5e1eb;
+  border-radius: 10px;
+  &--active {
+    border-color: #0b8a77;
+    box-shadow: 0 0 0 2px #0b8a7720;
+    background: #edf8f4;
+  }
+}
+.emar__queue-button {
+  padding: 16px;
+  color: #163247;
+  gap: 7px;
+  font: inherit;
+  font-size: 13px;
+}
+.emar__queue-patient {
+  font-size: 14px;
+}
+.emar__queue-meta {
+  color: #52667b;
+  line-height: 1.6;
+}
+.emar__detail {
+  border: 1px solid #dce6ef;
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  min-width: 0;
+}
+.emar__detail-header {
+  padding-bottom: 18px;
+  border-bottom: 1px solid #e5edf3;
+  margin-bottom: 20px;
+  h2 {
+    font-size: 22px;
+    margin: 0 0 8px;
+    color: #163247;
+  }
+}
+.emar__btn {
+  border-radius: 8px;
+  min-height: 40px;
+  padding: 10px 15px;
+}
+.emar__btn--primary {
+  background: #0b7061;
+  border-color: #0b7061;
+  color: white;
+}
+.emar__state {
+  padding: 60px 24px;
+  border: 1px solid #dce6ef;
+  border-radius: 16px;
+  background: #fff;
+  line-height: 1.8;
+}
+@media (max-width: 900px) {
+  .emar__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .emar__queue {
+    max-height: 42vh;
+  }
 }

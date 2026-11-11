@@ -187,7 +187,9 @@ class TransferServiceImplTest {
         assertThatThrownBy(() -> service.requestTransfer(base().build()))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
             .satisfies(e -> org.assertj.core.api.Assertions.assertThat(
-                ((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("bed.ward.maternityMismatch"));
+                ((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("bed.ward.maternityMismatch"))
+            // QA D1366 class (added assertion): named on the destination picker.
+            .hasFieldOrPropertyWithValue("field", "toBedId");
         verify(bedAssignmentService, never()).reserveBed(any(), any());
         verify(transferOrderRepository, never()).save(any());
     }
@@ -266,7 +268,9 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("transfer.r7.destinationTaken"));
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("transfer.r7.destinationTaken"))
+            // QA D1366 class (added assertion): named on the destination picker.
+            .hasFieldOrPropertyWithValue("field", "toBedId");
     }
 
     @Test
@@ -277,7 +281,10 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.alreadyInBed"));
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.alreadyInBed"))
+            // QA D1352 (round 30): on the destination bed the form offers.
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "toBedId");
     }
 
     @Test

@@ -375,51 +375,143 @@ public class CriticalValueNotificationService {
      * 2026-08-21 reassessment that rollback silently erased the mismatch row this
      * method had just written — the audit record existed only in the log line.
      *
+     * <p>QA D1553 (round 43): a CONFIRMED read-back is immutable. A second
+     * doctor's wrong read-back after the first doctor's correct one used to
+     * overwrite the stored value and author through the mismatch record while
+     * the confirmation time stayed, so the chart read "read-back confirmed
+     * '250' - Dr B" on a glucose of 520. Once {@code criticalReadBackAt} is
+     * set, any further read-back, right or wrong, is refused and writes
+     * nothing. Both writes are conditional UPDATEs ({@code WHERE
+     * critical_readback_at IS NULL}), so neither a concurrent confirmation nor
+     * one committed between a read and the write is ever overwritten.
+     *
+     * <p>A read-back is the critical-value protocol, so it is refused, writing
+     * nothing, on a result that is not critical (QA D1553 asked; it was
+     * accepted with 200 and stamped a normal result "read-back confirmed" and
+     * acknowledged). "Critical" is the escalation sweep's own reading: graded
+     * critical now, or paged as critical and not since graded otherwise. The
+     * portal offers the read-back only on critical results.
+     *
      * @return the updated result
-     * @throws com.example.hms.exception.BusinessException when the repeated
-     *         value does not match the reported one
+     * @throws com.example.hms.exception.BusinessException when the result
+     *         already has a confirmed read-back, is not critical, or the
+     *         repeated value does not match the reported one
      */
     @Transactional
     public LabResult recordReadBack(LabResult result, String repeatedValue,
                                     UUID byUserId, String byDisplay) {
-        String reported = normalizeForComparison(result.getResultValue());
-        String repeated = normalizeForComparison(repeatedValue);
+        if (result.getCriticalReadBackAt() != null) {
+            log.warn("Critical-value read-back on lab result {} refused: already confirmed", result.getId());
+            throw new com.example.hms.exception.BusinessException("lab.criticalReadBack.alreadyConfirmed");
+        }
+        if (!readBackApplies(result)) {
+            throw new com.example.hms.exception.BusinessException("lab.criticalReadBack.notCritical");
+        }
 
-        result.setCriticalReadBackValue(repeatedValue);
-        result.setCriticalReadBackByUserId(byUserId);
-        result.setCriticalReadBackByDisplay(byDisplay);
-
-        if (reported == null || repeated == null || !reported.equals(repeated)) {
-            // Copy the mismatch onto a fresh row loaded inside the inner
-            // transaction rather than saving the caller's managed entity: the
-            // outer session still owns `result`, and committing it here while
-            // the outer transaction rolls back would leave the two sessions
-            // disagreeing about the entity's state.
+        // QA D1095: the unit as shown (the test definition's when none was typed).
+        if (!readBackMatches(result.getResultValue(), LabResultMapper.unitOf(result), repeatedValue)) {
+            // Written by the inner transaction straight to the row, never
+            // through the caller's managed entity, whose transaction rolls back.
+            // D1553 (Rex P2): one conditional UPDATE, so a read-back confirmed
+            // between any read and this write is never overwritten (0 rows).
             UUID resultId = result.getId();
+            LocalDateTime at = LocalDateTime.now(java.time.ZoneId.systemDefault());
             mismatchTx.executeWithoutResult(status ->
-                labResultRepository.findById(resultId).ifPresent(row -> {
-                    row.setCriticalReadBackValue(repeatedValue);
-                    row.setCriticalReadBackByUserId(byUserId);
-                    row.setCriticalReadBackByDisplay(byDisplay);
-                    labResultRepository.save(row);
-                }));
+                labResultRepository.recordReadBackMismatchIfUnconfirmed(
+                    resultId, repeatedValue, byUserId, byDisplay, at));
             log.warn("Critical-value read-back MISMATCH on lab result {}: reported '{}', repeated '{}'",
                 result.getId(), result.getResultValue(), repeatedValue);
             throw new com.example.hms.exception.BusinessException("lab.criticalReadBack.mismatch");
         }
 
         // Only a MATCHING read-back resolves the result and stops escalation.
-        result.setCriticalReadBackAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        // D1553 (Rex P2): a conditional UPDATE, not check-then-save. Of two
+        // concurrent read-backs both past the check above, the second waits on
+        // the row lock, re-reads the WHERE and touches 0 rows: refused, and the
+        // first author stands.
+        LocalDateTime at = LocalDateTime.now(java.time.ZoneId.systemDefault());
+        if (labResultRepository.confirmReadBackIfUnconfirmed(result.getId(), repeatedValue, byUserId, byDisplay, at) == 0) {
+            log.warn("Critical-value read-back on lab result {} refused: confirmed concurrently", result.getId());
+            throw new com.example.hms.exception.BusinessException("lab.criticalReadBack.alreadyConfirmed");
+        }
+        // The managed entity carries exactly what the UPDATE wrote, so the
+        // response shows it and a flush at commit rewrites the same values.
+        result.setCriticalReadBackValue(repeatedValue);
+        result.setCriticalReadBackByUserId(byUserId);
+        result.setCriticalReadBackByDisplay(byDisplay);
+        result.setCriticalReadBackAt(at);
         result.setAcknowledged(true);
-        result.setAcknowledgedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        result.setAcknowledgedAt(at);
         result.setAcknowledgedByUserId(byUserId);
         result.setAcknowledgedByDisplay(byDisplay);
-        LabResult saved = labResultRepository.save(result);
+        LabResult saved = result;
         // QA D726: the alert is answered, so its notifications (to the
         // orderer and to every escalation recipient) no longer read as unread.
         notificationService.markReadForSubject(result.getId(), java.util.List.of(NOTIFICATION_TYPE, ESCALATION_TYPE));
         return saved;
     }
+
+    /**
+     * QA D1292 (round 27): a clinician repeats a critical value the way it was
+     * phoned through - with its unit ("6,8 mmol/L") and a comma decimal - and
+     * was told the read-back did not match; only the bare "6,8" was accepted.
+     * A read-back matches when its number equals the result's (see
+     * {@link #normalizeForComparison}) and, when it states a unit, that unit is
+     * the result's (case and spacing aside). A wrong number or a wrong unit is
+     * still refused, and so is a unit when the result has none to check it
+     * against. A value that is not a number is compared as text, as before.
+     */
+    static boolean readBackMatches(String reportedValue, String reportedUnit, String repeatedValue) {
+        String[] reported = numberAndUnit(reportedValue);
+        String[] repeated = numberAndUnit(repeatedValue);
+        if (reported.length == 0 || repeated.length == 0) {
+            String a = normalizeForComparison(reportedValue);
+            return a != null && a.equals(normalizeForComparison(repeatedValue));
+        }
+        if (!normalizeForComparison(reported[0]).equals(normalizeForComparison(repeated[0]))) {
+            return false;
+        }
+        if (repeated[1] == null) {
+            return true;
+        }
+        String unit = reported[1] != null ? reported[1] : unitKey(reportedUnit);
+        return repeated[1].equals(unit);
+    }
+
+    /**
+     * QA D1394: a value graded critical from its comparator (">6,5") is phoned and
+     * repeated with it; the comparator is part of what must match, so ">6,5 mmol/L"
+     * reads back ">6.5" and "6,5" does not.
+     *
+     * {@code [number, unit key or null]} of "6,8 mmol/L", "6.8" or "-2"; an
+     * empty array when it does not start with a number (Sonar S1168: never null).
+     */
+    private static String[] numberAndUnit(String value) {
+        if (value == null) {
+            return new String[0];
+        }
+        java.util.regex.Matcher m = NUMBER_THEN_UNIT.matcher(value.trim());
+        if (!m.matches()) {
+            return new String[0];
+        }
+        return new String[] {m.group(1), unitKey(m.group(2))};
+    }
+
+    /** A unit as compared: lower case, no spaces, the micro sign as "u"; null when blank. */
+    private static String unitKey(String unit) {
+        if (unit == null || unit.isBlank()) {
+            return null;
+        }
+        return WHITESPACE.matcher(unit).replaceAll("").replace('µ', 'u').replace('μ', 'u')
+            .toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** A number (one comma or point decimal), then anything (the unit), with nothing given back. */
+    private static final java.util.regex.Pattern NUMBER_THEN_UNIT =
+        java.util.regex.Pattern.compile("((?:<=|>=|<|>|\u2264|\u2265)?+\\s*+[+-]?+\\d++(?:[.,]\\d++)?+)\\s*+(.*+)");
+    private static final java.util.regex.Pattern WHITESPACE = java.util.regex.Pattern.compile("\\s+");
+    private static final java.util.regex.Pattern READ_BACK_COMPARATOR =
+        java.util.regex.Pattern.compile("^(<=|>=|<|>|\u2264|\u2265)\\s*+");
 
     /**
      * Compare on trimmed, case-folded text with trailing zeros normalised, so
@@ -431,16 +523,36 @@ public class CriticalValueNotificationService {
             return null;
         }
         String trimmed = value.trim().toLowerCase(java.util.Locale.ROOT);
+        // QA D1394: the comparator, spaces aside, then the number as below.
+        java.util.regex.Matcher comparator = READ_BACK_COMPARATOR.matcher(trimmed);
+        String prefix = "";
+        if (comparator.find()) {
+            prefix = comparator.group(1);
+            trimmed = trimmed.substring(comparator.end());
+        }
         // QA D415: a French reader says and types "28,5"; one comma between
         // digits is the decimal separator, not a mismatch.
         if (trimmed.matches("[+-]?\\d+,\\d+")) {
             trimmed = trimmed.replace(',', '.');
         }
         try {
-            return new java.math.BigDecimal(trimmed).stripTrailingZeros().toPlainString();
+            return prefix + new java.math.BigDecimal(trimmed).stripTrailingZeros().toPlainString();
         } catch (NumberFormatException notNumeric) {
-            return trimmed;
+            return prefix + trimmed;
         }
+    }
+
+    /**
+     * QA D1553: whether a read-back may be taken on this result - critical now,
+     * or paged as critical and not positively graded otherwise since (the
+     * sweep's {@link #noLongerCritical} exit), so a result the sweep still
+     * pages can always be read back.
+     */
+    private boolean readBackApplies(LabResult result) {
+        if (isCritical(result, null)) {
+            return true;
+        }
+        return result.getCriticalNotifiedAt() != null && !noLongerCritical(result);
     }
 
     /** Same semantics as the /lab-results/hospital/{id}/critical endpoints. */
@@ -525,7 +637,6 @@ public class CriticalValueNotificationService {
      * locale anyway — so the body is rendered in the staff locale.
      */
     private NotificationText buildText(LabResult result, boolean escalation) {
-        java.util.Locale locale = NotificationLocales.STAFF;
         LabOrder order = result.getLabOrder();
         // QA D665: keyed so the reader's language is used; QA D648: an order
         // whose definition was deleted names a deleted test.
@@ -540,32 +651,48 @@ public class CriticalValueNotificationService {
         Object patientName = order != null && order.getPatient() != null
             ? order.getPatient().getFullName()
             : NotificationLocalizer.key("patient.fallback.generic");
-        String value = localizedValue(result.getResultValue(), locale)
-            + (result.getResultUnit() != null ? " " + result.getResultUnit() : "");
+        // QA D1095: the value is never sent without its unit (the definition's when none was typed).
+        // QA D1207 (round 22): formatted in each reader's locale when read, not in the staff locale here.
+        Object value = valueArg(result);
+        // QA D931: a critical CORRECTION says so, and names the value it
+        // replaces; the clinician may have acted on that one.
+        if (!escalation && result.getSupersedesResultId() != null) {
+            Object replaced = labResultRepository.findById(result.getSupersedesResultId())
+                .map(CriticalValueNotificationService::valueArg)
+                .orElse(null);
+            if (replaced != null) {
+                return NotificationText.of("lab.critical.correction.notification",
+                    testName, value, patientName, replaced);
+            }
+        }
         return NotificationText.of(
             escalation ? "lab.critical.escalation" : "lab.critical.notification",
             testName, value, patientName);
     }
 
     /**
-     * QA D349: a numeric result in the reader's notation ("5,0" in French),
-     * keeping the scale the laboratory reported. Anything that is not a plain
-     * number ("Positif", "&lt;0.5") is shown as entered.
+     * QA D1207 (round 22): a result's value and unit as a notification
+     * argument, formatted in the reader's locale when the notification is
+     * read (and in the staff locale for an SMS, which is rendered once).
      */
-    static String localizedValue(String raw, java.util.Locale locale) {
-        if (raw == null) {
-            return "";
-        }
-        try {
-            java.math.BigDecimal number = new java.math.BigDecimal(raw.trim());
-            java.text.NumberFormat format = java.text.NumberFormat.getNumberInstance(locale);
-            int scale = Math.max(number.scale(), 0);
-            format.setGroupingUsed(false);
-            format.setMinimumFractionDigits(scale);
-            format.setMaximumFractionDigits(scale);
-            return format.format(number);
-        } catch (NumberFormatException notANumber) {
-            return raw;
-        }
+    public static Object valueArg(LabResult result) {
+        return com.example.hms.service.i18n.NotificationLocalizer.labValue(result.getResultValue(),
+            com.example.hms.mapper.LabResultMapper.unitOf(result));
+    }
+
+    /** QA D1095: the value, a space and its unit; the value alone for a test with no unit (no double space). */
+    public static String withUnit(String value, LabResult result) {
+        String unit = com.example.hms.mapper.LabResultMapper.unitOf(result);
+        return unit != null ? value + " " + unit : value;
+    }
+
+    /**
+     * QA D349: a numeric result in the reader's notation ("5,0" in French),
+     * keeping the scale the laboratory reported; a comparator is kept
+     * ("&lt;0.5" reads "&lt;0,5", round 19). Words ("Positif") are shown as entered.
+     */
+    public static String localizedValue(String raw, java.util.Locale locale) {
+        // D1002 class: one server number formatter (utility/DisplayNumbers).
+        return com.example.hms.utility.DisplayNumbers.labValue(raw, locale);
     }
 }

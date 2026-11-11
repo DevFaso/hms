@@ -302,6 +302,17 @@ class MedicationCatalogItemServiceImplTest {
     // ── listByCategory ──
 
     @Test
+    void listByCategory_globalViewListsEveryTenant() {
+        // Review of #975: a null scope (verified super-admin, no hospital pinned) is the whole platform.
+        Pageable pageable = PageRequest.of(0, 20);
+        when(catalogRepository.findByCategoryAndActiveTrue("Analgesic", pageable))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        assertThat(service.listByCategory(null, "Analgesic", pageable).getContent()).isEmpty();
+        verify(catalogRepository).findByCategoryAndActiveTrue("Analgesic", pageable);
+    }
+
+    @Test
     void listByCategory_returnsPage() {
         Pageable pageable = PageRequest.of(0, 10);
         Page<MedicationCatalogItem> page = new PageImpl<>(List.of(item));

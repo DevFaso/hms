@@ -9,7 +9,13 @@ import {
 import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { localizeDecimals } from '../../shared/i18n/app-locale';
-import { PatientPortalService, VitalSignSummary } from '../../services/patient-portal.service';
+import { refusalReason } from '../../shared/refusal-reason';
+import {
+  PatientPortalService,
+  VITALS_PAGE_SIZE,
+  VitalSignSummary,
+} from '../../services/patient-portal.service';
+import { RangePagerComponent } from '../../shared/range-pager/range-pager.component';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { serverInstant } from '../../shared/date-utils';
@@ -24,7 +30,14 @@ interface VitalGroup {
 @Component({
   selector: 'app-my-vitals',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    EnumLabelPipe,
+    TranslateModule,
+    RangePagerComponent,
+  ],
   templateUrl: './my-vitals.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-vitals.component.scss', '../patient-portal-pages.scss'],
@@ -34,6 +47,15 @@ export class MyVitalsComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   vitals = signal<VitalSignSummary[]>([]);
   loading = signal(true);
+  /** QA D1379: the page could not be read (never shown as "no readings"). */
+  loadFailed = signal(false);
+  /** The server's reason for a failed load, when it gave one. */
+  loadFailedReason = signal<string | null>(null);
+  /** QA D1379: the server's paging of the records — every one is reachable. */
+  page = signal(0);
+  pageSize = signal(VITALS_PAGE_SIZE);
+  total = signal(0);
+  recordsOnPage = signal(0);
   expandedGroupId = signal<string | null>(null);
 
   private readonly vitalTypeOrder: Record<string, number> = {
@@ -79,14 +101,29 @@ export class MyVitalsComponent implements OnInit {
   });
 
   ngOnInit() {
-    this.portal.getMyVitals().subscribe({
-      next: (v) => {
-        this.vitals.set(v);
+    this.loadPage(0);
+  }
+
+  /** QA D1379: reads one page of records with the server's total. */
+  loadPage(page: number): void {
+    this.loading.set(true);
+    this.loadFailed.set(false);
+    this.portal.getMyVitalsPage(page, this.pageSize()).subscribe({
+      next: (p) => {
+        this.vitals.set(p.items);
+        this.page.set(p.page);
+        this.pageSize.set(p.size);
+        this.total.set(p.total);
+        this.recordsOnPage.set(p.records);
         const firstGroup = this.groupedVitals()[0];
         this.expandedGroupId.set(firstGroup?.id ?? null);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: (err: unknown) => {
+        this.loadFailedReason.set(refusalReason(err));
+        this.loadFailed.set(true);
+        this.loading.set(false);
+      },
     });
   }
 
@@ -123,6 +160,50 @@ export class MyVitalsComponent implements OnInit {
       BLOOD_GLUCOSE: `70 – 100 mg/dL (${this.translate.instant('PORTAL.VITALS.FASTING')})`,
     };
     return localizeDecimals(ranges[type?.toUpperCase()] || '');
+  }
+
+  /**
+   * QA D980: a reading outside the normal range shown under it is flagged
+   * (142/90 read as normal). The same bounds as {@link getNormalRange}; a
+   * pressure is high when either number is above 120/80 and low when either
+   * is below 90/60.
+   */
+  rangeFlag(v: VitalSignSummary): 'HIGH' | 'LOW' | null {
+    const type = v.type?.toUpperCase();
+    // The range printed is in one unit; a reading in another is not compared.
+    const unit = (v.unit ?? '').trim().toLowerCase();
+    const expected: Record<string, string[]> = {
+      BLOOD_PRESSURE: ['mmhg', ''],
+      HEART_RATE: ['bpm', '/min', ''],
+      TEMPERATURE: ['°c', 'c', ''],
+      OXYGEN_SATURATION: ['%', ''],
+      RESPIRATORY_RATE: ['breaths/min', '/min', ''],
+      BMI: ['kg/m²', 'kg/m2', ''],
+    };
+    if (!expected[type]?.includes(unit)) return null;
+    const numbers = (v.value ?? '')
+      .split('/')
+      .map((part) => Number.parseFloat(part.replace(',', '.')))
+      .filter((n) => Number.isFinite(n));
+    if (type === 'BLOOD_PRESSURE') {
+      if (numbers.length !== 2) return null;
+      const [systolic, diastolic] = numbers;
+      if (systolic > 120 || diastolic > 80) return 'HIGH';
+      if (systolic < 90 || diastolic < 60) return 'LOW';
+      return null;
+    }
+    const bounds: Record<string, [number, number]> = {
+      HEART_RATE: [60, 100],
+      TEMPERATURE: [36.1, 37.2],
+      OXYGEN_SATURATION: [95, 100],
+      RESPIRATORY_RATE: [12, 20],
+      BMI: [18.5, 24.9],
+    };
+    const range = bounds[type];
+    if (!range || numbers.length !== 1) return null;
+    if (numbers[0] > range[1]) return 'HIGH';
+    if (numbers[0] < range[0]) return 'LOW';
+    return null;
   }
 
   /** QA D344: a reading in the patient's notation ("37,9" in French). */

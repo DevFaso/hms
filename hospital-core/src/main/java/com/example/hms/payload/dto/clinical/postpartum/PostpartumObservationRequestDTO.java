@@ -123,4 +123,12 @@ public class PostpartumObservationRequestDTO {
     private String signoffCredentials;
     @com.example.hms.validation.NotInClinicalFuture
     private LocalDateTime signedAt;
+
+    /** QA D1424 (D111): a diastolic at or above the systolic is a swapped entry. */
+    @com.example.hms.validation.ReportedOn("diastolicBpMmHg")
+    @jakarta.validation.constraints.AssertTrue(message = "{vitals.bloodPressure.invalid}")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isBloodPressureOrdered() {
+        return VitalSignLimits.bloodPressureOrdered(systolicBpMmHg, diastolicBpMmHg);
+    }
 }

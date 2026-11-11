@@ -105,7 +105,6 @@ class PatientInsuranceServiceImplTest {
     void addInsuranceToPatient_nullPatientId_throwsBusinessException() {
         PatientInsuranceRequestDTO dto = new PatientInsuranceRequestDTO();
         dto.setPatientId(null);
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("Patient required");
 
         assertThatThrownBy(() -> service.addInsuranceToPatient(dto, locale))
             .isInstanceOf(BusinessException.class);
@@ -265,7 +264,6 @@ class PatientInsuranceServiceImplTest {
         when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(insurance));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(subjectReadGuard.callerOwns(patient)).thenReturn(true);
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("cannot link");
 
         assertThatThrownBy(() -> service.linkPatientInsurance(insuranceId, req, ctx, locale))
             .isInstanceOf(BusinessException.class);
@@ -304,7 +302,6 @@ class PatientInsuranceServiceImplTest {
 
         when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(insurance));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("hospital required");
 
         assertThatThrownBy(() -> service.linkPatientInsurance(insuranceId, req, ctx, locale))
             .isInstanceOf(BusinessException.class);
@@ -360,7 +357,6 @@ class PatientInsuranceServiceImplTest {
         ActingContext ctx = new ActingContext(userId, hospitalId, ActingMode.STAFF, null);
 
         when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(insurance));
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("Patient required");
 
         assertThatThrownBy(() -> service.upsertAndLinkByInsuranceId(insuranceId, req, ctx, locale))
             .isInstanceOf(BusinessException.class);
@@ -387,6 +383,41 @@ class PatientInsuranceServiceImplTest {
 
         PatientInsuranceResponseDTO result = service.upsertAndLinkByNaturalKey(req, ctx, locale);
         assertThat(result).isEqualTo(responseDTO);
+        // QA D925: a new policy with no name typed is named after its payer.
+        org.mockito.ArgumentCaptor<PatientInsurance> saved = org.mockito.ArgumentCaptor.forClass(PatientInsurance.class);
+        verify(patientInsuranceRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        assertThat(saved.getValue().getProviderName()).isEqualTo("AETNA");
+    }
+
+    @Test
+    void upsertAndLinkByNaturalKey_aTypedNameWins_andAnExistingNameIsKept_D925() {
+        ActingContext ctx = new ActingContext(userId, hospitalId, ActingMode.STAFF, null);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
+        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
+            .thenReturn(Optional.of(new UserRoleHospitalAssignment()));
+        when(patientInsuranceRepository.save(any(PatientInsurance.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(patientInsuranceMapper.toPatientInsuranceResponseDTO(any())).thenReturn(new PatientInsuranceResponseDTO());
+
+        when(patientInsuranceRepository.findByPatient_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
+                patientId, "CNAMU", "AMU-1")).thenReturn(Optional.empty());
+        service.upsertAndLinkByNaturalKey(LinkPatientInsuranceRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).payerCode("CNAMU").policyNumber("AMU-1")
+            .providerName("  Caisse Nationale AMU ").build(), ctx, locale);
+
+        PatientInsurance existing = new PatientInsurance();
+        existing.setProviderName("Assurance Faso");
+        when(patientInsuranceRepository.findByPatient_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
+                patientId, "CNAMU", "AMU-2")).thenReturn(Optional.of(existing));
+        service.upsertAndLinkByNaturalKey(LinkPatientInsuranceRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).payerCode("CNAMU").policyNumber("AMU-2").build(),
+            ctx, locale);
+
+        org.mockito.ArgumentCaptor<PatientInsurance> saved = org.mockito.ArgumentCaptor.forClass(PatientInsurance.class);
+        verify(patientInsuranceRepository, org.mockito.Mockito.atLeast(2)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(PatientInsurance::getProviderName)
+            .contains("Caisse Nationale AMU", "Assurance Faso");
     }
 
     @Test
@@ -394,7 +425,6 @@ class PatientInsuranceServiceImplTest {
         LinkPatientInsuranceRequestDTO req = LinkPatientInsuranceRequestDTO.builder()
             .patientId(patientId).policyNumber("POL123").build();
         ActingContext ctx = new ActingContext(userId, hospitalId, ActingMode.STAFF, null);
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("payer required");
 
         assertThatThrownBy(() -> service.upsertAndLinkByNaturalKey(req, ctx, locale))
             .isInstanceOf(BusinessException.class);
@@ -410,7 +440,6 @@ class PatientInsuranceServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
         when(subjectReadGuard.callerOwns(patient)).thenReturn(true);
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("cannot link");
 
         assertThatThrownBy(() -> service.upsertAndLinkByNaturalKey(req, ctx, locale))
             .isInstanceOf(BusinessException.class);

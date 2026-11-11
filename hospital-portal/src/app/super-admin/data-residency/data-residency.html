@@ -34,7 +34,7 @@
           (click)="setFilter('')"
         >
           <span class="chip-label">{{ 'COMMON.ALL' | translate }}</span>
-          <span class="chip-count">{{ rows().length }}</span>
+          {{ ' ' }}<span class="chip-count">{{ rows().length }}</span>
         </button>
         @for (entry of distributionEntries(); track entry.region) {
           <button
@@ -43,8 +43,8 @@
             [class.active]="filterRegion() === entry.region"
             (click)="setFilter(entry.region)"
           >
-            <span class="chip-label">{{ 'ORG_REGION.CODE.' + entry.region | translate }}</span>
-            <span class="chip-count">{{ entry.count }}</span>
+            <span class="chip-label">{{ entry.region | keyLabel: 'ORG_REGION.CODE.' }}</span>
+            {{ ' ' }}<span class="chip-count">{{ entry.count }}</span>
           </button>
         }
       </div>
@@ -80,7 +80,7 @@
                   </td>
                   <td>
                     <span class="region-badge region-badge--{{ row.region.toLowerCase() }}">
-                      {{ 'ORG_REGION.CODE.' + row.region | translate }}
+                      {{ row.region | keyLabel: 'ORG_REGION.CODE.' }}
                     </span>
                   </td>
                   <td class="actions-col">
@@ -98,7 +98,14 @@
     }
 
     @if (editing(); as state) {
-      <section class="edit-card" data-test="edit-card">
+      <!-- QA D1307 class (round 28): opened from a row action, this form takes the keyboard (its first field), keeps Escape to itself and gives focus back to the row on close. -->
+      <section
+        class="edit-card"
+        data-test="edit-card"
+        appInlineSubForm
+        #regionForm="inlineSubForm"
+        (dismissed)="cancelEdit()"
+      >
         <h2>{{ 'ORG_REGION.EDIT_TITLE' | translate }}</h2>
         <div class="grid">
           <label>
@@ -140,6 +147,7 @@
             {{ 'COMMON.CANCEL' | translate }}
           </button>
         </div>
+        <app-inline-discard-ask [form]="regionForm" />
       </section>
     }
   }

@@ -58,7 +58,8 @@
                         }}</span>
                       }
                       @if (org.lifecycleState && org.lifecycleState !== 'ACTIVE') {
-                        <span
+                        {{ ' '
+                        }}<span
                           class="lifecycle-chip"
                           [style.background]="lifecycleColor(org.lifecycleState) + '14'"
                           [style.color]="lifecycleColor(org.lifecycleState)"
@@ -81,7 +82,8 @@
                         }}</span>
                       }
                       @if (org.lifecycleState && org.lifecycleState !== 'ACTIVE') {
-                        <span
+                        {{ ' '
+                        }}<span
                           class="lifecycle-chip"
                           [style.background]="lifecycleColor(org.lifecycleState) + '14'"
                           [style.color]="lifecycleColor(org.lifecycleState)"
@@ -115,6 +117,7 @@
                   <button
                     class="action-link edit"
                     [title]="'COMMON.EDIT' | translate"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
                     (click)="openEdit(org)"
                   >
                     <span class="material-symbols-outlined">edit</span>
@@ -122,6 +125,7 @@
                   <button
                     class="action-link delete"
                     [title]="'COMMON.DELETE' | translate"
+                    [attr.aria-label]="'COMMON.DELETE' | translate"
                     (click)="confirmDelete(org)"
                   >
                     <span class="material-symbols-outlined">delete</span>
@@ -137,6 +141,7 @@
     @if (totalPages() > 1) {
       <div class="pagination">
         <button
+          [attr.aria-label]="'COMMON.PREVIOUS' | translate"
           class="page-btn"
           [disabled]="currentPage() === 0"
           (click)="goToPage(currentPage() - 1)"
@@ -148,6 +153,7 @@
           {{ 'ORGANIZATIONS.PAGE_OF' | translate }} {{ totalPages() }}</span
         >
         <button
+          [attr.aria-label]="'COMMON.NEXT' | translate"
           class="page-btn"
           [disabled]="currentPage() >= totalPages() - 1"
           (click)="goToPage(currentPage() + 1)"
@@ -182,18 +188,24 @@
     >
       <dialog
         class="modal"
+        appModalDialog
+        aria-labelledby="organization-list-dialog-2-title"
         [open]="showCreate()"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeCreate()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="organization-list-dialog-2-title">
             {{
               editing() ? ('ORGANIZATIONS.EDIT' | translate) : ('ORGANIZATIONS.CREATE' | translate)
             }}
           </h2>
-          <button class="modal-close" (click)="closeCreate()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeCreate()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -271,6 +283,7 @@
               <input
                 id="orgPhone"
                 type="tel"
+                appPhoneField
                 [(ngModel)]="createForm.contactPhone"
                 name="contactPhone"
                 [placeholder]="'ORGANIZATIONS.PHONE_PLACEHOLDER' | translate"
@@ -291,7 +304,13 @@
             <button type="button" class="btn-secondary" (click)="closeCreate()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{
                 saving()
                   ? ('COMMON.SAVING' | translate)
@@ -316,14 +335,20 @@
     >
       <dialog
         class="modal"
+        appModalDialog
+        aria-labelledby="organization-list-dialog-1-title"
         [open]="showDeleteConfirm()"
         (click)="$event.stopPropagation()"
         (keydown.escape)="cancelDelete()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ 'ORGANIZATIONS.DELETE' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <h2 id="organization-list-dialog-1-title">{{ 'ORGANIZATIONS.DELETE' | translate }}</h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="cancelDelete()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -333,7 +358,7 @@
             <p>
               {{ 'ORGANIZATIONS.DELETE_CONFIRM' | translate }}
               <strong>{{ deletingOrg()?.name }}</strong
-              >?
+              >{{ 'COMMON.QUESTION_MARK' | translate }}
             </p>
             <p class="delete-detail">
               {{ 'ORGANIZATIONS.DELETE_WARNING' | translate }}

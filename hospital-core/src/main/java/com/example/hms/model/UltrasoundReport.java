@@ -99,9 +99,9 @@ public class UltrasoundReport extends BaseEntity implements TenantScoped {
     private Boolean dueDateConfirmed = false;
 
     // Fetal count and position
+    /** QA D1525: null until someone counts them; no default of one. */
     @Column(name = "number_of_fetuses")
-    @Builder.Default
-    private Integer numberOfFetuses = 1;
+    private Integer numberOfFetuses;
 
     @Column(name = "fetal_position", length = 100)
     private String fetalPosition;
@@ -150,17 +150,33 @@ public class UltrasoundReport extends BaseEntity implements TenantScoped {
     @Column(name = "fetal_heart_rate")
     private Integer fetalHeartRate;
 
+    /*
+     * QA D1525: tri-state. TRUE present / normal, FALSE absent / abnormal, null
+     * NOT ASSESSED. Never defaulted: a stored TRUE is something the clinician
+     * stated (rows written before D1525 may carry a default TRUE; see the PR).
+     */
     @Column(name = "fetal_cardiac_activity")
-    @Builder.Default
-    private Boolean fetalCardiacActivity = true;
+    private Boolean fetalCardiacActivity;
 
     @Column(name = "fetal_movement_observed")
-    @Builder.Default
-    private Boolean fetalMovementObserved = true;
+    private Boolean fetalMovementObserved;
 
     @Column(name = "fetal_tone_normal")
+    private Boolean fetalToneNormal;
+
+    /**
+     * QA D1525 (V282): FALSE on a report that existed before V282 (V282 cleared
+     * its old defaults on unreviewed rows) and on a row an older application
+     * instance writes during a rolling deploy (the column defaults to FALSE).
+     * TRUE on every report this code creates (set explicitly here) and on a
+     * legacy report once a save changes one of its observations. Display only:
+     * a NULL reads "no answer (recorded before this was asked)" on a legacy row,
+     * "not assessed" on a stated one. Per report, not per field (known limit,
+     * tasklist.md). Provenance, not a finding.
+     */
+    @Column(name = "observations_stated", nullable = false)
     @Builder.Default
-    private Boolean fetalToneNormal = true;
+    private Boolean observationsStated = Boolean.TRUE;
 
     @Column(name = "anatomy_survey_complete")
     @Builder.Default
@@ -173,8 +189,7 @@ public class UltrasoundReport extends BaseEntity implements TenantScoped {
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "finding_category", nullable = false, length = 50)
-    @Builder.Default
-    private UltrasoundFindingCategory findingCategory = UltrasoundFindingCategory.NORMAL;
+    private UltrasoundFindingCategory findingCategory; // QA D1525: chosen by the clinician, never NORMAL by default
 
     @Column(name = "findings_summary", length = 3000)
     private String findingsSummary;
@@ -182,9 +197,9 @@ public class UltrasoundReport extends BaseEntity implements TenantScoped {
     @Column(name = "interpretation", length = 3000)
     private String interpretation;
 
+    /** QA D1525: tri-state like the observations; null = not stated, never "no anomalies" by default. */
     @Column(name = "anomalies_detected")
-    @Builder.Default
-    private Boolean anomaliesDetected = false;
+    private Boolean anomaliesDetected;
 
     @Column(name = "anomaly_description", length = 2000)
     private String anomalyDescription;

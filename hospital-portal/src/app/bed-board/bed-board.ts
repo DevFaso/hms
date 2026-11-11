@@ -11,6 +11,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import {
@@ -26,14 +27,19 @@ import {
   IsolationService,
 } from '../services/isolation.service';
 import { TransferOrderResponse, TransferService } from '../services/transfer.service';
-import { BedService } from '../services/bed.service';
+import { BedService, WardResponse } from '../services/bed.service';
+import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { roleSatisfies } from '../core/role-equivalence';
-import { finalize } from 'rxjs';
+import { catchError, finalize, forkJoin, of } from 'rxjs';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 
 /**
  * The ward board (Tier 2 items 30, 31 and 32).
@@ -53,7 +59,17 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 @Component({
   selector: 'app-bed-board',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    ReasonDialogComponent,
+    SubmitGuardDirective,
+    MeasurePipe,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './bed-board.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './bed-board.scss',
@@ -69,6 +85,120 @@ export class BedBoardComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
   private readonly translate = inject(TranslateService);
+  private readonly hospitalService = inject(HospitalService);
+  private readonly router = inject(Router);
+  readonly isNetworkView = computed(
+    () => this.roleContext.isSuperAdmin() && this.roleContext.globalView(),
+  );
+  readonly networkWards = signal<WardResponse[]>([]);
+  readonly networkHospitals = signal<HospitalResponse[]>([]);
+  readonly loadError = signal(false);
+  readonly hospitalNamesError = signal(false);
+  readonly searchTerm = signal('');
+  readonly networkRows = computed(() => {
+    const groups = new Map<
+      string,
+      {
+        hospitalId: string;
+        name: string;
+        wards: number;
+        total: number;
+        available: number;
+        occupied: number;
+      }
+    >();
+    for (const h of this.networkHospitals())
+      groups.set(h.id, {
+        hospitalId: h.id,
+        name: h.name,
+        wards: 0,
+        total: 0,
+        available: 0,
+        occupied: 0,
+      });
+    for (const w of this.networkWards()) {
+      const h = groups.get(w.hospitalId) ?? {
+        hospitalId: w.hospitalId,
+        name: w.hospitalId,
+        wards: 0,
+        total: 0,
+        available: 0,
+        occupied: 0,
+      };
+      h.wards++;
+      h.total += w.totalBeds;
+      h.available += w.availableBeds;
+      h.occupied += w.occupiedBeds;
+      groups.set(w.hospitalId, h);
+    }
+    return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name));
+  });
+  readonly visibleHospitals = computed(() =>
+    this.networkRows().filter((h) =>
+      h.name.toLowerCase().includes(this.searchTerm().toLowerCase().trim()),
+    ),
+  );
+  readonly networkTotals = computed(() =>
+    this.networkRows().reduce(
+      (sum, h) => ({
+        total: sum.total + h.total,
+        available: sum.available + h.available,
+        occupied: sum.occupied + h.occupied,
+      }),
+      { total: 0, available: 0, occupied: 0 },
+    ),
+  );
+  private boardRequest = 0;
+
+  occupancy(occupied: number, total: number): number {
+    return total ? Math.round((occupied / total) * 1000) / 10 : 0;
+  }
+
+  openHospital(hospitalId: string): void {
+    void this.router.navigate([], { queryParams: { hospitalId }, queryParamsHandling: 'merge' });
+  }
+
+  refresh(): void {
+    if (this.isNetworkView()) this.loadNetwork();
+    else {
+      this.loadBoard();
+      this.loadPendingTransfers();
+    }
+  }
+
+  private loadNetwork(): void {
+    const request = ++this.boardRequest;
+    this.loading.set(true);
+    this.loadError.set(false);
+    this.hospitalNamesError.set(false);
+    this.board.set(null);
+    this.pendingTransfers.set([]);
+    forkJoin({
+      wards: this.beds.getWards(false),
+      hospitals: this.hospitalService.list().pipe(
+        catchError(() => {
+          if (request === this.boardRequest) this.hospitalNamesError.set(true);
+          return of<HospitalResponse[]>([]);
+        }),
+      ),
+    })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: ({ wards, hospitals }) => {
+          if (request !== this.boardRequest) return;
+          this.networkHospitals.set(hospitals);
+          this.networkWards.set(wards);
+          this.loading.set(false);
+        },
+        error: () => {
+          if (request !== this.boardRequest) return;
+          this.networkWards.set([]);
+          this.networkHospitals.set([]);
+          this.loadError.set(true);
+          this.loading.set(false);
+        },
+      });
+  }
 
   loading = signal(false);
   board = signal<BedBoard | null>(null);
@@ -207,6 +337,7 @@ export class BedBoardComponent implements OnInit {
     const wardId = this.wardFilter();
     const isolationOnly = this.showOnlyIsolation();
     const availableOnly = this.showOnlyAvailable();
+    const term = this.searchTerm().toLowerCase().trim();
 
     return current.wards
       .filter((w) => !wardId || w.wardId === wardId)
@@ -215,7 +346,18 @@ export class BedBoardComponent implements OnInit {
         rooms: w.rooms
           .map((room) => ({
             ...room,
-            beds: room.beds.filter((bed) => this.matches(bed, isolationOnly, availableOnly)),
+            beds: room.beds.filter(
+              (bed) =>
+                this.matches(bed, isolationOnly, availableOnly) &&
+                (!term ||
+                  [
+                    bed.bedNumber,
+                    bed.occupant?.patientName,
+                    bed.occupant?.mrn,
+                    w.wardName,
+                    room.roomNumber,
+                  ].some((value) => value?.toLowerCase().includes(term))),
+            ),
           }))
           .filter((room) => room.beds.length > 0),
       }))
@@ -236,11 +378,16 @@ export class BedBoardComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    if (this.isNetworkView()) {
+      this.loadNetwork();
+      return;
+    }
     this.loadBoard();
     this.loadPendingTransfers();
   }
 
   loadPendingTransfers(): void {
+    if (this.isNetworkView()) return;
     if (!this.canReadTransfers) return;
     this.transfers
       .getPending()
@@ -258,19 +405,31 @@ export class BedBoardComponent implements OnInit {
   }
 
   loadBoard(): void {
+    if (this.isNetworkView()) {
+      this.loadNetwork();
+      return;
+    }
+    const request = ++this.boardRequest;
     this.loading.set(true);
+    this.loadError.set(false);
     this.boardService
       .getBoard()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        finalize(() => this.loading.set(false)),
+        finalize(() => {
+          if (request === this.boardRequest) this.loading.set(false);
+        }),
       )
       .subscribe({
         next: (board) => {
+          if (request !== this.boardRequest) return;
           this.board.set(board);
           this.loading.set(false);
         },
         error: () => {
+          if (request !== this.boardRequest) return;
+          this.board.set(null);
+          this.loadError.set(true);
           this.toast.error(this.translate.instant('BED_BOARD.LOAD_ERROR'));
           this.loading.set(false);
         },
@@ -353,24 +512,34 @@ export class BedBoardComponent implements OnInit {
       });
   }
 
+  /** QA D1201: the precaution being lifted; the shared reason dialog asks why. */
+  discontinuing = signal<IsolationPrecautionResponse | null>(null);
+  discontinueBusy = signal(false);
+
   discontinue(precaution: IsolationPrecautionResponse): void {
-    const reason = window.prompt(this.translate.instant('BED_BOARD.DISCONTINUE_PROMPT'));
-    if (!reason || !reason.trim()) {
-      return;
-    }
+    this.discontinuing.set(precaution);
+  }
+
+  confirmDiscontinue(precaution: IsolationPrecautionResponse, reason: string): void {
+    if (this.discontinueBusy()) return;
+    this.discontinueBusy.set(true);
     this.isolation
-      .discontinuePrecaution(precaution.id, { discontinuationReason: reason.trim() })
+      .discontinuePrecaution(precaution.id, { discontinuationReason: reason })
       .subscribe({
         next: () => {
           this.toast.success(this.translate.instant('BED_BOARD.PRECAUTION_LIFTED'));
+          this.discontinueBusy.set(false);
+          this.discontinuing.set(null);
           const target = this.precautionTarget();
           if (target) {
             this.openPrecautions(target);
           }
           this.loadBoard();
         },
-        error: (err: HttpErrorResponse) =>
-          this.toast.error(this.serverReason(err, 'BED_BOARD.DISCONTINUE_ERROR')),
+        error: (err: HttpErrorResponse) => {
+          this.discontinueBusy.set(false);
+          this.toast.error(this.serverReason(err, 'BED_BOARD.DISCONTINUE_ERROR'));
+        },
       });
   }
 
@@ -476,18 +645,28 @@ export class BedBoardComponent implements OnInit {
     });
   }
 
+  /** QA D1201: the pending transfer being cancelled; the shared reason dialog asks why. */
+  cancellingTransfer = signal<TransferOrderResponse | null>(null);
+  cancelTransferBusy = signal(false);
+
   cancelTransfer(order: TransferOrderResponse): void {
-    const reason = window.prompt(this.translate.instant('BED_BOARD.TRANSFER_CANCEL_PROMPT'));
-    if (!reason || !reason.trim()) {
-      return;
-    }
-    this.transfers.cancelTransfer(order.id, { cancellationReason: reason.trim() }).subscribe({
+    this.cancellingTransfer.set(order);
+  }
+
+  confirmCancelTransfer(order: TransferOrderResponse, reason: string): void {
+    if (this.cancelTransferBusy()) return;
+    this.cancelTransferBusy.set(true);
+    this.transfers.cancelTransfer(order.id, { cancellationReason: reason }).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('BED_BOARD.TRANSFER_CANCELLED'));
+        this.cancelTransferBusy.set(false);
+        this.cancellingTransfer.set(null);
         this.refreshAll();
       },
-      error: (err: HttpErrorResponse) =>
-        this.toast.error(this.serverReason(err, 'BED_BOARD.TRANSFER_CANCEL_ERROR')),
+      error: (err: HttpErrorResponse) => {
+        this.cancelTransferBusy.set(false);
+        this.toast.error(this.serverReason(err, 'BED_BOARD.TRANSFER_CANCEL_ERROR'));
+      },
     });
   }
 

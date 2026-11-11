@@ -1,3 +1,4 @@
+@use '../../shared/styles/diagnostics-workspace' as diagnostics;
 @use '../../shared/styles/page-common';
 
 // ── Status filter tabs ─────────────────────────────────────────────────────
@@ -693,3 +694,5 @@
   color: var(--text-secondary, #555);
   max-width: 18rem;
 }
+
+@include diagnostics.workspace;

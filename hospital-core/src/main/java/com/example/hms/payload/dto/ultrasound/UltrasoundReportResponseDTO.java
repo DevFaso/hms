@@ -36,6 +36,12 @@ public class UltrasoundReportResponseDTO extends UltrasoundReportBaseDTO {
 
     private Boolean patientNotified;
 
+    /**
+     * QA D1525: false when the report predates D1525 and its observations,
+     * anomalies answer and fetus count may be server defaults nobody stated.
+     */
+    private Boolean observationsStated;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime patientNotifiedAt;
 

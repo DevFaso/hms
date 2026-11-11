@@ -65,6 +65,51 @@ class NotificationTypeLabelCoverageTest {
         assertThat(missing).as("PORTAL.ENUM.NOTIFICATION_TYPE labels").isEmpty();
     }
 
+    /**
+     * QA D983: a chat message reached the patient's bell with type=null, so it
+     * had no label and clicking it only marked it read. Every notification,
+     * composed or literal, carries a type the portal labels and can route.
+     */
+    @Test
+    void everyNotificationIsTyped() throws Exception {
+        Pattern literal = Pattern.compile("\\bcreateLiteralNotification\\(", Pattern.MULTILINE);
+        List<String> untyped = new ArrayList<>();
+        TreeMap<String, String> literalTypes = new TreeMap<>();
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                String src = Files.readString(file, StandardCharsets.UTF_8);
+                Matcher call = CALL.matcher(src);
+                while (call.find()) {
+                    List<String> args = arguments(src, call.end());
+                    if ((args.size() != 4 && args.size() != 5) || isDeclaration(src, call.start())) continue;
+                    if (args.get(3).trim().equals("null")) {
+                        untyped.add(file.getFileName() + ": " + args.get(0).trim());
+                    }
+                }
+                Matcher lit = literal.matcher(src);
+                while (lit.find()) {
+                    List<String> args = arguments(src, lit.end());
+                    if (args.size() != 3 || isDeclaration(src, lit.start())) continue;
+                    String type = args.get(2).trim();
+                    if (type.equals("null")) {
+                        untyped.add(file.getFileName() + ": literal");
+                    } else if (type.startsWith("\"")) {
+                        literalTypes.put(type.substring(1, type.length() - 1), file.getFileName().toString());
+                    }
+                }
+            }
+        }
+        assertThat(untyped).as("notifications created without a type").isEmpty();
+        List<String> missing = new ArrayList<>();
+        for (String lang : new String[] {"en", "fr", "es"}) {
+            Set<String> keyed = notificationTypeKeys(Files.readString(LOCALES.resolve(lang + ".json"), StandardCharsets.UTF_8));
+            for (var e : literalTypes.entrySet()) {
+                if (!keyed.contains(e.getKey())) missing.add(lang + ": " + e.getKey() + " (" + e.getValue() + ")");
+            }
+        }
+        assertThat(missing).as("PORTAL.ENUM.NOTIFICATION_TYPE labels for literal notifications").isEmpty();
+    }
+
     private static boolean isDeclaration(String src, int at) {
         int lineStart = src.lastIndexOf('\n', at) + 1;
         String before = src.substring(lineStart, at);

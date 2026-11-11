@@ -89,7 +89,9 @@ not breaking, but worth keeping consistent across envs.
 
 ---
 
-## 2. `hms-backend-<env>` (Spring Boot, `hospital-core`) — one per environment
+## 2. The backend services (Spring Boot, `hospital-core`) — one per environment
+
+> **Service names do not follow the `-<env>` pattern.** Dev is `hms-backend-dev`; **prod is `hms-backend-core`**, not `hms-backend-prod`. `<env>` is used below only as shorthand for "the backend service in that environment". Targeting `hms-backend-prod` with the Railway CLI fails against a service that does not exist.
 
 The whole OIDC posture lives in env vars; there are no per-profile YAML
 defaults. From [`hospital-core/src/main/resources/application.properties`](../../hospital-core/src/main/resources/application.properties):
@@ -105,11 +107,31 @@ app.auth.oidc.required=${OIDC_REQUIRED:false}
 | `OIDC_ISSUER_URI` | public | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** match the `hms-keycloak-<env>` `KC_HOSTNAME` value above + `/realms/hms`. When unset, the OIDC bean graph stays off and the backend is pre-S-03 behavior. **Prod is unset today** (the SSO cutover has not happened) and `hms-keycloak-prod` is set to sleep. The backend fetches the issuer's discovery document at boot and the JWKS at runtime (`OidcResourceServerConfig`); the boot-time fetch runs while the decoder bean is created, so if the sleeping Keycloak is slow to wake the Spring context fails and the backend does not start. Turn `hms-keycloak-prod`'s sleep OFF before setting this on prod, and keep it off: `hms-keycloak-dev` never sleeps for the same reason. |
 | `OIDC_AUDIENCE` | public | `hms-backend` | `hms-backend` | **MUST.** Strict `aud` claim validation. The realm export hard-codes this audience on the issued tokens; mismatch → all KC-issued tokens rejected by the resource server. |
 | `OIDC_REQUIRED` | public | per phase plan (see [keycloak-implementation-gaps.md](../keycloak-implementation-gaps.md) §3 Phase 3) | per phase plan | **MUST.** Controls whether legacy `POST /api/auth/login` returns 410. The intended per-env value is documented in the gaps doc; this matrix only owns the *contract*, not the schedule. |
-| `JVM_HEAP_PERCENT` | public | unset (70) | unset (70) | Optional, read by the Dockerfile entrypoint once #839 is deployed: the heap is this percent (clamped 10-90) of the service's memory limit (§3a). Set it only to change the heap. A `MaxRAMPercentage` in `JAVA_TOOL_OPTIONS` loses to it; an `-Xmx` there overrides it. |
+| `JVM_HEAP_PERCENT` | public | unset | unset | Optional, read by the Dockerfile entrypoint: the heap is this percent (clamped 10-90) of the service's memory limit (§3a). Unset: 60, or 50 under a 3.5 GB limit (QA D1314). Set it only to change the heap. A `MaxRAMPercentage` in `JAVA_TOOL_OPTIONS` loses to it; an `-Xmx` there overrides it. |
+| `TOMCAT_MAX_THREADS` | public | unset (100) | unset (100) | Optional: the request threads (`server.tomcat.threads.max`). Each one's stack and each one's in-flight request count against the memory budget (§3a). |
 | `JWT_SECRET` | secret | (env-specific) | (env-specific) | **MUST.** HMAC signing for the legacy issuer (still active until Phase 4 cleanup). 32-byte minimum. |
 | `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` / `JWT_PREVIOUS_PUBLIC_KEY` | secret | unset (HMAC mode) | unset | RS256 mode is Phase 6; leave unset for now. When set in any env, that env switches to RS256 — must be set in lockstep with the matching public key on JWT consumers. |
 | `DATABASE_URL` (or `SPRING_DATASOURCE_URL` + USERNAME / PASSWORD) | derived | `${{hms-db-dev.DATABASE_URL}}` | same, `-prod` | **MUST.** Application Postgres — separate DB from `hms-keycloak-<env>-db`. |
 | Encryption keys (AES) | secret | (env-specific) | (env-specific) | **MUST.** Per memory `hms-prod-secrets-exposed-2026-05-09.md`, prod set is currently unrotated post-exposure; tier-4 rotation is a separate ticket. Refer to that runbook before touching. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | public | `https://otlp-gateway-prod-us-east-2.grafana.net/otlp` | same | **SHOULD.** The single switch that activates observability: the Dockerfile entrypoint attaches `-javaagent` only when this is non-empty, so leaving it unset means no traces, metrics or logs reach Grafana Cloud. Don't hand-set — run [`scripts/grafana-cloud-setup.sh`](../../scripts/grafana-cloud-setup.sh). |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | public | `http/protobuf` | same | **MUST** when the endpoint is set. The Grafana Cloud gateway rejects the agent's default `grpc`, and the failure is a quiet export error rather than a boot failure. |
+| `OTEL_EXPORTER_OTLP_HEADERS` | secret | `Authorization=Basic <base64(1404501:glc_…)>` | same | **MUST** when the endpoint is set. Read by the OTEL agent. Instance `1404501`. |
+| `GRAFANA_OTLP_AUTH_HEADER` | secret | `Basic <base64(1404501:glc_…)>` | same | **MUST** when the endpoint is set. Same credential, different format — read by the Micrometer OTLP registry via `application.properties` (global, so the dev profile gets it too). Must stay in lockstep with `OTEL_EXPORTER_OTLP_HEADERS`, or metrics and traces disagree about authorization. |
+| `OTEL_SERVICE_NAME` | public | `hms-backend` | `hms-backend` | **SHOULD.** Becomes `service_name` on every series and span. Keep it identical across envs — `OTEL_RESOURCE_ATTRIBUTES` is what separates them. |
+| `OTEL_RESOURCE_ATTRIBUTES` | public | `deployment.environment=dev,service.namespace=hms` | `deployment.environment=prod,…` | **SHOULD.** The only thing distinguishing dev from prod series in a shared Grafana Cloud stack. Getting this wrong silently merges the two environments' metrics. |
+| `OTEL_METRICS_ENABLED` | public | `true` | `true` | **SHOULD.** Gates the Micrometer OTLP exporter (`management.otlp.metrics.export.enabled`). Traces/logs flow from the agent regardless. |
+| `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` | public | `parentbased_always_on` / unset | `parentbased_traceidratio` / `0.1` | **SHOULD.** The agent defaults to 100% sampling. Traces are the signal that can outgrow the free tier's 50 GB/month, so prod ratio-samples. Raise temporarily for an investigation. |
+| `METRICS_SCRAPE_TOKEN` | secret | unset | unset | **SHOULD stay unset.** Gates `GET /api/actuator/prometheus`; blank = closed to everyone. Railway serves the management port on the public API hostname, so a public scrape endpoint leaks the whole URI inventory and business counters (it did, until this was gated). Production pushes over OTLP and never needs to be pulled. Set it only for a deliberate Grafana Cloud hosted-Prometheus scrape job. |
+| `OTEL_METRICS_EXPORTER` | public | `none` | `none` | **MUST** when the endpoint is set. Stops the *agent* exporting metrics. Metrics are owned by the Micrometer OTLP registry; leaving the agent's exporter on duplicates every series and doubles free-tier consumption. One exporter per signal: agent = traces + logs, Micrometer = metrics. |
+| `OTEL_METRICS_EXPORT_URL` | public | `<endpoint>/v1/metrics` | same | **MUST** when `OTEL_METRICS_ENABLED=true`. Micrometer wants a FULL signal URL (Boot's default is `…:4318/v1/metrics`), not the gateway base that `OTEL_EXPORTER_OTLP_ENDPOINT` holds for the agent. Pointing it at the bare `/otlp` makes every 60s push a rejected POST and the business counters never arrive. |
+| `SPLUNK_HEC_ENABLED` (+ `SPLUNK_HEC_URL` / `_TOKEN`) | secret | `false` | `false` | **MAY.** Additive SIEM log shipping. Enabling without URL + token fails the context at boot by design (`SplunkLoggingProperties`). Has never been enabled in either environment. |
+
+> **Observability (Grafana Cloud).** These were absent from this matrix and unset on
+> both backends until 2026-11-01, so the entire pipeline — agent, dashboards, alert
+> rules, runbook — sat dormant. See
+> [`docs/GRAFANA_CLOUD_SETUP.md`](../GRAFANA_CLOUD_SETUP.md) for the one-command
+> setup, the free-tier arithmetic, and why the scrape endpoint is closed.
+
 
 **Verify with:** the boot log of each backend should print:
 
@@ -148,8 +170,8 @@ service is `hms-backend-core`, dev is `hms-backend-dev`):
 
 | Service | Memory limit | `JAVA_TOOL_OPTIONS` | Sleep when idle |
 | --- | --- | --- | --- |
-| `hms-backend-core` (prod) | 2 GB | `-XX:MaxRAMPercentage=70` | off |
-| `hms-backend-dev` | 2 GB | `-XX:MaxRAMPercentage=70` | off |
+| `hms-backend-core` (prod) | 6 GB (raised 2026-11-07, heap read back at 4006M) | `-XX:MaxRAMPercentage=70`, to be removed after the sync that ships this entrypoint | off |
+| `hms-backend-dev` | 4 GB (raised after QA D1314's first report; the 2 GB here was stale) | `-XX:MaxRAMPercentage=70`, to be removed | off |
 | `hms-keycloak-prod` | 2 GB (1.5 GB failed to boot) | none | on, requested; confirm it actually sleeps (DB traffic can keep it awake) |
 | `hms-keycloak-dev` | 2 GB | none | off (hms-backend-dev needs it at boot and for JWKS refresh) |
 
@@ -162,11 +184,42 @@ that is too small for the whole process (heap plus metaspace, threads and the
 OpenTelemetry agent) shows up as a kernel kill, exit 137, and a **CRASHED**
 deployment once the 3 restarts are spent (FAILED is for builds and deploy-time
 healthchecks). Once #839 is deployed, the image's entrypoint sets the heap itself:
-`JVM_HEAP_PERCENT` (default 70, clamped to 10-90) of the service's memory limit,
+`JVM_HEAP_PERCENT` (default 60, or 50 under a 3.5 GB limit; clamped to 10-90) of the service's memory limit,
 logged at startup (`gc,init`, "Heap Max Capacity"). Every service must have a
 memory limit, or the JVM sizes from the platform's per-service maximum. The
-`JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=70` variables above then lose to the
-command line (same value, so the heap does not change) and can be removed.
+`JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=70` variables above lose to the command
+line and should be removed: they read as if they set the heap, and they do not.
+
+**The memory budget (QA D1314).** A container is killed on heap *plus* native
+memory, so the entrypoint bounds each native part as well as the heap. Worst
+case, in MB (`JvmContainerBudgetGuardTest` recomputes this from the Dockerfile
+and fails if it no longer fits):
+
+| Part | Bound | 4 GB limit (60%) | 2 GB limit (50%) |
+| --- | --- | --- | --- |
+| Heap | `-XX:MaxRAMPercentage` | 2458 | 1024 |
+| Metaspace with class space | `-XX:MaxMetaspaceSize=512m` | 512 | 512 |
+| JIT code cache | `-XX:ReservedCodeCacheSize=192m` | 192 | 192 |
+| Direct buffers | `-XX:MaxDirectMemorySize=128m` | 128 | 128 |
+| Stacks: 100 Tomcat + 70 other threads | `-Xss768k`, `server.tomcat.threads.max` | 128 | 128 |
+| G1 tables (about 8% of the heap, allowance) | none | 197 | 82 |
+| malloc, symbols, the OpenTelemetry agent's native part (allowance) | `MALLOC_ARENA_MAX=2` | 150 | 150 |
+| **Sum** | | **3765** | **2216 - see below** |
+| Limit | | 4096 | 2048 |
+
+At 2 GB the worst case is about 170 MB over the limit, every bound hit at once
+and the allowances fully spent. Metaspace was measured at about 300 MB and the
+code cache at about 55 MB without the OpenTelemetry agent (D1314's PR; the
+agent's share is not measured), so the real figure should be lower, but 2 GB has
+no headroom and 50% is a smaller heap than the 70% it replaces: give a backend
+that takes real load 4 GB. A `JVM_HEAP_PERCENT` above the default gives up the
+margin. Running out of metaspace is the one bound that does not fail a single
+request: classes stay unloadable until a restart, so check
+`jvm.memory.used{area=nonheap}` before lowering it. What happens when a request needs more
+heap than there is: an `OutOfMemoryError` fails it, the heap recovers, and the
+`HmsHeapHigh` alert is the signal. A kernel kill (exit 137, "Killed", no
+`OutOfMemoryError` in the log) now means an allowance above is wrong: take
+`jcmd <pid> VM.native_memory summary` with `-XX:NativeMemoryTracking=summary`.
 
 ---
 

@@ -59,6 +59,8 @@ export class HospitalTypeaheadComponent implements OnInit {
 
   /** Hide the "All hospitals" sentinel (e.g. when this typeahead is used outside the scope chip). */
   readonly hideAllOption = input<boolean>(false);
+  readonly ariaLabelKey = input('HOSPITAL_SCOPE.FILTER_BY_HOSPITAL');
+  readonly inputId = input<string | null>(null);
 
   /** Auto-focus the input when the host renders the component (chip overlay does this). */
   readonly autoFocus = input<boolean>(true);

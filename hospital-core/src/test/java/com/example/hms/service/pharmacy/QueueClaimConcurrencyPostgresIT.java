@@ -110,7 +110,7 @@ import static org.mockito.Mockito.when;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Import({PrescriptionQueueClaimService.class, DispenseServiceImpl.class, PreparedFillVoider.class, PharmacyPaymentVoider.class,
-        DispenseVerificationService.class, ControlledSubstanceGuard.class, PrescriptionControlledResolver.class, ControlledStockWitness.class, StockOutRoutingServiceImpl.class,
+        DispenseVerificationService.class, ControlledSubstanceGuard.class, PrescriptionControlledResolver.class, ControlledStockWitness.class, FefoLotPolicy.class, StockOutRoutingServiceImpl.class,
         DispenseMapper.class, PrescriptionRoutingMapper.class, com.example.hms.mapper.pharmacy.StockLotMapper.class,
         EncryptionKeyHolder.class,
         com.example.hms.service.EndedStayOrderGuard.class, com.example.hms.service.StayOrderDiscontinuation.class,
@@ -150,6 +150,8 @@ class QueueClaimConcurrencyPostgresIT {
     private static final ThreadLocal<UUID> CALLER = new ThreadLocal<>();
 
     @MockitoBean private RoleValidator roleValidator;
+    /** QA D1555: the allergy gate itself is tested in the unit tests; none of these patients has an allergy. */
+    @MockitoBean private com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck;
     @MockitoBean private PharmacyServiceSupport support;
     @MockitoBean private CdsCheckService cdsCheckService;
     @MockitoBean private PrescriberPharmacyNotifier prescriberNotifier;
@@ -467,6 +469,8 @@ class QueueClaimConcurrencyPostgresIT {
             .medicationName("Amoxicillin")
             .quantityRequested(BigDecimal.TEN)
             .quantityDispensed(BigDecimal.TEN)
+            // QA D1141: every fill carries its unit (the server refuses one without).
+            .unit("capsule")
             .build();
     }
 

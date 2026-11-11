@@ -40,7 +40,10 @@ class LabTestDefinitionBatchValidationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("[{\"id\":\"317d5ee5-0000-4000-8000-000000000001\",\"testCode\":\"TDR-R9A\"}]"))
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.fieldErrors.name").exists());
+            // QA D1338 (round 29, assertion changed): keyed on the request property testName (it was "name").
+            // QA D1349 (round 30, assertion changed): the batch is validated at the edge, so the key is
+            // the element's JSON path "[0].testName", as every list body answers (it was "testName").
+            .andExpect(jsonPath("$.fieldErrors['[0].testName']").exists());
         verifyNoInteractions(service);
     }
 

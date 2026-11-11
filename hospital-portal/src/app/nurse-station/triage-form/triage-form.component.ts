@@ -1,3 +1,5 @@
+import { refusalReason } from '../../shared/refusal-reason';
+import { announceNewbornWarning } from '../../shared/newborn-vital-alerts';
 import {
   Component,
   EventEmitter,
@@ -5,10 +7,13 @@ import {
   Output,
   inject,
   signal,
+  computed,
   ChangeDetectionStrategy,
   DestroyRef,
+  ElementRef,
 } from '@angular/core';
-import { firstImplausibleVital } from '../../shared/vital-sign-limits';
+import { firstImplausibleVital, type VitalSignField } from '../../shared/vital-sign-limits';
+import { refuseFields, type FieldRefusal } from '../../shared/forms/invalid-fields';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -21,13 +26,38 @@ import {
 } from '../../services/encounter.service';
 import { ToastService } from '../../core/toast.service';
 import { RovingFocusDirective } from '../../shared/a11y/roving-focus.directive';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { escapeDiscardConfirmed } from '../../shared/a11y/escape-keeps-typed-text';
+import { PatientService } from '../../services/patient.service';
+import { offersFundalHeight } from '../../shared/patient-measures';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 type ConsciousnessOption = 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
+
+/** Each bounded reading of the form and the id of its input. */
+const TRIAGE_VITAL_INPUTS: readonly (readonly [VitalSignField, string])[] = [
+  ['temperatureCelsius', 'temperature'],
+  ['heartRateBpm', 'heartRate'],
+  ['respiratoryRateBpm', 'respiratoryRate'],
+  ['systolicBpMmHg', 'systolicBp'],
+  ['diastolicBpMmHg', 'diastolicBp'],
+  ['spo2Percent', 'spo2'],
+  ['weightKg', 'weight'],
+  ['heightCm', 'height'],
+];
+const TRIAGE_VITAL_IDS = TRIAGE_VITAL_INPUTS.map(([, id]) => id);
 
 @Component({
   selector: 'app-triage-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, RovingFocusDirective],
+  imports: [
+    SubmitGuardDirective,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    RovingFocusDirective,
+    ModalDialogDirective,
+  ],
   templateUrl: './triage-form.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './triage-form.component.scss',
@@ -39,6 +69,7 @@ export class TriageFormComponent {
    */
   @Input() set encounter(value: EncounterResponse | null) {
     this._encounter = value;
+    this.loadPatientSex(value);
     if (value?.chiefComplaint && !this.chiefComplaint()) {
       this.chiefComplaint.set(value.chiefComplaint);
     }
@@ -51,8 +82,33 @@ export class TriageFormComponent {
   @Output() triageCompleted = new EventEmitter<TriageSubmissionResponse>();
 
   private readonly encounterService = inject(EncounterService);
+  private readonly patientService = inject(PatientService);
+
+  /**
+   * QA D1077: the patient's recorded sex, read once per encounter. A fundal
+   * height is not offered (nor sent) for a patient recorded as male.
+   */
+  readonly patientGender = signal<string | null>(null);
+  readonly showFundalHeight = computed(() => offersFundalHeight(this.patientGender()));
+
+  private loadPatientSex(value: EncounterResponse | null): void {
+    this.patientGender.set(null);
+    if (!value?.patientId) return;
+    const asked = value.patientId;
+    this.patientService
+      .getById(asked, value.hospitalId || undefined)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (p) => {
+          if (this._encounter?.patientId === asked) this.patientGender.set(p?.gender ?? null);
+        },
+        // Unknown sex keeps the field: the server refuses it for a male patient.
+        error: () => undefined,
+      });
+  }
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /* ── Vital signs ────────────────────────── */
   temperatureCelsius = signal<number | null>(null);
@@ -64,6 +120,8 @@ export class TriageFormComponent {
   weightKg = signal<number | null>(null);
   heightCm = signal<number | null>(null);
   painScale = signal<number | null>(null);
+  /** QA D1031: the antenatal fundal height, in cm (optional). */
+  fundalHeightCm = signal<number | null>(null);
 
   /* ── NEWS2 parameters (P3 #25b) ─────────── */
   onOxygen = signal(false);
@@ -78,7 +136,8 @@ export class TriageFormComponent {
 
   /* ── Clinical assessment ────────────────── */
   chiefComplaint = signal('');
-  esiScore = signal<number>(3);
+  /** QA D1158: never preset (an untouched form reached the doctor as ESI 3); the nurse picks it. */
+  esiScore = signal<number | null>(null);
   fallRisk = signal(false);
   fallRiskScore = signal<number | null>(null);
 
@@ -120,17 +179,84 @@ export class TriageFormComponent {
       .subscribe(() => (this.esiOptionsCache = this.buildEsiOptions()));
   }
 
-  get canSubmit(): boolean {
-    return !!this.encounter?.id && this.esiScore() >= 1 && this.esiScore() <= 5 && !this.saving();
+  /**
+   * Review of #971: Escape closes the dialog only while nothing has been
+   * typed; once vitals are entered it would throw them away, so it is ignored
+   * (the Close button still closes).
+   */
+  onEscape(): void {
+    // QA D1285: "Abandonner le texte" sends the Escape on; it closes, whatever was entered.
+    if (escapeDiscardConfirmed() || !this.hasEntries()) this.dismissed.emit();
   }
 
-  submit(): void {
-    if (!this.encounter?.id) {
-      this.toast.error(this.translate.instant('TRIAGE.NO_ENCOUNTER_SELECTED'));
-      return;
-    }
+  hasEntries(): boolean {
+    const vitals = [
+      this.temperatureCelsius(),
+      this.heartRateBpm(),
+      this.respiratoryRateBpm(),
+      this.systolicBpMmHg(),
+      this.diastolicBpMmHg(),
+      this.spo2Percent(),
+      this.weightKg(),
+      this.heightCm(),
+      this.painScale(),
+      this.fundalHeightCm(),
+      this.fallRiskScore(),
+    ];
+    return (
+      vitals.some((v) => v !== null) ||
+      !!this.consciousnessLevel() ||
+      this.onOxygen() ||
+      this.fallRisk() ||
+      !!this.roomAssignment().trim() ||
+      this.chiefComplaint().trim() !== (this.encounter?.chiefComplaint ?? '').trim()
+    );
+  }
 
-    const implausible = firstImplausibleVital({
+  /** QA D1158: a triage records at least one measured vital sign. */
+  hasVitalSign(): boolean {
+    return [
+      this.temperatureCelsius(),
+      this.heartRateBpm(),
+      this.respiratoryRateBpm(),
+      this.systolicBpMmHg(),
+      this.diastolicBpMmHg(),
+      this.spo2Percent(),
+    ].some((v) => v !== null && v !== undefined && `${v}`.trim() !== '');
+  }
+
+  private esiChosen(): boolean {
+    const esi = this.esiScore();
+    return esi !== null && esi >= 1 && esi <= 5;
+  }
+
+  get canSubmit(): boolean {
+    return !!this.encounter?.id && this.esiChosen() && this.hasVitalSign() && !this.saving();
+  }
+
+  /**
+   * QA D1158: why "Soumettre le triage" refuses, for the submit guard.
+   * QA D1277 (D1256 class, round 27): every gap on the FIRST press. The rule
+   * "at least one vital sign" is returned first and the guard names the blank
+   * ESI with it ("Champs obligatoires manquants : Score ESI. Saisissez au
+   * moins un signe vital…"); it used to say the ESI alone, and the vital-sign
+   * rule only on the next press.
+   */
+  submitBlockReason(): string | boolean {
+    if (!this.hasVitalSign()) return this.translate.instant('TRIAGE.VITAL_REQUIRED') as string;
+    return !this.encounter?.id || !this.esiChosen();
+  }
+
+  /** The fields the submit guard marks, matching {@link submitBlockReason}: each blank one. */
+  submitGuardFieldIds(): string[] {
+    return [
+      ...(this.esiChosen() ? [] : ['esiScore']),
+      ...(this.hasVitalSign() ? [] : ['temperature']),
+    ];
+  }
+
+  private boundedReadings(): Partial<Record<VitalSignField, number | null>> {
+    return {
       temperatureCelsius: this.temperatureCelsius(),
       heartRateBpm: this.heartRateBpm(),
       respiratoryRateBpm: this.respiratoryRateBpm(),
@@ -139,8 +265,38 @@ export class TriageFormComponent {
       spo2Percent: this.spo2Percent(),
       weightKg: this.weightKg(),
       heightCm: this.heightCm(),
+    };
+  }
+
+  /** Each reading outside its bounds, with its own "between min and max" message. */
+  private implausibleRefusals(
+    readings: Partial<Record<VitalSignField, number | null>>,
+  ): FieldRefusal[] {
+    return TRIAGE_VITAL_INPUTS.flatMap(([field, id]) => {
+      const limit = firstImplausibleVital({ [field]: readings[field] });
+      if (!limit) return [];
+      const message = this.translate.instant(limit.messageKey, {
+        min: limit.min,
+        max: limit.max,
+      });
+      return [{ id, message }];
     });
+  }
+
+  submit(): void {
+    if (!this.encounter?.id) {
+      this.toast.error(this.translate.instant('TRIAGE.NO_ENCOUNTER_SELECTED'));
+      return;
+    }
+    const esiScore = this.esiScore();
+    // QA D1158: the submit guard says why first; nothing empty is ever sent.
+    if (esiScore === null || !this.hasVitalSign()) return;
+
+    const readings = this.boundedReadings();
+    const implausible = firstImplausibleVital(readings);
     if (implausible) {
+      // QA D1306 (round 28): every implausible reading is marked, not only a toast.
+      refuseFields(this.host.nativeElement, this.implausibleRefusals(readings), TRIAGE_VITAL_IDS);
       this.toast.error(
         this.translate.instant(implausible.messageKey, {
           min: implausible.min,
@@ -149,11 +305,12 @@ export class TriageFormComponent {
       );
       return;
     }
+    refuseFields(this.host.nativeElement, [], TRIAGE_VITAL_IDS, '');
 
     this.saving.set(true);
 
     const request: TriageSubmissionRequest = {
-      esiScore: this.esiScore(),
+      esiScore,
       chiefComplaint: this.chiefComplaint() || undefined,
       temperatureCelsius: this.temperatureCelsius() ?? undefined,
       heartRateBpm: this.heartRateBpm() ?? undefined,
@@ -166,6 +323,7 @@ export class TriageFormComponent {
       onOxygen: this.onOxygen(),
       consciousnessLevel: this.consciousnessLevel() || undefined,
       painScale: this.painScale() ?? undefined,
+      fundalHeightCm: this.showFundalHeight() ? (this.fundalHeightCm() ?? undefined) : undefined,
       fallRisk: this.fallRisk() || undefined,
       fallRiskScore: this.fallRiskScore() ?? undefined,
       roomAssignment: this.roomAssignment() || undefined,
@@ -175,11 +333,13 @@ export class TriageFormComponent {
       next: (response) => {
         this.saving.set(false);
         this.toast.success(this.translate.instant('TRIAGE.COMPLETED'));
+        // QA D1564: a newborn's triage set is judged against the newborn bands; saved, and warned.
+        announceNewbornWarning(response?.newbornAlerts, this.toast, this.translate);
         this.triageCompleted.emit(response);
       },
       error: (err) => {
         this.saving.set(false);
-        const msg = err?.error?.message ?? this.translate.instant('TRIAGE.SUBMIT_FAILED');
+        const msg = refusalReason(err) ?? this.translate.instant('TRIAGE.SUBMIT_FAILED');
         this.toast.error(msg);
       },
     });

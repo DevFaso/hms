@@ -1,6 +1,7 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <span class="care-eyebrow">{{ 'CARE_DASH.REGISTRY_EYEBROW' | translate }}</span>
       <h1>{{ 'REGISTRIES.TITLE' | translate }}</h1>
       <p class="subtitle">{{ 'REGISTRIES.SUBTITLE' | translate }}</p>
     </div>
@@ -17,6 +18,32 @@
     </div>
   </div>
 
+  <section class="care-overview">
+    <div class="care-metrics">
+      <div class="care-metric">
+        <span class="material-symbols-outlined" aria-hidden="true">groups</span>
+        <div>
+          <strong>{{ loading() || loadFailed() ? '—' : totalRows() }}</strong
+          ><span>{{ 'CARE_DASH.COHORT_TOTAL' | translate }}</span>
+        </div>
+      </div>
+      <div class="care-metric">
+        <span class="material-symbols-outlined" aria-hidden="true">list_alt</span>
+        <div>
+          <strong>{{ loading() || loadFailed() ? '—' : rows().length }}</strong
+          ><span>{{ 'CARE_DASH.LOADED_ROWS' | translate }}</span>
+        </div>
+      </div>
+      <div class="care-metric">
+        <span class="material-symbols-outlined" aria-hidden="true">event_busy</span>
+        <div>
+          <strong>{{ loading() || loadFailed() ? '—' : overdueCount() }}</strong
+          ><span>{{ 'CARE_DASH.OVERDUE_LOADED' | translate }}</span>
+        </div>
+      </div>
+    </div>
+    <p class="care-scope-note">{{ 'CARE_DASH.LOADED_SCOPE' | translate }}</p>
+  </section>
   <!-- Programme filter. Plain toggle buttons, not the ARIA tab pattern:
        these filter one table rather than switching panels, and half a
        tablist (roles without roving tabindex or arrow keys) reads worse
@@ -69,6 +96,36 @@
     }
   </div>
 
+  <div class="care-toolbar">
+    <label class="care-search"
+      ><span class="material-symbols-outlined" aria-hidden="true">search</span
+      ><input
+        type="search"
+        [attr.aria-label]="'CARE_DASH.SEARCH_PATIENTS' | translate"
+        [placeholder]="'CARE_DASH.SEARCH_PATIENTS' | translate"
+        [disabled]="loading() || loadFailed()"
+        [ngModel]="patientSearch()"
+        (ngModelChange)="patientSearch.set($event)"
+    /></label>
+    @if (!loading() && !loadFailed()) {
+      <span class="care-visible-count">{{
+        'CARE_DASH.VISIBLE' | translate: { shown: visibleRows().length, total: rows().length }
+      }}</span>
+    }
+    @if (patientSearch()) {
+      <button type="button" class="btn-secondary" (click)="patientSearch.set('')">
+        {{ 'CARE_DASH.CLEAR_SEARCH' | translate }}
+      </button>
+    }
+  </div>
+  @if (!loading() && !loadFailed() && rows().length > 0 && visibleRows().length === 0) {
+    <div class="care-no-matches" role="status">
+      {{
+        (truncated() ? 'CARE_DASH.NO_MATCHES_TRUNCATED' : 'CARE_DASH.NO_MATCHES')
+          | translate: { shown: rows().length, total: totalRows() }
+      }}
+    </div>
+  }
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
@@ -99,97 +156,107 @@
         {{ 'REGISTRIES.SHOWING_FIRST' | translate: { shown: rows().length, total: totalRows() } }}
       </p>
     }
-    <div class="table-wrap">
-      <table class="registry-table">
-        <thead>
-          <tr>
-            <th>{{ 'REGISTRIES.COL_PATIENT' | translate }}</th>
-            <th>{{ 'REGISTRIES.COL_ENROLLED' | translate }}</th>
-            <th>{{ 'REGISTRIES.COL_CADENCE' | translate }}</th>
-            <th>{{ 'REGISTRIES.COL_LAST_VISIT' | translate }}</th>
-            <th>{{ 'REGISTRIES.COL_NEXT_VISIT' | translate }}</th>
-            <th>{{ 'REGISTRIES.COL_STATUS' | translate }}</th>
-            <th class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (row of rows(); track row.id) {
-            <tr [class.overdue-row]="row.overdueDays > 0">
-              <td>
-                <div class="patient-cell">
-                  <span class="patient-name">{{ row.patientName }}</span>
-                  <span class="patient-meta">
-                    @if (row.mrn) {
-                      {{ row.mrn }}
-                    }
-                    @if (row.phoneNumber) {
-                      · {{ row.phoneNumber }}
-                    }
+    @if (visibleRows().length > 0) {
+      <div
+        class="table-wrap"
+        tabindex="0"
+        role="region"
+        [attr.aria-label]="'REGISTRIES.TITLE' | translate"
+      >
+        <table class="registry-table">
+          <thead>
+            <tr>
+              <th>{{ 'REGISTRIES.COL_PATIENT' | translate }}</th>
+              <th>{{ 'REGISTRIES.COL_ENROLLED' | translate }}</th>
+              <th>{{ 'REGISTRIES.COL_CADENCE' | translate }}</th>
+              <th>{{ 'REGISTRIES.COL_LAST_VISIT' | translate }}</th>
+              <th>{{ 'REGISTRIES.COL_NEXT_VISIT' | translate }}</th>
+              <th>{{ 'REGISTRIES.COL_STATUS' | translate }}</th>
+              <th class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of visibleRows(); track row.id) {
+              <tr [class.overdue-row]="row.overdueDays > 0">
+                <td>
+                  <div class="patient-cell">
+                    <span class="patient-name">{{ row.patientName }}</span>
+                    {{ ' '
+                    }}<span class="patient-meta">
+                      @if (row.mrn) {
+                        {{ row.mrn }}
+                      }
+                      @if (row.phoneNumber) {
+                        · {{ row.phoneNumber }}
+                      }
+                    </span>
+                  </div>
+                </td>
+                <td>{{ row.enrolledOn | serverTime | date: 'mediumDate' }}</td>
+                <td>{{ 'REGISTRIES.EVERY_N_DAYS' | translate: { days: row.visitCadenceDays } }}</td>
+                <td>
+                  @if (row.lastVisitOn) {
+                    {{ row.lastVisitOn | serverTime | date: 'mediumDate' }}
+                  } @else {
+                    <span class="muted">{{ 'REGISTRIES.NO_VISIT_YET' | translate }}</span>
+                  }
+                </td>
+                <td>
+                  {{ row.nextExpectedVisit | serverTime | date: 'mediumDate' }}
+                  @if (row.overdueDays > 0) {
+                    <span class="overdue-chip" data-testid="overdue-chip">
+                      {{ 'REGISTRIES.OVERDUE_DAYS' | translate: { days: row.overdueDays } }}
+                    </span>
+                  }
+                </td>
+                <td>
+                  <span class="status-badge" [ngClass]="statusClass(row.status)">
+                    {{ 'REGISTRIES.STATUS.' + row.status | translate }}
                   </span>
-                </div>
-              </td>
-              <td>{{ row.enrolledOn | serverTime | date: 'mediumDate' }}</td>
-              <td>{{ 'REGISTRIES.EVERY_N_DAYS' | translate: { days: row.visitCadenceDays } }}</td>
-              <td>
-                @if (row.lastVisitOn) {
-                  {{ row.lastVisitOn | serverTime | date: 'mediumDate' }}
-                } @else {
-                  <span class="muted">{{ 'REGISTRIES.NO_VISIT_YET' | translate }}</span>
-                }
-              </td>
-              <td>
-                {{ row.nextExpectedVisit | serverTime | date: 'mediumDate' }}
-                @if (row.overdueDays > 0) {
-                  <span class="overdue-chip" data-testid="overdue-chip">
-                    {{ 'REGISTRIES.OVERDUE_DAYS' | translate: { days: row.overdueDays } }}
-                  </span>
-                }
-              </td>
-              <td>
-                <span class="status-badge" [ngClass]="statusClass(row.status)">
-                  {{ 'REGISTRIES.STATUS.' + row.status | translate }}
-                </span>
-                @if (row.closureReason) {
-                  <span class="closure-reason" [title]="row.closureReason">
-                    {{ row.closureReason }}
-                  </span>
-                }
-              </td>
-              <td class="col-actions">
-                @if (row.status === 'ACTIVE') {
+                  @if (row.closureReason) {
+                    {{ ' '
+                    }}<span class="closure-reason" [title]="row.closureReason">
+                      {{ row.closureReason }}
+                    </span>
+                  }
+                </td>
+                <td class="col-actions">
+                  @if (row.status === 'ACTIVE') {
+                    <button
+                      type="button"
+                      class="btn-row"
+                      [disabled]="actingOnId() !== null"
+                      (click)="recordVisit(row)"
+                      data-testid="record-visit"
+                    >
+                      <span class="material-symbols-outlined">event_available</span>
+                      {{ 'REGISTRIES.RECORD_VISIT' | translate }}
+                    </button>
+                  }
                   <button
                     type="button"
                     class="btn-row"
                     [disabled]="actingOnId() !== null"
-                    (click)="recordVisit(row)"
-                    data-testid="record-visit"
+                    (click)="openStatusModal(row, $event)"
+                    data-testid="change-status"
                   >
-                    <span class="material-symbols-outlined">event_available</span>
-                    {{ 'REGISTRIES.RECORD_VISIT' | translate }}
+                    <span class="material-symbols-outlined">swap_horiz</span>
+                    {{ 'REGISTRIES.CHANGE_STATUS' | translate }}
                   </button>
-                }
-                <button
-                  type="button"
-                  class="btn-row"
-                  [disabled]="actingOnId() !== null"
-                  (click)="openStatusModal(row, $event)"
-                  data-testid="change-status"
-                >
-                  <span class="material-symbols-outlined">swap_horiz</span>
-                  {{ 'REGISTRIES.CHANGE_STATUS' | translate }}
-                </button>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
   }
 
   <!-- Enrol modal -->
   @if (showEnrollForm()) {
     <div class="modal-backdrop" (click)="closeEnrollForm()" aria-hidden="true"></div>
     <div
+      appModalDialog
       #enrollDialog
       class="modal"
       role="dialog"
@@ -214,6 +281,7 @@
            idiom that makes a stale selection impossible, and the
            super-admin-aware hospital scope. -->
       <app-patient-picker
+        required
         inputId="registry-patient-picker"
         [hospitalId]="pickerHospitalId()"
         [selected]="selectedPatient()"
@@ -234,6 +302,7 @@
       <label class="field">
         <span>{{ 'REGISTRIES.CADENCE' | translate }} *</span>
         <input
+          required
           type="number"
           name="regCadence"
           min="1"
@@ -268,6 +337,8 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          appSubmitGuard
+          submitGuardRequired
           type="button"
           class="btn-primary"
           [disabled]="saving()"
@@ -284,6 +355,7 @@
   @if (statusTarget(); as target) {
     <div class="modal-backdrop" (click)="closeStatusModal()" aria-hidden="true"></div>
     <div
+      appModalDialog
       #statusDialog
       class="modal"
       role="dialog"
@@ -316,6 +388,7 @@
         <label class="field">
           <span>{{ 'REGISTRIES.CLOSURE_REASON' | translate }} *</span>
           <textarea
+            required
             name="regStatusReason"
             rows="2"
             maxlength="500"
@@ -334,6 +407,8 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          appSubmitGuard
+          submitGuardRequired
           type="button"
           class="btn-primary"
           [disabled]="saving()"

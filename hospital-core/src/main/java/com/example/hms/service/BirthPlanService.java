@@ -59,9 +59,10 @@ public interface BirthPlanService {
     BirthPlanResponseDTO providerReview(UUID id, BirthPlanProviderReviewRequestDTO review, String username);
 
     /**
-     * Delete a birth plan.
+     * Delete a birth plan. QA D1241 (round 25): a reason is required; a
+     * reviewed plan is withdrawn and kept, not deleted.
      */
-    void deleteBirthPlan(UUID id, String username);
+    void deleteBirthPlan(UUID id, String reason, String username);
 
     /**
      * Get birth plans pending review for a hospital.

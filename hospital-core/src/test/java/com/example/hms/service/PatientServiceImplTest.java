@@ -211,6 +211,10 @@ class PatientServiceImplTest {
     @Mock
     private PatientAccountLinkGuard accountLinkGuard;
 
+    /** QA D959 — the visit rows have their own test (VisitTimelineRowsTest); none here. */
+    @Mock
+    private com.example.hms.service.timeline.VisitTimelineRows visitTimelineRows;
+
     @InjectMocks
     private PatientServiceImpl patientService;
 
@@ -390,6 +394,24 @@ class PatientServiceImplTest {
         verify(patientMapper, never()).toPatientDTO(patient, hospitalId);
     }
 
+    // Residual #13 class: an email held by a patient of another hospital first must not hide
+    // this hospital's holder of the same address.
+    @Test
+    void lookupPatientsByIdentifierEmailKeepsEveryHolderBeforeTheScopeFilter() {
+        Patient elsewhere = new Patient();
+        elsewhere.setId(UUID.randomUUID());
+        PatientResponseDTO scoped = PatientResponseDTO.builder().id(patientId).build();
+        when(patientRepository.findAllByEmailIgnoreCase("family@example.com")).thenReturn(List.of(elsewhere, patient));
+        when(registrationRepository.existsByPatientIdAndHospitalId(elsewhere.getId(), hospitalId)).thenReturn(false);
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(scoped);
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        assertThat(patientService.lookupPatients("family@example.com", null, null, null, null, hospitalId, Locale.ENGLISH))
+            .extracting(PatientResponseDTO::getId)
+            .containsExactly(patientId);
+    }
+
     @Test
     void lookupPatientsWithoutHospitalScopeIsRefusedForStaff() {
         when(patientRepository.findByMrn("MRN-A1")).thenReturn(List.of(patient));
@@ -398,6 +420,23 @@ class PatientServiceImplTest {
 
         assertThatThrownBy(() -> patientService.lookupPatients(null, null, null, null, "MRN-A1", null, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        verify(patientMapper, never()).toPatientDTO(patient, null);
+    }
+
+    // QA D903: with no hospital passed, the lookup filters at the active hospital — and must map at
+    // it too, or the picker shows another hospital's MRN (the mapper's unscoped fallback).
+    @Test
+    void lookupPatientsMapsAtTheResolvedActiveHospitalSoTheMrnIsThatHospitals() {
+        PatientResponseDTO scoped = PatientResponseDTO.builder().id(patientId).mrn("CHW5448").build();
+        when(patientRepository.findByMrn("CHW5448")).thenReturn(List.of(patient));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(scoped);
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        assertThat(patientService.lookupPatients(null, null, null, null, "CHW5448", null, Locale.ENGLISH))
+            .extracting(PatientResponseDTO::getMrn)
+            .containsExactly("CHW5448");
         verify(patientMapper, never()).toPatientDTO(patient, null);
     }
 
@@ -535,6 +574,39 @@ class PatientServiceImplTest {
         assertThat(patient.getPhoneVerifiedAt()).isNotNull();
         // Once for the new record, once for the stamp.
         verify(patientRepository, times(2)).save(patient);
+    }
+
+    @Test
+    void reviewRound16_anIvorianVerifiedNumberIsStampedThoughItIsStoredInE164() {
+        UUID userId = UUID.randomUUID();
+        UUID challengeId = UUID.randomUUID();
+        PatientRequestDTO request = PatientRequestDTO.builder()
+            .userId(userId)
+            .hospitalId(hospitalId)
+            .phoneVerificationId(challengeId)
+            .build();
+        User user = new User();
+        user.setId(userId);
+        user.setActive(true);
+        hospital.setCountry("CI");
+        patient.setPhoneNumberPrimary("07 01 23 45 67");
+
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(patientMapper.toPatient(request, user)).thenReturn(patient);
+        when(patientRepository.save(patient)).thenReturn(patient);
+        // The challenge holds the number as the desk typed it.
+        when(phoneVerificationService.consumeVerifiedChallenge(challengeId, "07 01 23 45 67")).thenReturn(true);
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.of(new PatientHospitalRegistration()));
+        when(patientMapper.toPatientDTO(patient, hospitalId))
+            .thenReturn(PatientResponseDTO.builder().id(patientId).build());
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        patientService.createPatientByStaff(request, Locale.ENGLISH);
+
+        assertThat(patient.getPhoneNumberPrimary()).isEqualTo("+225701234567");
+        assertThat(patient.getPhoneVerifiedAt()).isNotNull();
     }
 
     @Test
@@ -698,13 +770,163 @@ class PatientServiceImplTest {
             any(Pageable.class));
     }
 
+    /**
+     * QA D1274 (round 27): every picker types into one box sent as the name.
+     * A birth date in each accepted format is a date search (it was read as
+     * a phone number), an address with its @ an e-mail search; each is the
+     * value the repository compares, nothing left in the name filter.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "1993-11-03 | | 1993-11-03 | | ",
+        "03/11/1993 | | 1993-11-03 | | ",
+        "03-11-1993 | | 1993-11-03 | | ",
+        "3/11/1993  | | 1993-11-03 | | ",
+        "03.11.1993 | | 1993-11-03 | | ",
+        "Awa.Kabore@Example.test | | | | %awa.kabore@example.test%",
+        "@example.test | | | | %@example.test%",
+        "70 26 01 22 | | | %70260122% | ",
+        "Kadidiatou | %kadidiatou% | | | ",
+    })
+    void aTypedSearchTermIsSearchedAsWhatItIs(String typed, String name, String dob, String phone, String email) {
+        when(patientRepository.searchPatientsExtended(any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(patient)));
+        lenient().when(patientMapper.toPatientDTO(patient, hospitalId))
+            .thenReturn(PatientResponseDTO.builder().id(patientId).build());
+        lenient().when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        patientService.searchPatients(PatientSearchCriteria.builder().name(typed).hospitalId(hospitalId)
+            .includeInactive(true).build(), 0, 1, Locale.FRENCH);
+
+        verify(patientRepository).searchPatientsExtended(isNull(), eq(name), eq(dob), eq(phone), eq(email),
+            eq(hospitalId), isNull(), any(Pageable.class));
+    }
+
+    @Test
+    void anExplicitBirthDateIsAcceptedInTheDayFirstFormats() {
+        when(patientRepository.searchPatientsExtended(any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
+            .thenReturn(Page.empty());
+
+        patientService.searchPatients(PatientSearchCriteria.builder().dateOfBirth("03/11/1993").hospitalId(hospitalId)
+            .build(), 0, 10, Locale.FRENCH);
+
+        verify(patientRepository).searchPatientsExtended(isNull(), isNull(), eq("1993-11-03"), isNull(), isNull(),
+            eq(hospitalId), eq(Boolean.TRUE), any(Pageable.class));
+    }
+
+    @Test
+    void theStartOfAnEmailAddressIsAlsoLookedUpInTheEmailAfterTheNameMatches() {
+        Patient byEmail = new Patient();
+        byEmail.setId(UUID.randomUUID());
+        when(patientRepository.searchPatientsExtended(isNull(), eq("%awa.kabore%"), isNull(), isNull(), isNull(),
+            eq(hospitalId), isNull(), any(Pageable.class))).thenReturn(Page.empty());
+        when(patientRepository.searchPatientsExtended(isNull(), isNull(), isNull(), isNull(), eq("%awa.kabore%"),
+            eq(hospitalId), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(byEmail)));
+        PatientResponseDTO dto = PatientResponseDTO.builder().id(byEmail.getId()).build();
+        when(patientMapper.toPatientDTO(byEmail, hospitalId)).thenReturn(dto);
+        when(patientVitalSignService.getLatestSnapshot(byEmail.getId(), hospitalId)).thenReturn(Optional.empty());
+
+        assertThat(patientService.searchPatients(PatientSearchCriteria.builder().name("awa.kabore")
+            .hospitalId(hospitalId).includeInactive(true).build(), 0, 8, Locale.FRENCH)).containsExactly(dto);
+    }
+
+    @Test
+    void aFullPageOfNameMatchesIsNotExtendedByEmailMatches() {
+        when(patientRepository.searchPatientsExtended(isNull(), eq("%awa%"), isNull(), isNull(), isNull(),
+            eq(hospitalId), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(patient)));
+        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(PatientResponseDTO.builder().id(patientId).build());
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        patientService.searchPatients(PatientSearchCriteria.builder().name("awa").hospitalId(hospitalId)
+            .includeInactive(true).build(), 0, 1, Locale.FRENCH);
+
+        verify(patientRepository, times(1)).searchPatientsExtended(any(), any(), any(), any(), any(), any(), any(),
+            any(Pageable.class));
+    }
+
+    @Test
+    void aBirthDateTypedIntoTheLookupIsSearchedAsADateInScopeNotAsAPhone() {
+        when(patientRepository.searchPatientsExtended(isNull(), isNull(), eq("1993-11-03"), isNull(), isNull(),
+            eq(hospitalId), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(patient)));
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        PatientResponseDTO dto = PatientResponseDTO.builder().id(patientId).build();
+        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(dto);
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        assertThat(patientService.lookupPatients("03/11/1993", null, null, null, null, hospitalId, Locale.FRENCH))
+            .containsExactly(dto);
+        verify(patientRepository, never()).findAllByPhoneSubscriber(any(), any());
+    }
+
+    /**
+     * QA D1287 (round 27): the same allergen cannot be active twice for a
+     * patient - the same code, or the same name with accents, case and
+     * spacing aside - while a deactivated one may be recorded again.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} / {1}")
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "Pénicilline | ",
+        "  PENICILLINE  | ",
+        "Amoxicilline | RXN-7980",
+    })
+    void anAllergenAlreadyActiveIsNotRecordedTwice(String display, String code) {
+        PatientAllergy existing = new PatientAllergy();
+        existing.setId(UUID.randomUUID());
+        existing.setAllergenDisplay("Penicilline");
+        existing.setAllergenCode("rxn-7980");
+        existing.setActive(true);
+        UUID requester = stubAllergyCreation(display, code);
+        when(patientAllergyRepository.findVisibleAt(patientId, hospitalId)).thenReturn(List.of(existing));
+        com.example.hms.payload.dto.PatientAllergyRequestDTO request = com.example.hms.payload.dto.PatientAllergyRequestDTO.builder().allergenDisplay(display).build();
+
+        com.example.hms.exception.FieldBusinessException refused = org.junit.jupiter.api.Assertions.assertThrows(
+            com.example.hms.exception.FieldBusinessException.class,
+            () -> patientService.createPatientAllergy(patientId, hospitalId, requester, request));
+
+        assertThat(refused.getField()).isEqualTo("allergenDisplay");
+        assertThat(refused.getMessageKey()).isEqualTo("patient.r27.allergyAlreadyActive");
+        verify(patientAllergyRepository, never()).save(any());
+    }
+
+    @Test
+    void aDeactivatedAllergenMayBeRecordedAgain() {
+        PatientAllergy deactivated = new PatientAllergy();
+        deactivated.setId(UUID.randomUUID());
+        deactivated.setAllergenDisplay("Pénicilline");
+        deactivated.setActive(false);
+        UUID requester = stubAllergyCreation("Pénicilline", null);
+        when(patientAllergyRepository.findVisibleAt(patientId, hospitalId)).thenReturn(List.of(deactivated));
+
+        patientService.createPatientAllergy(patientId, hospitalId, requester,
+            com.example.hms.payload.dto.PatientAllergyRequestDTO.builder().allergenDisplay("Pénicilline").build());
+
+        verify(patientAllergyRepository).save(any(PatientAllergy.class));
+    }
+
+    private UUID stubAllergyCreation(String display, String code) {
+        UUID requester = UUID.randomUUID();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(requester, hospitalId)).thenReturn(Optional.of(new Staff()));
+        org.mockito.Mockito.doAnswer(inv -> {
+            PatientAllergy target = inv.getArgument(1);
+            target.setAllergenDisplay(display);
+            target.setAllergenCode(code);
+            return null;
+        }).when(patientAllergyMapper).updateEntityFromRequest(any(), any(PatientAllergy.class));
+        return requester;
+    }
+
     @Test
     void createPatientByStaffRequiresHospitalId() {
         PatientRequestDTO request = PatientRequestDTO.builder().userId(UUID.randomUUID()).build();
 
         assertThatThrownBy(() -> patientService.createPatientByStaff(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("patient.r7.staffCreateNeedsHospital"));
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("patient.r7.staffCreateNeedsHospital"))
+            // QA D1282 (sweep): the refusal names the field.
+            .hasFieldOrPropertyWithValue("field", "hospitalId");
     }
 
     @Test
@@ -838,6 +1060,162 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void aRemovedDiagnosisIsNotRemovedAgainAndKeepsItsReason_D1186() {
+        UUID requesterUserId = UUID.randomUUID();
+        UUID diagnosisId = UUID.randomUUID();
+        PatientProblem problem = new PatientProblem();
+        problem.setId(diagnosisId);
+        problem.setPatient(patient);
+        problem.setHospital(hospital);
+        problem.setStatus(ProblemStatus.INACTIVE);
+        problem.setStatusChangeReason("Erreur de saisie");
+        when(patientProblemRepository.findById(diagnosisId)).thenReturn(Optional.of(problem));
+        com.example.hms.model.PatientProblemHistory removal = new com.example.hms.model.PatientProblemHistory();
+        removal.setChangeType(com.example.hms.enums.ProblemChangeType.DELETED);
+        when(patientProblemHistoryRepository.findFirstByProblem_IdAndChangeTypeInOrderByChangedAtDesc(
+            org.mockito.ArgumentMatchers.eq(diagnosisId), org.mockito.ArgumentMatchers.argThat(types -> types.contains(com.example.hms.enums.ProblemChangeType.DELETED)
+                && !types.contains(com.example.hms.enums.ProblemChangeType.UPDATED)
+                && !types.contains(com.example.hms.enums.ProblemChangeType.CHRONICITY_CHANGED))))
+            .thenReturn(Optional.of(removal));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+
+        assertThatThrownBy(() -> patientService.deletePatientDiagnosis(
+            patientId, hospitalId, diagnosisId, requesterUserId, "Second motif"))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("patient.r22.diagnosisAlreadyRemoved");
+        assertThat(problem.getStatusChangeReason()).isEqualTo("Erreur de saisie");
+        verify(patientProblemRepository, never()).save(any());
+    }
+
+    @Test
+    void aDiagnosisMarkedInactiveCanStillBeRemoved_D1186() throws Exception {
+        // INACTIVE is also a status the chart sets: only a removal (a DELETED
+        // history row) makes the next removal a duplicate.
+        UUID requesterUserId = UUID.randomUUID();
+        UUID diagnosisId = UUID.randomUUID();
+        PatientProblem problem = new PatientProblem();
+        problem.setId(diagnosisId);
+        problem.setPatient(patient);
+        problem.setHospital(hospital);
+        problem.setStatus(ProblemStatus.INACTIVE);
+        Staff staff = new Staff();
+        staff.setId(UUID.randomUUID());
+        when(patientProblemRepository.findById(diagnosisId)).thenReturn(Optional.of(problem));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        // Removed once, then set active again, then marked INACTIVE by the chart: the latest change is not a removal.
+        com.example.hms.model.PatientProblemHistory statusChange = new com.example.hms.model.PatientProblemHistory();
+        statusChange.setChangeType(com.example.hms.enums.ProblemChangeType.STATUS_CHANGED);
+        when(patientProblemHistoryRepository.findFirstByProblem_IdAndChangeTypeInOrderByChangedAtDesc(
+            org.mockito.ArgumentMatchers.eq(diagnosisId), org.mockito.ArgumentMatchers.argThat(types -> types.contains(com.example.hms.enums.ProblemChangeType.DELETED)
+                && !types.contains(com.example.hms.enums.ProblemChangeType.UPDATED)
+                && !types.contains(com.example.hms.enums.ProblemChangeType.CHRONICITY_CHANGED))))
+            .thenReturn(Optional.of(statusChange));
+
+        patientService.deletePatientDiagnosis(patientId, hospitalId, diagnosisId, requesterUserId, "Saisie en double");
+
+        assertThat(problem.getStatusChangeReason()).isEqualTo("Saisie en double");
+        verify(patientProblemRepository).save(problem);
+    }
+
+    @Test
+    void aRemovalMarksTheDiagnosisEnteredInErrorAndAStatusChangeReopensIt_D1240() throws Exception {
+        UUID requesterUserId = UUID.randomUUID();
+        UUID diagnosisId = UUID.randomUUID();
+        PatientProblem problem = new PatientProblem();
+        problem.setId(diagnosisId);
+        problem.setPatient(patient);
+        problem.setHospital(hospital);
+        problem.setStatus(ProblemStatus.ACTIVE);
+        Staff staff = new Staff();
+        staff.setId(UUID.randomUUID());
+        when(patientProblemRepository.findById(diagnosisId)).thenReturn(Optional.of(problem));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+
+        patientService.deletePatientDiagnosis(patientId, hospitalId, diagnosisId, requesterUserId, "Saisi par erreur");
+
+        assertThat(problem.isEnteredInError()).isTrue();
+        // A second removal is refused on the flag alone, whatever the history says.
+        assertThatThrownBy(() -> patientService.deletePatientDiagnosis(
+            patientId, hospitalId, diagnosisId, requesterUserId, "Second motif"))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("patient.r22.diagnosisAlreadyRemoved");
+
+        PatientDiagnosisUpdateRequestDTO reopen = PatientDiagnosisUpdateRequestDTO.builder()
+            .hospitalId(hospitalId).status(ProblemStatus.ACTIVE).changeReason("Diagnostic confirmé").build();
+        patientService.updatePatientDiagnosis(patientId, hospitalId, diagnosisId, requesterUserId, reopen);
+        assertThat(problem.isEnteredInError()).isFalse();
+    }
+
+    private com.example.hms.model.PatientAllergy storedAllergy(UUID allergyId, boolean active) {
+        com.example.hms.model.PatientAllergy allergy = new com.example.hms.model.PatientAllergy();
+        allergy.setId(allergyId);
+        allergy.setPatient(patient);
+        allergy.setHospital(hospital);
+        allergy.setAllergenDisplay("Arachide");
+        allergy.setActive(active);
+        when(patientAllergyRepository.findByIdAndPatient_IdAndHospital_Id(allergyId, patientId, hospitalId))
+            .thenReturn(Optional.of(allergy));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        return allergy;
+    }
+
+    @Test
+    void anAllergyDeactivationKeepsItsReasonAndActor_D1242() {
+        UUID requesterUserId = UUID.randomUUID();
+        UUID allergyId = UUID.randomUUID();
+        com.example.hms.model.PatientAllergy allergy = storedAllergy(allergyId, true);
+        Staff staff = new Staff();
+        staff.setId(UUID.randomUUID());
+        when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
+
+        patientService.deactivatePatientAllergy(patientId, hospitalId, allergyId, requesterUserId, " Erreur de patient ");
+
+        assertThat(allergy.isActive()).isFalse();
+        assertThat(allergy.getDeactivationReason()).isEqualTo("Erreur de patient");
+        assertThat(allergy.getDeactivatedAt()).isNotNull();
+        assertThat(allergy.getDeactivatedByUserId()).isEqualTo(requesterUserId);
+    }
+
+    @Test
+    void anInactiveAllergyIsNotDeactivatedAgainAndKeepsItsReason_D1242() {
+        UUID requesterUserId = UUID.randomUUID();
+        UUID allergyId = UUID.randomUUID();
+        com.example.hms.model.PatientAllergy allergy = storedAllergy(allergyId, false);
+        allergy.setDeactivationReason("Premier motif");
+
+        assertThatThrownBy(() -> patientService.deactivatePatientAllergy(
+            patientId, hospitalId, allergyId, requesterUserId, "Second motif"))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("patient.r25.allergyAlreadyDeactivated");
+        assertThat(allergy.getDeactivationReason()).isEqualTo("Premier motif");
+        verify(patientAllergyRepository, never()).save(any());
+    }
+
+    @Test
+    void anEditCannotDeactivateAnAllergyWithoutTheReason_D1242() {
+        UUID requesterUserId = UUID.randomUUID();
+        UUID allergyId = UUID.randomUUID();
+        com.example.hms.model.PatientAllergy allergy = storedAllergy(allergyId, true);
+        Staff staff = new Staff();
+        staff.setId(UUID.randomUUID());
+        when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
+        com.example.hms.payload.dto.PatientAllergyRequestDTO edit = new com.example.hms.payload.dto.PatientAllergyRequestDTO();
+        edit.setHospitalId(hospitalId);
+        edit.setAllergenDisplay("Arachide");
+        edit.setActive(false);
+
+        assertThatThrownBy(() -> patientService.updatePatientAllergy(patientId, hospitalId, allergyId, requesterUserId, edit))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("patient.r25.allergyDeactivateNeedsReason");
+        assertThat(allergy.isActive()).isTrue();
+        verify(patientAllergyRepository, never()).save(any());
+    }
+
+    @Test
     void deletePatientDiagnosisRequiresReason() {
         UUID requesterUserId = UUID.randomUUID();
         UUID diagnosisId = UUID.randomUUID();
@@ -851,6 +1229,59 @@ class PatientServiceImplTest {
         ))
             .isInstanceOf(BusinessException.class)
             .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("patient.r7.diagnosisRemoveReasonRequired"));
+    }
+
+    @Test
+    void getDoctorTimelineNamesTheTestAndTheVisitTypeInTheReadersLanguage_D958_D996() {
+        org.springframework.context.MessageSource previous = (org.springframework.context.MessageSource)
+            org.springframework.test.util.ReflectionTestUtils.getField(com.example.hms.utility.MessageUtil.class, "messageSource");
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+            assignment.setId(UUID.randomUUID());
+            assignment.setHospital(hospital);
+            Encounter stay = Encounter.builder().patient(patient).hospital(hospital)
+                .encounterDate(LocalDateTime.now().minusDays(1)).encounterType(EncounterType.INPATIENT).build();
+            stay.setId(UUID.randomUUID());
+            com.example.hms.model.LabTestDefinition glycemia = new com.example.hms.model.LabTestDefinition();
+            glycemia.setName("Glycémie à jeun");
+            glycemia.setUnit("g/L");
+            LabOrder order = LabOrder.builder().patient(patient).hospital(hospital)
+                .labTestDefinition(glycemia)
+                .clinicalIndication("Fièvre 39,2 °C, suspicion de paludisme")
+                .orderingStaff(Staff.builder().hospital(hospital).build())
+                .build();
+            order.setId(UUID.randomUUID());
+            LabResult result = LabResult.builder().labOrder(order).released(true).resultValue("0.92")
+                .resultDate(LocalDateTime.now().minusHours(2)).build();
+            result.setId(UUID.randomUUID());
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+            when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(stay));
+            when(labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId), hospitalId, false,
+                Pageable.unpaged())).thenReturn(List.of(result));
+
+            PatientTimelineResponseDTO response = patientService.getDoctorTimeline(patientId, hospitalId,
+                UUID.randomUUID(), assignment,
+                PatientTimelineAccessRequestDTO.builder().accessReason("Suivi").includeSensitiveData(true).build());
+
+            assertThat(response.getEntries())
+                .filteredOn(entry -> "LAB_RESULT".equals(entry.getCategory()))
+                .singleElement()
+                .extracting(PatientTimelineEntryDTO::getSummary)
+                // QA D1079 + D1106 (round 19): French colon spacing and the
+                // value in the reader's notation ("0,92", was "0.92").
+                .isEqualTo("Glycémie à jeun : 0,92 g/L");
+            assertThat(response.getEntries())
+                .filteredOn(entry -> "ENCOUNTER".equals(entry.getCategory()))
+                .singleElement()
+                .extracting(PatientTimelineEntryDTO::getSummary)
+                .isEqualTo("Hospitalisation");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            com.example.hms.utility.MessageUtil.setMessageSource(previous);
+        }
     }
 
     @Test
@@ -988,6 +1419,47 @@ class PatientServiceImplTest {
         assertThat(response.getHospitalId()).isEqualTo(hospitalId);
         assertThat(response.isContainsSensitiveData()).isTrue();
         verify(auditEventLogService).logEvent(any());
+    }
+
+    @Test
+    void getDoctorTimelinePagesEveryEntryWithTheTotal_D1380() {
+        // QA D1380 (D1347 class): the chart read "50 evenements" for the newest
+        // 50 entries and offered nothing more. totalEntries counts every entry
+        // and page reads the rest, each entry exactly once.
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+        assignment.setHospital(hospital);
+        java.util.List<Encounter> visits = new java.util.ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            Encounter visit = Encounter.builder()
+                .patient(patient)
+                .hospital(hospital)
+                .encounterDate(LocalDateTime.now().minusDays(i + 1L))
+                .encounterType(EncounterType.CONSULTATION)
+                .build();
+            visit.setId(UUID.randomUUID());
+            visits.add(visit);
+        }
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(visits);
+
+        java.util.List<String> seen = new java.util.ArrayList<>();
+        for (int page = 0; page < 3; page++) {
+            PatientTimelineResponseDTO response = patientService.getDoctorTimeline(patientId, hospitalId,
+                UUID.randomUUID(), assignment, PatientTimelineAccessRequestDTO.builder()
+                    .accessReason("Care coordination")
+                    .maxEvents(3)
+                    .page(page)
+                    .categories(List.of("ENCOUNTER"))
+                    .build());
+            assertThat(response.getTotalEntries()).isEqualTo(7);
+            assertThat(response.getPage()).isEqualTo(page);
+            assertThat(response.getPageSize()).isEqualTo(3);
+            assertThat(response.getEntries()).hasSize(page < 2 ? 3 : 1);
+            response.getEntries().forEach(entry -> seen.add(entry.getEntryId()));
+        }
+        assertThat(seen).doesNotHaveDuplicates().hasSize(7);
     }
 
     @Test
@@ -1505,8 +1977,7 @@ class PatientServiceImplTest {
         otherHospital.setId(UUID.randomUUID());
         patient.getHospitalRegistrations().add(activeRegistrationAt(otherHospital));
 
-        when(patientRepository.findAllByPhoneNumberPrimary("+22670707070")).thenReturn(List.of(patient));
-        when(patientRepository.findAllByPhoneNumberSecondary("+22670707070")).thenReturn(List.of());
+        when(patientRepository.findAllByPhoneSubscriber(eq("%70707070"), any())).thenReturn(List.of(patient));
 
         var matches = patientService.findRegistrationMatches(null, "+22670707070", hospitalId);
 
@@ -1524,12 +1995,69 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void qaD1061_aPhoneMatchSaysWhetherItIsTheSamePerson() {
+        // A child registered under the father's number: the father is listed,
+        // and the card is told he is NOT the person being registered.
+        patient.setPhoneNumberPrimary("+22676334455");
+        when(patientRepository.findAllByPhoneSubscriber(eq("%76334455"), any())).thenReturn(List.of(patient));
+
+        var child = patientService.findRegistrationMatches(null, "+22676334455", "Abdoul Aziz", "Nikiéma",
+            LocalDate.of(2021, 8, 19), hospitalId);
+        assertThat(child).singleElement().satisfies(m -> {
+            assertThat(m.getMatchedOn()).isEqualTo("PHONE");
+            assertThat(m.getSameIdentity()).isFalse();
+        });
+
+        var same = patientService.findRegistrationMatches(null, "+22676334455", "JANE", "doe",
+            LocalDate.of(1990, 1, 1), hospitalId);
+        assertThat(same).singleElement().satisfies(m -> assertThat(m.getSameIdentity()).isTrue());
+
+        // Without a name and date of birth there is nothing to compare: null, as before.
+        assertThat(patientService.findRegistrationMatches(null, "+22676334455", hospitalId))
+            .singleElement().satisfies(m -> assertThat(m.getSameIdentity()).isNull());
+    }
+
+    @Test
+    void qaD1064_theSamePersonAtAnotherHospitalOfTheOrganisationIsProposedWithAnotherPhone() {
+        com.example.hms.model.Organization organization = new com.example.hms.model.Organization();
+        organization.setId(UUID.randomUUID());
+        hospital.setOrganization(organization);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        Patient homonym = new Patient();
+        homonym.setId(UUID.randomUUID());
+        homonym.setFirstName("Jane");
+        homonym.setLastName("Smith");
+        homonym.setDateOfBirth(LocalDate.of(1990, 1, 1));
+        homonym.setHospitalRegistrations(new java.util.HashSet<>());
+        when(patientRepository.findByDateOfBirthInOrganization(LocalDate.of(1990, 1, 1), organization.getId()))
+            .thenReturn(List.of(patient, homonym));
+
+        var matches = patientService.findRegistrationMatches(null, "+22670440099", "Jané", "DOE",
+            LocalDate.of(1990, 1, 1), hospitalId);
+
+        // The same first name, last name and date of birth; never a mere same-birthday homonym.
+        assertThat(matches).singleElement().satisfies(m -> {
+            assertThat(m.getPatientId()).isEqualTo(patientId);
+            assertThat(m.getMatchedOn()).isEqualTo("IDENTITY");
+            assertThat(m.getSameIdentity()).isTrue();
+        });
+    }
+
+    @Test
+    void qaD1064_noIdentityMatchOutsideAnOrganisation() {
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        assertThat(patientService.findRegistrationMatches(null, null, "Jane", "Doe", LocalDate.of(1990, 1, 1),
+            hospitalId)).isEmpty();
+        verify(patientRepository, never()).findByDateOfBirthInOrganization(any(), any());
+    }
+
+    @Test
     void findRegistrationMatchesFlagsAlreadyRegisteredHere() {
         patient.setPhoneNumberPrimary("+22670707070");
         patient.getHospitalRegistrations().add(activeRegistrationAt(hospital));
 
-        when(patientRepository.findAllByPhoneNumberPrimary("+22670707070")).thenReturn(List.of(patient));
-        when(patientRepository.findAllByPhoneNumberSecondary("+22670707070")).thenReturn(List.of());
+        when(patientRepository.findAllByPhoneSubscriber(eq("%70707070"), any())).thenReturn(List.of(patient));
 
         var matches = patientService.findRegistrationMatches(null, "+22670707070", hospitalId);
 
@@ -1546,8 +2074,7 @@ class PatientServiceImplTest {
         inactive.setActive(false);
         patient.getHospitalRegistrations().add(inactive);
 
-        when(patientRepository.findAllByPhoneNumberPrimary("+22670707070")).thenReturn(List.of(patient));
-        when(patientRepository.findAllByPhoneNumberSecondary("+22670707070")).thenReturn(List.of());
+        when(patientRepository.findAllByPhoneSubscriber(eq("%70707070"), any())).thenReturn(List.of(patient));
 
         var matches = patientService.findRegistrationMatches(null, "+22670707070", hospitalId);
 
@@ -1557,12 +2084,31 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void reviewRound10_aShortNumberSharedByTwoRecordsMatchesBoth() {
+        // Too short to name a subscriber, so matched exactly as stored; a
+        // shared number lists every holder, as develop's match did.
+        patient.setPhoneNumberPrimary("700010");
+        Patient sibling = new Patient();
+        sibling.setId(UUID.randomUUID());
+        sibling.setFirstName("Awa");
+        sibling.setLastName("Doe");
+        sibling.setPhoneNumberSecondary("700010");
+        sibling.setHospitalRegistrations(new java.util.HashSet<>());
+        when(patientRepository.findAllByPhoneNumberPrimary("700010")).thenReturn(List.of(patient));
+        when(patientRepository.findAllByPhoneNumberSecondary("700010")).thenReturn(List.of(sibling, patient));
+
+        var matches = patientService.findRegistrationMatches(null, "700010", hospitalId);
+
+        assertThat(matches).extracting(com.example.hms.payload.dto.RegistrationMatchDTO::getPatientId)
+            .containsExactly(patientId, sibling.getId());
+    }
+
+    @Test
     void findRegistrationMatchesDedupesPhoneAndEmailHitsPreferringPhone() {
         patient.setPhoneNumberPrimary("+22670707070");
         patient.setEmail("jane@example.com");
 
-        when(patientRepository.findAllByPhoneNumberPrimary("+22670707070")).thenReturn(List.of(patient));
-        when(patientRepository.findAllByPhoneNumberSecondary("+22670707070")).thenReturn(List.of());
+        when(patientRepository.findAllByPhoneSubscriber(eq("%70707070"), any())).thenReturn(List.of(patient));
         when(patientRepository.findAllByEmailIgnoreCase("jane@example.com")).thenReturn(List.of(patient));
 
         var matches = patientService.findRegistrationMatches("jane@example.com", "+22670707070", hospitalId);
@@ -1577,7 +2123,44 @@ class PatientServiceImplTest {
 
         assertThat(matches).isEmpty();
         verify(patientRepository, never()).findAllByEmailIgnoreCase(any());
-        verify(patientRepository, never()).findAllByPhoneNumberPrimary(any());
+        verify(patientRepository, never()).findAllByPhoneSubscriber(any(), any());
+    }
+
+    @Test
+    void findRegistrationMatchesFindsTheSameSubscriberHoweverEitherSideIsWritten() {
+        // QA D942: "+22670001002" typed at B, "70001002" stored at A, matched on
+        // the eight national digits (the query folds the stored side to digits).
+        patient.setPhoneNumberPrimary("70001002");
+        when(patientRepository.findAllByPhoneSubscriber(eq("%70001002"), any())).thenReturn(List.of(patient));
+
+        for (String typed : List.of("+22670001002", "70 00 10 02", "0022670001002", "70001002")) {
+            var matches = patientService.findRegistrationMatches(null, typed, hospitalId);
+            assertThat(matches).as(typed).hasSize(1);
+        }
+    }
+
+    @Test
+    void d1448_theActiveAllergiesComeBeforeEveryDeactivatedOne() {
+        UUID requester = UUID.randomUUID();
+        PatientAllergy severeRemoved = new PatientAllergy();
+        severeRemoved.setHospital(hospital);
+        severeRemoved.setAllergenDisplay("Sesame");
+        severeRemoved.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        severeRemoved.setActive(false);
+        PatientAllergy mildActive = new PatientAllergy();
+        mildActive.setHospital(hospital);
+        mildActive.setAllergenDisplay("Latex");
+        mildActive.setSeverity(com.example.hms.enums.AllergySeverity.MILD);
+        mildActive.setActive(true);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(severeRemoved, mildActive));
+        when(patientAllergyMapper.toResponseDto(any())).thenAnswer(inv -> PatientAllergyResponseDTO.builder()
+            .allergenDisplay(inv.<PatientAllergy>getArgument(0).getAllergenDisplay()).hospitalId(hospitalId).build());
+
+        assertThat(patientService.getPatientAllergies(patientId, hospitalId, requester))
+            .extracting(PatientAllergyResponseDTO::getAllergenDisplay)
+            .containsExactly("Latex", "Sesame");
     }
 
     @Test

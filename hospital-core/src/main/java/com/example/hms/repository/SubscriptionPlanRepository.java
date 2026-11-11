@@ -29,4 +29,7 @@ public interface SubscriptionPlanRepository extends JpaRepository<SubscriptionPl
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM SubscriptionPlan p WHERE p.id = :id")
     Optional<SubscriptionPlan> findByIdForUpdate(@Param("id") UUID id);
+
+    /** QA CX-005: a tier code already taken, whatever its case (it is looked up ignoring case). */
+    boolean existsByTierCodeIgnoreCase(String tierCode);
 }

@@ -140,8 +140,20 @@ public interface EncounterService {
     /**
      * Doctor picks up a WAITING_FOR_PHYSICIAN encounter and transitions it to IN_PROGRESS.
      */
+    default EncounterResponseDTO startEncounter(UUID encounterId, String actorUsername,
+                                                 boolean isSuperAdmin, UUID callerHospitalId) {
+        return startEncounter(encounterId, actorUsername, isSuperAdmin, callerHospitalId, false);
+    }
+
+    /**
+     * QA D1015: the clinician who owns the visit starts it. A doctor may pick
+     * up an unassigned visit; a midwife (who is not also a doctor) leads only
+     * the visits booked with her, so {@code mustBeAssignedClinician} refuses
+     * an unassigned visit or one assigned to someone else.
+     */
     EncounterResponseDTO startEncounter(UUID encounterId, String actorUsername,
-                                         boolean isSuperAdmin, UUID callerHospitalId);
+                                         boolean isSuperAdmin, UUID callerHospitalId,
+                                         boolean mustBeAssignedClinician);
 
     /**
      * Advance a TRIAGE encounter to WAITING_FOR_PHYSICIAN (nurse completes triage from tracker).

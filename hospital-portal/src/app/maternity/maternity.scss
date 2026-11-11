@@ -1,3 +1,4 @@
+@use '../shared/styles/care-workspace' as care;
 @use '../shared/styles/page-common';
 
 .filter-bar {
@@ -604,5 +605,55 @@
 
   p {
     margin: 0;
+  }
+}
+
+/* QA D1005: the gestational age under the due date. */
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #555);
+}
+
+@include care.workspace;
+
+.care-maternity-guide {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: #123341;
+  color: white;
+  border: 1px solid #123341;
+  border-radius: 16px;
+  padding: 26px;
+  margin-bottom: 24px;
+  > .material-symbols-outlined {
+    font-size: 32px;
+    padding: 14px;
+    background: #ffffff14;
+    border-radius: 14px;
+    color: #bcf0e3;
+  }
+  h2 {
+    margin: 0 0 8px;
+    font-size: 20px;
+    letter-spacing: -0.02em;
+  }
+  p {
+    color: #e1edf2;
+    font-size: 13px;
+    line-height: 1.8;
+    margin: 0;
+    max-width: 850px;
+  }
+}
+@media (max-width: 650px) {
+  .care-maternity-guide {
+    padding: 20px;
+    align-items: flex-start;
+    > .material-symbols-outlined {
+      display: none;
+    }
   }
 }

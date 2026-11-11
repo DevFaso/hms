@@ -96,8 +96,10 @@ Profile-only exporter targets are covered by `HmsExporterDown` (ticket-only).
 
 - If `job=integrations/spring-boot` → the backend is down or its
   `/api/actuator/prometheus` endpoint is failing, *or* Alloy is failing to
-  scrape/forward. Hit `curl http://hms-backend:8081/api/actuator/health`
-  and check both `hms-backend` and `alloy` container logs.
+  scrape/forward. The backend is not a compose service — it runs on the host, so
+  hit `curl http://localhost:8081/api/actuator/health` and check the backend's own
+  console plus `docker compose logs alloy`. A 401 on `/api/actuator/prometheus`
+  means Alloy's `METRICS_SCRAPE_TOKEN` does not match the backend's.
 - If `job=alloy` → Alloy is down; backend metrics will stop flowing even
   if the backend itself is healthy. Check `docker compose logs alloy`.
 - If `job=loki` → log shipping is broken; the SLO error-rate signal is
@@ -231,11 +233,119 @@ extend the disk, or scale the host.
 **What it means.** `process_start_time_seconds` changed more than twice
 in 10 minutes — backend is in a crash loop.
 
-1. `docker compose logs hms-backend --tail=400`.
+1. The backend's own console (it runs on the host, not in compose). In production,
+   `railway logs --service hms-backend-core` (prod) or `hms-backend-dev`.
 2. Check the "Errors & Warnings" panel on the Application Metrics
    dashboard for the last fatal exception before each restart.
 3. If the restart loop traces to a bad config / migration, hold the next
-   container start with `docker compose stop hms-backend` and fix forward.
+   start with Ctrl-C on the `bootRun` process and fix forward.
+
+---
+
+<a id="hmschattransporterrors"></a>
+
+## HmsChatTransportErrors  (`severity: page`)
+
+**What it means.** `/ws-chat` returned 5xx at more than **0.05/s for 5 minutes**
+— roughly 15 or more server errors in five minutes, on requests that reached a
+handler. Clinical chat is down or degraded for every connected client.
+
+**An absolute rate, not a ratio, and 5xx only.** Both choices exist because the
+obvious alternatives were tried and did not work:
+
+- A **ratio** cannot fire here. Its denominator would be every `/ws-chat`
+  request, and those are dominated by traffic that cannot fail: the HTTP **101**
+  of each successful WebSocket upgrade, plus routine `xhr_send` 404s against
+  timed-out sessions. Real 500s at ~0.3/s against ~2/s of polling is a ratio of
+  0.13 — under any usable threshold.
+- A **traffic floor** is equally wrong: requests-per-second on an endpoint whose
+  *healthy* requests last 25–50 s, so a few clients failing slowly sit at
+  ~0.04/s.
+- Counting **4xx** lets one stale browser tab page you; counting
+  **anything-not-2xx/3xx** counts every successful upgrade as a failure.
+
+The threshold works with SockJS's retry behaviour: a broken transport fails fast
+and reconnects immediately, so an outage produces *more* requests per second than
+a healthy connection does.
+
+**What this alert cannot see** — read this before concluding chat is fine:
+
+- **Ticket/auth failures.** `respondUnauthorized` is written inside
+  `JwtAuthenticationFilter`, before any `HandlerMapping` runs, so those 401s
+  carry `uri="UNKNOWN"` and never reach this rate. A fleet-wide ticket expiry
+  leaves this alert silent, and it is quiet in the logs too: the ticket refusal
+  lines are DEBUG, for the reasons in step 3.
+- **A path that stopped routing.** Tagged `uri="NOT_FOUND"`, attributable to no
+  endpoint. A blackbox probe cannot cover this either: `SecurityConfig` ends in
+  `anyRequest().authenticated()`, so authorization answers 401 on the path
+  pattern before a handler is resolved — a deleted SockJS mapping answers 401
+  exactly like a healthy one, so a probe stays green either way.
+- **A silent transport.** No requests means no 5xx, so a transport nobody can
+  reach looks exactly like a transport nobody is using.
+
+**Nothing covers those three automatically, and it is worth being blunt about it.**
+`HmsBackendNoTraffic` watches an application-wide unfiltered total, so a dead
+`/ws-chat` listener with the API still serving keeps it well above zero;
+`HmsTargetDown` watches scrape targets, not endpoints. A blackbox probe cannot
+help either — `SecurityConfig` ends in `anyRequest().authenticated()`, so
+authorization answers 401 on the path pattern before a handler is resolved, and a
+deleted SockJS mapping answers 401 exactly like a healthy one.
+
+So the signal for all three is a human: clients reporting chat is down while
+these metrics look clean. Treat that report as authoritative over this alert's
+silence and go to step 3. Closing that gap properly needs a probe that can mint a
+ws ticket, or a client-side heartbeat metric — neither exists today, and
+`tasklist.md` carries it as standing debt.
+
+**Why it has its own alert.** `/ws-chat` is SockJS, and a healthy connection is
+held open for 25-50 seconds. Micrometer records that as request *duration*, so
+leaving the endpoint in the aggregate SLIs put permanent 50-second samples in
+the top histogram buckets and made every percentile, Apdex figure and latency
+SLI report the API as failing while it was healthy. It is therefore excluded
+from the burn-rate ratios and the aggregate latency rules — which means those
+alerts will stay quiet no matter how badly chat is broken. This is the only
+alert that covers it.
+
+1. Check whether it is chat or the whole backend. The "HTTP 5xx Error Rate by
+   URI" panel on the Application Metrics dashboard deliberately does *not*
+   exclude the transport, so `/ws-chat/**` appears there as its own row, and this
+   alert and that panel filter the same `status=~"5.."` — so the row you want is
+   there. For the full picture of what the transport is returning, including the
+   classes this alert ignores by design (101 upgrades, routine `xhr_send` 404s),
+   query
+   `sum by (status) (rate(http_server_requests_seconds_count{uri=~"(/api)?/ws-chat.*"}[5m]))`
+   in Explore.
+2. Check the proxy and the path. A `curl` of `/api/ws-chat/info` answers **401**
+   when healthy, not 200 — `/ws-chat/**` is `.authenticated()` and the handshake
+   wants a `?ticket=` — so 401 is the good answer here and **404** is the broken
+   one. Because authorization matches the path pattern before any handler is
+   resolved, a 401 does *not* prove the SockJS mapping still exists; it only
+   proves the app is answering that path.
+3. A **5xx-shaped** failure is usually the broker or the handler itself. Note what
+   this alert can *not* tell you: Micrometer tags `uri` from the matched handler,
+   so only requests that reached the DispatcherServlet carry `/ws-chat/**`. Every
+   401 from `JwtAuthenticationFilter` is written inside the filter, before any
+   handler mapping, and lands under `uri="UNKNOWN"` — so a fleet-wide ticket
+   expiry will leave this alert silent and the per-URI panel empty. If clients
+   report chat failing and the chat metrics look clean, that is the shape to
+   suspect: check `WsTicketService` and `JwtAuthenticationFilter` logs directly.
+   Most rejections are visible without raising anything: invalid token, global
+   session revocation, idle window, blocked tenant, disabled principal and a
+   disabled-account ticket refusal are all WARN. **Four are not**, and they are
+   the ones that matter for a ticket problem: the blacklisted-jti and MFA-challenge
+   rejections, and `WsTicketService`'s unknown/expired ticket refusals. All four
+   are DEBUG, deliberately — each is reached on a client-controlled path and fires
+   once per request, so a WARN would be a volume lever and the expiry line would
+   put a username into prod logs. So for a suspected ticket problem you *will* need
+   DEBUG on `LOG_LEVEL_SECURITY`, which means accepting the restart below. Those
+   four loggers sit at INFO on dev
+   (`LOG_LEVEL_SECURITY`) only to suppress per-request DEBUG chatter. **Do not
+   raise it mid-incident** — a Railway variable change restarts the service, which
+   drops every SockJS connection and all in-memory ws tickets, destroying the state
+   you are trying to observe.
+4. The blind spots above are not hypothetical — if the alert is firing, the 5xx
+   are real, but if clients complain and this alert is quiet, do not close the
+   ticket on the strength of it.
 
 ---
 
@@ -243,7 +353,17 @@ in 10 minutes — backend is in a crash loop.
 
 When you add an alert in `grafana/rules/alerts.yml`, also:
 
-1. Set `annotations.runbook_url` to a `#anchor` in this file.
-2. Add a new section above using the same format
+1. Add it to `grafana/provisioning/alerting/alert-rules.yml` as well, or it will
+   never notify anyone. Alertmanager is commented out in `grafana/prometheus.yml`,
+   so the rules in `alerts.yml` are evaluated and routed nowhere; Grafana's own
+   unified alerting is what reaches a contact point.
+2. Set `annotations.runbook_url` to a `#anchor` in this file.
+3. Add an explicit `<a id="youralertname"></a>` tag above the new heading. Do not
+   rely on GitHub's generated slug: the headings here carry a `` (`severity: …`) ``
+   suffix, so the real slug for ``## HmsErrorBudgetFastBurn  (`severity: page`)``
+   is `hmserrorbudgetfastburn--severity-page`, and a short
+   `#hmserrorbudgetfastburn` link silently lands the on-call at the top of this
+   file instead. Every section here has such a tag for that reason.
+4. Add a new section above using the same format
    (*What it means*, *First 5 minutes*, *Likely causes*, *Mitigation*).
-3. Keep the most-fired alerts at the top.
+5. Keep the most-fired alerts at the top.

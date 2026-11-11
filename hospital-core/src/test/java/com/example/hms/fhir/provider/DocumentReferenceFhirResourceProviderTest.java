@@ -98,6 +98,24 @@ class DocumentReferenceFhirResourceProviderTest {
     }
 
     @Test
+    @DisplayName("QA D961: a certificate another hospital issued is not-found, even for a patient registered here")
+    void anotherHospitalsCertificateIsNotFound() {
+        setScope();
+        PatientUploadedDocument doc = uploadedDoc();
+        com.example.hms.model.Hospital issuer = new com.example.hms.model.Hospital();
+        issuer.setId(UUID.randomUUID());
+        doc.setIssuingHospital(issuer);
+        when(uploadedDocumentRepository.findById(doc.getId())).thenReturn(Optional.of(doc));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
+            .thenReturn(Optional.of(new PatientHospitalRegistration()));
+
+        IdType id = new IdType("DocumentReference", "upl-" + doc.getId());
+        assertThatThrownBy(() -> provider.read(id))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verifyNoInteractions(mapper);
+    }
+
+    @Test
     @DisplayName("soft-deleted uploaded doc is not-found even at the right hospital")
     void softDeletedUploadedDocumentIsNotFound() {
         setScope();
@@ -161,8 +179,8 @@ class DocumentReferenceFhirResourceProviderTest {
         setScope();
         when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
             .thenReturn(Optional.of(new PatientHospitalRegistration()));
-        when(uploadedDocumentRepository.findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(
-                org.mockito.ArgumentMatchers.eq(patientId), any(Pageable.class)))
+        when(uploadedDocumentRepository.findForStaffNewestFirst(
+                org.mockito.ArgumentMatchers.eq(patientId), org.mockito.ArgumentMatchers.eq(hospitalId), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(uploadedDoc())));
         when(dischargeSummaryRepository
             .findWithAssociationsByPatient_IdAndHospital_IdOrderByDischargeDateDesc(patientId, hospitalId))

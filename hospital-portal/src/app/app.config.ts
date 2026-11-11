@@ -1,4 +1,10 @@
+import { ChunkRecoveryService } from './core/chunk-recovery.service';
 import { installDecimalCommaSupport } from './shared/decimal-comma';
+import { installFocusRescue } from './shared/a11y/focus-rescue';
+import {
+  installServerFieldMarks,
+  serverFieldErrorsInterceptor,
+} from './shared/forms/server-field-errors';
 import { ApplicationConfig, LOCALE_ID, provideAppInitializer, inject } from '@angular/core';
 import { DOCUMENT, registerLocaleData } from '@angular/common';
 import localeFr from '@angular/common/locales/fr';
@@ -17,33 +23,11 @@ import { hospitalCacheInterceptor } from './interceptors/hospital-cache.intercep
 import { errorInterceptor } from './interceptors/error.interceptor';
 import { offlineDispenseInterceptor } from './interceptors/offline-dispense.interceptor';
 import { languageInterceptor } from './interceptors/language.interceptor';
+import { patientChartChangeInterceptor } from './interceptors/patient-chart-change.interceptor';
 import { currentLocale } from './shared/i18n/app-locale';
 
-/**
- * Recover from stale-deployment chunk failures. After a redeploy replaces the
- * hashed lazy chunks, a browser tab still running the previous session gets
- * `Failed to fetch dynamically imported module: .../chunk-XXXX.js` on the next
- * lazy navigation and the route silently dies. One full reload fetches the new
- * index.html + chunk graph and replays the navigation. The sessionStorage
- * guard (cleared on success) prevents a reload loop when the chunk is missing
- * for a different reason (e.g. broken deploy).
- */
-const CHUNK_RELOAD_GUARD = 'hms-chunk-reload';
-
 export function handleChunkLoadNavigationError(error: NavigationError): void {
-  const message = String((error.error as Error | undefined)?.message ?? error.error ?? '');
-  const isChunkLoadFailure =
-    /Failed to fetch dynamically imported module|Importing a module script failed|ChunkLoadError/i.test(
-      message,
-    );
-  if (!isChunkLoadFailure || typeof window === 'undefined') return;
-
-  if (window.sessionStorage.getItem(CHUNK_RELOAD_GUARD)) {
-    console.error('Chunk load failed again after reload — deploy may be broken:', message);
-    return;
-  }
-  window.sessionStorage.setItem(CHUNK_RELOAD_GUARD, '1');
-  window.location.assign(error.url);
+  inject(ChunkRecoveryService).handle(error);
 }
 
 // Angular ships only en-US; every other locale's date, number and currency
@@ -58,10 +42,16 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(
       withXhr(),
       withInterceptors([
+        // QA D1341 / D1320 / D1321: a write refused with `fieldErrors` marks
+        // the named fields in the form it was sent from (outermost, so it sees
+        // the refusal the page sees, after CSRF replays and the error path).
+        serverFieldErrorsInterceptor,
         apiPrefixInterceptor,
         languageInterceptor,
         csrfInterceptor,
         hospitalCacheInterceptor,
+        // QA D957: a write on a patient's chart refreshes every summary of it.
+        patientChartChangeInterceptor,
         // Roadmap row 4 / T-68 — must run BEFORE errorInterceptor so a queued
         // (synthetic 202) response is not treated as a real error and routed
         // through the auth-refresh / toast path. Order is the chain order.
@@ -87,5 +77,11 @@ export const appConfig: ApplicationConfig = {
     provideAppInitializer(() => inject(OidcAuthService).initialize()),
     // QA D505: comma decimals in every numeric input, whatever the browser locale.
     provideAppInitializer(() => installDecimalCommaSupport(inject(DOCUMENT))),
+    // QA D1202 / D1198 / D1199 / D1197: focus never falls to the page body when
+    // the control that held it goes away (shared/a11y/focus-rescue.ts).
+    provideAppInitializer(() => installFocusRescue(inject(DOCUMENT))),
+    // QA D1341: remember where the reader acts, so a refused write's fields
+    // are marked in that form (shared/forms/server-field-errors.ts).
+    provideAppInitializer(() => installServerFieldMarks(inject(DOCUMENT))),
   ],
 };

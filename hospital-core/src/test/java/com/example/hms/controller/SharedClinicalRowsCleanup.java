@@ -63,6 +63,10 @@ final class SharedClinicalRowsCleanup {
         // QA D796: an unbooked labour opens the pregnancy record (maternal
         // history), which pins the patient, the hospital and the staff.
         context.getBean(com.example.hms.repository.MaternalHistoryRepository.class).deleteAll();
+        // QA D1212 (round 24): proxy grants pin the grantor and the proxy
+        // user; immunizations pin the patient and the hospital.
+        context.getBean(com.example.hms.repository.PatientProxyRepository.class).deleteAllInBatch();
+        context.getBean(com.example.hms.repository.ImmunizationRepository.class).deleteAllInBatch();
         context.getBean(PatientHospitalRegistrationRepository.class).deleteAll();
         // patient_problems (and their history) reference staff.
         context.getBean(PatientProblemHistoryRepository.class).deleteAllInBatch();

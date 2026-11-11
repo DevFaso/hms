@@ -1,5 +1,10 @@
+import { refusalReason } from '../../shared/refusal-reason';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Observable } from 'rxjs';
 import {
   Component,
+  DestroyRef,
+  WritableSignal,
   inject,
   signal,
   computed,
@@ -31,6 +36,9 @@ import { WaitlistPanelComponent } from '../waitlist-panel/waitlist-panel.compone
 import { RecallsPanelComponent } from '../recalls-panel/recalls-panel.component';
 import { CheckinDialogComponent } from '../checkin-dialog/checkin-dialog.component';
 import { localDateString } from '../../shared/date-utils';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
+import { DashPipe } from '../../shared/pipes/dash.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 type Tab = 'queue' | 'insurance' | 'payments' | 'flowboard' | 'waitlist' | 'recalls';
 type StatusFilter =
@@ -51,9 +59,12 @@ function todayIso(): string {
   selector: 'app-reception-cockpit',
   standalone: true,
   imports: [
+    DashPipe,
+    KeyLabelPipe,
     CommonModule,
     FormsModule,
     TranslateModule,
+    ServerTimePipe,
     PatientSnapshotDrawerComponent,
     InsuranceIssuesPanelComponent,
     PaymentPendingPanelComponent,
@@ -73,6 +84,24 @@ export class ReceptionCockpitComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
+  private readonly destroyRef = inject(DestroyRef);
+  private readEpoch = 0;
+  readonly searchTerm = signal('');
+  readonly attentionFilter = signal<'all' | 'insurance' | 'balance'>('all');
+  readonly summaryLoading = signal(false);
+  readonly insuranceLoading = signal(false);
+  readonly paymentsLoading = signal(false);
+  readonly flowLoading = signal(false);
+  readonly summaryFailed = signal(false);
+  readonly queueFailed = signal(false);
+  readonly insuranceFailed = signal(false);
+  readonly paymentsFailed = signal(false);
+  readonly flowFailed = signal(false);
+  clearQueueFilters(): void {
+    this.searchTerm.set('');
+    this.attentionFilter.set('all');
+    this.statusFilter.set('ALL');
+  }
   readonly STATUS_FILTERS: StatusFilter[] = [
     'ALL',
     'SCHEDULED',
@@ -102,9 +131,25 @@ export class ReceptionCockpitComponent implements OnInit {
   flowBoard = signal<FlowBoard | null>(null);
 
   filteredQueue = computed(() => {
+    const term = this.searchTerm().trim().toLocaleLowerCase();
     const f = this.statusFilter();
-    const items = this.queueItems();
-    return f === 'ALL' ? items : items.filter((i) => i.status === f);
+    return this.queueItems().filter(
+      (item) =>
+        // QA D1400 + D1401: the server says which filters open a row, by the rule its
+        // summary counts through, so a card's number is the rows it opens. A walk-in's
+        // status is ARRIVED, IN_PROGRESS, ...: it carries WALK_IN here, never as a status.
+        (f === 'ALL' || (item.queueFilters ?? [item.status]).includes(f)) &&
+        (this.attentionFilter() !== 'insurance' || item.hasInsuranceIssue) &&
+        (this.attentionFilter() !== 'balance' || item.hasOutstandingBalance) &&
+        (!term ||
+          [
+            item.patientName,
+            item.mrn,
+            item.providerName,
+            item.departmentName,
+            item.appointmentReason,
+          ].some((v) => v?.toLocaleLowerCase().includes(term))),
+    );
   });
 
   ngOnInit(): void {
@@ -113,47 +158,78 @@ export class ReceptionCockpitComponent implements OnInit {
 
   loadAll(): void {
     const date = this.selectedDate();
-    this.loading.set(true);
+    const request = ++this.readEpoch;
+    this.summary.set(null);
+    this.queueItems.set([]);
+    this.insuranceIssues.set([]);
+    this.paymentsPending.set([]);
+    this.flowBoard.set(null);
+    this.loadPart(
+      this.receptionService.getDashboardSummary(date),
+      this.summaryLoading,
+      this.summaryFailed,
+      (value) => this.summary.set(value),
+      request,
+      'RECEPTION.LOAD_SUMMARY_FAILED',
+    );
+    this.loadPart(
+      this.receptionService.getQueue({ date }),
+      this.loading,
+      this.queueFailed,
+      (value) => this.queueItems.set(value ?? []),
+      request,
+      'RECEPTION.LOAD_QUEUE_FAILED',
+    );
+    this.loadPart(
+      this.receptionService.getInsuranceIssues(date),
+      this.insuranceLoading,
+      this.insuranceFailed,
+      (value) => this.insuranceIssues.set(value ?? []),
+      request,
+    );
+    this.loadPart(
+      this.receptionService.getPaymentsPending(date),
+      this.paymentsLoading,
+      this.paymentsFailed,
+      (value) => this.paymentsPending.set(value ?? []),
+      request,
+    );
+    this.loadPart(
+      this.receptionService.getFlowBoard(date),
+      this.flowLoading,
+      this.flowFailed,
+      (value) => this.flowBoard.set(value),
+      request,
+    );
+  }
 
-    this.receptionService.getDashboardSummary(date).subscribe({
-      next: (s) => this.summary.set(s),
-      error: () => this.toast.error(this.translate.instant('RECEPTION.LOAD_SUMMARY_FAILED')),
-    });
-
-    this.receptionService.getQueue({ date }).subscribe({
-      next: (items) => {
-        this.queueItems.set(items);
-        this.loading.set(false);
+  private loadPart<T>(
+    source: Observable<T>,
+    loading: WritableSignal<boolean>,
+    failed: WritableSignal<boolean>,
+    apply: (value: T) => void,
+    request: number,
+    errorKey?: string,
+  ): void {
+    loading.set(true);
+    failed.set(false);
+    source.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (value) => {
+        if (request !== this.readEpoch) return;
+        apply(value);
+        loading.set(false);
       },
       error: () => {
-        this.toast.error(this.translate.instant('RECEPTION.LOAD_QUEUE_FAILED'));
-        this.loading.set(false);
-      },
-    });
-
-    this.receptionService.getInsuranceIssues(date).subscribe({
-      next: (issues) => this.insuranceIssues.set(issues),
-      error: () => {
-        /* silent — summary strip shows placeholder */
-      },
-    });
-
-    this.receptionService.getPaymentsPending(date).subscribe({
-      next: (items) => this.paymentsPending.set(items),
-      error: () => {
-        /* silent — panel shows empty state */
-      },
-    });
-
-    this.receptionService.getFlowBoard(date).subscribe({
-      next: (board) => this.flowBoard.set(board),
-      error: () => {
-        /* silent — flow board shows empty state */
+        if (request !== this.readEpoch) return;
+        failed.set(true);
+        loading.set(false);
+        if (errorKey) this.toast.error(this.translate.instant(errorKey));
       },
     });
   }
 
   onDateChange(): void {
+    this.clearQueueFilters();
     this.loadAll();
   }
 
@@ -192,6 +268,15 @@ export class ReceptionCockpitComponent implements OnInit {
     return this.translate.instant(key);
   }
 
+  formatWait(minutes: number): string {
+    if (!Number.isFinite(minutes)) return '—';
+    const value = Math.round(minutes);
+    return this.translate.instant(value >= 60 ? 'TRACKER.DURATION_HM' : 'TRACKER.DURATION_M', {
+      hours: Math.floor(value / 60),
+      minutes: value >= 60 ? value % 60 : value,
+    });
+  }
+
   onFlowBoardStatusChanged(change: FlowBoardStatusChange): void {
     this.receptionService.updateEncounterStatus(change.encounterId, change.newStatus).subscribe({
       next: () => {
@@ -202,7 +287,7 @@ export class ReceptionCockpitComponent implements OnInit {
         // QA D788: the server says why (a visit nobody saw, the clinician's
         // steps), and the card goes back where it was.
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.STATUS_UPDATE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('RECEPTION.STATUS_UPDATE_FAILED'),
         );
         this.reloadFlowBoard();
       },
@@ -223,9 +308,15 @@ export class ReceptionCockpitComponent implements OnInit {
   }
 
   private reloadFlowBoard(): void {
-    this.receptionService.getFlowBoard(this.selectedDate()).subscribe({
-      next: (board) => this.flowBoard.set(board),
-    });
+    const request = this.readEpoch;
+    this.receptionService
+      .getFlowBoard(this.selectedDate())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (board) => {
+          if (request === this.readEpoch) this.flowBoard.set(board);
+        },
+      });
   }
 
   openCheckIn(item: ReceptionQueueItem): void {
@@ -238,6 +329,12 @@ export class ReceptionCockpitComponent implements OnInit {
   }
 
   canCheckIn(item: ReceptionQueueItem): boolean {
-    return !!item.appointmentId && (item.status === 'SCHEDULED' || item.status === 'CONFIRMED');
+    return (
+      !!item.appointmentId &&
+      (item.status === 'SCHEDULED' || item.status === 'CONFIRMED') &&
+      // QA D1489: an action that could only be refused is not offered.
+      !item.patientDeceased &&
+      !item.registrationInactive
+    );
   }
 }

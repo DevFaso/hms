@@ -1,15 +1,18 @@
-import { TestBed } from '@angular/core/testing';
+import { EmpiStatusService } from '../reception/empi-status.service';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter, Route } from '@angular/router';
+import { provideRouter, Route, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
-import { ShellComponent } from './shell';
+import { MOBILE_SIDEBAR_QUERY, ShellComponent } from './shell';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { NotificationService } from '../services/notification.service';
+import { expectKeyboardModal } from '../testing/modal-dialog-keyboard';
 import { ImpersonationService } from '../services/impersonation.service';
 import { IdleService } from '../core/idle.service';
 import { EmergencyBroadcastService } from '../services/emergency-broadcast.service';
@@ -23,6 +26,7 @@ import { ProviderSettings } from '../services/provider.model';
 import { WritableSignal } from '@angular/core';
 import { routes } from '../app.routes';
 import { roleSatisfies } from '../core/role-equivalence';
+import { HospitalScopeGateService } from '../core/hospital-scope-gate.service';
 import en from '../../assets/i18n/en.json';
 import fr from '../../assets/i18n/fr.json';
 import es from '../../assets/i18n/es.json';
@@ -47,6 +51,10 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     wildcardPermission: boolean;
     /** When set, hasPermission answers from this list instead of the wildcard. */
     permissions?: string[];
+    /** QA D987: whether the EMPI matcher is on (default on). */
+    empiEnabled?: boolean | null;
+    /** Review round 16: the status read failed. */
+    empiFailed?: boolean;
   }): { items: NavItem[]; component: ShellComponent } {
     const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
       'getUserProfile',
@@ -104,6 +112,16 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
         { provide: NotificationService, useValue: notifStub },
         { provide: ImpersonationService, useValue: impersonationStub },
         { provide: IdleService, useValue: idleStub },
+        {
+          provide: EmpiStatusService,
+          useValue: {
+            enabled: signal<boolean | null>(
+              opts.empiEnabled === undefined ? true : opts.empiEnabled,
+            ),
+            failed: signal(opts.empiFailed ?? false),
+            load: () => of(true),
+          },
+        },
       ],
     });
 
@@ -123,6 +141,114 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
   }
 
   afterEach(() => TestBed.resetTestingModule());
+
+  it('names every facility-only network workspace, including routes absent from navigation', () => {
+    const { items, component } = createComponent({
+      activeRole: 'ROLE_SUPER_ADMIN',
+      roles: ['ROLE_SUPER_ADMIN'],
+      wildcardPermission: true,
+    });
+    component.navItems.set(items as never);
+    const gate = TestBed.inject(HospitalScopeGateService);
+    const title = () =>
+      (component as unknown as { networkModuleTitleKey: () => string }).networkModuleTitleKey();
+    function visit(entries: Route[], prefix = ''): void {
+      for (const route of entries) {
+        const path = `${prefix}/${route.path ?? ''}`.replace(/\/+/g, '/');
+        if (route.data?.['requiresHospitalScope'] && !route.data?.['supportsGlobalHospitalView']) {
+          gate.routePath.set(path);
+          gate.moduleTitleKey.set(route.data?.['hospitalNetworkTitleKey'] ?? null);
+          expect(title()).withContext(path).not.toBe('HOSPITAL_NETWORK.TITLE');
+        }
+        if (route.children) visit(route.children, path);
+      }
+    }
+    visit(routes);
+  });
+
+  describe('sidebar width controls', () => {
+    let previousWidth: string | null;
+    const make = () =>
+      createComponent({
+        activeRole: 'ROLE_PATIENT',
+        roles: ['ROLE_PATIENT'],
+        wildcardPermission: false,
+      }).component;
+
+    beforeEach(() => {
+      previousWidth = localStorage.getItem('hms.sidebar.width');
+      localStorage.removeItem('hms.sidebar.width');
+      spyOn(globalThis, 'matchMedia').and.returnValue({ matches: false } as MediaQueryList);
+    });
+    afterEach(() => {
+      if (previousWidth === null) localStorage.removeItem('hms.sidebar.width');
+      else localStorage.setItem('hms.sidebar.width', previousWidth);
+    });
+
+    it('restores valid width preferences and rejects invalid browser storage', () => {
+      localStorage.setItem('hms.sidebar.width', '360');
+      expect(make().sidebarWidth()).toBe(360);
+      TestBed.resetTestingModule();
+      localStorage.setItem('hms.sidebar.width', 'NaN');
+      expect(make().sidebarWidth()).toBe(260);
+    });
+
+    it('resizes by keyboard within bounds and keeps the width after collapse and expansion', () => {
+      const component = make();
+      const key = (name: string) =>
+        component.resizeSidebarWithKey(
+          new KeyboardEvent('keydown', { key: name, cancelable: true }),
+        );
+      key('ArrowRight');
+      expect(component.sidebarWidth()).toBe(276);
+      key('End');
+      key('ArrowRight');
+      expect(component.sidebarWidth()).toBe(420);
+      component.toggleSidebar();
+      component.toggleSidebar();
+      expect(component.sidebarCollapsed()).toBeFalse();
+      expect(component.sidebarWidth()).toBe(420);
+      key('Home');
+      key('ArrowLeft');
+      expect(component.sidebarWidth()).toBe(240);
+      expect(localStorage.getItem('hms.sidebar.width')).toBe('240');
+      component.resetSidebarWidth();
+      expect(component.sidebarWidth()).toBe(260);
+    });
+
+    it('captures a drag, clamps its width, ignores other pointers, and restores cancelled drags', () => {
+      const component = make();
+      const target = {
+        setPointerCapture: jasmine.createSpy(),
+        hasPointerCapture: () => true,
+        releasePointerCapture: jasmine.createSpy(),
+      };
+      const event = (x: number, pointerId = 7) =>
+        ({
+          button: 0,
+          pointerId,
+          clientX: x,
+          preventDefault: () => undefined,
+          currentTarget: target,
+        }) as unknown as PointerEvent;
+      component.startSidebarResize(event(260));
+      component.moveSidebarResize(event(350, 8));
+      expect(component.sidebarWidth()).toBe(260);
+      component.moveSidebarResize(event(900));
+      expect(component.sidebarWidth()).toBe(420);
+      component.endSidebarResize(event(900), true);
+      expect(component.sidebarWidth()).toBe(260);
+      expect(component.sidebarResizing()).toBeFalse();
+      component.startSidebarResize(event(260));
+      component.moveSidebarResize(event(350));
+      component.endSidebarResize(event(350));
+      expect(component.sidebarWidth()).toBe(350);
+      expect(localStorage.getItem('hms.sidebar.width')).toBe('350');
+      component.toggleSidebar();
+      component.startSidebarResize(event(350));
+      expect(component.sidebarResizing()).toBeFalse();
+    });
+  });
 
   it('starts with the drawer closed on a phone, so it does not cover the topbar (D116)', () => {
     spyOn(globalThis, 'matchMedia').and.callFake(
@@ -298,6 +424,29 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(hospitalAdmin).toContain('/admin/integrations/dhis2');
     // ADT intake is SUPER_ADMIN only, on the route and on the controller.
     expect(hospitalAdmin).not.toContain('/admin/adt-intake-configs');
+  });
+
+  it('QA D987: hides the duplicate-patient panel while the matcher is switched off', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_RECEPTIONIST',
+      roles: ['ROLE_RECEPTIONIST'],
+      wildcardPermission: false,
+      empiEnabled: false,
+    });
+
+    expect(items.map((i) => i.route)).not.toContain('/reception/empi-candidates');
+  });
+
+  it('review round 16: a failed status read still offers the panel (the guard decides)', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_RECEPTIONIST',
+      roles: ['ROLE_RECEPTIONIST'],
+      wildcardPermission: false,
+      empiEnabled: null,
+      empiFailed: true,
+    });
+
+    expect(items.map((i) => i.route)).toContain('/reception/empi-candidates');
   });
 
   it('hides the duplicate-patient panel from roles outside its route guard', () => {
@@ -1185,6 +1334,146 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
     expect(broadcastSpy().connect).toHaveBeenCalledTimes(1);
   });
 
+  // QA D1125 (D1004 class, round 20): the bell panel and the profile menu
+  // moved no focus, and their Escape was bound on an aria-hidden backdrop that
+  // never receives a key, so Escape left them open.
+  for (const [what, testid] of [
+    ['notification panel', 'shell-bell'],
+    ['profile menu', 'shell-profile-btn'],
+  ]) {
+    it(`the ${what} is a keyboard modal: focus in, Escape closes, focus back to its button`, () => {
+      const fixture = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');
+      document.body.appendChild(fixture.nativeElement);
+      fixture.detectChanges();
+      const opener = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        `[data-testid="${testid}"]`,
+      )!;
+      expectKeyboardModal(fixture, opener);
+      fixture.destroy();
+    });
+  }
+
+  // QA D1153 / D1125 / D1004 (round 21): at 375 px the drawer never took
+  // focus, Escape from the Menu button did nothing and Tab walked to the
+  // language select behind the backdrop.
+  describe('the phone drawer is a keyboard modal', () => {
+    function phoneShell(): { fixture: ComponentFixture<ShellComponent>; menu: HTMLElement } {
+      spyOn(globalThis, 'matchMedia').and.callFake(
+        (q: string) => ({ matches: q === MOBILE_SIDEBAR_QUERY }) as MediaQueryList,
+      );
+      const fixture = build(['ROLE_PATIENT'], 'ROLE_PATIENT');
+      document.body.appendChild(fixture.nativeElement);
+      attached.push(fixture.nativeElement);
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      // The test browser is wider than a phone, so the CSS hides the Menu button.
+      const menu = host.querySelector<HTMLElement>('.mobile-toggle')!;
+      menu.style.display = 'inline-flex';
+      return { fixture, menu };
+    }
+
+    function openFromMenu(
+      fixture: ComponentFixture<ShellComponent>,
+      menu: HTMLElement,
+    ): HTMLElement {
+      menu.focus();
+      menu.click();
+      fixture.detectChanges();
+      TestBed.tick();
+      const aside = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        'aside.sidebar',
+      )!;
+      expect(aside.getAttribute('role')).toBe('dialog');
+      expect(aside.getAttribute('aria-modal')).toBe('true');
+      expect((aside.getAttribute('aria-label') ?? '').trim()).not.toBe('');
+      expect(aside.contains(document.activeElement))
+        .withContext('focus moved into the drawer')
+        .toBeTrue();
+      return aside;
+    }
+
+    function press(target: EventTarget, key: string, shiftKey = false): void {
+      target.dispatchEvent(
+        new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }),
+      );
+    }
+
+    const attached: HTMLElement[] = [];
+    afterEach(() => attached.splice(0).forEach((el) => el.remove()));
+
+    it('focus moves in, Escape closes it and focus is back on Menu', () => {
+      const { fixture, menu } = phoneShell();
+      openFromMenu(fixture, menu);
+      const mainArea = (fixture.nativeElement as HTMLElement).querySelector('.main-area')!;
+      expect(mainArea.hasAttribute('inert')).withContext('the page behind is inert').toBeTrue();
+      press(document.activeElement!, 'Escape');
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(fixture.componentInstance.sidebarCollapsed()).toBeTrue();
+      expect(document.activeElement).withContext('focus back on Menu').toBe(menu);
+      expect(mainArea.hasAttribute('inert')).toBeFalse();
+      fixture.destroy();
+    });
+
+    it('Escape pressed with focus outside the drawer (on Menu, or fallen to the page) still closes it', () => {
+      const { fixture, menu } = phoneShell();
+      openFromMenu(fixture, menu);
+      (document.activeElement as HTMLElement).blur();
+      press(document.body, 'Escape');
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(fixture.componentInstance.sidebarCollapsed()).toBeTrue();
+      expect(document.activeElement).toBe(menu);
+      fixture.destroy();
+    });
+
+    it('Tab and Shift+Tab stay inside the drawer', () => {
+      const { fixture, menu } = phoneShell();
+      const aside = openFromMenu(fixture, menu);
+      const focusable = Array.from(
+        aside.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled])',
+        ),
+      ).filter((el) => el.getClientRects().length > 0);
+      const last = focusable[focusable.length - 1];
+      last.focus();
+      press(last, 'Tab');
+      expect(document.activeElement)
+        .withContext('Tab from the last control wraps')
+        .toBe(focusable[0]);
+      press(focusable[0], 'Tab', true);
+      expect(document.activeElement).withContext('Shift+Tab from the first wraps').toBe(last);
+      // Focus that left the drawer is brought back in by Tab.
+      (document.activeElement as HTMLElement).blur();
+      press(document.body, 'Tab');
+      expect(aside.contains(document.activeElement)).toBeTrue();
+      fixture.destroy();
+    });
+
+    it('a navigation from the open drawer closes it and puts focus on the new page, not on Menu', async () => {
+      const { fixture, menu } = phoneShell();
+      openFromMenu(fixture, menu);
+      await TestBed.inject(Router).navigateByUrl('/');
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(fixture.componentInstance.sidebarCollapsed()).toBeTrue();
+      const main = (fixture.nativeElement as HTMLElement).querySelector('#main-content');
+      expect(document.activeElement).withContext('focus on <main>').toBe(main);
+      fixture.destroy();
+    });
+
+    it('on a wide screen the expanded sidebar is a landmark, not a modal', () => {
+      spyOn(globalThis, 'matchMedia').and.callFake(() => ({ matches: false }) as MediaQueryList);
+      const fixture = build(['ROLE_PATIENT'], 'ROLE_PATIENT');
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(fixture.componentInstance.sidebarCollapsed()).toBeFalse();
+      expect(host.querySelector('aside.sidebar')!.hasAttribute('role')).toBeFalse();
+      expect(host.querySelector('aside.sidebar')!.hasAttribute('aria-modal')).toBeFalse();
+      expect(host.querySelector('.main-area')!.hasAttribute('inert')).toBeFalse();
+    });
+  });
+
   it('a provider user whose settings are being asked again keeps the provider home, never the hospital nav', () => {
     const fixture = build(['ROLE_PHARMACIST'], 'ROLE_PHARMACIST', true);
     const context = TestBed.inject(ProviderContextService) as unknown as {
@@ -1446,6 +1735,7 @@ describe('ShellComponent — route-level hospital scope gate', () => {
         'lab-release-worklist',
         'lab-staff',
         'maternity',
+        'mortality',
         'nurse-station',
         'patient-tracker',
         'procedure-orders',

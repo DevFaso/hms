@@ -31,8 +31,12 @@ public class LabResultRequestDTO {
     private UUID patientId;
 
     @NotBlank
+    /** QA D1387 (round 32): within its column, refused by name (not a generic constraint 400). */
+    @jakarta.validation.constraints.Size(max = 2048)
     private String resultValue;
 
+    /** QA D1387 (round 32): within its column, refused by name (not a generic constraint 400). */
+    @jakarta.validation.constraints.Size(max = 50)
     private String resultUnit;
 
     /**
@@ -68,6 +72,8 @@ public class LabResultRequestDTO {
     @NotNull
     private LocalDateTime resultDate;
 
+    /** QA D1387 (round 32): within its column, refused by name (not a generic constraint 400). */
+    @jakarta.validation.constraints.Size(max = 2048)
     private String notes;
 
     /**

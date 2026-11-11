@@ -6,7 +6,10 @@
     </h1>
     @if (summary()) {
       <p class="subtitle">
-        {{ 'LAB_OPS.SNAPSHOT_AS_OF' | translate: { date: summary()!.asOfDate } }}
+        {{
+          'LAB_OPS.SNAPSHOT_AS_OF'
+            | translate: { date: summary()!.asOfDate | serverTime | date: 'mediumDate' }
+        }}
       </p>
     }
   </header>
@@ -54,7 +57,7 @@
                 ></div>
               </div>
               <span class="bar-count">{{ row.count }}</span>
-              <span class="bar-pct">({{ row.pct }}%)</span>
+              <span class="bar-pct">({{ row.pct | measure: '%' }})</span>
             </div>
           }
         </div>
@@ -77,7 +80,7 @@
                 ></div>
               </div>
               <span class="bar-count">{{ row.count }}</span>
-              <span class="bar-pct">({{ row.pct }}%)</span>
+              <span class="bar-pct">({{ row.pct | measure: '%' }})</span>
             </div>
           }
         </div>

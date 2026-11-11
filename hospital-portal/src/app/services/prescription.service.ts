@@ -1,13 +1,43 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
+import { STEP_UP_REQUEST } from './step-up';
+
+/**
+ * Round 18: the prescriber's re-authentication when signing a controlled-drug
+ * prescription: the TOTP code when an authenticator is enrolled, else the
+ * password. Checked on that one call.
+ */
+export interface SignReauthentication {
+  password?: string;
+  mfaCode?: string;
+}
+
+/**
+ * POST /prescriptions/{id}/sign (SignPrescriptionRequestDTO): the
+ * re-authentication of a controlled drug, and (QA D1183, round 23) the
+ * prescriber's reason for signing an order the allergy stop applies to when
+ * no acknowledgement was recorded at creation or edit (a documented allergy
+ * covers the drug, or the drug name could not be checked against a drug-class
+ * allergy: `prescription.allergy.unverifiable`).
+ */
+export interface SignPrescriptionBody extends SignReauthentication {
+  allergyOverrideReason?: string;
+  /** CR-02: the token the refused signature answered with (`CdsCard.exceptionKey`). */
+  doseExceptionToken?: string;
+  /** CR-01: the prescriber states this child's order cannot wait for the second-person review. */
+  urgentDoseException?: boolean;
+}
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
+import { ALL_PAGES_SIZE, PageSlice, allRows } from '../shared/all-pages';
 
 export interface PrescriptionResponse {
   id: string;
   patientId: string;
   patientFullName: string;
   patientEmail: string;
+  /** QA D912: the patient's primary phone; absent from a server that predates it. */
+  patientPhone?: string;
   staffId: string;
   staffFullName: string;
   encounterId: string;
@@ -23,6 +53,12 @@ export interface PrescriptionResponse {
   medicationDisplayName: string;
   dosage: string;
   frequency: string;
+  /** QA round 30: the minimum hours between two doses of an as-needed order, or null. */
+  prnMinIntervalHours?: number | null;
+  /** QA D1378 (round 32): the order is as-needed (PRN), as the prescriber ticked it. */
+  asNeeded?: boolean;
+  /** QA D1452: the MAR cannot schedule this wording: nurses give a reason at each later dose. */
+  frequencyUnread?: boolean;
   /** Administration route code (PO, IV, ...); null on orders that never recorded one. */
   route?: string | null;
   duration: string;
@@ -56,6 +92,10 @@ export interface PrescriptionResponse {
   /** Safeguard state (P2 #15) — why a sign/dispense was refused, made visible. */
   controlledSubstance?: boolean;
   requiresCosign?: boolean;
+  /** QA D934: a nurse's or midwife's unsigned draft, which a doctor of the hospital signs. */
+  awaitingPhysicianSignature?: boolean;
+  /** QA D922: the catalogue item the order was written from, or resolved to. */
+  medicationCatalogItemId?: string | null;
   /** QA D757: a take-home order outlives its stay. */
   takeHome?: boolean;
   twoFactorVerifiedAt?: string | null;
@@ -123,6 +163,24 @@ export interface PrescriptionResponse {
   clarificationRequestedAt?: string | null;
   clarificationResponse?: string | null;
   clarificationResolvedAt?: string | null;
+
+  /* ── Overrides and the paediatric dose review (round 19) ─────────── */
+
+  /**
+   * QA D1101: why the prescriber passed an alert - a documented allergy
+   * (`allergyOverride` true) or a critical decision-support alert such as a
+   * paediatric dose soft stop. Absent when nothing was overridden, and from
+   * the patient's copy.
+   */
+  overrideReason?: string | null;
+  allergyOverride?: boolean | null;
+  /** CR-01: signed as an urgent exception; the review is still due after the fact. */
+  pediatricDoseUrgentExceptionAt?: string | null;
+  /** QA D1096: the paediatric dose check asked for a recorded review before signing. */
+  pediatricDoseReviewRequired?: boolean | null;
+  pediatricDoseReviewedAt?: string | null;
+  pediatricDoseReviewedByName?: string | null;
+  pediatricDoseReviewReason?: string | null;
 }
 
 /**
@@ -174,6 +232,22 @@ export interface PrescriptionRequest {
   medicationName: string;
   dosage?: string;
   frequency?: string;
+  /**
+   * QA round 30 (user decision 2026-11-02): the minimum hours between two
+   * doses of an as-needed (PRN, "si besoin") order; required on one, refused
+   * on any other (fieldErrors.prnMinIntervalHours).
+   */
+  prnMinIntervalHours?: number | null;
+  /**
+   * QA D1378 (round 32): the prescriber's explicit "as needed (PRN)" tick. A
+   * condition in the frequency sent without it is refused (fieldErrors.asNeeded).
+   */
+  asNeeded?: boolean;
+  /**
+   * QA D1419: the prescriber's answer to "this wording cannot be scheduled"
+   * (fieldErrors.frequencyConfirmed): the order is created and the MAR flags it.
+   */
+  frequencyConfirmed?: boolean;
   /** D109: the route the MAR five-rights check compares the bedside entry with. */
   route?: string;
   duration?: string;
@@ -193,6 +267,12 @@ export interface PrescriptionRequest {
    */
   controlledSubstance?: boolean;
   requiresCosign?: boolean;
+  /**
+   * QA D922/D935: the catalogue item picked in the form, so the catalogue's
+   * controlled flag and paediatric ceiling apply. The server also resolves a
+   * typed name to the hospital's item when this is absent.
+   */
+  medicationCatalogItemId?: string | null;
   /** QA D757: the order goes home with the patient; every other stay order ends at discharge. */
   takeHome?: boolean;
   /** QA D660: mandatory when a SIGNED prescription is cancelled or discontinued. */
@@ -205,51 +285,89 @@ export class PrescriptionService {
   private readonly baseUrl = '/prescriptions';
 
   /**
-   * How many rows the prescriber's list asks for.
+   * The transfer size of one page of the prescriber's list.
    *
-   * <p>`GET /prescriptions` declares no `@PageableDefault`, so it was serving
-   * Spring's default page 0 of 20 from an UNORDERED derived query — an
-   * arbitrary twenty rows out of the tenant. That was survivable while the
-   * page only listed what it had; it stopped being survivable when the tabs
-   * started counting, because a "Needs attention 0" is a confident claim that
-   * nothing is waiting. The page still has a ceiling, and the UI says so when
-   * it is reached rather than pretending otherwise.
+   * <p>`GET /prescriptions` declares no `@PageableDefault`, so without an
+   * explicit size and sort it served Spring's default page 0 of 20 from an
+   * UNORDERED derived query. QA D1347 (round 30): the list then read ONE page
+   * of 200 and the tabs counted that page, so on a busy tenant "Needs
+   * attention" could miss an order the clinical inbox pointed at. `list` now
+   * reads EVERY page; this is only how many rows each request carries.
    */
-  static readonly LIST_PAGE_SIZE = 200;
+  static readonly LIST_PAGE_SIZE = ALL_PAGES_SIZE;
 
+  /**
+   * Every prescription the filters select, newest first. Reads every page
+   * (`allRows`); past the helper's page ceiling the stream FAILS rather than
+   * returning a partial list, and the caller says the load failed.
+   */
   list(filters?: {
     patientId?: string;
     staffId?: string;
     hospitalId?: string;
+    /** One visit's prescriptions (used without patientId, which the server reads first). */
+    encounterId?: string;
     /**
-     * Gap G12 — restrict the page to these `PrescriptionStatus` values. One
+     * Gap G12 — restrict the list to these `PrescriptionStatus` values. One
      * repeated `status` query parameter per value. Omitted or empty means
      * every status, which is what the endpoint did before the filter existed.
      */
     statuses?: string[];
   }): Observable<PrescriptionResponse[]> {
-    // An explicit size and sort. Without them the derived query's order is
-    // arbitrary, so "the first page" is not even the newest prescriptions:
-    // a prescriber told by the clinical inbox that N orders await
-    // clarification could find none of them here. Sorting by updatedAt was
-    // tried and dropped — it reorders the page for everyone and still loses
-    // the row on a busy day, because every sign, edit and fill bumps that
-    // column. The size and sort make the page deterministic; `statuses`
-    // makes a bucket COMPLETE, which is what the counts actually need.
-    let params = new HttpParams()
-      .set('size', PrescriptionService.LIST_PAGE_SIZE)
-      .set('sort', 'createdAt,desc');
+    // An explicit sort, with `id` as the tiebreak: rows sharing a `createdAt`
+    // would otherwise have no stable order between two page reads, and a row
+    // could be served on both pages or on neither. Sorting by updatedAt was
+    // tried and dropped — every sign, edit and fill bumps that column, so the
+    // rows would move between the pages of one read.
+    let filterParams = new HttpParams();
     if (filters) {
-      if (filters.patientId) params = params.set('patientId', filters.patientId);
-      if (filters.staffId) params = params.set('staffId', filters.staffId);
-      if (filters.hospitalId) params = params.set('hospitalId', filters.hospitalId);
+      if (filters.patientId) filterParams = filterParams.set('patientId', filters.patientId);
+      if (filters.staffId) filterParams = filterParams.set('staffId', filters.staffId);
+      if (filters.hospitalId) filterParams = filterParams.set('hospitalId', filters.hospitalId);
+      if (filters.encounterId) filterParams = filterParams.set('encounterId', filters.encounterId);
       for (const status of filters.statuses ?? []) {
-        params = params.append('status', status);
+        filterParams = filterParams.append('status', status);
       }
     }
-    return this.http
-      .get<{ content: PrescriptionResponse[] }>(this.baseUrl, { params })
-      .pipe(map((res) => res?.content ?? []));
+    return allRows<PrescriptionResponse>(
+      (page, size) =>
+        this.http.get<PageSlice<PrescriptionResponse>>(this.baseUrl, {
+          params: filterParams
+            .set('page', page)
+            .set('size', size)
+            .append('sort', 'createdAt,desc')
+            .append('sort', 'id,desc'),
+        }),
+      PrescriptionService.LIST_PAGE_SIZE,
+    );
+  }
+
+  /**
+   * QA D1412: one page of the list and the server's own total. Same order as
+   * {@link list}. `/prescriptions` shows these; every row is one page away.
+   * QA D1314: `search` narrows it on the server (drug, patient or prescriber
+   * name, accents ignored); the total is then the count of the matches.
+   */
+  page(
+    filters: { statuses?: readonly string[]; search?: string },
+    page: number,
+    size: number,
+  ): Observable<PageSlice<PrescriptionResponse>> {
+    let params = new HttpParams();
+    for (const status of filters.statuses ?? []) {
+      params = params.append('status', status);
+    }
+    const search = filters.search?.trim();
+    if (search) {
+      params = params.set('search', search);
+    }
+    return this.http.get<PageSlice<PrescriptionResponse>>(this.baseUrl, {
+      params: params
+        .set('page', page)
+        .set('size', size)
+        .append('sort', 'createdAt,desc')
+        .append('sort', 'id,desc'),
+    });
   }
 
   getById(id: string): Observable<PrescriptionResponse> {
@@ -274,8 +392,14 @@ export class PrescriptionService {
    * is the only path that records who signed, when, and a digest of what they
    * signed. Only the prescribing clinician can call it.
    */
-  sign(id: string): Observable<PrescriptionResponse> {
-    return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/sign`, {});
+  sign(id: string, body?: SignPrescriptionBody): Observable<PrescriptionResponse> {
+    // Round 18: a controlled drug is signed with the prescriber's
+    // re-authentication in the body (never a header, never stored). The call
+    // is marked as a step-up, so a refused password or code comes back to the
+    // sign dialog instead of signing the user out or opening the 403 page.
+    return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/sign`, body ?? {}, {
+      context: new HttpContext().set(STEP_UP_REQUEST, true),
+    });
   }
 
   /**
@@ -294,9 +418,39 @@ export class PrescriptionService {
    * <p>The note is optional by design — the common case is a clean check with
    * nothing to add, and a mandatory field there trains people to type "ok".
    */
+  /**
+   * QA D1096: a pharmacist or a physician other than the prescriber records
+   * the paediatric dose review the decision support asked for. The reason is
+   * mandatory; the order is not signed until the review is recorded.
+   */
+  recordPediatricDoseReview(id: string, reason: string): Observable<PrescriptionResponse> {
+    return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/pediatric-dose-review`, {
+      reason: reason.trim(),
+    });
+  }
+
+  /** QA D1555 / Policy 4: an allergy conflict is held for the prescriber's review (shared/allergy-acknowledgement). */
   pharmacistVerify(id: string, note?: string): Observable<PrescriptionResponse> {
     return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/pharmacist-verify`, {
       note: note?.trim() || undefined,
+    });
+  }
+
+  /**
+   * Policy 4 (user recommendation 2026-11-10, pending clinical approval): the allergy conflict a
+   * signed order meets now and the prescriber's review on record. Prescribers of the order's hospital.
+   */
+  getAllergyConflict(id: string): Observable<AllergyConflict> {
+    return this.http.get<AllergyConflict>(`${this.baseUrl}/${id}/allergy-conflict`);
+  }
+
+  /** Policy 4: the prescriber's review: CONTINUE with a plan, or STOP, with a rationale, for the conflict shown. */
+  reviewAllergyConflict(id: string, review: AllergyConflictReview): Observable<AllergyConflict> {
+    return this.http.post<AllergyConflict>(`${this.baseUrl}/${id}/allergy-review`, {
+      decision: review.decision,
+      plan: review.decision === 'CONTINUE' ? review.plan.trim() : undefined,
+      rationale: review.rationale.trim(),
+      allergyToken: review.allergyToken,
     });
   }
 
@@ -338,9 +492,38 @@ export class PrescriptionService {
     return this.http
       .post<{
         data: PrescriptionSmsDispatchResult;
-      }>(`${this.baseUrl}/${id}/dispatch-sms`, { pharmacyId, note: note ?? null })
+      }>(`${this.baseUrl}/${id}/dispatch-sms`, {
+        pharmacyId,
+        note: note ?? null,
+      })
       .pipe(map((r) => r.data));
   }
+}
+
+/** Policy 4: a prescriber's decision on an allergy conflict. */
+export type AllergyReviewDecision = 'CONTINUE' | 'STOP';
+
+/** Policy 4: the allergy conflict an order meets now, and the review on record (GET .../allergy-conflict). */
+export interface AllergyConflict {
+  conflict: boolean;
+  allergen?: string | null;
+  cards: CdsCard[];
+  /** What the review sends back as `allergyToken`: the conflict as it was shown. */
+  reviewToken?: string | null;
+  decision?: AllergyReviewDecision | null;
+  plan?: string | null;
+  rationale?: string | null;
+  reviewedByName?: string | null;
+  reviewedAt?: string | null;
+  /** The recorded review answers this very conflict. */
+  reviewCurrent: boolean;
+}
+
+export interface AllergyConflictReview {
+  decision: AllergyReviewDecision;
+  plan: string;
+  rationale: string;
+  allergyToken: string;
 }
 
 export interface PrescriptionSmsDispatchResult {

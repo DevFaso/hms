@@ -26,6 +26,12 @@
   "trackerAcuity": {
     "reason": "PatientTrackerItemDTO.acuityLevel is a String PatientTrackerMapper.deriveAcuityLevel DERIVES: ESI-<score> (1-5), else an EncounterUrgency name (EMERGENT, URGENT, ROUTINE, LOW), else ROUTINE. PORTAL.ENUM.TRACKER_ACUITY keys all nine; check by hand when that method or EncounterUrgency changes (QA D528/D663)."
   },
+  "advanceDirectiveType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/AdvanceDirectiveType.java"
+  },
+  "codeStatus": {
+    "reason": "Patient.codeStatus is a free-text String column (V13: FULL_CODE / DNR / DNI / COMFORT_ONLY); PORTAL.ENUM.CODE_STATUS keys those four and every AdvanceDirectiveType name; any other typed text falls back to the pipe (QA D1148)."
+  },
   "fulfillmentMode": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/PharmacyFulfillmentMode.java"
   },
@@ -126,12 +132,24 @@
   "labOrderStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/LabOrderStatus.java"
   },
+  "labOrderPriority": {
+    "reason": "LabOrder.priority is a String column that LabOrderServiceImpl.resolvePriority validates against LAB_PRIORITIES (ROUTINE, URGENT, STAT); PORTAL.ENUM.LAB_ORDER_PRIORITY keys all three. Check by hand when that set changes (QA D963)."
+  },
+  "labOrderChannel": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/LabOrderChannel.java"
+  },
+  "labSpecimenStatus": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/LabSpecimenStatus.java"
+  },
   "leaveType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffLeaveType.java" },
   "leaveStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffLeaveStatus.java"
   },
   "marTaskStatus": {
-    "reason": "no enum holds it: NurseTaskServiceImpl.resolveMarStatus DERIVES it from a prescription and the clock — COMPLETED when a GIVEN MAR row exists, else OVERDUE or DUE against a naive created-at-plus-four-hours window. nurse-station.html also guards on GIVEN, which resolveMarStatus never returns, so GIVEN is deliberately not keyed — keying a value nothing emits is how the phantom DISCHARGE_DISPOSITION vocabulary got here."
+    "reason": "no enum holds it: NurseTaskServiceImpl.resolveMarStatus DERIVES it from a prescription, its recorded doses and the clock: COMPLETED when no dose is left to give, UPCOMING when the next slot is beyond the early window (QA D949), else OVERDUE or DUE. Check by hand when resolveMarStatus changes."
+  },
+  "medicationAdministrationStatus": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/MedicationAdministrationStatus.java"
   },
   "mtmReviewStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/MtmReviewStatus.java"
@@ -140,7 +158,7 @@
     "enum": "hospital-core/src/main/java/com/example/hms/enums/NewbornAlertType.java"
   },
   "notificationType": {
-    "reason": "NOT the NotificationType enum, which governs notification PREFERENCES. The field the portal pipes is Notification.type, a free String column (length 40, nullable) that NotificationServiceImpl.createNotification writes from whatever literal its caller passes, across its call sites (hospital-core NotificationTypeLabelCoverageTest reads them from the sources and fails on an unkeyed one, QA D641): APPOINTMENT_REMINDER, BREAK_GLASS_OPT_OUT_OVERRIDE, LAB_ORDER_RECEIVED, NEWS2_ESCALATION, PHARMACY_EVENT, CRITICAL_IMAGING_FINDING, CRITICAL_IMAGING_FINDING_ESCALATION, CRITICAL_LAB_RESULT, CRITICAL_LAB_RESULT_ESCALATION, DISCHARGE_SUMMARY, LICENSE_EXPIRY, MEDICATION_REFILL, POSITIVE_CULTURE_RESULT, PRO_CRITICAL_ITEM, PRO_CRITICAL_ITEM_ESCALATION, PRO_SCREEN_POSITIVE, REORDER_ALERT — and null, which the two-argument overload passes. Ten of those are not enum constants, so declaring the enum here made the coverage gate certify eight values the column may never hold while the ten it does hold went unkeyed."
+    "reason": "NOT the NotificationType enum, which governs notification PREFERENCES. The field the portal pipes is Notification.type, a free String column (length 40, nullable) that NotificationServiceImpl.createNotification writes from whatever literal its caller passes, across its call sites (hospital-core NotificationTypeLabelCoverageTest reads them from the sources and fails on an unkeyed one, QA D641): APPOINTMENT_REMINDER, BREAK_GLASS_OPT_OUT_OVERRIDE, LAB_ORDER_RECEIVED, NEWS2_ESCALATION, PHARMACY_EVENT, CRITICAL_IMAGING_FINDING, CRITICAL_IMAGING_FINDING_ESCALATION, CRITICAL_LAB_RESULT, CRITICAL_LAB_RESULT_ESCALATION, DISCHARGE_SUMMARY, LICENSE_EXPIRY, MEDICATION_REFILL, POSITIVE_CULTURE_RESULT, PRO_CRITICAL_ITEM, PRO_CRITICAL_ITEM_ESCALATION, PRO_SCREEN_POSITIVE, REORDER_ALERT, CHAT_MESSAGE, ANNOUNCEMENT, ADMIN_MESSAGE, PRENATAL_REMINDER, CONSULTATION_UPDATE, MATERNITY_ALERT (QA D983: no call passes null any more, NotificationTypeLabelCoverageTest.everyNotificationIsTyped). Ten of those are not enum constants, so declaring the enum here made the coverage gate certify eight values the column may never hold while the ten it does hold went unkeyed."
   },
   "orderSourceType": {
     "reason": "no enum holds it: a fixed token per source, stamped by two services onto one badge vocabulary — PatientSnapshotServiceImpl writes VITALS on every recent-vital row and LAB on every pending-order row of the snapshot drawer (only lab orders are collected there), and NurseTaskServiceImpl writes LAB, IMAGING or PROCEDURE per order source on the nurse station board. These were two groups (snapshotItemType, orderTaskType) keying LAB twice until #664 round 3 merged them. Every value was an English word (Vitals, Lab, Imaging, Procedure) until the tranche that tokenized them; a wire value the portal must render has to be a token, not a word the server already chose the language for."
@@ -235,7 +253,13 @@
   },
   "wardType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/WardType.java" },
   "timelineCategory": {
-    "reason": "no enum holds it: PatientTimelineEntryDTO.category is a String that PatientServiceImpl writes from its CATEGORY_* constants (ENCOUNTER / PRESCRIPTION / LAB_RESULT / ALLERGY / IMAGING / PROCEDURE), all six keyed in PORTAL.ENUM.TIMELINE_CATEGORY; check by hand when a category is added there."
+    "reason": "no enum holds it: PatientTimelineEntryDTO.category is a String that PatientServiceImpl and VisitTimelineRows write from their CATEGORY_* constants (the chronology registry, QA D959); every category is keyed in PORTAL.ENUM.TIMELINE_CATEGORY, and the backend registry guard fails when a category has no label in enum-label.service.ts or icon in patient-chart.component.ts."
+  },
+  "noteTemplate": {
+    "enums": [
+      "hospital-core/src/main/java/com/example/hms/enums/EncounterNoteTemplate.java",
+      "hospital-core/src/main/java/com/example/hms/model/NursingNoteTemplate.java"
+    ]
   },
   "specimenType": {
     "reason": "QA D528: LabSpecimen.specimenType and LabTestDefinition.sampleType are free String columns (the definition upper-cases it on save), not an enum. Keyed: the catalogue codes in use (BLOOD from the seeded definitions, WHOLE_BLOOD, SERUM, URINE, STOOL, CSF, SPUTUM, SWAB, TISSUE, OTHER); free text outside that list is Title-Cased by the pipe."

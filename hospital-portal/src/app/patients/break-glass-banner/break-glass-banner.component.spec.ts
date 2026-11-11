@@ -1,11 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { BreakGlassBannerComponent } from './break-glass-banner.component';
 import { BreakGlassService, BreakGlassSession } from '../../services/break-glass.service';
 import { ToastService } from '../../core/toast.service';
 import { AuthService } from '../../auth/auth.service';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 
 const liveSession: BreakGlassSession = {
   id: 's1',
@@ -89,6 +90,34 @@ describe('BreakGlassBannerComponent', () => {
       setInputs('p1');
       expect(bgSpy.findMyLiveSession).toHaveBeenCalledWith('p1');
     }
+  });
+
+  it('keeps an idle declaration accessible in compact mode and highlights a live session', () => {
+    init(['ROLE_DOCTOR']);
+    fixture.componentRef.setInput('compactWhenIdle', true);
+    bgSpy.findMyLiveSession.and.returnValue(of(null));
+    setInputs('p1');
+    expect(fixture.nativeElement.querySelector('.bg-compact .bg-banner__btn')).toBeTruthy();
+
+    bgSpy.findMyLiveSession.and.returnValue(of(liveSession));
+    setInputs('p2');
+    expect(fixture.nativeElement.querySelector('.bg-active')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.bg-compact')).toBeNull();
+  });
+
+  it('keeps loading and failed session lookups prominent in compact mode', () => {
+    init(['ROLE_DOCTOR']);
+    fixture.componentRef.setInput('compactWhenIdle', true);
+    const lookup = new Subject<BreakGlassSession | null>();
+    bgSpy.findMyLiveSession.and.returnValue(lookup);
+    setInputs('p1');
+    expect(fixture.nativeElement.querySelector('.bg-banner')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.bg-compact')).toBeNull();
+
+    lookup.error(new Error('network'));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.bg-banner')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.bg-compact')).toBeNull();
   });
 
   it('shows the prompt button when clinician has no active session', () => {
@@ -177,5 +206,16 @@ describe('BreakGlassBannerComponent', () => {
     bgSpy.findMyLiveSession.and.returnValue(of(null));
     setInputs(null);
     expect(bgSpy.findMyLiveSession).not.toHaveBeenCalled();
+  });
+
+  it('QA CX-010: ending the emergency access asks first; a no sends nothing', async () => {
+    init(['ROLE_DOCTOR']);
+    bgSpy.findMyLiveSession.and.returnValue(of(liveSession));
+    setInputs('p1');
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    const banner = fixture.componentInstance as unknown as { revoke(): Promise<void> };
+    await banner.revoke();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(bgSpy.revoke).not.toHaveBeenCalled();
   });
 });

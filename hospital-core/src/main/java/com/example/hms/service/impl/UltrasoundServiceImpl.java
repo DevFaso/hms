@@ -1,8 +1,10 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.UltrasoundFindingCategory;
 import com.example.hms.enums.UltrasoundOrderStatus;
 import com.example.hms.enums.UltrasoundScanType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.UltrasoundMapper;
 import com.example.hms.model.Hospital;
@@ -23,11 +25,14 @@ import com.example.hms.repository.UltrasoundReportRepository;
 import com.example.hms.service.UltrasoundService;
 import com.example.hms.service.PatientSubjectReadGuard;
 import com.example.hms.service.PatientSubjectReaderRoles;
+import com.example.hms.service.maternity.UltrasoundObservations;
+import com.example.hms.service.support.ClinicalContent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
@@ -41,6 +46,9 @@ import com.example.hms.utility.RoleValidator;
 @RequiredArgsConstructor
 @Transactional
 public class UltrasoundServiceImpl implements UltrasoundService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_GESTATIONAL_AGE_AT_ORDER = "gestationalAgeAtOrder";
+
     private static final String ULTRASOUND_ORDER_NOT_FOUND_KEY = "ultrasound.order.notFound";
     private static final String ULTRASOUND_REPORT_NOT_FOUND_KEY = "ultrasound.report.notFound";
 
@@ -57,6 +65,8 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     private final PatientSubjectReadGuard subjectReadGuard;
     private final RoleValidator roleValidator;
     private final PatientHospitalRegistrationRepository registrationRepository;
+    /** QA D1538 review: audits an obstetric rule skipped for an emergency. */
+    private final com.example.hms.service.support.ObstetricRuleSkipRecorder skipRecorder;
 
     @Override
     public UltrasoundOrderResponseDTO createOrder(UltrasoundOrderRequestDTO request, UUID orderedByUserId) {
@@ -70,16 +80,33 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        // QA D1538 review: one form of the priority everywhere (the exemption, the worklists, the row).
+        request.setPriority(normalisedPriority(request.getPriority(), "ROUTINE"));
+        // QA D1538 (round 40): every scan type of this module but OTHER is a pregnancy scan, so the
+        // maternity rule applies, refused on patientId; an URGENT or STAT scan is an emergency, which
+        // the rule never refuses, but an emergency for a patient it would refuse is flagged and audited.
+        boolean ruleSkipped = judgeOnCreate(patient, request);
         // Validate gestational age for scan type
         validateGestationalAgeForScanType(request.getScanType(), request.getGestationalAgeAtOrder());
+        requirePlausibleSchedule(request, null);
 
         // Use mapper to create entity
         UltrasoundOrder entity = ultrasoundMapper.toOrderEntity(request, patient, hospital);
         entity.setStatus(UltrasoundOrderStatus.ORDERED);
+        entity.setObstetricRuleSkipped(ruleSkipped);
 
-        // Set ordered by information
-        if (orderedByUserId != null) {
-            Staff orderedByStaff = staffRepository.findByUserIdAndHospitalId(orderedByUserId, hospital.getId()).orElse(null);
+        // Set ordered by information. QA D930 class: the id decides who may
+        // change or cancel the order; the name is for display. The session
+        // decides it: the controller's id parses the username as a UUID,
+        // which is null for every real account.
+        UUID authorId = com.example.hms.security.CallerIdentity.currentUserId();
+        if (authorId == null) {
+            authorId = orderedByUserId;
+        }
+        entity.setOrderedByUserId(authorId);
+        if (authorId != null) {
+            Staff orderedByStaff = staffRepository.findByUserIdAndHospitalId(authorId, hospital.getId()).orElse(null);
             if (orderedByStaff != null) {
                 String name = orderedByStaff.getName();
                 if (name == null && orderedByStaff.getUser() != null) {
@@ -90,20 +117,122 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         }
 
         UltrasoundOrder saved = orderRepository.save(entity);
+        if (ruleSkipped) {
+            skipRecorder.record(patient, saved.getPriority(), AUDIT_ENTITY_ULTRASOUND_ORDER, saved.getId(), hospital.getId());
+        }
         return ultrasoundMapper.toOrderResponseDTO(saved);
+    }
+
+    static final String AUDIT_ENTITY_ULTRASOUND_ORDER = com.example.hms.service.support.ObstetricRuleSkipRecorder.ENTITY_ULTRASOUND_ORDER;
+
+    /**
+     * QA D1538 review: whether a scan of this type is judged by the obstetric rule. Every type is a
+     * prenatal scan but OTHER ("not covered by standard categories"), which need not be; a missing type
+     * is judged (the request is refused for it elsewhere).
+     */
+    static boolean isObstetricScan(com.example.hms.enums.UltrasoundScanType type) {
+        return type != com.example.hms.enums.UltrasoundScanType.OTHER;
+    }
+
+    /** The rule on a new order: judged unless OTHER; returns whether it was skipped for an emergency. */
+    static boolean judgeOnCreate(Patient patient, UltrasoundOrderRequestDTO request) {
+        if (!isObstetricScan(request.getScanType())) {
+            return false;
+        }
+        return com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(patient, "patientId",
+            com.example.hms.enums.ClinicalPriority.isEmergency(request.getPriority()));
+    }
+
+    /**
+     * QA D1538 (round 40): an edit that leaves an exemption the order was placed under is judged
+     * again: an URGENT or STAT scan lowered to routine (refused on {@code priority}), or an OTHER scan
+     * turned into a prenatal one (refused on {@code scanType}). An edit that keeps the order exempt, or
+     * one that was judged when it was ordered (or ordered before the rule), is not judged again.
+     *
+     * <p>QA D1538 review: the review flag ({@code obstetricRuleSkipped}) is re-evaluated on every edit
+     * against the order as it will stand: set when it is a prenatal emergency scan for a patient the rule
+     * would refuse, cleared when the reason is gone (type OTHER, a patient record now eligible, or no
+     * longer an emergency and judged and passing).
+     *
+     * @return the review flag the order carries after the edit; the caller audits a change of it.
+     */
+    static boolean requireObstetricPatientOnEdit(UltrasoundOrder order, UltrasoundOrderRequestDTO request) {
+        String resultingPriority = request.getPriority() != null ? request.getPriority() : order.getPriority();
+        com.example.hms.enums.UltrasoundScanType resultingType =
+            request.getScanType() != null ? request.getScanType() : order.getScanType();
+        boolean judgedBefore = isObstetricScan(order.getScanType())
+            && !com.example.hms.enums.ClinicalPriority.isEmergency(order.getPriority());
+        boolean obstetricAfter = isObstetricScan(resultingType);
+        boolean emergencyAfter = com.example.hms.enums.ClinicalPriority.isEmergency(resultingPriority);
+        if (obstetricAfter && !emergencyAfter && !judgedBefore) {
+            String field = isObstetricScan(order.getScanType()) ? "priority" : "scanType";
+            com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(order.getPatient(), field, false);
+        }
+        return obstetricAfter && emergencyAfter
+            && com.example.hms.utility.ObstetricEligibility.isIneligible(order.getPatient());
+    }
+
+    /**
+     * QA D1538 review: the priority as it is stored and read (ROUTINE, URGENT, STAT), whatever case or
+     * padding the request used. A blank one is {@code whenBlank} (ROUTINE on a new order, the order's
+     * own on an edit); a value that names no priority is refused on {@code priority}.
+     */
+    static String normalisedPriority(String requested, String whenBlank) {
+        if (requested == null || requested.isBlank()) {
+            return whenBlank;
+        }
+        com.example.hms.enums.ClinicalPriority parsed = com.example.hms.enums.ClinicalPriority.parse(requested);
+        if (parsed == null) {
+            throw new com.example.hms.exception.FieldBusinessException("priority", "validation.priority.invalid");
+        }
+        return parsed.name();
+    }
+
+    /**
+     * QA D1447: an appointment is not booked in the past, its time is a time of
+     * day, and a scan count starts at 1. A value an edit only echoes is not
+     * judged (the imaging order's rule): an order whose appointment has passed,
+     * or stored before this check, stays editable on its other fields.
+     */
+    public static void requirePlausibleSchedule(UltrasoundOrderRequestDTO request, UltrasoundOrder current) {
+        java.time.LocalDate date = request.getScheduledDate();
+        if (date != null && !date.equals(current == null ? null : current.getScheduledDate())
+            && date.isBefore(java.time.LocalDate.now(java.time.ZoneId.systemDefault()))) {
+            throw new com.example.hms.exception.FieldBusinessException("scheduledDate", "ultrasound.order.scheduledDatePast");
+        }
+        String time = request.getScheduledTime();
+        if (time != null && !time.isBlank() && !time.equals(current == null ? null : current.getScheduledTime())
+            && !isTimeOfDay(time.trim())) {
+            throw new com.example.hms.exception.FieldBusinessException("scheduledTime", "ultrasound.order.scheduledTimeInvalid");
+        }
+        Integer count = request.getScanCountForPregnancy();
+        if (count != null && count < 1 && !count.equals(current == null ? null : current.getScanCountForPregnancy())) {
+            throw new com.example.hms.exception.FieldBusinessException("scanCountForPregnancy", "ultrasound.order.scanCountInvalid");
+        }
+    }
+
+    private static boolean isTimeOfDay(String value) {
+        try {
+            java.time.LocalTime.parse(value);
+            return true;
+        } catch (java.time.format.DateTimeParseException ex) {
+            return false;
+        }
     }
 
     @Override
     public UltrasoundOrderResponseDTO updateOrder(UUID orderId, UltrasoundOrderRequestDTO request) {
         UltrasoundOrder order = getOrderInScope(orderId);
+        requireOrderAuthor(order);
 
-        // Prevent modification of completed orders
-        if (order.getStatus() == UltrasoundOrderStatus.COMPLETED) {
-            throw new BusinessException("Cannot modify a completed ultrasound order");
+        // Prevent modification of completed orders (QA D1098: and reported ones)
+        if (order.getStatus() == UltrasoundOrderStatus.COMPLETED
+                || order.getStatus() == UltrasoundOrderStatus.REPORT_AVAILABLE) {
+            throw new BusinessException("ultrasound.order.completedNoEdit");
         }
 
         if (order.getStatus() == UltrasoundOrderStatus.CANCELLED) {
-            throw new BusinessException("Cannot modify a cancelled ultrasound order");
+            throw new BusinessException("ultrasound.order.cancelledNoEdit");
         }
 
         // Update hospital if changed
@@ -118,29 +247,70 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             order.setHospital(newHospital);
         }
 
+        requirePlausibleSchedule(request, order);
+        // QA D1538 review: an absent priority keeps the order's own; a present one is stored normalised.
+        request.setPriority(normalisedPriority(request.getPriority(), null));
+        boolean wasFlagged = order.isObstetricRuleSkipped();
+        boolean flagged = requireObstetricPatientOnEdit(order, request);
         ultrasoundMapper.updateOrderFromRequest(order, request);
+        order.setObstetricRuleSkipped(flagged);
 
         UltrasoundOrder saved = orderRepository.save(order);
+        UUID savedHospitalId = saved.getHospital() != null ? saved.getHospital().getId() : null;
+        if (flagged && !wasFlagged) {
+            skipRecorder.record(saved.getPatient(), saved.getPriority(), AUDIT_ENTITY_ULTRASOUND_ORDER, saved.getId(),
+                savedHospitalId);
+        } else if (!flagged && wasFlagged) {
+            skipRecorder.recordCleared(saved.getPatient(), saved.getPriority(), AUDIT_ENTITY_ULTRASOUND_ORDER, saved.getId(),
+                savedHospitalId);
+        }
         return ultrasoundMapper.toOrderResponseDTO(saved);
     }
 
     @Override
     public UltrasoundOrderResponseDTO cancelOrder(UUID orderId, String cancellationReason) {
         UltrasoundOrder order = getOrderInScope(orderId);
+        requireOrderAuthor(order);
 
         if (order.getStatus() == UltrasoundOrderStatus.CANCELLED) {
-            throw new BusinessException("Order is already cancelled");
+            throw new BusinessException("ultrasound.order.alreadyCancelled");
         }
 
-        if (order.getStatus() == UltrasoundOrderStatus.COMPLETED) {
-            throw new BusinessException("Cannot cancel a completed order");
+        // QA D1098 (round 19): an order whose report is available is resulted
+        // too - it was cancellable, leaving a report on a cancelled order.
+        if (order.getStatus() == UltrasoundOrderStatus.COMPLETED
+                || order.getStatus() == UltrasoundOrderStatus.REPORT_AVAILABLE) {
+            throw new BusinessException("ultrasound.order.completedNoCancel");
         }
+        // QA D1098: every cancel states why (the endpoint's reason was optional).
+        String reason = com.example.hms.service.support.CancelledOrders.requireCancelReason(cancellationReason, "cancellationReason");
 
         order.setStatus(UltrasoundOrderStatus.CANCELLED);
-        order.setCancellationReason(cancellationReason);
+        order.setCancellationReason(reason);
+        // QA D1047: a cancellation is stamped with when and by whom, like every order.
+        order.setCancelledAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        order.setCancelledBy(cancellerName(order));
 
         UltrasoundOrder saved = orderRepository.save(order);
         return ultrasoundMapper.toOrderResponseDTO(saved);
+    }
+
+    /**
+     * QA D930 class: an ultrasound order is changed or cancelled by the
+     * clinician who placed it, or a verified super-admin in global view. An
+     * order written before V243 has no recorded author and keeps the old rule
+     * (any doctor or midwife in scope). Anyone else gets 403; the order was
+     * resolved in the caller's scope first.
+     */
+    private void requireOrderAuthor(UltrasoundOrder order) {
+        UUID author = order.getOrderedByUserId();
+        if (author == null || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()) {
+            return;
+        }
+        if (!author.equals(com.example.hms.security.CallerIdentity.currentUserId())) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("ultrasound.order.authorOnly"));
+        }
     }
 
     @Override
@@ -258,17 +428,170 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             .toList();
     }
 
+    /**
+     * The empty-report rule, for create and edit alike (QA D1150, D1525). A
+     * report must state at least one finding: an observation
+     * ({@link UltrasoundObservations}: cardiac activity, movement, tone, nasal
+     * bone or anomalies answered either way, or a fetus count, 0 included), a
+     * measurement, a date or a written finding. The category alone is not a
+     * report, and neither are the yes/no boxes that are not observations
+     * (anatomy survey complete, due date confirmed). A stated FALSE counts
+     * ({@code ClinicalContent.requireAnyAnswered}): nothing defaults an
+     * observation any more, so "cardiac activity absent" was stated by
+     * someone. A report whose every observation is "not assessed" and that
+     * states nothing else is refused. {@code UltrasoundReportFindingsTest}
+     * pins it.
+     */
+    static void requireReportFindings(UltrasoundReportRequestDTO request) {
+        ClinicalContent.requireAnyAnswered("findingsSummary", "ultrasound.report.findingsRequired",
+            UltrasoundObservations.allFindings(request));
+    }
+
+    /**
+     * QA D1525 review (the D1150 class): a stored report that states no finding
+     * - an untouched template V282 emptied, category NORMAL and nothing else -
+     * is neither reviewed nor notified to the patient: a signed "Normal" that
+     * records nothing. The same empty-report rule as a save, on the stored
+     * values.
+     */
+    static void requireStoredFindings(UltrasoundReport report) {
+        ClinicalContent.requireAnyAnswered("findingsSummary", "ultrasound.report.emptyNotReviewable",
+            UltrasoundObservations.allFindings(report));
+    }
+
+    /** A legacy report (existed before V282) that was already reviewed: signed, immutable. */
+    static boolean isGrandfatheredSignedLegacy(UltrasoundReport report) {
+        return Boolean.TRUE.equals(report.getReportReviewedByProvider())
+            && Boolean.FALSE.equals(report.getObservationsStated());
+    }
+
+    /** QA D1525 review: 0 (no fetus seen) to 8 fetuses. */
+    static final int MAX_FETUSES = 8;
+
+    /**
+     * QA D1525 review: a fetus count is 0 (no fetus seen) to {@link #MAX_FETUSES}.
+     * Judged only when the value changes: a stored count outside the range (a
+     * legacy row) stays editable on its other fields, so the bounds cannot be
+     * bean constraints, which do not see the stored value.
+     */
+    static void requireFetusCountInRange(UltrasoundReportRequestDTO request, UltrasoundReport stored) {
+        Integer count = request.getNumberOfFetuses();
+        if (count == null || (stored != null && count.equals(stored.getNumberOfFetuses()))) {
+            return;
+        }
+        if (count < 0 || count > MAX_FETUSES) {
+            throw new FieldBusinessException("numberOfFetuses", "ultrasoundReport.numberOfFetuses.range");
+        }
+    }
+
+    /**
+     * QA D1525: the clinician chooses the finding category; nothing defaults it
+     * to NORMAL. Asked after {@link #requireReportFindings}.
+     */
+    static void requireFindingCategory(UltrasoundReportRequestDTO request) {
+        ClinicalContent.requirePresent(request.getFindingCategory(),
+            "findingCategory", "ultrasoundReport.findingCategory.required");
+    }
+
+    /**
+     * The categories that claim no clinically significant finding: NORMAL and
+     * VARIANT ("not clinically significant").
+     */
+    static final Set<UltrasoundFindingCategory> NO_SIGNIFICANT_FINDING =
+        EnumSet.of(UltrasoundFindingCategory.NORMAL, UltrasoundFindingCategory.VARIANT);
+
+    /**
+     * QA D1525: a category that claims no significant finding (NORMAL,
+     * VARIANT) cannot stand with absent cardiac activity, an abnormal fetal
+     * tone or detected anomalies. Refused on the category, which the clinician
+     * corrects. Deliberately NOT contradictions, pending a clinician: absent
+     * fetal movement (it can be normal on a single scan), an absent nasal bone
+     * (an isolated absent or hypoplastic nasal bone occurs in euploid fetuses,
+     * more often in African-descent populations) and no fetus seen (a very
+     * early scan with a sac and no fetal pole can be normal).
+     */
+    static void requireCategoryMatchesObservations(UltrasoundReportRequestDTO request) {
+        if (!NO_SIGNIFICANT_FINDING.contains(request.getFindingCategory())) {
+            return;
+        }
+        if (Boolean.FALSE.equals(request.getFetalCardiacActivity())
+                || Boolean.FALSE.equals(request.getFetalToneNormal())
+                || Boolean.TRUE.equals(request.getAnomaliesDetected())) {
+            throw new FieldBusinessException("findingCategory",
+                "ultrasound.report.normalContradictsObservation");
+        }
+    }
+
+    /**
+     * QA D1525 review: no fetus seen contradicts a sign of a fetus: cardiac
+     * activity or fetal movement present, a fetal heart rate, any fetal
+     * biometry (BPD, HC, AC, FL, CRL), an estimated fetal weight, a nuchal
+     * translucency, any nasal-bone or fetal-tone answer or anomalies detected
+     * ({@link UltrasoundObservations#SIGNS_OF_A_FETUS},
+     * which the portal mirrors). Refused on the fetus count.
+     */
+    static void requireFetusCountMatchesObservations(UltrasoundReportRequestDTO request) {
+        if (Integer.valueOf(0).equals(request.getNumberOfFetuses())
+                && UltrasoundObservations.hasSignOfAFetus(request)) {
+            throw new FieldBusinessException("numberOfFetuses", "ultrasound.report.noFetusContradictsObservation");
+        }
+    }
+
+    /**
+     * QA D1525 review: an anomaly is described only when anomalies were
+     * detected: a written description with "no anomaly" or "not assessed"
+     * contradicts itself. Refused on the description.
+     */
+    static void requireAnomalyDescriptionMatchesAnswer(UltrasoundReportRequestDTO request) {
+        if (!Boolean.TRUE.equals(request.getAnomaliesDetected())
+                && ClinicalContent.isPresent(request.getAnomalyDescription())) {
+            throw new FieldBusinessException("anomalyDescription",
+                "ultrasound.report.anomalyDescriptionWithoutAnomaly");
+        }
+    }
+
+    /**
+     * QA D1525 review: whether a save turns a legacy report ("not asked") into a
+     * stated one. A new report is stated already. A legacy one flips only when
+     * the request answers an observation differently from what is stored: the
+     * portal reloads and re-sends the surviving values (a FALSE flag, two
+     * fetuses), so a summary-only edit sends them back unchanged and keeps the
+     * report legacy.
+     */
+    static boolean statesAnObservation(UltrasoundReportRequestDTO request, UltrasoundReport stored) {
+        return stored == null || UltrasoundObservations.differ(request, stored);
+    }
+
     @Override
     public UltrasoundReportResponseDTO createOrUpdateReport(UUID orderId, UltrasoundReportRequestDTO request, UUID performedByUserId) {
         UltrasoundOrder order = getOrderInScope(orderId);
 
         if (order.getStatus() == UltrasoundOrderStatus.CANCELLED) {
-            throw new BusinessException("Cannot create report for a cancelled order");
+            throw new BusinessException("ultrasound.report.cancelledOrder");
         }
 
         String performerName = resolveStaffName(performedByUserId, order.getHospital().getId());
 
         UltrasoundReport report = reportRepository.findByUltrasoundOrderId(orderId).orElse(null);
+        if (report != null && Boolean.TRUE.equals(report.getReportReviewedByProvider())) {
+            throw new BusinessException("ultrasound.report.reviewedNoEdit");
+        }
+        // QA D1525: the fetus count's range (judged only when it changes), then
+        // the empty report, the category, the contradictions - the portal runs
+        // the same order.
+        requireFetusCountInRange(request, report);
+        requireReportFindings(request);
+        requireFindingCategory(request);
+        // On a legacy report, the contradictions are judged only when one of
+        // their inputs changes, so a typo fix on an old report still saves.
+        if (report == null || !Boolean.FALSE.equals(report.getObservationsStated())
+                || UltrasoundObservations.differ(UltrasoundObservations.CONTRADICTION_INPUTS, request, report)) {
+            requireCategoryMatchesObservations(request);
+            requireFetusCountMatchesObservations(request);
+            requireAnomalyDescriptionMatchesAnswer(request);
+        }
+        // Decided before the edit is applied: it compares the request to what is stored.
+        boolean statesObservations = statesAnObservation(request, report);
 
         if (report == null) {
             report = ultrasoundMapper.toReportEntity(request, order, order.getHospital());
@@ -276,10 +599,15 @@ public class UltrasoundServiceImpl implements UltrasoundService {
                 report.setScanPerformedBy(performerName);
             }
         } else {
-            if (Boolean.TRUE.equals(report.getReportReviewedByProvider())) {
-                throw new BusinessException("Cannot modify a reviewed report. Please create an addendum or new order.");
-            }
             ultrasoundMapper.updateReportFromRequest(report, request);
+        }
+
+        // QA D1525: a new report is stated (entity default). A legacy one
+        // becomes stated when this save changes an observation; a
+        // summary-only edit leaves "not asked" as it was. V282 already removed
+        // its old defaults, so nothing ambiguous can be echoed back.
+        if (statesObservations) {
+            report.setObservationsStated(Boolean.TRUE);
         }
 
         // Update order status
@@ -296,10 +624,14 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundReportResponseDTO markReportReviewed(UUID reportId, UUID reviewedByUserId) {
         UltrasoundReport report = getReportInScope(reportId);
+        // QA D1066 class: a cancelled scan order is not completed back to life by its report's review.
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(report.getUltrasoundOrder().getStatus(),
+            "ultrasound.order.cancelled.locked");
 
         if (report.getReportReviewedByProvider() != null && report.getReportReviewedByProvider()) {
-            throw new BusinessException("Report is already reviewed");
+            throw new BusinessException("ultrasound.report.alreadyReviewed");
         }
+        requireStoredFindings(report);
 
         UUID hospitalId = report.getUltrasoundOrder().getHospital().getId();
         String reviewerName = resolveStaffName(reviewedByUserId, hospitalId);
@@ -325,7 +657,14 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         UltrasoundReport report = getReportInScope(reportId);
 
         if (report.getPatientNotifiedAt() != null) {
-            throw new BusinessException("Patient has already been notified");
+            throw new BusinessException("ultrasound.report.patientAlreadyNotified");
+        }
+        // QA D1525 review (provisional, for a clinician): a legacy report already
+        // reviewed before V282 is grandfathered. It is signed and can no longer be
+        // edited or re-reviewed, so refusing its notification would leave it stuck;
+        // the empty-report check guards the review, not this notification.
+        if (!isGrandfatheredSignedLegacy(report)) {
+            requireStoredFindings(report);
         }
 
         report.setPatientNotifiedAt(LocalDateTime.now());
@@ -489,36 +828,13 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             .toList();
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public UltrasoundReportRequestDTO getNuchalTranslucencyTemplate() {
-        // Return a template with typical values pre-filled for NT scan
-        return UltrasoundReportRequestDTO.builder()
-            .scanDate(java.time.LocalDate.now())
-            .gestationalAgeAtScan(12) // weeks + days will be set by user
-            .numberOfFetuses(1)
-            .fetalCardiacActivity(true)
-            .fetalMovementObserved(true)
-            .fetalToneNormal(true)
-            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
-            .build();
-    }
-
-    @Transactional(readOnly = true)
-    @Override
-    public UltrasoundReportRequestDTO getAnatomyScanTemplate() {
-        // Return a template with typical values pre-filled for anatomy scan
-        return UltrasoundReportRequestDTO.builder()
-            .scanDate(java.time.LocalDate.now())
-            .gestationalAgeAtScan(20) // weeks + days will be set by user
-            .numberOfFetuses(1)
-            .fetalCardiacActivity(true)
-            .fetalMovementObserved(true)
-            .fetalToneNormal(true)
-            .anatomySurveyComplete(false)
-            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
-            .build();
-    }
+    /*
+     * QA D1525: the nuchal-translucency and anatomy-scan templates were removed.
+     * They pre-filled findings (cardiac activity, movement, tone, NORMAL, a
+     * gestational age, one fetus); without those they carried only today's date,
+     * which overwrote a stored scan date. A template that states nothing has
+     * nothing to offer, so the endpoints and the portal buttons are gone.
+     */
 
     // Private helper methods
 
@@ -530,25 +846,34 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         switch (scanType) {
             case NUCHAL_TRANSLUCENCY:
                 if (gestationalAgeWeeks < 11 || gestationalAgeWeeks > 14) {
-                    throw new BusinessException(
-                        "Nuchal Translucency scan is typically performed between 11-14 weeks. Current: " + gestationalAgeWeeks + " weeks");
+                    throw new com.example.hms.exception.FieldBusinessException(FIELD_GESTATIONAL_AGE_AT_ORDER, "ultrasound.ga.NUCHAL_TRANSLUCENCY", gestationalAgeWeeks);
                 }
                 break;
             case ANATOMY_SCAN:
                 if (gestationalAgeWeeks < 18 || gestationalAgeWeeks > 22) {
-                    throw new BusinessException(
-                        "Anatomy scan is typically performed between 18-22 weeks. Current: " + gestationalAgeWeeks + " weeks");
+                    throw new com.example.hms.exception.FieldBusinessException(FIELD_GESTATIONAL_AGE_AT_ORDER, "ultrasound.ga.ANATOMY_SCAN", gestationalAgeWeeks);
                 }
                 break;
             case GROWTH_SCAN:
                 if (gestationalAgeWeeks < 24) {
-                    throw new BusinessException(
-                        "Growth scan is typically performed after 24 weeks. Current: " + gestationalAgeWeeks + " weeks");
+                    throw new com.example.hms.exception.FieldBusinessException(FIELD_GESTATIONAL_AGE_AT_ORDER, "ultrasound.ga.GROWTH_SCAN", gestationalAgeWeeks);
                 }
                 break;
             default:
                 break;
         }
+    }
+
+    /** QA D1047: the canceller's name at the order's hospital, else the session's username. */
+    private String cancellerName(UltrasoundOrder order) {
+        UUID caller = com.example.hms.security.CallerIdentity.currentUserId();
+        String name = order.getHospital() != null ? resolveStaffName(caller, order.getHospital().getId()) : null;
+        if (name != null) {
+            return name;
+        }
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     private String resolveStaffName(UUID userId, UUID hospitalId) {

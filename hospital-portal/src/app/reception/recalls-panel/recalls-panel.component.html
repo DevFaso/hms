@@ -60,7 +60,7 @@
               }
             </td>
             <td>{{ 'RECEPTION.RECALL_TYPE_' + recall.recallType | translate }}</td>
-            <td>{{ recall.departmentName ?? '—' }}</td>
+            <td>{{ recall.departmentName | dash }}</td>
             <td class="reason-cell">{{ recall.reason }}</td>
             <td>{{ 'RECEPTION.RECALL_SOURCE_' + recall.source | translate }}</td>
             <td>
@@ -76,6 +76,19 @@
             </td>
             <td class="actions-cell">
               @if (isOpen(recall)) {
+                <!-- QA D985: book the visit the recall asks for; the booking schedules the recall. -->
+                <a
+                  class="btn-sm btn-primary"
+                  data-testid="book-recall"
+                  routerLink="/appointments/new"
+                  [queryParams]="{
+                    patientId: recall.patientId,
+                    reason: recall.reason,
+                    recallId: recall.id,
+                  }"
+                >
+                  {{ 'RECEPTION.BOOK_RECALL' | translate }}
+                </a>
                 <button
                   class="btn-sm btn-primary"
                   [disabled]="actingOnId() === recall.id"
@@ -86,7 +99,7 @@
                 <button
                   class="btn-sm btn-ghost"
                   [disabled]="actingOnId() === recall.id"
-                  (click)="cancelRecall(recall)"
+                  (click)="askCancelRecall(recall)"
                 >
                   {{ 'COMMON.CANCEL' | translate }}
                 </button>
@@ -122,6 +135,8 @@
     role="dialog"
     aria-modal="true"
     [attr.aria-label]="'RECEPTION.ADD_RECALL' | translate"
+    appDialogFocus
+    (dialogDismiss)="showAddForm.set(false)"
   >
     <div class="modal-header">
       <h2>{{ 'RECEPTION.ADD_RECALL' | translate }}</h2>
@@ -139,21 +154,30 @@
         <label class="form-label" for="rc-patient">{{ 'PATIENTS.PATIENT' | translate }} *</label>
         <div class="autocomplete-wrap">
           <input
+            required
+            data-escape-discards
             id="rc-patient"
+            [attr.data-submit-blank]="selectedPatient() ? 'false' : 'true'"
             class="form-input"
             type="text"
             [placeholder]="'RECEPTION.SEARCH_PATIENT_NAME' | translate"
             [ngModel]="patientQuery()"
             (ngModelChange)="onPatientQueryChange($event)"
+            [appListEscape]="patientResults().length > 0"
+            (listEscape)="patientResults.set([])"
             autocomplete="off"
           />
           @if (patientResults().length > 0) {
             <ul class="autocomplete-list">
               @for (p of patientResults(); track p.id) {
                 <li (click)="selectPatient(p)" (keydown.enter)="selectPatient(p)" tabindex="0">
-                  {{ p.firstName }} {{ p.lastName }}
+                  {{ p | personName }}
+                  @if (p | patientSubline; as sub) {
+                    <span class="mrn-hint">· {{ sub }}</span>
+                  }
                   @if (p.dateOfBirth) {
-                    <span class="dob-hint"
+                    {{ ' '
+                    }}<span class="dob-hint"
                       >({{ p.dateOfBirth | serverTime | date: 'mediumDate' }})</span
                     >
                   }
@@ -169,9 +193,11 @@
         <div class="form-group">
           <label class="form-label" for="rc-due">{{ 'RECEPTION.RECALL_DUE' | translate }} *</label>
           <input
+            required
             id="rc-due"
             class="form-input"
             type="date"
+            [attr.min]="today()"
             [ngModel]="dueDate()"
             (ngModelChange)="dueDate.set($event)"
           />
@@ -212,6 +238,7 @@
       <div class="form-group">
         <label class="form-label" for="rc-reason">{{ 'RECEPTION.REASON' | translate }} *</label>
         <textarea
+          required
           id="rc-reason"
           class="form-textarea"
           rows="2"
@@ -245,4 +272,16 @@
       </button>
     </div>
   </div>
+}
+
+<!-- QA D1157: a recall is cancelled with a reason, after a confirmation. -->
+@if (cancelling(); as recall) {
+  <app-reason-dialog
+    titleKey="RECEPTION.RECALL_CANCEL_TITLE"
+    labelKey="RECEPTION.RECALL_CANCEL_REASON"
+    confirmKey="RECEPTION.RECALL_CANCEL_CONFIRM"
+    [busy]="actingOnId() === recall.id"
+    (confirmed)="cancelRecall(recall, $event)"
+    (cancelled)="cancelling.set(null)"
+  />
 }

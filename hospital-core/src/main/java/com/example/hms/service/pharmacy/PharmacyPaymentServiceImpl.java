@@ -39,6 +39,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_AMOUNT = "amount";
+
 
     private static final String AUDIT_ENTITY = "PHARMACY_PAYMENT";
 
@@ -52,13 +55,23 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
     private final InventoryItemRepository inventoryItemRepository;
+    /** QA D1129: a typed provider reference is recorded once across every till. */
+    private final com.example.hms.service.payment.PaymentReferenceRegistry referenceRegistry;
+
+    /** QA D1032: the receipt counter. Setter-injected so hand-built test instances keep working. */
+    private PharmacyReceiptNumberAllocator receiptNumberAllocator;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setReceiptNumberAllocator(PharmacyReceiptNumberAllocator receiptNumberAllocator) {
+        this.receiptNumberAllocator = receiptNumberAllocator;
+    }
 
     private Dispense loadDispenseForPayment(PharmacyPaymentRequestDTO dto, UUID hospitalId) {
         Dispense dispense = dispenseRepository.findLockedById(dto.getDispenseId())
                 .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
         if (dispense.getPatient() == null
                 || !dispense.getPatient().getId().equals(dto.getPatientId())) {
-            throw new BusinessException("pharmacy.payment.patientMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "pharmacy.payment.patientMismatch");
         }
         if (dispense.getPharmacy() == null
                 || dispense.getPharmacy().getHospital() == null
@@ -67,7 +80,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         }
         // QA D404: a cancelled dispense has nothing left to pay for.
         if (dispense.getStatus() == com.example.hms.enums.DispenseStatus.CANCELLED) {
-            throw new BusinessException("pharmacy.payment.dispenseCancelled");
+            throw new com.example.hms.exception.FieldBusinessException("dispenseId", "pharmacy.payment.dispenseCancelled");
         }
         return dispense;
     }
@@ -91,6 +104,45 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         throw new BusinessException("pharmacy.payment.alreadyPaid");
     }
 
+    /**
+     * The provider reference of a mobile-money payment.
+     *
+     * <p>QA D1033: with no real provider configured (the mock gateway is the
+     * fallback bean in every environment), a mobile-money payment is what
+     * the cashier saw on the patient's phone: the typed transaction
+     * reference is required and stored as typed. The mock is never asked
+     * to "charge": it made a payment COMPLETED with no money moved and put
+     * "MOCK-&lt;uuid&gt;" on a patient's receipt. With a real provider, the
+     * patient's phone is charged and the provider's reference is kept.
+     */
+    private String mobileMoneyReference(PharmacyPaymentRequestDTO dto, Dispense dispense, Patient patient,
+                                        String currency) {
+        if (!isRealProvider()) {
+            String typed = dto.getReferenceNumber();
+            if (typed == null || typed.isBlank()) {
+                throw new com.example.hms.exception.FieldBusinessException("referenceNumber", "pharmacy.payment.mobileMoneyReferenceRequired");
+            }
+            return typed.trim();
+        }
+        String phone = patient.getPhoneNumberPrimary();
+        if (phone == null || phone.isBlank()) {
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "pharmacy.payment.noMobileMoneyPhone");
+        }
+        try {
+            MobileMoneyGateway.MobileMoneyCharge charge = mobileMoneyGateway.charge(
+                    new MobileMoneyGateway.MobileMoneyChargeRequest(
+                            phone,
+                            dto.getAmount(),
+                            currency,
+                            "Pharmacie : " + dispense.getMedicationName(),
+                            dispense.getId().toString()));
+            return charge.providerReference();
+        } catch (MobileMoneyGateway.MobileMoneyException e) {
+            log.warn("Mobile-money charge failed for dispense {}: {}", dispense.getId(), e.getMessage());
+            throw new BusinessException("pharmacy.payment.mobileMoneyFailed");
+        }
+    }
+
     @Override
     @Transactional
     public PharmacyPaymentResponseDTO createPayment(PharmacyPaymentRequestDTO dto) {
@@ -102,7 +154,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
 
         java.util.Optional<PharmacyPayment> replay = findReplayedPayment(dispense, dto);
         if (replay.isPresent()) {
-            return paymentMapper.toResponseDTO(replay.get());
+            return toResponse(replay.get());
         }
         requireAmountMatchesCharge(dispense, dto.getAmount());
 
@@ -118,37 +170,30 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
             throw new BusinessException("pharmacy.currentUserUnknown");
         }
         if (dto.getReceivedBy() != null && !currentUserId.equals(dto.getReceivedBy())) {
-            throw new BusinessException("pharmacy.payment.receivedByMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("receivedBy", "pharmacy.payment.receivedByMismatch");
         }
         User receivedBy = userRepository.findById(currentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
 
         String providerReference = dto.getReferenceNumber();
         String currency = dto.getCurrency() != null ? dto.getCurrency() : "XOF";
+        // QA D1129: a mobile-money reference the cashier typed (not one a real
+        // provider generated by charging) already on an invoice, copay, dispense
+        // or sale payment of this hospital is the same money: refused before
+        // anything is charged. An insurance authorisation is not a provider
+        // transaction (one can cover several dispenses), so it is not checked.
+        if (dto.getPaymentMethod() == PharmacyPaymentMethod.MOBILE_MONEY && !isRealProvider()) {
+            referenceRegistry.requireUnused(hospitalId, providerReference, "referenceNumber");
+        }
 
         if (dto.getPaymentMethod() == PharmacyPaymentMethod.MOBILE_MONEY) {
-            String phone = patient.getPhoneNumberPrimary();
-            if (phone == null || phone.isBlank()) {
-                throw new BusinessException("pharmacy.payment.noMobileMoneyPhone");
-            }
-            try {
-                MobileMoneyGateway.MobileMoneyCharge charge = mobileMoneyGateway.charge(
-                        new MobileMoneyGateway.MobileMoneyChargeRequest(
-                                phone,
-                                dto.getAmount(),
-                                currency,
-                                "Pharmacie: " + dispense.getMedicationName(),
-                                dispense.getId().toString()));
-                providerReference = charge.providerReference();
-            } catch (MobileMoneyGateway.MobileMoneyException e) {
-                log.warn("Mobile-money charge failed for dispense {}: {}", dispense.getId(), e.getMessage());
-                throw new BusinessException("pharmacy.payment.mobileMoneyFailed");
-            }
+            providerReference = mobileMoneyReference(dto, dispense, patient, currency);
         }
 
         PharmacyPayment entity = paymentMapper.toEntity(dto, dispense, patient, hospital, receivedBy);
         entity.setReferenceNumber(providerReference);
         entity.setCurrency(currency);
+        entity.setReceiptNumber(allocateReceiptNumber(hospital));
         PharmacyPayment saved = paymentRepository.save(entity);
 
         support.logAudit(AuditEventType.PAYMENT_POSTED,
@@ -157,7 +202,40 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 saved.getId().toString(),
                 AUDIT_ENTITY);
 
-        return paymentMapper.toResponseDTO(saved);
+        return toResponse(saved);
+    }
+
+    /** QA D1033: a configured provider, not the development fallback. */
+    private boolean isRealProvider() {
+        return mobileMoneyGateway != null
+                && !com.example.hms.service.pharmacy.payment.MockMobileMoneyGateway.PROVIDER_CODE
+                        .equals(mobileMoneyGateway.providerCode());
+    }
+
+    /** QA D1032: every payment read carries the receipt number stored when it was recorded. */
+    private PharmacyPaymentResponseDTO toResponse(PharmacyPayment payment) {
+        PharmacyPaymentResponseDTO dto = paymentMapper.toResponseDTO(payment);
+        if (dto != null) {
+            dto.setReceiptNumber(payment.getReceiptNumber());
+        }
+        return dto;
+    }
+
+    /**
+     * QA D1032: the payment's readable receipt number, allocated once; the
+     * first allocation of a year can lose the counter-row insert race, and is
+     * retried once (the invoice number's rule).
+     */
+    private String allocateReceiptNumber(Hospital hospital) {
+        if (receiptNumberAllocator == null) {
+            return null;
+        }
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.systemDefault());
+        try {
+            return receiptNumberAllocator.next(hospital, today);
+        } catch (org.springframework.dao.DataIntegrityViolationException firstOfYearRace) {
+            return receiptNumberAllocator.next(hospital, today);
+        }
     }
 
     @Override
@@ -171,7 +249,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 && (entity.getHospital() == null || !hospitalId.equals(entity.getHospital().getId()))) {
             throw new ResourceNotFoundException("pharmacy.payment.notfound");
         }
-        return paymentMapper.toResponseDTO(entity);
+        return toResponse(entity);
     }
 
     @Override
@@ -180,10 +258,10 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
             // SUPER_ADMIN unscoped read (no active hospital).
-            return paymentRepository.findByDispenseId(dispenseId, pageable).map(paymentMapper::toResponseDTO);
+            return paymentRepository.findByDispenseId(dispenseId, pageable).map(this::toResponse);
         }
         return paymentRepository.findByDispenseIdAndHospital_Id(dispenseId, hospitalId, pageable)
-                .map(paymentMapper::toResponseDTO);
+                .map(this::toResponse);
     }
 
     @Override
@@ -191,10 +269,10 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     public Page<PharmacyPaymentResponseDTO> listByPatient(UUID patientId, Pageable pageable) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            return paymentRepository.findByPatientId(patientId, pageable).map(paymentMapper::toResponseDTO);
+            return paymentRepository.findByPatientId(patientId, pageable).map(this::toResponse);
         }
         return paymentRepository.findByPatientIdAndHospital_Id(patientId, hospitalId, pageable)
-                .map(paymentMapper::toResponseDTO);
+                .map(this::toResponse);
     }
 
     /**
@@ -206,7 +284,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     @Override
     @Transactional(readOnly = true)
     public Page<PharmacyPaymentResponseDTO> listByPatientForSelf(UUID patientId, Pageable pageable) {
-        return paymentRepository.findByPatientId(patientId, pageable).map(paymentMapper::toResponseDTO);
+        return paymentRepository.findByPatientId(patientId, pageable).map(this::toResponse);
     }
 
     /**
@@ -222,7 +300,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         if (charge.compareTo(amount) != 0) {
             // QA D828: the number itself (grouped in the caller's language) and the
             // bundle writes "F CFA" after it, never a bare figure or the raw XOF code.
-            throw new BusinessException("pharmacy.payment.amountMismatch", charge);
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "pharmacy.payment.amountMismatch", charge);
         }
     }
 
@@ -231,21 +309,21 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
             throw new BusinessException("pharmacy.payment.requestRequired");
         }
         if (dto.getAmount() == null || dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException("pharmacy.payment.amountPositive");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "pharmacy.payment.amountPositive");
         }
         // QA D204 (D184): the franc CFA has no minor unit.
         if (dto.getAmount().stripTrailingZeros().scale() > 0) {
-            throw new BusinessException("billing.payment.wholeAmountOnly");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.payment.wholeAmountOnly");
         }
         if (dto.getPaymentMethod() == null) {
-            throw new BusinessException("pharmacy.payment.methodRequired");
+            throw new com.example.hms.exception.FieldBusinessException("paymentMethod", "pharmacy.payment.methodRequired");
         }
         // SUPER_ADMIN may have no active hospital; require one for payment creation.
         if (hospitalId == null) {
             throw new BusinessException("pharmacy.payment.hospitalRequired");
         }
         if (!hospitalId.equals(dto.getHospitalId())) {
-            throw new BusinessException("pharmacy.payment.hospitalMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "pharmacy.payment.hospitalMismatch");
         }
     }
 }

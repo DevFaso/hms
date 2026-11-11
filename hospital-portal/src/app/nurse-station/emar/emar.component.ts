@@ -19,6 +19,7 @@ import { Subject, Subscription, takeUntil } from 'rxjs';
 import {
   FiveRightsCheck,
   MarVerificationRequest,
+  MedicationAdministrationRequest,
   MarVerificationResponse,
   NurseMedicationTask,
   NurseTaskService,
@@ -26,6 +27,24 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { CdsCardListComponent } from '../../shared/cds-card/cds-card.component';
 import { CdsCard } from '../../shared/cds-card/cds-card.model';
+import { MedicationRoutePipe } from '../../shared/pipes/medication-route.pipe';
+import { isServerTimeToday } from '../../shared/date-utils';
+import { WitnessPickerComponent } from '../witness-picker/witness-picker.component';
+
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
+import { MarDoseHistoryComponent } from '../mar-dose-history/mar-dose-history.component';
+import { earlyDoseDialogKeys, earlyDoseRefusal } from '../early-dose';
+import { givenBeforeHoldRefusal } from '../given-before-hold';
+import {
+  AllergyHold,
+  allergyHoldRefusal,
+} from '../../shared/allergy-acknowledgement/allergy-acknowledgement';
+import { AllergyHoldDialogComponent } from '../../shared/allergy-acknowledgement/allergy-hold-dialog.component';
+import { AllergyReviewStateComponent } from '../../shared/allergy-acknowledgement/allergy-review-state.component';
+import type { AllergyReviewState } from '../../shared/allergy-acknowledgement/allergy-acknowledgement';
+import { toServerDateTime } from '../../shared/date-utils';
+import { joinReasons } from '../../shared/required-fields';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 type ScanField = 'patient' | 'medication';
@@ -62,7 +81,20 @@ const FIVE_RIGHTS_LABEL_KEYS: Record<FiveRightsCheck, string> = {
 @Component({
   selector: 'app-emar',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, ServerTimePipe, CdsCardListComponent],
+  imports: [
+    SubmitGuardDirective,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    ServerTimePipe,
+    CdsCardListComponent,
+    MedicationRoutePipe,
+    WitnessPickerComponent,
+    ReasonDialogComponent,
+    MarDoseHistoryComponent,
+    AllergyHoldDialogComponent,
+    AllergyReviewStateComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './emar.component.html',
   styleUrl: './emar.component.scss',
@@ -70,14 +102,41 @@ const FIVE_RIGHTS_LABEL_KEYS: Record<FiveRightsCheck, string> = {
 export class EmarComponent implements OnInit, OnDestroy {
   protected readonly state = signal<LoadState>('loading');
   protected readonly tasks = signal<NurseMedicationTask[]>([]);
+  protected readonly taskSearch = signal('');
+  protected readonly visibleTasks = computed(() => {
+    const term = this.taskSearch().trim().toLocaleLowerCase();
+    return this.tasks().filter(
+      (task) =>
+        !term ||
+        [task.patientName, task.medication].some((value) =>
+          value?.toLocaleLowerCase().includes(term),
+        ),
+    );
+  });
+  protected readonly pendingPharmacyCount = computed(
+    () =>
+      this.tasks().filter((task) => task.requiresPharmacistVerification && !task.pharmacistVerified)
+        .length,
+  );
+  protected readonly patientCount = computed(
+    () => new Set(this.tasks().map((task) => task.patientId)).size,
+  );
   protected readonly activeTask = signal<NurseMedicationTask | null>(null);
+  protected readonly selectedTaskHidden = computed(() => {
+    const selected = this.activeTask();
+    return !!selected && !this.visibleTasks().some((task) => task.id === selected.id);
+  });
 
   protected readonly patientScan = signal('');
   protected readonly medicationScan = signal('');
   protected readonly doseScan = signal('');
   protected readonly routeScan = signal('');
   protected readonly overrideReason = signal('');
+  /** QA D922: the second clinician who witnesses a controlled dose. */
+  protected readonly witnessUserId = signal<string | null>(null);
 
+  /** QA D1392: why the open panel closed: its order was withdrawn meanwhile. Stays until the next choice. */
+  protected readonly orderGoneNotice = signal<string | null>(null);
   protected readonly verification = signal<MarVerificationResponse | null>(null);
   protected readonly verifyInFlight = signal(false);
   protected readonly administerInFlight = signal(false);
@@ -103,12 +162,22 @@ export class EmarComponent implements OnInit, OnDestroy {
    * QA D799: the cross-reactivity advisory the prescriber saw, before the
    * dose is given. The bedside verify's answer is the fresher one (the
    * allergy list may have changed since the queue loaded); until then the
-   * row's. Never a block: Record Given stays governed by the five rights.
+   * row's. QA D1563: a stop (a documented allergy) is acknowledged with a reason when Give is refused.
    */
   protected readonly allergyAdvisories = computed<CdsCard[]>(() => {
     const fromVerify = this.verification()?.cdsAdvisories;
     if (fromVerify) return fromVerify;
     return this.activeTask()?.cdsAdvisories ?? [];
+  });
+
+  /**
+   * QA D1584: the allergy stop's review state, from the same answer as the cards above (the bedside
+   * verify's when it ran, else the row's): the plan a CONTINUE gives the dose under, or the STOP.
+   */
+  protected readonly allergyReview = computed<AllergyReviewState | null>(() => {
+    const verification = this.verification();
+    if (verification?.cdsAdvisories) return verification.allergyReview ?? null;
+    return this.activeTask()?.allergyReview ?? null;
   });
 
   protected readonly needsOverride = computed(() => {
@@ -130,13 +199,40 @@ export class EmarComponent implements OnInit, OnDestroy {
     return !!t && !!t.requiresPharmacistVerification && !t.pharmacistVerified;
   });
 
+  /** QA D922: a controlled drug is given only with a witness. */
+  protected readonly needsWitness = computed(() => !!this.activeTask()?.controlledSubstance);
+
   protected readonly canAdminister = computed(() => {
     if (this.blockedPendingPharmacist()) return false;
+    if (this.needsWitness() && !this.witnessUserId()) return false;
     const v = this.verification();
     if (!v) return false;
     if (v.allPassed) return true;
     return this.overrideReason().trim().length > 0;
   });
+
+  /**
+   * QA D1124: why "Record given" refuses, shown next to it; null when the
+   * dose may be recorded. The button is never silently disabled.
+   */
+  protected administerBlockReason(): string | null {
+    if (this.blockedPendingPharmacist()) {
+      return this.translate.instant('EMAR.PHARMACIST_BLOCKED_TITLE');
+    }
+    const v = this.verification();
+    // QA D1256 class (round 27): the witness and the five-rights check (or its
+    // override reason) are said together, not one per press.
+    return joinReasons([
+      this.needsWitness() &&
+        !this.witnessUserId() &&
+        this.translate.instant('SUBMIT_GUARD.WITNESS'),
+      !v && this.translate.instant('SUBMIT_GUARD.VERIFY_FIRST'),
+      !!v &&
+        !v.allPassed &&
+        this.overrideReason().trim().length === 0 &&
+        this.translate.instant('SUBMIT_GUARD.OVERRIDE_REASON'),
+    ]);
+  }
 
   @ViewChild('scannerVideo') protected scannerVideo?: ElementRef<HTMLVideoElement>;
 
@@ -159,6 +255,11 @@ export class EmarComponent implements OnInit, OnDestroy {
     this.destroyed$.complete();
   }
 
+  /** QA D949: an overdue dose from another day shows its date, not the time alone. */
+  protected isDueToday(dueTime: string | null | undefined): boolean {
+    return isServerTimeToday(dueTime);
+  }
+
   protected loadTasks(): void {
     this.state.set('loading');
     this.loadSub?.unsubscribe();
@@ -175,19 +276,36 @@ export class EmarComponent implements OnInit, OnDestroy {
   }
 
   protected selectTask(task: NurseMedicationTask): void {
+    this.orderGoneNotice.set(null);
+    this.earlyDose.set(null);
     this.activeTask.set(task);
     this.patientScan.set('');
     this.medicationScan.set('');
-    this.doseScan.set(task.dose ?? '');
-    this.routeScan.set(task.route ?? '');
+    // QA D1025: the nurse confirms the dose and the route she is about to
+    // give; a prefilled prescribed value made "Bonne dose" and "Bonne voie"
+    // pass without anyone checking. The prescription is shown beside them.
+    this.doseScan.set('');
+    this.routeScan.set('');
     this.overrideReason.set('');
+    this.holdRefuseReason.set('');
+    this.witnessUserId.set(null);
     this.verification.set(null);
     this.scannerError.set(null);
     this.stopScanner();
   }
 
+  /**
+   * QA D1283 (round 27): where focus goes when this task's panel leaves (a
+   * dose recorded closes it and reloads the queue): the task in the queue,
+   * else the queue's first task (shared/a11y/focus-rescue.ts reads it).
+   */
+  protected focusReturnFor(task: NurseMedicationTask): string {
+    return `[data-testid="emar-task-${task.id}"] || [data-testid="emar-queue"] button`;
+  }
+
   protected closeTask(): void {
     this.activeTask.set(null);
+    this.earlyDose.set(null);
     this.verification.set(null);
     this.stopScanner();
   }
@@ -274,6 +392,7 @@ export class EmarComponent implements OnInit, OnDestroy {
         error: (err: HttpErrorResponse) => {
           if (this.activeTask()?.id !== taskIdAtCall) return;
           this.verifyInFlight.set(false);
+          if (this.closeOnOrderChange(err)) return;
           this.toast.error(
             this.serverReason(err) ?? this.translate.instant('EMAR.TOAST.VERIFY_FAILED'),
           );
@@ -281,39 +400,151 @@ export class EmarComponent implements OnInit, OnDestroy {
       });
   }
 
+  /** QA D1159: why the dose is held or refused; required for those two outcomes. */
+  protected readonly holdRefuseReason = signal('');
+
+  protected holdRefuseReasonMissing(): boolean {
+    return this.holdRefuseReason().trim() === '';
+  }
+
   protected administer(status: 'GIVEN' | 'HELD' | 'REFUSED'): void {
     const task = this.activeTask();
     if (!task) return;
     if (status === 'GIVEN' && !this.canAdminister()) return;
+    // QA D1159: never a HELD/REFUSED record without its reason (the buttons' guard says so first).
+    const holdReason = this.holdRefuseReason().trim();
+    if (status !== 'GIVEN' && !holdReason) return;
 
-    this.administerInFlight.set(true);
-    const payload: { status: string; note?: string; overrideReason?: string } = { status };
+    const payload: MedicationAdministrationRequest = { status };
     if (this.needsOverride() && status === 'GIVEN') {
       payload.overrideReason = this.overrideReason().trim();
     }
+    if (status !== 'GIVEN') payload.note = holdReason;
+    const witness = this.witnessUserId();
+    if (status === 'GIVEN' && this.needsWitness() && witness) {
+      payload.witnessUserId = witness;
+    }
+    this.sendAdministration(task.id, payload);
+  }
 
+  /**
+   * QA D1210 (round 23): the dose the server refused as too soon after the
+   * last one, with the server's reason (last dose, earliest next time). The
+   * nurse may give it early with a reason, or go back.
+   */
+  protected readonly earlyDose = signal<{
+    taskId: string;
+    payload: MedicationAdministrationRequest;
+    why: string;
+  } | null>(null);
+
+  /** QA D1265: an unreadable frequency's refusal has its own title and question. */
+  protected readonly earlyDoseKeys = computed(() =>
+    earlyDoseDialogKeys(this.activeTask()?.frequencyUnread),
+  );
+
+  /** The order is held for review: the refusal, and the dose to chart if it was given before the hold. */
+  protected readonly givenBeforeHold = signal<{
+    taskId: string;
+    payload: MedicationAdministrationRequest;
+    why: string;
+  } | null>(null);
+  protected readonly givenBeforeAt = signal('');
+
+  protected confirmGivenBeforeHold(reason: string): void {
+    const prior = this.givenBeforeHold();
+    if (!prior || this.administerInFlight()) return;
+    // No time is the server's to refuse, on its field, and the dialog says so.
+    this.sendAdministration(prior.taskId, {
+      ...prior.payload,
+      givenBeforeHoldAt: this.givenBeforeAt() ? toServerDateTime(this.givenBeforeAt()) : undefined,
+      givenBeforeHoldReason: reason,
+    });
+  }
+
+  /**
+   * QA D1563 / Policy 4: the patient's current allergies stop this drug (an allergy recorded after the
+   * order was signed included). The server held the dose for an authorized prescriber's review: its
+   * card and who was notified. The nurse's own reason never releases it; the dose can be held.
+   */
+  protected readonly allergyHold = signal<AllergyHold | null>(null);
+
+  /** QA D1210: the same dose again, with the nurse's reason for giving it early. */
+  protected confirmEarlyDose(reason: string): void {
+    const early = this.earlyDose();
+    if (!early || this.administerInFlight()) return;
+    this.sendAdministration(early.taskId, { ...early.payload, earlyDoseReason: reason });
+  }
+
+  private sendAdministration(taskId: string, payload: MedicationAdministrationRequest): void {
+    const status = payload.status;
+    this.administerInFlight.set(true);
     this.nurseTaskService
-      .administerMedication(task.id, payload)
+      .administerMedication(taskId, payload)
       .pipe(takeUntil(this.destroyed$))
       .subscribe({
-        next: () => {
+        next: (recorded) => {
           this.administerInFlight.set(false);
+          this.earlyDose.set(null);
+          this.givenBeforeHold.set(null);
+          this.allergyHold.set(null);
           this.toast.success(
             this.translate.instant('EMAR.TOAST.RECORDED', {
               status: this.translate.instant(`EMAR.ADMIN_STATUS.${status}`),
             }),
           );
+          // CR-03: the documented exposure counts this dose: a warning, the dose stands.
+          for (const card of recorded?.cdsAdvisories ?? []) {
+            if (card.indicator === 'warning') this.toast.warning(card.summary);
+          }
           this.closeTask();
           this.loadTasks();
         },
         error: (err: HttpErrorResponse) => {
           this.administerInFlight.set(false);
+          // QA D1563 / Policy 4: held for the prescriber's review: show the card and who was notified.
+          const allergy = allergyHoldRefusal(err);
+          if (allergy) {
+            this.allergyHold.set(allergy);
+            return;
+          }
+          this.allergyHold.set(null);
+          const held = givenBeforeHoldRefusal(err);
+          if (held) {
+            this.givenBeforeHold.set({ taskId, payload, why: held });
+            return;
+          }
+          this.givenBeforeHold.set(null);
+          // QA D1210: too soon after the last dose. Say why and ask for the
+          // reason to give it early, instead of a dead-end toast.
+          const tooSoon = earlyDoseRefusal(err);
+          if (tooSoon && !payload.earlyDoseReason) {
+            this.earlyDose.set({ taskId, payload, why: tooSoon });
+            return;
+          }
+          this.earlyDose.set(null);
+          if (this.closeOnOrderChange(err)) return;
           // QA D233: a five-rights refusal carries its reason; show it.
           this.toast.error(
             this.serverReason(err) ?? this.translate.instant('EMAR.TOAST.ADMINISTER_FAILED'),
           );
         },
       });
+  }
+
+  /**
+   * QA D1392: a 409 says the order changed under this panel (the prescriber
+   * withdrew it): no dose was recorded and no retry can help. The panel closes,
+   * says why where it stood, and the queue is read again without that order.
+   */
+  private closeOnOrderChange(err: HttpErrorResponse): boolean {
+    if (err.status !== 409) return false;
+    this.closeTask();
+    this.orderGoneNotice.set(
+      this.serverReason(err) ?? this.translate.instant('EMAR.ORDER_NO_LONGER_ACTIVE'),
+    );
+    this.loadTasks();
+    return true;
   }
 
   /** The server's own refusal message (a 4xx body), when it sent one. */

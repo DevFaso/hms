@@ -121,7 +121,7 @@ class ActingScopeCoverageTest {
         new Rule("HospitalContext.isSuperAdmin() read locally",
             Pattern.compile("(ctx|context)\\.isSuperAdmin\\(\\)|getContextOrEmpty\\(\\)\\s*\\.isSuperAdmin\\(\\)"),
             allow(
-                "security/tenant/ActingScopeResolver.java", 3, "The resolver itself",
+                "security/tenant/ActingScopeResolver.java", 4, "The resolver itself",
                 "security/TenantLifecycleGate.java", 1, "The lifecycle gate: a verified super-admin passes",
                 "security/provider/ProviderConfinementPolicy.java", 1,
                 "Provider confinement, a gate like the lifecycle one: a verified super-admin is never confined",

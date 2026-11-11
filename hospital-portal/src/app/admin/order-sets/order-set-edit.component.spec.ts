@@ -1,7 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import en from '../../../assets/i18n/en.json';
+import { MedicationCatalogItemResponse, PharmacyService } from '../../services/pharmacy.service';
+import type { Page } from '../../services/pharmacy.service';
+import es from '../../../assets/i18n/es.json';
+import fr from '../../../assets/i18n/fr.json';
 import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 import { OrderSetEditComponent } from './order-set-edit.component';
 import { OrderSetService, OrderSetSummary } from '../../services/order-set.service';
@@ -130,6 +135,59 @@ describe('OrderSetEditComponent', () => {
     expect(navigateSpy).toHaveBeenCalledWith(['/admin/order-sets']);
   });
 
+  // QA round 30 (user decision 2026-11-02) / QA D1378 / D1382 (round 32): an
+  // item its author ticks as needed (the coded PRN preset ticks it) states the
+  // minimum interval between two doses; the order it creates requires it.
+  it('QA round 30 / D1378: a PRN item asks for its minimum interval, marks it, and saves it', async () => {
+    await configure('new');
+    spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+    fixture = TestBed.createComponent(OrderSetEditComponent);
+    fixture.detectChanges();
+    const cmp = fixture.componentInstance as unknown as { save(): void };
+    fixture.componentInstance['form'].name = 'Douleur';
+    const items = fixture.componentInstance['items']();
+    items[0].medicationName = 'Paracétamol';
+    const host = fixture.nativeElement as HTMLElement;
+    const field = () =>
+      host.querySelector<HTMLInputElement>('[data-testid="order-set-item-prn-0"]');
+    const tick = () =>
+      host.querySelector<HTMLInputElement>('[data-testid="order-set-item-as-needed-0"]');
+    fixture.detectChanges();
+    expect(tick()!.getAttribute('data-server-field')).toBe('orderItems[0].asNeeded');
+    expect(field()).withContext('not ticked: no interval').toBeNull();
+    fixture.componentInstance['onFrequencyChange'](items[0], 'PRN');
+    fixture.componentInstance['items'].set([...items]);
+    fixture.detectChanges();
+    expect(items[0].asNeeded).withContext('the coded PRN preset ticks it').toBeTrue();
+    expect(field()).not.toBeNull();
+
+    cmp.save();
+    fixture.detectChanges();
+    expect(svc.create).not.toHaveBeenCalled();
+    expect(field()!.getAttribute('aria-invalid')).toBe('true');
+    expect(toast.error.calls.mostRecent().args[0] as string).toContain(
+      'PRESCRIPTIONS.PRN_MIN_INTERVAL_REQUIRED',
+    );
+
+    items[0].prnMinIntervalHours = 6;
+    fixture.componentInstance['items'].set([...items]);
+    cmp.save();
+    expect(svc.create.calls.mostRecent().args[0].orderItems[0].prnMinIntervalHours).toBe(6);
+    expect(svc.create.calls.mostRecent().args[0].orderItems[0].asNeeded).toBeTrue();
+
+    // Another pick never unticks; unticking drops the tick and the interval.
+    fixture.componentInstance['onFrequencyChange'](items[0], 'Q6H');
+    expect(items[0].asNeeded).toBeTrue();
+    fixture.componentInstance['onAsNeededChange'](items[0], false);
+    fixture.componentInstance['items'].set([...items]);
+    fixture.detectChanges();
+    expect(field()).toBeNull();
+    cmp.save();
+    const saved = svc.create.calls.mostRecent().args[0].orderItems[0];
+    expect('prnMinIntervalHours' in saved).toBeFalse();
+    expect('asNeeded' in saved).toBeFalse();
+  });
+
   it('errors when an item is missing a name', async () => {
     await configure('new');
     fixture = TestBed.createComponent(OrderSetEditComponent);
@@ -144,6 +202,166 @@ describe('OrderSetEditComponent', () => {
 
     expect(svc.create).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalled();
+  });
+
+  /** QA D1410: the refusal named "Nom, Nom"; the set and its items read differently, in every language. */
+  it('QA D1410: the set name and the item name have different labels in EN, FR and ES', () => {
+    for (const locale of [en, fr, es]) {
+      const { FIELD_NAME, FIELD_ITEM_NAME } = locale.ORDER_SETS;
+      expect(FIELD_NAME).not.toBe(FIELD_ITEM_NAME);
+    }
+  });
+
+  /** QA D1396: a name several catalogue items carry offers the exact item; a new name drops the pick. */
+  it('QA D1396: the catalogue pick is offered and sent, and a new name drops it', async () => {
+    await configure('new');
+    const pharmacy = TestBed.inject(PharmacyService);
+    spyOn(pharmacy, 'searchMedications').and.returnValue(
+      of({
+        content: [
+          { id: 'm10', nameFr: 'Morphine', strength: '10', strengthUnit: 'mg' },
+          { id: 'm30', nameFr: 'Morphine', strength: '30', strengthUnit: 'mg' },
+        ],
+      } as unknown as Page<MedicationCatalogItemResponse>),
+    );
+    fixture = TestBed.createComponent(OrderSetEditComponent);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const select = () => host.querySelector('[data-testid="order-set-item-catalog-0"]');
+    expect(select()).withContext('nothing to choose yet').toBeNull();
+
+    const c = fixture.componentInstance as unknown as {
+      form: { name: string };
+      items: () => Record<string, unknown>[];
+      save(): void;
+      loadCatalogChoices(i: number): void;
+      setItemName(it: unknown, value: string): void;
+    };
+    c.form.name = 'Douleur';
+    c.setItemName(c.items()[0], 'Morphine');
+    c.loadCatalogChoices(0);
+    fixture.detectChanges();
+    expect(select()!.getAttribute('data-server-field')).toBe(
+      'orderItems[0].medicationCatalogItemId',
+    );
+    expect(select()!.querySelectorAll('option').length).toBe(3);
+
+    c.items()[0]['medicationCatalogItemId'] = 'm30';
+    c.items()[0]['frequency'] = 'Q6H';
+    c.items()[0]['quantity'] = 6;
+    c.save();
+    expect(svc.create.calls.mostRecent().args[0].orderItems[0].medicationCatalogItemId).toBe('m30');
+
+    c.setItemName(c.items()[0], 'Paracetamol');
+    c.save();
+    expect(
+      'medicationCatalogItemId' in svc.create.calls.mostRecent().args[0].orderItems[0],
+    ).toBeFalse();
+  });
+
+  /** QA D1396: the editor writes the quantity; the server's refusal names this control. */
+  it('QA D1419: a wording the MAR cannot schedule asks on the item; a chosen value never asks', async () => {
+    await configure('new');
+    fixture = TestBed.createComponent(OrderSetEditComponent);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const box = () => host.querySelector('[data-testid="order-set-item-frequency-confirmed-0"]');
+    expect(box()).withContext('nothing asked yet').toBeNull();
+
+    const c = fixture.componentInstance as unknown as {
+      form: { name: string };
+      items: () => Record<string, unknown>[];
+      save(): void;
+      onFrequencyChange(it: Record<string, unknown>, value: string): void;
+    };
+    c.form.name = 'TPI';
+    Object.assign(c.items()[0], { medicationName: 'Fansidar', frequency: 'SP + AQ' });
+    svc.create.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          message: 'asked',
+          fieldErrors: { 'orderItems[0].frequencyConfirmed': 'asked' },
+        },
+      })),
+    );
+    c.save();
+    fixture.detectChanges();
+    expect(box()).withContext('the refusal shows the box').not.toBeNull();
+    expect(box()?.getAttribute('data-server-field')).toBe('orderItems[0].frequencyConfirmed');
+    expect(host.querySelector('[data-testid="order-set-item-frequency-0"]')?.textContent)
+      .withContext('the wording asked about is on screen')
+      .toContain('SP + AQ');
+
+    svc.create.and.returnValue(of(existing));
+    c.items()[0]['frequencyConfirmed'] = true;
+    c.save();
+    expect(svc.create.calls.mostRecent().args[0].orderItems[0].frequencyConfirmed).toBeTrue();
+
+    c.onFrequencyChange(c.items()[0], 'BID');
+    fixture.detectChanges();
+    expect(box()).withContext('a chosen value never asks').toBeNull();
+    c.save();
+    expect('frequencyConfirmed' in svc.create.calls.mostRecent().args[0].orderItems[0]).toBeFalse();
+  });
+
+  it('QA D1491: a medication item states its frequency, marked and named on the press of Save', async () => {
+    await configure('new');
+    fixture = TestBed.createComponent(OrderSetEditComponent);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const c = fixture.componentInstance as unknown as {
+      form: { name: string };
+      items: () => Record<string, unknown>[];
+      save(): void;
+    };
+    c.form.name = 'Douleur';
+    Object.assign(c.items()[0], { medicationName: 'Morphine', frequency: '' });
+    svc.create.calls.reset();
+    c.save();
+    fixture.detectChanges();
+    expect(svc.create).not.toHaveBeenCalled();
+    const field = host.querySelector('[data-testid="order-set-item-frequency-0"]');
+    expect(field?.getAttribute('aria-invalid')).toBe('true');
+    expect(field?.getAttribute('data-server-field')).toBe('orderItems[0].frequency');
+    Object.assign(c.items()[0], { frequency: 'Q6H' });
+    c.save();
+    expect(svc.create).toHaveBeenCalled();
+  });
+
+  it('QA D1396: the quantity and unit are saved with the item, and a blank one is not sent', async () => {
+    await configure('new');
+    fixture = TestBed.createComponent(OrderSetEditComponent);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const quantity = host.querySelector('[data-testid="order-set-item-quantity-0"]')!;
+    expect(quantity.getAttribute('data-server-field')).toBe('orderItems[0].quantity');
+    expect(quantity.hasAttribute('required'))
+      .withContext('only a controlled drug needs it')
+      .toBeFalse();
+
+    const c = fixture.componentInstance as unknown as {
+      form: { name: string };
+      items: () => Record<string, unknown>[];
+      save(): void;
+    };
+    c.form.name = 'Douleur';
+    Object.assign(c.items()[0], {
+      medicationName: 'Morphine',
+      frequency: 'Q6H',
+      quantity: 6,
+      quantityUnit: 'ampoules',
+    });
+    c.save();
+    let sent = svc.create.calls.mostRecent().args[0].orderItems[0];
+    expect(sent.quantity).toBe(6);
+    expect(sent.quantityUnit).toBe('ampoules');
+
+    Object.assign(c.items()[0], { quantity: null, quantityUnit: ' ' });
+    c.save();
+    sent = svc.create.calls.mostRecent().args[0].orderItems[0];
+    expect('quantity' in sent).toBeFalse();
+    expect('quantityUnit' in sent).toBeFalse();
   });
 
   /** QA D859: HOSPITAL_ADMIN_A opened /admin/order-sets/new in FR and ES. */
@@ -162,7 +380,10 @@ describe('OrderSetEditComponent', () => {
       'true',
     );
     expect(host.querySelector('[data-testid="order-set-item-name-error-0"]')).not.toBeNull();
-    expect(toast.error).toHaveBeenCalledWith('ORDER_SETS.NAME_REQUIRED');
+    // QA D1256 class (round 27): the name AND the unnamed item in one toast (it said the name only).
+    const said = toast.error.calls.mostRecent().args[0] as string;
+    expect(said).toContain('ORDER_SETS.NAME_REQUIRED');
+    expect(said).toContain('ORDER_SETS.ITEM_NAME_MISSING');
   });
 
   it('QA D859: item types, units, routes and frequencies are read, not shown as codes', async () => {

@@ -52,6 +52,7 @@ public class UserController {
     private final com.example.hms.service.PatientAccountRegistrationService patientAccountRegistrationService;
     private final com.example.hms.repository.HospitalRepository hospitalRepository;
     private final RoleValidator roleValidator;
+    private final org.springframework.context.MessageSource messageSource;
 
     @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")
     @Operation(
@@ -92,9 +93,12 @@ public class UserController {
         // QA D626 (verification): the flag alone proves nothing, the client sets
         // it. A patient registration carries the patient record and both are
         // written in one transaction, so no PATIENT account is left without one.
-        final boolean patientRegistration = Boolean.TRUE.equals(request.getPatientRegistration());
+        // QA D1416: a receptionist only ever registers a patient (the roles were
+        // forced above), so the same rule holds for them, flag or no flag.
+        final boolean patientRegistration = callerIsReceptionistOnly
+            || Boolean.TRUE.equals(request.getPatientRegistration());
         if (patientRegistration && request.getPatient() == null) {
-            throw new com.example.hms.exception.BusinessException("users.patientRegistration.patientRequired");
+            throw new com.example.hms.exception.FieldBusinessException("patient", "users.patientRegistration.patientRequired");
         }
 
         // SUPER_ADMIN is a global (platform-level) role — it has no hospital context.
@@ -198,7 +202,8 @@ public class UserController {
             + "sees the live accounts holding an assignment (any role, active or not) at a hospital "
             + "they administer. includeDeleted=true also returns soft-deleted "
             + "accounts; onlyDeleted=true returns only them (the restore worklist). Both are "
-            + "honoured only for SUPER_ADMIN; everyone else silently gets the live-only view.")
+            + "honoured only for SUPER_ADMIN; for anyone else includeDeleted is ignored and "
+            + "onlyDeleted returns an empty page (QA D919).")
     @GetMapping
     @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_DIRECTORY_AUTHORITIES + ")")
     public ResponseEntity<Page<UserSummaryDTO>> getAllUsers(
@@ -207,6 +212,13 @@ public class UserController {
             @RequestParam(defaultValue = "false") boolean includeDeleted,
             @RequestParam(defaultValue = "false") boolean onlyDeleted) {
         boolean allowed = canSeeDeleted();
+        // QA D919: the deleted worklist asked for by someone it is not for is
+        // empty. It used to fall back to the live list, so a hospital admin
+        // clicking "Supprimé" got every live account with edit buttons.
+        if (onlyDeleted && !allowed) {
+            return ResponseEntity.ok(org.springframework.data.domain.Page.empty(
+                org.springframework.data.domain.PageRequest.of(Math.max(page, 0), Math.max(size, 1))));
+        }
         return ResponseEntity.ok(userService.getAllUsers(
             page, size, includeDeleted && allowed, onlyDeleted && allowed));
     }
@@ -248,7 +260,9 @@ public class UserController {
     @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_REGISTRAR_AUTHORITIES + ")")
     public ResponseEntity<MessageResponse> deleteUser(@PathVariable UUID id) {
         userService.deleteUser(id);
-        return ResponseEntity.ok(new MessageResponse("User deleted successfully."));
+        // QA D911: in the reader's language, like every other answer here.
+        return ResponseEntity.ok(new MessageResponse(messageSource.getMessage(
+            "user.deleted", null, org.springframework.context.i18n.LocaleContextHolder.getLocale())));
     }
 
     @WriteAudited(skip = true, reason = "service emits USER_RESTORE")
@@ -284,6 +298,11 @@ public class UserController {
             @RequestParam(defaultValue = "false") boolean includeDeleted,
             @RequestParam(defaultValue = "false") boolean onlyDeleted) {
         boolean allowed = canSeeDeleted();
+        // QA D919: as GET /users, the deleted worklist is empty for anyone else.
+        if (onlyDeleted && !allowed) {
+            return ResponseEntity.ok(org.springframework.data.domain.Page.empty(
+                org.springframework.data.domain.PageRequest.of(Math.max(page, 0), Math.max(size, 1))));
+        }
         return ResponseEntity.ok(userService.searchUsers(
             name, role, email, page, size, includeDeleted && allowed, onlyDeleted && allowed));
     }

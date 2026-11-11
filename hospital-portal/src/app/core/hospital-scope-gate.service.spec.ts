@@ -1,9 +1,13 @@
+import { Subject } from 'rxjs';
+import { Location } from '@angular/common';
+import { NavigationStart, NavigationEnd, Event as RouterEvent } from '@angular/router';
 import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRouteSnapshot, Router, provideRouter } from '@angular/router';
 
 import {
   HospitalScopeGateService,
+  GLOBAL_HOSPITAL_HISTORY_STATE,
   routeRequiresHospitalScope,
 } from './hospital-scope-gate.service';
 import { RoleContextService } from './role-context.service';
@@ -23,10 +27,22 @@ describe('HospitalScopeGateService', () => {
           { path: 'open', component: BlankComponent },
           { path: 'gated', component: BlankComponent, data: { requiresHospitalScope: true } },
           {
+            path: 'network',
+            component: BlankComponent,
+            data: { requiresHospitalScope: true, supportsGlobalHospitalView: true },
+          },
+          {
             path: 'parent',
             data: { roles: ['ROLE_SUPER_ADMIN'] },
             children: [
-              { path: 'child', component: BlankComponent, data: { requiresHospitalScope: true } },
+              {
+                path: 'child',
+                component: BlankComponent,
+                data: {
+                  requiresHospitalScope: true,
+                  hospitalNetworkTitleKey: 'ORDER_SETS.ADMIN_TITLE',
+                },
+              },
             ],
           },
         ]),
@@ -55,6 +71,7 @@ describe('HospitalScopeGateService', () => {
     await router.navigateByUrl('/gated');
     expect(gate.required()).toBeTrue();
     expect(gate.blocked()).toBeTrue();
+    expect(gate.showNetworkDirectory()).toBeTrue();
     expect(gate.showChip()).toBeTrue();
   });
 
@@ -65,6 +82,48 @@ describe('HospitalScopeGateService', () => {
     expect(gate.required()).toBeTrue();
     expect(gate.blocked()).toBeFalse();
     expect(gate.showChip()).toBeFalse();
+    expect(gate.showNetworkDirectory()).toBeFalse();
+  });
+
+  it('allows an explicitly supported global read without weakening facility-only routes', async () => {
+    asSuperAdminInGlobalView();
+    await router.navigateByUrl('/network');
+    expect(gate.blocked()).toBeFalse();
+    expect(gate.allowsGlobal()).toBeTrue();
+    expect(gate.showChip()).toBeTrue();
+    await router.navigateByUrl('/gated');
+    expect(gate.allowsGlobal()).toBeFalse();
+    expect(gate.blocked()).toBeTrue();
+  });
+
+  it('waits for explicit global mode when a super-admin has no resolved hospital', async () => {
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    await router.navigateByUrl('/network');
+    expect(roleContext.globalView()).toBeFalse();
+    expect(gate.blocked()).toBeTrue();
+    roleContext.markSuperAdminGlobalDefaults();
+    expect(gate.blocked()).toBeFalse();
+  });
+
+  it('does not grant an unassigned non-super-admin the global capability', async () => {
+    roleContext.setRoles(['ROLE_NURSE']);
+    await router.navigateByUrl('/network');
+    expect(gate.blocked()).toBeTrue();
+  });
+
+  it('rebuilds the outlet between a network overview and a selected hospital', async () => {
+    asSuperAdminInGlobalView();
+    await router.navigateByUrl('/network');
+    TestBed.tick();
+    const networkKey = gate.outletKey();
+    roleContext.scopeToHospital('h1');
+    TestBed.tick();
+    expect(gate.outletKey()).not.toBe(networkKey);
+    const scopedKey = gate.outletKey();
+    roleContext.enableGlobalView();
+    TestBed.tick();
+    expect(gate.outletKey()).not.toBe(scopedKey);
+    expect(gate.blocked()).toBeFalse();
   });
 
   it('reads the flag from a child route under an unflagged parent', async () => {
@@ -72,6 +131,9 @@ describe('HospitalScopeGateService', () => {
     await router.navigateByUrl('/parent/child');
     expect(gate.required()).toBeTrue();
     expect(gate.blocked()).toBeTrue();
+    expect(gate.moduleTitleKey()).toBe('ORDER_SETS.ADMIN_TITLE');
+    await router.navigateByUrl('/open');
+    expect(gate.moduleTitleKey()).toBeNull();
   });
 
   it('pins the super-admin from ?hospitalId= so a shared link opens scoped', async () => {
@@ -126,6 +188,84 @@ describe('HospitalScopeGateService', () => {
     expect(gate.outletKey())
       .withContext('a pick on an ungated route, which reloads itself')
       .toBe(afterPick);
+  });
+
+  it('restores global view on browser history navigation without a hospital query', async () => {
+    asSuperAdminInGlobalView();
+    await router.navigateByUrl('/gated');
+    roleContext.scopeToHospital('h2');
+    const events = router.events as Subject<RouterEvent>;
+    events.next(
+      new NavigationStart(100, '/gated', 'popstate', {
+        navigationId: 1,
+        [GLOBAL_HOSPITAL_HISTORY_STATE]: true,
+      }),
+    );
+    events.next(new NavigationEnd(100, '/gated', '/gated'));
+    expect(roleContext.globalView()).toBeTrue();
+    expect(gate.showNetworkDirectory()).toBeTrue();
+  });
+
+  for (const marker of [undefined, false]) {
+    it(`keeps a session hospital on Back/Forward with history marker ${marker}`, async () => {
+      asSuperAdminInGlobalView();
+      roleContext.scopeToHospital('h2');
+      await router.navigateByUrl('/gated');
+      await router.navigateByUrl('/parent/child');
+      const events = router.events as Subject<RouterEvent>;
+      events.next(
+        new NavigationStart(100, '/gated', 'popstate', {
+          navigationId: 1,
+          [GLOBAL_HOSPITAL_HISTORY_STATE]: marker,
+        }),
+      );
+      events.next(new NavigationEnd(100, '/gated', '/gated'));
+      expect(roleContext.effectiveHospitalIdForRequest()).toBe('h2');
+      expect(gate.showNetworkDirectory()).toBeFalse();
+    });
+  }
+
+  it('stamps global and scoped entries without losing caller navigation state', async () => {
+    asSuperAdminInGlobalView();
+    await router.navigateByUrl('/gated?filter=active#section', { state: { caller: 'retained' } });
+    const location = TestBed.inject(Location);
+    expect(location.path(true)).toBe('/gated?filter=active#section');
+    expect(location.getState()).toEqual(
+      jasmine.objectContaining({
+        caller: 'retained',
+        [GLOBAL_HOSPITAL_HISTORY_STATE]: true,
+      }),
+    );
+    await router.navigateByUrl('/gated?hospitalId=h2');
+    expect(location.getState()).toEqual(
+      jasmine.objectContaining({
+        [GLOBAL_HOSPITAL_HISTORY_STATE]: false,
+      }),
+    );
+  });
+
+  it('ignores even a global history marker for staff', async () => {
+    roleContext.setRoles(['ROLE_NURSE']);
+    roleContext.activeHospitalId = 'h1';
+    await router.navigateByUrl('/gated');
+    const global = spyOn(roleContext, 'enableGlobalView');
+    const events = router.events as Subject<RouterEvent>;
+    events.next(
+      new NavigationStart(100, '/gated', 'popstate', {
+        navigationId: 1,
+        [GLOBAL_HOSPITAL_HISTORY_STATE]: true,
+      }),
+    );
+    events.next(new NavigationEnd(100, '/gated', '/gated'));
+    expect(global).not.toHaveBeenCalled();
+    expect(roleContext.effectiveHospitalIdForRequest()).toBe('h1');
+  });
+  it('does not offer the network directory to a staff account without an active hospital', async () => {
+    roleContext.setRoles(['ROLE_NURSE']);
+    roleContext.activeHospitalId = null;
+    await router.navigateByUrl('/gated');
+    expect(gate.blocked()).toBeTrue();
+    expect(gate.showNetworkDirectory()).toBeFalse();
   });
 
   it('routeRequiresHospitalScope accepts only a literal true', () => {

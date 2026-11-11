@@ -45,8 +45,8 @@
 .detail-header {
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 24px;
+  gap: 16px;
+  padding: 22px;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
@@ -68,6 +68,8 @@
 }
 
 .header-info {
+  flex: 1;
+  min-width: 0;
   h1 {
     margin: 0;
     font-size: 1.5rem;
@@ -112,6 +114,14 @@
     background: #fbe9e7;
     color: #c62828;
   }
+  &.deceased {
+    background: #37474f;
+    color: #fff;
+  }
+  &.disputed {
+    background: #fff3e0;
+    color: #b45309;
+  }
 }
 
 .tabs {
@@ -147,7 +157,7 @@
 
 .info-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 20px;
 }
 
@@ -608,6 +618,17 @@
   padding: 1rem;
   border: 1px solid var(--border, #cfd8d7);
   border-radius: 8px;
+  background: #fff;
+
+  h3 {
+    margin-top: 0;
+  }
+
+  p {
+    color: var(--text-secondary);
+    line-height: 1.6;
+    max-width: 65ch;
+  }
 
   label {
     display: block;
@@ -615,8 +636,178 @@
   }
 
   input {
+    display: block;
+    box-sizing: border-box;
+    margin-top: 8px;
     width: 100%;
     max-width: 32rem;
-    padding: 0.4rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font: inherit;
+  }
+}
+
+.header-actions,
+.quick-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.header-actions {
+  max-width: 360px;
+  justify-content: flex-end;
+}
+
+.patient-navigation {
+  margin: 20px 0;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+}
+
+.section-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+
+  .material-symbols-outlined {
+    font-size: 20px;
+  }
+
+  &:hover {
+    background: var(--bg-secondary, #f1f5f9);
+  }
+
+  &.active {
+    background: var(--primary);
+    color: #fff;
+  }
+}
+
+.sub-tabs {
+  margin: 0;
+  padding: 8px;
+  border-radius: 0;
+  border-top: 1px solid var(--border);
+  box-shadow: none;
+
+  .tab {
+    padding: 9px 12px;
+    font-size: 0.8125rem;
+  }
+
+  .tab.active {
+    background: var(--bg-secondary, #f1f5f9);
+    color: var(--primary);
+    box-shadow: none;
+    font-weight: 700;
+  }
+}
+
+.overview-grid {
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.overview-main,
+.overview-side {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.info-card {
+  min-width: 0;
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+.info-row {
+  gap: 16px;
+
+  .value {
+    overflow-wrap: anywhere;
+  }
+}
+
+.essentials-card {
+  border-top: 3px solid var(--primary);
+}
+
+.clinical-summary {
+  margin: 16px 0;
+}
+
+.privacy-card {
+  background: var(--bg-secondary, #f8fafc);
+}
+
+.contact-card a {
+  color: var(--primary);
+  text-underline-offset: 3px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+
+@media (max-width: 1100px) {
+  .detail-header {
+    flex-wrap: wrap;
+  }
+
+  .header-actions {
+    max-width: none;
+    justify-content: flex-start;
+    flex-basis: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .section-tab {
+    flex: 1 1 40%;
+    padding: 10px 8px;
+  }
+
+  .header-actions {
+    justify-content: center;
+  }
+
+  .info-card {
+    padding: 18px;
+  }
+
+  .header-actions button,
+  .quick-links button {
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }

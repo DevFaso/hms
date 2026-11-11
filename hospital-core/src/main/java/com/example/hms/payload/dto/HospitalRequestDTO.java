@@ -46,6 +46,7 @@ public class HospitalRequestDTO {
     // QA D833: the limit is on what is typed, spaces included; the service
     // stores the number without them (PhoneNumbers.normalizeFacilityPhone).
     @Size(max = 30, message = "{hospital.phoneNumber.size}")
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
 
     @Email(message = "{hospital.email.invalid}")

@@ -42,6 +42,11 @@ public abstract class UltrasoundReportBaseDTO {
     private Boolean dueDateConfirmed;
 
     // Fetal count and position
+    /**
+     * 0 means no fetus seen (a finding). The range (0 to 8) is checked by the
+     * service only when the value changes (UltrasoundServiceImpl
+     * .requireFetusCountInRange), never on this shared DTO.
+     */
     private Integer numberOfFetuses;
 
     private String fetalPosition;

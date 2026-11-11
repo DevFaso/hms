@@ -123,6 +123,42 @@ class DrugDrugInteractionRuleTest {
         assertThat(rule.evaluate(contextWith("11289", "1191"))).isEmpty();
     }
 
+    /** QA D1523: an interaction with a draft is warned about, and the card says the other order is not signed yet. */
+    @Test
+    void anInteractionWithADraftNamesItsStatus() {
+        DrugInteraction di = DrugInteraction.builder()
+            .drug1Code("11289").drug1Name("warfarin")
+            .drug2Code("1191").drug2Name("aspirin")
+            .severity(InteractionSeverity.MODERATE)
+            .active(true)
+            .build();
+        when(repo.findInteractionBetween("11289", "1191")).thenReturn(Optional.of(di));
+        com.example.hms.model.Prescription draft = com.example.hms.model.Prescription.builder()
+            .medicationName("Aspirin").status(com.example.hms.enums.PrescriptionStatus.DRAFT).build();
+        com.example.hms.model.Prescription signed = com.example.hms.model.Prescription.builder()
+            .medicationName("Aspirin").status(com.example.hms.enums.PrescriptionStatus.SIGNED).build();
+
+        List<CdsCard> withDraft = rule.evaluate(new CdsRuleContext(null, UUID.randomUUID(), "Warfarin", null,
+            "11289", null, null, null, List.of(draft), List.of("1191")));
+        assertThat(withDraft).singleElement().satisfies(card -> {
+            assertThat(card.indicator()).isEqualTo(CdsCard.Indicator.WARNING);
+            assertThat(card.detail()).contains("not signed yet");
+        });
+
+        // The same drug also signed: the card is about the order in force, with no "not signed" sentence.
+        List<CdsCard> withSigned = rule.evaluate(new CdsRuleContext(null, UUID.randomUUID(), "Warfarin", null,
+            "11289", null, null, null, List.of(draft, signed), List.of("1191", "1191")));
+        assertThat(withSigned).singleElement()
+            .satisfies(card -> assertThat(String.valueOf(card.detail())).doesNotContain("not signed yet"));
+
+        // An abandoned draft (past the duplicate check's look-back) is not an order the patient may soon be on.
+        com.example.hms.model.Prescription abandoned = com.example.hms.model.Prescription.builder()
+            .medicationName("Aspirin").status(com.example.hms.enums.PrescriptionStatus.DRAFT).build();
+        abandoned.setCreatedAt(java.time.LocalDateTime.now().minus(DuplicateMedicationOrderRule.LOOKBACK).minusDays(1));
+        assertThat(rule.evaluate(new CdsRuleContext(null, UUID.randomUUID(), "Warfarin", null,
+            "11289", null, null, null, List.of(abandoned), List.of("1191")))).isEmpty();
+    }
+
     @Test
     void hasStableId() {
         assertThat(rule.id()).isEqualTo("drug-drug-interaction");

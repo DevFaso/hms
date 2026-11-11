@@ -449,6 +449,7 @@ export class AuthService {
       try {
         sessionStorage.removeItem('hms_idle_locked');
         sessionStorage.removeItem('hms_lock_ts');
+        sessionStorage.removeItem('hms-chunk-reload');
       } catch {
         /* storage not available */
       }

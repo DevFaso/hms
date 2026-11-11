@@ -49,6 +49,21 @@ function mockResult(overrides: Record<string, unknown> = {}): Record<string, unk
 }
 
 describe('LabResultsComponent', () => {
+  it('keeps critical severity visible while filter buttons announce their selected state', () => {
+    fixture.detectChanges();
+    flushInit([mockResult({ severityFlag: 'CRITICAL', released: false })]);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const badge = el.querySelector<HTMLElement>('.severity-critical')!;
+    expect(badge).not.toBeNull();
+    expect(getComputedStyle(badge).color).toBe('rgb(153, 27, 27)');
+    const buttons = [...el.querySelectorAll<HTMLButtonElement>('.tabs .tab')];
+    buttons[2].click();
+    fixture.detectChanges();
+    expect(buttons[2].getAttribute('aria-pressed')).toBe('true');
+    expect(buttons[0].getAttribute('aria-pressed')).toBe('false');
+    expect(el.querySelectorAll('.data-table tbody tr').length).toBe(1);
+  });
   let fixture: ComponentFixture<LabResultsComponent>;
   let component: LabResultsComponent;
   let httpMock: HttpTestingController;
@@ -65,6 +80,47 @@ describe('LabResultsComponent', () => {
   });
 
   afterEach(() => httpMock.verify());
+
+  it('renders evolution from the actual unwrapped detail response', () => {
+    fixture.detectChanges();
+    flushInit();
+    const row = component.results()[0];
+    component.viewResult(row);
+    httpMock.expectOne('/lab-results/result-1').flush({
+      ...row,
+      trendHistory: [
+        { resultDate: '2026-11-01T09:00:00Z', resultValue: '1.0', resultUnit: 'g/L' },
+        { resultDate: '2026-11-08T09:00:00Z', resultValue: '1.2', resultUnit: 'g/L' },
+      ],
+    });
+    fixture.detectChanges();
+    expect(component.detailHistoryError()).toBeFalse();
+    expect(component.detailHistory().length).toBe(2);
+    expect(fixture.nativeElement.querySelector('app-result-evolution svg')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('app-result-evolution [role="alert"]')).toBeNull();
+  });
+
+  it('uses the fetched result date and patient-specific range in the marker', () => {
+    fixture.detectChanges();
+    flushInit();
+    const row = component.results()[0];
+    component.viewResult(row);
+    httpMock.expectOne('/lab-results/result-1').flush({
+      ...row,
+      resultValue: '15',
+      resultUnit: 'cdx-unit',
+      resultDate: '2026-01-02T09:00:00Z',
+      gradedReferenceRange: { minValue: 10, maxValue: 20, unit: 'cdx-unit' },
+    });
+    fixture.detectChanges();
+    expect(component.selectedResult()?.resultDate).toBe('2026-01-02T09:00:00Z');
+    expect(
+      fixture.nativeElement.querySelector('app-result-range time')?.getAttribute('datetime'),
+    ).toBe('2026-01-02T09:00:00Z');
+    expect(
+      fixture.nativeElement.querySelector('app-result-range .marker')?.getAttribute('style'),
+    ).toContain('50%');
+  });
 
   function flushInit(results: Record<string, unknown>[] = [mockResult()]): void {
     // listResults
@@ -86,6 +142,195 @@ describe('LabResultsComponent', () => {
     assignReq.flush([{ id: 'assign-1', active: true }]);
   }
 
+  it('paginates results and resets the page after filtering', () => {
+    fixture.detectChanges();
+    flushInit(
+      Array.from({ length: 26 }, (_, i) =>
+        mockResult({ id: `result-${i}`, patientFullName: `Patient ${i}` }),
+      ),
+    );
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('tbody .data-row').length).toBe(10);
+    component.page.set(3);
+    expect(component.pagedResults().length).toBe(6);
+    expect(component.pageStart()).toBe(20);
+    component.setPageSize(25);
+    expect(component.currentPage()).toBe(1);
+    expect(component.pagedResults().length).toBe(25);
+    component.page.set(2);
+    component.searchTerm = 'Patient 25';
+    component.applyFilter();
+    expect(component.currentPage()).toBe(1);
+    expect(component.pagedResults().length).toBe(1);
+  });
+
+  it('ignores history received after switching patient details', () => {
+    fixture.detectChanges();
+    flushInit();
+    const first = component.results()[0];
+    component.viewResult(first);
+    const pending = httpMock.expectOne('/lab-results/result-1');
+    component.viewResult({ ...first, id: 'result-2', patientId: 'patient-2' });
+    httpMock
+      .expectOne('/lab-results/result-2')
+      .flush({ ...first, id: 'result-2', patientId: 'patient-2', trendHistory: [] });
+    pending.flush({
+      ...first,
+      trendHistory: [{ resultValue: '999', resultUnit: 'mg/dL', resultDate: first.resultDate }],
+    });
+    expect(component.detailHistory()[0].resultValue).toBe(first.resultValue);
+    expect(component.selectedResult()?.patientId).toBe('patient-2');
+  });
+
+  it('reports a failed history request', () => {
+    fixture.detectChanges();
+    flushInit();
+    component.viewResult(component.results()[0]);
+    httpMock
+      .expectOne('/lab-results/result-1')
+      .flush({}, { status: 503, statusText: 'Unavailable' });
+    expect(component.detailHistoryError()).toBeTrue();
+    expect(component.detailHistoryLoading()).toBeFalse();
+    expect(component.detailHistory()).toEqual([]);
+  });
+
+  it('rejects a detail response for another patient', () => {
+    fixture.detectChanges();
+    flushInit();
+    component.viewResult(component.results()[0]);
+    httpMock.expectOne('/lab-results/result-1').flush(mockResult({ patientId: 'other-patient' }));
+    expect(component.detailHistoryError()).toBeTrue();
+    expect(component.detailHistory()).toEqual([]);
+  });
+
+  it('closes the detail and ignores pending history on hospital scope changes', () => {
+    fixture.detectChanges();
+    flushInit(Array.from({ length: 21 }, (_, i) => mockResult({ id: `result-${i}` })));
+    component.page.set(3);
+    expect(component.currentPage()).toBe(3);
+    component.viewResult(component.results()[0]);
+    const detail = httpMock.expectOne('/lab-results/result-0');
+    component.onScopeChange('new-hospital');
+    expect(component.selectedResult()).toBeNull();
+    expect(component.currentPage()).toBe(1);
+    httpMock
+      .expectOne((r) => r.url === '/lab-results')
+      .flush({ data: { content: [], totalElements: 0, totalPages: 0, number: 0 } });
+    detail.flush(
+      mockResult({
+        trendHistory: [
+          { resultDate: '2026-11-08T09:00:00Z', resultUnit: 'g/L', resultValue: '999' },
+        ],
+      }),
+    );
+    expect(component.detailHistory()).toEqual([]);
+  });
+
+  it('disables pager controls only at the first and last pages', () => {
+    fixture.detectChanges();
+    flushInit(Array.from({ length: 11 }, (_, i) => mockResult({ id: `result-${i}` })));
+    fixture.detectChanges();
+    const buttons = fixture.nativeElement.querySelectorAll(
+      '.results-pagination button',
+    ) as NodeListOf<HTMLButtonElement>;
+    expect(buttons[0].disabled).toBeTrue();
+    expect(buttons[1].disabled).toBeFalse();
+    buttons[1].click();
+    fixture.detectChanges();
+    expect(buttons[0].disabled).toBeFalse();
+    expect(buttons[1].disabled).toBeTrue();
+    expect(component.pageStart()).toBe(10);
+    expect(component.pageEnd()).toBe(11);
+  });
+
+  it('keeps the current page after a result reload following an action', () => {
+    fixture.detectChanges();
+    const rows = Array.from({ length: 21 }, (_, i) => mockResult({ id: `result-${i}` }));
+    flushInit(rows);
+    component.page.set(2);
+    component.loadResults();
+    httpMock
+      .expectOne((r) => r.url === '/lab-results')
+      .flush({ data: { content: rows, totalElements: rows.length, totalPages: 1, number: 0 } });
+    expect(component.currentPage()).toBe(2);
+    expect(component.pagedResults()[0].id).toBe('result-10');
+  });
+
+  it('keeps the clamped critical page after read-back and a later growing refresh', () => {
+    fixture.detectChanges();
+    flushInit();
+    const rows = Array.from({ length: 21 }, (_, i) =>
+      mockResult({ id: `critical-${i}`, severityFlag: 'CRITICAL' }),
+    ) as unknown as LabResultResponse[];
+    component.activeTab.set('critical');
+    component.criticalList.set(rows);
+    component.applyFilter();
+    component.page.set(2);
+    component.openReadBack(rows[0]);
+    component.readBackValue.set(rows[0].resultValue);
+    component.submitReadBack();
+    httpMock
+      .expectOne('/lab-results/critical-0/critical-read-back')
+      .flush({ ...rows[0], acknowledged: true });
+    expect(component.currentPage()).toBe(2);
+
+    component.page.set(3);
+    component.criticalList.set(rows);
+    component.applyFilter(false);
+    component.openReadBack(rows[1]);
+    component.readBackValue.set(rows[1].resultValue);
+    component.submitReadBack();
+    httpMock
+      .expectOne('/lab-results/critical-1/critical-read-back')
+      .flush({ ...rows[1], acknowledged: true });
+    expect(component.currentPage()).toBe(2);
+    component.criticalList.set(rows);
+    component.applyFilter(false);
+    expect(component.currentPage()).toBe(2);
+    expect(component.pageStart()).toBe(10);
+  });
+
+  it('resets pagination through the search input binding', () => {
+    fixture.detectChanges();
+    flushInit(
+      Array.from({ length: 21 }, (_, i) =>
+        mockResult({ id: `result-${i}`, patientFullName: `Patient ${i}` }),
+      ),
+    );
+    component.page.set(3);
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector('.search-box input') as HTMLInputElement;
+    input.value = 'Patient 20';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(component.page()).toBe(1);
+    expect(component.filtered().map((row) => row.id)).toEqual(['result-20']);
+  });
+
+  it('opens history for a critical queue row carrying the mapped patient identity', () => {
+    fixture.detectChanges();
+    flushInit();
+    const row = mockResult({ severityFlag: 'CRITICAL' }) as unknown as LabResultResponse;
+    component.criticalList.set([row]);
+    component.viewResult(component.criticalList()[0]);
+    httpMock.expectOne('/lab-results/result-1').flush(row);
+    expect(component.detailHistoryError()).toBeFalse();
+    expect(component.detailHistory()[0].resultValue).toBe(row.resultValue);
+  });
+
+  it('resets the page when changing tabs even when both tabs contain several pages', () => {
+    fixture.detectChanges();
+    flushInit(
+      Array.from({ length: 31 }, (_, i) => mockResult({ id: `result-${i}`, released: true })),
+    );
+    component.page.set(3);
+    expect(component.currentPage()).toBe(3);
+    component.setTab('released');
+    expect(component.pageCount()).toBe(4);
+    expect(component.currentPage()).toBe(1);
+    expect(component.pagedResults()[0].id).toBe('result-0');
+  });
+
   it('should create the component', () => {
     expect(component).toBeTruthy();
     fixture.detectChanges();
@@ -101,6 +346,26 @@ describe('LabResultsComponent', () => {
       '[data-testid="unit-mismatch-result-1"]',
     );
     expect(marker?.textContent).toContain('LAB_RESULTS.NOT_GRADED_UNITS_DIFFER');
+  });
+
+  it('QA D1394: marks a value whose limit settles no grade', () => {
+    fixture.detectChanges();
+    flushInit([mockResult({ severityFlag: 'UNSPECIFIED', gradeUnknown: true })]);
+    fixture.detectChanges();
+
+    const marker = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="grade-unknown-result-1"]',
+    );
+    expect(marker?.textContent).toContain('LAB_RESULTS.GRADE_UNKNOWN');
+  });
+
+  it('QA D1394: the entry dialog says a comparator is graded from its limit', () => {
+    component.form.resultValue = '4,2';
+    expect(component.valueHasComparator()).toBeFalse();
+    for (const value of ['> 6,5', '<1.5', ' >=7', '\u2264 2']) {
+      component.form.resultValue = value;
+      expect(component.valueHasComparator()).withContext(value).toBeTrue();
+    }
   });
 
   it('shows the severity, not the marker, for a result graded in its own unit', () => {
@@ -166,6 +431,47 @@ describe('LabResultsComponent', () => {
     expect(component.filtered()[0].patientFullName).toBe('Alice Smith');
   });
 
+  it('QA D968: the detail panel takes focus, keeps Tab inside, closes on Escape and gives focus back', async () => {
+    fixture.detectChanges();
+    flushInit();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const trigger = host.querySelector<HTMLButtonElement>('.view-link')!;
+    trigger.focus();
+    trigger.click();
+    httpMock.expectOne('/lab-results/result-1').flush(component.results()[0]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve));
+
+    const dialog = host.querySelector<HTMLElement>('.detail-panel[role="dialog"]')!;
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.getAttribute('aria-labelledby')).toBeTruthy();
+    expect(dialog.contains(document.activeElement)).withContext('focus moved in').toBeTrue();
+    // Tab from the last element comes back to the first instead of walking to
+    // the page behind (round 22: the shared appModalDialog trap replaced
+    // cdkTrapFocus, so the dialog also keeps typed text on Escape).
+    const focusables = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input, select, textarea',
+      ),
+    );
+    const last = focusables[focusables.length - 1];
+    last.focus();
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    last.dispatchEvent(tab);
+    expect(tab.defaultPrevented).withContext('Tab is kept inside the dialog').toBeTrue();
+    expect(document.activeElement).toBe(focusables[0]);
+
+    (document.activeElement as HTMLElement).dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.selectedResult()).toBeNull();
+    expect(document.activeElement).withContext('focus returned to the trigger').toBe(trigger);
+  });
+
   describe('D81: released results', () => {
     function allowEntry(): void {
       spyOn(
@@ -209,6 +515,45 @@ describe('LabResultsComponent', () => {
       expect(host.querySelector('[data-testid="superseded-result-1"]')).not.toBeNull();
       expect(host.querySelector('[data-testid="correct-result-1"]')).toBeNull();
     });
+
+    it('QA D931: keeps a released correction marked "Corrected", in the list and the detail', () => {
+      fixture.detectChanges();
+      flushInit([mockResult({ released: true, supersedesResultId: 'result-0' })]);
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="corrected-result-1"]')?.textContent).toContain(
+        'LAB_RESULTS.CORRECTED',
+      );
+      component.viewResult(component.results()[0]);
+      httpMock.expectOne('/lab-results/result-1').flush(component.results()[0]);
+      fixture.detectChanges();
+      expect(host.querySelector('[data-testid="detail-corrected"]')).not.toBeNull();
+    });
+  });
+
+  // QA D1205 / D1167 / D1137 (round 22): "RectificationEn attente de publication".
+  it('QA D1205: every badge pair of the status cell is separated by a word space', () => {
+    fixture.detectChanges();
+    flushInit([
+      mockResult({ id: 'r-pend', released: false, supersedesResultId: 'result-0' }),
+      mockResult({
+        id: 'r-rel',
+        released: true,
+        supersedesResultId: 'result-0',
+        supersededByResultId: 'result-9',
+      }),
+    ]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const cells = Array.from(host.querySelectorAll<HTMLElement>('tbody tr')).map((tr) =>
+      Array.from(tr.querySelectorAll('td')).find((td) => td.querySelector('.status-badge')),
+    );
+    const pending = cells[0]!.textContent!.replace(/\s+/g, ' ').trim();
+    // QA D1222: the row pill has its own singular key (es "Pendiente de publicación").
+    expect(pending).toBe('LAB_RESULTS.CORRECTION LAB_RESULTS.ROW_PENDING_RELEASE');
+    const released = cells[1]!.textContent!.replace(/\s+/g, ' ').trim();
+    expect(released).toContain('LAB_RESULTS.RELEASED LAB_RESULTS.SUPERSEDED LAB_RESULTS.CORRECTED');
   });
 
   it('should open create modal', () => {
@@ -277,7 +622,12 @@ describe('LabResultsComponent', () => {
     // reload triggered
     const reloadReq = httpMock.expectOne((r) => r.url === '/lab-results' && r.method === 'GET');
     reloadReq.flush({
-      data: { content: [mockResult({ id: 'new-result', resultValue: '7.0' })], totalElements: 1 },
+      data: {
+        content: [mockResult({ id: 'new-result', resultValue: '7.0' })],
+        totalElements: 1,
+        totalPages: 1,
+        number: 0,
+      },
       success: true,
     });
 
@@ -332,6 +682,7 @@ describe('LabResultsComponent', () => {
 
     const result = component.results()[0];
     component.viewResult(result);
+    httpMock.expectOne('/lab-results/result-1').flush(result);
     expect(component.selectedResult()).toBe(result);
 
     component.closeDetail();
@@ -915,6 +1266,81 @@ describe('LabResultsComponent — rendered delete gate and order picker', () => 
     expect(component.orders().map((o) => o.id)).toEqual(['o-glu']);
   });
 
+  it('QA D1204: "New result" offers no order whose specimen was never taken or was rejected', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    const order = (id: string, status: string) => ({
+      id,
+      labOrderCode: id,
+      patientId: 'p-1',
+      labTestName: 'NFS',
+      labTestCode: 'CBC',
+      status,
+    });
+    flushInit(
+      [],
+      [
+        order('LAB-000029', 'ORDERED'), // never collected
+        order('LAB-000032', 'PENDING'), // specimen rejected, back to awaiting collection
+        order('o-collected', 'COLLECTED'),
+        order('o-received', 'RECEIVED'),
+        order('o-running', 'IN_PROGRESS'),
+      ],
+    );
+    component.openCreate();
+    fixture.detectChanges();
+    const picker = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+        '#lr-orderId option',
+      ),
+    ).map((o) => o.value);
+    expect(picker).toEqual(['', 'o-collected', 'o-received', 'o-running']);
+  });
+
+  it('QA D1176: "New result" offers no order that already has a result or is closed; a correction keeps its own', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    const order = (id: string, status: string) => ({
+      id,
+      labOrderCode: id,
+      patientId: 'p-1',
+      labTestName: 'Glucose',
+      labTestCode: 'GLU',
+      status,
+    });
+    flushInit(
+      [],
+      [
+        order('o-new', 'COLLECTED'),
+        order('o-resulted', 'RESULTED'),
+        order('o-done', 'COMPLETED'),
+        order('o-verified', 'VERIFIED'),
+        order('o-cancelled', 'CANCELLED'),
+      ],
+    );
+    expect(component.orders().map((o) => o.id)).toEqual(['o-new']);
+    const options = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('#lr-orderId option'),
+    );
+    // Rendered only once the modal is open.
+    component.openCreate();
+    fixture.detectChanges();
+    const picker = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+        '#lr-orderId option',
+      ),
+    ).map((o) => o.value);
+    expect(options.length).toBe(0);
+    expect(picker).toEqual(['', 'o-new']);
+    component.closeModal();
+
+    // Correcting the released result of a completed order keeps that order selectable.
+    component.openCorrection(
+      mockResult({ id: 'r-1', labOrderId: 'o-done', released: true }) as never,
+    );
+    expect(component.orders().map((o) => o.id)).toEqual(['o-new', 'o-done']);
+    component.closeModal();
+    expect(component.orders().map((o) => o.id)).toEqual(['o-new']);
+  });
+
   it('QA D648: an order flagged as missing its definition stays out of the picker despite its label', () => {
     setup(['ROLE_LAB_SCIENTIST']);
     flushInit(
@@ -938,5 +1364,92 @@ describe('LabResultsComponent — rendered delete gate and order picker', () => 
     );
 
     expect(component.orders().map((o) => o.id)).toEqual(['o-glu']);
+  });
+
+  it('QA D1095: choosing an order prefills the unit from its test, and a blank unit is filled on save', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    flushInit(
+      [],
+      [
+        {
+          id: 'o-glu',
+          labOrderCode: 'o-glu',
+          patientId: 'patient-1',
+          labTestName: 'Glucose',
+          labTestCode: 'GLU',
+          labTestUnit: 'g/L',
+        },
+      ],
+    );
+
+    component.form.labOrderId = 'o-glu';
+    component.onOrderChange('o-glu');
+    expect(component.form.resultUnit).toBe('g/L');
+    expect(component.selectedTestUnit()).toBe('g/L');
+
+    component.form.resultUnit = '   ';
+    component.form.resultValue = '0,40';
+    component.submitForm();
+    const req = httpMock.expectOne((r) => r.url === '/lab-results' && r.method === 'POST');
+    expect(req.request.body.resultUnit).toBe('g/L');
+  });
+
+  it('QA D1394: a value whose limit settles no grade is released only after the warning is confirmed', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    const ungraded = mockResult({
+      gradeUnknown: true,
+      enteredByUserId: 'user-2',
+      resultValue: '>1',
+    });
+    flushInit([ungraded], []);
+
+    component.releaseResult(ungraded as unknown as LabResultResponse);
+    fixture.detectChanges();
+    httpMock.expectNone((r) => r.method === 'POST');
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="release-grade-unknown-note"]')).not.toBeNull();
+
+    component.confirmSelfRelease();
+    const req = httpMock.expectOne(
+      (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
+    );
+    expect(req.request.params.get('ungradedConfirmed')).toBe('true');
+    req.flush({ ...ungraded, released: true });
+    httpMock
+      .expectOne((r) => r.url === '/lab-results' && r.method === 'GET')
+      .flush({
+        data: { content: [], totalElements: 0, totalPages: 1, number: 0 },
+        success: true,
+      });
+  });
+
+  it('QA D1092: a result no range can grade is released only after the warning is confirmed', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    const ungraded = mockResult({
+      unitMismatch: true,
+      enteredByUserId: 'user-2',
+      resultUnit: 'mEq/L',
+    });
+    flushInit([ungraded], []);
+
+    component.releaseResult(ungraded as unknown as LabResultResponse);
+    fixture.detectChanges();
+    httpMock.expectNone((r) => r.method === 'POST');
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="release-ungraded-note"]')).not.toBeNull();
+
+    component.confirmSelfRelease();
+    const req = httpMock.expectOne(
+      (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
+    );
+    expect(req.request.params.get('ungradedConfirmed')).toBe('true');
+    expect(req.request.params.has('selfRelease')).toBeFalse();
+    req.flush({ ...ungraded, released: true });
+    httpMock
+      .expectOne((r) => r.url === '/lab-results' && r.method === 'GET')
+      .flush({
+        data: { content: [], totalElements: 0, totalPages: 1, number: 0 },
+        success: true,
+      });
   });
 });

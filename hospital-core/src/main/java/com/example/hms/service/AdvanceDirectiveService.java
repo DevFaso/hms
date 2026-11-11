@@ -26,5 +26,5 @@ public interface AdvanceDirectiveService {
      * withdrawn is part of the clinical record, and deleting the row would
      * destroy the evidence that it ever applied.
      */
-    AdvanceDirectiveResponseDTO revoke(UUID id);
+    AdvanceDirectiveResponseDTO revoke(UUID id, String reason);
 }

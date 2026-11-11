@@ -143,7 +143,8 @@ class FhirBulkExportRunnerTest {
             .thenReturn(new PageImpl<>(List.of()));
         when(patientProblemRepository.findByPatient_IdAndHospital_Id(any(), any()))
             .thenReturn(List.of());
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(any(), any(), any()))
+        // QA D1537: the export reads the issued orders, chosen in the query.
+        when(prescriptionRepository.findIssuedByPatientIdAndHospitalIdIn(any(), any(), any(), any()))
             .thenReturn(new PageImpl<>(List.of()));
     }
 

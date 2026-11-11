@@ -1,6 +1,7 @@
-<div class="page-container">
+<div class="page-container pharmacy-workspace">
   <div class="page-header">
     <div>
+      <p class="workspace-eyebrow">{{ 'PHARMACY_DASH.WORKSPACE' | translate }}</p>
       <h1 class="page-title">{{ 'PHARMACY.INVENTORY_TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'PHARMACY.INVENTORY_SUBTITLE' | translate }}</p>
     </div>
@@ -28,20 +29,44 @@
     </div>
   </div>
 
+  @if (pharmacyFailed()) {
+    <div class="workspace-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+      <button class="btn-secondary" (click)="loadPharmacies()">
+        {{ 'PHARMACY_DASH.RETRY' | translate }}
+      </button>
+    </div>
+  }
   <!-- Tabs -->
   <div class="tab-bar">
-    <button class="tab-btn" [class.active]="activeTab() === 'stock'" (click)="setTab('stock')">
+    <button
+      class="tab-btn"
+      [class.active]="activeTab() === 'stock'"
+      [attr.aria-pressed]="activeTab() === 'stock'"
+      (click)="setTab('stock')"
+    >
       <span class="material-symbols-outlined">inventory_2</span>
       {{ 'PHARMACY.STOCK_LEVELS' | translate }}
     </button>
-    <button class="tab-btn" [class.active]="activeTab() === 'alerts'" (click)="setTab('alerts')">
+    <button
+      class="tab-btn"
+      [class.active]="activeTab() === 'alerts'"
+      [attr.aria-pressed]="activeTab() === 'alerts'"
+      (click)="setTab('alerts')"
+    >
       <span class="material-symbols-outlined">warning</span>
       {{ 'PHARMACY.REORDER_ALERTS' | translate }}
       @if (alertItems().length > 0) {
         <span class="alert-count">{{ alertItems().length }}</span>
       }
     </button>
-    <button class="tab-btn" [class.active]="activeTab() === 'expiry'" (click)="setTab('expiry')">
+    <button
+      class="tab-btn"
+      [class.active]="activeTab() === 'expiry'"
+      [attr.aria-pressed]="activeTab() === 'expiry'"
+      (click)="setTab('expiry')"
+    >
       <span class="material-symbols-outlined">event_busy</span>
       {{ 'PHARMACY.EXPIRY_REPORT' | translate }}
     </button>
@@ -49,13 +74,70 @@
 
   <!-- Stock Levels Tab -->
   @if (activeTab() === 'stock') {
-    @if (stockLoading()) {
+    @if (!stockLoading() && !stockFailed() && selectedPharmacyId) {
+      <section class="workspace-stats" [attr.aria-label]="'PHARMACY_DASH.SUMMARY' | translate">
+        <div class="workspace-stat stat-lead">
+          <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>
+          <div>
+            <strong>{{ inventoryItems().length }}</strong
+            ><span>{{ 'PHARMACY_DASH.LOADED' | translate }}</span>
+          </div>
+        </div>
+        <div class="workspace-stat">
+          <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
+          <div>
+            <strong>{{ stockCount('stock-ok') }}</strong
+            ><span>{{ 'PHARMACY.IN_STOCK' | translate }}</span>
+          </div>
+        </div>
+        <div class="workspace-stat">
+          <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+          <div>
+            <strong>{{ stockCount('stock-low') }}</strong
+            ><span>{{ 'PHARMACY_DASH.LOW' | translate }}</span>
+          </div>
+        </div>
+        <div class="workspace-stat">
+          <span class="material-symbols-outlined" aria-hidden="true">block</span>
+          <div>
+            <strong>{{ stockCount('stock-out') }}</strong
+            ><span>{{ 'PHARMACY_DASH.OUT' | translate }}</span>
+          </div>
+        </div>
+      </section>
+      <div class="workspace-toolbar">
+        <label class="workspace-search"
+          ><span class="material-symbols-outlined" aria-hidden="true">search</span
+          ><input
+            [(ngModel)]="searchTerm"
+            [attr.aria-label]="'PHARMACY_DASH.SEARCH_STOCK' | translate"
+            [placeholder]="'PHARMACY_DASH.SEARCH_STOCK' | translate" /></label
+        ><span class="workspace-note">{{ 'PHARMACY_DASH.PAGE_SCOPE' | translate }}</span>
+      </div>
+    }
+    @if (stockFailed()) {
+      <div class="workspace-error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+        <button class="btn-secondary" (click)="loadStockLevels()">
+          {{ 'PHARMACY_DASH.RETRY' | translate }}
+        </button>
+      </div>
+    } @else if (stockLoading()) {
       <div class="loading-state">
         <div class="spinner"></div>
         <p>{{ 'COMMON.LOADING' | translate }}</p>
       </div>
     } @else if (inventoryItems().length > 0) {
-      <div class="table-wrapper">
+      @if (visibleStock().length === 0) {
+        <p class="workspace-note" role="status">{{ 'PHARMACY_DASH.NO_MATCHES' | translate }}</p>
+      }
+      <div
+        class="table-wrapper"
+        tabindex="0"
+        role="region"
+        [attr.aria-label]="'PHARMACY.INVENTORY_TITLE' | translate"
+      >
         <table class="data-table">
           <thead>
             <tr>
@@ -69,9 +151,9 @@
             </tr>
           </thead>
           <tbody>
-            @for (item of inventoryItems(); track item.id) {
+            @for (item of visibleStock(); track item.id) {
               <tr>
-                <td class="med-name">{{ item.medicationName ?? item.medicationCode ?? '—' }}</td>
+                <td class="med-name">{{ item.medicationName || item.medicationCode | dash }}</td>
                 <td>
                   <span class="qty" [class]="getStockStatusClass(item)">{{
                     item.quantityOnHand
@@ -79,23 +161,48 @@
                 </td>
                 <td>{{ item.reorderThreshold }}</td>
                 <td>{{ item.reorderQuantity }}</td>
-                <td>{{ item.unit ?? '—' }}</td>
+                <td>{{ item.unit | dash }}</td>
                 <!-- QA D835: the price is READ as text (an input's value is not
                      part of the row's text, so the column read as empty); the
                      pencil opens the box that changes it. -->
                 <td class="price-cell">
                   @if (editingPriceId() === item.id) {
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      class="price-input"
-                      [attr.aria-label]="'PHARMACY.UNIT_PRICE' | translate"
-                      [attr.data-testid]="'price-input-' + item.id"
-                      [value]="item.unitPrice ?? ''"
-                      (change)="savePrice(item, $any($event.target).value)"
-                      (keydown.escape)="editingPriceId.set(null)"
-                    />
+                    <!-- QA D1191 (round 22): Escape SAVED the typed price (the input's
+                         (change) fired as Escape destroyed it). The price is saved only on
+                         Enter or the Save button; Escape cancels, asking first over a typed
+                         value, and the keyboard goes back to the pencil. -->
+                    <span
+                      class="price-editor"
+                      appInlineSubForm
+                      #priceForm="inlineSubForm"
+                      (dismissed)="editingPriceId.set(null)"
+                    >
+                      <input
+                        #priceInput
+                        [id]="'price-input-' + item.id"
+                        type="number"
+                        min="0"
+                        step="1"
+                        class="price-input"
+                        [attr.aria-label]="'PHARMACY.UNIT_PRICE' | translate"
+                        [attr.data-testid]="'price-input-' + item.id"
+                        [value]="item.unitPrice ?? ''"
+                        appFocusOnRender
+                        [focusOnRenderReturn]="'[data-testid=price-edit-' + item.id + ']'"
+                        (keydown.enter)="savePrice(item, priceInput.value)"
+                      />
+                      <button
+                        type="button"
+                        class="btn-icon"
+                        [attr.aria-label]="'PHARMACY.SAVE_PRICE' | translate"
+                        [title]="'PHARMACY.SAVE_PRICE' | translate"
+                        [attr.data-testid]="'price-save-' + item.id"
+                        (click)="savePrice(item, priceInput.value)"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">check</span>
+                      </button>
+                      <app-inline-discard-ask [form]="priceForm" />
+                    </span>
                   } @else {
                     <span class="price-text" [attr.data-testid]="'price-' + item.id">{{
                       (item.unitPrice ?? null) !== null ? (item.unitPrice | cfa: 'XOF') : '—'
@@ -124,11 +231,17 @@
       </div>
       @if (totalPages > 1) {
         <div class="pagination">
-          <button class="btn-secondary btn-sm" [disabled]="currentPage === 0" (click)="prevPage()">
+          <button
+            [attr.aria-label]="'COMMON.PREVIOUS' | translate"
+            class="btn-secondary btn-sm"
+            [disabled]="currentPage === 0"
+            (click)="prevPage()"
+          >
             <span class="material-symbols-outlined">chevron_left</span>
           </button>
           <span class="page-info">{{ currentPage + 1 }} / {{ totalPages }}</span>
           <button
+            [attr.aria-label]="'COMMON.NEXT' | translate"
             class="btn-secondary btn-sm"
             [disabled]="currentPage >= totalPages - 1"
             (click)="nextPage()"
@@ -148,13 +261,27 @@
 
   <!-- Reorder Alerts Tab -->
   @if (activeTab() === 'alerts') {
-    <div class="alerts-header">
-      <button class="btn-secondary" (click)="triggerReorderAlerts()">
-        <span class="material-symbols-outlined">notifications_active</span>
-        {{ 'PHARMACY.TRIGGER_ALERTS' | translate }}
-      </button>
-    </div>
-    @if (alertsLoading()) {
+    @if (canTriggerAlerts()) {
+      <div class="alerts-header">
+        <button
+          class="btn-secondary"
+          data-testid="trigger-reorder-alerts"
+          (click)="triggerReorderAlerts()"
+        >
+          <span class="material-symbols-outlined">notifications_active</span>
+          {{ 'PHARMACY.TRIGGER_ALERTS' | translate }}
+        </button>
+      </div>
+    }
+    @if (alertsFailed()) {
+      <div class="workspace-error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+        <button class="btn-secondary" (click)="loadReorderAlerts()">
+          {{ 'PHARMACY_DASH.RETRY' | translate }}
+        </button>
+      </div>
+    } @else if (alertsLoading()) {
       <div class="loading-state">
         <div class="spinner"></div>
         <p>{{ 'COMMON.LOADING' | translate }}</p>
@@ -200,7 +327,9 @@
   <!-- Expiry Report Tab -->
   @if (activeTab() === 'expiry') {
     <div class="expiry-controls">
-      <label for="expiryDays">{{ 'PHARMACY.DAYS_AHEAD' | translate }}:</label>
+      <label for="expiryDays"
+        >{{ 'PHARMACY.DAYS_AHEAD' | translate }}{{ 'COMMON.COLON' | translate }}</label
+      >
       <select id="expiryDays" [(ngModel)]="daysAhead" (ngModelChange)="loadExpiringLots()">
         <option [ngValue]="30">30</option>
         <option [ngValue]="60">60</option>
@@ -209,13 +338,26 @@
         <option [ngValue]="365">365</option>
       </select>
     </div>
-    @if (expiryLoading()) {
+    @if (expiryFailed()) {
+      <div class="workspace-error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+        <button class="btn-secondary" (click)="loadExpiringLots()">
+          {{ 'PHARMACY_DASH.RETRY' | translate }}
+        </button>
+      </div>
+    } @else if (expiryLoading()) {
       <div class="loading-state">
         <div class="spinner"></div>
         <p>{{ 'COMMON.LOADING' | translate }}</p>
       </div>
     } @else if (expiringLots().length > 0) {
-      <div class="table-wrapper">
+      <div
+        class="table-wrapper"
+        tabindex="0"
+        role="region"
+        [attr.aria-label]="'PHARMACY.EXPIRY_REPORT' | translate"
+      >
         <table class="data-table">
           <thead>
             <tr>
@@ -253,7 +395,7 @@
                   }
                 </td>
                 <td>{{ lot.remainingQuantity }}</td>
-                <td>{{ lot.supplier ?? '—' }}</td>
+                <td>{{ lot.supplier | dash }}</td>
               </tr>
             }
           </tbody>
@@ -283,10 +425,17 @@
         (click)="$event.stopPropagation()"
         (keydown)="$event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="inventory-dashboard-dialog-title-1"
+        (escaped)="closeCreateModal()"
       >
         <div class="modal-header">
-          <h2>{{ 'PHARMACY.ADD_ITEM' | translate }}</h2>
-          <button class="modal-close" (click)="closeCreateModal()">
+          <h2 id="inventory-dashboard-dialog-title-1">{{ 'PHARMACY.ADD_ITEM' | translate }}</h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeCreateModal()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -359,7 +508,13 @@
             <button type="button" class="btn-secondary" (click)="closeCreateModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{ saving() ? ('COMMON.CREATING' | translate) : ('COMMON.CREATE' | translate) }}
             </button>
           </div>

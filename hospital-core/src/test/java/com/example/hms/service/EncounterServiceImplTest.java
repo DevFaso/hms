@@ -74,6 +74,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import java.util.Locale;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -107,6 +108,7 @@ class EncounterServiceImplTest {
     @Mock private EncounterNoteHistoryRepository encounterNoteHistoryRepository;
     @Mock private LabOrderRepository labOrderRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
     @Mock private ObgynReferralRepository obgynReferralRepository;
     @Mock private UserRepository userRepository;
     @Mock private DischargeSummaryRepository dischargeSummaryRepository;
@@ -125,6 +127,10 @@ class EncounterServiceImplTest {
     @Mock private com.example.hms.controller.support.ControllerAuthUtils authUtils;
     @Mock private com.example.hms.service.vitals.News2EscalationService news2EscalationService;
 
+    /** QA D1060: the slot rules, stubbed to their 30-minute fallback (SlotPolicyStubs). */
+    @org.mockito.Mock
+    private com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
+
     @InjectMocks private EncounterServiceImpl service;
 
     private final Locale locale = Locale.ENGLISH;
@@ -141,12 +147,20 @@ class EncounterServiceImplTest {
     }
 
     @org.junit.jupiter.api.AfterEach
-    void clearSignIn() {
+    void clearSignInAndLocale() {
         org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        // QA D952 tests switch the request locale to French.
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
     }
 
     @BeforeEach
     void setUpCheckoutDefaults() {
+        // QA D1564: the real shared vitals judgement, over the NEWS2 escalation mock.
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "vitalSignJudgement", new com.example.hms.service.vitals.VitalSignJudgement(
+            org.mockito.Mockito.mock(com.example.hms.repository.NewbornAssessmentRepository.class), news2EscalationService,
+            org.mockito.Mockito.mock(com.example.hms.service.NotificationService.class),
+            com.example.hms.i18n.TestMessageSources.bundles()));
+        com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
         signInAsDoctor();
         // The services ask the one PatientSubjectReadGuard; it is built here over
         // this class's authUtils and patientRepository so ownership is decided
@@ -287,7 +301,7 @@ class EncounterServiceImplTest {
         EncounterResponseDTO dto = new EncounterResponseDTO();
 
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(roleValidator.isDoctor(userId, null)).thenReturn(true);
+        when(roleValidator.isEncounterProvider(userId, null)).thenReturn(true);
         when(encounterRepository.findByStaff_Id(staffId)).thenReturn(List.of(encounter));
         when(encounterMapper.toEncounterResponseDTO(encounter)).thenReturn(dto);
 
@@ -314,8 +328,7 @@ class EncounterServiceImplTest {
         staff.setId(staffId);
 
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(roleValidator.isDoctor(userId, null)).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("invalid");
+        when(roleValidator.isEncounterProvider(userId, null)).thenReturn(false);
 
         assertThatThrownBy(() -> service.getEncountersByDoctorId(staffId, locale))
             .isInstanceOf(BusinessException.class);
@@ -328,7 +341,6 @@ class EncounterServiceImplTest {
         staff.setId(staffId);
 
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("invalid");
 
         assertThatThrownBy(() -> service.getEncountersByDoctorId(staffId, locale))
             .isInstanceOf(BusinessException.class);
@@ -572,6 +584,30 @@ class EncounterServiceImplTest {
         verify(encounterRepository).save(any(Encounter.class));
     }
 
+    /** QA D1077: the triage path refuses a fundal height for a man, before any row is saved. */
+    @Test
+    void submitTriage_refusesAFundalHeightForAMan_D1077() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        patient.setGender("Homme");
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.ARRIVED);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        TriageSubmissionRequestDTO request = TriageSubmissionRequestDTO.builder()
+                .esiScore(3).heartRateBpm(80).fundalHeightCm(28).build();
+
+        assertThatThrownBy(() -> service.submitTriage(encounterId, request, "nurse1", true, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("vitals.fundalHeight.notApplicable");
+        verify(patientVitalSignRepository, never()).save(any(PatientVitalSign.class));
+    }
+
     @Test
     void submitTriage_routesTheVitalsThroughTheNews2Escalation_D265() {
         UUID encounterId = UUID.randomUUID();
@@ -613,7 +649,7 @@ class EncounterServiceImplTest {
     @Test
     void submitTriage_encounterNotFound_throws() {
         UUID encounterId = UUID.randomUUID();
-        TriageSubmissionRequestDTO request = TriageSubmissionRequestDTO.builder().esiScore(2).build();
+        TriageSubmissionRequestDTO request = TriageSubmissionRequestDTO.builder().esiScore(2).heartRateBpm(88).build();
 
         when(encounterRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
         // The not-found refusal now carries the message KEY, not resolved prose,
@@ -630,7 +666,7 @@ class EncounterServiceImplTest {
         encounter.setId(encounterId);
         encounter.setStatus(EncounterStatus.COMPLETED);
 
-        TriageSubmissionRequestDTO request = TriageSubmissionRequestDTO.builder().esiScore(2).build();
+        TriageSubmissionRequestDTO request = TriageSubmissionRequestDTO.builder().esiScore(2).heartRateBpm(88).build();
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
@@ -655,6 +691,7 @@ class EncounterServiceImplTest {
 
         TriageSubmissionRequestDTO request = TriageSubmissionRequestDTO.builder()
                 .esiScore(1)
+                .heartRateBpm(130) // QA D1158: a triage records at least one vital sign
                 .build();
 
         PatientVitalSign savedVital = new PatientVitalSign();
@@ -689,7 +726,7 @@ class EncounterServiceImplTest {
         enc2.setHospital(hospital);
         enc2.setPatient(patient);
 
-        TriageSubmissionRequestDTO req2 = TriageSubmissionRequestDTO.builder().esiScore(2).build();
+        TriageSubmissionRequestDTO req2 = TriageSubmissionRequestDTO.builder().esiScore(2).heartRateBpm(88).build();
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(enc2));
         when(patientVitalSignRepository.save(any(PatientVitalSign.class))).thenReturn(savedVital);
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -703,7 +740,7 @@ class EncounterServiceImplTest {
         enc4.setHospital(hospital);
         enc4.setPatient(patient);
 
-        TriageSubmissionRequestDTO req4 = TriageSubmissionRequestDTO.builder().esiScore(4).build();
+        TriageSubmissionRequestDTO req4 = TriageSubmissionRequestDTO.builder().esiScore(4).heartRateBpm(88).build();
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(enc4));
 
         assertThat(service.submitTriage(encounterId, req4, "nurse1", true, null).getUrgency()).isEqualTo("LOW");
@@ -715,13 +752,108 @@ class EncounterServiceImplTest {
         enc5.setHospital(hospital);
         enc5.setPatient(patient);
 
-        TriageSubmissionRequestDTO req5 = TriageSubmissionRequestDTO.builder().esiScore(5).build();
+        TriageSubmissionRequestDTO req5 = TriageSubmissionRequestDTO.builder().esiScore(5).heartRateBpm(88).build();
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(enc5));
 
         assertThat(service.submitTriage(encounterId, req5, "nurse1", true, null).getUrgency()).isEqualTo("LOW");
     }
 
+    @Test
+    void submitTriage_withoutAnyVitalSignIsRefused_D1158() {
+        UUID encounterId = UUID.randomUUID();
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.ARRIVED);
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+
+        // QA D1158 (round 21): an empty triage stored an all-null vitals row and ranked the patient.
+        assertThatThrownBy(() -> service.submitTriage(encounterId,
+                TriageSubmissionRequestDTO.builder().esiScore(3).build(), "nurse1", true, null))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("triage.vitals.required");
+        verify(patientVitalSignRepository, never()).save(any());
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.ARRIVED);
+    }
+
     // ---------- submitNursingIntake ----------
+
+    /** A mock message source that answers from the real bundles, in French. */
+    private void answerFromTheRealFrenchBundles() {
+        org.springframework.context.MessageSource real = new com.example.hms.config.LocaleConfig().messageSource();
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenAnswer(inv -> real.getMessage(inv.getArgument(0), inv.getArgument(1), inv.getArgument(2)));
+    }
+
+    @Test
+    void qaD952_theIntakeNoteHeadersAreWrittenInTheCliniciansLanguage() {
+        answerFromTheRealFrenchBundles();
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        encounter.setNotes("Motif : céphalées");
+
+        NursingIntakeRequestDTO request = NursingIntakeRequestDTO.builder()
+                .nursingAssessmentNotes("Conscient, orienté")
+                .painAssessment("EVA 6/10")
+                .fallRiskDetail("Morse 25")
+                .medications(List.of(NursingIntakeRequestDTO.MedicationReconciliationEntry.builder()
+                        .medicationName("Paracétamol").stillTaking(false).build()))
+                .build();
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.submitNursingIntake(encounterId, request, null, true, null);
+
+        assertThat(encounter.getNotes())
+            .contains("--- Admission infirmière ---")
+            .contains("[Évaluation infirmière]")
+            .contains("[Évaluation de la douleur]")
+            .contains("[Risque de chute]")
+            .contains("[Conciliation médicamenteuse] 1 médicament déclaré :")
+            .contains("Paracétamol (arrêté)")
+            .doesNotContain("Nursing")
+            .doesNotContain("medication(s)")
+            .doesNotContain("DISCONTINUED");
+    }
+
+    @Test
+    void qaD1169_theTriagePainScoreIsStoredAsANumber() {
+        answerFromTheRealFrenchBundles();
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.ARRIVED);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        org.mockito.ArgumentCaptor<PatientVitalSign> vital = org.mockito.ArgumentCaptor.forClass(PatientVitalSign.class);
+        PatientVitalSign saved = new PatientVitalSign();
+        saved.setId(UUID.randomUUID());
+        when(patientVitalSignRepository.save(vital.capture())).thenReturn(saved);
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // QA D1188 (round 22, changed request): a pain score alone is no longer
+        // a triage's vital sign; the score rides with one.
+        service.submitTriage(encounterId, TriageSubmissionRequestDTO.builder().esiScore(3).heartRateBpm(88).painScale(8).build(),
+            null, true, null);
+
+        // QA D1169 (round 21): was the French sentence "Douleur : 8/10" (QA D989), read
+        // untranslated in Spanish and English; the number is rendered at read time.
+        assertThat(vital.getValue().getPainScore()).isEqualTo(8);
+        assertThat(vital.getValue().getNotes()).isNull();
+    }
 
     @Test
     void submitNursingIntake_happyPath_succeeds() {
@@ -840,6 +972,48 @@ class EncounterServiceImplTest {
         verify(patientAllergyRepository).save(any(com.example.hms.model.PatientAllergy.class));
     }
 
+    /**
+     * QA D1287 (round 27): an intake listing an allergy the patient already
+     * has active (here with other accents and case), or the same allergen
+     * twice, records it once; a new allergen is still recorded.
+     */
+    @Test
+    void submitNursingIntake_mergesAnAllergyAlreadyActive_D1287() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        com.example.hms.model.PatientAllergy existing = com.example.hms.model.PatientAllergy.builder()
+                .allergenDisplay("Pénicilline").active(true).build();
+        java.util.function.Function<String, com.example.hms.payload.dto.PatientAllergyRequestDTO> entry =
+                name -> com.example.hms.payload.dto.PatientAllergyRequestDTO.builder().allergenDisplay(name).build();
+        NursingIntakeRequestDTO request = NursingIntakeRequestDTO.builder()
+                .allergies(List.of(entry.apply("PENICILLINE"), entry.apply("Arachide"), entry.apply("arachide ")))
+                .build();
+        User user = new User();
+        user.setId(UUID.randomUUID());
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(userRepository.findByUsername("nurse1")).thenReturn(Optional.of(user));
+        when(staffRepository.findByUserIdAndHospitalId(user.getId(), hospital.getId()))
+                .thenReturn(Optional.of(new Staff()));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(patientAllergyRepository.findVisibleAt(patient.getId(), hospital.getId())).thenReturn(List.of(existing));
+
+        NursingIntakeResponseDTO result = service.submitNursingIntake(encounterId, request, "nurse1", true, null);
+
+        assertThat(result.getAllergyCount()).isEqualTo(1);
+        org.mockito.ArgumentCaptor<com.example.hms.model.PatientAllergy> saved =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.model.PatientAllergy.class);
+        verify(patientAllergyRepository).save(saved.capture());
+        assertThat(saved.getValue().getAllergenDisplay()).isEqualTo("Arachide");
+    }
+
     @Test
     void submitNursingIntake_triageStatus_succeeds() {
         UUID encounterId = UUID.randomUUID();
@@ -868,7 +1042,7 @@ class EncounterServiceImplTest {
     }
 
     @Test
-    void submitNursingIntake_emptyRequest_noNoteRecorded() {
+    void submitNursingIntake_emptyRequestIsRefused_D1158() {
         UUID encounterId = UUID.randomUUID();
         Hospital hospital = new Hospital();
         hospital.setId(UUID.randomUUID());
@@ -884,13 +1058,12 @@ class EncounterServiceImplTest {
         NursingIntakeRequestDTO request = NursingIntakeRequestDTO.builder().build();
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
-        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        NursingIntakeResponseDTO result = service.submitNursingIntake(encounterId, request, "nurse1", true, null);
-
-        assertThat(result.isNursingNoteRecorded()).isFalse();
-        assertThat(result.getAllergyCount()).isZero();
-        assertThat(result.getMedicationCount()).isZero();
+        // QA D1158 (round 21): an empty intake was stored as completed; it is refused now.
+        assertThatThrownBy(() -> service.submitNursingIntake(encounterId, request, "nurse1", true, null))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("encounter.intake.contentRequired");
+        verify(encounterRepository, never()).save(any(Encounter.class));
     }
 
     // ---------- checkOut (MVP 6) ----------
@@ -924,7 +1097,7 @@ class EncounterServiceImplTest {
         encounter.setStaff(staff);
         encounter.setAssignment(assignment);
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .followUpInstructions("Follow up in 2 weeks")
             .dischargeDiagnoses(List.of("Upper respiratory infection"))
             .build();
@@ -953,7 +1126,140 @@ class EncounterServiceImplTest {
         verify(encounterRepository).save(encounter);
         verify(dischargeSummaryRepository).save(any(DischargeSummary.class));
         verify(notificationService).created(anyString(), org.mockito.ArgumentMatchers.eq("patient1"), org.mockito.ArgumentMatchers.eq("DISCHARGE_SUMMARY"));
-        verify(emailService).sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"), anyString());
+        verify(emailService).sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.argThat((String subject) -> !"Your After-Visit Summary is Ready".equals(subject)), anyString());
+    }
+
+    @Test
+    void qaD972_checkoutPublishesTheCompletedVisitWithItsBillableItems() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        encounter.setEncounterType(com.example.hms.enums.EncounterType.OUTPATIENT);
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(CheckOutRequestDTO.class), any()))
+            .thenReturn(AfterVisitSummaryDTO.builder().encounterId(encounterId).build());
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
+        // QA D972 (round 18): the event names the visit only; billing reads the
+        // visit's orders itself, through its registry (EncounterCheckoutChargeListenerTest).
+        service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").build(), "doctor1", true, null);
+
+        org.mockito.ArgumentCaptor<com.example.hms.event.EncounterCheckedOutEvent> event =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.event.EncounterCheckedOutEvent.class);
+        verify(eventPublisher).publishEvent(event.capture());
+        assertThat(event.getValue().encounterId()).isEqualTo(encounterId);
+        assertThat(event.getValue().checkedOutAt()).isNotNull();
+        assertThat(event.getValue().encounterType()).isEqualTo("OUTPATIENT");
+        assertThat(event.getValue().patientId()).isEqualTo(patient.getId());
+    }
+
+    @Test
+    void qaD930_theDoctorWhoChecksOutAVisitANurseOpenedOwnsItsSummary() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Staff nurse = new Staff();
+        nurse.setId(UUID.randomUUID());
+        User nurseUser = new User();
+        nurseUser.setId(UUID.randomUUID());
+        nurse.setUser(nurseUser);
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        // QA D1099: the nurse who examined has ended her examination; the doctor checks the visit out.
+        encounter.setStatus(EncounterStatus.READY_FOR_DISCHARGE);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        encounter.setStaff(nurse);
+        User doctorUser = new User();
+        doctorUser.setId(UUID.randomUUID());
+        Staff doctor = new Staff();
+        doctor.setId(UUID.randomUUID());
+        doctor.setUser(doctorUser);
+        UserRoleHospitalAssignment doctorAssignment = new UserRoleHospitalAssignment();
+        doctorAssignment.setId(UUID.randomUUID());
+        doctor.setAssignment(doctorAssignment);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(doctorUser, null,
+                List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_DOCTOR"))));
+        try {
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+            when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserIdAndHospitalId(doctorUser.getId(), hospital.getId())).thenReturn(Optional.of(doctor));
+            // Review of #971: the closing doctor is a doctor at the visit's hospital.
+            when(roleValidator.isDoctor(doctorUser.getId(), hospital.getId())).thenReturn(true);
+            lenient().when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(CheckOutRequestDTO.class), any()))
+                .thenReturn(AfterVisitSummaryDTO.builder().encounterId(encounterId).build());
+            lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+            lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
+
+            service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").build(), "doctor1", true, null);
+
+            org.mockito.ArgumentCaptor<DischargeSummary> saved = org.mockito.ArgumentCaptor.forClass(DischargeSummary.class);
+            verify(dischargeSummaryRepository).save(saved.capture());
+            assertThat(saved.getValue().getDischargingProvider()).isEqualTo(doctor);
+            // Review of #971: filed under her doctor assignment, not any assignment she holds.
+            assertThat(saved.getValue().getAssignment()).isSameAs(doctorAssignment);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void qaD930_aDoctorElsewhereWhoIsANurseHereDoesNotTakeTheSummary() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Staff nurse = new Staff();
+        nurse.setId(UUID.randomUUID());
+        User nurseUser = new User();
+        nurseUser.setId(UUID.randomUUID());
+        nurse.setUser(nurseUser);
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        // QA D1099: the nurse who examined has ended her examination; the doctor checks the visit out.
+        encounter.setStatus(EncounterStatus.READY_FOR_DISCHARGE);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        encounter.setStaff(nurse);
+        User doctorUser = new User();
+        doctorUser.setId(UUID.randomUUID());
+        Staff doctor = new Staff();
+        doctor.setId(UUID.randomUUID());
+        doctor.setUser(doctorUser);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(doctorUser, null,
+                List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_DOCTOR"))));
+        try {
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+            when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserIdAndHospitalId(doctorUser.getId(), hospital.getId())).thenReturn(Optional.of(doctor));
+            lenient().when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(CheckOutRequestDTO.class), any()))
+                .thenReturn(AfterVisitSummaryDTO.builder().encounterId(encounterId).build());
+            lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+            lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
+
+            service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").build(), "doctor1", true, null);
+
+            org.mockito.ArgumentCaptor<DischargeSummary> saved = org.mockito.ArgumentCaptor.forClass(DischargeSummary.class);
+            verify(dischargeSummaryRepository).save(saved.capture());
+            // Her token says doctor (another hospital); here she is not one, so the
+            // summary stays with the visit's clinician of record.
+            assertThat(saved.getValue().getDischargingProvider()).isEqualTo(nurse);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
     }
 
     @Test
@@ -968,7 +1274,7 @@ class EncounterServiceImplTest {
         encounter.setStatus(EncounterStatus.IN_PROGRESS);
         encounter.setHospital(hospital);
         encounter.setPatient(patient);
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .dischargeDiagnoses(List.of("Paludisme simple"))
             .prescriptionSummary("Artéméther-luméfantrine 3 jours")
             .referralSummary("Aucune")
@@ -1009,7 +1315,7 @@ class EncounterServiceImplTest {
         note.setPlan("Metformine 500 mg deux fois par jour.");
         note.setSignedAt(java.time.LocalDateTime.now().minusMinutes(5));
         encounter.setEncounterNote(note);
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .followUpInstructions("Revoir dans 3 mois avec le résultat HbA1c")
             .build();
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
@@ -1054,7 +1360,7 @@ class EncounterServiceImplTest {
         encounter.setPatient(patient);
         encounter.setStaff(staff);
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .followUpInstructions("Follow up in 2 weeks")
             .dischargeDiagnoses(List.of("Upper respiratory infection"))
             .build();
@@ -1071,7 +1377,7 @@ class EncounterServiceImplTest {
         doThrow(new RuntimeException("ws down")).when(notificationService)
             .created(anyString(), org.mockito.ArgumentMatchers.eq("patient1"), org.mockito.ArgumentMatchers.eq("DISCHARGE_SUMMARY"));
         doThrow(new RuntimeException("smtp down")).when(emailService)
-            .sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient.user@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"), anyString());
+            .sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient.user@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.argThat((String subject) -> !"Your After-Visit Summary is Ready".equals(subject)), anyString());
 
         // The after-visit summary bell entry is rendered through the message
         // source in the patient's language; lenient, since not every path notifies.
@@ -1083,7 +1389,7 @@ class EncounterServiceImplTest {
         assertThat(result.getEncounterId()).isEqualTo(encounterId);
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
         verify(dischargeSummaryRepository).save(any(DischargeSummary.class));
-        verify(emailService).sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient.user@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"), anyString());
+        verify(emailService).sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient.user@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.argThat((String subject) -> !"Your After-Visit Summary is Ready".equals(subject)), anyString());
     }
 
     @Test
@@ -1096,7 +1402,7 @@ class EncounterServiceImplTest {
         encounter.setHospital(new Hospital());
         encounter.setPatient(new Patient());
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder().build();
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos").build();
         AfterVisitSummaryDTO avs = AfterVisitSummaryDTO.builder().encounterId(encounterId).build();
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
@@ -1144,7 +1450,7 @@ class EncounterServiceImplTest {
         Encounter encounter = checkoutRecallEncounter(encounterId);
         LocalDate preferred = LocalDate.now().plusWeeks(6);
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
                 .reason("Repeat HbA1c")
                 .preferredDate(preferred.toString())
@@ -1183,7 +1489,7 @@ class EncounterServiceImplTest {
         UUID encounterId = UUID.randomUUID();
         checkoutRecallEncounter(encounterId);
         LocalDate preferred = LocalDate.now().plusWeeks(3);
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
                 .preferredDate(preferred.toString())
                 .build())
@@ -1198,7 +1504,8 @@ class EncounterServiceImplTest {
             org.mockito.ArgumentCaptor.forClass(com.example.hms.model.scheduling.PatientRecall.class);
         verify(patientRecallRepository).save(captor.capture());
         assertThat(captor.getValue().getDueDate()).isEqualTo(preferred);
-        assertThat(captor.getValue().getReason()).isEqualTo("Follow-up after visit");
+        // QA D952 class: the default recall reason comes from the bundle, not an English literal.
+        assertThat(captor.getValue().getReason()).isEqualTo("ok");
     }
 
     @Test
@@ -1214,7 +1521,7 @@ class EncounterServiceImplTest {
         lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
         lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
 
-        AfterVisitSummaryDTO returned = service.checkOut(encounterId, CheckOutRequestDTO.builder().build(),
+        AfterVisitSummaryDTO returned = service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
             "doctor1", true, null);
 
         assertThat(returned.getPrescriptionSummary()).isEqualTo("Amoxicilline 1 g 3x/j");
@@ -1225,7 +1532,7 @@ class EncounterServiceImplTest {
         UUID encounterId = UUID.randomUUID();
         checkoutRecallEncounter(encounterId);
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
                 .reason("Wound check")
                 .preferredDate("next Tuesday")
@@ -1250,9 +1557,9 @@ class EncounterServiceImplTest {
         UUID encounterId = UUID.randomUUID();
         checkoutRecallEncounter(encounterId);
 
-        service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1", true, null);
+        service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").build(), "doctor1", true, null);
 
-        verify(patientRecallRepository, org.mockito.Mockito.never()).save(any());
+        verify(patientRecallRepository, never()).save(any());
     }
 
     @Test
@@ -1262,7 +1569,7 @@ class EncounterServiceImplTest {
         Encounter encounter = checkoutRecallEncounter(encounterId);
         when(patientRecallRepository.save(any())).thenThrow(new RuntimeException("db down"));
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
                 .reason("Repeat labs")
                 .build())
@@ -1289,7 +1596,7 @@ class EncounterServiceImplTest {
         encounter.setHospital(new Hospital());
         encounter.setPatient(new Patient());
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder().build();
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos").build();
         AfterVisitSummaryDTO avs = AfterVisitSummaryDTO.builder().encounterId(encounterId).build();
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
@@ -1317,7 +1624,7 @@ class EncounterServiceImplTest {
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder().build();
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos").build();
         // The after-visit summary bell entry is rendered through the message
         // source in the patient's language; lenient, since not every path notifies.
         lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
@@ -1340,7 +1647,7 @@ class EncounterServiceImplTest {
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
-        CheckOutRequestDTO cancelledRequest = CheckOutRequestDTO.builder().build();
+        CheckOutRequestDTO cancelledRequest = CheckOutRequestDTO.builder().followUpInstructions("Repos").build();
         assertThatThrownBy(() -> service.checkOut(encounterId, cancelledRequest, "doctor1", true, null))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already Cancelled");
@@ -1356,7 +1663,7 @@ class EncounterServiceImplTest {
         // The not-found refusal now carries the message KEY, not resolved prose,
         // so no messageSource stub is needed (and strict stubs reject one).
 
-        CheckOutRequestDTO notFoundRequest = CheckOutRequestDTO.builder().build();
+        CheckOutRequestDTO notFoundRequest = CheckOutRequestDTO.builder().followUpInstructions("Repos").build();
         assertThatThrownBy(() -> service.checkOut(encounterId, notFoundRequest, "doctor1", true, null))
             .isInstanceOf(ResourceNotFoundException.class);
     }
@@ -1376,7 +1683,7 @@ class EncounterServiceImplTest {
         encounter.setPatient(new Patient());
         encounter.setAppointment(appointment);
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder().build();
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos").build();
         AfterVisitSummaryDTO avs = AfterVisitSummaryDTO.builder().encounterId(encounterId).build();
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
@@ -1409,7 +1716,7 @@ class EncounterServiceImplTest {
         encounter.setPatient(new Patient());
         encounter.setAppointment(appointment);
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder().build();
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos").build();
         AfterVisitSummaryDTO avs = AfterVisitSummaryDTO.builder().encounterId(encounterId).build();
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
@@ -1427,8 +1734,15 @@ class EncounterServiceImplTest {
         verify(appointmentRepository, never()).save(any());
     }
 
-    @Test
-    void checkOut_nullRequest_setsNoDischargeFields() {
+    /**
+     * QA D1246 (round 25), declared behaviour change: a checkout with no body
+     * (or an all-empty one) closed the visit with an empty after-visit
+     * summary. It is now refused, naming dischargeDiagnoses, and the visit
+     * stays open. (Was: checkOut_nullRequest_setsNoDischargeFields.)
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"none", "empty", "blank"})
+    void checkOut_anEmptySummaryIsRefusedAndTheVisitStaysOpen_D1246(String shape) {
         UUID encounterId = UUID.randomUUID();
 
         Encounter encounter = new Encounter();
@@ -1436,19 +1750,28 @@ class EncounterServiceImplTest {
         encounter.setStatus(EncounterStatus.IN_PROGRESS);
         encounter.setHospital(new Hospital());
         encounter.setPatient(new Patient());
+        // QA round 29 (stub now lenient): the empty summary is refused before the visit is read.
+        org.mockito.Mockito.lenient().when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        CheckOutRequestDTO request = switch (shape) {
+            case "none" -> null;
+            case "empty" -> CheckOutRequestDTO.builder().build();
+            default -> CheckOutRequestDTO.builder().followUpInstructions("   ")
+                .dischargeDiagnoses(java.util.List.of(" ", "")).build();
+        };
 
-        AfterVisitSummaryDTO avs = AfterVisitSummaryDTO.builder().encounterId(encounterId).build();
+        assertThatThrownBy(() -> service.checkOut(encounterId, request, "doctor1", true, null))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("field").isEqualTo("dischargeDiagnoses");
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+        verify(encounterRepository, never()).save(any());
+    }
 
-        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
-        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(checkOutMapper.toAfterVisitSummary(any(), any(), any())).thenReturn(avs);
-
-        AfterVisitSummaryDTO result = service.checkOut(encounterId, null, "doctor1", true, null);
-
-        assertThat(result).isNotNull();
-        assertThat(encounter.getFollowUpInstructions()).isNull();
-        assertThat(encounter.getDischargeDiagnoses()).isNull();
-        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
+    @Test
+    void checkOut_instructionsAloneOrADiagnosisAloneAreEnough_D1246() {
+        com.example.hms.service.AfterVisitSummaryContent.require("Repos 3 jours", null);
+        com.example.hms.service.AfterVisitSummaryContent.require(null, java.util.List.of("J06.9"));
+        assertThatThrownBy(() -> com.example.hms.service.AfterVisitSummaryContent.require(" ", java.util.List.of()))
+            .extracting("messageKey").isEqualTo("encounter.checkout.summaryContentRequired");
     }
 
     // ---------- startEncounter ----------
@@ -1598,7 +1921,142 @@ class EncounterServiceImplTest {
 
         assertThatThrownBy(() -> service.startEncounter(encounterId, "other-doctor", false, hospitalId))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("not the assigned physician");
+                .hasMessageContaining("Only the clinician assigned to this visit"); // QA D1085: was "not the assigned physician"
+    }
+
+    @Test
+    void startEncounter_midwifeStartsTheVisitBookedWithHer_D1015() {
+        UUID encounterId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+        User midwife = User.builder().build();
+        midwife.setId(UUID.randomUUID());
+        Staff staff = Staff.builder().user(midwife).build();
+        staff.setId(UUID.randomUUID());
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
+        encounter.setHospital(hospital);
+        encounter.setStaff(staff);
+        EncounterResponseDTO dto = new EncounterResponseDTO();
+        dto.setId(encounterId);
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(userRepository.findByUsername("midwife1")).thenReturn(Optional.of(midwife));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
+
+        service.startEncounter(encounterId, "midwife1", false, hospitalId, true);
+
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void startEncounter_midwifeCannotPickUpAnUnassignedVisit_D1015() {
+        UUID encounterId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+        User midwife = User.builder().build();
+        midwife.setId(UUID.randomUUID());
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
+        encounter.setHospital(hospital);
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(userRepository.findByUsername("midwife1")).thenReturn(Optional.of(midwife));
+
+        assertThatThrownBy(() -> service.startEncounter(encounterId, "midwife1", false, hospitalId, true))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Only the clinician assigned to this visit"); // QA D1085: was "not the assigned physician"
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.WAITING_FOR_PHYSICIAN);
+    }
+
+    // ---------- QA D1099: the examining clinician ends the examination ----------
+
+    /** A doctor's visit in progress, and the caller signed in as a midwife who is not that doctor. */
+    private Encounter doctorsVisitInProgressSeenByAMidwife(UUID encounterId, Hospital hospital) {
+        Staff doctor = new Staff();
+        com.example.hms.model.User doctorUser = new com.example.hms.model.User();
+        doctorUser.setId(UUID.randomUUID());
+        doctor.setUser(doctorUser);
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+        encounter.setStaff(doctor);
+        com.example.hms.model.User midwife = new com.example.hms.model.User();
+        midwife.setId(UUID.randomUUID());
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(midwife, null,
+                org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_MIDWIFE")));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        return encounter;
+    }
+
+    @Test
+    void completeExamination_refusesAnyoneButTheExaminingClinician_D1099() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital(); hospital.setId(UUID.randomUUID());
+        Encounter encounter = doctorsVisitInProgressSeenByAMidwife(encounterId, hospital);
+        UUID hospitalId = hospital.getId();
+
+        assertThatThrownBy(() -> service.completeExamination(encounterId, false, hospitalId))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("encounter.exam.notExaminingClinician");
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+        verify(encounterRepository, never()).save(any());
+    }
+
+    @Test
+    void completeExamination_theAssignedClinicianEndsIt_D1099() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital(); hospital.setId(UUID.randomUUID());
+        Encounter encounter = doctorsVisitInProgressSeenByAMidwife(encounterId, hospital);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                encounter.getStaff().getUser(), null,
+                org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_DOCTOR")));
+        when(labOrderRepository.existsByEncounter_IdAndStatusNotIn(any(UUID.class), any())).thenReturn(false);
+        when(procedureOrderRepository.existsByEncounter_IdAndStatusNotIn(any(UUID.class), any())).thenReturn(false);
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(new EncounterResponseDTO());
+
+        service.completeExamination(encounterId, false, hospital.getId());
+
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.READY_FOR_DISCHARGE);
+    }
+
+    @Test
+    void markReadyForDischargeFromInProgress_refusesAnyoneButTheExaminingClinician_D1099() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital(); hospital.setId(UUID.randomUUID());
+        Encounter encounter = doctorsVisitInProgressSeenByAMidwife(encounterId, hospital);
+        UUID hospitalId = hospital.getId();
+
+        assertThatThrownBy(() -> service.markReadyForDischarge(encounterId, false, hospitalId))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("encounter.exam.notExaminingClinician");
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void checkOutOfAVisitInProgress_refusesAnyoneButTheExaminingClinician_D1099() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital(); hospital.setId(UUID.randomUUID());
+        Encounter encounter = doctorsVisitInProgressSeenByAMidwife(encounterId, hospital);
+
+        UUID hospitalId = hospital.getId();
+        com.example.hms.payload.dto.clinical.CheckOutRequestDTO checkOut =
+            com.example.hms.payload.dto.clinical.CheckOutRequestDTO.builder().followUpInstructions("Repos").build();
+
+        assertThatThrownBy(() -> service.checkOut(encounterId, checkOut, "midwife1", false, hospitalId))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("encounter.exam.notExaminingClinician");
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
     }
 
     // ---------- completeExamination ----------
@@ -1852,6 +2310,10 @@ class EncounterServiceImplTest {
         existing.setHospital(hospital);
         existing.setPatient(patient);
         existing.setStaff(staff);
+        // QA D1099: the attending ends his own consultation through the edit.
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(staffUser, null,
+                org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_DOCTOR")));
         existing.setAssignment(assignment);
         existing.setEncounterDate(LocalDateTime.now().minusHours(1));
 
@@ -1924,8 +2386,10 @@ class EncounterServiceImplTest {
             org.mockito.ArgumentMatchers.eq(List.of("patient@example.com")),
             org.mockito.ArgumentMatchers.eq(List.of()),
             org.mockito.ArgumentMatchers.eq(List.of()),
-            org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"),
+            org.mockito.ArgumentMatchers.argThat((String subject) -> !"Your After-Visit Summary is Ready".equals(subject)),
             anyString());
+        // QA D972: completing through PUT hands the visit to billing like a checkout.
+        verify(eventPublisher).publishEvent(any(com.example.hms.event.EncounterCheckedOutEvent.class));
     }
 
     /**
@@ -1934,6 +2398,68 @@ class EncounterServiceImplTest {
      * edit on an encounter would write a duplicate DischargeSummary and spam the
      * patient with a fresh email.
      */
+    @Test
+    void qaD990_aScheduledVisitMarkedArrivedThroughPutWaitsFromNow() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        com.example.hms.model.Department department = new com.example.hms.model.Department();
+        department.setId(UUID.randomUUID());
+        department.setHospital(hospital);
+        hospital.setDepartments(java.util.Set.of(department));
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        User user = new User();
+        user.setId(UUID.randomUUID());
+        Staff staff = new Staff();
+        staff.setId(UUID.randomUUID());
+        staff.setUser(user);
+        staff.setHospital(hospital);
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+        assignment.setHospital(hospital);
+        Encounter existing = new Encounter();
+        existing.setId(encounterId);
+        existing.setStatus(EncounterStatus.SCHEDULED);
+        existing.setHospital(hospital);
+        existing.setPatient(patient);
+        existing.setStaff(staff);
+        existing.setAssignment(assignment); // the request keeps the recorded attending
+        existing.setEncounterDate(java.time.LocalDate.now().atStartOfDay());
+        Encounter merged = new Encounter();
+        merged.setId(encounterId);
+        merged.setStatus(EncounterStatus.ARRIVED);
+        merged.setHospital(hospital);
+        merged.setPatient(patient);
+        merged.setStaff(staff);
+        merged.setDepartment(department);
+        merged.setEncounterDate(existing.getEncounterDate());
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staff.getId())).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findClinicalById(hospital.getId())).thenReturn(Optional.of(hospital));
+        lenient().when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospital.getId()))
+            .thenReturn(true);
+        lenient().when(departmentRepository.findById(department.getId())).thenReturn(Optional.of(department));
+        lenient().when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospital.getId()))
+            .thenReturn(Optional.of(assignment));
+        when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                any(Encounter.class), any(Patient.class), any(Staff.class), any(Hospital.class),
+                org.mockito.ArgumentMatchers.<Appointment>isNull(), any(UserRoleHospitalAssignment.class)))
+            .thenReturn(merged);
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(new EncounterResponseDTO());
+        com.example.hms.payload.dto.EncounterRequestDTO request = com.example.hms.payload.dto.EncounterRequestDTO.builder()
+            .patientId(patient.getId()).staffId(staff.getId()).hospitalId(hospital.getId())
+            .departmentId(department.getId()).encounterType(com.example.hms.enums.EncounterType.OUTPATIENT)
+            .encounterDate(existing.getEncounterDate()).status(EncounterStatus.ARRIVED).build();
+        LocalDateTime before = LocalDateTime.now().minusSeconds(1);
+
+        service.updateEncounter(encounterId, request, Locale.ENGLISH, true, null);
+
+        assertThat(merged.getArrivalTimestamp()).isNotNull().isAfter(before);
+    }
+
     @Test
     void updateEncounter_noTransitionToCompleted_doesNotPersistDischargeSummary() {
         UUID encounterId = UUID.randomUUID();
@@ -2020,7 +2546,76 @@ class EncounterServiceImplTest {
         verify(dischargeSummaryRepository, never()).save(any(DischargeSummary.class));
         verify(notificationService, never()).created(anyString(), anyString(), anyString());
         verify(emailService, never()).sendHtml(any(), any(), any(), anyString(), anyString());
+        verify(eventPublisher, never()).publishEvent(any(com.example.hms.event.EncounterCheckedOutEvent.class));
         assertThat(merged.getCheckoutTimestamp()).isNull();
+    }
+
+    /** QA D1099: PUT /encounters/{id} ending an examination in progress is the examining clinician's too. */
+    @Test
+    void updateEncounter_endingAnExaminationIsTheExaminingClinicians_D1099() {
+        UUID encounterId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID departmentId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+        com.example.hms.model.Department department = new com.example.hms.model.Department();
+        department.setId(departmentId);
+        department.setHospital(hospital);
+        hospital.setDepartments(java.util.Set.of(department));
+        Patient patient = new Patient();
+        patient.setId(patientId);
+        User staffUser = User.builder().username("dr.smith").build();
+        staffUser.setId(UUID.randomUUID());
+        Staff staff = Staff.builder().user(staffUser).hospital(hospital).build();
+        staff.setId(staffId);
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+        Encounter existing = new Encounter();
+        existing.setId(encounterId);
+        existing.setStatus(EncounterStatus.IN_PROGRESS);
+        existing.setHospital(hospital);
+        existing.setPatient(patient);
+        existing.setStaff(staff);
+        existing.setAssignment(assignment);
+        existing.setEncounterDate(LocalDateTime.now().minusHours(1));
+        Encounter merged = new Encounter();
+        merged.setId(encounterId);
+        merged.setStatus(EncounterStatus.READY_FOR_DISCHARGE);
+        merged.setHospital(hospital);
+        merged.setPatient(patient);
+        merged.setStaff(staff);
+        merged.setAssignment(assignment);
+        merged.setEncounterDate(existing.getEncounterDate());
+        com.example.hms.payload.dto.EncounterRequestDTO request = new com.example.hms.payload.dto.EncounterRequestDTO();
+        request.setPatientId(patientId);
+        request.setStaffId(staffId);
+        request.setHospitalId(hospitalId);
+        request.setDepartmentId(departmentId);
+        request.setEncounterDate(existing.getEncounterDate());
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId))
+            .thenReturn(true);
+        when(encounterMapper.mergeEncounter(
+                any(com.example.hms.payload.dto.EncounterRequestDTO.class), any(Encounter.class), any(Patient.class),
+                any(Staff.class), any(Hospital.class), org.mockito.ArgumentMatchers.<Appointment>isNull(),
+                any(UserRoleHospitalAssignment.class)))
+            .thenReturn(merged);
+        User midwife = new User();
+        midwife.setId(UUID.randomUUID());
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(midwife, null,
+                org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_MIDWIFE")));
+
+        assertThatThrownBy(() -> service.updateEncounter(encounterId, request, locale, true, null))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("encounter.exam.notExaminingClinician");
+        verify(encounterRepository, never()).save(any());
     }
 
     // =====================================================================
@@ -2045,7 +2640,7 @@ class EncounterServiceImplTest {
             PatientVitalSign v = new PatientVitalSign();
             v.setRecordedAt(LocalDateTime.now());
             org.mockito.Mockito.lenient().when(patientVitalSignRepository
-                .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(eq(p.getId()), any()))
+                .findLatestObservationSet(eq(p.getId()), any()))
                 .thenReturn(Optional.of(v));
             if (hospitalId != null) {
                 Hospital h = new Hospital();
@@ -2119,7 +2714,10 @@ class EncounterServiceImplTest {
             encounterExists(foreign);
 
             assertThatThrownBy(() -> service.checkOut(
-                    foreign.getId(), new com.example.hms.payload.dto.clinical.CheckOutRequestDTO(),
+                    // QA round 29 (request changed): a summary with content, since an empty one is
+                    // refused before the scope check now; the scope refusal is what this test reads.
+                    foreign.getId(), com.example.hms.payload.dto.clinical.CheckOutRequestDTO.builder()
+                        .followUpInstructions("Revoir dans 7 jours").build(),
                     "doctor", false, CALLER_HOSPITAL))
                 .isInstanceOf(ResourceNotFoundException.class);
 
@@ -2401,9 +2999,7 @@ class EncounterServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId))
             .thenReturn(true);
-        when(roleValidator.isDoctor(newUserId, hospitalId)).thenReturn(false);
-        when(roleValidator.isNurse(newUserId, hospitalId)).thenReturn(false);
-        when(roleValidator.isHospitalAdmin(newUserId, hospitalId)).thenReturn(false);
+        when(roleValidator.isEncounterProvider(newUserId, hospitalId)).thenReturn(false);
 
         // The after-visit summary bell entry is rendered through the message
         // source in the patient's language; lenient, since not every path notifies.
@@ -2546,22 +3142,17 @@ class EncounterServiceImplTest {
         @Test
         void d513_updateRefusesANestedNoteOnACheckedOutVisit() {
             // #922 review: PUT /encounters/{id} with a nested note bypassed the
-            // lock that POST /encounters/{id}/notes enforces.
+            // lock that POST /encounters/{id}/notes enforces. QA D1428: a closed visit
+            // is no longer merged, so the note is read from the stored row.
             Encounter existing = encounter();
             existing.setStatus(EncounterStatus.COMPLETED);
-            Encounter merged = encounter();
-            merged.setStatus(EncounterStatus.COMPLETED);
             com.example.hms.model.encounter.EncounterNote mine = new com.example.hms.model.encounter.EncounterNote();
             mine.setId(UUID.randomUUID());
             mine.setAssessment("original");
-            merged.setEncounterNote(mine);
+            existing.setEncounterNote(mine);
             when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(existing));
-            when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
-                    any(Encounter.class), any(Patient.class), any(Staff.class), any(Hospital.class),
-                    org.mockito.ArgumentMatchers.<Appointment>isNull(), any(UserRoleHospitalAssignment.class)))
-                .thenReturn(merged);
             com.example.hms.payload.dto.EncounterRequestDTO request =
-                request(note(null, "rewritten after checkout"), merged.getEncounterDate());
+                request(note(null, "rewritten after checkout"), existing.getEncounterDate());
             request.setStatus(EncounterStatus.COMPLETED);
 
             assertThatThrownBy(() -> service.updateEncounter(encounterId, request, locale, true, null))
@@ -2582,7 +3173,7 @@ class EncounterServiceImplTest {
                     isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
                     org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
                 .thenReturn(fresh);
-            when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
             com.example.hms.payload.dto.EncounterRequestDTO request = request(null, LocalDateTime.now());
             request.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
             request.setStatus(EncounterStatus.ARRIVED);
@@ -2602,11 +3193,99 @@ class EncounterServiceImplTest {
                     isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
                     org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
                 .thenReturn(fresh);
-            when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
+            actWithRole("ROLE_DOCTOR");
 
             service.createEncounter(request(null, LocalDateTime.now()), locale);
 
             assertThat(fresh.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+        }
+
+        private void actWithRole(String role) {
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("someone", null,
+                    List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(role))));
+        }
+
+        @org.junit.jupiter.api.AfterEach
+        void clearSecurityContext() {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+
+        @Test
+        void qaD990_aNurseCreatedUrgencesVisitStartsArrivedAndWaitsFromNow() {
+            Encounter fresh = encounter();
+            fresh.setStatus(EncounterStatus.IN_PROGRESS); // the entity default
+            fresh.setArrivalTimestamp(null);
+            when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                    isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
+                    org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
+                .thenReturn(fresh);
+            org.mockito.Mockito.lenient().when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
+            actWithRole("ROLE_NURSE");
+            LocalDateTime before = LocalDateTime.now().minusSeconds(1);
+            com.example.hms.payload.dto.EncounterRequestDTO request = request(null, LocalDate.now().atStartOfDay());
+            request.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+
+            service.createEncounter(request, locale);
+
+            assertThat(fresh.getStatus()).isEqualTo(EncounterStatus.ARRIVED);
+            assertThat(fresh.getArrivalTimestamp()).isAfter(before);
+        }
+
+        @Test
+        void qaD990_aMidwifeLedConsultationKeepsItsInProgressDefault() {
+            // Review of #971: a nurse/midwife-led visit stays one she can check out.
+            Encounter fresh = encounter();
+            when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                    isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
+                    org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
+                .thenReturn(fresh);
+            org.mockito.Mockito.lenient().when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
+            actWithRole("ROLE_MIDWIFE");
+
+            service.createEncounter(request(null, LocalDateTime.now()), locale);
+
+            assertThat(fresh.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+        }
+
+        @Test
+        void qaD990_aPastVisitEnteredByANurseKeepsThePreviousDefault() {
+            // Review of #971: a visit recorded late for last week is not an arrival now.
+            Encounter fresh = encounter();
+            fresh.setStatus(EncounterStatus.IN_PROGRESS);
+            fresh.setArrivalTimestamp(null);
+            when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                    isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
+                    org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
+                .thenReturn(fresh);
+            org.mockito.Mockito.lenient().when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
+            actWithRole("ROLE_NURSE");
+
+            com.example.hms.payload.dto.EncounterRequestDTO past = request(null, LocalDateTime.now().minusDays(7));
+            past.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+            service.createEncounter(past, locale);
+
+            assertThat(fresh.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+            assertThat(fresh.getArrivalTimestamp()).isNull();
+        }
+
+        @Test
+        void qaD990_anEmergencyVisitGoesThroughTriageEvenWhenADoctorOpensIt() {
+            Encounter fresh = encounter();
+            fresh.setStatus(EncounterStatus.IN_PROGRESS);
+            when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                    isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
+                    org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
+                .thenReturn(fresh);
+            org.mockito.Mockito.lenient().when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
+            actWithRole("ROLE_DOCTOR");
+            com.example.hms.payload.dto.EncounterRequestDTO request = request(null, LocalDateTime.now());
+            request.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+
+            service.createEncounter(request, locale);
+
+            assertThat(fresh.getStatus()).isEqualTo(EncounterStatus.ARRIVED);
         }
 
         @Test
@@ -2625,7 +3304,7 @@ class EncounterServiceImplTest {
                     isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
                     org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
                 .thenReturn(encounter());
-            when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
             com.example.hms.payload.dto.EncounterRequestDTO request =
                 request(note(UUID.randomUUID(), "stable"), LocalDateTime.now());
 
@@ -2699,7 +3378,7 @@ class EncounterServiceImplTest {
         lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
         lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
 
-        service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
+        service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").followUpInstructions("Repos").build(),
             "doctor1", true, null);
 
         org.mockito.ArgumentCaptor<DischargeSummary> summary = org.mockito.ArgumentCaptor.forClass(DischargeSummary.class);
@@ -2756,6 +3435,74 @@ class EncounterServiceImplTest {
         verify(patientRecallRepository).save(any(com.example.hms.model.scheduling.PatientRecall.class));
     }
 
+    /** The booking context d526 uses: a dated follow-up for a clinician of the encounter's hospital. */
+    private Encounter followUpEncounter(UUID encounterId) {
+        Encounter encounter = checkoutRecallEncounter(encounterId);
+        Hospital hospital = encounter.getHospital();
+        encounter.getStaff().setHospital(hospital);
+        com.example.hms.model.UserRoleHospitalAssignment assignment = new com.example.hms.model.UserRoleHospitalAssignment();
+        assignment.setHospital(hospital);
+        encounter.setAssignment(assignment);
+        com.example.hms.model.Department department = new com.example.hms.model.Department();
+        department.setId(UUID.randomUUID());
+        encounter.setDepartment(department);
+        encounter.getStaff().setId(UUID.randomUUID());
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
+        return encounter;
+    }
+
+    private static CheckOutRequestDTO followUpOn(LocalDate date) {
+        return CheckOutRequestDTO.builder().followUpInstructions("Repos")
+            .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
+                .reason("Contrôle").preferredDate(date.toString()).build())
+            .build();
+    }
+
+    @Test
+    void qaD1139_aFollowUpTakesExactlyOnePublishedSlotOnTheGrid() {
+        // QA D1139: the placeholder grid booked 08:30-08:50 (two 20-minute
+        // patient slots, before the 09:00 session). With published slots the
+        // follow-up takes the first free one, and books it.
+        UUID encounterId = UUID.randomUUID();
+        Encounter encounter = followUpEncounter(encounterId);
+        LocalDate preferred = LocalDate.now().plusDays(7);
+        com.example.hms.model.scheduling.AppointmentSlot nineOClock = com.example.hms.model.scheduling.AppointmentSlot.builder()
+            .slotDate(preferred).startAt(preferred.atTime(9, 0)).endAt(preferred.atTime(9, 20)).build();
+        when(slotPolicy.firstFreePublished(eq(encounter.getStaff().getId()), eq(encounter.getHospital().getId()),
+                eq(preferred), any()))
+            .thenReturn(new com.example.hms.service.scheduling.AppointmentSlotPolicy.PublishedPick(true, nineOClock));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> {
+            Appointment a = inv.getArgument(0);
+            a.setId(UUID.randomUUID());
+            return a;
+        });
+
+        service.checkOut(encounterId, followUpOn(preferred), "doctor1", true, null);
+
+        org.mockito.ArgumentCaptor<Appointment> booked = org.mockito.ArgumentCaptor.forClass(Appointment.class);
+        verify(appointmentRepository).save(booked.capture());
+        assertThat(booked.getValue().getStartTime()).isEqualTo(java.time.LocalTime.of(9, 0));
+        assertThat(booked.getValue().getEndTime()).isEqualTo(java.time.LocalTime.of(9, 20));
+        verify(slotPolicy).takeSlot(nineOClock, booked.getValue());
+        verify(slotPolicy, never()).endFor(any(), any(), any());
+    }
+
+    @Test
+    void qaD1139_aDayWhosePublishedSlotsAreAllTakenBooksNothingAndKeepsTheRecall() {
+        UUID encounterId = UUID.randomUUID();
+        followUpEncounter(encounterId);
+        LocalDate preferred = LocalDate.now().plusDays(7);
+        when(slotPolicy.firstFreePublished(any(), any(), eq(preferred), any()))
+            .thenReturn(new com.example.hms.service.scheduling.AppointmentSlotPolicy.PublishedPick(true, null));
+
+        service.checkOut(encounterId, followUpOn(preferred), "doctor1", true, null);
+
+        verify(appointmentRepository, never()).save(any(Appointment.class));
+        verify(slotPolicy, never()).takeSlot(any(), any());
+        verify(patientRecallRepository).save(any(com.example.hms.model.scheduling.PatientRecall.class));
+    }
+
     @Test
     void d526_anIncompleteBookingContextKeepsTheRecallAndBooksNothing() {
         // The staff has no hospital: Appointment#validate would throw inside
@@ -2765,7 +3512,7 @@ class EncounterServiceImplTest {
         lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
         lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
 
-        service.checkOut(encounterId, CheckOutRequestDTO.builder()
+        service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos")
                 .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
                     .reason("Contrôle").preferredDate(LocalDate.now().plusDays(7).toString()).build())
                 .build(), "doctor1", true, null);
@@ -2820,7 +3567,7 @@ class EncounterServiceImplTest {
         void deskCheckoutOfANeverSeenVisitIsRefused() {
             Encounter encounter = visit(EncounterStatus.ARRIVED);
 
-            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(),
+            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
                     "receptionist1", true, null))
                 .isInstanceOf(com.example.hms.exception.BusinessException.class)
                 .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.checkout.notSeen"));
@@ -2843,7 +3590,7 @@ class EncounterServiceImplTest {
                     org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_DOCTOR")));
             Encounter encounter = visit(status);
 
-            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(),
+            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
                     "doctor1", true, null))
                 .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.checkout.notSeen"));
         }
@@ -2853,7 +3600,7 @@ class EncounterServiceImplTest {
         void deskCheckoutMidConsultationIsRefused() {
             Encounter encounter = visit(EncounterStatus.IN_PROGRESS);
 
-            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(),
+            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
                     "receptionist1", true, null))
                 .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.checkout.examinationNotCompleted"));
             assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
@@ -2870,7 +3617,7 @@ class EncounterServiceImplTest {
                     .isEqualTo("encounter.readyForDischarge.examinationNotCompleted"));
             assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
 
-            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(),
+            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
                     "receptionist1", true, null))
                 .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.checkout.examinationNotCompleted"));
 
@@ -2905,7 +3652,7 @@ class EncounterServiceImplTest {
             lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
             lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("x");
 
-            service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(), "receptionist1", true, null);
+            service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().followUpInstructions("Repos").build(), "receptionist1", true, null);
 
             assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
             assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.COMPLETED);
@@ -2958,7 +3705,7 @@ class EncounterServiceImplTest {
         void aLeftWithoutBeingSeenVisitIsClosed() {
             Encounter encounter = visit(EncounterStatus.LEFT_WITHOUT_BEING_SEEN);
 
-            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(),
+            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
                     "receptionist1", true, null))
                 .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.checkout.alreadyClosed"));
             assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.LEFT_WITHOUT_BEING_SEEN);
@@ -2981,6 +3728,109 @@ class EncounterServiceImplTest {
             assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.LEFT_WITHOUT_BEING_SEEN);
             assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
             verify(appointmentRepository).save(appointment);
+        }
+
+        @Test
+        @DisplayName("QA D1126: close-unseen keeps its reason on the appointment it cancels")
+        void qaD1126_closeUnseenKeepsTheReasonOnTheAppointment() {
+            Encounter encounter = visit(EncounterStatus.ARRIVED);
+            com.example.hms.repository.BillingInvoiceRepository invoices =
+                mock(com.example.hms.repository.BillingInvoiceRepository.class);
+            service.setBillingInvoiceRepository(invoices);
+            when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(encounterMapper.toEncounterResponseDTO(any())).thenReturn(new EncounterResponseDTO());
+
+            service.closeUnseen(encounter.getId(), com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO.builder()
+                    .outcome(com.example.hms.enums.UnseenVisitOutcome.LEFT_WITHOUT_BEING_SEEN)
+                    .reason("  Parti avant l'appel  ").build(),
+                "receptionist1", true, null);
+
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+            assertThat(appointment.getStatusReason()).isEqualTo("Parti avant l'appel");
+            verify(invoices).findByEncounter_IdAndCheckInCopayTrueAndStatusIn(encounter.getId(), java.util.List.of(
+                com.example.hms.enums.InvoiceStatus.PAID, com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID));
+        }
+
+        @Test
+        @DisplayName("QA D1165: a copay billing reversed is cancelled when the visit closes unseen, not left due")
+        void qaD1165_aReversedCopayIsCancelledWhenTheVisitClosesUnseen() {
+            Encounter encounter = visit(EncounterStatus.ARRIVED);
+            com.example.hms.repository.BillingInvoiceRepository invoices =
+                mock(com.example.hms.repository.BillingInvoiceRepository.class);
+            com.example.hms.model.BillingInvoice reversed = new com.example.hms.model.BillingInvoice();
+            reversed.setInvoiceNumber("CHWF6646-2026-000013");
+            reversed.setStatus(com.example.hms.enums.InvoiceStatus.SENT);
+            reversed.setAmountPaid(java.math.BigDecimal.ZERO);
+            reversed.setTotalAmount(new java.math.BigDecimal("1500"));
+            when(invoices.findByEncounter_IdAndCheckInCopayTrueAndStatusIn(encounter.getId(), java.util.List.of(
+                com.example.hms.enums.InvoiceStatus.DRAFT, com.example.hms.enums.InvoiceStatus.SENT)))
+                .thenReturn(java.util.List.of(reversed));
+            when(invoices.findByEncounter_IdAndCheckInCopayTrueAndStatusIn(encounter.getId(), java.util.List.of(
+                com.example.hms.enums.InvoiceStatus.PAID, com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)))
+                .thenReturn(java.util.List.of());
+            service.setBillingInvoiceRepository(invoices);
+            when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(encounterMapper.toEncounterResponseDTO(any())).thenReturn(new EncounterResponseDTO());
+
+            service.closeUnseen(encounter.getId(), com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO.builder()
+                    .outcome(com.example.hms.enums.UnseenVisitOutcome.LEFT_WITHOUT_BEING_SEEN)
+                    .reason(" Parti avant l'appel ").build(),
+                "receptionist1", true, null);
+
+            assertThat(reversed.getStatus()).isEqualTo(com.example.hms.enums.InvoiceStatus.CANCELLED);
+            assertThat(reversed.getCancelReason()).isEqualTo("Parti avant l'appel");
+            assertThat(reversed.getCancelledAt()).isNotNull();
+            verify(invoices).save(reversed);
+        }
+
+        @Test
+        @DisplayName("QA D1165: a partly paid copay holds money too and stops the close until it is reversed")
+        void qaD1165_aPartlyPaidCopayStopsTheClose() {
+            Encounter encounter = visit(EncounterStatus.ARRIVED);
+            com.example.hms.repository.BillingInvoiceRepository invoices =
+                mock(com.example.hms.repository.BillingInvoiceRepository.class);
+            com.example.hms.model.BillingInvoice partly = new com.example.hms.model.BillingInvoice();
+            partly.setInvoiceNumber("CHW-2026-000070");
+            partly.setStatus(com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID);
+            when(invoices.findByEncounter_IdAndCheckInCopayTrueAndStatusIn(encounter.getId(), java.util.List.of(
+                com.example.hms.enums.InvoiceStatus.PAID, com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)))
+                .thenReturn(java.util.List.of(partly));
+            service.setBillingInvoiceRepository(invoices);
+
+            assertThatThrownBy(() -> service.closeUnseen(encounter.getId(),
+                    com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO.builder()
+                        .outcome(com.example.hms.enums.UnseenVisitOutcome.LEFT_WITHOUT_BEING_SEEN).reason("Parti").build(),
+                    "receptionist1", true, null))
+                .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.closeUnseen.paidCopay"));
+            verify(encounterRepository, never()).save(any());
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+        @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.UnseenVisitOutcome.class)
+        @DisplayName("QA D1126: a checked-in visit whose copay was paid is not closed until the copay is reversed")
+        void qaD1126_aPaidCopayIsReversedBeforeTheVisitIsClosed(com.example.hms.enums.UnseenVisitOutcome outcome) {
+            Encounter encounter = visit(EncounterStatus.ARRIVED);
+            com.example.hms.repository.BillingInvoiceRepository invoices =
+                mock(com.example.hms.repository.BillingInvoiceRepository.class);
+            com.example.hms.model.BillingInvoice copay = new com.example.hms.model.BillingInvoice();
+            copay.setInvoiceNumber("CHW-2026-000063");
+            when(invoices.findByEncounter_IdAndCheckInCopayTrueAndStatusIn(encounter.getId(), java.util.List.of(
+                com.example.hms.enums.InvoiceStatus.PAID, com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)))
+                .thenReturn(java.util.List.of(copay));
+            service.setBillingInvoiceRepository(invoices);
+
+            assertThatThrownBy(() -> service.closeUnseen(encounter.getId(),
+                    com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO.builder()
+                        .outcome(outcome).reason("Parti").build(),
+                    "receptionist1", true, null))
+                .satisfies(ex -> {
+                    assertThat(keyOf(ex)).isEqualTo("encounter.closeUnseen.paidCopay");
+                    assertThat(((com.example.hms.exception.BusinessException) ex).getArgs())
+                        .containsExactly("CHW-2026-000063");
+                });
+            assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.ARRIVED);
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CHECKED_IN);
+            verify(encounterRepository, never()).save(any());
         }
 
         @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
@@ -3045,5 +3895,81 @@ class EncounterServiceImplTest {
             EncounterClosureRules.requireDirectTransition(EncounterStatus.ARRIVED, EncounterStatus.TRIAGE, false);
             EncounterClosureRules.requireDeskTransition(EncounterStatus.IN_PROGRESS, EncounterStatus.ARRIVED);
         }).doesNotThrowAnyException();
+    }
+
+    // ═══════════════ QA D1428 class (round 34): a closed visit's record is protected ═══════════════
+
+    private Encounter closedVisit(EncounterStatus status) {
+        Hospital h = new Hospital();
+        h.setId(UUID.randomUUID());
+        Encounter e = new Encounter();
+        e.setId(UUID.randomUUID());
+        e.setStatus(status);
+        e.setHospital(h);
+        e.setNotes("as written");
+        when(encounterRepository.findById(e.getId())).thenReturn(Optional.of(e));
+        return e;
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = EncounterStatus.class,
+        names = {"COMPLETED", "CANCELLED", "LEFT_WITHOUT_BEING_SEEN"})
+    void qaD1428_aPutThatKeepsTheStatusDoesNotRewriteAClosedVisit(EncounterStatus closed) {
+        Encounter visit = closedVisit(closed);
+        com.example.hms.payload.dto.EncounterRequestDTO body = new com.example.hms.payload.dto.EncounterRequestDTO();
+        body.setStatus(closed);
+        body.setNotes("rewritten");
+        Locale fr = Locale.FRENCH;
+
+        assertThatThrownBy(() -> service.updateEncounter(visit.getId(), body, fr, true, null))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("encounter.closed.readOnly");
+        assertThat(visit.getNotes()).isEqualTo("as written");
+        verify(encounterRepository, never()).save(any());
+        verify(encounterMapper, never()).mergeEncounter(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void qaD1428_aPutStillRefusesReopeningAClosedVisitByItsOwnReason() {
+        Encounter visit = closedVisit(EncounterStatus.COMPLETED);
+        com.example.hms.payload.dto.EncounterRequestDTO body = new com.example.hms.payload.dto.EncounterRequestDTO();
+        body.setStatus(EncounterStatus.IN_PROGRESS);
+        Locale fr = Locale.FRENCH;
+
+        assertThatThrownBy(() -> service.updateEncounter(visit.getId(), body, fr, true, null))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("encounter.status.closed");
+    }
+
+    @Test
+    void qaD1428_aClosedVisitIsNotDeleted() {
+        Encounter visit = closedVisit(EncounterStatus.COMPLETED);
+        when(encounterRepository.existsById(visit.getId())).thenReturn(true);
+        Locale fr = Locale.FRENCH;
+
+        assertThatThrownBy(() -> service.deleteEncounter(visit.getId(), fr))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("encounter.closed.readOnly");
+        verify(encounterRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void qaD1428_theCheckoutAfterAFinalizedSummaryLeavesItAsSigned() {
+        UUID encounterId = UUID.randomUUID();
+        Encounter encounter = checkoutRecallEncounter(encounterId);
+        DischargeSummary summary = new DischargeSummary();
+        summary.setIsFinalized(true);
+        summary.setDischargeDiagnosis("as signed");
+        summary.setFollowUpInstructions("as signed");
+        when(dischargeSummaryRepository.findByEncounter_Id(encounter.getId())).thenReturn(Optional.of(summary));
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
+
+        service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
+            "doctor1", true, null);
+
+        assertThat(summary.getDischargeDiagnosis()).isEqualTo("as signed");
+        assertThat(summary.getFollowUpInstructions()).isEqualTo("as signed");
+        verify(dischargeSummaryRepository, never()).save(summary);
     }
 }

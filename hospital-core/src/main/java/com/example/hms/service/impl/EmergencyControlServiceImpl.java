@@ -14,7 +14,6 @@ import com.example.hms.repository.MfaBackupCodeRepository;
 import com.example.hms.repository.UserMfaEnrollmentRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.security.GlobalSessionRevocationService;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.AuditEventLogService;
@@ -122,10 +121,8 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
         // Refuse a request that cannot run BEFORE the step-up, which would
         // otherwise spend a backup code on it.
         if (everyone && !Boolean.TRUE.equals(request.getResetAll())) {
-            throw new BusinessException(
-                "Refusing a platform-wide MFA reset: no userIds were given and resetAll is not true. "
-                    + "Name the users, or set resetAll=true to reset every enrolled user"
-                    + (request.getHospitalId() != null ? " at the given hospital." : " on the platform."));
+            // QA round 29 sweep: named on the user picker, translated.
+            throw new com.example.hms.exception.FieldBusinessException("userIds", "emergency.mfaReset.noTarget");
         }
         verifyMfaStepUp(currentUserId(), mfaToken, "force-mfa-reenrol");
         if (everyone) {

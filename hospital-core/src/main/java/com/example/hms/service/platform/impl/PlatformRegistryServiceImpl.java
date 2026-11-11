@@ -4,7 +4,6 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.platform.PlatformRegistryEventType;
 import com.example.hms.enums.platform.PlatformServiceStatus;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -84,7 +83,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
                                                                   Locale locale) {
         Objects.requireNonNull(organizationId, ORGANIZATION_ID_REQUIRED);
         if (request == null || request.getServiceType() == null) {
-            throw new IllegalArgumentException("Platform service type is required");
+            throw new com.example.hms.exception.FieldBusinessException("serviceType", "platform.serviceTypeRequired");
         }
 
         Organization organization = organizationRepository.findById(organizationId)
@@ -103,7 +102,8 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
         boolean exists = organizationPlatformServiceRepository
             .existsByOrganizationIdAndServiceType(organizationId, request.getServiceType());
         if (exists) {
-            throw new ConflictException(MessageUtil.resolve(locale,
+            // QA CX-005: marked on the field that conflicts.
+            throw new ConflictException("serviceType:" + MessageUtil.resolve(locale,
                 "platform.service.alreadyRegistered", request.getServiceType().name()));
         }
 
@@ -129,7 +129,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
                                                                 Locale locale) {
         if (request != null && Boolean.TRUE.equals(request.getClearApiKeyReference())
             && request.getApiKeyReference() != null && !request.getApiKeyReference().isBlank()) {
-            throw new BusinessException("platform.service.apiKey.setAndClear");
+            throw new com.example.hms.exception.FieldBusinessException("clearApiKeyReference", "platform.service.apiKey.setAndClear");
         }
         OrganizationPlatformService service = loadServiceForOrganization(organizationId, serviceId);
         platformServiceMapper.updateOrganizationServiceFromDto(request, service);
@@ -210,7 +210,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
         Objects.requireNonNull(hospitalId, HOSPITAL_ID_REQUIRED);
         Objects.requireNonNull(organizationServiceId, ORGANIZATION_SERVICE_ID_REQUIRED);
         if (request == null || request.getEnabled() == null) {
-            throw new IllegalArgumentException("enabled is required");
+            throw new com.example.hms.exception.FieldBusinessException("enabled", "platform.enabledRequired");
         }
 
         HospitalPlatformServiceLink link = hospitalPlatformServiceLinkRepository
@@ -412,21 +412,17 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
         HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
         String actor = ctx.getPrincipalUsername();
         UUID organizationId = Optional.ofNullable(service.getOrganization()).map(Organization::getId).orElse(null);
-        StringBuilder description = new StringBuilder("Platform ")
-            .append(action)
-            .append(" type=").append(service.getServiceType())
-            .append(" organizationId=").append(organizationId);
-        if (hospitalId != null) {
-            description.append(" hospitalId=").append(hospitalId);
-        }
-        if (departmentId != null) {
-            description.append(" departmentId=").append(departmentId);
-        }
+        // One expression, so AuditDescriptionCoverageTest can read the shape (QA D894).
+        String description = "Platform " + action
+            + " type=" + service.getServiceType()
+            + " organizationId=" + organizationId
+            + (hospitalId != null ? " hospitalId=" + hospitalId : "")
+            + (departmentId != null ? " departmentId=" + departmentId : "");
         AuditEventRequestDTO event = AuditEventRequestDTO.builder()
             .userId(ctx.getPrincipalUserId())
             .userName(actor != null && !actor.isBlank() ? actor : SYSTEM_ACTOR)
             .eventType(AuditEventType.PLATFORM_REGISTRY_UPDATED)
-            .eventDescription(description.toString())
+            .eventDescription(description)
             .resourceId(service.getId() == null ? null : service.getId().toString())
             .resourceName(service.getServiceType() == null ? null : service.getServiceType().name())
             .entityType(AUDIT_ENTITY_TYPE)

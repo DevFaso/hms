@@ -383,3 +383,55 @@ explicitly deferred (listed below).
   in JWT". Tracked separately; not blocking this work.
 - The `setAllowedClockSkewSeconds(30)` JWT fix from the same review.
   Independent, do later.
+
+
+## Global entry and hospital-targeted actions (8 November 2026)
+
+A super-admin should enter a useful network view, rather than a full-page hospital-selection blocker. Hospital selection is a filter or an operation target, not a prerequisite for seeing the platform.
+
+The implementation distinguishes two truthful experiences:
+
+- Modules with an aggregate API show their records across hospitals. Hospital identity remains visible on every actionable row. Bed management now follows this pattern, alongside the existing bed board and cross-tenant clinical lists.
+- Modules whose operational APIs require one hospital show a shared hospital worklist in global view. Each hospital has an action to open that module with its hospital encoded in the URL. The worklist is explicitly an establishment directory, not a combined clinical-record list; its counts describe hospitals only. Its table is paged, searchable, and has loading, empty and retry states.
+
+The scope chip on a hospital-specific module can return to the global worklist. The shell still does not mount a facility-only component until its hospital is resolved. Route roles, backend tenant checks and clinical authorization remain authoritative. Making a route globally visible does not grant clinical write privileges.
+
+Bed-management actions use the hospital of their ward row, or the hospital captured when a bed form opens. That hospital is visible in the dialog and carried in the individual request's `X-Hospital-Id`; global list reads do not inherit it. Creating a new ward asks for a destination inside the form, using the existing server-side hospital typeahead, and departments reload for that destination. Existing facility-scoped callers keep their original request behavior.
+
+### Route audit
+
+The current router has 29 hospital-gated routes. Two support combined module records; the other 27 receive the shared hospital worklist. Existing ungated cross-tenant lists retain their aggregate behavior. Nested hospital-only sections (for example the laboratory inbox panel) and modules with their own pharmacy/provider selectors need individual follow-up for true record aggregation; the shared directory does not claim to aggregate their records.
+
+| Route | Super-admin global presentation |
+|---|---|
+| `/appointments/calendar` | Hospital worklist with direct module action |
+| `/registries` | Hospital worklist with direct module action |
+| `/panels` | Hospital worklist with direct module action |
+| `/roi` | Hospital worklist with direct module action |
+| `/webhooks` | Hospital worklist with direct module action |
+| `/on-call` | Hospital worklist with direct module action |
+| `/transfusions` | Hospital worklist with direct module action |
+| `/mortality` | Hospital worklist with direct module action |
+| `/microbiology` | Hospital worklist with direct module action |
+| `/lab-release-worklist` | Hospital worklist with direct module action |
+| `/lab-ops-dashboard` | Hospital worklist with direct module action |
+| `/lab-staff` | Hospital worklist with direct module action |
+| `/lab-instruments` | Hospital worklist with direct module action |
+| `/lab-inventory` | Hospital worklist with direct module action |
+| `/bed-board` | Combined ward/capacity records |
+| `/bed-management` | Combined ward/capacity records |
+| `/slot-admin` | Hospital worklist with direct module action |
+| `/reports` | Hospital worklist with direct module action |
+| `/discharge` | Hospital worklist with direct module action |
+| `/maternity` | Hospital worklist with direct module action |
+| `/nurse-station` | Hospital worklist with direct module action |
+| `/emar` | Hospital worklist with direct module action |
+| `/patient-tracker` | Hospital worklist with direct module action |
+| `/reception` | Hospital worklist with direct module action |
+| `/pharmacy/mtm` | Hospital worklist with direct module action |
+| `/registrations` | Hospital worklist with direct module action |
+| `/procedure-orders` | Hospital worklist with direct module action |
+| `/admin/order-sets` | Hospital worklist with direct module action |
+| `/admin/integrations/dhis2` | Hospital worklist with direct module action |
+
+This is the common interaction contract for further module redesigns: network overview first, row identity and explicit action targets, optional hospital filtering, and no fabricated module totals. Replacing each remaining directory with combined operational records requires a module-specific read API and validation of its totals, workflow and permissions.

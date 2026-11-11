@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  ElementRef,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -20,9 +27,10 @@ import {
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
-import { labelledRefusalReason } from '../shared/refusal-reason';
+import { labelledRefusalReason, refusedFieldReasons } from '../shared/refusal-reason';
 import { FieldLimit, firstOutOfRange, labelKeysOf, rangeMessage } from '../shared/field-limits';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
+import { bloodPressureReversed } from '../shared/vital-sign-limits';
 import { PartographChartComponent } from './partograph-chart.component';
 
 /**
@@ -31,7 +39,11 @@ import { PartographChartComponent } from './partograph-chart.component';
  */
 import { fromServerDateTime, localInputInstant, withServerDateTimes } from '../shared/date-utils';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { FieldRefusal, refuseFields } from '../shared/forms/invalid-fields';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 /**
  * QA D808: the bounds PartographEntryRequestDTO puts on each number. The
  * server refused a dilation of 15 with a bare "≤ 10"; the form now refuses it
@@ -44,9 +56,10 @@ export const PARTOGRAPH_LIMITS: readonly FieldLimit[] = [
   { field: 'contractionsPerTenMinutes', labelKey: 'LABOR.CONTRACTIONS_TEN', min: 0, max: 10 },
   { field: 'contractionDurationSeconds', labelKey: 'LABOR.CONTRACTION_SECONDS', min: 0, max: 600 },
   { field: 'oxytocinDropsPerMinute', labelKey: 'LABOR.OXYTOCIN_DROPS', min: 0, max: 120 },
-  { field: 'pulseBpm', labelKey: 'LABOR.PULSE', min: 0, max: 300 },
-  { field: 'systolicBpMmHg', labelKey: 'LABOR.SYSTOLIC', min: 0, max: 350 },
-  { field: 'diastolicBpMmHg', labelKey: 'LABOR.DIASTOLIC', min: 0, max: 250 },
+  // QA D1424: VitalSignLimits, as on every other vitals form.
+  { field: 'pulseBpm', labelKey: 'LABOR.PULSE', min: 20, max: 300 },
+  { field: 'systolicBpMmHg', labelKey: 'LABOR.SYSTOLIC', min: 40, max: 300 },
+  { field: 'diastolicBpMmHg', labelKey: 'LABOR.DIASTOLIC', min: 20, max: 200 },
   { field: 'temperatureCelsius', labelKey: 'LABOR.TEMPERATURE', min: 25, max: 44 },
   { field: 'urineOutputMl', labelKey: 'LABOR.URINE_ML', min: 0 },
 ];
@@ -76,16 +89,83 @@ const DELIVERY_LABELS: Record<string, string> = {
   ...labelKeysOf(DELIVERY_LIMITS),
   birthDateTime: 'LABOR.BIRTH_TIME',
   placentaDeliveredAt: 'LABOR.PLACENTA_TIME',
+  recentDeliveryOverrideReason: 'LABOR.RECENT_DELIVERY_OVERRIDE',
 };
 const EPISODE_LABELS: Record<string, string> = {
   ...labelKeysOf(EPISODE_LIMITS),
   laborOnsetAt: 'LABOR.ONSET_TIME',
+  recentDeliveryOverrideReason: 'LABOR.RECENT_DELIVERY_OVERRIDE',
 };
+
+/** QA D1306 (round 28): the template id of each field a form's check may refuse. */
+const EPISODE_FIELD_IDS: Readonly<Record<string, string>> = {
+  gestationalAgeWeeks: 'labor-ga',
+  gravida: 'labor-gravida',
+  para: 'labor-para',
+  laborOnsetAt: 'labor-onset',
+  recentDeliveryOverrideReason: 'labor-override',
+};
+const PARTOGRAPH_FIELD_IDS: Readonly<Record<string, string>> = {
+  fetalHeartRateBpm: 'pe-fhr',
+  cervicalDilationCm: 'pe-dilation',
+  descentFifths: 'pe-descent',
+  contractionsPerTenMinutes: 'pe-contractions',
+  contractionDurationSeconds: 'pe-duration',
+  oxytocinDropsPerMinute: 'pe-oxytocin',
+  pulseBpm: 'pe-pulse',
+  systolicBpMmHg: 'pe-sys',
+  diastolicBpMmHg: 'pe-dia',
+  temperatureCelsius: 'pe-temp',
+  urineOutputMl: 'pe-urine',
+};
+/** QA D1446: the template id of each field the server may name under a partograph refusal. */
+const PARTOGRAPH_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
+  ...PARTOGRAPH_FIELD_IDS,
+  observationTime: 'pe-time',
+};
+const DELIVERY_MODE_ID = 'dl-mode';
+const DELIVERY_BIRTH_TIME_ID = 'dl-time';
+const DELIVERY_PLACENTA_TIME_ID = 'dl-placenta-time';
+const DELIVERY_FIELD_IDS: Readonly<Record<string, string>> = {
+  numberOfInfants: 'dl-infants',
+  birthWeightGrams: 'dl-weight',
+  apgarOneMinute: 'dl-apgar1',
+  apgarFiveMinute: 'dl-apgar5',
+  estimatedBloodLossMl: 'dl-ebl',
+  recentDeliveryOverrideReason: 'dl-override',
+};
+
+/**
+ * QA D1339 (D1272 / D1256 class, round 29): the server refuses a labour, or a
+ * birth, within this many days of another recorded birth unless an override
+ * reason is given (`LaborServiceImpl.MIN_DAYS_BETWEEN_DELIVERIES`; the hint
+ * says "20 weeks"). The override field is then required, starred and marked.
+ */
+const RECENT_DELIVERY_DAYS = 140;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const EPISODE_IDS = Object.values(EPISODE_FIELD_IDS);
+/** The template id of each field the server may name under a delivery refusal's `fieldErrors`. */
+const DELIVERY_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
+  ...DELIVERY_FIELD_IDS,
+  deliveryMode: DELIVERY_MODE_ID,
+  birthDateTime: DELIVERY_BIRTH_TIME_ID,
+  placentaDeliveredAt: DELIVERY_PLACENTA_TIME_ID,
+};
+const PARTOGRAPH_IDS = Object.values(PARTOGRAPH_SERVER_FIELD_IDS);
+const DELIVERY_IDS = [
+  DELIVERY_BIRTH_TIME_ID,
+  DELIVERY_MODE_ID,
+  ...Object.values(DELIVERY_FIELD_IDS),
+  DELIVERY_PLACENTA_TIME_ID,
+];
 
 @Component({
   selector: 'app-labor-tab',
   standalone: true,
   imports: [
+    DateTimePipe,
+    SubmitGuardDirective,
+    ModalDialogDirective,
     ServerTimePipe,
     MeasurePipe,
     CommonModule,
@@ -99,6 +179,7 @@ const EPISODE_LABELS: Record<string, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LaborTabComponent {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly laborService = inject(LaborService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
@@ -220,7 +301,15 @@ export class LaborTabComponent {
     if (!patient || !this.startForm.laborOnsetAt) return;
     const outOfRange = firstOutOfRange(this.startForm, EPISODE_LIMITS);
     if (outOfRange) {
-      this.toast.error(rangeMessage(outOfRange, this.translate));
+      const message = rangeMessage(outOfRange, this.translate);
+      // QA D1306 (round 28): the field is marked, not only a toast.
+      refuseFields(
+        this.host.nativeElement,
+        [EPISODE_FIELD_IDS[outOfRange.field]],
+        EPISODE_IDS,
+        message,
+      );
+      this.toast.error(message);
       return;
     }
     // QA D809: G1 P3 was saved. P counts births, each of which ended a pregnancy counted in G.
@@ -232,9 +321,12 @@ export class LaborTabComponent {
       para !== null &&
       para > gravida
     ) {
-      this.toast.error(this.translate.instant('MATERNITY.PARA_ABOVE_GRAVIDA'));
+      const message = this.translate.instant('MATERNITY.PARA_ABOVE_GRAVIDA');
+      refuseFields(this.host.nativeElement, [EPISODE_FIELD_IDS['para']], EPISODE_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], EPISODE_IDS, '');
     this.saving.set(true);
     this.laborService
       .startEpisode(
@@ -249,6 +341,8 @@ export class LaborTabComponent {
           this.loadEpisodes(patient.id);
         },
         error: (err: unknown) => {
+          // QA D1339: the fields the refusal names are marked, each with its reason.
+          this.markServerRefusals(err, EPISODE_FIELD_IDS, EPISODE_IDS);
           // QA D214: the server's reason (e.g. a recent delivery needs an
           // override) is shown, not hidden behind a generic failure; QA D746:
           // a field reason (an admission in the future) included.
@@ -283,14 +377,43 @@ export class LaborTabComponent {
       form.notes,
     ].some((value) => value !== undefined && value !== null && value !== ('' as unknown));
     if (!hasObservation) {
-      this.toast.error(this.translate.instant('LABOR.ENTRY_REQUIRED'));
+      const message = this.translate.instant('LABOR.ENTRY_REQUIRED');
+      // At least one observation: the first one (the fetal heart rate) is marked.
+      refuseFields(
+        this.host.nativeElement,
+        [PARTOGRAPH_FIELD_IDS['fetalHeartRateBpm']],
+        PARTOGRAPH_IDS,
+        message,
+      );
+      this.toast.error(message);
       return;
     }
     const outOfRange = firstOutOfRange(form, PARTOGRAPH_LIMITS);
     if (outOfRange) {
-      this.toast.error(rangeMessage(outOfRange, this.translate));
+      const message = rangeMessage(outOfRange, this.translate);
+      // QA D1306 (round 28): the field is marked, not only a toast.
+      refuseFields(
+        this.host.nativeElement,
+        [PARTOGRAPH_FIELD_IDS[outOfRange.field]],
+        PARTOGRAPH_IDS,
+        message,
+      );
+      this.toast.error(message);
       return;
     }
+    if (bloodPressureReversed(form.systolicBpMmHg, form.diastolicBpMmHg)) {
+      // QA D1424: 70/120 is a swapped entry; it never reaches the hypertension alert.
+      const message = this.translate.instant('VITAL_LIMITS.BP_ORDER');
+      refuseFields(
+        this.host.nativeElement,
+        [PARTOGRAPH_FIELD_IDS['diastolicBpMmHg']],
+        PARTOGRAPH_IDS,
+        message,
+      );
+      this.toast.error(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], PARTOGRAPH_IDS, '');
     this.saving.set(true);
     this.laborService
       .addEntry(patient.id, episode.id, withServerDateTimes(form, ['observationTime']))
@@ -310,6 +433,8 @@ export class LaborTabComponent {
           this.loadEpisodes(patient.id);
         },
         error: (err: unknown) => {
+          // QA D1446: the fields the refusal names are marked, as on the delivery form.
+          this.markServerRefusals(err, PARTOGRAPH_SERVER_FIELD_IDS, PARTOGRAPH_IDS);
           this.toast.error(
             labelledRefusalReason(err, this.translate, PARTOGRAPH_LABELS) ??
               this.translate.instant('LABOR.ENTRY_SAVE_ERROR'),
@@ -317,6 +442,51 @@ export class LaborTabComponent {
           this.saving.set(false);
         },
       });
+  }
+
+  /* ── Recent-delivery override (QA D1339) ─────────────────── */
+
+  /**
+   * Whether another of this patient's labours ended in a birth within
+   * {@link RECENT_DELIVERY_DAYS} days before `at`. Read from the labour's
+   * admission, which precedes its birth: an admission inside the window puts
+   * the birth inside it too, so the field is never required when the server
+   * would not ask for it (a birth just inside the window after an admission
+   * just outside it is refused by the server and marked from its fieldErrors).
+   */
+  private recentDeliveryBefore(at: Date, excludeEpisodeId: string | null): boolean {
+    const from = at.getTime() - RECENT_DELIVERY_DAYS * DAY_MS;
+    return this.episodes().some((episode) => {
+      if (!episode.deliveryRecorded || episode.id === excludeEpisodeId) return false;
+      const admitted = fromServerDateTime(episode.admittedAt)?.getTime();
+      return admitted !== undefined && admitted >= from && admitted <= at.getTime();
+    });
+  }
+
+  /** The start form's override reason is required: a birth was recorded recently. */
+  startOverrideRequired(): boolean {
+    return this.recentDeliveryBefore(new Date(), null);
+  }
+
+  /** The delivery form's override reason is required: another birth is recent. */
+  deliveryOverrideRequired(): boolean {
+    const at = localInputInstant(this.deliveryForm.birthDateTime) ?? new Date();
+    return this.recentDeliveryBefore(at, this.activeEpisode()?.id ?? null);
+  }
+
+  /** Marks each field a refusal names under `fieldErrors` with the server's reason. */
+  private markServerRefusals(
+    err: unknown,
+    idByField: Readonly<Record<string, string>>,
+    all: readonly string[],
+  ): void {
+    const refused = refusedFieldReasons(err, idByField);
+    if (refused.length === 0) return;
+    refuseFields(
+      this.host.nativeElement,
+      refused.map(([id, message]) => ({ id, message })),
+      all,
+    );
   }
 
   /* ── Delivery ──────────────────────────────────────────── */
@@ -335,14 +505,19 @@ export class LaborTabComponent {
     const episode = this.activeEpisode();
     if (!patient || !episode) return;
     if (!this.deliveryForm.deliveryMode) {
-      this.toast.error(this.translate.instant('LABOR.DELIVERY_MODE_REQUIRED'));
+      const message = this.translate.instant('LABOR.DELIVERY_MODE_REQUIRED');
+      refuseFields(this.host.nativeElement, [DELIVERY_MODE_ID], DELIVERY_IDS, message);
+      this.toast.error(message);
       return;
     }
     const problem = this.deliveryProblem();
     if (problem) {
-      this.toast.error(problem);
+      // QA D1306 (round 28): the field is marked, not only a toast.
+      refuseFields(this.host.nativeElement, [problem], DELIVERY_IDS);
+      this.toast.error(problem.message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], DELIVERY_IDS, '');
     this.saving.set(true);
     this.laborService
       .recordDelivery(
@@ -366,6 +541,8 @@ export class LaborTabComponent {
           this.loadEpisodes(patient.id);
         },
         error: (err: unknown) => {
+          // QA D1339: the fields the refusal names are marked, each with its reason.
+          this.markServerRefusals(err, DELIVERY_SERVER_FIELD_IDS, DELIVERY_IDS);
           this.toast.error(
             labelledRefusalReason(err, this.translate, DELIVERY_LABELS) ??
               this.translate.instant('LABOR.DELIVERY_SAVE_ERROR'),
@@ -380,11 +557,16 @@ export class LaborTabComponent {
    * null. A number outside the server's bounds; a birth earlier than an
    * observation already charted on the partograph; a placenta delivered
    * before the birth (no birth time typed means the birth is recorded now).
-   * The server refuses the same, on the same fields.
+   * The server refuses the same, on the same fields. Returns the field to mark with its reason.
    */
-  private deliveryProblem(): string | null {
+  private deliveryProblem(): FieldRefusal | null {
     const outOfRange = firstOutOfRange(this.deliveryForm, DELIVERY_LIMITS);
-    if (outOfRange) return rangeMessage(outOfRange, this.translate);
+    if (outOfRange) {
+      return {
+        id: DELIVERY_FIELD_IDS[outOfRange.field],
+        message: rangeMessage(outOfRange, this.translate),
+      };
+    }
     const typedBirth = localInputInstant(this.deliveryForm.birthDateTime);
     const birth = typedBirth ?? new Date();
     const lastObservation = this.entries()
@@ -392,11 +574,17 @@ export class LaborTabComponent {
       .filter((when): when is Date => when !== null)
       .reduce<Date | null>((latest, when) => (!latest || when > latest ? when : latest), null);
     if (typedBirth && lastObservation && typedBirth < lastObservation) {
-      return this.translate.instant('LABOR.BIRTH_BEFORE_LAST_ENTRY');
+      return {
+        id: DELIVERY_BIRTH_TIME_ID,
+        message: this.translate.instant('LABOR.BIRTH_BEFORE_LAST_ENTRY'),
+      };
     }
     const placenta = localInputInstant(this.deliveryForm.placentaDeliveredAt);
     if (placenta && placenta < birth) {
-      return this.translate.instant('LABOR.PLACENTA_BEFORE_BIRTH');
+      return {
+        id: DELIVERY_PLACENTA_TIME_ID,
+        message: this.translate.instant('LABOR.PLACENTA_BEFORE_BIRTH'),
+      };
     }
     return null;
   }

@@ -1,17 +1,21 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches, rankPeopleByName } from '../shared/person-search';
 import {
   Component,
   computed,
   DestroyRef,
+  ElementRef,
   inject,
   OnInit,
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { HttpErrorResponse } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { forkJoin, of, Subject } from 'rxjs';
+import { forkJoin, of, Subject, Subscription } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 import {
   PrescriptionService,
@@ -19,9 +23,11 @@ import {
   PrescriptionRequest,
   CommunityPharmacyService,
   CommunityPharmacyOption,
+  SignPrescriptionBody,
 } from '../services/prescription.service';
 import {
   DispenseResponse,
+  MedicationCatalogItemResponse,
   PharmacyService,
   RoutingDecisionResponse,
 } from '../services/pharmacy.service';
@@ -32,7 +38,11 @@ import {
   EncounterResponse,
   isClosedEncounterStatus,
 } from '../services/encounter.service';
-import { currentLocale } from '../shared/i18n/app-locale';
+import { encounterOptionLabel } from '../shared/encounter-option-label';
+import { allPages, allRows } from '../shared/all-pages';
+import { RangePagerComponent } from '../shared/range-pager/range-pager.component';
+import { frequencyWritten, unTickedFrequencyVerdict } from '../shared/as-needed-frequency';
+import { serverFieldErrors } from '../shared/forms/server-field-errors';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents, roleSatisfies } from '../core/role-equivalence';
@@ -47,7 +57,24 @@ import { AuthService } from '../auth/auth.service';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverInstant } from '../shared/date-utils';
+import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { canonicalRoute } from '../shared/pipes/medication-route.pipe';
+import { PRN_MAX_INTERVAL_HOURS } from '../shared/as-needed-frequency';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { isStepUpRefusal } from '../services/step-up';
+import { MfaService } from '../auth/mfa.service';
+import { refuseFields } from '../shared/forms/invalid-fields';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
+import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import {
+  AllergyHold,
+  allergyHoldRefusal,
+} from '../shared/allergy-acknowledgement/allergy-acknowledgement';
+import { AllergyHoldDialogComponent } from '../shared/allergy-acknowledgement/allergy-hold-dialog.component';
+import { AllergyReviewDialogComponent } from '../shared/allergy-acknowledgement/allergy-review-dialog.component';
 /**
  * The prescriber's list tabs (gap G10).
  *
@@ -76,9 +103,32 @@ export type PrescriptionStatusTab = Exclude<PrescriptionTab, 'all'>;
  * `labelKey` is the field name on purpose — check-i18n-referenced-keys.mjs
  * reads it, so a typo fails the gate instead of rendering the raw key.
  */
+/** QA D1096: the dose review dialog's reason field. */
+const DOSE_REVIEW_REASON_ID = 'rx-dose-review-reason';
+
 /** CANCELLED and DISCONTINUED: the prescriber withdrew the order, which the server treats as final. */
 export function isWithdrawnStatus(status: string | null | undefined): boolean {
   return status === 'CANCELLED' || status === 'DISCONTINUED';
+}
+
+/**
+ * Policy 3 (2026-11-09, provisional): the allergy card a refused signature answers with carries
+ * the signature's token behind this prefix (PrescriptionServiceImpl.ALLERGY_KEY_PREFIX). It is sent
+ * back with the reason, and it is not a dose exception: the dialog must not call it one.
+ */
+export function isAllergyAcknowledgementKey(key: string | null | undefined): boolean {
+  return !!key && key.startsWith('allergy:');
+}
+
+/**
+ * QA D1537 review (round 40): a status a signature led to: not a proposal (DRAFT,
+ * PENDING_SIGNATURE) and not withdrawn. The server's rule for refusing a return to a proposal
+ * (PrescriptionServiceImpl.rejectStatusChangeOnUpdate).
+ */
+export function isIssuedStatus(status: string | null | undefined): boolean {
+  return (
+    !!status && status !== 'DRAFT' && status !== 'PENDING_SIGNATURE' && !isWithdrawnStatus(status)
+  );
 }
 
 export const ATTENTION_REASONS: readonly { status: string; labelKey: string }[] = [
@@ -138,10 +188,52 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
   { id: 'closed', labelKey: 'PRESCRIPTIONS.TAB.CLOSED' },
 ];
 
+/** The prescribed quantity, refused when blank or not positive (QA D1306). */
+const RX_QUANTITY_IDS = ['rx-quantity'];
+/** QA round 30: the as-needed order's minimum interval (server key prnMinIntervalHours). */
+/** QA D1472: `PRESCRIPTIONS.FREQUENCY_CHOICES`; FrequencyWordingTest reads each in EN, FR and ES. */
+const FREQUENCY_CHOICES = [
+  'ONCE_DAILY',
+  'TWICE_DAILY',
+  'THREE_DAILY',
+  'FOUR_DAILY',
+  'Q4H',
+  'Q6H',
+  'Q8H',
+  'Q12H',
+  'MORNING',
+  'EVENING',
+  'MORNING_EVENING',
+  'MORNING_NOON_EVENING',
+  'BEDTIME',
+  'ALTERNATE_DAYS',
+  'WEEKLY',
+  'SINGLE_DOSE',
+  'CONTINUOUS',
+] as const;
+
+/** QA D1440: the server keys of the wording and as-needed refusals, each marked at its own field. */
+const RX_WORDING_FIELDS: ReadonlySet<string> = new Set([
+  'asNeeded',
+  'frequency',
+  'frequencyConfirmed',
+  'prnMinIntervalHours',
+]);
+const RX_PRN_INTERVAL_IDS = ['rx-prnMinIntervalHours'];
+const RX_FREQUENCY_IDS = ['rx-frequency'];
+
 @Component({
   selector: 'app-prescriptions',
   standalone: true,
   imports: [
+    AllergyHoldDialogComponent,
+    AllergyReviewDialogComponent,
+    DateTimePipe,
+    ListEscapeDirective,
+    SubmitGuardDirective,
+    PersonNamePipe,
+    ModalDialogDirective,
+    PatientSublinePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -150,6 +242,7 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
     HospitalScopeChipComponent,
     EnumLabelPipe,
     PrescriptionClarificationComponent,
+    RangePagerComponent,
   ],
   templateUrl: './prescriptions.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -171,6 +264,7 @@ export class PrescriptionsComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
+  private readonly mfa = inject(MfaService);
 
   /**
    * QA D427: the actions the API admits for this caller, so nobody is offered
@@ -291,6 +385,16 @@ export class PrescriptionsComponent implements OnInit {
   saving = signal(false);
   editingId = signal<string | null>(null);
   form: PrescriptionRequest = this.emptyForm();
+  /**
+   * QA D1345 (round 30): a create that the server accepted with advisories
+   * ("Doublon possible") keeps the dialog open so the cards can be read, but
+   * the dialog is no longer a create form: its fields are locked, the Create
+   * button is gone and a second press can never post the same order again.
+   * Only Close remains (focused). Reset when a form is opened or closed.
+   */
+  readonly createdWithAdvisories = signal(false);
+  /** QA round 30: the longest minimum interval the form accepts, in hours. */
+  protected readonly prnMaxIntervalHours = PRN_MAX_INTERVAL_HOURS;
 
   showDeleteConfirm = signal(false);
   deletingRx = signal<PrescriptionResponse | null>(null);
@@ -300,6 +404,12 @@ export class PrescriptionsComponent implements OnInit {
 
   /* ── Pharmacist verification (Tier 2 item 33) ── */
   showVerifyModal = signal(false);
+  /** QA D1096: the paediatric dose review dialog. */
+  readonly doseReviewTarget = signal<PrescriptionResponse | null>(null);
+  readonly doseReviewError = signal('');
+  readonly doseReviewSaving = signal(false);
+  doseReviewReason = '';
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   verifyTarget = signal<PrescriptionResponse | null>(null);
   verifyNote = '';
   verifying = signal(false);
@@ -311,26 +421,51 @@ export class PrescriptionsComponent implements OnInit {
    * advisory. Surfaces the override checkbox in the form.
    */
   cdsCriticalBlocked = signal(false);
+  /** Round 18 (QA D935): a hard stop among the cards: no override is offered, the dose must change. */
+  readonly cdsHardStop = computed(() => this.cdsAdvisories().some((c) => !!c.hardStop));
 
   ngOnInit(): void {
+    this.destroyRef.onDestroy(() => clearTimeout(this.searchDelay));
     // Cross-tenant: hydrate URL scope before the first list fetch so
     // the auth interceptor sends the right X-Hospital-Id (or omits it
     // for global view). See docs/super-admin-cross-tenant-design.md.
     this.scopeUrl.applyUrlScopeSync(this.route);
 
+    const params = this.route.snapshot.queryParamMap;
+    // D1573: ?patientId= without ?new=1 opens the list on that patient's orders.
+    if (params.get('new') !== '1') this.contextPatientId = params.get('patientId');
     this.load();
+    // Angular reuses this component when navigation only changes query parameters.
+    // Leaving a patient URL must restore the hospital worklist too.
+    this.route.queryParamMap
+      .pipe(
+        map((next) => (next.get('new') === '1' ? null : next.get('patientId'))),
+        distinctUntilChanged(),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((patientId) => {
+        if (patientId === this.contextPatientId) return;
+        this.contextPatientId = patientId;
+        this.searchPatient = null;
+        this.searchTerm = '';
+        this.listPage.set(0);
+        clearTimeout(this.searchDelay);
+        this.rowsBeforeSearch = null;
+        this.prescriptions.set([]);
+        this.filtered.set([]);
+        this.load();
+      });
     this.loadPrescribers();
     this.initPatientSearch();
+    this.initCatalogSearch();
     this.initPharmacyHistory();
 
-    const params = this.route.snapshot.queryParamMap;
     if (params.get('new') === '1') {
       const patientId = params.get('patientId');
       this.openCreate();
       if (patientId) {
         this.form.patientId = patientId;
-        const hid = this.roleContext.activeHospitalId ?? undefined;
-        this.patientService.list(hid, '').subscribe((list) => {
+        this.patientService.list(this.patientSearchHospitalId(), '').subscribe((list) => {
           const match = list.find((p) => p.id === patientId);
           if (match) this.selectPatient(match);
         });
@@ -370,6 +505,15 @@ export class PrescriptionsComponent implements OnInit {
    * with a reason. Every other field is read-only; the server refuses them.
    */
   editingSigned = signal(false);
+  /** QA D1098 class: an order awaiting the pharmacist's clarification was signed. */
+  editingClarification = signal(false);
+  /**
+   * QA D1537 review (round 40): the order being edited was signed, whatever status the pharmacy
+   * moved it to (sent, part-filled, at a partner, awaiting stock or a clarification...). The server
+   * never puts a signed order back to a draft or to awaiting signature, so the form offers it only
+   * the withdrawal statuses, as for SIGNED itself.
+   */
+  editingIssued = signal(false);
 
   /** QA D670: the prescriber of record shown on a signed order's withdrawal form. */
   editingPrescriberName = signal('');
@@ -396,6 +540,19 @@ export class PrescriptionsComponent implements OnInit {
   private isOtherPrescriber(p: PrescriptionResponse): boolean {
     const own = this.ownPrescriberStaffId();
     return !!own && !!p.staffId && p.staffId !== own;
+  }
+
+  /**
+   * Policy 2026-11-09: a prescription another hospital wrote is read-only here.
+   * The server refuses every write on it (404); the row offers no write action.
+   * Judged against the hospital the requests are pinned to (RoleContextService.effectiveHospitalIdForRequest),
+   * not the home hospital: a scoped super-admin's selected hospital's own rows are not foreign.
+   */
+  isForeign(p: PrescriptionResponse): boolean {
+    // The hospital the requests are pinned to: a scoped super-admin's selected hospital, a
+    // staff member's own; null in global view, where no row is "elsewhere".
+    const scope = this.roleContext.effectiveHospitalIdForRequest();
+    return !!p.hospitalId && !!scope && p.hospitalId !== scope;
   }
 
   /**
@@ -428,7 +585,7 @@ export class PrescriptionsComponent implements OnInit {
       // Discontinued at creation recorded an order nobody ever placed (D129).
       return this.prescriptionStatuses.filter((s) => !isWithdrawnStatus(s.value));
     }
-    if (!this.editingWithdrawn() && !this.editingSigned()) {
+    if (!this.editingWithdrawn() && !this.editingSigned() && !this.editingIssued()) {
       return this.prescriptionStatuses;
     }
     return this.prescriptionStatuses.filter((s) => isWithdrawnStatus(s.value));
@@ -443,6 +600,8 @@ export class PrescriptionsComponent implements OnInit {
       medicationName: '',
       dosage: '',
       frequency: '',
+      asNeeded: false,
+      prnMinIntervalHours: null,
       route: 'PO',
       duration: '',
       quantity: null,
@@ -452,21 +611,70 @@ export class PrescriptionsComponent implements OnInit {
     };
   }
 
+  /**
+   * QA D922/D935: the hospital's catalogue items matching the typed name. A
+   * pick sends its id, so the catalogue's controlled flag and paediatric
+   * ceiling apply to the order (the server resolves a typed name too).
+   */
+  readonly catalogOptions = signal<MedicationCatalogItemResponse[]>([]);
+  private readonly catalogSearch$ = new Subject<string>();
+
+  initCatalogSearch(): void {
+    this.catalogSearch$
+      .pipe(
+        debounceTime(250),
+        switchMap((q) =>
+          q.length < 2
+            ? of([] as MedicationCatalogItemResponse[])
+            : this.pharmacyService.searchMedications(q, 0, 15).pipe(
+                map((page) => page.content ?? []),
+                catchError(() => of([] as MedicationCatalogItemResponse[])),
+              ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((items) => this.catalogOptions.set(items));
+  }
+
+  /**
+   * The text a catalogue option puts in the medication field: name, strength
+   * and form, so a tablet and a syrup of the same name and strength (one of
+   * them perhaps controlled) read apart in the list.
+   */
+  catalogLabel(item: MedicationCatalogItemResponse): string {
+    const strength = [item.strength, item.strengthUnit].filter((v) => !!v).join(' ');
+    const form = item.form ? this.translate.instant(`PHARMACY.FORM_OPTION.${item.form}`) : '';
+    return [item.nameFr, strength, form].filter((v) => !!v).join(' ');
+  }
+
+  /** The picked catalogue item, when the field holds one option's text exactly. */
+  readonly pickedCatalogItem = signal<MedicationCatalogItemResponse | null>(null);
+
+  onMedicationNameChange(value: string): void {
+    this.form.medicationName = value;
+    // Review of #975: two options reading the same must not resolve to the
+    // first one's id; the server then resolves (or refuses) the typed name.
+    const matches = this.catalogOptions().filter((o) => this.catalogLabel(o) === value);
+    const picked = matches.length === 1 ? matches[0] : null;
+    this.pickedCatalogItem.set(picked);
+    this.form.medicationCatalogItemId = picked ? picked.id : null;
+    if (!picked) this.catalogSearch$.next((value ?? '').trim());
+  }
+
   initPatientSearch(): void {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          // ── TENANT ISOLATION: scope patient search to active hospital ──
-          const hid = this.roleContext.activeHospitalId ?? undefined;
-          return this.patientService.list(hid, q);
+          // ── TENANT ISOLATION: scope patient search to the request's hospital ──
+          return this.patientService.list(this.patientSearchHospitalId(), q);
         }),
       )
       .subscribe({
         next: (list) => {
-          this.patientSuggestions.set(list.slice(0, 8));
+          // QA D1239: ranked by how the name answers the query, then cut.
+          this.patientSuggestions.set(rankPeopleByName(list, this.patientQuery()).slice(0, 8));
           this.patientDropdownOpen.set(list.length > 0);
           this.patientSearchLoading.set(false);
         },
@@ -523,12 +731,21 @@ export class PrescriptionsComponent implements OnInit {
     return this.patientEncounters().some((e) => e.id === id);
   }
 
-  /** QA D177: the date and department of an encounter, for the picker (the type is a pipe). */
+  /**
+   * QA D177: the date and department of an encounter, for the picker (the
+   * type is a pipe). QA D1309: and its time, so same-day visits differ.
+   */
   encounterLabel(e: EncounterResponse): string {
-    const date = e.encounterDate
-      ? serverInstant(e.encounterDate).toLocaleDateString(currentLocale())
-      : '';
-    return [date, e.departmentName].filter((part) => !!part).join(' · ');
+    return encounterOptionLabel(e);
+  }
+
+  /**
+   * QA D912 (#967 review): the hospital whose patients, and whose MRN, the
+   * typeahead offers: the request scope, which for a super-admin is the
+   * hospital the scope chip picked, not their home hospital.
+   */
+  private patientSearchHospitalId(): string | undefined {
+    return this.roleContext.effectiveHospitalIdForRequest() ?? undefined;
   }
 
   patientInitials(p: PatientResponse): string {
@@ -543,7 +760,12 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   openCreate(): void {
+    this.resetWordingAnswer();
+    this.frequencyBeforeEdit = undefined;
+    this.frequencyStored = '';
     this.form = this.emptyForm();
+    this.createdWithAdvisories.set(false);
+    this.resetCatalogPick();
     // QA D123: a clinician prescribing opens the form with THEMSELVES as the
     // prescriber, instead of an empty choice in a list of colleagues.
     this.form.staffId = this.ownPrescriberStaffId();
@@ -551,6 +773,8 @@ export class PrescriptionsComponent implements OnInit {
     this.editingId.set(null);
     this.editingWithdrawn.set(false);
     this.editingSigned.set(false);
+    this.editingClarification.set(false);
+    this.editingIssued.set(false);
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.formError.set('');
@@ -558,9 +782,15 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   openEdit(p: PrescriptionResponse): void {
+    this.resetWordingAnswer();
     // QA D660: a withdrawn order is read-only, every field; the server
     // refuses any edit of it, so no form is opened on one.
     if (isWithdrawnStatus(p.status)) return;
+    this.resetCatalogPick();
+    this.createdWithAdvisories.set(false);
+    // A ticked order: unticking it writes its frequency as a fixed schedule, so the hint speaks.
+    this.frequencyBeforeEdit = p.asNeeded ? undefined : (p.frequency ?? '');
+    this.frequencyStored = p.frequency ?? '';
     this.form = {
       patientId: p.patientId ?? '',
       staffId: p.staffId ?? '',
@@ -568,19 +798,26 @@ export class PrescriptionsComponent implements OnInit {
       medicationName: p.medicationName ?? '',
       dosage: p.dosage ?? '',
       frequency: p.frequency ?? '',
-      route: p.route ?? '',
+      // QA D1378: the prescriber's explicit "as needed" tick, and its minimum interval.
+      asNeeded: !!p.asNeeded,
+      prnMinIntervalHours: p.prnMinIntervalHours ?? null,
+      // QA D950: a stored "ORAL" opens on the form's own PO option.
+      route: canonicalRoute(p.route) ?? p.route ?? '',
       duration: p.duration ?? '',
       quantity: p.quantity ?? null,
       quantityUnit: p.quantityUnit ?? '',
       notes: p.notes ?? '',
       status: (p.status as PrescriptionRequest['status']) ?? 'DRAFT',
       takeHome: !!p.takeHome,
+      medicationCatalogItemId: p.medicationCatalogItemId ?? null,
     };
     this.selectedPatient.set({
       id: p.patientId ?? '',
       firstName: p.patientFullName?.split(' ')[0] ?? '',
       lastName: p.patientFullName?.split(' ').slice(1).join(' ') ?? '',
-      email: '',
+      // QA D912: the row has no MRN; its contact details keep the chip's fallback.
+      email: p.patientEmail,
+      phoneNumberPrimary: p.patientPhone,
     } as PatientResponse);
     this.patientEncounters.set([]);
     if (p.patientId) this.loadPatientEncounters(p.patientId);
@@ -589,6 +826,8 @@ export class PrescriptionsComponent implements OnInit {
     this.editingWithdrawn.set(isWithdrawnStatus(p.status));
     const signed = p.status === 'SIGNED';
     this.editingSigned.set(signed);
+    this.editingClarification.set(p.status === 'PENDING_CLARIFICATION');
+    this.editingIssued.set(isIssuedStatus(p.status));
     this.editingPrescriberName.set(p.staffFullName ?? '');
     if (signed) {
       // No withdrawal is pre-selected: the prescriber chooses one, deliberately.
@@ -599,8 +838,23 @@ export class PrescriptionsComponent implements OnInit {
     this.showModal.set(true);
   }
 
+  /**
+   * QA D660 / D1098 class: the withdrawal reason is asked of a signed order,
+   * and of an order awaiting clarification (signed before the pharmacist's
+   * question) once Cancelled or Discontinued is chosen; the server refuses
+   * either withdrawal without it.
+   */
+  withdrawalReasonShown(): boolean {
+    return (
+      this.editingSigned() || (this.editingClarification() && isWithdrawnStatus(this.form.status))
+    );
+  }
+
   /** QA D660: what the Save button waits for on a signed prescription. */
   signedWithdrawalIncomplete(): boolean {
+    if (this.editingClarification()) {
+      return isWithdrawnStatus(this.form.status) && !this.form.withdrawalReason?.trim();
+    }
     return (
       this.editingSigned() &&
       (!isWithdrawnStatus(this.form.status) || !this.form.withdrawalReason?.trim())
@@ -608,9 +862,22 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   closeModal(): void {
+    this.resetWordingAnswer();
     this.showModal.set(false);
+    this.createdWithAdvisories.set(false);
     this.formError.set('');
     this.resetCdsState();
+    this.resetCatalogPick();
+  }
+
+  /**
+   * Review of #975: the previous form's catalogue pick (and its "controlled"
+   * hint) is not carried into the next order opened. The options stay: the
+   * search skips a repeated query, so clearing them would leave a re-typed
+   * name with nothing to pick.
+   */
+  private resetCatalogPick(): void {
+    this.pickedCatalogItem.set(null);
   }
 
   /**
@@ -620,19 +887,147 @@ export class PrescriptionsComponent implements OnInit {
    */
   protected readonly formError = signal('');
 
-  submitForm(): void {
+  /**
+   * QA round 30 / QA D1378 (round 32): the minimum interval is asked of an
+   * order the prescriber TICKS as needed, never guessed from the frequency
+   * text (round 32 found ~45 wordings a word list missed). A conditional
+   * frequency written without the tick is refused by the server on
+   * `asNeeded` (its safety net), and the shared interceptor marks the box.
+   */
+  prnIntervalShown(): boolean {
+    return !!this.form.asNeeded;
+  }
+
+  /** QA D1378: unticking "as needed" drops the interval (the server refuses one on an order not ticked). */
+  onAsNeededChange(checked: boolean): void {
+    this.form.asNeeded = checked;
+    if (!checked) {
+      this.form.prnMinIntervalHours = null;
+    }
+    // QA D1419: the tick answers the question too.
+    this.form.frequencyConfirmed = false;
+    this.resetWordingAnswer();
+    // QA D1406: the tick answers the refusal; its banner does not outlive the answer.
     this.formError.set('');
+  }
+
+  /** QA D1406: so does a new frequency. */
+  onFrequencyChange(value: string): void {
+    this.form.frequency = value;
+    this.formError.set('');
+    // QA D1419: a new wording is a new question; the old answer does not carry over.
+    this.form.frequencyConfirmed = false;
+    this.frequencyConfirmAsked.set(false);
+    this.wordingRefused.set(false);
+  }
+
+  /** QA D1472: the schedules the form offers: each reads as a schedule in every language, and never asks. */
+  protected readonly frequencyChoices = FREQUENCY_CHOICES;
+
+  /** QA D1419: the server asked about this wording: the prescriber may confirm it, here. */
+  readonly frequencyConfirmAsked = signal(false);
+
+  /** QA D1440: the server's own sentence stands at the marked field, so the hint gives way to it. */
+  private readonly wordingRefused = signal(false);
+
+  private resetWordingAnswer(): void {
+    this.frequencyConfirmAsked.set(false);
+    this.wordingRefused.set(false);
+  }
+
+  /**
+   * QA D1419 / D1440: a refusal of the wording or of the as-needed part. The
+   * shared interceptor marks its field with the server's sentence (the checkbox
+   * appears first, this tick); a banner, a toast and the hint would only say the
+   * same sentence three more times, the toast over the Create button.
+   *
+   * @return whether the field says it all
+   */
+  private answerWordingRefusal(err: unknown): boolean {
+    const fields = [...serverFieldErrors(err).keys()];
+    // Asked whatever else the refusal names: the box must be there for the interceptor to mark.
+    this.frequencyConfirmAsked.set(fields.includes('frequencyConfirmed'));
+    if (fields.length === 0 || !fields.every((f) => RX_WORDING_FIELDS.has(f))) return false;
+    this.wordingRefused.set(true);
+    return true;
+  }
+
+  /**
+   * QA D1391 / D1395: what the server will answer about this wording, under the
+   * field, before the round trip (the mirror of its one rule). A hint: the
+   * server decides. Not for a ticked order, and not for a frequency an edit
+   * leaves as it was.
+   */
+  frequencyHintKey(): string | null {
+    if (this.form.asNeeded || this.frequencyBeforeEdit === this.form.frequency) return null;
+    if (this.wordingRefused()) return null;
+    const verdict = unTickedFrequencyVerdict(this.form.frequency);
+    if (verdict === 'FIXED') return null;
+    return verdict === 'CONDITIONAL'
+      ? 'PRESCRIPTIONS.FREQUENCY_READS_AS_NEEDED'
+      : 'PRESCRIPTIONS.FREQUENCY_UNREADABLE';
+  }
+
+  /** The frequency the order being edited already carries (no hint about it). */
+  private frequencyBeforeEdit: string | null | undefined = undefined;
+
+  /** QA D1491: what the order carries; an older order written with none stays editable as it is. */
+  private frequencyStored = '';
+
+  /** QA D1491: a new order states its frequency, and an edit does not empty one (the server refuses both). */
+  private frequencyMissing(): boolean {
+    if (this.editingSigned() || frequencyWritten(this.form.frequency)) return false;
+    return !this.editing() || frequencyWritten(this.frequencyStored);
+  }
+
+  /** QA round 30: a whole number of hours from 1 to the maximum. */
+  private prnIntervalValid(): boolean {
+    const hours = Number(this.form.prnMinIntervalHours);
+    return Number.isInteger(hours) && hours >= 1 && hours <= PRN_MAX_INTERVAL_HOURS;
+  }
+
+  submitForm(): void {
+    // QA D1345: a created order is never posted again from the same dialog.
+    if (this.createdWithAdvisories()) return;
+    this.formError.set('');
+    if (this.frequencyMissing()) {
+      const message = this.translate.instant('PRESCRIPTIONS.FREQUENCY_REQUIRED');
+      refuseFields(this.host.nativeElement, RX_FREQUENCY_IDS, RX_FREQUENCY_IDS, message);
+      this.formError.set(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], RX_FREQUENCY_IDS, '');
     // QA D706: a new prescription states the quantity to hand over; the
     // pharmacy caps the dispense at it (the server refuses it too).
     const qty = this.form.quantity;
     if (!this.editing() && (qty == null || !(Number(qty) > 0))) {
-      this.formError.set(this.translate.instant('PRESCRIPTIONS.PRESCRIBED_QUANTITY_REQUIRED'));
+      // QA D1306 (round 28): the quantity is marked, not only the banner.
+      const message = this.translate.instant('PRESCRIPTIONS.PRESCRIBED_QUANTITY_REQUIRED');
+      refuseFields(this.host.nativeElement, RX_QUANTITY_IDS, RX_QUANTITY_IDS, message);
+      this.formError.set(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], RX_QUANTITY_IDS, '');
+    // QA round 30: an as-needed order states its minimum interval (a signed
+    // order only accepts its withdrawal, so it is not asked there).
+    if (!this.editingSigned() && this.prnIntervalShown() && !this.prnIntervalValid()) {
+      const message = this.translate.instant('PRESCRIPTIONS.PRN_MIN_INTERVAL_REQUIRED');
+      refuseFields(this.host.nativeElement, RX_PRN_INTERVAL_IDS, RX_PRN_INTERVAL_IDS, message);
+      this.formError.set(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], RX_PRN_INTERVAL_IDS, '');
     this.saving.set(true);
+    const body: PrescriptionRequest = {
+      ...this.form,
+      asNeeded: !!this.form.asNeeded,
+      prnMinIntervalHours: this.prnIntervalShown() ? this.form.prnMinIntervalHours : null,
+      frequencyConfirmed:
+        !this.form.asNeeded && this.frequencyConfirmAsked() && !!this.form.frequencyConfirmed,
+    };
     const op = this.editing()
-      ? this.prescriptionService.update(this.editingId()!, this.form)
-      : this.prescriptionService.create(this.form);
+      ? this.prescriptionService.update(this.editingId()!, body)
+      : this.prescriptionService.create(body);
     op.subscribe({
       next: (saved) => {
         const advisories = saved?.cdsAdvisories ?? [];
@@ -650,10 +1045,20 @@ export class PrescriptionsComponent implements OnInit {
         // warning/info cards we just attached.
         if (advisories.length === 0) {
           this.closeModal();
+        } else if (!this.editing()) {
+          // QA D1345: the order exists now. The dialog stays to show the
+          // cards, locked, with Close focused: a second press of Create
+          // posted a duplicate order.
+          this.createdWithAdvisories.set(true);
+          this.focusCreatedClose();
         }
       },
       error: (err) => {
         const cards = this.extractCdsCards(err);
+        if (cards.length === 0 && this.answerWordingRefusal(err)) {
+          this.saving.set(false);
+          return;
+        }
         if (cards.length > 0) {
           // Stay in the modal — backend has signalled a critical
           // block. Render the structured cards verbatim and expose
@@ -677,6 +1082,15 @@ export class PrescriptionsComponent implements OnInit {
         this.saving.set(false);
       },
     });
+  }
+
+  /** QA D1345: focus moves to the dialog's Close once the order is created (after the view shows it). */
+  private focusCreatedClose(): void {
+    setTimeout(() => {
+      this.host.nativeElement
+        .querySelector<HTMLElement>('[data-testid="rx-created-close"]')
+        ?.focus();
+    }, 0);
   }
 
   /** Cleared when the modal closes so a stale advisory does not leak between rxes. */
@@ -748,8 +1162,10 @@ export class PrescriptionsComponent implements OnInit {
         this.deleting.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.DELETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PRESCRIPTIONS.TOAST.DELETE_FAILED'),
+        );
         this.deleting.set(false);
       },
     });
@@ -762,7 +1178,10 @@ export class PrescriptionsComponent implements OnInit {
    * — so this is presentation only: it hides a button that would 403.
    */
   canSign(p: PrescriptionResponse): boolean {
-    if (!this.canSignRole() || this.isOtherPrescriber(p)) return false;
+    // QA D934: a nurse's or midwife's draft is signed by a doctor of the hospital.
+    if (!this.canSignRole() || (this.isOtherPrescriber(p) && !p.awaitingPhysicianSignature)) {
+      return false;
+    }
     return p.status === 'DRAFT' || p.status === 'PENDING_SIGNATURE';
   }
 
@@ -856,6 +1275,85 @@ export class PrescriptionsComponent implements OnInit {
     );
   }
 
+  /* ── Paediatric dose review (round 19, QA D1096) ───────────────────── */
+
+  /** Pharmacists (the verify roles) and physicians may record the review. */
+  private static readonly DOSE_REVIEWER_ROLES = [
+    ...PrescriptionsComponent.VERIFIER_ROLES,
+    'ROLE_DOCTOR',
+  ];
+
+  /** The order waits for its paediatric dose review: the row says so to everyone. */
+  awaitsDoseReview(p: PrescriptionResponse): boolean {
+    return (
+      !!p.pediatricDoseReviewRequired && !p.pediatricDoseReviewedAt && !isWithdrawnStatus(p.status)
+    );
+  }
+
+  /**
+   * Offered to a pharmacist or a physician on an order awaiting its review,
+   * never to its own prescriber (the server refuses that too, with a reason).
+   */
+  canRecordDoseReview(p: PrescriptionResponse): boolean {
+    if (!this.awaitsDoseReview(p)) return false;
+    const own = this.ownPrescriberStaffId();
+    if (own && p.staffId === own) return false;
+    // CR-01: the signer of an urgent exception is not its second pair of eyes.
+    if (own && p.pediatricDoseUrgentExceptionAt && p.signedByStaffId === own) return false;
+    return this.roleContext.hasAnyActiveRole(PrescriptionsComponent.DOSE_REVIEWER_ROLES);
+  }
+
+  openDoseReview(p: PrescriptionResponse): void {
+    this.doseReviewTarget.set(p);
+    this.doseReviewReason = '';
+    this.doseReviewError.set('');
+  }
+
+  closeDoseReview(): void {
+    this.doseReviewTarget.set(null);
+    this.doseReviewReason = '';
+    this.doseReviewError.set('');
+  }
+
+  /**
+   * The submit button stays enabled: a missing reason is said in the dialog
+   * (QA D1089 class - a disabled button never shows its message), and every
+   * server refusal (own order, not a pharmacist or physician) is shown there.
+   */
+  submitDoseReview(): void {
+    const target = this.doseReviewTarget();
+    if (!target || this.doseReviewSaving()) return;
+    if (!this.doseReviewReason.trim()) {
+      // QA D1143: said once, under the reason box (the dialog-level alert is
+      // kept for the server's refusals), not twice.
+      this.doseReviewError.set('');
+      refuseFields(
+        this.host.nativeElement,
+        [DOSE_REVIEW_REASON_ID],
+        [DOSE_REVIEW_REASON_ID],
+        this.translate.instant('PRESCRIPTIONS.DOSE_REVIEW.REASON_REQUIRED'),
+      );
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], [DOSE_REVIEW_REASON_ID], '');
+    this.doseReviewSaving.set(true);
+    this.prescriptionService.recordPediatricDoseReview(target.id, this.doseReviewReason).subscribe({
+      next: () => {
+        this.doseReviewSaving.set(false);
+        this.toast.success(this.translate.instant('PRESCRIPTIONS.DOSE_REVIEW.RECORDED'));
+        this.closeDoseReview();
+        this.load();
+      },
+      error: (err: unknown) => {
+        this.doseReviewSaving.set(false);
+        this.doseReviewError.set(
+          this.extractErrorMessage(err) ||
+            this.refusalText(err, 'PRESCRIPTIONS.DOSE_REVIEW.FAILED'),
+        );
+      },
+    });
+  }
+
   openVerifyModal(p: PrescriptionResponse): void {
     this.verifyTarget.set(p);
     this.verifyNote = '';
@@ -866,6 +1364,34 @@ export class PrescriptionsComponent implements OnInit {
     this.showVerifyModal.set(false);
     this.verifyTarget.set(null);
     this.verifyNote = '';
+  }
+
+  /**
+   * QA D1555 / Policy 4: the patient's current allergies stop the drug (an allergy recorded after the
+   * order was signed included). The server held the action for an authorized prescriber's review: its
+   * card and who was notified. The pharmacist's own reason never releases it.
+   */
+  readonly allergyHold = signal<AllergyHold | null>(null);
+
+  /**
+   * Policy 4 (pending clinical approval): the order whose allergy conflict the prescriber reviews,
+   * or null. Offered on a signed order of this hospital to the roles POST /allergy-review admits; the
+   * server decides who may review (a prescriber of the order's hospital) and whether a conflict exists.
+   */
+  readonly allergyReviewFor = signal<string | null>(null);
+
+  private readonly canReviewAllergyRole = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('prescriptionAllergyReview')),
+  );
+
+  canReviewAllergy(p: PrescriptionResponse): boolean {
+    return this.canReviewAllergyRole() && !this.isForeign(p) && isIssuedStatus(p.status);
+  }
+
+  onAllergyReviewed(): void {
+    this.allergyReviewFor.set(null);
+    this.toast.success(this.translate.instant('ALLERGY_REVIEW.RECORDED'));
+    this.load();
   }
 
   submitPharmacistVerify(): void {
@@ -885,6 +1411,11 @@ export class PrescriptionsComponent implements OnInit {
         // one string would leave them with no idea what to do next — the
         // same reason signPrescription surfaces its message verbatim.
         this.verifying.set(false);
+        const allergy = allergyHoldRefusal(err);
+        if (allergy) {
+          this.allergyHold.set(allergy);
+          return;
+        }
         const msg = this.extractErrorMessage(err);
         this.toast.error(
           msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.PHARMACIST_VERIFY_FAILED'),
@@ -893,12 +1424,141 @@ export class PrescriptionsComponent implements OnInit {
     });
   }
 
+  /**
+   * Round 18: the order a controlled-drug signature is being re-authenticated
+   * for, and what the prescriber types: their TOTP code when an authenticator
+   * is enrolled, else their password. Cleared after every attempt that ends
+   * the dialog, so nothing is kept between signatures.
+   */
+  readonly signReauthTarget = signal<PrescriptionResponse | null>(null);
+  readonly signReauthUsesCode = signal(false);
+  readonly signReauthError = signal('');
+  signReauthSecret = '';
+  /** Round 18: the sign dialog asks for the re-authentication (a controlled drug, or a step-up refusal). */
+  readonly signNeedsSecret = signal(false);
+  /**
+   * QA D1183 (round 23, portal half): the critical allergy cards the server
+   * answered the signature with (a documented allergy covers the drug, or
+   * "Vérification des allergies impossible" for a drug name it cannot place
+   * while the patient has a drug-class allergy). Signing then needs the
+   * prescriber's reason, sent as `allergyOverrideReason`; without this the
+   * order could never be signed.
+   */
+  readonly signAllergyCards = signal<CdsCard[]>([]);
+  /** The same dialog, for a card that is not an allergy alone: it must not be called one. */
+  readonly signAlertIsCritical = computed(() =>
+    this.signAllergyCards().some((c) => !!c.reasonAtSignature),
+  );
+  /** CR-02: the dialog is for an explicit prescribing exception, which a reason answers with its token. */
+  readonly signAlertIsException = computed(() =>
+    this.signAllergyCards().some(
+      (c) => !!c.exceptionKey && !isAllergyAcknowledgementKey(c.exceptionKey),
+    ),
+  );
+  /** A child's dose above the limit: the prescriber decides alone, and may mark it urgent so the review follows. */
+  readonly signAlertIsAboveLimit = computed(() =>
+    this.signAllergyCards().some(
+      (c) =>
+        c.indicator === 'critical' &&
+        !!c.exceptionKey &&
+        !isAllergyAcknowledgementKey(c.exceptionKey),
+    ),
+  );
+  signAllergyReason = '';
+  /** CR-01: this attempt is the prescriber's urgent exception to the second-person dose review. */
+  readonly signUrgent = signal(false);
+
+  /** CR-01: offered where the review is what holds the signature; the server says whether it may be used. */
+  canSignUrgently(p: PrescriptionResponse): boolean {
+    return this.canSign(p) && !!p.pediatricDoseReviewRequired && !p.pediatricDoseReviewedAt;
+  }
+
+  signUrgently(p: PrescriptionResponse): void {
+    this.signUrgent.set(true);
+    this.doSign(p, { urgentDoseException: true });
+  }
+
   signPrescription(p: PrescriptionResponse): void {
+    if (p.controlledSubstance) {
+      this.openSignReauth(p);
+      return;
+    }
+    this.doSign(p);
+  }
+
+  openSignReauth(p: PrescriptionResponse): void {
+    this.actionError.set('');
+    this.signReauthSecret = '';
+    this.signReauthError.set('');
+    this.signReauthUsesCode.set(false);
+    this.signNeedsSecret.set(true);
+    this.signReauthTarget.set(p);
+    this.mfa.getStatus().subscribe({
+      next: (status) => this.signReauthUsesCode.set(!!status?.mfaEnabled),
+      error: () => this.signReauthUsesCode.set(false),
+    });
+  }
+
+  /** QA D1183: the sign dialog with the allergy cards and the reason (and the secret again for a controlled drug). */
+  private openSignAllergy(p: PrescriptionResponse, cards: CdsCard[]): void {
+    const needsSecret = this.signNeedsSecret() || !!p.controlledSubstance;
+    if (needsSecret && !this.signReauthTarget()) {
+      this.openSignReauth(p);
+    }
+    this.signReauthSecret = '';
+    this.signReauthError.set('');
+    this.signAllergyReason = '';
+    this.signAllergyCards.set(cards);
+    this.signNeedsSecret.set(needsSecret);
+    this.signReauthTarget.set(p);
+  }
+
+  closeSignReauth(): void {
+    this.signReauthSecret = '';
+    this.signReauthError.set('');
+    this.signAllergyReason = '';
+    this.signAllergyCards.set([]);
+    this.signNeedsSecret.set(false);
+    this.signReauthTarget.set(null);
+    this.signUrgent.set(false);
+  }
+
+  /** What the sign dialog still lacks before it can send. */
+  signDialogIncomplete(): boolean {
+    return (
+      (this.signNeedsSecret() && !this.signReauthSecret.trim()) ||
+      (this.signAllergyCards().length > 0 && !this.signAllergyReason.trim())
+    );
+  }
+
+  submitSignReauth(): void {
+    const target = this.signReauthTarget();
+    if (!target || this.signDialogIncomplete() || this.signingId()) return;
+    const body: SignPrescriptionBody = {};
+    if (this.signUrgent()) body.urgentDoseException = true;
+    if (this.signNeedsSecret()) {
+      const secret = this.signReauthSecret;
+      if (this.signReauthUsesCode()) body.mfaCode = secret.trim();
+      else body.password = secret;
+    }
+    if (this.signAllergyCards().length > 0) {
+      body.allergyOverrideReason = this.signAllergyReason.trim();
+      const token = this.signAllergyCards().find((c) => !!c.exceptionKey)?.exceptionKey;
+      if (token) body.doseExceptionToken = token;
+    }
+    this.doSign(target, body);
+  }
+
+  private doSign(p: PrescriptionResponse, body?: SignPrescriptionBody): void {
     this.actionError.set('');
     this.signingId.set(p.id);
-    this.prescriptionService.sign(p.id).subscribe({
+    const signed$ = body
+      ? this.prescriptionService.sign(p.id, body)
+      : this.prescriptionService.sign(p.id);
+    signed$.subscribe({
       next: (signed) => {
         this.toast.success(this.translate.instant('PRESCRIPTIONS.TOAST.SIGNED'));
+        this.closeSignReauth();
         // QA D793: the signature repeats the non-blocking advisories (a
         // beta-lactam cross-reactivity), already in the reader's language.
         for (const card of signed?.cdsAdvisories ?? []) {
@@ -915,10 +1575,46 @@ export class PrescriptionsComponent implements OnInit {
         // outstanding. Collapsing those into one generic string would leave a
         // prescriber with no idea what to do next.
         const msg = this.extractErrorMessage(err);
+        this.signingId.set(null);
+        // QA D1183 (round 23): the allergy stop at the signature answers with
+        // its critical cards; the dialog shows them and asks for the reason.
+        const cards = this.extractCdsCards(err);
+        if (cards.length > 0 && !body?.allergyOverrideReason) {
+          this.openSignAllergy(p, cards);
+          return;
+        }
+        // CR-02: the order or its findings changed under the exception: the current cards, the
+        // reason asked again, and the server's sentence saying why.
+        if (cards.some((c) => !!c.exceptionKey)) {
+          this.openSignAllergy(p, cards);
+          this.signReauthError.set(msg);
+          return;
+        }
+        // Round 18: a refused re-authentication (missing, wrong, locked) is
+        // shown in the sign dialog, which opens if the list did not know the
+        // drug was controlled; the secret typed is cleared either way.
+        if (err instanceof HttpErrorResponse && isStepUpRefusal(err)) {
+          this.signReauthSecret = '';
+          if (!this.signReauthTarget()) {
+            this.openSignReauth(p);
+          }
+          this.signNeedsSecret.set(true);
+          this.signReauthError.set(
+            msg || this.translate.instant('PRESCRIPTIONS.SIGN_REAUTH.FAILED'),
+          );
+          return;
+        }
         const text = msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.SIGN_FAILED');
+        this.closeSignReauth();
         this.actionError.set(text);
         this.toast.error(text);
-        this.signingId.set(null);
+        // QA D1142: a business refusal (400) can leave state behind on the
+        // order — one saved before the paediatric dose-review gate is now
+        // flagged as awaiting its review — so that row is read again and the
+        // reviewer's "Record the dose review" action appears on it.
+        if (err instanceof HttpErrorResponse && err.status === 400) {
+          this.refreshRow(p.id);
+        }
       },
     });
   }
@@ -933,96 +1629,334 @@ export class PrescriptionsComponent implements OnInit {
    * because nothing re-asked.
    */
   onScopeChange(_hospitalId: string | null): void {
+    this.searchPatient = null;
+    this.listPage.set(0);
+    // Never another hospital's rows under the new chip, even while it reads or if it fails.
+    clearTimeout(this.searchDelay);
+    this.rowsBeforeSearch = null;
+    this.prescriptions.set([]);
+    this.filtered.set([]);
+    this.wholeTabRead = false;
     this.load();
     this.loadPrescribers();
   }
 
-  /**
-   * Gap G12 — the statuses that make up "Needs attention", as the backend
-   * `status` filter understands them. Derived from {@link ATTENTION_REASONS}
-   * rather than re-listed, for the same reason {@link TAB_BY_STATUS} is: a
-   * status flagged in one place and not the other is the only failure mode
-   * that matters here.
-   */
-  private static readonly ATTENTION_STATUSES = ATTENTION_REASONS.map((r) => r.status);
-
-  /**
-   * How many rows the UNFILTERED page returned. Tracked separately from
-   * `prescriptions()` because the attention rows are merged into that signal
-   * and would otherwise push it past the page size and make every load look
-   * truncated.
-   */
-  private readonly pageRowCount = signal(0);
-
-  load(): void {
-    this.loading.set(true);
-    // Two requests, because they answer different questions. The first is the
-    // page: the newest 200 prescriptions, whatever their status, which is what
-    // five of the six tabs list. The second is the newest 200 in an ATTENTION
-    // status, because that is the tab the clinical inbox sends a prescriber
-    // to — an inbox saying "3 orders await clarification" over a page holding
-    // none of them is the defect this fixes, and no page size makes it go away
-    // on a busy tenant.
-    //
-    // It makes the bucket much more complete, NOT provably complete, and the
-    // page deliberately does not claim otherwise: the filtered query has the
-    // same 200-row ceiling, and `tabForStatus` also files any status this
-    // build has never heard of under "Needs attention", which no status
-    // filter can ask for. The truncation banner therefore goes on saying the
-    // counts are a minimum.
-    forkJoin({
-      page: this.prescriptionService.list().pipe(
-        map((rows) => ({ rows, failed: false })),
-        catchError(() => of({ rows: [] as PrescriptionResponse[], failed: true })),
-      ),
-      attention: this.prescriptionService
-        .list({ statuses: PrescriptionsComponent.ATTENTION_STATUSES })
-        .pipe(
-          map((rows) => ({ rows, failed: false })),
-          catchError(() => of({ rows: [] as PrescriptionResponse[], failed: true })),
-        ),
-    })
+  /** Re-reads one order and puts it back in place (the rest of the page is untouched). */
+  private refreshRow(id: string): void {
+    this.prescriptionService
+      .getById(id)
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((res) => {
-        this.loading.set(false);
-        if (res.page.failed) {
-          // Nothing is rendered as empty: the list keeps whatever it held and
-          // the failure is said out loud, as before.
-          this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.LOAD_FAILED'));
-          return;
-        }
-        const page = Array.isArray(res.page.rows) ? res.page.rows : [];
-        this.pageRowCount.set(page.length);
-        this.prescriptions.set(this.mergeById(page, res.attention.rows));
-        this.applyFilter();
+      .subscribe({
+        next: (fresh) => {
+          if (!fresh?.id) return;
+          this.prescriptions.update((rows) => rows.map((r) => (r.id === fresh.id ? fresh : r)));
+          this.applyFilter();
+        },
+        // The refusal is already shown; a failed re-read changes nothing.
+        error: () => undefined,
       });
   }
 
+  /** The list read in flight, so a newer `load` supersedes it (see `load`). */
+  private listLoad: Subscription | null = null;
+  /** The tab counts read in flight. */
+  private countsLoad: Subscription | null = null;
+
   /**
-   * The page plus the attention rows it did not reach, newest first.
-   *
-   * <p>De-duplicated on id — the two queries overlap by design, since a
-   * recent PENDING_CLARIFICATION is on both — and re-sorted, because
-   * appending the second result would otherwise break the `createdAt,desc`
-   * order the page was fetched in. A row with no `createdAt` sorts last
-   * rather than to the top, where a missing timestamp would read as "just
-   * now".
+   * QA D1412: rows on one page of the list. The page read every order of the
+   * tenant (17 requests, 11 s to the first row, 3250 table rows, 54000 DOM
+   * nodes) so its tabs and its search could be computed here. It now shows one
+   * page from the server with the server's total, as the chart review does
+   * (QA D1380), and every row stays reachable: QA D1347's every-count-is-whole
+   * still holds, because each count IS the server's total for that tab.
    */
-  private mergeById(
-    page: PrescriptionResponse[],
-    extra: PrescriptionResponse[],
-  ): PrescriptionResponse[] {
-    const byId = new Map<string, PrescriptionResponse>();
-    for (const row of page) byId.set(row.id, row);
-    for (const row of extra ?? []) byId.set(row.id, row);
-    return [...byId.values()].sort(
-      (a, b) => eventTime(b.createdAt, null) - eventTime(a.createdAt, null),
-    );
+  static readonly PAGE_ROWS = 50;
+  protected readonly pageRows = PrescriptionsComponent.PAGE_ROWS;
+  /** The page of the list on screen. */
+  readonly listPage = signal(0);
+  /** The server's count of the rows the current tab holds, or the search's matches. */
+  readonly listTotal = signal(0);
+  /** True while `prescriptions` holds the WHOLE tab, read for the search box. */
+  private wholeTabRead = false;
+  /** QA D1441: the rows a search hid while it reads, shown again if the read fails. */
+  private rowsBeforeSearch: { rows: PrescriptionResponse[]; total: number; page: number } | null =
+    null;
+  /** That read is in flight: the keystrokes meanwhile are applied when it lands. */
+  private wholeTabLoading = false;
+  /** The list holds a status this build does not know: "Needs attention" is read whole, and narrowed here. */
+  private unmappedStatuses = false;
+
+  /** QA D1314: how long the search box waits for the next keystroke before it asks the server. */
+  static readonly SEARCH_DELAY_MS = 250;
+  private searchDelay: ReturnType<typeof setTimeout> | undefined;
+
+  /** What only the whole tab can answer: a status with no name to ask for. */
+  private needsWholeTab(): boolean {
+    return this.unmappedStatuses && this.activeTab() === 'attention';
+  }
+
+  /** The statuses of a tab (none: every status). */
+  private tabStatuses(tab: PrescriptionTab): string[] {
+    if (tab === 'all') return [];
+    return Object.keys(TAB_BY_STATUS).filter((status) => TAB_BY_STATUS[status] === tab);
+  }
+
+  load(): void {
+    this.loadCounts();
+    this.loadRows();
+  }
+
+  /**
+   * QA D1347 / D1412: each count is the server's total for that tab, read with
+   * the smallest page: never a count of the rows on hand.
+   */
+  private loadCounts(): void {
+    this.countsLoad?.unsubscribe();
+    const ids: PrescriptionTab[] = [
+      'all',
+      'draft',
+      'attention',
+      'inPharmacy',
+      'dispensed',
+      'closed',
+    ];
+    this.countsLoad = forkJoin(
+      ids.map((tab) =>
+        this.prescriptionService
+          .page({ statuses: this.tabStatuses(tab) }, 0, 1)
+          .pipe(map((slice) => slice?.totalElements ?? 0)),
+      ),
+    )
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (totals) => {
+          const count = Object.fromEntries(ids.map((tab, i) => [tab, totals[i]])) as Record<
+            PrescriptionTab,
+            number
+          >;
+          // A status this build has never heard of cannot be asked for by name,
+          // and it belongs in "Needs attention" (gap G10: never out of the
+          // list), so that tab's count is whatever the other tabs leave.
+          const rest = count.all - count.draft - count.inPharmacy - count.dispensed - count.closed;
+          const unmapped = Math.max(0, rest - count.attention);
+          this.tabTotals.set({ ...count, attention: Math.max(rest, count.attention) });
+          const change = unmapped > 0 !== this.unmappedStatuses;
+          this.unmappedStatuses = unmapped > 0;
+          if (change && this.activeTab() === 'attention') this.loadRows();
+        },
+        error: () => this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.LOAD_FAILED')),
+      });
+  }
+
+  /** The rows on screen: one server page, or the whole tab while the search box is in use. */
+  private loadRows(page = this.listPage()): void {
+    this.loading.set(true);
+    // A reload (a scope switch, a dispatch, a tab) can overtake the read before
+    // it. The older read is cancelled: finishing last, it would put the
+    // previous hospital's or a stale list back on screen.
+    this.listLoad?.unsubscribe();
+    this.wholeTabLoading = false;
+    const statuses = this.tabStatuses(this.activeTab());
+    if (this.needsWholeTab()) {
+      // A status this build has no name for cannot be asked for, so the tab is
+      // read once and narrowed here. A read that fails is said out loud and
+      // leaves the list as it was: never a partial list.
+      this.wholeTabLoading = true;
+      this.listLoad = this.prescriptionService
+        .list({ statuses: [] })
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (rows) => {
+            this.loading.set(false);
+            this.wholeTabLoading = false;
+            this.wholeTabRead = true;
+            this.prescriptions.set(Array.isArray(rows) ? rows : []);
+            this.applyFilter();
+          },
+          error: () => this.refuseLoad(),
+        });
+      return;
+    }
+    // QA D1314: the search box asks the server for one page of matches. It read
+    // every row of the tab into the browser (42 to 90 s on 15,800 rows, about
+    // 3 GB allocated on the server, per search) and filtered them here.
+    // D1573: a list filtered to one patient (the URL's patientId, or a search that names
+    // exactly one) is read by patient, so the patient's signed orders from the other
+    // hospitals appear too, read-only. The hospital's own list never holds them.
+    const term = this.searchTerm.trim();
+    if (page === 0 || this.searchPatient?.term !== term) this.searchPatient = null;
+    if (this.contextPatientId && !term) {
+      this.loadPatientRows(this.contextPatientId, statuses, page);
+      return;
+    }
+    if (this.searchPatient) {
+      this.loadPatientRows(this.searchPatient.patientId, statuses, page);
+      return;
+    }
+    this.listLoad = this.prescriptionService
+      .page({ statuses, search: this.searchTerm }, page, PrescriptionsComponent.PAGE_ROWS)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (slice) => {
+          const rows = slice?.content ?? [];
+          if (term && page === 0) {
+            // One page cannot establish that all matches belong to one patient.
+            const named =
+              slice.totalElements === rows.length ? this.singlePatientNamedBy(rows, term) : null;
+            if (named) {
+              this.loadPatientRows(named, statuses, 0);
+              return;
+            }
+            if (rows.length === 0) {
+              this.resolvePatientByTerm(term, statuses);
+              return;
+            }
+          }
+          // The last row of the last page went (a withdrawal elsewhere): show the page before.
+          if (rows.length === 0 && page > 0) {
+            this.loadRows(page - 1);
+            return;
+          }
+          this.loading.set(false);
+          this.wholeTabRead = false;
+          this.rowsBeforeSearch = null;
+          // Only now: a move that fails leaves the pager on the rows still shown.
+          this.listPage.set(page);
+          this.prescriptions.set(rows);
+          this.listTotal.set(slice?.totalElements ?? rows.length);
+          this.applyFilter();
+        },
+        error: () => this.refuseLoad(),
+      });
+  }
+
+  /** D1573: the patient the URL pinned the list to (`?patientId=`), if any. */
+  private contextPatientId: string | null = null;
+  /** Keep a resolved search on the same patient's cross-hospital list when paging. */
+  private searchPatient: { term: string; patientId: string } | null = null;
+
+  /**
+   * The one patient every row belongs to AND the term names (a drug or prescriber
+   * search that happens to hit one patient's rows must stay a drug search).
+   */
+  private singlePatientNamedBy(rows: PrescriptionResponse[], term: string): string | null {
+    const fold = (v: string | undefined): string =>
+      (v ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+    const needle = fold(term).trim();
+    if (rows.length === 0 || !needle) return null;
+    const ids = new Set(rows.map((r) => r.patientId ?? ''));
+    if (ids.size !== 1 || ids.has('')) return null;
+    return rows.every((r) => fold(r.patientFullName).includes(needle)) ? [...ids][0] : null;
+  }
+
+  /**
+   * D1573: a search with no match here can still name a patient whose orders were
+   * signed elsewhere. Exactly one patient answering the term makes the list theirs.
+   */
+  private resolvePatientByTerm(term: string, statuses: string[]): void {
+    // Of this route's readers, pharmacy verifiers cannot GET /patients. Avoid
+    // that request: its 403 is handled by the global interceptor before a catch here.
+    const active = this.roleContext.activeRole;
+    const roles = expandRoleEquivalents(active ? [active] : this.roleContext.activeRoles);
+    if (
+      !roles.some((role) =>
+        [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_PHARMACIST',
+          'ROLE_SUPER_ADMIN',
+        ].includes(role),
+      )
+    ) {
+      this.showRows([], 0, 0);
+      return;
+    }
+    this.listLoad = this.patientService
+      .list(this.patientSearchHospitalId(), term)
+      .pipe(
+        // This lookup only enriches a successful, empty prescription search.
+        catchError(() => of<PatientResponse[]>([])),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (patients) => {
+          if (patients?.length === 1 && patients[0].id) {
+            this.loadPatientRows(patients[0].id, statuses, 0);
+            return;
+          }
+          this.showRows([], 0, 0);
+        },
+        error: () => this.refuseLoad(),
+      });
+  }
+
+  /** D1573: every order of one patient across the hospitals the caller may read, one page shown. */
+  private loadPatientRows(patientId: string, statuses: string[], page: number): void {
+    const term = this.searchTerm.trim();
+    if (term) this.searchPatient = { term, patientId };
+    this.listLoad?.unsubscribe();
+    this.listLoad = this.prescriptionService
+      .list({ patientId, statuses })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (all) => {
+          const rows = Array.isArray(all) ? all : [];
+          const size = PrescriptionsComponent.PAGE_ROWS;
+          const shown = Math.min(page, Math.max(0, Math.ceil(rows.length / size) - 1));
+          this.showRows(rows.slice(shown * size, (shown + 1) * size), rows.length, shown);
+        },
+        error: () => this.refuseLoad(),
+      });
+  }
+
+  private showRows(rows: PrescriptionResponse[], total: number, page: number): void {
+    this.loading.set(false);
+    this.wholeTabRead = false;
+    this.rowsBeforeSearch = null;
+    this.listPage.set(page);
+    this.prescriptions.set(rows);
+    this.listTotal.set(total);
+    this.filtered.set(rows);
+  }
+
+  private refuseLoad(): void {
+    this.loading.set(false);
+    this.wholeTabLoading = false;
+    // QA D1441: a read that fails leaves the list as it was: the rows the search hid come back.
+    if (this.rowsBeforeSearch) {
+      this.filtered.set(this.rowsBeforeSearch.rows);
+      this.listTotal.set(this.rowsBeforeSearch.total);
+      this.listPage.set(this.rowsBeforeSearch.page);
+      this.rowsBeforeSearch = null;
+    }
+    this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.LOAD_FAILED'));
   }
 
   setTab(tab: PrescriptionTab): void {
     this.activeTab.set(tab);
-    this.applyFilter();
+    clearTimeout(this.searchDelay);
+    this.rowsBeforeSearch = null;
+    this.listPage.set(0);
+    this.wholeTabRead = false;
+    this.wholeTabLoading = false;
+    // Never the last tab's rows under this tab's label, even if the read fails.
+    this.prescriptions.set([]);
+    this.filtered.set([]);
+    this.loadRows();
+  }
+
+  /** QA D1412: the pager's move: the server reads the page, unless the whole tab is on hand. */
+  onListPage(page: number): void {
+    if (this.needsWholeTab()) {
+      this.listPage.set(page);
+      this.applyFilter();
+    } else {
+      this.loadRows(page);
+    }
   }
 
   /**
@@ -1036,44 +1970,20 @@ export class PrescriptionsComponent implements OnInit {
     return TAB_BY_STATUS[status] ?? 'attention';
   }
 
-  /**
-   * Every tab's count in one pass, memoised by the signal.
-   *
-   * <p>The tab bar binds six counts and the summary card a seventh; filtering
-   * the whole list per call re-scanned it seven times on every change
-   * detection, which on a tenant with thousands of unpaged prescriptions is
-   * seven full scans per keystroke in the search box.
-   */
-  private readonly tabCounts = computed<Record<PrescriptionTab, number>>(() => {
-    const counts: Record<PrescriptionTab, number> = {
-      all: 0,
-      draft: 0,
-      attention: 0,
-      inPharmacy: 0,
-      dispensed: 0,
-      closed: 0,
-    };
-    for (const p of this.prescriptions()) {
-      counts.all += 1;
-      counts[this.tabForStatus(p.status)] += 1;
-    }
-    return counts;
+  /** QA D1412: the server's count of each tab. */
+  private readonly tabTotals = signal<Record<PrescriptionTab, number>>({
+    all: 0,
+    draft: 0,
+    attention: 0,
+    inPharmacy: 0,
+    dispensed: 0,
+    closed: 0,
   });
 
   /** How many prescriptions the tab holds, before the search box narrows it. */
   countInTab(tab: PrescriptionTab): number {
-    return this.tabCounts()[tab];
+    return this.tabTotals()[tab];
   }
-
-  /**
-   * True when the list came back full, so there may be prescriptions this
-   * page has never seen — and every count on the tab bar is a lower bound
-   * rather than a total. Said out loud, because a silently truncated
-   * "Needs attention 0" is worse than no count at all.
-   */
-  readonly listTruncated = computed(
-    () => this.pageRowCount() >= PrescriptionService.LIST_PAGE_SIZE,
-  );
 
   /** True while the prescriber, not the pharmacy, is the one holding this up. */
   needsAttention(p: PrescriptionResponse): boolean {
@@ -1090,20 +2000,74 @@ export class PrescriptionsComponent implements OnInit {
     return match ? match.labelKey : UNRECOGNISED_STATUS.labelKey;
   }
 
-  applyFilter(): void {
-    let list = this.prescriptions();
-    const tab = this.activeTab();
-    if (tab !== 'all') list = list.filter((p) => this.tabForStatus(p.status) === tab);
-    const term = this.searchTerm.toLowerCase().trim();
-    if (term) {
-      list = list.filter(
-        (p) =>
-          (p.patientFullName ?? '').toLowerCase().includes(term) ||
-          (p.medicationName ?? '').toLowerCase().includes(term) ||
-          (p.staffFullName ?? '').toLowerCase().includes(term),
-      );
+  /** The search box: `(input)` here. Starting or clearing a search changes what is read. */
+  onSearchInput(): void {
+    const pageShown = this.listPage();
+    this.listPage.set(0);
+    if (this.needsWholeTab()) {
+      this.applyFilter();
+      return;
     }
-    this.filtered.set(list);
+    // QA D1441: until the answer is known the rows on screen say nothing about
+    // this search: they go, and the list says it is searching.
+    if (this.filtered().length > 0) {
+      this.rowsBeforeSearch = { rows: this.filtered(), total: this.listTotal(), page: pageShown };
+    }
+    this.filtered.set([]);
+    this.loading.set(true);
+    this.listLoad?.unsubscribe();
+    clearTimeout(this.searchDelay);
+    this.searchDelay = setTimeout(() => this.loadRows(0), PrescriptionsComponent.SEARCH_DELAY_MS);
+  }
+
+  applyFilter(): void {
+    const term = this.searchTerm.toLowerCase().trim();
+    // A row re-read in place may have left the tab (a signature, a withdrawal).
+    const tab = this.activeTab();
+    const inTab = this.prescriptions().filter(
+      (p) => tab === 'all' || this.tabForStatus(p.status) === tab,
+    );
+    if (!this.needsWholeTab()) {
+      // The whole tab was on hand and is not needed any more.
+      if (this.wholeTabRead) {
+        this.loadRows();
+      } else if (inTab.length === 0 && this.prescriptions().length > 0) {
+        // The page's only row left the tab: re-read, the tab may hold others.
+        this.load();
+      } else {
+        this.filtered.set(inTab);
+      }
+      return;
+    }
+    if (!this.wholeTabRead) {
+      // QA D1441: until the answer is known the page's rows say nothing about this
+      // search: they go, and the list says it is searching.
+      if (this.filtered().length > 0) {
+        this.rowsBeforeSearch = {
+          rows: this.filtered(),
+          total: this.listTotal(),
+          page: this.listPage(),
+        };
+      }
+      this.filtered.set([]);
+      if (!this.wholeTabLoading) this.loadRows();
+      return;
+    }
+    this.rowsBeforeSearch = null;
+    const matches = term
+      ? inTab.filter(
+          (p) =>
+            textMatches(p.patientFullName, term) ||
+            (p.medicationName ?? '').toLowerCase().includes(term) ||
+            textMatches(p.staffFullName, term),
+        )
+      : inTab;
+    this.listTotal.set(matches.length);
+    // A row went while on the last page of the matches: show the page that is left.
+    const lastPage = Math.max(0, Math.ceil(matches.length / PrescriptionsComponent.PAGE_ROWS) - 1);
+    if (this.listPage() > lastPage) this.listPage.set(lastPage);
+    const from = this.listPage() * PrescriptionsComponent.PAGE_ROWS;
+    this.filtered.set(matches.slice(from, from + PrescriptionsComponent.PAGE_ROWS));
   }
 
   /* ── Pharmacy state + history (gaps G7 / G11) ─────────────────── */
@@ -1391,11 +2355,12 @@ export class PrescriptionsComponent implements OnInit {
    * <p>Two ways they cannot, and both make the live balance wrong rather than
    * merely imprecise, so both send it back to the routing snapshot.
    *
-   * <p>The list is PAGED — `initPharmacyHistory` asks for the 20 most recent
-   * fills. On an order with more than that, summing what arrived understates
-   * what has been dispensed and therefore overstates what is owed, and unlike
-   * the snapshot this figure reads as an authoritative balance.
-   * `dispensesTruncated` is set from the server's `totalElements`.
+   * <p>The list is PAGED. `initPharmacyHistory` reads every page (QA D1347,
+   * round 30), but if the server counts more fills than it served, summing
+   * what arrived understates what has been dispensed and therefore overstates
+   * what is owed, and unlike the snapshot this figure reads as an
+   * authoritative balance. `dispensesTruncated` compares the server's
+   * `totalElements` with the rows read.
    *
    * <p>And a fill records its OWN unit. A 200 ml syrup dispensed as 2 bottles
    * would be subtracted as "200 − 2 = 198", then labelled "ml". The backend
@@ -1483,27 +2448,39 @@ export class PrescriptionsComponent implements OnInit {
           forkJoin({
             // Each arm collapses its own failure to null so the other still
             // arrives; forkJoin is otherwise all-or-nothing.
-            dispenses: this.pharmacyService
-              .listDispensesByPrescription(prescriptionId, 0, 20, 'dispensedAt,desc')
-              .pipe(catchError(() => of(null))),
-            routings: this.pharmacyService
-              .listRoutingDecisionsByPrescription(prescriptionId, 0, 20, 'decidedAt,desc')
-              .pipe(catchError(() => of(null))),
+            //
+            // QA D1347 (round 30): EVERY fill and EVERY routing decision, all
+            // pages. Past the paging helper's ceiling the arm FAILS (null), so
+            // the half says it did not load — never a partial fill list summed
+            // into a balance.
+            dispenses: allPages<DispenseResponse>((page, size) =>
+              this.pharmacyService
+                .listDispensesByPrescription(prescriptionId, page, size, 'dispensedAt,desc')
+                .pipe(map((res) => res?.data)),
+            ).pipe(catchError(() => of(null))),
+            routings: allRows<RoutingDecisionResponse>((page, size) =>
+              this.pharmacyService
+                .listRoutingDecisionsByPrescription(prescriptionId, page, size, [
+                  'decidedAt,desc',
+                  'id,desc',
+                ])
+                .pipe(map((res) => res?.data)),
+            ).pipe(catchError(() => of(null))),
           }).pipe(
             map((res) => ({
               prescriptionId,
               dispenseFailed: res.dispenses === null,
               routingFailed: res.routings === null,
-              // The fills are paged; the remainder may only be computed from
-              // them when the page IS the whole list.
-              dispensesTruncated:
-                (res.dispenses?.data?.totalElements ?? 0) >
-                (res.dispenses?.data?.content?.length ?? 0),
-              dispenses: [...(res.dispenses?.data?.content ?? [])].sort(
+              // Every page is read, so this is false unless the server counted
+              // more fills than it served (one recorded between two page
+              // reads): the remainder is then taken from the routing snapshot
+              // rather than summed from a list known to be short.
+              dispensesTruncated: (res.dispenses?.total ?? 0) > (res.dispenses?.rows.length ?? 0),
+              dispenses: [...(res.dispenses?.rows ?? [])].sort(
                 (a, b) =>
                   eventTime(b.dispensedAt, b.createdAt) - eventTime(a.dispensedAt, a.createdAt),
               ),
-              routings: [...(res.routings?.data?.content ?? [])].sort(
+              routings: [...(res.routings ?? [])].sort(
                 (a, b) => eventTime(b.decidedAt, b.createdAt) - eventTime(a.decidedAt, a.createdAt),
               ),
             })),
@@ -1619,6 +2596,11 @@ export class PrescriptionsComponent implements OnInit {
         },
         error: (err) => {
           this.dispatching.set(false);
+          const allergy = allergyHoldRefusal(err);
+          if (allergy) {
+            this.allergyHold.set(allergy);
+            return;
+          }
           const msg = err?.error?.message || 'Could not dispatch the prescription SMS';
           this.toast.error(msg);
           // A refused SMS is recorded server-side (TRANSMISSION_FAILED, unless

@@ -67,6 +67,11 @@ class WriteAuditInterceptorTest {
         public void optedOut() {
             // see plain()
         }
+
+        @com.example.hms.security.ReadsOnly("a search under POST for its body")
+        public void declaredRead() {
+            // see plain()
+        }
     }
 
     @SuppressWarnings("unused")
@@ -271,15 +276,23 @@ class WriteAuditInterceptorTest {
     }
 
     @Test
-    @DisplayName("a POST whose route ends in a read verb is a read, not DATA_CREATE")
-    void readOnlyPostsAreNotRecorded() throws Exception {
-        for (String route : List.of("/appointments/search", "/departments/filter", "/empi/candidates",
-                "/eligibility/check", "/maternal-history/{id}/calculate-risk")) {
-            interceptor.afterCompletion(request("POST", route, Map.of()), ok(200), handler(Handlers.class, "plain"), null);
+    @DisplayName("a POST that declares @ReadsOnly is a read, not DATA_CREATE, whatever its route is called")
+    void aDeclaredReadIsNotRecorded() throws Exception {
+        for (String route : List.of("/appointments/search", "/signatures/verify", "/prenatal/schedule")) {
+            interceptor.afterCompletion(request("POST", route, Map.of()), ok(200), handler(Handlers.class, "declaredRead"), null);
         }
         verify(auditService, never()).logEvent(org.mockito.ArgumentMatchers.any());
-        assertThat(WriteAuditInterceptor.isReadOnlyPost("POST", "/transfusions/requests")).isFalse();
-        assertThat(WriteAuditInterceptor.isReadOnlyPost("PUT", "/x/search")).isFalse();
+    }
+
+    @Test
+    @DisplayName("a route named as a read proves nothing: without @ReadsOnly the write is recorded")
+    void aRouteNamedAsAReadIsRecordedWithoutTheDeclaration() throws Exception {
+        interceptor.afterCompletion(request("POST", "/maternal-history/{id}/calculate-risk", Map.of("id", RESOURCE.toString())),
+            ok(200), handler(Handlers.class, "plain"), null);
+
+        AuditEventRequestDTO row = emitted();
+        assertThat(row.getEventDescription()).isEqualTo("POST /maternal-history/{id}/calculate-risk");
+        assertThat(row.getResourceId()).isEqualTo(RESOURCE.toString());
     }
 
     @Test

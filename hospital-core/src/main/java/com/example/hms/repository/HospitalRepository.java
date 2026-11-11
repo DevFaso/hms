@@ -29,7 +29,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
      */
     String CLINICAL_ONLY = " h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL ";
 
-    @Query("SELECT h FROM Hospital h WHERE LOWER(h.name) = LOWER(:identifier) OR LOWER(h.code) = LOWER(:identifier) OR LOWER(h.email) = LOWER(:identifier)")
+    @Query("SELECT h FROM Hospital h WHERE LOWER(h.name) = LOWER(CAST(:identifier AS string)) OR LOWER(h.code) = LOWER(CAST(:identifier AS string)) OR LOWER(h.email) = LOWER(CAST(:identifier AS string))")
     java.util.Optional<Hospital> findByNameOrCodeOrEmail(@Param("identifier") String identifier);
 
     /** All hospital IDs whose lifecycle state matches one of the given states (MVP-c batch). */
@@ -134,6 +134,19 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     Optional<Hospital> findByIdForUpdate(@Param("id") UUID id);
 
     /**
+     * QA D1121 (round 20): the hospital's time-zone id (its organisation's),
+     * read as a plain value. A card writer runs outside any persistence
+     * context (open-in-view is off and the CDS hooks are not transactional),
+     * so loading the {@link Hospital} and walking to its LAZY organisation
+     * threw {@code LazyInitializationException} and every time-stamped BPA
+     * card was dropped. This projection reads no association, so it works
+     * with or without an open session. Empty when the hospital is unknown or
+     * names no zone.
+     */
+    @Query("SELECT o.defaultTimezone FROM Hospital h JOIN h.organization o WHERE h.id = :id")
+    Optional<String> findTimezoneIdById(@Param("id") UUID id);
+
+    /**
      * The requireClinicalHospital rule (provider plan AC-11, item 4): a
      * hospital by id, for any request-supplied CLINICAL destination (a
      * booking, an admission, an order, a referral, a registration...). A
@@ -146,7 +159,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     Optional<Hospital> findClinicalById(@Param("id") UUID id);
 
     /** A clinical destination named by its exact name, any case (requireClinicalHospital, AC-11). */
-    @Query("SELECT h FROM Hospital h WHERE LOWER(h.name) = LOWER(:name)"
+    @Query("SELECT h FROM Hospital h WHERE LOWER(h.name) = LOWER(CAST(:name AS string))"
         + " AND " + CLINICAL_ONLY)
     Optional<Hospital> findClinicalByNameIgnoreCase(@Param("name") String name);
 
@@ -156,13 +169,13 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     Optional<Hospital> findClinicalByName(@Param("name") String name);
 
     /** A clinical destination named by its code, any case (requireClinicalHospital, AC-11). */
-    @Query("SELECT h FROM Hospital h WHERE LOWER(h.code) = LOWER(:code)"
+    @Query("SELECT h FROM Hospital h WHERE LOWER(h.code) = LOWER(CAST(:code AS string))"
         + " AND " + CLINICAL_ONLY)
     Optional<Hospital> findClinicalByCodeIgnoreCase(@Param("code") String code);
 
     /** A clinical destination named by its name, code or email, any case (requireClinicalHospital, AC-11). */
-    @Query("SELECT h FROM Hospital h WHERE (LOWER(h.name) = LOWER(:identifier) OR LOWER(h.code) = LOWER(:identifier)"
-        + " OR LOWER(h.email) = LOWER(:identifier)) AND " + CLINICAL_ONLY)
+    @Query("SELECT h FROM Hospital h WHERE (LOWER(h.name) = LOWER(CAST(:identifier AS string)) OR LOWER(h.code) = LOWER(CAST(:identifier AS string))"
+        + " OR LOWER(h.email) = LOWER(CAST(:identifier AS string))) AND " + CLINICAL_ONLY)
     Optional<Hospital> findClinicalByNameOrCodeOrEmail(@Param("identifier") String identifier);
 
     /* Organization-related queries */

@@ -60,15 +60,14 @@ public class PrescriptionController {
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     @Operation(summary = "Create Prescription", description = "Creates a new prescription (doctor, nurse or midwife).")
     public ResponseEntity<PrescriptionResponseDTO> create(
-        @Valid @RequestBody PrescriptionRequestDTO request,
+        @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+            com.example.hms.validation.OnCreate.class}) @RequestBody PrescriptionRequestDTO request,
         Locale locale) {
         // QA D706: a new prescription from the prescribing form states the
-        // quantity to hand over; the dispense is capped at it. (Order sets
-        // and legacy rows without one are handled in the service and the
-        // dispense: a controlled substance is refused without it.)
-        if (request.getQuantity() == null) {
-            throw new com.example.hms.exception.BusinessException("prescription.quantity.required");
-        }
+        // quantity to hand over; the dispense is capped at it (OnCreate on the
+        // body: QA D1318, named with the other missing fields). Order sets and
+        // legacy rows without one are handled in the service and the dispense:
+        // a controlled substance is refused without it.
         PrescriptionResponseDTO created = prescriptionService.createPrescription(request, locale);
         return new ResponseEntity<>(created, HttpStatus.CREATED);
     }
@@ -94,8 +93,11 @@ public class PrescriptionController {
             + "PENDING_SIGNATURE prescription can be signed.")
     public ResponseEntity<PrescriptionResponseDTO> sign(
         @PathVariable UUID id,
+        // Round 18: the re-authentication a controlled-drug signature needs.
+        @org.springframework.web.bind.annotation.RequestBody(required = false)
+        @jakarta.validation.Valid com.example.hms.payload.dto.SignPrescriptionRequestDTO reauthentication,
         Locale locale) {
-        return ResponseEntity.ok(prescriptionService.signPrescription(id, locale));
+        return ResponseEntity.ok(prescriptionService.signPrescription(id, reauthentication, locale));
     }
 
     /**
@@ -135,11 +137,64 @@ public class PrescriptionController {
             + "prescription clears the verification and it must be repeated.")
     public ResponseEntity<PrescriptionResponseDTO> pharmacistVerify(
         @PathVariable UUID id,
-        @RequestBody(required = false) PharmacistVerificationRequestDTO request,
+        @Valid @RequestBody(required = false) PharmacistVerificationRequestDTO request,
         Locale locale) {
         String note = request != null ? request.getNote() : null;
+        // QA D1555 / Policy 4: an allergy conflict is held for the prescriber's review; nothing sent here releases it.
         pharmacistVerificationService.verify(id, note);
         return ResponseEntity.ok(prescriptionService.getPrescriptionAfterWrite(id, locale));
+    }
+
+    /**
+     * Round 19 (QA D1096): the paediatric dose review the decision support
+     * asked for ("a pharmacist or physician must review the dose"). A
+     * pharmacist, or a signing physician of the order's hospital who is not
+     * its prescriber, records it with a reason; the order is not signed until
+     * then. The service checks the hospital role and the prescriber.
+     */
+    @PostMapping("/{id}/pediatric-dose-review")
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_PHARMACY_VERIFIER','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Record the paediatric dose review an order needs before it is signed",
+        description = "For a child under the medication's manual-review age, or outside every weight band, "
+            + "the dose check gives no automatic verdict. A pharmacist or a physician other than the "
+            + "prescriber records the review with a mandatory reason; the signer cannot be the reviewer. "
+            + "Any later edit of the order clears the review.")
+    public ResponseEntity<PrescriptionResponseDTO> pediatricDoseReview(
+        @PathVariable UUID id,
+        @Valid @RequestBody(required = false) com.example.hms.payload.dto.PediatricDoseReviewRequestDTO request,
+        Locale locale) {
+        String reason = request != null ? request.getReason() : null;
+        return ResponseEntity.ok(prescriptionService.recordPediatricDoseReview(id, reason, locale));
+    }
+
+    /**
+     * Policy 4 (user recommendation 2026-11-10, pending clinical approval): the allergy conflict a signed
+     * order meets now, for the prescriber who reviews it. The signing authority, as for /sign; the
+     * service requires a signing physician of the order's hospital, or its own prescriber.
+     */
+    @GetMapping("/{id}/allergy-conflict")
+    @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
+    @Operation(summary = "Read the allergy conflict a signed prescription meets",
+        description = "The allergy card, the token the review sends back, and the prescriber's review on record.")
+    public ResponseEntity<com.example.hms.payload.dto.prescription.AllergyConflictDTO> allergyConflict(@PathVariable UUID id) {
+        return ResponseEntity.ok(prescriptionService.getAllergyConflict(id));
+    }
+
+    /**
+     * Policy 4 (pending clinical approval): an authorized prescriber reviews the allergy conflict that
+     * holds a signed order at the eMAR and the pharmacy. A nurse's or a pharmacist's reason never
+     * releases it. Only at the order's own hospital (a shared patient's order elsewhere is read-only).
+     */
+    @PostMapping("/{id}/allergy-review")
+    @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
+    @Operation(summary = "Review the allergy conflict of a signed prescription",
+        description = "CONTINUE (with a plan) or STOP, with a mandatory rationale and the token of the conflict "
+            + "shown. Recorded on the order with the reviewer and the time, and audited. The eMAR and pharmacy "
+            + "gates honour a CONTINUE while the allergy and the order stay as reviewed; STOP refuses them.")
+    public ResponseEntity<com.example.hms.payload.dto.prescription.AllergyConflictDTO> allergyReview(
+        @PathVariable UUID id,
+        @Valid @RequestBody com.example.hms.payload.dto.prescription.AllergyConflictReviewRequestDTO request) {
+        return ResponseEntity.ok(prescriptionService.reviewAllergyConflict(id, request));
     }
 
     /**
@@ -257,6 +312,34 @@ public class PrescriptionController {
         return ResponseEntity.ok(
             prescriptionService.list(patientId, staffId, encounterId, status, pageable, locale)
         );
+    }
+
+    /**
+     * QA D1314: {@code GET /prescriptions?search=}. The search box searches the
+     * hospital's list, so a term with an id filter is refused: never silently a
+     * different list. A blank term is the plain list.
+     */
+    @GetMapping(params = "search")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST',"
+        + "'ROLE_PHARMACY_VERIFIER','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Search Prescriptions",
+        description = "One page of the hospital's list narrowed to a drug, patient or prescriber name, "
+            + "accents ignored. `status` as on the list. Does not combine with patientId, staffId or encounterId.")
+    public ResponseEntity<Page<PrescriptionResponseDTO>> search(
+        @RequestParam(required = false) UUID patientId,
+        @RequestParam(required = false) UUID staffId,
+        @RequestParam(required = false) UUID encounterId,
+        @RequestParam(required = false) List<PrescriptionStatus> status,
+        @RequestParam String search,
+        @ParameterObject Pageable pageable,
+        Locale locale) {
+        if (search.isBlank()) {
+            return list(patientId, staffId, encounterId, status, pageable, locale);
+        }
+        if (patientId != null || staffId != null || encounterId != null) {
+            throw new com.example.hms.exception.FieldBusinessException("search", "prescription.list.searchWithFilter");
+        }
+        return ResponseEntity.ok(prescriptionService.search(search, status, pageable, locale));
     }
 
     @PutMapping("/{id}")

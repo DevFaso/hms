@@ -32,6 +32,8 @@ public class LabOrderResponseDTO {
     /** QA D648: the order's test definition no longer exists; labTestName is the "deleted test" label. */
     private boolean labTestDefinitionMissing;
     private String labTestCode;
+    /** QA D1095: the test definition's unit, which a result is entered in. */
+    private String labTestUnit;
     private LocalDateTime orderDatetime;
     private String status;
     private String priority;

@@ -5,12 +5,16 @@ import com.example.hms.payload.dto.discharge.DischargeApprovalDecisionDTO;
 import com.example.hms.payload.dto.discharge.DischargeApprovalRequestDTO;
 import com.example.hms.payload.dto.discharge.DischargeApprovalResponseDTO;
 import com.example.hms.service.DischargeApprovalService;
+import com.example.hms.validation.OnApproval;
+import com.example.hms.validation.OnRefusal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.groups.Default;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -42,7 +46,8 @@ public class DischargeApprovalController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
     public ResponseEntity<DischargeApprovalResponseDTO> approve(
         @PathVariable UUID id,
-        @Valid @RequestBody DischargeApprovalDecisionDTO decision
+        // QA D1372 (round 31): the approve path's own required field is named with the doctor ids.
+        @Validated({Default.class, OnApproval.class}) @RequestBody DischargeApprovalDecisionDTO decision
     ) {
         return ResponseEntity.ok(service.approve(id, decision));
     }
@@ -52,7 +57,8 @@ public class DischargeApprovalController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
     public ResponseEntity<DischargeApprovalResponseDTO> reject(
         @PathVariable UUID id,
-        @Valid @RequestBody DischargeApprovalDecisionDTO decision
+        // QA D1372 (round 31): the reject path's own required field is named with the doctor ids.
+        @Validated({Default.class, OnRefusal.class}) @RequestBody DischargeApprovalDecisionDTO decision
     ) {
         return ResponseEntity.ok(service.reject(id, decision));
     }

@@ -1,10 +1,10 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { formatDate } from '@angular/common';
 import { signal } from '@angular/core';
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { AdmissionsComponent } from './admissions';
 import { AdmissionResponse, AdmissionService } from '../services/admission.service';
@@ -20,6 +20,10 @@ import { BedResponse, BedService } from '../services/bed.service';
 import { AppliedOrderSetSummary } from '../services/order-set.service';
 import { toLocalInputValue } from '../shared/date-utils';
 import { roleContextStub } from '../testing/role-context.stub';
+import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
 
 /**
  * QA D176 (regression of D84/D123): the server refused a nurse or a midwife as
@@ -39,6 +43,8 @@ describe('AdmissionsComponent', () => {
   let superAdmin: ReturnType<typeof signal<boolean>>;
   let queryTab: string | null;
   let activeRoles: string[];
+  /** The request scope (X-Hospital-Id): the chip's hospital for a super-admin. */
+  let requestScope: string | null;
 
   const member = (id: string, roleCode: string) => ({ id, roleCode }) as StaffResponse;
   const adm = (overrides: Partial<AdmissionResponse> = {}) =>
@@ -61,6 +67,7 @@ describe('AdmissionsComponent', () => {
     queryTab = null;
     superAdmin = signal(false);
     activeRoles = ['ROLE_DOCTOR'];
+    requestScope = 'h1';
     admissionService = jasmine.createSpyObj<AdmissionService>('AdmissionService', [
       'getAll',
       'create',
@@ -118,6 +125,7 @@ describe('AdmissionsComponent', () => {
           provide: RoleContextService,
           useValue: {
             activeHospitalId: 'h1',
+            effectiveHospitalIdForRequest: () => requestScope,
             isSuperAdmin: superAdmin,
             globalView: signal(false),
             hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
@@ -173,9 +181,23 @@ describe('AdmissionsComponent', () => {
       expect(Object.values(gates()).every(Boolean)).toBeTrue();
     });
 
-    it('a midwife reads admissions but is offered no write', () => {
+    it('a midwife is offered New admission for labour and delivery only, and no other write (policy 2)', () => {
       activeRoles = ['ROLE_MIDWIFE'];
-      expect(Object.values(gates()).some(Boolean)).toBeFalse();
+      expect(gates()).toEqual({
+        admit: true,
+        edit: false,
+        orderSets: false,
+        assignBed: false,
+        unassignBed: false,
+        discharge: false,
+        cancel: false,
+      });
+      expect(component['formAdmissionTypes']()).toEqual(['LABOR_DELIVERY']);
+    });
+
+    it('a doctor keeps every admission type on the form', () => {
+      activeRoles = ['ROLE_DOCTOR'];
+      expect(component['formAdmissionTypes']().length).toBeGreaterThan(1);
     });
 
     it('a super-admin moves beds only (PUT, discharge, cancel and admit refuse her)', () => {
@@ -241,6 +263,72 @@ describe('AdmissionsComponent', () => {
   });
 
   describe('loading and filters', () => {
+    it('counts only active stays with no structured or free-text bed in the missing-bed card', () => {
+      component.admissions.set([
+        adm({ id: 'missing', roomBed: '  ', bedId: null }),
+        adm({ id: 'structured', roomBed: '', bedId: 'bed-1' }),
+        adm({ id: 'legacy', roomBed: 'CDX-12', bedId: null }),
+        adm({ id: 'closed', status: 'DISCHARGED', roomBed: '' }),
+      ]);
+      component.selectMetric('missing-bed');
+      expect(component.filtered().map((a) => a.id)).toEqual(['missing']);
+      expect(component.summaryMetrics().find((m) => m.id === 'missing-bed')?.count).toBe(1);
+      expect(component.admissions().length).toBe(4);
+      expect(admissionService.getAll).not.toHaveBeenCalled();
+      component.selectMetric('missing-bed');
+      expect(component.filtered().length).toBe(4);
+    });
+
+    it('combines facets and MRN/reference searches, sorts UTC instants and resets paging', () => {
+      component.admissions.set(
+        Array.from({ length: 26 }, (_, i) =>
+          adm({
+            id: `cdx-${i}`,
+            patientMrn: `CDX-MRN-${i}`,
+            encounterCode: `CDX-ENC-${i}`,
+            admissionType: i === 25 ? 'EMERGENCY' : 'ELECTIVE',
+            acuityLevel: 'LEVEL_4_SEVERE',
+            admissionDateTime: i === 25 ? '2026-11-07T12:00:00' : '2026-11-07T11:00:00Z',
+          }),
+        ),
+      );
+      component.applyFilter();
+      expect(component.pagedAdmissions()[0].id).toBe('cdx-25');
+      expect(component.totalPages()).toBe(3);
+      component.setPage(2);
+      expect(component.pagedAdmissions().length).toBe(6);
+      component.typeFilter.set('EMERGENCY');
+      component.acuityFilter.set('LEVEL_4_SEVERE');
+      component.searchTerm = 'CDX-MRN-25';
+      component.applyFilter();
+      expect(component.filtered().map((a) => a.id)).toEqual(['cdx-25']);
+      expect(component.currentPage()).toBe(0);
+      component.searchTerm = 'CDX-ENC-25';
+      component.applyFilter();
+      expect(component.filtered().length).toBe(1);
+      component.resetFilters();
+      expect(component.filtered().length).toBe(26);
+    });
+
+    it('ignores stale scoped responses and clears data on a current reload error', () => {
+      const old = new Subject<AdmissionResponse[]>();
+      const current = new Subject<AdmissionResponse[]>();
+      admissionService.getAll.and.returnValues(old, current);
+      component.load();
+      component.onScopeChange('h2');
+      current.next([adm({ id: 'new', hospitalId: 'h2' })]);
+      old.next([adm({ id: 'old', hospitalId: 'h1' })]);
+      expect(component.admissions().map((a) => a.id)).toEqual(['new']);
+      old.error(new Error('stale'));
+      expect(component.loadError()).toBeFalse();
+      expect(toast.error).not.toHaveBeenCalled();
+      admissionService.getAll.and.returnValue(throwError(() => new Error('offline')));
+      component.onScopeChange('h1');
+      expect(component.admissions()).toEqual([]);
+      expect(component.filtered()).toEqual([]);
+      expect(component.loadError()).toBeTrue();
+    });
+
     it('locks a non-super-admin to their hospital and honours the tab query', () => {
       queryTab = 'discharged';
       component.ngOnInit();
@@ -249,6 +337,7 @@ describe('AdmissionsComponent', () => {
       expect(component.hospitalLocked).toBeTrue();
       expect(component.lockedHospitalName).toBe('CHU Ouaga');
       expect(component.activeTab()).toBe('discharged');
+      expect(component.filtered().map((a) => a.id)).toEqual(['a2']);
     });
 
     it('lets a super admin choose any hospital', () => {
@@ -320,6 +409,24 @@ describe('AdmissionsComponent', () => {
       expect(component.selectedPatient()).toBeNull();
     }));
 
+    // QA D912 (#967 review): a super-admin whose home hospital is A but whose
+    // scope chip picked B was offered A's patients, and A's MRN on the chip.
+    it("searches the scope chip's hospital, not a super-admin's home one", fakeAsync(() => {
+      superAdmin.set(true);
+      requestScope = 'hB';
+      patientService.list.and.returnValue(of([]));
+      component.initPatientSearch();
+      component.onPatientQueryChange('kab');
+      tick(250);
+      expect(patientService.list).toHaveBeenCalledWith('hB', 'kab');
+
+      // A hospital picked on the form wins: the stay is created there.
+      component.form.hospitalId = 'hC';
+      component.onPatientQueryChange('zon');
+      tick(250);
+      expect(patientService.list).toHaveBeenCalledWith('hC', 'zon');
+    }));
+
     it('clears the spinner when the search fails', fakeAsync(() => {
       patientService.list.and.returnValue(throwError(() => new Error('x')));
       component.initPatientSearch();
@@ -366,6 +473,38 @@ describe('AdmissionsComponent', () => {
       expect(sent.admissionDateTime).toBe(new Date('2026-10-23T07:48').toISOString().slice(0, 19));
     });
 
+    // QA D918: the physicians were loaded once for the home hospital, so a stay
+    // at another hospital offered physicians the server refuses there.
+    it("offers the physicians of the stay's hospital", () => {
+      departmentLookup.getActiveDepartments.and.returnValue(of([]));
+      const staff = TestBed.inject(StaffService) as jasmine.SpyObj<StaffService>;
+      component.ngOnInit();
+      expect(staff.list).toHaveBeenCalledWith('h1');
+
+      component.openEdit(adm({ hospitalId: 'hB' }));
+      expect(staff.list).toHaveBeenCalledWith('hB');
+
+      component.form.admittingProviderId = 'doc';
+      component.onHospitalChange('h2');
+      expect(staff.list).toHaveBeenCalledWith('h2');
+      expect(component.form.admittingProviderId).toBe('');
+    });
+
+    it("offers no physician of the previous hospital while the next hospital's load (QA D918)", () => {
+      departmentLookup.getActiveDepartments.and.returnValue(of([]));
+      const staff = TestBed.inject(StaffService) as jasmine.SpyObj<StaffService>;
+      component.ngOnInit();
+      expect(component.staffMembers().length).toBeGreaterThan(0);
+
+      const pending = new Subject<StaffResponse[]>();
+      staff.list.and.returnValue(pending);
+      component.onHospitalChange('hB');
+      expect(component.staffMembers()).toEqual([]);
+
+      pending.next([member('docB', 'ROLE_DOCTOR')]);
+      expect(component.staffMembers().map((s) => s.id)).toEqual(['docB']);
+    });
+
     it('edits an existing admission', () => {
       departmentLookup.getActiveDepartments.and.returnValue(of([]));
       component.openEdit(adm({ admissionDateTime: '2026-10-18T10:00:00' }));
@@ -383,10 +522,13 @@ describe('AdmissionsComponent', () => {
       component.confirmDelete(adm());
       expect(component.showDeleteConfirm()).toBeTrue();
       admissionService.delete.and.returnValue(of(undefined as unknown as void));
+      component.deleteReason.set('Admission en double');
       component.executeDelete();
+      expect(admissionService.delete).toHaveBeenCalledWith('a1', 'Admission en double');
       expect(toast.success).toHaveBeenCalledWith('ADMISSIONS.DELETED');
       expect(component.deletingAdm()).toBeNull();
       component.confirmDelete(adm());
+      component.deleteReason.set('Erreur de saisie');
       admissionService.delete.and.returnValue(throwError(() => new Error('x')));
       component.executeDelete();
       expect(toast.error).toHaveBeenCalledWith('ADMISSIONS.DELETE_FAILED');
@@ -439,9 +581,32 @@ describe('AdmissionsComponent', () => {
       component.submitBedAssign();
       expect(toast.success).toHaveBeenCalledWith('ADMISSIONS.BED_ASSIGNED');
       expect(component.bedAssignFor()).toBeNull();
+      // QA D1100: freeing the bed goes through a dialog with a reason.
       admissionService.unassignBed.and.returnValue(of(adm()));
-      component.unassignBed(adm());
+      component.openUnassignBed(adm());
+      component.unassignReason.set('Transfert en réanimation');
+      component.confirmUnassignBed();
+      expect(admissionService.unassignBed).toHaveBeenCalledWith(
+        adm().id,
+        'Transfert en réanimation',
+      );
       expect(toast.success).toHaveBeenCalledWith('ADMISSIONS.BED_UNASSIGNED');
+      expect(component.unassigningAdm()).toBeNull();
+    });
+
+    // QA D1100 (round 19): "Retirer le lit" freed an inpatient's bed in one click.
+    it('QA D1100: freeing a bed asks for confirmation and a reason first', () => {
+      component.openUnassignBed(adm());
+      expect(component.unassigningAdm()).withContext('the dialog opens').toBeTruthy();
+      expect(admissionService.unassignBed).not.toHaveBeenCalled();
+      component.unassignReason.set('   ');
+      component.confirmUnassignBed();
+      expect(admissionService.unassignBed)
+        .withContext('no reason, no release')
+        .not.toHaveBeenCalled();
+      component.closeUnassignBed();
+      expect(component.unassigningAdm()).toBeNull();
+      expect(admissionService.unassignBed).not.toHaveBeenCalled();
     });
 
     it('reports bed failures', () => {
@@ -453,8 +618,50 @@ describe('AdmissionsComponent', () => {
       component.submitBedAssign();
       expect(component.bedAssigning()).toBeFalse();
       admissionService.unassignBed.and.returnValue(throwError(() => new Error('x')));
-      component.unassignBed(adm());
+      component.openUnassignBed(adm());
+      component.unassignReason.set('Erreur de lit');
+      component.confirmUnassignBed();
       expect(toast.error).toHaveBeenCalledWith('ADMISSIONS.BED_ASSIGN_FAILED');
+    });
+  });
+
+  describe('QA D1428 / D1439', () => {
+    it('offers no edit on a closed stay, and one on every open stay', () => {
+      for (const status of [
+        'DISCHARGED',
+        'CANCELLED',
+        'TRANSFERRED',
+        'DECEASED',
+        'CLOSED_IN_ERROR',
+      ]) {
+        expect(component.isEditable(adm({ status } as Partial<AdmissionResponse>)))
+          .withContext(status)
+          .toBeFalse();
+      }
+      for (const status of ['PENDING', 'ACTIVE', 'ON_LEAVE', 'AWAITING_DISCHARGE']) {
+        expect(component.isEditable(adm({ status } as Partial<AdmissionResponse>)))
+          .withContext(status)
+          .toBeTrue();
+      }
+    });
+
+    it('the room follows the held bed: read-only while editing a stay that holds one', () => {
+      departmentLookup.getActiveDepartments.and.returnValue(of([]));
+      component.openEdit(adm({ bedId: 'b1' } as Partial<AdmissionResponse>));
+      expect(component.editingHoldsBed()).toBeTrue();
+      component.openEdit(adm({ bedId: undefined } as Partial<AdmissionResponse>));
+      expect(component.editingHoldsBed()).toBeFalse();
+    });
+
+    it('says one order in the singular, as the panel does', () => {
+      toast.success.calls.reset();
+      component.onOrderSetApplied({
+        prescriptionIds: ['x'],
+        labOrderIds: [],
+        imagingOrderIds: [],
+        skippedItemCount: 0,
+      } as unknown as AppliedOrderSetSummary);
+      expect(toast.success).toHaveBeenCalledWith('ORDER_SETS.APPLIED_RESULT_ONE');
     });
   });
 });
@@ -466,7 +673,19 @@ describe('AdmissionsComponent', () => {
  */
 describe('AdmissionsComponent row actions (rendered, D527)', () => {
   function render(roles: string[], status = 'ACTIVE', admissionDateTime?: string): HTMLElement {
-    const admissions = jasmine.createSpyObj<AdmissionService>('AdmissionService', ['getAll']);
+    return mount(roles, status, admissionDateTime).nativeElement as HTMLElement;
+  }
+
+  function mount(
+    roles: string[],
+    status = 'ACTIVE',
+    admissionDateTime?: string,
+    superAdmin = false,
+  ): ComponentFixture<AdmissionsComponent> {
+    const admissions = jasmine.createSpyObj<AdmissionService>('AdmissionService', [
+      'getAll',
+      'delete',
+    ]);
     admissions.getAll.and.returnValue(
       of([
         {
@@ -484,7 +703,16 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
       'list',
       'getMyHospitalAsResponse',
     ]);
-    hospitals.list.and.returnValue(of([]));
+    hospitals.list.and.returnValue(
+      of(
+        superAdmin
+          ? ([
+              { id: 'h1', name: 'Hôpital A' },
+              { id: 'hB', name: 'Clinique B' },
+            ] as HospitalResponse[])
+          : [],
+      ),
+    );
     hospitals.getMyHospitalAsResponse.and.returnValue(of({ id: 'h1' } as HospitalResponse));
     const staff = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
     staff.list.and.returnValue(of([]));
@@ -513,16 +741,89 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
         },
         {
           provide: RoleContextService,
-          useValue: roleContextStub({ superAdmin: false, hospitalId: 'h1', roles }),
+          useValue: roleContextStub({ superAdmin, hospitalId: 'h1', roles }),
         },
       ],
     });
     const fixture = TestBed.createComponent(AdmissionsComponent);
     fixture.detectChanges();
-    return fixture.nativeElement as HTMLElement;
+    return fixture;
   }
 
   const newButton = (el: HTMLElement) => el.querySelector('.page-actions .btn-primary');
+
+  /**
+   * QA D1381 (round 32): the delete dialog asks for the reason, refuses a
+   * blank one on the field, and sends nothing. QA D1388: the patient's name is
+   * followed by a space, never glued to "Cette action est irréversible."
+   */
+  it('QA D1381 / D1388: the delete dialog asks the reason and reads cleanly', () => {
+    const fixture = mount(['ROLE_DOCTOR']);
+    const service = TestBed.inject(AdmissionService) as unknown as { delete: jasmine.Spy };
+    fixture.componentInstance.confirmDelete({
+      id: 'a1',
+      hospitalId: 'h1',
+      patientId: 'p1',
+      patientName: 'Fatimata Zongo',
+      status: 'ACTIVE',
+    } as AdmissionResponse);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const reason = el.querySelector<HTMLTextAreaElement>('#admission-cancel-reason');
+    expect(reason).withContext('the reason field').not.toBeNull();
+    expect(reason!.getAttribute('data-server-field')).toBe('reason');
+    fixture.componentInstance.executeDelete();
+    fixture.detectChanges();
+    expect(service.delete).not.toHaveBeenCalled();
+    expect(reason!.getAttribute('aria-invalid')).toBe('true');
+    const warning = el.querySelector('.delete-warning')!;
+    expect(warning.textContent!.replace(/\s+/g, ' ')).not.toMatch(/Zongo\S/);
+  });
+
+  // QA D903/D912: the chip showed the email, or an empty line for a phone-only
+  // patient, and the option led with the email; both now name the MRN.
+  it('names the patient by MRN in the chip and the options (QA D912)', () => {
+    const fixture = mount(['ROLE_DOCTOR']);
+    fixture.componentInstance.openCreate();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, fixture.componentInstance)).toEqual(
+      EXPECTED_PICKER_SUBLINES,
+    );
+  });
+
+  // QA D912: [value] on the select ran before its @for options existed, so a
+  // super-admin reopening a stay at B saw "Select a hospital".
+  it("shows a super-admin the reopened stay's hospital as selected (QA D912)", () => {
+    const fixture = mount(['ROLE_SUPER_ADMIN'], 'ACTIVE', undefined, true);
+    fixture.componentInstance.openEdit({
+      id: 'a2',
+      hospitalId: 'hB',
+      patientId: 'p1',
+      patientName: 'Awa Kaboré',
+      status: 'ACTIVE',
+    } as AdmissionResponse);
+    fixture.detectChanges();
+    const select = (fixture.nativeElement as HTMLElement).querySelector(
+      '#adm-hospitalId',
+    ) as HTMLSelectElement;
+    expect(select.value).toBe('hB');
+    expect(select.selectedOptions[0]?.textContent?.trim()).toBe('Clinique B');
+  });
+
+  it('keeps the MRN on the chip when an admission is reopened (QA D912)', () => {
+    const fixture = mount(['ROLE_DOCTOR']);
+    fixture.componentInstance.openEdit({
+      id: 'a1',
+      hospitalId: 'h1',
+      patientId: 'p1',
+      patientName: 'Awa Kaboré',
+      patientMrn: 'CHW2572',
+      status: 'ACTIVE',
+    } as AdmissionResponse);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.picker-chip .chip-sub')?.textContent?.trim()).toBe('CHW2572');
+  });
 
   it('shows a nurse edit, order sets and beds, but not New, Discharge or Delete', () => {
     const el = render(['ROLE_NURSE']);
@@ -545,7 +846,7 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
   });
 
   // QA D603: a discharged (finalized, billed) stay was deleted from the "Sorti" row.
-  for (const status of ['DISCHARGED', 'TRANSFERRED', 'DECEASED', 'CANCELLED']) {
+  for (const status of ['DISCHARGED', 'TRANSFERRED', 'DECEASED', 'CANCELLED', 'CLOSED_IN_ERROR']) {
     it(`offers no Delete on a ${status} stay, even to a doctor`, () => {
       const el = render(['ROLE_DOCTOR'], status);
       expect(el.querySelector('.delete-link')).toBeNull();

@@ -195,7 +195,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.createOrder(request, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Growth scan");
+            .hasMessageContaining("ultrasound.ga.GROWTH_SCAN"); // QA D1046: keyed, was English prose
 
         verifyNoInteractions(ultrasoundMapper);
         verify(orderRepository, never()).save(any());
@@ -215,7 +215,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.createOrder(request, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Anatomy scan");
+            .hasMessageContaining("ultrasound.ga.ANATOMY_SCAN"); // QA D1046: keyed, was English prose
 
         verify(orderRepository, never()).save(any());
     }
@@ -224,6 +224,7 @@ class UltrasoundServiceImplTest {
     void createOrUpdateReport_createsNewReportAndAdvancesOrderStatus() {
         UUID performedBy = UUID.randomUUID();
         UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .findingsSummary("Grossesse évolutive")
             .scanDate(LocalDate.now())
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
             .build();
@@ -269,8 +270,10 @@ class UltrasoundServiceImplTest {
     @Test
     void createOrUpdateReport_updatesExistingReport() {
         UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .findingsSummary("Grossesse évolutive")
             .scanDate(LocalDate.now())
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
+            .fetalHeartRate(150)
             .scanPerformedBy("Tech One")
             .build();
 
@@ -301,9 +304,40 @@ class UltrasoundServiceImplTest {
         verify(orderRepository).save(order);
     }
 
+    /**
+     * QA D1182 (round 22), restated by D1525: the EDIT of a report whose every
+     * observation is "not assessed" and that states nothing else is refused,
+     * nothing saved. (The boxes themselves are no longer defaults: a stated
+     * one is a finding, see createOrUpdateReport_savesAStatedAbsentObservation.)
+     */
+    @Test
+    void createOrUpdateReport_refusesAnEditThatStatesNothing() {
+        UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now())
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
+            .build();
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.IN_PROGRESS);
+        UltrasoundReport existingReport = new UltrasoundReport();
+        existingReport.setUltrasoundOrder(order);
+        existingReport.setHospital(hospital);
+        existingReport.setReportReviewedByProvider(false);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.of(existingReport));
+
+        assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, request, null))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("ultrasound.report.findingsRequired");
+        verify(ultrasoundMapper, never()).updateReportFromRequest(any(), any());
+        verify(reportRepository, never()).save(any());
+    }
+
     @Test
     void createOrUpdateReport_throwsWhenOrderCancelled() {
         UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .findingsSummary("Grossesse évolutive")
             .scanDate(LocalDate.now())
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
             .build();
@@ -325,6 +359,7 @@ class UltrasoundServiceImplTest {
     @Test
     void createOrUpdateReport_throwsWhenReportAlreadyReviewed() {
         UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .findingsSummary("Grossesse évolutive")
             .scanDate(LocalDate.now())
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
             .build();
@@ -363,6 +398,7 @@ class UltrasoundServiceImplTest {
         report.setUltrasoundOrder(order);
         report.setHospital(hospital);
         report.setReportReviewedByProvider(null);
+        report.setFindingsSummary("Grossesse évolutive");
 
         UltrasoundReportResponseDTO responseDTO = UltrasoundReportResponseDTO.builder()
             .id(reportId)
@@ -403,6 +439,7 @@ class UltrasoundServiceImplTest {
         report.setUltrasoundOrder(order);
         report.setHospital(hospital);
         report.setReportReviewedByProvider(null);
+        report.setFindingsSummary("Grossesse évolutive");
 
         UltrasoundReportResponseDTO responseDTO = UltrasoundReportResponseDTO.builder().id(reportId).build();
 
@@ -418,6 +455,131 @@ class UltrasoundServiceImplTest {
         assertThat(report.getReportFinalizedBy()).isNull();
         assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.COMPLETED);
         assertThat(result).isSameAs(responseDTO);
+    }
+
+    /**
+     * QA D1525 review (the D1150 class): an untouched-template report V282
+     * emptied - category NORMAL, legacy, nothing else - is neither reviewed nor
+     * notified: a signed "Normal" that records nothing.
+     */
+    @Test
+    void anEmptiedLegacyReportIsNeitherReviewedNorNotified() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.IN_PROGRESS);
+        UltrasoundReport emptied = new UltrasoundReport();
+        emptied.setId(reportId);
+        emptied.setUltrasoundOrder(order);
+        emptied.setHospital(hospital);
+        emptied.setReportReviewedByProvider(false);
+        emptied.setObservationsStated(false);
+        emptied.setFindingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL);
+        emptied.setFindingsSummary("  ");
+        when(reportRepository.findById(reportId)).thenReturn(Optional.of(emptied));
+
+        assertThatThrownBy(() -> ultrasoundService.markReportReviewed(reportId, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.emptyNotReviewable"));
+        assertThatThrownBy(() -> ultrasoundService.markPatientNotified(reportId))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.emptyNotReviewable"));
+        verify(reportRepository, never()).save(any());
+        assertThat(emptied.getReportReviewedByProvider()).isFalse();
+        assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.IN_PROGRESS);
+        for (java.util.Locale locale : new java.util.Locale[] {
+                java.util.Locale.ENGLISH, java.util.Locale.FRENCH, java.util.Locale.forLanguageTag("es")}) {
+            assertThat(java.util.ResourceBundle.getBundle("i18n/messages-lab", locale)
+                .getString("ultrasound.report.emptyNotReviewable")).isNotBlank();
+        }
+    }
+
+    /**
+     * QA D1525 review: a legacy report whose only observations are the old
+     * defaults (flags TRUE, no anomalies, one fetus - left on a row an older
+     * instance wrote during the rolling deploy) records nothing stated, so it
+     * is neither reviewed nor notified. A typed legacy value still counts.
+     */
+    @Test
+    void aLegacyReportWithOnlyOldDefaultsIsNeitherReviewedNorNotified() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.IN_PROGRESS);
+        UltrasoundReport defaultsOnly = new UltrasoundReport();
+        defaultsOnly.setId(reportId);
+        defaultsOnly.setUltrasoundOrder(order);
+        defaultsOnly.setHospital(hospital);
+        defaultsOnly.setReportReviewedByProvider(false);
+        defaultsOnly.setObservationsStated(false);
+        defaultsOnly.setFindingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL);
+        defaultsOnly.setFetalCardiacActivity(true);
+        defaultsOnly.setFetalMovementObserved(true);
+        defaultsOnly.setFetalToneNormal(true);
+        defaultsOnly.setAnomaliesDetected(false);
+        defaultsOnly.setNumberOfFetuses(1);
+        when(reportRepository.findById(reportId)).thenReturn(Optional.of(defaultsOnly));
+
+        assertThatThrownBy(() -> ultrasoundService.markReportReviewed(reportId, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.emptyNotReviewable"));
+        assertThatThrownBy(() -> ultrasoundService.markPatientNotified(reportId))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        verify(reportRepository, never()).save(any());
+
+        // The same values on a stated report are statements, and a typed legacy value counts.
+        defaultsOnly.setObservationsStated(true);
+        assertThat(java.util.Arrays.stream(
+                com.example.hms.service.maternity.UltrasoundObservations.allFindings(defaultsOnly))
+            .anyMatch(com.example.hms.service.support.ClinicalContent::isAnswer)).isTrue();
+        defaultsOnly.setObservationsStated(false);
+        defaultsOnly.setFetalMovementObserved(false);
+        assertThat(java.util.Arrays.stream(
+                com.example.hms.service.maternity.UltrasoundObservations.allFindings(defaultsOnly))
+            .anyMatch(com.example.hms.service.support.ClinicalContent::isAnswer)).isTrue();
+    }
+
+    /**
+     * QA D1525 review (provisional): a legacy report already reviewed before V282
+     * holding only old defaults is grandfathered: it is signed and immutable, so
+     * its patient can still be notified. An unreviewed empty one still cannot.
+     */
+    @Test
+    void aSignedLegacyReportIsNotifiedButAnUnreviewedEmptyOneIsNot() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.COMPLETED);
+        UltrasoundReport signed = new UltrasoundReport();
+        signed.setId(reportId);
+        signed.setUltrasoundOrder(order);
+        signed.setHospital(hospital);
+        signed.setReportReviewedByProvider(true);
+        signed.setObservationsStated(false);
+        signed.setFindingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL);
+        signed.setFetalCardiacActivity(true);
+        signed.setAnomaliesDetected(false);
+        signed.setNumberOfFetuses(1);
+        UltrasoundReportResponseDTO dto = UltrasoundReportResponseDTO.builder().id(reportId).build();
+        when(reportRepository.findById(reportId)).thenReturn(Optional.of(signed));
+        when(reportRepository.save(signed)).thenReturn(signed);
+        when(ultrasoundMapper.toReportResponseDTO(signed)).thenReturn(dto);
+
+        assertThat(ultrasoundService.markPatientNotified(reportId)).isSameAs(dto);
+        assertThat(signed.getPatientNotifiedAt()).isNotNull();
+
+        UltrasoundReport unreviewed = new UltrasoundReport();
+        unreviewed.setId(reportId);
+        unreviewed.setUltrasoundOrder(order);
+        unreviewed.setHospital(hospital);
+        unreviewed.setReportReviewedByProvider(false);
+        unreviewed.setObservationsStated(false);
+        unreviewed.setFindingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL);
+        unreviewed.setFetalCardiacActivity(true);
+        when(reportRepository.findById(reportId)).thenReturn(Optional.of(unreviewed));
+        assertThatThrownBy(() -> ultrasoundService.markPatientNotified(reportId))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.emptyNotReviewable"));
     }
 
     @Test
@@ -436,7 +598,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.markReportReviewed(reportId, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already reviewed");
+            .hasMessageContaining("ultrasound.report.alreadyReviewed"); // QA D1046
 
         verify(reportRepository, never()).save(any());
     }
@@ -446,6 +608,7 @@ class UltrasoundServiceImplTest {
         UltrasoundReport report = new UltrasoundReport();
         report.setId(reportId);
         report.setPatientNotifiedAt(null);
+        report.setFetalHeartRate(148);
 
         UltrasoundReportResponseDTO responseDTO = UltrasoundReportResponseDTO.builder()
             .id(reportId)
@@ -472,21 +635,277 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.markPatientNotified(reportId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already been notified");
+            .hasMessageContaining("ultrasound.report.patientAlreadyNotified"); // QA D1046
 
         verify(reportRepository, never()).save(any());
     }
 
+    /** QA D1525: a report that states nothing is refused on the summary field, before the category. */
     @Test
-    void getTemplateMethodsReturnPresetValues() {
-        var ntTemplate = ultrasoundService.getNuchalTranslucencyTemplate();
-        var anatomyTemplate = ultrasoundService.getAnatomyScanTemplate();
+    void createOrUpdateReport_refusesAReportThatStatesNothing() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.empty());
+        UltrasoundReportRequestDTO dateOnly = UltrasoundReportRequestDTO.builder().scanDate(LocalDate.now()).build();
 
-        assertThat(ntTemplate.getGestationalAgeAtScan()).isEqualTo(12);
-        assertThat(ntTemplate.getNumberOfFetuses()).isEqualTo(1);
-        assertThat(anatomyTemplate.getGestationalAgeAtScan()).isEqualTo(20);
-        assertThat(anatomyTemplate.getNumberOfFetuses()).isEqualTo(1);
-        assertThat(anatomyTemplate.getAnatomySurveyComplete()).isFalse();
+        assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, dateOnly, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("findingsSummary");
+                assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.findingsRequired");
+            });
+        verify(reportRepository, never()).save(any());
+        assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.ORDERED);
+    }
+
+    /** QA D1525: "cardiac activity absent" with URGENT and nothing else is a report, and is marked as stated. */
+    @Test
+    void createOrUpdateReport_savesAStatedAbsentObservation() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now())
+            .fetalCardiacActivity(Boolean.FALSE)
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.URGENT)
+            .build();
+        UltrasoundReport mapped = new UltrasoundReport();
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.empty());
+        when(ultrasoundMapper.toReportEntity(request, order, hospital)).thenReturn(mapped);
+        when(reportRepository.save(mapped)).thenReturn(mapped);
+
+        ultrasoundService.createOrUpdateReport(orderId, request, null);
+
+        verify(reportRepository).save(mapped);
+        assertThat(mapped.getObservationsStated()).as("saved from now on: not legacy").isTrue();
+    }
+
+    /**
+     * QA D1525 review: a save that changes an observation of a legacy row takes
+     * the values sent as stated and marks the row stated. Nothing is masked or
+     * cleared on the way (V282 already removed the old defaults).
+     */
+    @Test
+    void createOrUpdateReport_aSaveThatChangesAnObservationMakesALegacyRowStated() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.IN_PROGRESS);
+        UltrasoundReport legacy = new UltrasoundReport();
+        legacy.setUltrasoundOrder(order);
+        legacy.setHospital(hospital);
+        legacy.setReportReviewedByProvider(false);
+        legacy.setObservationsStated(false);
+        UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now())
+            .fetalCardiacActivity(true).anomaliesDetected(false).numberOfFetuses(1)
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
+            .build();
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.of(legacy));
+        when(reportRepository.save(legacy)).thenReturn(legacy);
+
+        ultrasoundService.createOrUpdateReport(orderId, request, null);
+
+        assertThat(request.getFetalCardiacActivity()).as("nothing cleared").isTrue();
+        assertThat(request.getNumberOfFetuses()).isEqualTo(1);
+        verify(ultrasoundMapper).updateReportFromRequest(legacy, request);
+        assertThat(legacy.getObservationsStated()).isTrue();
+    }
+
+    /**
+     * QA D1525 review: one input, the same refusal as the portal's spec
+     * ("the same input refuses on the same field on both sides"): no fetus seen,
+     * a heart rate, anomalies detected and NORMAL is refused on the category
+     * first (the category contradiction runs before the fetus-count one); with
+     * URGENT and a heart rate it is refused on the fetus count.
+     */
+    @Test
+    void createOrUpdateReport_runsTheContradictionsInThePortalsOrder() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.empty());
+        UltrasoundReportRequestDTO both = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).numberOfFetuses(0).fetalHeartRate(140).anomaliesDetected(true)
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL).build();
+        assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, both, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("findingCategory");
+                assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.normalContradictsObservation");
+            });
+        UltrasoundReportRequestDTO heartRate = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).numberOfFetuses(0).fetalHeartRate(140)
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.URGENT).build();
+        assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, heartRate, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("numberOfFetuses");
+                assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.noFetusContradictsObservation");
+            });
+        verify(reportRepository, never()).save(any());
+    }
+
+    /** QA D1525 review: a summary-only edit of a legacy report leaves "not asked" as it was. */
+    @Test
+    void createOrUpdateReport_aSummaryOnlyEditKeepsALegacyReportLegacy() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.IN_PROGRESS);
+        UltrasoundReport legacy = new UltrasoundReport();
+        legacy.setUltrasoundOrder(order);
+        legacy.setHospital(hospital);
+        legacy.setReportReviewedByProvider(false);
+        legacy.setObservationsStated(false);
+        legacy.setNumberOfFetuses(2);
+        // The portal reloads the surviving value and sends it back with the typo fix.
+        UltrasoundReportRequestDTO typoFix = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).findingsSummary("Grossesse gémellaire (typo corrigé)").numberOfFetuses(2)
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL).build();
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.of(legacy));
+        when(reportRepository.save(legacy)).thenReturn(legacy);
+
+        ultrasoundService.createOrUpdateReport(orderId, typoFix, null);
+
+        assertThat(legacy.getObservationsStated()).as("still legacy: no observation answered").isFalse();
+    }
+
+    /** QA D1525 review: a legacy count of 9, sent back unchanged with a summary edit, is accepted. */
+    @Test
+    void createOrUpdateReport_anUnchangedLegacyFetusCountOutOfRangeIsAccepted() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.IN_PROGRESS);
+        UltrasoundReport legacy = new UltrasoundReport();
+        legacy.setUltrasoundOrder(order);
+        legacy.setHospital(hospital);
+        legacy.setReportReviewedByProvider(false);
+        legacy.setObservationsStated(false);
+        legacy.setNumberOfFetuses(9);
+        UltrasoundReportRequestDTO edit = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).findingsSummary("Résumé corrigé").numberOfFetuses(9)
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.MONITORING_REQUIRED).build();
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.of(legacy));
+        when(reportRepository.save(legacy)).thenReturn(legacy);
+
+        ultrasoundService.createOrUpdateReport(orderId, edit, null);
+
+        verify(reportRepository).save(legacy);
+        assertThat(legacy.getObservationsStated()).as("nothing changed: still legacy").isFalse();
+    }
+
+    /**
+     * QA D1525 review: an old contradictory legacy report (NORMAL with no cardiac
+     * activity, a description without anomalies detected) can still take a typo
+     * fix: the contradictions are judged only when one of their inputs changes.
+     * Changing the category judges them; a new report always does.
+     */
+    @Test
+    void createOrUpdateReport_aLegacyReportJudgesContradictionsOnlyWhenTheirInputsChange() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.IN_PROGRESS);
+        UltrasoundReport legacy = new UltrasoundReport();
+        legacy.setUltrasoundOrder(order);
+        legacy.setHospital(hospital);
+        legacy.setReportReviewedByProvider(false);
+        legacy.setObservationsStated(false);
+        legacy.setFindingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL);
+        legacy.setFetalCardiacActivity(false);
+        legacy.setAnomalyDescription("Kyste");
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.of(legacy));
+        when(reportRepository.save(legacy)).thenReturn(legacy);
+
+        UltrasoundReportRequestDTO typoFix = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).findingsSummary("Résumé corrigé").fetalCardiacActivity(false)
+            .anomalyDescription("Kyste").findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL).build();
+        ultrasoundService.createOrUpdateReport(orderId, typoFix, null);
+        verify(reportRepository).save(legacy);
+
+        UltrasoundReportRequestDTO recategorised = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).findingsSummary("Résumé corrigé").fetalCardiacActivity(false)
+            .anomalyDescription("Kyste").findingCategory(com.example.hms.enums.UltrasoundFindingCategory.VARIANT).build();
+        assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, recategorised, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("findingCategory"));
+    }
+
+    /** QA D1525 review: a new report is stated whatever the client sends; the client flag plays no part. */
+    @Test
+    void createOrUpdateReport_aNewReportIsStatedWithoutAnyClientFlag() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).fetalCardiacActivity(true).numberOfFetuses(1)
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
+            .build();
+        UltrasoundReport mapped = UltrasoundReport.builder().build();
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.empty());
+        when(ultrasoundMapper.toReportEntity(request, order, hospital)).thenReturn(mapped);
+        when(reportRepository.save(mapped)).thenReturn(mapped);
+
+        ultrasoundService.createOrUpdateReport(orderId, request, null);
+
+        assertThat(request.getFetalCardiacActivity()).as("nothing cleared on a new report").isTrue();
+        assertThat(mapped.getObservationsStated()).isTrue();
+    }
+
+    /** QA D1525: NORMAL cannot be saved with absent cardiac activity, abnormal tone or anomalies. */
+    @Test
+    void createOrUpdateReport_refusesNormalWithAContradictingObservation() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.empty());
+        List<UltrasoundReportRequestDTO> contradictions = List.of(
+            UltrasoundReportRequestDTO.builder().scanDate(LocalDate.now()).fetalCardiacActivity(false)
+                .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL).build(),
+            UltrasoundReportRequestDTO.builder().scanDate(LocalDate.now()).fetalToneNormal(false)
+                .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL).build(),
+            UltrasoundReportRequestDTO.builder().scanDate(LocalDate.now()).anomaliesDetected(true)
+                .anomalyDescription("Hygroma").findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL).build());
+        for (UltrasoundReportRequestDTO request : contradictions) {
+            assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, request, null))
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                    assertThat(ex.getField()).isEqualTo("findingCategory");
+                    assertThat(ex.getMessageKey()).isEqualTo("ultrasound.report.normalContradictsObservation");
+                });
+        }
+        verify(reportRepository, never()).save(any());
+    }
+
+    /** QA D1525: with a finding but no category, the category is asked for, never assumed NORMAL. */
+    @Test
+    void createOrUpdateReport_refusesAMissingCategory() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.empty());
+        UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now()).fetalHeartRate(148).build();
+
+        assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, request, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("findingCategory"));
+        verify(reportRepository, never()).save(any());
     }
 
     @Test
@@ -570,6 +989,8 @@ class UltrasoundServiceImplTest {
 
         assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.CANCELLED);
         assertThat(order.getCancellationReason()).isEqualTo(reason);
+        // QA D1047: the cancellation is stamped with its time.
+        assertThat(order.getCancelledAt()).isNotNull();
         assertThat(result).isSameAs(responseDTO);
     }
 
@@ -583,6 +1004,31 @@ class UltrasoundServiceImplTest {
         assertThatThrownBy(() -> ultrasoundService.cancelOrder(orderId, "reason"))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("completed");
+    }
+
+    /** QA D1098 (round 19): an order whose report is available is resulted too. */
+    @Test
+    void cancelOrder_refusesAnOrderWithItsReport_D1098() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setStatus(UltrasoundOrderStatus.REPORT_AVAILABLE);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> ultrasoundService.cancelOrder(orderId, "reason"))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("ultrasound.order.completedNoCancel");
+        assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.REPORT_AVAILABLE);
+    }
+
+    @Test
+    void cancelOrder_refusesABlankReason_D1098() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> ultrasoundService.cancelOrder(orderId, "  "))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("order.lifecycle.cancelReasonRequired");
+        assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.ORDERED);
     }
 
     @Test
@@ -766,6 +1212,7 @@ class UltrasoundServiceImplTest {
     void reportWritesAtTheActingHospitalStillWork() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         UltrasoundReport own = reportAt(hospitalId);
+        own.setFindingsSummary("Grossesse évolutive"); // QA D1525: an empty report is neither reviewed nor notified
         when(reportRepository.findById(reportId)).thenReturn(Optional.of(own));
         when(reportRepository.save(own)).thenReturn(own);
         UltrasoundReportResponseDTO dto = UltrasoundReportResponseDTO.builder().id(reportId).build();
@@ -855,5 +1302,110 @@ class UltrasoundServiceImplTest {
         when(ultrasoundMapper.toOrderResponseDTO(own)).thenReturn(UltrasoundOrderResponseDTO.builder().id(orderId).build());
 
         assertThat(ultrasoundService.getOrdersByHospitalId(hospitalId)).hasSize(1);
+    }
+
+    // ═══════════════ QA D930 class (round 16 siblings): the order's author ═══════════════
+
+    private static void asUser(UUID userId, Runnable call) {
+        User user = new User();
+        user.setId(userId);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user, null, java.util.List.of()));
+        try {
+            call.run();
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void d930_createRecordsTheSessionUserAsTheOrdersAuthor() {
+        UUID sessionUser = UUID.randomUUID();
+        UltrasoundOrderRequestDTO request = UltrasoundOrderRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId)
+            .scanType(UltrasoundScanType.NUCHAL_TRANSLUCENCY).gestationalAgeAtOrder(12).build();
+        UltrasoundOrder orderEntity = new UltrasoundOrder();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(ultrasoundMapper.toOrderEntity(request, patient, hospital)).thenReturn(orderEntity);
+        when(orderRepository.save(orderEntity)).thenReturn(orderEntity);
+        when(staffRepository.findByUserIdAndHospitalId(sessionUser, hospitalId)).thenReturn(Optional.empty());
+
+        // The controller's id parses the username as a UUID: null for a real account.
+        asUser(sessionUser, () -> ultrasoundService.createOrder(request, null));
+
+        assertThat(orderEntity.getOrderedByUserId()).isEqualTo(sessionUser);
+    }
+
+    @Test
+    void d930_aColleagueCannotChangeOrCancelAnotherCliniciansOrder() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        order.setOrderedByUserId(UUID.randomUUID());
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        UUID colleague = UUID.randomUUID();
+        UltrasoundOrderRequestDTO edit = UltrasoundOrderRequestDTO.builder().build();
+
+        assertThatThrownBy(() -> asUser(colleague, () -> ultrasoundService.updateOrder(orderId, edit)))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> asUser(colleague, () -> ultrasoundService.cancelOrder(orderId, "no")))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.ORDERED);
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void d930_theAuthorCancelsHerOrder() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        UUID author = UUID.randomUUID();
+        order.setOrderedByUserId(author);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderRepository.save(order)).thenReturn(order);
+
+        asUser(author, () -> ultrasoundService.cancelOrder(orderId, "Patient request"));
+
+        assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.CANCELLED);
+    }
+
+    private static UltrasoundOrderRequestDTO schedule(java.time.LocalDate date, String time, Integer count) {
+        return UltrasoundOrderRequestDTO.builder().scheduledDate(date).scheduledTime(time).scanCountForPregnancy(count).build();
+    }
+
+    private static void refusedOn(String field, UltrasoundOrderRequestDTO request, com.example.hms.model.UltrasoundOrder current) {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> UltrasoundServiceImpl.requirePlausibleSchedule(request, current))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> org.assertj.core.api.Assertions.assertThat(ex.getField()).isEqualTo(field));
+    }
+
+    @Test
+    void d1447_aPastDateTextAsTimeAndABadCountAreRefusedOnTheirFields() {
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.systemDefault());
+        refusedOn("scheduledDate", schedule(today.minusDays(30), null, null), null);
+        refusedOn("scheduledTime", schedule(today, "99:99 demain", null), null);
+        refusedOn("scanCountForPregnancy", schedule(today, null, -1), null);
+        refusedOn("scanCountForPregnancy", schedule(today, null, 0), null);
+        org.assertj.core.api.Assertions.assertThatCode(() -> UltrasoundServiceImpl.requirePlausibleSchedule(
+            schedule(today, "14:30", 2), null)).doesNotThrowAnyException();
+        org.assertj.core.api.Assertions.assertThatCode(() -> UltrasoundServiceImpl.requirePlausibleSchedule(
+            schedule(null, "", null), null)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void d1447_anEditDoesNotJudgeWhatItOnlyEchoes() {
+        java.time.LocalDate past = java.time.LocalDate.now(java.time.ZoneId.systemDefault()).minusDays(30);
+        com.example.hms.model.UltrasoundOrder stored = new com.example.hms.model.UltrasoundOrder();
+        stored.setScheduledDate(past);
+        stored.setScheduledTime("99:99 demain");
+        stored.setScanCountForPregnancy(-1);
+        org.assertj.core.api.Assertions.assertThatCode(() -> UltrasoundServiceImpl.requirePlausibleSchedule(
+            schedule(past, "99:99 demain", -1), stored)).doesNotThrowAnyException();
+        refusedOn("scheduledDate", schedule(past.minusDays(1), "99:99 demain", -1), stored);
+        refusedOn("scheduledTime", schedule(past, "tomorrow", -1), stored);
+        refusedOn("scanCountForPregnancy", schedule(past, "99:99 demain", -2), stored);
     }
 }

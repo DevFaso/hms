@@ -1,6 +1,7 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <span class="specialist-eyebrow">{{ 'SPECIALIST_DASH.PLAN_EYEBROW' | translate }}</span>
       <h1 class="page-title">{{ 'TREATMENT.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'TREATMENT.SUBTITLE' | translate }}</p>
     </div>
@@ -13,41 +14,55 @@
       </button>
     </div>
   </div>
-  <div class="summary-cards">
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon active">healing</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByGroup('active') }}</span
-        ><span class="card-label">{{ 'COMMON.ACTIVE' | translate }}</span>
+  <section class="specialist-overview">
+    <div class="overview-heading">
+      <h2>{{ 'SPECIALIST_DASH.OVERVIEW' | translate }}</h2>
+      <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+    </div>
+    <div class="summary-cards">
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon active">healing</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            loading() || loadFailed() ? '—' : countByGroup('active')
+          }}</span
+          ><span class="card-label">{{ 'COMMON.ACTIVE' | translate }}</span>
+        </div>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon draft">edit_note</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            loading() || loadFailed() ? '—' : countByGroup('draft')
+          }}</span
+          ><span class="card-label">{{ 'SPECIALIST_DASH.DRAFT_REVIEW' | translate }}</span>
+        </div>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon completed">check_circle</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            loading() || loadFailed() ? '—' : countByGroup('completed')
+          }}</span
+          ><span class="card-label">{{ 'TREATMENT.COMPLETED' | translate }}</span>
+        </div>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon total">bar_chart</span>
+        <div class="card-info">
+          <span class="card-value">{{ loading() || loadFailed() ? '—' : plans().length }}</span
+          ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
+        </div>
       </div>
     </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon draft">edit_note</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByGroup('draft') }}</span
-        ><span class="card-label">{{ 'TREATMENT.DRAFT' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon completed">check_circle</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByGroup('completed') }}</span
-        ><span class="card-label">{{ 'TREATMENT.COMPLETED' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon total">bar_chart</span>
-      <div class="card-info">
-        <span class="card-value">{{ plans().length }}</span
-        ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
-      </div>
-    </div>
-  </div>
+    <p class="specialist-scope-note">{{ 'SPECIALIST_DASH.LOADED_SCOPE' | translate }}</p>
+  </section>
   <div class="filter-bar">
     <div class="tabs">
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'all'"
+        [attr.aria-pressed]="activeTab() === 'all'"
         (click)="setTab('all')"
         [title]="'COMMON.ALL' | translate"
       >
@@ -56,6 +71,7 @@
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'active'"
+        [attr.aria-pressed]="activeTab() === 'active'"
         (click)="setTab('active')"
         [title]="'COMMON.ACTIVE' | translate"
       >
@@ -64,14 +80,16 @@
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'draft'"
+        [attr.aria-pressed]="activeTab() === 'draft'"
         (click)="setTab('draft')"
-        [title]="'TREATMENT.DRAFT' | translate"
+        [title]="'SPECIALIST_DASH.DRAFT_REVIEW' | translate"
       >
-        {{ 'TREATMENT.DRAFT' | translate }}
+        {{ 'SPECIALIST_DASH.DRAFT_REVIEW' | translate }}
       </button>
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'completed'"
+        [attr.aria-pressed]="activeTab() === 'completed'"
         (click)="setTab('completed')"
         [title]="'TREATMENT.COMPLETED' | translate"
       >
@@ -89,16 +107,42 @@
       />
     </div>
   </div>
+  @if (!loading() && !loadFailed()) {
+    <div class="workspace-caption">
+      <span>{{
+        'SPECIALIST_DASH.VISIBLE' | translate: { shown: filtered().length, loaded: plans().length }
+      }}</span>
+      @if (searchTerm) {
+        <button type="button" class="clear-search" (click)="searchTerm = ''; applyFilter()">
+          {{ 'SPECIALIST_DASH.CLEAR_SEARCH' | translate }}
+        </button>
+      }
+    </div>
+  }
+  @if (!loading() && loadFailed()) {
+    <div class="dashboard-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <div>
+        <h2>{{ 'SPECIALIST_DASH.UNAVAILABLE' | translate }}</h2>
+        <p>{{ 'TREATMENT.LOAD_FAILED' | translate }}</p>
+      </div>
+      <button type="button" class="btn-secondary" (click)="load()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  }
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
       <p>{{ 'TREATMENT.LOADING' | translate }}</p>
     </div>
   }
-  @if (!loading() && filtered().length === 0) {
+  @if (!loading() && !loadFailed() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">healing</span>
-      @if (isSuperAdmin() && globalView()) {
+      @if (plans().length > 0) {
+        <h3>{{ 'SPECIALIST_DASH.NO_MATCHES' | translate }}</h3>
+      } @else if (isSuperAdmin() && globalView()) {
         <h3>{{ 'HOSPITAL_SCOPE.EMPTY_GLOBAL.TREATMENT_PLANS' | translate }}</h3>
       } @else {
         <h3>{{ 'TREATMENT.NO_PLANS' | translate }}</h3>
@@ -106,8 +150,13 @@
       <p>{{ 'TREATMENT.PLANS_APPEAR_HERE' | translate }}</p>
     </div>
   }
-  @if (!loading() && filtered().length > 0) {
-    <div class="data-table">
+  @if (!loading() && !loadFailed() && filtered().length > 0) {
+    <div
+      class="data-table"
+      tabindex="0"
+      role="region"
+      [attr.aria-label]="'TREATMENT.TITLE' | translate"
+    >
       <table>
         <thead>
           <tr>
@@ -155,16 +204,21 @@
                     class="action-link"
                     (click)="viewDetail(p)"
                     [title]="'TREATMENT.VIEW_PLAN' | translate"
+                    [attr.aria-label]="'TREATMENT.VIEW_PLAN' | translate"
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  <button
-                    class="action-link"
-                    (click)="openEdit(p)"
-                    [title]="'TREATMENT.EDIT_PLAN' | translate"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
+                  <!-- QA D1081: a plan is rewritten by its author (the server refuses others). -->
+                  @if (canEditPlan(p)) {
+                    <button
+                      class="action-link"
+                      (click)="openEdit(p)"
+                      [title]="'TREATMENT.EDIT_PLAN' | translate"
+                      [attr.aria-label]="'TREATMENT.EDIT_PLAN' | translate"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  }
                 </div>
               </td>
             </tr>
@@ -175,10 +229,20 @@
   }
   @if (selectedPlan(); as plan) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="treatment-plans-panel-1-title"
+        (escaped)="closeDetail()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ 'TREATMENT.TREATMENT_PLAN' | translate }}</h2>
-          <button class="btn-close" (click)="closeDetail()" [title]="'COMMON.CLOSE' | translate">
+          <h2 id="treatment-plans-panel-1-title">{{ 'TREATMENT.TREATMENT_PLAN' | translate }}</h2>
+          <button
+            class="btn-close"
+            (click)="closeDetail()"
+            [title]="'COMMON.CLOSE' | translate"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -206,11 +270,19 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'TREATMENT.START' | translate }}</span
-              ><span class="field-value">{{ plan.timelineStartDate || '—' }}</span>
+              ><span class="field-value">{{
+                plan.timelineStartDate
+                  ? (plan.timelineStartDate | serverTime | date: 'mediumDate')
+                  : '—'
+              }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'TREATMENT.REVIEW' | translate }}</span
-              ><span class="field-value">{{ plan.timelineReviewDate || '—' }}</span>
+              ><span class="field-value">{{
+                plan.timelineReviewDate
+                  ? (plan.timelineReviewDate | serverTime | date: 'mediumDate')
+                  : '—'
+              }}</span>
             </div>
           </div>
           @if (plan.problemStatement) {
@@ -246,7 +318,8 @@
                 <div class="followup-item">
                   <strong>{{ f.label }}</strong
                   ><span>{{ f.dueOn ? (f.dueOn | serverTime | date: 'mediumDate') : '—' }}</span
-                  ><span
+                  >{{ ' '
+                  }}<span
                     class="status-badge {{
                       f.status === 'COMPLETED' ? 'status-completed' : 'status-pending'
                     }}"
@@ -254,6 +327,20 @@
                   >
                 </div>
               }
+            </div>
+          }
+          <!-- QA D1127: another clinician approves the plan; its author cannot. -->
+          @if (canApprovePlan(plan)) {
+            <div class="detail-section">
+              <button
+                type="button"
+                class="btn-primary"
+                data-testid="approve-plan"
+                (click)="approvePlan(plan)"
+                [attr.aria-busy]="approving() ? 'true' : null"
+              >
+                {{ 'TREATMENT.APPROVE_PLAN' | translate }}
+              </button>
             </div>
           }
         </div>
@@ -269,9 +356,14 @@
       (click)="closeModal()"
       (keydown.escape)="closeModal()"
     ></div>
-    <div class="modal modal-lg">
+    <div
+      appModalDialog
+      aria-labelledby="treatment-plans-dialog-form-title"
+      (escaped)="closeModal()"
+      class="modal modal-lg"
+    >
       <div class="modal-header">
-        <h2>
+        <h2 id="treatment-plans-dialog-form-title">
           {{ editing() ? ('COMMON.EDIT' | translate) : ('TREATMENT.NEW' | translate) }}
           {{ 'TREATMENT.TREATMENT_PLAN' | translate }}
         </h2>
@@ -287,16 +379,17 @@
               <div class="picker-chip">
                 <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
                 <div class="chip-info">
-                  <span class="chip-name"
-                    >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
-                  >
-                  <span class="chip-sub">{{ selectedPatient()!.email }}</span>
+                  <span class="chip-name">{{ selectedPatient() | personName }}</span>
+                  @if (selectedPatient() | patientSubline; as sub) {
+                    {{ ' ' }}<span class="chip-sub">{{ sub }}</span>
+                  }
                 </div>
                 <button
                   type="button"
                   class="chip-clear"
                   (click)="clearPatient()"
                   [title]="'TREATMENT.CHANGE_PATIENT' | translate"
+                  [attr.aria-label]="'TREATMENT.CHANGE_PATIENT' | translate"
                 >
                   <span class="material-symbols-outlined">close</span>
                 </button>
@@ -305,13 +398,18 @@
               <div class="patient-picker-wrap">
                 <span class="material-symbols-outlined picker-search-icon">person_search</span>
                 <input
+                  required
+                  data-escape-discards
                   id="tp-patientSearch"
+                  [attr.data-submit-blank]="form.patientId ? 'false' : 'true'"
                   class="picker-input"
                   type="text"
                   [placeholder]="'TREATMENT.SEARCH_PATIENT_PLACEHOLDER' | translate"
                   [value]="patientQuery()"
                   (input)="onPatientQueryChange($any($event.target).value)"
                   (blur)="patientDropdownOpen.set(false)"
+                  [appListEscape]="patientDropdownOpen()"
+                  (listEscape)="patientDropdownOpen.set(false)"
                   autocomplete="off"
                 />
                 @if (patientSearchLoading()) {
@@ -326,10 +424,10 @@
                       <li class="picker-option" (mousedown)="selectPatient(p)">
                         <div class="opt-avatar">{{ patientInitials(p) }}</div>
                         <div class="opt-info">
-                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
-                          <span class="opt-meta"
-                            >{{ p.email }}{{ p.mrn ? ' · MRN ' + p.mrn : '' }}</span
-                          >
+                          <span class="opt-name">{{ p | personName }}</span>
+                          @if (p | patientSubline; as sub) {
+                            {{ ' ' }}<span class="opt-meta">{{ sub }}</span>
+                          }
                         </div>
                       </li>
                     }
@@ -348,6 +446,7 @@
               <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
             } @else {
               <select
+                required
                 id="tp-hospitalId"
                 [(ngModel)]="form.hospitalId"
                 [title]="'ENCOUNTERS.HOSPITAL' | translate"
@@ -362,17 +461,31 @@
         </div>
         <div class="form-row">
           <div class="field full-width">
-            <label for="tp-authorStaff">{{ 'TREATMENT.AUTHOR_STAFF' | translate }} *</label>
-            <select
-              id="tp-authorStaff"
-              [(ngModel)]="form.authorStaffId"
-              [title]="'TREATMENT.AUTHOR_STAFF' | translate"
-            >
-              <option value="">{{ 'TREATMENT.SELECT_STAFF' | translate }}</option>
-              @for (s of staffList(); track s.id) {
-                <option [value]="s.id">{{ s.name }}</option>
-              }
-            </select>
+            <!-- QA D1332: the author is the signed-in clinician; only a
+                 super-admin (whom the server lets name another) picks one. -->
+            @if (authorChoosable) {
+              <label for="tp-authorStaff">{{ 'TREATMENT.AUTHOR_STAFF' | translate }} *</label>
+              <select
+                required
+                id="tp-authorStaff"
+                [(ngModel)]="form.authorStaffId"
+                [title]="'TREATMENT.AUTHOR_STAFF' | translate"
+              >
+                <option value="">{{ 'TREATMENT.SELECT_STAFF' | translate }}</option>
+                @for (s of staffList(); track s.id) {
+                  <option [value]="s.id">{{ s.name }}</option>
+                }
+              </select>
+            } @else {
+              <label for="tp-authorSelf">{{ 'TREATMENT.AUTHOR_STAFF' | translate }}</label>
+              <input
+                id="tp-authorSelf"
+                type="text"
+                readonly
+                data-testid="tp-author-self"
+                [value]="authorDisplayName() || '—'"
+              />
+            }
           </div>
         </div>
         <div class="form-row">
@@ -403,6 +516,7 @@
           <div class="field full-width">
             <label for="tp-problem">{{ 'TREATMENT.PROBLEM_STATEMENT' | translate }} *</label>
             <textarea
+              required
               id="tp-problem"
               [(ngModel)]="form.problemStatement"
               rows="3"
@@ -415,7 +529,14 @@
         <button class="btn-secondary" (click)="closeModal()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="submitForm()" [disabled]="saving()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          data-testid="tp-submit"
+          (click)="submitForm()"
+          [disabled]="saving()"
+        >
           {{
             saving()
               ? ('COMMON.SAVING' | translate)

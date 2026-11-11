@@ -1,3 +1,4 @@
+@use '../../shared/styles/diagnostics-workspace' as diagnostics;
 .release-worklist-container {
   padding: 1.5rem;
   max-width: 1200px;
@@ -199,6 +200,12 @@
     color: #991b1b;
   }
 
+  /* QA D969: a positive qualitative answer (a malaria rapid test). */
+  &.flag-abnormal {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
   &.flag-low {
     background: #dbeafe;
     color: #1e40af;
@@ -211,6 +218,7 @@
 
   /* Never graded: no configured range is in the result's unit. Amber, the
      reviewer must look at it, and never the green of a normal row. */
+  &.flag-grade_unknown,
   &.flag-unit_mismatch {
     background: #fef3c7;
     color: #92400e;
@@ -326,3 +334,22 @@
     animation: none;
   }
 }
+
+/* QA D963: STAT and URGENT results are listed first and flagged. */
+.priority-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #fef3c7;
+  color: #92400e;
+
+  &.priority-stat {
+    background: #991b1b;
+    color: #ffffff;
+  }
+}
+
+@include diagnostics.workspace;

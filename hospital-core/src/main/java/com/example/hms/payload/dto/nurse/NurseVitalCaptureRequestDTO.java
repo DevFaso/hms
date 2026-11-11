@@ -74,6 +74,12 @@ public class NurseVitalCaptureRequestDTO {
     @Size(max = 1000)
     private String notes;
 
+    /** QA D1045: the 0-10 pain score of a ward reassessment, charted like the triage one. */
+    @Min(value = 0, message = "{vitals.painScale.range}")
+    @Max(value = 10, message = "{vitals.painScale.range}")
+    private Integer painScale;
+
+    @com.example.hms.validation.ReportedOn("diastolicBpMmHg")
     @AssertTrue(message = "{vitals.bloodPressure.invalid}")
     @JsonIgnore
     public boolean isBloodPressureOrdered() {
@@ -81,6 +87,7 @@ public class NurseVitalCaptureRequestDTO {
     }
 
     /** D111: a submission with no measurement at all is not a reading. */
+    @com.example.hms.validation.ReportedOn("temperatureCelsius")
     @AssertTrue(message = "{vitals.empty}")
     @JsonIgnore
     public boolean isAnyMeasurementPresent() {

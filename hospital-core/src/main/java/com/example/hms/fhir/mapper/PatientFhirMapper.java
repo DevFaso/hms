@@ -291,9 +291,19 @@ public class PatientFhirMapper {
         String mobile = firstTelecom(src, ContactPoint.ContactPointSystem.PHONE, ContactPoint.ContactPointUse.MOBILE);
         String home = firstTelecom(src, ContactPoint.ContactPointSystem.PHONE, ContactPoint.ContactPointUse.HOME);
         String email = firstTelecom(src, ContactPoint.ContactPointSystem.EMAIL, null);
-        if (mobile != null) out.setPhoneNumberPrimary(mobile);
-        if (home != null) out.setPhoneNumberSecondary(home);
+        // QA D1211 (round 23): a FHIR client writes the same phone rule as the desk.
+        if (mobile != null) out.setPhoneNumberPrimary(requirePhone(mobile));
+        if (home != null) out.setPhoneNumberSecondary(requirePhone(home));
         if (email != null) out.setEmail(email);
+    }
+
+    /** A telecom value that is a phone number, else HAPI's 400 with the shared phone message. */
+    private static String requirePhone(String value) {
+        if (!com.example.hms.validation.PhoneNumberValidator.isPhoneNumber(value)) {
+            throw new ca.uhn.fhir.rest.server.exceptions.InvalidRequestException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw(com.example.hms.validation.PhoneNumber.MESSAGE_KEY));
+        }
+        return value;
     }
 
     private void applyAddressUpdates(Patient out, org.hl7.fhir.r4.model.Patient src) {

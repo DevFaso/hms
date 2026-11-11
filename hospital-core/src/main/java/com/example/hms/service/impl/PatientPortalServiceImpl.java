@@ -124,14 +124,27 @@ import com.example.hms.utility.RoleNames;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientPortalServiceImpl implements PatientPortalService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_APPOINTMENT_ID = "appointmentId";
+    private static final String FIELD_DATE = "date";
+    private static final String FIELD_HOSPITAL_ID = "hospitalId";
+    private static final String FIELD_PRESCRIPTION_ID = "prescriptionId";
+
+
+    private static final String PROXY_VIEW_LAB_RESULTS = "VIEW_LAB_RESULTS";
+    private static final String PROXY_VIEW_MEDICATIONS = "VIEW_MEDICATIONS";
+    private static final String PROXY_VIEW_APPOINTMENTS = "VIEW_APPOINTMENTS";
+    private static final String PROXY_VIEW_BILLING = "VIEW_BILLING";
+    private static final String PROXY_VIEW_RECORDS = "VIEW_RECORDS";
     private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
+    private static final String PROVIDER_UNAVAILABLE_KEY = "portal.booking.providerUnavailable";
     /** QA D717: the only states a patient may still cancel or reschedule from the portal. */
     private static final Set<AppointmentStatus> PATIENT_CHANGEABLE_STATUSES = java.util.EnumSet.of(
             AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED,
             AppointmentStatus.PENDING, AppointmentStatus.RESCHEDULED);
 
 
-    private static final String MSG_UNABLE_RESOLVE_USER = "Unable to resolve user from authentication";
+    private static final String MSG_UNABLE_RESOLVE_USER = "patient.refill.decision.userUnresolved";
     private static final String MEDICATION_REFILL_NOTIFICATION_TYPE = "MEDICATION_REFILL";
 
     /**
@@ -187,6 +200,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.service.NotificationService notificationService;
     private final EmailService emailService;
     private final com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
+    /** QA D1060 / D1063: the slot rules set the visit length and refuse a slot held for an offer. */
+    private final com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
     private final com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
     /** The patient's stated language for the mails the portal sends them. */
     private final com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
@@ -213,6 +228,22 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.repository.EducationResourceRepository educationResourceRepository;
     private final com.example.hms.mapper.PatientEducationQuestionMapper educationQuestionMapper;
     private final MessageSource messageSource;
+    /**
+     * QA D1212 (round 24): the health summary's best-effort cards each read in
+     * their own transaction, so a failed card never rolls back the page.
+     */
+    private final com.example.hms.service.support.IsolatedReads isolatedReads;
+
+    /**
+     * QA D985: booking or cancelling the visit a recall asks for moves the
+     * recall. Setter-injected (null in constructor-built unit tests).
+     */
+    private com.example.hms.service.scheduling.PatientRecallService recallService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setRecallService(com.example.hms.service.scheduling.PatientRecallService recallService) {
+        this.recallService = recallService;
+    }
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -252,6 +283,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // message, never stored as typed (QA D113: free text, another
         // patient's address, a blank phone failing as a 500).
         applySelfServiceIdentifiers(patient, dto);
+        // QA D1471: the same rule as the patient's names; only a CHANGE is judged.
+        com.example.hms.utility.PatientIdentityRules.requireNameWithLetters(
+                "emergencyContactName", dto.getEmergencyContactName(), patient.getEmergencyContactName());
+        com.example.hms.utility.PatientIdentityRules.requirePlaceWithLetters("city", dto.getCity(), patient.getCity());
         if (dto.getAddressLine1() != null)             patient.setAddressLine1(dto.getAddressLine1());
         if (dto.getAddressLine2() != null)             patient.setAddressLine2(dto.getAddressLine2());
         if (dto.getCity() != null)                     patient.setCity(dto.getCity());
@@ -260,7 +295,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (dto.getCountry() != null)                  patient.setCountry(dto.getCountry());
         if (dto.getEmergencyContactName() != null)     patient.setEmergencyContactName(dto.getEmergencyContactName());
         if (dto.getEmergencyContactPhone() != null) {
-            patient.setEmergencyContactPhone(selfServicePhone(patient, dto.getEmergencyContactPhone()));
+            patient.setEmergencyContactPhone(selfServicePhone(patient, dto.getEmergencyContactPhone(), "emergencyContactPhone"));
         }
         if (dto.getEmergencyContactRelationship() != null)
             patient.setEmergencyContactRelationship(dto.getEmergencyContactRelationship());
@@ -276,34 +311,39 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     /** The phones and e-mail of a self-service edit: normalised, checked, never stored as typed. */
     private void applySelfServiceIdentifiers(Patient patient, PatientProfileUpdateDTO dto) {
         if (dto.getPhoneNumberPrimary() != null) {
-            String primary = selfServicePhone(patient, dto.getPhoneNumberPrimary());
+            String primary = selfServicePhone(patient, dto.getPhoneNumberPrimary(), "phoneNumberPrimary");
             if (primary == null) {
-                throw new BusinessException(MessageUtil.resolve("patient.phoneNumberPrimary.required"));
+                throw new com.example.hms.exception.FieldBusinessException("phoneNumberPrimary", "patient.phoneNumberPrimary.required");
             }
             UUID selfId = patient.getId();
-            if (patientRepository.findByPhoneNumberPrimary(primary)
-                    .filter(other -> !other.getId().equals(selfId)).isPresent()) {
-                throw new BusinessException(MessageUtil.resolve("patient.profile.phone.taken"));
+            // Never single-result: two records may already share the number,
+            // and keeping one's own (unchanged) number is never a conflict.
+            if (!primary.equals(patient.getPhoneNumberPrimary())
+                    && patientRepository.existsByPhoneNumberPrimaryAndIdNot(primary, selfId)) {
+                throw new com.example.hms.exception.FieldBusinessException("phoneNumberPrimary", "patient.profile.phone.taken");
             }
             patient.setPhoneNumberPrimary(primary);
         }
         if (dto.getPhoneNumberSecondary() != null) {
-            patient.setPhoneNumberSecondary(selfServicePhone(patient, dto.getPhoneNumberSecondary()));
+            patient.setPhoneNumberSecondary(selfServicePhone(patient, dto.getPhoneNumberSecondary(), "phoneNumberSecondary"));
         }
         if (dto.getEmail() != null) {
             patient.setEmail(selfServiceEmail(patient, dto.getEmail()));
         }
     }
 
-    /** A phone typed on the profile in E.164; blank is null; anything else is refused. */
-    private static String selfServicePhone(Patient patient, String raw) {
+    /**
+     * A phone typed on the profile in E.164; blank is null; anything else is
+     * refused. QA D1299: a number refused names the field it was typed in.
+     */
+    private static String selfServicePhone(Patient patient, String raw, String field) {
         if (raw.isBlank()) {
             return null;
         }
         String e164 = com.example.hms.utility.PhoneNumbers.toE164(
                 raw, com.example.hms.utility.PhoneNumbers.callingCodeForCountry(patient.getCountry()));
         if (e164 == null) {
-            throw new BusinessException(MessageUtil.resolve("adminSignup.phoneNumber.invalid"));
+            throw new com.example.hms.exception.FieldBusinessException(field, "adminSignup.phoneNumber.invalid");
         }
         return e164;
     }
@@ -314,11 +354,15 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (email.isEmpty()) {
             return null;
         }
+        // QA D1471: a@b was saved. An address stored before this rule stays, while other fields change.
+        if (!email.equalsIgnoreCase(patient.getEmail()) && !com.example.hms.utility.EmailAddresses.isDeliverable(email)) {
+            throw new com.example.hms.exception.FieldBusinessException("email", "patient.email.undeliverable");
+        }
         // The signed-in patient always has an account (findPatient resolves it).
         boolean takenByAccount = patient.getUser() != null
                 && userRepository.existsEmailOnOtherAccount(email, patient.getUser().getId());
         if (patientRepository.existsEmailOnOtherPatient(email, patient.getId()) || takenByAccount) {
-            throw new BusinessException(MessageUtil.resolve("user.update.email.taken"));
+            throw new com.example.hms.exception.FieldBusinessException("email", "user.update.email.taken");
         }
         return email;
     }
@@ -388,9 +432,50 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .currentMedications(safeMedications(patientId, hospitalId))
                 .recentVitals(safeVitals(patientId))
                 .immunizations(safeImmunizations(patientId))
+                .activeDiagnoses(activeDiagnosesOf(patientId))
                 .allergies(splitToList(patient.getAllergies()))
                 .chronicConditions(splitToList(patient.getChronicConditions()))
+                .labResultTotal(safeCount("health summary lab result total",
+                    () -> labResultService.countLabResultsForPatientPortal(patientId)))
+                .medicationTotal(safeCount("health summary medication total",
+                    () -> medicationService.countMedicationsForPatientPortal(patientId)))
                 .build();
+    }
+
+    /**
+     * QA D1214 (round 23): the patient's active diagnoses for "Pathologies
+     * actives". The health summary never set the field, so the card was empty
+     * for every patient. The doctor's diagnoses land in
+     * {@code clinical.patient_problems} (ACTIVE); V14-era rows in
+     * {@code patient_diagnoses} are read as the medical history reads them.
+     * The patient's own record at every hospital (design Q1): no hospital
+     * scope. The display text, the code when there is none; each once.
+     */
+    private List<String> activeDiagnosesOf(UUID patientId) {
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        // Partial availability, as the other cards of the summary: a failed
+        // read is logged, never a broken page — and, QA D1212 (round 24),
+        // never a rolled-back summary: the read has its own transaction.
+        isolatedReads.attempt("health summary active diagnoses", () -> {
+            if (patientProblemRepository != null) {
+                patientProblemRepository.findByPatient_IdAndStatusOrderByCreatedAtDesc(
+                        patientId, com.example.hms.enums.ProblemStatus.ACTIVE)
+                    .forEach(p -> addDiagnosisLabel(out, p.getProblemDisplay(), p.getProblemCode()));
+            }
+            if (patientDiagnosisRepository != null) {
+                patientDiagnosisRepository.findByPatient_IdOrderByDiagnosedAtDesc(patientId).stream()
+                    .filter(d -> "ACTIVE".equalsIgnoreCase(d.getStatus()))
+                    .forEach(d -> addDiagnosisLabel(out, d.getDescription(), d.getIcdCode()));
+            }
+        });
+        return List.copyOf(out);
+    }
+
+    private static void addDiagnosisLabel(java.util.Set<String> out, String display, String code) {
+        String label = display != null && !display.isBlank() ? display.trim() : code;
+        if (label != null && !label.isBlank()) {
+            out.add(label.trim());
+        }
     }
 
     // ── Lab results ──────────────────────────────────────────────────────
@@ -404,6 +489,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return labResultService.getLabResultsForPatientPortal(patient.getId(), null, limit);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientLabResultResponseDTO> getMyLabResults(Authentication auth, int offset, int limit) {
+        Patient patient = findPatient(auth);
+        // QA D1213: every current result reachable, window by window.
+        return labResultService.getLabResultsForPatientPortal(patient.getId(), offset, limit);
+    }
+
     // ── Medications ──────────────────────────────────────────────────────
 
     @Override
@@ -413,6 +506,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // Own medications at every hospital (design Q1): the portal variant
         // resolves the patient by ownership, so no hospital scope is needed.
         return medicationService.getMedicationsForPatientPortal(patient.getId(), null, limit);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<PatientMedicationResponseDTO> getMyMedicationsPage(Authentication auth, Pageable pageable) {
+        return medicationService.getMedicationsPageForPatientPortal(findPatient(auth).getId(), pageable);
     }
 
     // ── Prescriptions ────────────────────────────────────────────────────
@@ -435,6 +534,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<PatientVitalSignResponseDTO> getMyVitals(Authentication auth, int limit) {
         UUID patientId = resolvePatientId(auth);
         return vitalSignService.getRecentVitalsForPatientPortal(patientId, limit);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<PatientVitalSignResponseDTO> getMyVitalsPage(Authentication auth,
+                                                                                            int page, int size) {
+        UUID patientId = resolvePatientId(auth);
+        return vitalSignService.getVitalsPageForPatientPortal(patientId, page, size);
     }
 
     // ── Encounters / visit history ───────────────────────────────────────
@@ -474,6 +581,25 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return billingInvoiceService.getInvoicesForPortalPatient(patientId, pageable, locale);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO getMyInvoiceDetail(Authentication auth, UUID invoiceId) {
+        return billingInvoiceService.getPortalInvoiceDetail(invoiceId, resolvePatientId(auth));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.InvoicePdfResponseDTO getMyInvoicePdf(Authentication auth, UUID invoiceId, Locale locale) {
+        return billingInvoiceService.getPortalInvoicePdf(invoiceId, resolvePatientId(auth), locale);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.InvoicePdfResponseDTO getMyReceiptPdf(Authentication auth, UUID invoiceId,
+                                                                             UUID paymentId, Locale locale) {
+        return billingInvoiceService.getPortalReceiptPdf(invoiceId, paymentId, resolvePatientId(auth), locale);
+    }
+
     // ── Pay an invoice ───────────────────────────────────────────────────
 
     @Override
@@ -501,7 +627,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<ImmunizationResponseDTO> getMyImmunizations(Authentication auth) {
         UUID patientId = resolvePatientId(auth);
-        return immunizationService.getImmunizationsByPatientId(patientId);
+        // QA D1212 (round 24): the patient's own record at every hospital
+        // (design Q1), as labs, medications and vitals already read it.
+        return immunizationService.getImmunizationsForPatientPortal(patientId);
     }
 
     // ── Consultations ────────────────────────────────────────────────────
@@ -549,13 +677,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // Verify patient is registered at this hospital
         requireBookingRegistration(patientId, dto.getHospitalId());
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patientEntity);
         Hospital hospital = hospitalRepository.findClinicalById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
 
         Department department = departmentRepository.findById(dto.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("department.notFound", dto.getDepartmentId()));
         if (!department.getHospital().getId().equals(dto.getHospitalId())) {
-            throw new BusinessException(MessageUtil.resolve("portal.booking.departmentOtherHospital"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, MessageUtil.resolve("portal.booking.departmentOtherHospital"));
         }
 
         // Resolve staff — explicit pick or first available in department
@@ -564,7 +693,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             staff = staffRepository.findByIdAndActiveTrue(dto.getStaffId())
                     .orElseThrow(() -> new ResourceNotFoundException("provider.notFound", dto.getStaffId()));
             if (!staff.getHospital().getId().equals(dto.getHospitalId())) {
-                throw new BusinessException(MessageUtil.resolve("portal.booking.providerOtherHospital"));
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, MessageUtil.resolve("portal.booking.providerOtherHospital"));
             }
         } else {
             List<Staff> available = staffRepository.findActiveProvidersByHospitalAndDepartment(
@@ -572,33 +701,39 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             if (available.isEmpty()) {
                 throw new BusinessException(MessageUtil.resolve("portal.booking.noProvider"));
             }
-            staff = available.get(0); // assign first available
+            // QA D1093: "any clinician" is a clinician whose published slot
+            // starts then, never the first provider of the list whatever their rota.
+            staff = clinicianWithPublishedSlot(available, dto);
         }
 
-        // Time defaults — endTime = startTime + 30 min if omitted
-        java.time.LocalTime endTime = dto.getEndTime() != null
-                ? dto.getEndTime()
-                : dto.getStartTime().plusMinutes(30);
         java.time.LocalDateTime requestedStart = java.time.LocalDateTime.of(dto.getDate(), dto.getStartTime());
-        java.time.LocalDateTime requestedEnd = java.time.LocalDateTime.of(dto.getDate(), endTime);
-        if (!requestedEnd.isAfter(requestedStart)) {
-            throw new BusinessException(MessageUtil.resolve("portal.booking.endBeforeStart"));
-        }
+        // QA D1093: a patient's own booking takes exactly one published, free
+        // slot of the clinician, at this hospital and department. The time
+        // input took any minute, so a 10:10 booking straddled two slots and a
+        // weekend or an afternoon with no session was booked.
+        com.example.hms.model.scheduling.AppointmentSlot slot = slotPolicy.requirePublishedFreeSlot(
+                staff.getId(), requestedStart, dto.getHospitalId(), dto.getDepartmentId());
+        // QA D1060: the slot decides how long the visit lasts, never the
+        // patient: any end time the client sends is ignored.
+        java.time.LocalTime endTime = slot.getEndAt().toLocalTime();
+        java.time.LocalDateTime requestedEnd = slot.getEndAt();
+
+        // QA D978: a patient books a future time within the patient booking day.
+        com.example.hms.service.AppointmentSlotRules.requirePatientBookable(
+                requestedStart, requestedEnd, nowAt(department.getHospital()));
 
         // Staff availability check
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
-            throw new BusinessException(MessageUtil.resolve("portal.booking.providerUnavailable"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_DATE, MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY));
         }
 
-        // Overlap check
-        boolean hasConflict = appointmentRepository
-                .findByStaff_IdAndAppointmentDate(staff.getId(), dto.getDate())
-                .stream()
-                .anyMatch(existing -> {
-                    java.time.LocalDateTime es = java.time.LocalDateTime.of(existing.getAppointmentDate(), existing.getStartTime());
-                    java.time.LocalDateTime ee = java.time.LocalDateTime.of(existing.getAppointmentDate(), existing.getEndTime());
-                    return requestedStart.isBefore(ee) && es.isBefore(requestedEnd);
-                });
+        // QA D1063: a slot held for a waitlist offer is not given to anyone else.
+        slotPolicy.requireNoLiveHold(staff.getId(), requestedStart, requestedEnd);
+
+        // Overlap check. QA D937: a cancelled booking or a no-show frees its slot.
+        boolean hasConflict = com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
+                appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), dto.getDate()),
+                null, requestedStart, requestedEnd);
         if (hasConflict) {
             throw new BusinessException(MessageUtil.resolve("portal.booking.providerBusy"));
         }
@@ -606,7 +741,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // Resolve the staff's role assignment for this hospital
         UserRoleHospitalAssignment assignment = assignmentRepository
                 .findActiveStaffAssignment(staff.getUser().getId(), hospital.getId())
-                .orElseThrow(() -> new BusinessException(MessageUtil.resolve("portal.booking.providerUnavailable")));
+                .orElseThrow(() -> new BusinessException(MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY)));
 
         // Create the appointment
         Appointment appointment = new Appointment();
@@ -624,10 +759,104 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         appointment.setAssignment(assignment);
 
         Appointment saved = appointmentRepository.save(appointment);
+        // QA D1093: the slot is taken, so nobody else is offered it.
+        slotPolicy.takeSlot(slot, saved);
+        // QA D985: a recall the patient answers by booking is scheduled.
+        if (recallService != null) {
+            recallService.scheduleOpenRecallFor(saved, null);
+        }
         log.info("Patient {} self-scheduled appointment {} at hospital {} department {}",
                 patientId, saved.getId(), hospital.getName(), department.getName());
 
         return appointmentMapper.toAppointmentResponseDTO(saved);
+    }
+
+    /**
+     * QA D1093: the bookable clinician of the department whose published,
+     * free slot starts at the requested time, in rota order. No such slot is
+     * the same refusal as a picked clinician with none.
+     */
+    private Staff clinicianWithPublishedSlot(List<Staff> available, PortalBookAppointmentRequestDTO dto) {
+        java.time.LocalDateTime start = java.time.LocalDateTime.of(dto.getDate(), dto.getStartTime());
+        java.util.Map<UUID, com.example.hms.model.scheduling.AppointmentSlot> slotted = new java.util.HashMap<>();
+        for (com.example.hms.model.scheduling.AppointmentSlot s : slotPolicy.offerableAt(dto.getDepartmentId(), start)) {
+            slotted.putIfAbsent(s.getStaff().getId(), s);
+        }
+        return available.stream()
+                .filter(st -> slotted.containsKey(st.getId()))
+                .filter(st -> !com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
+                        appointmentRepository.findByStaff_IdAndAppointmentDate(st.getId(), dto.getDate()),
+                        null, start, slotted.get(st.getId()).getEndAt()))
+                .findFirst()
+                .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException("startTime", "portal.booking.notAPublishedSlot"));
+    }
+
+    /**
+     * QA D1093: the published slots a patient may take on {@code date}:
+     * generated, free now, in the future at the hospital's clock, within the
+     * patient booking day, and with no other booking of the clinician over
+     * them ({@code movingAppointmentId}, when set, is the visit being moved,
+     * which never blocks itself). The portal offers exactly these; the
+     * booking and the reschedule refuse anything else.
+     */
+    private List<Map<String, Object>> openSlotsFor(UUID hospitalId, UUID departmentId, UUID staffId,
+                                                   java.time.LocalDate date, UUID movingAppointmentId,
+                                                   java.time.LocalDateTime hospitalNow) {
+        if (date == null) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_DATE, "portal.booking.dateRequired");
+        }
+        java.util.Set<UUID> bookable = staffId != null ? null
+                : staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId).stream()
+                        .map(Staff::getId).collect(java.util.stream.Collectors.toSet());
+        Map<UUID, List<Appointment>> booked = new java.util.HashMap<>();
+        return slotPolicy.openOn(hospitalId, departmentId, staffId, date, hospitalNow)
+                .stream()
+                .filter(s -> s.getStaff() != null && (bookable == null || bookable.contains(s.getStaff().getId())))
+                .filter(s -> com.example.hms.service.AppointmentSlotRules.isPatientBookable(
+                        s.getStartAt(), s.getEndAt(), hospitalNow))
+                .filter(s -> !com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
+                        booked.computeIfAbsent(s.getStaff().getId(),
+                                id -> appointmentRepository.findByStaff_IdAndAppointmentDate(id, date)),
+                        movingAppointmentId, s.getStartAt(), s.getEndAt()))
+                .map(s -> {
+                    Map<String, Object> m = new java.util.LinkedHashMap<>();
+                    m.put("slotId", s.getId());
+                    m.put("staffId", s.getStaff().getId());
+                    m.put("staffName", s.getStaff().getName());
+                    m.put(FIELD_DATE, s.getSlotDate());
+                    m.put("startTime", s.getStartAt().toLocalTime());
+                    m.put("endTime", s.getEndAt().toLocalTime());
+                    return m;
+                })
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getOpenSlots(Authentication auth, UUID hospitalId, UUID departmentId,
+                                                  UUID staffId, java.time.LocalDate date) {
+        requireActiveRegistration(auth, hospitalId);
+        Department department = departmentRepository.findById(departmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", departmentId));
+        if (department.getHospital() == null || !hospitalId.equals(department.getHospital().getId())) {
+            throw new ResourceNotFoundException("department.notFound", departmentId);
+        }
+        return openSlotsFor(hospitalId, departmentId, staffId, date, null, nowAt(department.getHospital()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getRescheduleSlots(Authentication auth, UUID appointmentId,
+                                                        java.time.LocalDate date) {
+        UUID patientId = resolvePatientId(auth);
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointmentId));
+        requirePatientOwnership(appointment, patientId);
+        if (appointment.getStaff() == null || appointment.getHospital() == null) {
+            return List.of();
+        }
+        return openSlotsFor(appointment.getHospital().getId(), null, appointment.getStaff().getId(), date,
+                appointment.getId(), nowAt(appointment.getHospital()));
     }
 
     // ── Booking-form lookups ─────────────────────────────────────────────
@@ -719,29 +948,35 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         requirePatientOwnership(appointment, patientId);
 
         if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
-            throw new BusinessException("appointment.alreadyCancelled");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_APPOINTMENT_ID, "appointment.alreadyCancelled");
         }
         if (appointment.getStatus() == AppointmentStatus.COMPLETED) {
-            throw new BusinessException("appointment.cancel.completed");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_APPOINTMENT_ID, "appointment.cancel.completed");
         }
         // QA D717: once the patient has arrived (CHECKED_IN / IN_PROGRESS) or
         // the visit is closed out (NO_SHOW, FAILED), the portal must not cancel:
         // the encounter is already open at the desk. Only a not-yet-started
         // booking is the patient's to cancel.
         if (!PATIENT_CHANGEABLE_STATUSES.contains(appointment.getStatus())) {
-            throw new BusinessException("appointment.patient.notChangeable");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_APPOINTMENT_ID, "appointment.patient.notChangeable");
         }
 
         appointment.setStatus(AppointmentStatus.CANCELLED);
-        if (dto.getReason() != null && !dto.getReason().isBlank()) {
-            String existingNotes = appointment.getNotes() != null ? appointment.getNotes() : "";
-            appointment.setNotes(existingNotes + (existingNotes.isEmpty() ? "" : " | ")
-                    + "Patient cancelled: " + dto.getReason());
-        }
+        // QA D1126: the patient's own reason, when given, is kept like the desk's.
+        // Optional here on purpose: the shipped iOS app labels it "Reason
+        // (optional)", and the patient is the author of the cancellation.
+        // QA D1196 (round 22): the reason is data, in its own column, and every
+        // reader labels it in their own language. It was also appended to the
+        // notes as "Patient cancelled: ...", in English for good.
+        appointment.setStatusReason(patientReason(dto.getReason()));
         appointmentRepository.save(appointment);
         // The appointment owns its slot (P3 #22): a patient cancelling from the
         // portal frees the time for the next patient just like a desk cancel.
         slotInventoryService.releaseForAppointment(appointment.getId());
+        // QA D985: the recall this visit answered is open again.
+        if (recallService != null) {
+            recallService.reopenRecallsOf(appointment.getId());
+        }
         // Outbound webhooks (Tier 2 item 45): the portal cancel is its own
         // write path - a subscriber must see it like a desk cancel.
         if (appointment.getHospital() != null) {
@@ -757,7 +992,57 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return appointmentMapper.toAppointmentResponseDTO(appointment);
     }
 
+    /** The status a visit the patient moves lands on: SCHEDULED, a tentative PENDING one staying PENDING. */
+    private static AppointmentStatus movedStatus(AppointmentStatus current) {
+        return current == AppointmentStatus.PENDING ? AppointmentStatus.PENDING : AppointmentStatus.SCHEDULED;
+    }
+
+    /**
+     * QA D1196 (round 22): the patient's own reason for a cancel or a move, as
+     * data: trimmed, null when blank. The request DTOs cap it at 500, the
+     * status_reason column's length.
+     */
+    static String patientReason(String reason) {
+        return reason == null || reason.isBlank() ? null : reason.trim();
+    }
+
+    /**
+     * The wall-clock time at the hospital (its organisation's zone, else the
+     * server's): a patient's "past" slot is judged on the hospital's clock,
+     * not the server's (QA D978, review round 8).
+     */
+    private static java.time.LocalDateTime nowAt(com.example.hms.model.Hospital hospital) {
+        return com.example.hms.utility.HospitalCalendar.now(hospital);
+    }
+
     // ── Reschedule own appointment ───────────────────────────────────────
+
+    /** A completed, cancelled or already-arrived visit is not moved by the patient (QA D717 sibling). */
+    private static void requirePatientReschedulable(Appointment appointment) {
+        if (appointment.getStatus() == AppointmentStatus.COMPLETED) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_APPOINTMENT_ID, "appointment.reschedule.completed");
+        }
+        if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_APPOINTMENT_ID, "appointment.reschedule.cancelled");
+        }
+        if (!PATIENT_CHANGEABLE_STATUSES.contains(appointment.getStatus())) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_APPOINTMENT_ID, "appointment.patient.notChangeable");
+        }
+    }
+
+    /** QA D978 / D937: the clinician works at the new time and has no other booking over it. */
+    private void requireProviderFreeForMove(Appointment appointment, java.time.LocalDateTime newStart,
+                                            java.time.LocalDateTime newEnd) {
+        UUID staffId = appointment.getStaff().getId();
+        if (!staffAvailabilityService.isStaffAvailable(staffId, newStart)) {
+            throw new com.example.hms.exception.FieldBusinessException("newDate", MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY));
+        }
+        if (com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
+                appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, newStart.toLocalDate()),
+                appointment.getId(), newStart, newEnd)) {
+            throw new com.example.hms.exception.FieldBusinessException("newDate", MessageUtil.resolve("portal.booking.providerBusy"));
+        }
+    }
 
     @Override
     @Transactional
@@ -769,31 +1054,51 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, dto.getAppointmentId()));
 
         requirePatientOwnership(appointment, patientId);
-
-        if (appointment.getStatus() == AppointmentStatus.COMPLETED) {
-            throw new BusinessException("appointment.reschedule.completed");
-        }
-        if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
-            throw new BusinessException("appointment.reschedule.cancelled");
-        }
-        // QA D717 sibling: an arrived patient cannot move the visit either.
-        if (!PATIENT_CHANGEABLE_STATUSES.contains(appointment.getStatus())) {
-            throw new BusinessException("appointment.patient.notChangeable");
-        }
-        if (!dto.getNewEndTime().isAfter(dto.getNewStartTime())) {
-            throw new BusinessException("appointment.timeRange.invalid");
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(appointment.getPatient());
+        requirePatientReschedulable(appointment);
+        // QA D1495: refused as the patient's own booking is, once the desk has deactivated the registration.
+        refuseDeactivatedRegistration(patientId, appointment);
+        java.time.LocalDateTime newStart = java.time.LocalDateTime.of(dto.getNewDate(), dto.getNewStartTime());
+        // QA D1093: the new time is a published, free slot of the same
+        // clinician at the same hospital, as a new booking must be.
+        com.example.hms.model.scheduling.AppointmentSlot newSlot = slotPolicy.requirePublishedFreeSlot(
+                appointment.getStaff() != null ? appointment.getStaff().getId() : null, newStart,
+                appointment.getHospital() != null ? appointment.getHospital().getId() : null, null);
+        // QA D1060: the slot sets the length at the new time; the patient
+        // never chooses it (the dialog's free end field saved 08:20-09:20).
+        java.time.LocalTime newEndTime = newSlot.getEndAt().toLocalTime();
+        // QA D978 / D937: the new slot obeys the same rules as a new booking:
+        // in the future, within the patient booking day, and free.
+        java.time.LocalDateTime newEnd = newSlot.getEndAt();
+        com.example.hms.service.AppointmentSlotRules.requirePatientBookable(
+                newStart, newEnd, nowAt(appointment.getHospital()));
+        if (appointment.getStaff() != null) {
+            requireProviderFreeForMove(appointment, newStart, newEnd);
+            // QA D1063: nor onto a slot held for a waitlist offer.
+            slotPolicy.requireNoLiveHold(appointment.getStaff().getId(), newStart, newEnd);
         }
 
         appointment.setAppointmentDate(dto.getNewDate());
         appointment.setStartTime(dto.getNewStartTime());
-        appointment.setEndTime(dto.getNewEndTime());
-        appointment.setStatus(AppointmentStatus.RESCHEDULED);
-        if (dto.getReason() != null && !dto.getReason().isBlank()) {
-            String existingNotes = appointment.getNotes() != null ? appointment.getNotes() : "";
-            appointment.setNotes(existingNotes + (existingNotes.isEmpty() ? "" : " | ")
-                    + "Patient rescheduled: " + dto.getReason());
-        }
+        appointment.setEndTime(newEndTime);
+        // QA D977: a moved appointment is booked at its new time, exactly as the
+        // desk reschedule lands it (SCHEDULED). RESCHEDULED marks a superseded
+        // booking; parking the moved one there hid its pre-check-in and its
+        // reminders' status checks treated it as a different state. A tentative
+        // booking (PENDING, the check-out follow-up of QA D526) stays tentative:
+        // moving it is not the clinic confirming it (review round 13).
+        appointment.setStatus(movedStatus(appointment.getStatus()));
+        // QA D1196 (round 22): the patient's reason for the move is stored as
+        // data (the status reason the appointment screens label in the reader's
+        // language), never glued into the notes as "Patient rescheduled: ...".
+        // No reason given: the previous status reason does not describe this move.
+        appointment.setStatusReason(patientReason(dto.getReason()));
+        // QA D1429: the visit now sits on a published slot: it is no longer overbooked.
+        appointment.setOverbookReason(null);
         appointmentRepository.save(appointment);
+        // QA D1093: the old slot goes back on offer and the new one is taken.
+        slotInventoryService.releaseForAppointment(appointment.getId());
+        slotPolicy.takeSlot(newSlot, appointment);
         // Outbound webhooks (Tier 2 item 45): same rule as the desk path.
         if (appointment.getHospital() != null) {
             webhookPublisher.publish(appointment.getHospital().getId(),
@@ -833,7 +1138,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .build();
 
         log.info("Patient {} recording home vital", patient.getId());
-        return vitalSignService.recordVital(patient.getId(), vitalRequest, userId);
+        PatientVitalSignResponseDTO recorded = vitalSignService.recordVital(patient.getId(), vitalRequest, userId);
+        // QA D1564: the newborn warnings are written for clinicians (and reach them as notices);
+        // a parent's home reading does not get the clinical wording back.
+        if (recorded != null) {
+            recorded.setNewbornAlerts(null);
+        }
+        return recorded;
     }
 
     // ── Request medication refill ────────────────────────────────────────
@@ -854,6 +1165,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             throw new ResourceNotFoundException("prescription.notFound", dto.getPrescriptionId());
         }
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         // Refuse up front what approval would refuse anyway. Without this the
         // patient's request is accepted, the whole care team is emailed, and the
         // prescriber only discovers the prescription is dead when they try to
@@ -861,10 +1173,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // QA D813: a controlled medicine says so. It used to share the "no renewals left"
         // message, which told a patient with renewals on paper the wrong reason.
         if (controlledResolver.isControlled(prescription)) {
-            throw new BusinessException("patient.refill.controlled");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_PRESCRIPTION_ID, "patient.refill.controlled");
         }
         if (!prescription.allowsRefill()) {
-            throw new BusinessException("patient.refill.notRefillable");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_PRESCRIPTION_ID, "patient.refill.notRefillable");
         }
 
         // One open request per prescription. There was no guard at all, so a
@@ -875,7 +1187,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                         prescription.getId(), patient.getId(), OPEN_REFILL_STATUSES)
                 .ifPresent(open -> {
                     // QA D743: localised (the French portal showed English).
-                    throw new BusinessException(
+                    throw new com.example.hms.exception.FieldBusinessException(FIELD_PRESCRIPTION_ID, 
                             open.getStatus() == RefillStatus.PAUSED
                                     ? "patient.refill.onHold"
                                     : "patient.refill.alreadyPending");
@@ -923,7 +1235,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // A request the provider has put on hold has not been decided yet, so the
         // patient can still withdraw it.
         if (refill.getStatus() != RefillStatus.REQUESTED && refill.getStatus() != RefillStatus.PAUSED) {
-            throw new BusinessException("Only pending refill requests can be cancelled. Current status: " + refill.getStatus());
+            // QA D1187 class (round 22): a key, in the reader's language.
+            throw new BusinessException("patient.refill.cancel.notPending");
         }
 
         refill.setStatus(RefillStatus.CANCELLED);
@@ -995,7 +1308,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public Page<AccessLogEntryDTO> getMyAccessLog(Authentication auth, Pageable pageable) {
         UUID patientId = resolvePatientId(auth);
-        return disclosureAccountingService.getEntries(patientId, null, null, pageable);
+        return disclosureAccountingService.getEntriesAsPatientSees(patientId, null, null, pageable);
     }
 
     @Override
@@ -1006,7 +1319,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                              java.time.LocalDateTime to,
                                                              Pageable pageable) {
         UUID patientId = resolvePatientId(auth);
-        return disclosureAccountingService.getAccounting(patientId, from, to, pageable);
+        return disclosureAccountingService.getAccountingAsPatientSees(patientId, from, to, pageable);
     }
 
     // ── Private helpers ──────────────────────────────────────────────────
@@ -1030,7 +1343,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private UUID writeHospitalFor(Patient patient, UUID requestedHospitalId) {
         if (requestedHospitalId != null) {
             if (!isRegisteredAt(patient.getId(), requestedHospitalId)) {
-                throw new BusinessException(portalMessage("patientPortal.request.hospitalNotRegistered"));
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, portalMessage("patientPortal.request.hospitalNotRegistered"));
             }
             return requestedHospitalId;
         }
@@ -1045,7 +1358,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (patient.getHospitalId() != null && active.contains(patient.getHospitalId())) {
             return patient.getHospitalId();
         }
-        throw new BusinessException(portalMessage(active.isEmpty()
+        throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, portalMessage(active.isEmpty()
                 ? "patientPortal.request.noHospitalRegistration"
                 : "patientPortal.request.chooseHospital"));
     }
@@ -1081,12 +1394,6 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     private PatientProfileDTO toProfileDTO(Patient p) {
         UUID hospId = resolvePatientHospitalId(p);
-        String hospName = null;
-        if (hospId != null) {
-            hospName = hospitalRepository.findById(hospId)
-                    .map(h -> h.getName())
-                    .orElse(null);
-        }
         // QA D244: the MRN was never mapped, so every profile read null. It lives on
         // the per-hospital registration: the current hospital's, plus the full list.
         List<PatientProfileDTO.HospitalRecord> records = registrationRepository.findByPatientId(p.getId()).stream()
@@ -1097,6 +1404,15 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                         .mrn(reg.getMrn())
                         .build())
                 .toList();
+        // QA D1212 (round 24): the name comes from the patient's own
+        // registration first. The tenant-scoped hospital read answered nothing
+        // for a proxy viewing a grantor registered at another hospital.
+        String hospName = records.stream()
+                .filter(r -> r.getHospitalId().equals(hospId))
+                .map(PatientProfileDTO.HospitalRecord::getHospitalName)
+                .findFirst()
+                .orElseGet(() -> hospId == null ? null
+                        : hospitalRepository.findById(hospId).map(Hospital::getName).orElse(null));
         String mrn = records.stream()
                 .filter(r -> r.getHospitalId().equals(hospId))
                 .map(PatientProfileDTO.HospitalRecord::getMrn)
@@ -1136,48 +1452,64 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .build();
     }
 
-    /** Safe delegates — return empty list if service call fails (partial availability). */
+    /**
+     * Best-effort delegates: a card that cannot be read is empty, never a
+     * broken page (partial availability). QA D1212 (round 24): each read runs
+     * through {@link com.example.hms.service.support.IsolatedReads}, in its own
+     * transaction. A plain try/catch here let the nested read mark the
+     * summary's own transaction rollback-only, and the summary's commit then
+     * answered 500 (UnexpectedRollbackException) for a grantor registered at
+     * another hospital.
+     */
     private List<PatientLabResultResponseDTO> safeLabResults(UUID patientId, UUID hospitalId) {
-        try {
-            return labResultService.getLabResultsForPatientPortal(patientId, hospitalId, 5);
-        } catch (Exception e) {
-            log.warn("Failed to fetch lab results for health summary: {}", e.getMessage());
-            return Collections.emptyList();
-        }
+        java.util.concurrent.atomic.AtomicReference<List<PatientLabResultResponseDTO>> out =
+            new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
+        isolatedReads.attempt("health summary lab results",
+            () -> out.set(labResultService.getLabResultsForPatientPortal(patientId, hospitalId, 5)));
+        return out.get();
     }
 
     private List<PatientMedicationResponseDTO> safeMedications(UUID patientId, UUID hospitalId) {
-        try {
-            // QA D720: the summary's "current medications" (health summary and
-            // the proxy view) are the courses still running, never a completed
-            // or discontinued one. Filtered before the cap so ten current ones
-            // are not crowded out by finished ones.
-            return medicationService.getMedicationsForPatientPortal(patientId, hospitalId, 100).stream()
+        java.util.concurrent.atomic.AtomicReference<List<PatientMedicationResponseDTO>> out =
+            new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
+        // QA D720: the summary's "current medications" (health summary and
+        // the proxy view) are the courses still running, never a completed
+        // or discontinued one. QA D1346 (round 30): and every one of them -
+        // the list returns every active course first whatever its limit
+        // (the limit bounds only the history), and the summary no longer cuts
+        // the running courses at ten.
+        isolatedReads.attempt("health summary medications",
+            () -> out.set(medicationService.getMedicationsForPatientPortal(patientId, hospitalId, 100).stream()
                 .filter(m -> "ACTIVE".equals(m.getStatus()))
-                .limit(10)
-                .toList();
-        } catch (Exception e) {
-            log.warn("Failed to fetch medications for health summary: {}", e.getMessage());
-            return Collections.emptyList();
-        }
+                .toList()));
+        return out.get();
+    }
+
+    /**
+     * QA D1362: a total for a card, read like the cards themselves (its own
+     * transaction, partial availability); null when it cannot be read, so the
+     * page falls back to what it holds rather than showing a wrong number.
+     */
+    private Long safeCount(String what, java.util.function.LongSupplier count) {
+        java.util.concurrent.atomic.AtomicReference<Long> out = new java.util.concurrent.atomic.AtomicReference<>();
+        isolatedReads.attempt(what, () -> out.set(count.getAsLong()));
+        return out.get();
     }
 
     private List<PatientVitalSignResponseDTO> safeVitals(UUID patientId) {
-        try {
-            return vitalSignService.getRecentVitalsForPatientPortal(patientId, 5);
-        } catch (Exception e) {
-            log.warn("Failed to fetch vitals for health summary: {}", e.getMessage());
-            return Collections.emptyList();
-        }
+        java.util.concurrent.atomic.AtomicReference<List<PatientVitalSignResponseDTO>> out =
+            new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
+        isolatedReads.attempt("health summary vitals",
+            () -> out.set(vitalSignService.getRecentVitalsForPatientPortal(patientId, 5)));
+        return out.get();
     }
 
     private List<ImmunizationResponseDTO> safeImmunizations(UUID patientId) {
-        try {
-            return immunizationService.getImmunizationsByPatientId(patientId);
-        } catch (Exception e) {
-            log.warn("Failed to fetch immunizations for health summary: {}", e.getMessage());
-            return Collections.emptyList();
-        }
+        java.util.concurrent.atomic.AtomicReference<List<ImmunizationResponseDTO>> out =
+            new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
+        isolatedReads.attempt("health summary immunizations",
+            () -> out.set(immunizationService.getImmunizationsForPatientPortal(patientId)));
+        return out.get();
     }
 
     private List<String> splitToList(String csv) {
@@ -1201,9 +1533,20 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     /** QA D128: the booking's own refusal, in the patient's language (it used the consent text). */
+    /**
+     * QA D1495: a visit already booked is not moved on, in the words a new booking is refused in, once the desk has
+     * deactivated the registration. A row with no registration at all is not this: it keeps working as it did.
+     */
+    private void refuseDeactivatedRegistration(UUID patientId, Appointment appointment) {
+        if (appointment.getHospital() != null && registrationRepository.existsByPatientIdAndHospitalIdAndActiveFalse(
+                patientId, appointment.getHospital().getId())) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, MessageUtil.resolve("portal.booking.notRegistered"));
+        }
+    }
+
     private void requireBookingRegistration(UUID patientId, UUID hospitalId) {
         if (!isRegisteredAt(patientId, hospitalId)) {
-            throw new BusinessException(MessageUtil.resolve("portal.booking.notRegistered"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, MessageUtil.resolve("portal.booking.notRegistered"));
         }
     }
 
@@ -1241,9 +1584,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     private String formatPatientName(Patient patient, Locale locale) {
-        String first = patient.getFirstName() != null ? patient.getFirstName() : "";
-        String last = patient.getLastName() != null ? patient.getLastName() : "";
-        String combined = (first + " " + last).trim();
+        String combined = java.util.Objects.toString(patient.getFullName(), "");
         return combined.isBlank()
             ? messageSource.getMessage("patient.fallback.indefinite", null, locale)
             : combined;
@@ -1336,6 +1677,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .prescriptionId(r.getPrescription().getId())
                 .medicationName(medName)
                 .patientId(r.getPatient().getId())
+                .patientName(r.getPatient().getFullName())
+                .patientMrn(RefillApprovalServiceImpl.mrnAtPrescribingHospital(r))
                 .status(r.getStatus().name())
                 .preferredPharmacy(r.getPreferredPharmacy())
                 .notes(r.getPatientNotes())
@@ -1426,8 +1769,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
                 patient.getId(), proxyUser.getId(), ProxyStatus.ACTIVE
         ).ifPresent(existing -> {
-            throw new BusinessException("portal.proxy.duplicate");
+            throw new com.example.hms.exception.FieldBusinessException("proxyUsername", "portal.proxy.duplicate");
         });
+
+        // QA D1464: told "access granted" while the row was born EXPIRED and the grantee had nothing.
+        com.example.hms.utility.ExpiryRules.requireFuture("expiresAt", dto.getExpiresAt(), "portal.proxy.expiryInPast");
+        requireKnownPermissions(dto.getPermissions());
 
         PatientProxy proxy = PatientProxy.builder()
                 .grantorPatient(patient)
@@ -1453,6 +1800,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             // Somebody else's grant answers exactly as a missing one.
             throw new ResourceNotFoundException("proxyGrant.notFound", proxyId);
         }
+        // QA D1186 class (round 22): a revoked grant stays revoked; a second
+        // revoke re-stamped revokedAt, so the record no longer said when.
+        if (proxy.getStatus() == ProxyStatus.REVOKED) {
+            throw new BusinessException("proxyGrant.alreadyRevoked");
+        }
 
         proxy.setStatus(ProxyStatus.REVOKED);
         proxy.setRevokedAt(java.time.LocalDateTime.now());
@@ -1477,7 +1829,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return ProxyResponseDTO.builder()
                 .id(p.getId())
                 .grantorPatientId(grantor.getId())
-                .grantorName(grantor.getFirstName() + " " + grantor.getLastName())
+                .grantorName(grantor.getFullName())
                 .proxyUserId(proxy.getId())
                 .proxyUsername(proxy.getUsername())
                 .proxyDisplayName(proxy.getFirstName() + " " + proxy.getLastName())
@@ -1514,7 +1866,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             throw new AccessDeniedException("Your proxy access does not include " + requiredPermission);
         }
 
-        return patientRepository.findById(patientId)
+        // QA D1212 (round 23): the grant is the patient's, not a hospital's. A
+        // grantor registered only at another hospital than the proxy's was
+        // looked up under the PROXY's hospital scope and answered 404. The
+        // active, unexpired, in-scope grant checked above is the authority, so
+        // the grantor is read without tenant scope.
+        return patientRepository.findByIdUnscoped(patientId)
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
     }
 
@@ -1528,11 +1885,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      * VIEW_* form. Normalize so legacy grants keep working.
      */
     private static final Map<String, String> LEGACY_PERMISSION_ALIASES = Map.of(
-            "APPOINTMENTS", "VIEW_APPOINTMENTS",
-            "MEDICATIONS", "VIEW_MEDICATIONS",
-            "LAB_RESULTS", "VIEW_LAB_RESULTS",
-            "BILLING", "VIEW_BILLING",
-            "RECORDS", "VIEW_RECORDS");
+            "APPOINTMENTS", PROXY_VIEW_APPOINTMENTS,
+            "MEDICATIONS", PROXY_VIEW_MEDICATIONS,
+            "LAB_RESULTS", PROXY_VIEW_LAB_RESULTS,
+            "BILLING", PROXY_VIEW_BILLING,
+            "RECORDS", PROXY_VIEW_RECORDS);
 
     private static Set<String> normalizedPermissions(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -1545,6 +1902,22 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
     }
 
+    /** What a grant may name: the scopes {@code verifyProxyAccess} checks, and ALL. */
+    private static final Set<String> KNOWN_PROXY_PERMISSIONS = Set.of("ALL", PROXY_VIEW_APPOINTMENTS, PROXY_VIEW_MEDICATIONS,
+            PROXY_VIEW_LAB_RESULTS, PROXY_VIEW_BILLING, PROXY_VIEW_RECORDS);
+
+    /**
+     * QA D1468: BANANA was saved, and listed as a grant that opened nothing. Only a new grant is
+     * judged: {@link #normalizedPermissions} still reads whatever an older row holds.
+     */
+    private static void requireKnownPermissions(String raw) {
+        for (String token : normalizedPermissions(raw)) {
+            if (!KNOWN_PROXY_PERMISSIONS.contains(token)) {
+                throw new com.example.hms.exception.FieldBusinessException("permissions", "portal.proxy.permissionUnknown", token);
+            }
+        }
+    }
+
     /** Store grants in the canonical VIEW_* vocabulary regardless of client. */
     private static String canonicalPermissionsCsv(String raw) {
         Set<String> normalized = normalizedPermissions(raw);
@@ -1554,7 +1927,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     @Transactional(readOnly = true)
     public List<AppointmentResponseDTO> getProxyAppointments(Authentication auth, UUID patientId, Locale locale) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_APPOINTMENTS");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_APPOINTMENTS);
         // The verified-patient variant, NOT the username-scoped one: passing
         // null for username threw inside getUserOrThrow before any query ran,
         // so this tab returned 500 for every proxy while its unit test stubbed
@@ -1565,15 +1938,44 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientMedicationResponseDTO> getProxyMedications(Authentication auth, UUID patientId, int limit) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_MEDICATIONS");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_MEDICATIONS);
         UUID hospitalId = resolvePatientHospitalId(patient);
         return medicationService.getMedicationsForPatientPortal(patient.getId(), hospitalId, limit);
     }
 
     @Override
     @Transactional(readOnly = true)
+    public Page<PatientMedicationResponseDTO> getProxyMedicationsPage(Authentication auth, UUID patientId, Pageable pageable) {
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_MEDICATIONS);
+        return medicationService.getMedicationsPageForPatientPortal(patient.getId(), pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countProxyLabResults(Authentication auth, UUID patientId) {
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_LAB_RESULTS);
+        return labResultService.countLabResultsForPatientPortal(patient.getId());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countMyLabResults(Authentication auth) {
+        return labResultService.countLabResultsForPatientPortal(findPatient(auth).getId());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientLabResultResponseDTO> getProxyLabResults(Authentication auth, UUID patientId,
+                                                                int offset, int limit) {
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_LAB_RESULTS);
+        // QA D1213: the proxy view pages like the patient's own (the id the grant check resolved).
+        return labResultService.getLabResultsForPatientPortal(patient.getId(), offset, limit);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getProxyLabResults(Authentication auth, UUID patientId, int limit) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_LAB_RESULTS");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_LAB_RESULTS);
         UUID hospitalId = resolvePatientHospitalId(patient);
         return labResultService.getLabResultsForPatientPortal(patient.getId(), hospitalId, limit);
     }
@@ -1581,23 +1983,28 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     @Transactional(readOnly = true)
     public Page<BillingInvoiceResponseDTO> getProxyBilling(Authentication auth, UUID patientId, Pageable pageable, Locale locale) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_BILLING");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_BILLING);
         return billingInvoiceService.getInvoicesForPortalPatient(patient.getId(), pageable, locale);
     }
 
     @Override
     @Transactional(readOnly = true)
     public HealthSummaryDTO getProxyRecords(Authentication auth, UUID patientId, Locale locale) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_RECORDS");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_RECORDS);
         UUID hospitalId = resolvePatientHospitalId(patient);
         return HealthSummaryDTO.builder()
                 .profile(toProfileDTO(patient))
                 .recentLabResults(safeLabResults(patient.getId(), hospitalId))
                 .currentMedications(safeMedications(patient.getId(), hospitalId))
+                .activeDiagnoses(activeDiagnosesOf(patient.getId()))
                 .recentVitals(safeVitals(patient.getId()))
                 .immunizations(safeImmunizations(patient.getId()))
                 .allergies(splitToList(patient.getAllergies()))
                 .chronicConditions(splitToList(patient.getChronicConditions()))
+                .labResultTotal(safeCount("proxy records lab result total",
+                    () -> labResultService.countLabResultsForPatientPortal(patient.getId())))
+                .medicationTotal(safeCount("proxy records medication total",
+                    () -> medicationService.countMedicationsForPatientPortal(patient.getId())))
                 .build();
     }
 
@@ -1833,7 +2240,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             Patient patient = appointment.getPatient();
             Staff staff = appointment.getStaff();
             Hospital hospital = appointment.getHospital();
-            String patientName = patient.getFirstName() + " " + patient.getLastName();
+            String patientName = patient.getFullName();
             String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
             String appointmentDate = appointment.getAppointmentDate().toString();
             String appointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();
@@ -1855,7 +2262,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             Patient patient = appointment.getPatient();
             Staff staff = appointment.getStaff();
             Hospital hospital = appointment.getHospital();
-            String patientName = patient.getFirstName() + " " + patient.getLastName();
+            String patientName = patient.getFullName();
             String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
             String newAppointmentDate = appointment.getAppointmentDate().toString();
             String newAppointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();
@@ -1964,20 +2371,27 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             throw new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, dto.getAppointmentId());
         }
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        // QA D1494: the desk read a pre-checked-in visit that carried no consent; the form always required it.
+        if (!Boolean.TRUE.equals(dto.getConsentAcknowledged())) {
+            throw new com.example.hms.exception.FieldBusinessException("consentAcknowledged", "portal.precheckin.consentRequired");
+        }
+        // QA D1489 class: the consent below fails on a deactivated registration, so it is refused first.
+        refuseDeactivatedRegistration(patientId, appointment);
+
         // Only allow pre-check-in for upcoming SCHEDULED/CONFIRMED appointments
         if (appointment.getStatus() != com.example.hms.enums.AppointmentStatus.SCHEDULED
                 && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CONFIRMED) {
-            throw new IllegalStateException(
-                    "Pre-check-in is only available for SCHEDULED or CONFIRMED appointments. Current: "
-                            + appointment.getStatus());
+            // QA D940: in the patient's language, not a hard-coded English string.
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_APPOINTMENT_ID, "portal.precheckin.status");
         }
 
-        // Validate timing: 1-7 days before appointment
+        // Validate timing: from 7 days before the appointment to the day itself
         java.time.LocalDate today = java.time.LocalDate.now();
         java.time.LocalDate apptDate = appointment.getAppointmentDate();
         long daysUntil = java.time.temporal.ChronoUnit.DAYS.between(today, apptDate);
         if (daysUntil < 0 || daysUntil > 7) {
-            throw new BusinessException("Pre-check-in is available 1–7 days before your appointment.");
+            throw new BusinessException("portal.precheckin.window");
         }
 
         // 1) Update demographics if provided
@@ -2066,6 +2480,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
         if (dto.getAddressLine1() != null) { patient.setAddressLine1(dto.getAddressLine1()); changed = true; }
         if (dto.getAddressLine2() != null) { patient.setAddressLine2(dto.getAddressLine2()); changed = true; }
+        // QA D1471: pre-check-in writes the same fields as the profile, under the same rule.
+        com.example.hms.utility.PatientIdentityRules.requirePlaceWithLetters("city", dto.getCity(), patient.getCity());
+        com.example.hms.utility.PatientIdentityRules.requireNameWithLetters(
+                "emergencyContactName", dto.getEmergencyContactName(), patient.getEmergencyContactName());
         if (dto.getCity() != null) { patient.setCity(dto.getCity()); changed = true; }
         if (dto.getState() != null) { patient.setState(dto.getState()); changed = true; }
         if (dto.getZipCode() != null) { patient.setZipCode(dto.getZipCode()); changed = true; }
@@ -2109,8 +2527,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
         java.util.List<com.example.hms.payload.dto.portal.PatientDiagnosisSummaryDTO> merged =
                 new java.util.ArrayList<>();
+        // QA D1240 (round 25): a diagnosis removed as entered in error is not
+        // part of the patient's history (it stays in the clinicians' audit).
         patientProblemRepository.findByPatient_IdOrderByCreatedAtDesc(patient.getId())
                 .stream()
+                .filter(problem -> !problem.isEnteredInError())
                 .map(PatientPortalServiceImpl::toDiagnosisSummary)
                 .forEach(merged::add);
         patientDiagnosisRepository.findByPatient_IdOrderByDiagnosedAtDesc(patient.getId())

@@ -4,7 +4,12 @@
 -->
 <app-skip-link target="#main-content" [label]="'A11Y.SKIP_TO_MAIN' | translate" />
 
-<div class="shell" [class.collapsed]="sidebarCollapsed()">
+<div
+  class="shell"
+  [class.collapsed]="sidebarCollapsed()"
+  [class.sidebar-resizing]="sidebarResizing()"
+  [style.--sidebar-expanded-width]="sidebarWidth() + 'px'"
+>
   <!--
     Sidebar.
     The accessible name belongs on the inner <nav> (the navigation
@@ -14,7 +19,19 @@
     unlabeled; it remains a `complementary` landmark by default, which
     is the correct ARIA role for a non-primary side region.
   -->
-  <aside class="sidebar">
+  <!--
+    QA D1153 / D1125: on a phone the open drawer is a modal over the page
+    (appDrawerDialog: role and aria-modal, focus in, Tab kept inside, Escape
+    from anywhere - the Menu button included - and focus back to Menu). On a
+    wide screen it stays a landmark.
+  -->
+  <aside
+    class="sidebar"
+    tabindex="-1"
+    [appDrawerDialog]="phoneDrawerOpen()"
+    [attr.aria-label]="phoneDrawerOpen() ? ('SHELL.MENU' | translate) : null"
+    (drawerClose)="closeSidebarFromKeyboard()"
+  >
     <div class="sidebar-header">
       <div class="logo-area">
         <app-brand-mark [size]="30" tone="onDark" />
@@ -24,6 +41,10 @@
       </div>
       <button
         class="toggle-btn"
+        type="button"
+        data-testid="sidebar-toggle"
+        [attr.aria-expanded]="!sidebarCollapsed()"
+        aria-controls="primary-navigation"
         (click)="toggleSidebar()"
         [attr.aria-label]="'SHELL.TOGGLE_SIDEBAR' | translate"
       >
@@ -69,7 +90,11 @@
       </div>
     }
 
-    <nav class="sidebar-nav" [attr.aria-label]="'SHELL.PRIMARY_NAV_ARIA' | translate">
+    <nav
+      id="primary-navigation"
+      class="sidebar-nav"
+      [attr.aria-label]="'SHELL.PRIMARY_NAV_ARIA' | translate"
+    >
       @for (group of navGroups(); track group.id) {
         <!--
           role="group" + aria-labelledby so the heading names the set for a
@@ -171,20 +196,37 @@
         </div>
       }
     </div>
+    @if (!sidebarCollapsed()) {
+      <div
+        class="sidebar-resize-handle"
+        role="separator"
+        tabindex="0"
+        aria-orientation="vertical"
+        [attr.aria-label]="'SHELL.RESIZE_SIDEBAR' | translate"
+        [title]="'SHELL.RESIZE_SIDEBAR_HINT' | translate"
+        [attr.aria-valuemin]="sidebarMinWidth"
+        [attr.aria-valuemax]="sidebarMaxWidth"
+        [attr.aria-valuenow]="sidebarWidth()"
+        data-testid="sidebar-resize-handle"
+        (pointerdown)="startSidebarResize($event)"
+        (pointermove)="moveSidebarResize($event)"
+        (pointerup)="endSidebarResize($event)"
+        (pointercancel)="endSidebarResize($event, true)"
+        (lostpointercapture)="endSidebarResize($event, true)"
+        (keydown)="resizeSidebarWithKey($event)"
+        (dblclick)="resetSidebarWidth()"
+      ></div>
+    }
   </aside>
 
   @if (!sidebarCollapsed()) {
     <!-- Phones only (shell.scss): the drawer's backdrop closes it on a tap. -->
-    <div
-      class="sidebar-backdrop"
-      aria-hidden="true"
-      (click)="closeSidebar()"
-      (keydown.escape)="closeSidebar()"
-    ></div>
+    <div class="sidebar-backdrop" aria-hidden="true" (click)="closeSidebar()"></div>
   }
 
   <!-- Main Content -->
-  <div class="main-area">
+  <!-- QA D1153: the page behind the open phone drawer is out of reach (Tab, clicks, readers). -->
+  <div class="main-area" [attr.inert]="phoneDrawerOpen() ? '' : null">
     <!-- Header -->
     <header class="topbar" role="banner">
       <div class="topbar-left">
@@ -256,7 +298,7 @@
         >
           <span class="material-symbols-outlined" aria-hidden="true">chat</span>
           @if (chatUnread() > 0) {
-            <span class="badge">{{ chatUnread() > 99 ? '99+' : chatUnread() }}</span>
+            {{ ' ' }}<span class="badge">{{ chatUnread() > 99 ? '99+' : chatUnread() }}</span>
           }
         </a>
 
@@ -274,18 +316,20 @@
         <!-- Notifications -->
         <button
           class="icon-btn"
+          data-testid="shell-bell"
           (click)="toggleNotifications()"
           [attr.aria-label]="translate.instant('NAV.NOTIFICATIONS_ARIA', { count: unreadCount() })"
         >
           <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
           @if (unreadCount() > 0) {
-            <span class="badge">{{ unreadCount() > 99 ? '99+' : unreadCount() }}</span>
+            {{ ' ' }}<span class="badge">{{ unreadCount() > 99 ? '99+' : unreadCount() }}</span>
           }
         </button>
 
         <!-- Profile -->
         <button
           class="profile-btn"
+          data-testid="shell-profile-btn"
           (click)="toggleProfileMenu()"
           [attr.aria-label]="userName() ? null : ('SHELL.MY_PROFILE' | translate)"
         >
@@ -312,15 +356,17 @@
 
     <!-- Notification Panel -->
     @if (notifPanelOpen()) {
+      <div class="overlay-backdrop" aria-hidden="true" (click)="closeOverlays()"></div>
+      <!-- QA D1125: focus in, Escape, focus back to the bell (appModalDialog). -->
       <div
-        class="overlay-backdrop"
-        aria-hidden="true"
-        (click)="closeOverlays()"
-        (keydown.escape)="closeOverlays()"
-      ></div>
-      <div class="notif-panel">
+        class="notif-panel"
+        appModalDialog
+        aria-labelledby="shell-notif-panel-title"
+        data-testid="shell-notif-panel"
+        (escaped)="closeOverlays()"
+      >
         <div class="panel-header">
-          <h3>{{ 'SHELL.NOTIFICATIONS' | translate }}</h3>
+          <h3 id="shell-notif-panel-title">{{ 'SHELL.NOTIFICATIONS' | translate }}</h3>
           <div class="panel-header-actions">
             @if (unreadCount() > 0) {
               <button
@@ -382,13 +428,15 @@
 
     <!-- Profile Menu -->
     @if (profileMenuOpen()) {
+      <div class="overlay-backdrop" aria-hidden="true" (click)="closeOverlays()"></div>
+      <!-- QA D1125: focus in, Escape, focus back to the avatar (appModalDialog). -->
       <div
-        class="overlay-backdrop"
-        aria-hidden="true"
-        (click)="closeOverlays()"
-        (keydown.escape)="closeOverlays()"
-      ></div>
-      <div class="profile-menu">
+        class="profile-menu"
+        appModalDialog
+        [attr.aria-label]="'SHELL.MY_PROFILE' | translate"
+        data-testid="shell-profile-menu"
+        (escaped)="closeOverlays()"
+      >
         <div class="profile-menu-header">
           <div class="avatar-lg">
             @if (userAvatarUrl()) {
@@ -446,20 +494,25 @@
       <app-emergency-broadcast-banner />
       <!-- P3 #23a — persistent read-only banner; not dismissible by design. -->
       <app-downtime-banner />
-      @if (scopeGate.blocked()) {
+      @if (scopeGate.showNetworkDirectory()) {
+        <app-hospital-network-workspace [moduleTitleKey]="networkModuleTitleKey()" />
+      } @else if (scopeGate.blocked()) {
         <!-- Route-level hospital scope gate (HospitalScopeGateService): a route
              flagged requiresHospitalScope is one facility's page. Until a
              hospital is pinned the page is not created, so it never fires a
              scoped request into global view; the chip is the way in. -->
         <section class="scope-gate" data-testid="scope-gate">
           <h1 class="scope-gate__title">{{ 'HOSPITAL_SCOPE.GATE_TITLE' | translate }}</h1>
-          <app-hospital-scope-chip [preserveScope]="true" />
+          <span class="material-symbols-outlined scope-gate__icon" aria-hidden="true"
+            >local_hospital</span
+          >
+          <app-hospital-scope-chip [preserveScope]="true" [hospitalRequired]="true" />
           <app-hospital-scope-hint />
         </section>
       } @else {
         @if (scopeGate.showChip()) {
           <div class="scope-bar" data-testid="scope-bar">
-            <app-hospital-scope-chip [preserveScope]="true" />
+            <app-hospital-scope-chip [preserveScope]="true" [hospitalRequired]="false" />
           </div>
         }
         <!-- The key advances on a scope change while the route is gated, so the

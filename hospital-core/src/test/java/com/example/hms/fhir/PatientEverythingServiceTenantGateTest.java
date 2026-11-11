@@ -295,11 +295,13 @@ class PatientEverythingServiceTenantGateTest {
             any(), any(), any())).thenAnswer(empty);
         when(labResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
             any(), any(), any())).thenAnswer(empty);
-        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(
-            any(), any(), any(org.springframework.data.domain.PageRequest.class))).thenAnswer(empty);
-        when(uploadedDocumentRepository.findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(
-            any(), any())).thenAnswer(inv -> new org.springframework.data.domain.PageImpl<>(
-                java.util.List.of(), inv.getArgument(1), 0));
+        // QA D1537: the MedicationRequest section reads the issued orders, chosen in the query.
+        when(prescriptionRepository.findIssuedByPatientIdAndHospitalIdIn(
+            any(), any(), any(), any(org.springframework.data.domain.PageRequest.class)))
+            .thenAnswer(inv -> new org.springframework.data.domain.PageImpl<>(java.util.List.of(), inv.getArgument(3), 0));
+        when(uploadedDocumentRepository.findForStaffNewestFirst(
+            any(), any(), any())).thenAnswer(inv -> new org.springframework.data.domain.PageImpl<>(
+                java.util.List.of(), inv.getArgument(2), 0));
     }
 
     private void setActiveHospital() {
@@ -338,9 +340,9 @@ class PatientEverythingServiceTenantGateTest {
             .thenReturn(new PageImpl<>(List.of()));
         when(labResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(any(), any(), any()))
             .thenReturn(new PageImpl<>(List.of()));
-        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(any(), any(), any(org.springframework.data.domain.Pageable.class)))
+        when(prescriptionRepository.findIssuedByPatientIdAndHospitalIdIn(any(), any(), any(), any(org.springframework.data.domain.Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
-        when(uploadedDocumentRepository.findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(any(), any()))
+        when(uploadedDocumentRepository.findForStaffNewestFirst(any(), any(), any()))
             .thenReturn(new PageImpl<>(List.of()));
 
         org.hl7.fhir.r4.model.Bundle bundle = service.everythingForPatient(patientId);
@@ -380,9 +382,9 @@ class PatientEverythingServiceTenantGateTest {
             .thenReturn(new PageImpl<>(List.of()));
         when(labResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(any(), any(), any()))
             .thenReturn(new PageImpl<>(List.of()));
-        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(any(), any(), any(org.springframework.data.domain.Pageable.class)))
+        when(prescriptionRepository.findIssuedByPatientIdAndHospitalIdIn(any(), any(), any(), any(org.springframework.data.domain.Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
-        when(uploadedDocumentRepository.findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(any(), any()))
+        when(uploadedDocumentRepository.findForStaffNewestFirst(any(), any(), any()))
             .thenReturn(new PageImpl<>(List.of()));
 
         service.everythingForPatient(patientId);
@@ -415,9 +417,9 @@ class PatientEverythingServiceTenantGateTest {
             .thenReturn(new PageImpl<>(List.of()));
         when(labResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(any(), any(), any()))
             .thenReturn(new PageImpl<>(List.of()));
-        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(any(), any(), any(org.springframework.data.domain.Pageable.class)))
+        when(prescriptionRepository.findIssuedByPatientIdAndHospitalIdIn(any(), any(), any(), any(org.springframework.data.domain.Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
-        when(uploadedDocumentRepository.findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(any(), any()))
+        when(uploadedDocumentRepository.findForStaffNewestFirst(any(), any(), any()))
             .thenReturn(new PageImpl<>(List.of()));
 
         org.hl7.fhir.r4.model.Bundle bundle = scoped.everythingForPatient(patientId);

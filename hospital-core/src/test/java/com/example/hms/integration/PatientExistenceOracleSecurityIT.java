@@ -281,8 +281,11 @@ class PatientExistenceOracleSecurityIT extends BaseIT {
     }
 
     private String booking(UUID patientId) {
+        // QA D1318 (round 29, request changed): a booking names its clinician, now refused at the edge
+        // when absent; a complete body reaches the patient check this test is about.
         return objectMapper.writeValueAsString(Map.of(
             "patientId", patientId,
+            "staffId", UUID.randomUUID(),
             "hospitalId", hospital.getId(),
             "appointmentDate", LocalDate.now().plusDays(3).toString(),
             "startTime", "10:00:00"));

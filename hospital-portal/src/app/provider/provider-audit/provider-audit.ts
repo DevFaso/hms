@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
@@ -11,6 +10,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
 import { followFacility } from '../follow-facility';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 
 const PAGE_SIZE = 20;
 
@@ -25,7 +25,7 @@ const PAGE_SIZE = 20;
 @Component({
   selector: 'app-provider-audit',
   standalone: true,
-  imports: [ServerTimePipe, DatePipe, TranslateModule, EnumLabelPipe, RoleLabelPipe],
+  imports: [DateTimePipe, ServerTimePipe, TranslateModule, EnumLabelPipe, RoleLabelPipe],
   templateUrl: './provider-audit.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: '../provider-pages.scss',

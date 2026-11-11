@@ -321,10 +321,11 @@ public class PatientEverythingService {
 
     private void appendDocumentReferenceSection(Bundle bundle, SectionContext ctx) {
         if (!ctx.includes("DocumentReference")) return;
-        // Uploaded documents are patient-anchored (no hospital column); the
-        // registration gate in loadAndVerifyTenantOwnedPatient already ran.
+        // Uploaded documents follow the patient (the registration gate in
+        // loadAndVerifyTenantOwnedPatient already ran); a document another
+        // hospital issued, such as its medical certificate, does not (QA D961).
         Page<PatientUploadedDocument> docs = uploadedDocumentRepository
-            .findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(ctx.patientId(), ctx.pageRequest());
+            .findForStaffNewestFirst(ctx.patientId(), ctx.hospitalId(), ctx.pageRequest());
         ctx.notePageOverflow(docs);
         docs.forEach(d -> {
             if (ctx.passesSinceFilter(d.getUpdatedAt())) {
@@ -439,6 +440,8 @@ public class PatientEverythingService {
         // problem in a sensitive category is withheld (D3).
         List<com.example.hms.model.PatientProblem> problems = patientProblemRepository
             .findByPatient_IdAndHospital_IdIn(ctx.patientId(), ctx.readable()).stream()
+            // QA D1240 (round 25): a problem removed as entered in error is not part of the record.
+            .filter(c -> !c.isEnteredInError())
             .filter(c -> CrossHospitalRows.maySurface(c.getHospital(), ctx.hospitalId(), sensitivityClassifier.effectiveCategory(c), ctx.unlocked()))
             .toList();
         ctx.account(problems.stream().map(c -> CrossHospitalReachRecorder.hospitalIdOf(c.getHospital())).toList());
@@ -449,16 +452,21 @@ public class PatientEverythingService {
 
     private void appendMedicationRequestSection(Bundle bundle, SectionContext ctx) {
         if (!ctx.includes("MedicationRequest")) return;
+        // QA D1537: an export carries the orders that were issued, never a draft or a discarded one,
+        // chosen in the query so a page is never thinned after it was fetched. The query is the single
+        // source: an issued order is a sent one (NeverSentRule.sent), so no hospital's never-sent row
+        // reaches this section and no post-filter is needed (QA D652).
         Page<com.example.hms.model.Prescription> prescriptions = prescriptionRepository
-            .findByPatient_IdAndHospital_IdIn(ctx.patientId(), ctx.readable(), ctx.pageRequest());
+            .findIssuedByPatientIdAndHospitalIdIn(ctx.patientId(), ctx.readable(),
+                com.example.hms.service.support.PrescriptionIssuance.PROPOSALS, ctx.pageRequest());
         ctx.notePageOverflow(prescriptions);
-        // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
-        List<com.example.hms.model.Prescription> shown =
-            NeverSentRule.prescriptionsReadableHere(prescriptions.getContent(), ctx.hospitalId());
+        List<com.example.hms.model.Prescription> shown = prescriptions.getContent();
         ctx.account(shown.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList());
+        List<com.example.hms.model.Admission> closedStays = shown.isEmpty() ? List.of()
+            : medicationRequestMapper.closedStaysOf(ctx.patientId());
         shown.forEach(p -> {
             if (ctx.passesSinceFilter(p.getUpdatedAt())) {
-                addEntry(bundle, medicationRequestMapper.toFhir(p));
+                addEntry(bundle, medicationRequestMapper.toFhir(p, closedStays));
             }
         });
     }
@@ -491,21 +499,12 @@ public class PatientEverythingService {
     }
 
     private static String describe(UUID patientId, PatientEverythingParams params, int entryCount) {
-        StringBuilder sb = new StringBuilder("FHIR ")
-            .append(PATIENT_PREFIX)
-            .append(patientId)
-            .append("/$everything returned a ")
-            .append(entryCount)
-            .append("-entry Bundle");
-        if (params.since() != null) {
-            sb.append(" since=").append(params.since());
-        }
-        if (!params.types().isEmpty()) {
-            sb.append(" types=").append(String.join(",", params.types()));
-        }
-        sb.append(" count=").append(params.count())
-            .append(" cursor=").append(params.cursor());
-        return sb.toString();
+        // One expression, so AuditDescriptionCoverageTest can read the shape (QA D894).
+        return "FHIR " + PATIENT_PREFIX + patientId + "/$everything returned a " + entryCount + "-entry Bundle"
+            + (params.since() != null ? " since=" + params.since() : "")
+            + (params.types().isEmpty() ? "" : " types=" + String.join(",", params.types()))
+            + " count=" + params.count()
+            + " cursor=" + params.cursor();
     }
 
     private static void addEntry(Bundle bundle, Resource resource) {

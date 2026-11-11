@@ -19,6 +19,9 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { currentMedications } from '../current-medications';
 import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { saveResponse } from '../../shared/download-file';
+import { refusalReason } from '../../shared/refusal-reason';
+import { ShownRows } from '../shown-rows';
 
 @Component({
   selector: 'app-my-medications',
@@ -32,28 +35,54 @@ export class MyMedicationsComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
-
   medications = signal<MedicationSummary[]>([]);
+  /** QA D1399: the medicines could not be read: said so, never "no medicines". */
+  medicationsFailed = signal(false);
+  /** The server's reason, when it gave one. */
+  medicationsFailureReason = signal<string | null>(null);
+  private readonly pastMedications = computed(() => {
+    const all = this.medications();
+    const active = currentMedications(all);
+    return all.filter((m) => !active.includes(m));
+  });
+  /** QA D1399: every past medicine is one click away, with the total. */
+  readonly pastRows = new ShownRows(this.pastMedications);
   /**
    * QA D720: "Active medications" lists the courses still running; a
    * completed or discontinued one moves to "Past medications" (where its
    * refill button stays: a finished, dispensed course is refillable).
    */
   medicationGroups = computed(() => {
-    const all = this.medications();
-    const active = currentMedications(all);
-    const past = all.filter((m) => !active.includes(m));
+    const active = currentMedications(this.medications());
     return [
-      { titleKey: 'PORTAL.MEDICATIONS.ACTIVE', meds: active },
-      { titleKey: 'PORTAL.MEDICATIONS.PAST', meds: past },
+      { titleKey: 'PORTAL.MEDICATIONS.ACTIVE', meds: active, pager: null },
+      { titleKey: 'PORTAL.MEDICATIONS.PAST', meds: this.pastRows.shown(), pager: this.pastRows },
     ].filter((g) => g.meds.length > 0);
   });
   prescriptions = signal<PortalPrescription[]>([]);
+  /** QA D1442: every prescription one click away, with the total, as the past medicines. */
+  readonly prescriptionRows = new ShownRows(this.prescriptions);
   refills = signal<MedicationRefill[]>([]);
   loading = signal(true);
   expandedMedId = signal<string | null>(null);
   expandedRxId = signal<string | null>(null);
   requestingRefill = signal<string | null>(null);
+
+  /**
+   * QA D966: a prescription printed for me offers its copy; the page said
+   * "Imprimée pour le patient" with nothing to download.
+   */
+  openPrintedCopy(rxId: string, event?: Event): void {
+    event?.stopPropagation();
+    this.portal.getMyPrintedPrescription(rxId).subscribe({
+      // QA D1443: saved under the server's readable name; a viewer tab named it after a random id.
+      next: (response) => saveResponse(response, 'ordonnance.pdf'),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.MEDICATIONS.PRINTED_COPY_FAILED'),
+        ),
+    });
+  }
 
   ngOnInit() {
     let pending = 3;
@@ -61,12 +90,16 @@ export class MyMedicationsComponent implements OnInit {
       if (--pending <= 0) this.loading.set(false);
     };
 
-    this.portal.getMyMedications().subscribe({
+    this.portal.getAllMyMedications().subscribe({
       next: (meds) => {
         this.medications.set(meds);
         done();
       },
-      error: () => done(),
+      error: (err: unknown) => {
+        this.medicationsFailureReason.set(refusalReason(err));
+        this.medicationsFailed.set(true);
+        done();
+      },
     });
 
     this.portal.getMyPrescriptions().subscribe({
@@ -122,7 +155,7 @@ export class MyMedicationsComponent implements OnInit {
           // with a message written for the patient — show it rather than a
           // generic failure.
           this.toast.error(
-            err?.error?.message ?? this.translate.instant('PORTAL.MEDICATIONS.REFILL_FAILED'),
+            refusalReason(err) ?? this.translate.instant('PORTAL.MEDICATIONS.REFILL_FAILED'),
           );
           this.requestingRefill.set(null);
         },

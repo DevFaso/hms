@@ -31,7 +31,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -152,10 +151,10 @@ class StaffAvailabilityServiceImplTest {
         StaffAvailabilityRequestDTO dto = buildDto(false);
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("inactive");
 
         assertThatThrownBy(() -> service.create(dto, locale))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOf(BusinessRuleException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.inactive"));
     }
 
     @Test
@@ -167,10 +166,10 @@ class StaffAvailabilityServiceImplTest {
         StaffAvailabilityRequestDTO dto = buildDto(false);
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("mismatch");
 
         assertThatThrownBy(() -> service.create(dto, locale))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOf(BusinessRuleException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.not.assigned"));
     }
 
     @Test
@@ -199,10 +198,10 @@ class StaffAvailabilityServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(otherDept));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("mismatch");
 
         assertThatThrownBy(() -> service.create(dto, locale))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOf(BusinessRuleException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("department.hospital.mismatch"));
     }
 
     @Test
@@ -216,10 +215,10 @@ class StaffAvailabilityServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("mismatch");
 
         assertThatThrownBy(() -> service.create(dto, locale))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOf(BusinessRuleException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.department.mismatch"));
     }
 
     @Test
@@ -229,10 +228,10 @@ class StaffAvailabilityServiceImplTest {
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
         when(availabilityRepository.existsByStaff_IdAndDate(staffId, dto.date())).thenReturn(true);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("exists");
 
         assertThatThrownBy(() -> service.create(dto, locale))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOf(BusinessRuleException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("availability.exists"));
     }
 
     @Test
@@ -245,10 +244,10 @@ class StaffAvailabilityServiceImplTest {
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
         when(availabilityRepository.existsByStaff_IdAndDate(staffId, dto.date())).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("time required");
-
+        // QA round 29 (assertion changed): a field refusal on availableFrom (it was a field-less BusinessRuleException).
         assertThatThrownBy(() -> service.create(dto, locale))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("availableFrom"));
     }
 
     @Test
@@ -261,10 +260,10 @@ class StaffAvailabilityServiceImplTest {
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
         when(availabilityRepository.existsByStaff_IdAndDate(staffId, dto.date())).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("invalid");
-
+        // QA round 29 (assertion changed): a field refusal on availableTo (it was a field-less BusinessRuleException).
         assertThatThrownBy(() -> service.create(dto, locale))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("availableTo"));
     }
 
     @Test
@@ -277,10 +276,10 @@ class StaffAvailabilityServiceImplTest {
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
         when(availabilityRepository.existsByStaff_IdAndDate(staffId, dto.date())).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("past");
 
         assertThatThrownBy(() -> service.create(dto, locale))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOf(BusinessRuleException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("availability.date.past"));
     }
 
     // ---- isStaffAvailable ----

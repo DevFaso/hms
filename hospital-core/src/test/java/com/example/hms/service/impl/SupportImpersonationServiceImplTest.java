@@ -174,7 +174,7 @@ class SupportImpersonationServiceImplTest {
             "irrelevant",
             "original.super-admin.jwt"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Cannot impersonate yourself");
+            .extracting("messageKey").isEqualTo("impersonation.notYourself");
         verify(tokenProvider, never()).generateImpersonationAccessToken(any(), any(), any(), anyLong(), any());
     }
 

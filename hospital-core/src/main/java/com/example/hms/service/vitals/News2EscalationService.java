@@ -88,14 +88,7 @@ public class News2EscalationService {
                 || !needsEscalation(score) || patientId == null || hospitalId == null) {
             return score;
         }
-        Set<String> recipients = new LinkedHashSet<>();
-        if (recorderUsername != null && !recorderUsername.isBlank()) {
-            recipients.add(recorderUsername);
-        }
-        responsiblePhysicianUsername(patientId, hospitalId).ifPresent(recipients::add);
-        if (visitPhysicianUsername != null && !visitPhysicianUsername.isBlank()) {
-            recipients.add(visitPhysicianUsername);
-        }
+        Set<String> recipients = recipients(patientId, hospitalId, recorderUsername, visitPhysicianUsername);
         if (recipients.isEmpty()) {
             return score;
         }
@@ -111,9 +104,32 @@ public class News2EscalationService {
         return score;
     }
 
+    /**
+     * Who hears about a vital set: the recorder, the stay's responsible physician and the
+     * visit's clinician. QA D1564: the newborn warnings on a vital set reach the same people.
+     */
+    public Set<String> recipients(UUID patientId, UUID hospitalId, String recorderUsername,
+                                  String visitPhysicianUsername) {
+        Set<String> recipients = new LinkedHashSet<>();
+        if (recorderUsername != null && !recorderUsername.isBlank()) {
+            recipients.add(recorderUsername);
+        }
+        if (patientId != null && hospitalId != null) {
+            responsiblePhysicianUsername(patientId, hospitalId).ifPresent(recipients::add);
+        }
+        if (visitPhysicianUsername != null && !visitPhysicianUsername.isBlank()) {
+            recipients.add(visitPhysicianUsername);
+        }
+        return recipients;
+    }
+
     private Optional<String> responsiblePhysicianUsername(UUID patientId, UUID hospitalId) {
-        return admissionRepository.findCurrentAdmissionByPatient(patientId)
-            .filter(a -> a.getHospital() != null && hospitalId.equals(a.getHospital().getId()))
+        // QA D1065 class (round 18): this hospital's open stay, not the
+        // patient's latest admission anywhere filtered afterwards.
+        return admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(patientId, hospitalId,
+                com.example.hms.enums.AdmissionStatus.OPEN).stream()
+            .max(java.util.Comparator.comparing(com.example.hms.model.Admission::getAdmissionDateTime,
+                java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
             .map(News2EscalationService::responsibleOf)
             .filter(s -> s.getUser() != null && s.getUser().getUsername() != null)
             .map(s -> s.getUser().getUsername());

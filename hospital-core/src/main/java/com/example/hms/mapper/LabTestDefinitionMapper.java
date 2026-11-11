@@ -69,6 +69,8 @@ public class LabTestDefinitionMapper {
                 .reviewedById(entity.getReviewedById())
                 .reviewedAt(entity.getReviewedAt())
                 .rejectionReason(entity.getRejectionReason())
+                .supersedesDefinitionId(entity.getSupersedesDefinitionId())
+                .versionNumber(entity.getVersionNumber() != null ? entity.getVersionNumber() : 1)
                 .referenceRanges(mapToDtoRanges(entity.getReferenceRanges()))
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
@@ -120,6 +122,8 @@ public class LabTestDefinitionMapper {
                 .notes(range.getNotes())
                 .criticalLow(range.getCriticalLow())
                 .criticalHigh(range.getCriticalHigh())
+                .ageUnit(range.getAgeUnit())
+                .source(range.getSource())
                 .build())
             .collect(Collectors.toCollection(java.util.ArrayList::new));
     }
@@ -140,6 +144,8 @@ public class LabTestDefinitionMapper {
                 .notes(range.getNotes())
                 .criticalLow(range.getCriticalLow())
                 .criticalHigh(range.getCriticalHigh())
+                .ageUnit(range.getAgeUnit())
+                .source(range.getSource())
                 .build())
             .collect(Collectors.toCollection(java.util.ArrayList::new));
     }

@@ -160,6 +160,40 @@ class RefillApprovalServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D1276: each refill names its patient, with the MRN of the prescribing hospital only")
+    void theQueueNamesThePatientWithTheMrnOfThePrescribingHospital() {
+        com.example.hms.model.Hospital here = new com.example.hms.model.Hospital();
+        here.setId(UUID.randomUUID());
+        com.example.hms.model.Hospital elsewhere = new com.example.hms.model.Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        prescription.setHospital(here);
+        com.example.hms.model.PatientHospitalRegistration other = new com.example.hms.model.PatientHospitalRegistration();
+        other.setHospital(elsewhere);
+        other.setId(UUID.randomUUID());
+        other.setMrn("OTH0001");
+        other.setActive(true);
+        com.example.hms.model.PatientHospitalRegistration local = new com.example.hms.model.PatientHospitalRegistration();
+        local.setHospital(here);
+        local.setId(UUID.randomUUID());
+        local.setMrn("CHW0042");
+        local.setActive(true);
+        patient.setHospitalRegistrations(new java.util.HashSet<>(List.of(other, local)));
+        when(roleValidator.hasAnyAuthority("PHARMACIST")).thenReturn(true);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(here.getId());
+        when(refillRequestRepository.findByPrescription_Hospital_IdAndStatus(eq(here.getId()), eq(RefillStatus.REQUESTED),
+            any())).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(pendingRefill())));
+
+        MedicationRefillResponseDTO card = service.listForProvider(auth, RefillStatus.REQUESTED,
+            org.springframework.data.domain.PageRequest.of(0, 20)).getContent().get(0);
+
+        assertThat(card.getPatientName()).isEqualTo("Alice Patient");
+        assertThat(card.getPatientMrn()).isEqualTo("CHW0042");
+        prescription.setHospital(null);
+        assertThat(RefillApprovalServiceImpl.mrnAtPrescribingHospital(pendingRefill()))
+            .as("no hospital, no MRN: never another hospital's").isNull();
+    }
+
+    @Test
     @DisplayName("reject — flips REQUESTED to DENIED")
     void reject_happyPath() {
         stubStaffResolution();
@@ -283,6 +317,18 @@ class RefillApprovalServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D1315: reject — refuses without a reason, before any lookup, keyed providerNotes")
+    void aDenialWithoutAReasonIsRefused_D1315() {
+        for (RefillDecisionRequestDTO decision : java.util.Arrays.asList(null, new RefillDecisionRequestDTO(),
+                RefillDecisionRequestDTO.builder().providerNotes("  ").build())) {
+            assertThatThrownBy(() -> service.reject(auth, refillId, decision))
+                    .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                        ex -> assertThat(ex.getFieldErrors()).containsKey("providerNotes"));
+        }
+        verify(refillRequestRepository, never()).findById(any());
+    }
+
+    @Test
     @DisplayName("pause — refuses a null decision body")
     void pause_requiresBody() {
         assertThatThrownBy(() -> service.pause(auth, refillId, null))
@@ -311,7 +357,9 @@ class RefillApprovalServiceImplTest {
         when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(paused));
         when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThat(service.reject(auth, refillId, null).getStatus()).isEqualTo("DENIED");
+        // QA D1315 (assertion changed): a denial now needs its reason.
+        assertThat(service.reject(auth, refillId,
+                RefillDecisionRequestDTO.builder().providerNotes("Arrêté").build()).getStatus()).isEqualTo("DENIED");
     }
 
     @Test
@@ -572,7 +620,8 @@ class RefillApprovalServiceImplTest {
         when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
         when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        service.reject(auth, refillId, null);
+        // QA D1315 (assertion changed): a denial now needs its reason.
+        service.reject(auth, refillId, RefillDecisionRequestDTO.builder().providerNotes("Arrêté").build());
 
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
         assertThat(prescription.getRefillsUsed()).isZero();

@@ -25,11 +25,24 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { EnumLabelService } from '../core/enum-label.service';
 import { OrgTextPipe, seededOrgTextKey } from '../shared/pipes/org-text.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
+import { missingRequiredMessage } from '../shared/required-fields';
 
 @Component({
   selector: 'app-organization-list',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule, EnumLabelPipe, OrgTextPipe],
+  imports: [
+    PhoneFieldDirective,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    EnumLabelPipe,
+    OrgTextPipe,
+  ],
   templateUrl: './organization-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './organization-list.scss',
@@ -231,7 +244,16 @@ export class OrganizationListComponent implements OnInit {
       !this.createForm.contactEmail ||
       !this.createForm.timezone
     ) {
-      this.toast.error(this.translate.instant('ORGANIZATIONS.REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list (in form order).
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'DEPARTMENTS.NAME', value: this.createForm.name },
+          { labelKey: 'HOSPITALS.CODE', value: this.createForm.code },
+          { labelKey: 'ORGANIZATIONS.CONTACT_EMAIL', value: this.createForm.contactEmail },
+          { labelKey: 'ORGANIZATIONS.TIMEZONE', value: this.createForm.timezone },
+          { labelKey: 'ORGANIZATIONS.TYPE', value: this.createForm.type },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
       return;
     }
     this.saving.set(true);

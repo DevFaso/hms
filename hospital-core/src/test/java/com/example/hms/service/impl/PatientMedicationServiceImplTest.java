@@ -164,6 +164,7 @@ class PatientMedicationServiceImplTest {
         p.setId(UUID.randomUUID());
         p.setCreatedAt(LocalDateTime.now());
         p.setMedicationName("Med");
+        p.setStatus(PrescriptionStatus.SIGNED); // QA D1537: a stopped order was signed first
         p.setStatus(PrescriptionStatus.DISCONTINUED);
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
@@ -245,6 +246,7 @@ class PatientMedicationServiceImplTest {
     @Test
     void getMedications_discontinuedPrescriptionIsNotRefillable() {
         Prescription p = refillablePrescription();
+        p.setStatus(PrescriptionStatus.SIGNED); // QA D1537: a stopped order was signed first
         p.setStatus(PrescriptionStatus.DISCONTINUED);
         stubMedicationsFor(p);
 
@@ -282,6 +284,7 @@ class PatientMedicationServiceImplTest {
         assertThat(service.getMedicationsForPatient(patientId, hospitalId, 10).get(0).getRefillBlockedReason())
                 .isNull();
 
+        refillable.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED); // QA D1537: a stopped order was signed first
         refillable.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
         PatientMedicationResponseDTO dto = service.getMedicationsForPatient(patientId, hospitalId, 10).get(0);
         assertThat(dto.isRefillable()).isFalse();
@@ -407,6 +410,85 @@ class PatientMedicationServiceImplTest {
         assertThat(result.get(0).getReadyForCollectionPharmacyName()).isEqualTo("Pharmacie Centrale");
         assertThat(result.get(1).getReadyForCollectionAt()).isNull();
         assertThat(result.get(1).getReadyForCollectionPharmacyName()).isNull();
+    }
+
+    /** QA D1362 (round 31): the portal's total is every issued prescription, never a draft. */
+    @Test
+    void d1362_theTotalCountsEveryIssuedPrescription() {
+        java.util.List<Prescription> rows = new java.util.ArrayList<>();
+        for (com.example.hms.enums.PrescriptionStatus status : java.util.List.of(
+                com.example.hms.enums.PrescriptionStatus.SIGNED, com.example.hms.enums.PrescriptionStatus.DRAFT,
+                com.example.hms.enums.PrescriptionStatus.SIGNED, com.example.hms.enums.PrescriptionStatus.DISCONTINUED)) {
+            Prescription p = new Prescription();
+            p.setId(UUID.randomUUID());
+            p.setStatus(status);
+            rows.add(p);
+        }
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        lenient().when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(rows));
+        long expected = rows.stream().filter(com.example.hms.service.support.PrescriptionIssuance::wasIssued).count();
+        // QA D1537 review: the total is the database count of the same rule.
+        when(prescriptionRepository.countIssuedByPatientId(patientId, com.example.hms.service.support.PrescriptionIssuance.PROPOSALS))
+            .thenReturn(expected);
+
+        assertThat(service.countMedicationsForPatientPortal(patientId)).isEqualTo(expected).isLessThan(rows.size());
+    }
+
+    private Prescription d1537Row(String name, com.example.hms.enums.PrescriptionStatus status, boolean signed) {
+        Prescription p = new Prescription();
+        p.setId(UUID.randomUUID());
+        p.setMedicationName(name);
+        p.setCreatedAt(LocalDateTime.now());
+        if (signed) {
+            p.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        }
+        p.setStatus(status);
+        return p;
+    }
+
+    /**
+     * QA D1537 (round 40): a draft cancelled before anyone signed it was never the patient's medicine.
+     * It is not a past medication, not counted; a signed order that was discontinued still is.
+     */
+    @Test
+    void d1537_aDiscardedDraftIsNeitherListedNorCountedForThePatient() {
+        Prescription discardedDraft = d1537Row("Totapen", com.example.hms.enums.PrescriptionStatus.CANCELLED, false);
+        Prescription discardedUnsigned = d1537Row("Doliprane", com.example.hms.enums.PrescriptionStatus.DISCONTINUED, false);
+        Prescription stoppedAfterSigning = d1537Row("Amoxicilline", com.example.hms.enums.PrescriptionStatus.DISCONTINUED, true);
+        Prescription cancelledAfterSigning = d1537Row("Ibuprofene", com.example.hms.enums.PrescriptionStatus.CANCELLED, true);
+        Prescription liveDraft = d1537Row("Efferalgan", com.example.hms.enums.PrescriptionStatus.DRAFT, false);
+        List<Prescription> rows = List.of(discardedDraft, discardedUnsigned, stoppedAfterSigning, cancelledAfterSigning, liveDraft);
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(rows));
+
+        assertThat(service.getMedicationsForPatientPortal(patientId, null, 50))
+            .extracting(PatientMedicationResponseDTO::getMedicationName)
+            .containsExactlyInAnyOrder("Amoxicilline", "Ibuprofene");
+        assertThat(service.getMedicationsPageForPatientPortal(patientId, org.springframework.data.domain.PageRequest.of(0, 20))
+            .getContent()).extracting(PatientMedicationResponseDTO::getMedicationName)
+            .containsExactlyInAnyOrder("Amoxicilline", "Ibuprofene");
+        when(prescriptionRepository.countIssuedByPatientId(patientId, com.example.hms.service.support.PrescriptionIssuance.PROPOSALS))
+            .thenReturn(2L);
+        assertThat(service.countMedicationsForPatientPortal(patientId)).isEqualTo(2);
+    }
+
+    /** QA D1537: the clinician keeps a live draft (on hold), never a discarded one as a stopped course. */
+    @Test
+    void d1537_theStaffListKeepsALiveDraftButNotADiscardedOne() {
+        Prescription discardedDraft = d1537Row("Totapen", com.example.hms.enums.PrescriptionStatus.CANCELLED, false);
+        Prescription stoppedAfterSigning = d1537Row("Amoxicilline", com.example.hms.enums.PrescriptionStatus.DISCONTINUED, true);
+        Prescription liveDraft = d1537Row("Efferalgan", com.example.hms.enums.PrescriptionStatus.DRAFT, false);
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
+            .thenReturn(List.of(discardedDraft, stoppedAfterSigning, liveDraft));
+
+        assertThat(service.getMedicationsForPatient(patientId, hospitalId, 50))
+            .extracting(PatientMedicationResponseDTO::getMedicationName)
+            .containsExactlyInAnyOrder("Amoxicilline", "Efferalgan");
     }
 
     @Test
@@ -553,5 +635,128 @@ class PatientMedicationServiceImplTest {
         service.getMedicationsForPatient(patientId, hospitalId, 10);
 
         verify(patientChartAccess, never()).requireOwnRecord(any());
+    }
+
+    /**
+     * QA D1346 (round 30): PATIENT_A2 had three running medicines older than
+     * twenty cancelled orders; the portal asked for 20 and got the twenty
+     * cancelled ones. Every active course comes first, whatever the limit;
+     * the limit bounds only the history after it.
+     */
+    @Test
+    void d1346_everyActiveCourseIsListedFirst_whateverTheLimitAndTheCancelledOrders() {
+        LocalDateTime start = LocalDateTime.now().minusDays(3);
+        List<Prescription> rows = new java.util.ArrayList<>();
+        List<UUID> running = new java.util.ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            Prescription p = rx("Amoxicilline " + i, PrescriptionStatus.SIGNED, start.plusMinutes(i));
+            rows.add(p);
+            running.add(p.getId());
+        }
+        for (int i = 0; i < 25; i++) {
+            rows.add(rx("Paracétamol " + i, PrescriptionStatus.CANCELLED, start.plusHours(1).plusMinutes(i)));
+        }
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(rows));
+
+        List<PatientMedicationResponseDTO> result = service.getMedicationsForPatientPortal(patientId, null, 20);
+
+        assertThat(result).hasSize(23);
+        assertThat(result.subList(0, 3)).extracting(PatientMedicationResponseDTO::getId)
+            .containsExactly(running.get(2), running.get(1), running.get(0));
+        assertThat(result.subList(0, 3)).extracting(PatientMedicationResponseDTO::getStatus).containsOnly("ACTIVE");
+        assertThat(result.subList(3, 23)).extracting(PatientMedicationResponseDTO::getStatus)
+            .containsOnly("DISCONTINUED");
+        assertThat(service.getMedicationsForPatientPortal(patientId, null, 1)).hasSize(4);
+    }
+
+    private static Prescription rx(String name, PrescriptionStatus status, LocalDateTime createdAt) {
+        Prescription p = new Prescription();
+        p.setId(UUID.randomUUID());
+        p.setMedicationName(name);
+        if (status != null && status.isWithdrawn()) {
+            p.setStatus(PrescriptionStatus.SIGNED); // QA D1537: a stopped order was signed first
+        }
+        p.setStatus(status);
+        p.setCreatedAt(createdAt);
+        return p;
+    }
+
+    /** QA D1398: the patient takes it at home; "q6h" alone reads as a fixed schedule. */
+    @Test
+    void d1398_theRowSaysItIsAsNeededAndItsLeastInterval() {
+        Prescription prn = issued("Paracétamol", LocalDateTime.now().minusDays(1));
+        prn.setAsNeeded(true);
+        prn.setPrnMinIntervalHours(6);
+        Prescription fixed = issued("Amoxicilline", LocalDateTime.now().minusDays(2));
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(prn, fixed)));
+
+        List<PatientMedicationResponseDTO> rows = service.getMedicationsForPatientPortal(patientId, null, 10);
+
+        assertThat(rows.get(0).isAsNeeded()).isTrue();
+        assertThat(rows.get(0).getPrnMinIntervalHours()).isEqualTo(6);
+        assertThat(rows.get(1).isAsNeeded()).isFalse();
+        assertThat(rows.get(1).getPrnMinIntervalHours()).isNull();
+    }
+
+    /** QA D1399: 20 of 249 past medicines with nothing to say so; every row is on a page, with the total. */
+    @Test
+    void d1399_thePagesReachEveryRowWithTheServersTotal() {
+        List<Prescription> rows = new java.util.ArrayList<>();
+        LocalDateTime sameMoment = LocalDateTime.of(2026, 11, 1, 9, 0);
+        for (int i = 0; i < 45; i++) {
+            Prescription past = issued("Passé " + i, sameMoment);
+            past.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED); // QA D1537: a stopped order was signed first
+            past.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+            rows.add(past);
+        }
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenAnswer(read -> new org.springframework.data.domain.PageImpl<>(new java.util.ArrayList<>(rows)));
+
+        java.util.Set<UUID> seen = new java.util.HashSet<>();
+        for (int page = 0; page < 3; page++) {
+            // The repository's order is not promised between reads: each page re-reads it reversed.
+            java.util.Collections.reverse(rows);
+            org.springframework.data.domain.Page<PatientMedicationResponseDTO> slice = service
+                .getMedicationsPageForPatientPortal(patientId, org.springframework.data.domain.PageRequest.of(page, 20));
+            assertThat(slice.getTotalElements()).isEqualTo(45);
+            slice.getContent().forEach(row -> seen.add(row.getId()));
+        }
+        assertThat(seen).as("a tie on the date never moves a row to another page").hasSize(45);
+    }
+
+    @Test
+    void d1399_thePagesPutActiveCoursesFirstAndLeaveOutDrafts() {
+        Prescription old = issued("Ancien actif", LocalDateTime.now().minusDays(9));
+        Prescription recentPast = issued("Récent arrêté", LocalDateTime.now().minusDays(1));
+        recentPast.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED); // QA D1537: a stopped order was signed first
+        recentPast.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        Prescription draft = issued("Brouillon", LocalDateTime.now());
+        draft.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(draft, recentPast, old)));
+
+        org.springframework.data.domain.Page<PatientMedicationResponseDTO> page = service
+            .getMedicationsPageForPatientPortal(patientId, org.springframework.data.domain.PageRequest.of(0, 20));
+
+        assertThat(page.getContent()).extracting(PatientMedicationResponseDTO::getMedicationName)
+            .containsExactly("Ancien actif", "Récent arrêté");
+        assertThat(page.getTotalElements()).isEqualTo(2);
+        assertThat(service.getMedicationsPageForPatientPortal(patientId,
+            org.springframework.data.domain.PageRequest.of(5, 20)).getContent()).as("past the end").isEmpty();
+    }
+
+    private static Prescription issued(String name, LocalDateTime createdAt) {
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setMedicationName(name);
+        rx.setCreatedAt(createdAt);
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        return rx;
     }
 }

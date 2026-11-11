@@ -157,9 +157,8 @@ public class PharmacyFillMapper {
     // Helper methods
 
     private String buildPatientName(Patient patient) {
-        String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
-        String lastName = patient.getLastName() != null ? patient.getLastName() : "";
-        return (firstName + " " + lastName).trim();
+        String fullName = patient.getFullName();
+        return fullName != null ? fullName : "";
     }
 
     private String resolvePatientMrn(Patient patient, Hospital hospital) {

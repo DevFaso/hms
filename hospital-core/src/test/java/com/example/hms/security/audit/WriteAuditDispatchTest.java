@@ -75,6 +75,7 @@ class WriteAuditDispatchTest {
             return ResponseEntity.ok("{}");
         }
 
+        @com.example.hms.security.ReadsOnly("a search under POST for its body")
         @PostMapping("/episodes/search")
         ResponseEntity<String> search() {
             return ResponseEntity.ok("[]");
@@ -142,7 +143,7 @@ class WriteAuditDispatchTest {
     }
 
     @Test
-    @DisplayName("a rejected write, a read, and a POST /search record nothing")
+    @DisplayName("a rejected write, a read, and a POST that declares @ReadsOnly record nothing")
     void ignoresFailuresAndReads() throws Exception {
         mockMvc.perform(post("/labor/episodes/{episodeId}/reject", EPISODE)).andExpect(status().isBadRequest());
         mockMvc.perform(get("/labor/episodes/{episodeId}", EPISODE)).andExpect(status().isOk());

@@ -2,6 +2,7 @@ package com.example.hms.utility;
 
 import com.example.hms.config.SecurityConstants;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.HospitalScopeRefusedException;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -9,7 +10,6 @@ import com.example.hms.security.PrincipalUserIds;
 import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.MessageSource;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -27,6 +27,7 @@ public class RoleValidator {
     private static final String PHYSICIAN_ROLE = "PHYSICIAN";
     private static final String SURGEON_ROLE = "SURGEON";
     private static final String NURSE_ROLE = "NURSE";
+    private static final String MIDWIFE_ROLE = "MIDWIFE";
     private static final String ROLE_PREFIX = SecurityConstants.ROLE_PREFIX;
 
     /**
@@ -106,7 +107,7 @@ public class RoleValidator {
 
     /** Quick check for “can act as staff/admin” */
     public boolean isStaffOrAdminFromAuth() {
-        return hasAnyAuthority(HOSPITAL_ADMIN_ROLE, DOCTOR_ROLE, PHYSICIAN_ROLE, NURSE_ROLE,"MIDWIFE","STAFF","RECEPTIONIST","SUPER_ADMIN");
+        return hasAnyAuthority(HOSPITAL_ADMIN_ROLE, DOCTOR_ROLE, PHYSICIAN_ROLE, NURSE_ROLE, MIDWIFE_ROLE,"STAFF","RECEPTIONIST","SUPER_ADMIN");
     }
 
     /* =========================================
@@ -186,11 +187,79 @@ public class RoleValidator {
             userId, hospitalId, expandCodesForDb(baseCode));
     }
 
+    /** Any of several base codes, in ONE query (the repository takes the whole set). */
+    private boolean hasAnyCode(UUID userId, UUID hospitalId, String... baseCodes) {
+        var wanted = new HashSet<String>();
+        for (var base : baseCodes) wanted.addAll(expandCodesForDb(base));
+        return assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(userId, hospitalId, wanted);
+    }
+
+    /**
+     * QA D934: a doctor, physician or surgeon at {@code hospitalId} - the roles
+     * whose signature a prescription carries. One query over the three codes.
+     */
+    public boolean isSigningPhysician(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE);
+    }
+
+    /**
+     * QA D934: a nurse or a midwife at {@code hospitalId} who is not also a
+     * signing physician there: her draft waits for a doctor of that hospital
+     * to sign. Deliberately NOT "anyone who is not a physician" (review of
+     * #975): a doctor credentialed elsewhere, or a prescriber outside these
+     * two roles, keeps "only the prescribing clinician signs".
+     */
+    public boolean draftsForPhysicianSignature(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, NURSE_ROLE, MIDWIFE_ROLE) && !isSigningPhysician(userId, hospitalId);
+    }
+
+    /**
+     * Product decision 2026-10-28 ("as it works in real hospitals"): the
+     * licensed-physician roles this codebase seeds (V2__seed_roles.sql) - the
+     * doctor (general practitioner), the physician, and the specialist
+     * physicians: surgeon, anaesthesiologist, radiologist. Nurses, midwives,
+     * receptionists and administrators are not physicians. The medical
+     * certificate endpoint's {@code @PreAuthorize} names exactly these
+     * (MedicalCertificateServiceImplTest pins the two lists together).
+     */
+    public static final java.util.List<String> LICENSED_PHYSICIAN_ROLE_CODES = java.util.List.of(
+        DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, "ANESTHESIOLOGIST", "RADIOLOGIST");
+
+    /**
+     * QA D1164 (round 21): the roles a visit takes as its provider - every
+     * licensed physician, the nurse and the midwife (a midwife runs her own
+     * antenatal and delivery visits), and the hospital administrator the old
+     * check admitted. The walk-in refused the midwife the appointment check-in
+     * accepted, and a physician or a surgeon too, because each check listed
+     * roles by hand; this is the one list.
+     */
+    public static final java.util.List<String> ENCOUNTER_PROVIDER_ROLE_CODES;
+
+    static {
+        java.util.List<String> codes = new java.util.ArrayList<>(LICENSED_PHYSICIAN_ROLE_CODES);
+        codes.addAll(java.util.List.of(NURSE_ROLE, MIDWIFE_ROLE, HOSPITAL_ADMIN_ROLE));
+        ENCOUNTER_PROVIDER_ROLE_CODES = java.util.List.copyOf(codes);
+    }
+
+    /** A role a visit takes as its provider ({@link #ENCOUNTER_PROVIDER_ROLE_CODES}), in one query. */
+    public boolean isEncounterProvider(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, ENCOUNTER_PROVIDER_ROLE_CODES.toArray(new String[0]));
+    }
+
+    /** A licensed physician ({@link #LICENSED_PHYSICIAN_ROLE_CODES}) at {@code hospitalId}, in one query. */
+    public boolean isLicensedPhysician(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, LICENSED_PHYSICIAN_ROLE_CODES.toArray(new String[0]));
+    }
+
     public boolean isDoctor(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, DOCTOR_ROLE); }
     public boolean isPhysician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, PHYSICIAN_ROLE); }
     public boolean isSurgeon(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, SURGEON_ROLE); }
     public boolean isNurse(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, NURSE_ROLE); }
-    public boolean isMidwife(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "MIDWIFE"); }
+    public boolean isMidwife(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, MIDWIFE_ROLE); }
+    /** One query: a clinician or a pharmacist at {@code hospitalId}, not the union of the caller's assignments. */
+    public boolean isClinicianOrPharmacist(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE, MIDWIFE_ROLE, "PHARMACIST");
+    }
     public boolean isHospitalAdmin(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE); }
     public boolean isLabScientist(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_SCIENTIST"); }
     public boolean isLabTechnician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_TECHNICIAN"); }
@@ -204,11 +273,45 @@ public class RoleValidator {
     }
     public boolean hasRole(UUID userId, UUID hospitalId, String roleCode) { return hasAnyCode(userId, hospitalId, roleCode); }
 
-    public void validateRoleOrThrow(UUID userId, UUID hospitalId, String roleCode, Locale locale, MessageSource messageSource) {
+    public void validateRoleOrThrow(UUID userId, UUID hospitalId, String roleCode) {
         if (!hasAnyCode(userId, hospitalId, roleCode)) {
-            throw new BusinessException(
-                messageSource.getMessage("role.notfound", new Object[]{userId, hospitalId}, "Role not found", locale));
+            // #1096 review: the user does not hold the role (role.notfound is a role that does not
+            // exist); the role is named by its label in the reader's language, never by its code.
+            throw new BusinessException("role.notHeld", roleLabel(roleCode));
         }
+    }
+
+    /**
+     * The chosen assignment ITSELF holds the role (#1096 review): it is active, it is at
+     * {@code hospitalId}, and its role is {@code roleCode}. Checking the assignment's user
+     * instead accepted an inactive or a non-doctor assignment of a user who holds an active
+     * doctor assignment elsewhere.
+     */
+    public void requireAssignmentHolds(UserRoleHospitalAssignment assignment, UUID hospitalId, String roleCode) {
+        if (assignment == null || !Boolean.TRUE.equals(assignment.getActive())) {
+            throw new FieldBusinessException("assignmentId", "role.assignment.inactive");
+        }
+        String held = assignment.getRole() == null || assignment.getRole().getCode() == null
+            ? "" : assignment.getRole().getCode().trim().toUpperCase(Locale.ROOT);
+        boolean atHospital = assignment.getHospital() != null && hospitalId != null
+            && hospitalId.equals(assignment.getHospital().getId());
+        if (!atHospital || !expandCodes(roleCode).contains(held)) {
+            throw new FieldBusinessException("assignmentId", "role.assignment.wrongRole", roleLabel(roleCode));
+        }
+    }
+
+    /**
+     * "ROLE_DOCTOR" read as the role's label in the reader's language ("Médecin"); a code with
+     * no label reads as itself, never as a raw bundle key (#1096 review).
+     */
+    private static String roleLabel(String roleCode) {
+        String code = roleCode == null ? "" : roleCode.trim();
+        String bare = code.toUpperCase(Locale.ROOT);
+        if (bare.startsWith("ROLE_")) {
+            bare = bare.substring("ROLE_".length());
+        }
+        String label = MessageUtil.resolveOrNull(null, "email.role.label." + bare);
+        return label != null ? label : code;
     }
 
     public boolean isAnyActiveRole(UUID userId) { return assignmentRepository.existsByUserIdAndActiveTrue(userId); }
@@ -268,15 +371,15 @@ public class RoleValidator {
         return LAB_ORDERING_ROLE_CODES.contains(bare);
     }
 
-    public void requireLabScientistOrAdmin(UUID userId, UUID hospitalId, Locale locale, MessageSource messageSource) {
+    public void requireLabScientistOrAdmin(UUID userId, UUID hospitalId) {
         if (!(isLabScientist(userId, hospitalId) || isHospitalAdmin(userId, hospitalId))) {
-            throw new BusinessException(messageSource.getMessage("auth.lab.required", null, "Only Lab Scientist or Hospital Admin allowed", locale));
+            throw new BusinessException("auth.lab.required");
         }
     }
 
-    public void requireLabStaffOrAdmin(UUID userId, UUID hospitalId, Locale locale, MessageSource messageSource) {
+    public void requireLabStaffOrAdmin(UUID userId, UUID hospitalId) {
         if (!(isLabStaff(userId, hospitalId) || isHospitalAdmin(userId, hospitalId))) {
-            throw new BusinessException(messageSource.getMessage("auth.lab.staff.required", null, "Only Lab staff or Hospital Admin allowed", locale));
+            throw new BusinessException("auth.lab.staff.required");
         }
     }
 

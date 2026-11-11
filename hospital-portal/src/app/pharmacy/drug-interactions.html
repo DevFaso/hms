@@ -3,6 +3,10 @@
     <div class="header-left">
       <span class="material-symbols-outlined header-icon">medication_liquid</span>
       <div>
+        <p class="workspace-eyebrow">
+          <span class="material-symbols-outlined" aria-hidden="true">medication_liquid</span
+          ><span>{{ 'PHARMACY_WORKSPACE.LABEL' | translate }}</span>
+        </p>
         <h1 class="page-title">{{ 'DRUG_INTERACTIONS.TITLE' | translate }}</h1>
         <p class="page-subtitle">{{ 'DRUG_INTERACTIONS.SUBTITLE' | translate }}</p>
       </div>
@@ -14,7 +18,12 @@
           {{ 'DRUG_INTERACTIONS.ADD' | translate }}
         </button>
       }
-      <button class="btn-refresh" (click)="load()" [disabled]="loading()">
+      <button
+        [attr.aria-label]="'COMMON.REFRESH' | translate"
+        class="btn-refresh"
+        (click)="load()"
+        [disabled]="loading()"
+      >
         <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
       </button>
     </div>
@@ -26,6 +35,13 @@
     {{ 'DRUG_INTERACTIONS.PLATFORM_SCOPE' | translate }}
   </div>
 
+  <div class="workspace-strip">
+    <p>
+      <strong>{{ loading() ? '—' : filtered().length }}</strong
+      ><span>{{ 'PHARMACY_WORKSPACE.VISIBLE_INTERACTIONS' | translate }}</span>
+    </p>
+    <span class="material-symbols-outlined" aria-hidden="true">policy</span>
+  </div>
   <div class="filter-bar">
     <input
       type="search"
@@ -72,7 +88,12 @@
       <p>{{ 'DRUG_INTERACTIONS.EMPTY' | translate }}</p>
     </div>
   } @else {
-    <div class="table-wrap">
+    <div
+      class="table-wrap"
+      tabindex="0"
+      role="region"
+      [attr.aria-label]="'DRUG_INTERACTIONS.TITLE' | translate"
+    >
       <table class="ddi-table">
         <thead>
           <tr>
@@ -180,12 +201,15 @@
       data-testid="ddi-modal"
     >
       <div
+        appModalDialog
+        aria-labelledby="drug-interactions-panel-1-title"
+        (escaped)="closeModal()"
         class="form-card"
         (click)="$event.stopPropagation()"
         (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
-        <h2>
+        <h2 id="drug-interactions-panel-1-title">
           {{
             (editingId() ? 'DRUG_INTERACTIONS.EDIT_TITLE' : 'DRUG_INTERACTIONS.ADD_TITLE')
               | translate
@@ -197,6 +221,7 @@
             <label for="ddi-drug1-name"
               >{{ 'DRUG_INTERACTIONS.DRUG1_NAME' | translate }} *
               <input
+                required
                 id="ddi-drug1-name"
                 type="text"
                 [(ngModel)]="form.drug1Name"
@@ -206,6 +231,7 @@
             <label for="ddi-drug1-code"
               >{{ 'DRUG_INTERACTIONS.DRUG1_CODE' | translate }} *
               <input
+                required
                 id="ddi-drug1-code"
                 type="text"
                 [(ngModel)]="form.drug1Code"
@@ -218,6 +244,7 @@
             <label for="ddi-drug2-name"
               >{{ 'DRUG_INTERACTIONS.DRUG2_NAME' | translate }} *
               <input
+                required
                 id="ddi-drug2-name"
                 type="text"
                 [(ngModel)]="form.drug2Name"
@@ -227,6 +254,7 @@
             <label for="ddi-drug2-code"
               >{{ 'DRUG_INTERACTIONS.DRUG2_CODE' | translate }} *
               <input
+                required
                 id="ddi-drug2-code"
                 type="text"
                 [(ngModel)]="form.drug2Code"
@@ -237,7 +265,7 @@
           </div>
           <label for="ddi-severity-select"
             >{{ 'DRUG_INTERACTIONS.SEVERITY' | translate }} *
-            <select id="ddi-severity-select" [(ngModel)]="form.severity" name="severity">
+            <select required id="ddi-severity-select" [(ngModel)]="form.severity" name="severity">
               @for (s of severities; track s) {
                 <option [ngValue]="s">{{ 'DRUG_INTERACTIONS.SEVERITY_' + s | translate }}</option>
               }
@@ -250,13 +278,16 @@
               <span class="flag-chip">{{ 'DRUG_INTERACTIONS.FLAG_AVOID' | translate }}</span>
             }
             @if (derivedFlags(form.severity).adjust) {
-              <span class="flag-chip">{{ 'DRUG_INTERACTIONS.FLAG_ADJUST' | translate }}</span>
+              {{ ' '
+              }}<span class="flag-chip">{{ 'DRUG_INTERACTIONS.FLAG_ADJUST' | translate }}</span>
             }
-            <span class="flag-chip">{{ 'DRUG_INTERACTIONS.FLAG_MONITOR' | translate }}</span>
+            {{ ' '
+            }}<span class="flag-chip">{{ 'DRUG_INTERACTIONS.FLAG_MONITOR' | translate }}</span>
           </p>
           <label for="ddi-recommendation"
             >{{ 'DRUG_INTERACTIONS.RECOMMENDATION' | translate }} *
             <textarea
+              required
               id="ddi-recommendation"
               [(ngModel)]="form.recommendation"
               name="recommendation"
@@ -363,7 +394,14 @@
             <button type="button" class="btn-secondary" (click)="closeModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()" data-testid="ddi-save">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+              data-testid="ddi-save"
+            >
               {{ 'COMMON.SAVE' | translate }}
             </button>
           </div>
@@ -382,12 +420,17 @@
       data-testid="ddi-deactivate-modal"
     >
       <div
+        appModalDialog
+        aria-labelledby="drug-interactions-panel-2-title"
+        (escaped)="cancelDeactivate()"
         class="form-card confirm-card"
         (click)="$event.stopPropagation()"
         (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
-        <h2>{{ 'DRUG_INTERACTIONS.DEACTIVATE_TITLE' | translate }}</h2>
+        <h2 id="drug-interactions-panel-2-title">
+          {{ 'DRUG_INTERACTIONS.DEACTIVATE_TITLE' | translate }}
+        </h2>
         <p>
           <strong>{{ target.drug1Name }} + {{ target.drug2Name }}</strong>
           <span [class]="severityClass(target.severity)">

@@ -83,8 +83,9 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
         // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
-        List<Prescription> prescriptions = NeverSentRule.prescriptionsReadableHere(
-            fetchPrescriptions(patientId, readable, startDate, endDate), hospitalId);
+        // QA D1537: a draft thrown away before anyone signed it is no course the patient took.
+        List<Prescription> prescriptions = com.example.hms.service.support.PrescriptionIssuance.withoutDiscardedProposals(
+            NeverSentRule.prescriptionsReadableHere(fetchPrescriptions(patientId, readable, startDate, endDate), hospitalId));
         List<PharmacyFill> pharmacyFills = fetchPharmacyFills(patientId, readable, startDate, endDate);
 
         log.debug("Found {} prescriptions and {} pharmacy fills", prescriptions.size(), pharmacyFills.size());
@@ -318,6 +319,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .hasInteraction(false)
             .interactingWith(new ArrayList<>())
             .prescriptionId(rx.getId())
+            .signedAt(rx.getSignedAt())
             .documentedAt(rx.getCreatedAt())
             .hospitalId(CrossHospitalReachRecorder.hospitalIdOf(rx.getHospital()))
             .hospitalName(rx.getHospital() != null ? rx.getHospital().getName() : null)

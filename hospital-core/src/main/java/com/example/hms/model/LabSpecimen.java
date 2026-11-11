@@ -84,4 +84,15 @@ public class LabSpecimen extends BaseEntity {
 
     @Column(name = "notes", length = 2048)
     private String notes;
+
+    /** QA D962: why the laboratory refused this specimen (status REJECTED). */
+    @Column(name = "rejection_reason", length = 500)
+    private String rejectionReason;
+
+    @Column(name = "rejected_at")
+    private LocalDateTime rejectedAt;
+
+    /** ID of the user (staff) who rejected the specimen. */
+    @Column(name = "rejected_by_id")
+    private UUID rejectedById;
 }

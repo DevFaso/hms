@@ -210,7 +210,9 @@ public class BirthPlanController {
             
             Authentication authentication) {
         
-        Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        // QA D1385 class (round 32): anything but ASC silently sorted DESC; an unknown direction is refused by name.
+        Sort.Direction sortDirection = "ASC".equals(com.example.hms.controller.support.QueryParameterValues.oneOf(
+            "direction", direction, java.util.Set.of("ASC", "DESC"))) ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
         
         Page<BirthPlanResponseDTO> response = birthPlanService.searchBirthPlans(
@@ -249,8 +251,9 @@ public class BirthPlanController {
     }
 
     /**
-     * Delete a birth plan.
-     * Patients can delete their own plans, providers can delete plans within their scope.
+     * Delete a birth plan (QA D1241, round 25): a reason is required. A plan a
+     * provider has reviewed, or a draft written by someone else, is withdrawn
+     * (kept, marked, audited); only the author's unreviewed draft is deleted.
      *
      * @param id Birth plan ID
      * @param authentication Spring Security authentication
@@ -262,9 +265,10 @@ public class BirthPlanController {
                description = "Deletes a birth plan. Access is controlled based on user role and ownership.")
     public ResponseEntity<Void> deleteBirthPlan(
             @PathVariable UUID id,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String reason,
             Authentication authentication) {
-        
-        birthPlanService.deleteBirthPlan(id, getUsername(authentication));
+
+        birthPlanService.deleteBirthPlan(id, reason, getUsername(authentication));
         return ResponseEntity.noContent().build();
     }
 

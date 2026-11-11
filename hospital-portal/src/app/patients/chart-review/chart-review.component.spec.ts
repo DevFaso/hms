@@ -5,6 +5,9 @@ import { Observable, Subject, of, throwError } from 'rxjs';
 
 import { ChartReviewComponent } from './chart-review.component';
 import { ChartReview, ChartReviewService } from '../../services/chart-review.service';
+import en from '../../../assets/i18n/en.json';
+import es from '../../../assets/i18n/es.json';
+import fr from '../../../assets/i18n/fr.json';
 
 describe('ChartReviewComponent', () => {
   let fixture: ComponentFixture<ChartReviewComponent>;
@@ -49,6 +52,74 @@ describe('ChartReviewComponent', () => {
     expect(
       fixture.nativeElement.querySelector('[data-testid="chart-review-panel-timeline"]'),
     ).not.toBeNull();
+  });
+
+  describe('every row of a tab is reachable (QA D1380)', () => {
+    function pagedChart(): ChartReview {
+      const c = populatedChart();
+      return {
+        ...c,
+        limit: 20,
+        totals: {
+          timeline: 700,
+          encounters: 5,
+          notes: 1,
+          results: 42,
+          medications: 667,
+          imaging: 27,
+          procedures: 1,
+        },
+      };
+    }
+
+    it('badges each tab with the server total, not the page length', () => {
+      chartSpy.getChartReview.and.returnValue(of(pagedChart()));
+      setPatient('p-1');
+      const badge = (tab: string) =>
+        (
+          fixture.nativeElement.querySelector(
+            `[data-testid="chart-review-tab-${tab}"] .chart-review__tab-count`,
+          ) as HTMLElement
+        ).textContent?.trim();
+      expect(badge('medications')).toBe('667');
+      expect(badge('timeline')).toBe('700');
+      expect(badge('results')).toBe('42');
+    });
+
+    it('reads the next page of the active tab only, and puts it in place', () => {
+      chartSpy.getChartReview.and.returnValue(of(pagedChart()));
+      setPatient('p-1');
+      (
+        fixture.nativeElement.querySelector(
+          '[data-testid="chart-review-tab-medications"]',
+        ) as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+
+      const next = { ...pagedChart(), page: 1, section: 'MEDICATIONS' as const };
+      next.medications = [{ ...populatedChart().medications[0], id: 'm-page-2' }];
+      chartSpy.getChartReview.and.returnValue(of(next));
+      (
+        fixture.nativeElement.querySelector(
+          '[data-testid="chart-review-pager-next"]',
+        ) as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+
+      expect(chartSpy.getChartReview).toHaveBeenCalledWith('p-1', undefined, 20, 'MEDICATIONS', 1);
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="chart-review-pager"]'),
+      ).not.toBeNull();
+      expect(
+        (fixture.componentInstance as unknown as { chart: () => ChartReview }).chart()
+          .medications[0].id,
+      ).toBe('m-page-2');
+      // The other tabs keep their first page.
+      expect(
+        (fixture.componentInstance as unknown as { chart: () => ChartReview }).chart().encounters
+          .length,
+      ).toBe(populatedChart().encounters.length);
+    });
   });
 
   it('forwards the hospital scope when supplied', () => {
@@ -263,6 +334,139 @@ describe('ChartReviewComponent', () => {
     }
   });
 
+  /** The timeline pills, section then status, as rendered. */
+  function timelinePills(): string[] {
+    return Array.from(
+      fixture.nativeElement.querySelectorAll(
+        '[data-testid="chart-review-panel-timeline"] .chart-review__timeline-head',
+      ) as NodeListOf<HTMLElement>,
+    ).map((el) => (el.textContent ?? '').replace(/\s+/g, ' ').trim());
+  }
+
+  function d897Chart(): ChartReview {
+    const chart = populatedChart();
+    chart.timeline = [
+      {
+        id: 'n-1',
+        section: 'NOTE',
+        occurredAt: '2026-10-26T10:00:00',
+        title: 'SOAP',
+        status: 'SIGNED',
+      },
+      {
+        id: 'e-1',
+        section: 'ENCOUNTER',
+        occurredAt: '2026-10-26T09:00:00',
+        title: 'A',
+        status: 'COMPLETED',
+      },
+      {
+        id: 'i-1',
+        section: 'IMAGING',
+        occurredAt: '2026-10-26T08:00:00',
+        title: 'B',
+        status: 'FINAL',
+      },
+      {
+        id: 'p-1',
+        section: 'PROCEDURE',
+        occurredAt: '2026-10-26T07:00:00',
+        title: 'C',
+        status: 'COMPLETED',
+      },
+      {
+        id: 'm-1',
+        section: 'MEDICATION',
+        occurredAt: '2026-10-26T06:00:00',
+        title: 'D',
+        status: 'SIGNED',
+      },
+    ];
+    return chart;
+  }
+
+  it('QA D897: French timeline statuses agree with their section ("Note Signée", "Consultation Terminée")', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    chartSpy.getChartReview.and.returnValue(of(d897Chart()));
+
+    setPatient('p-897');
+
+    expect(timelinePills()).toEqual([
+      'Note Signée',
+      'Consultation Terminée',
+      'Imagerie Finale',
+      'Procédure Terminée',
+      // A masculine noun keeps the shared label.
+      'Médicament Signé',
+    ]);
+  });
+
+  it('QA D897: Spanish agrees too, and its procedimiento is masculine', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('es', es);
+    translate.use('es');
+    chartSpy.getChartReview.and.returnValue(of(d897Chart()));
+
+    setPatient('p-897');
+
+    expect(timelinePills()).toEqual([
+      'Nota Firmada',
+      'Consulta Completada',
+      'Imagen Definitiva',
+      'Procedimiento Completado',
+      'Medicamento Firmado',
+    ]);
+  });
+
+  it('QA D897: English is unchanged, and a status with no agreed label keeps the shared one', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', en);
+    translate.use('en');
+    const chart = d897Chart();
+    chart.timeline = [
+      ...(chart.timeline ?? []),
+      {
+        id: 'r-1',
+        section: 'RESULT',
+        occurredAt: '2026-10-26T05:00:00',
+        title: 'E',
+        status: 'HIGH',
+      },
+    ];
+    chartSpy.getChartReview.and.returnValue(of(chart));
+
+    setPatient('p-897');
+
+    const pills = timelinePills();
+    expect(pills.slice(0, 5)).toEqual([
+      'Note Signed',
+      'Encounter Completed',
+      'Imaging Final',
+      'Procedure Completed',
+      'Medication Signed',
+    ]);
+    expect(pills[5]).not.toContain('TIMELINE_STATUS');
+  });
+
+  it('QA D897: every agreed label exists in all three languages for the same statuses', () => {
+    const trees = [en, fr, es].map(
+      (d) =>
+        (
+          d as unknown as {
+            CHART_REVIEW: { TIMELINE_STATUS: Record<string, Record<string, string>> };
+          }
+        ).CHART_REVIEW.TIMELINE_STATUS,
+    );
+    const shape = (t: Record<string, Record<string, string>>): string[] =>
+      Object.entries(t).flatMap(([section, labels]) =>
+        Object.keys(labels).map((s) => `${section}.${s}`),
+      );
+    expect(shape(trees[1]).sort()).toEqual(shape(trees[0]).sort());
+    expect(shape(trees[2]).sort()).toEqual(shape(trees[0]).sort());
+  });
+
   for (const [lang, label] of [
     ['en', 'Inpatient-en'],
     ['es', 'Hospitalizado-es'],
@@ -286,6 +490,153 @@ describe('ChartReviewComponent', () => {
       expect(title).not.toContain('INPATIENT');
     });
   }
+
+  it('QA D1016 (round 18): the Chronologie marks a corrected result, and only that one', () => {
+    const chart = populatedChart();
+    chart.timeline = [
+      {
+        id: 'r-1',
+        section: 'RESULT',
+        occurredAt: '2026-10-30T12:58:00',
+        title: 'TDR paludisme Négatif',
+        corrected: true,
+      },
+      {
+        id: 'r-2',
+        section: 'RESULT',
+        occurredAt: '2026-10-30T12:00:00',
+        title: 'NFS 12 g/dL',
+        corrected: false,
+      },
+    ];
+    chartSpy.getChartReview.and.returnValue(of(chart));
+    setPatient('p-1');
+    const rows = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        '.chart-review__timeline-item',
+      ) as NodeListOf<HTMLElement>,
+    );
+    expect(rows.length).toBe(2);
+    expect(rows[0].querySelector('[data-testid="lab-correction-badge"]')).not.toBeNull();
+    expect(rows[1].querySelector('[data-testid="lab-correction-badge"]')).toBeNull();
+  });
+
+  it('QA D1076: a nursing note is listed, says it is a nursing note, its template by name', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    const chart = populatedChart();
+    chart.notes = [
+      ...chart.notes,
+      {
+        id: 'nn-1',
+        template: 'DAR',
+        source: 'NURSING',
+        authorName: 'Inf. Kaboré',
+        documentedAt: '2026-10-30T09:00:00',
+        signedAt: '2026-10-30T09:00:00',
+        signed: true,
+        lateEntry: false,
+        preview: 'Patient calme.',
+      },
+    ];
+    chart.timeline = [
+      {
+        id: 'nn-1',
+        section: 'NOTE',
+        occurredAt: '2026-10-30T09:00:00',
+        title: 'DAR — Inf. Kaboré',
+        status: 'SIGNED',
+      },
+    ];
+    chartSpy.getChartReview.and.returnValue(of(chart));
+    setPatient('p-1');
+    const title = (
+      fixture.nativeElement.querySelector('[data-testid="timeline-note-title"]') as HTMLElement
+    ).textContent!.replace(/\s+/g, ' ');
+    expect(title).toContain('Note infirmière');
+    expect(title).toContain('Note DAR');
+    expect(title.trim().startsWith('DAR')).toBeFalse();
+    const notesTab = Array.from(
+      fixture.nativeElement.querySelectorAll('[role="tab"]') as NodeListOf<HTMLElement>,
+    ).find((t) => t.id.includes('notes'))!;
+    notesTab.click();
+    fixture.detectChanges();
+    const panel = fixture.nativeElement.querySelector(
+      '[data-testid="chart-review-panel-notes"]',
+    ) as HTMLElement;
+    expect(panel.querySelectorAll('[data-testid="note-source-nursing"]').length).toBe(1);
+    expect(panel.textContent).toContain('Note SOAP');
+    expect(panel.textContent).toContain('Note DAR');
+  });
+
+  // QA D1107 (NOT_FIXED r19, r20): the Chronologie row dropped the nursing
+  // note's title. QA D1136: the author's job title read "Nurse" in French, with
+  // a stray space before the comma. QA D1137: "6,8 [Corrigé] g/dL".
+  it('QA D1107 / D1136 / D1137: title in the Chronologie, job title in French, badge after the unit', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    const chart = populatedChart();
+    chart.notes = [
+      {
+        id: 'nn-2',
+        template: 'DAR',
+        source: 'NURSING',
+        title: 'Surveillance post-opératoire',
+        authorName: 'Roger Bationo',
+        authorCredentials: 'NURSE',
+        documentedAt: '2026-10-30T09:00:00',
+        signedAt: '2026-10-30T09:00:00',
+        signed: true,
+        lateEntry: false,
+        preview: 'Patient calme.',
+      },
+    ];
+    chart.timeline = [
+      {
+        id: 'nn-2',
+        section: 'NOTE',
+        occurredAt: '2026-10-30T09:00:00',
+        title: 'x',
+        status: 'SIGNED',
+      },
+    ];
+    chart.results = [{ ...chart.results[0], resultValue: '6.8', corrected: true }];
+    chartSpy.getChartReview.and.returnValue(of(chart));
+    setPatient('p-1');
+
+    const title = (
+      fixture.nativeElement.querySelector('[data-testid="timeline-note-title"]') as HTMLElement
+    ).textContent!.replace(/\s+/g, ' ');
+    expect(title).toContain('Surveillance post-opératoire');
+
+    const tab = (id: string) =>
+      Array.from(fixture.nativeElement.querySelectorAll('[role="tab"]') as NodeListOf<HTMLElement>)
+        .find((t) => t.id.includes(id))!
+        .click();
+    tab('notes');
+    fixture.detectChanges();
+    const notes = (
+      fixture.nativeElement.querySelector('[data-testid="chart-review-panel-notes"]') as HTMLElement
+    ).textContent!.replace(/\s+/g, ' ');
+    expect(notes).toContain('Roger Bationo, Infirmier(ère)');
+    expect(notes).not.toContain('NURSE');
+    expect(notes).not.toContain('Bationo ,');
+
+    tab('results');
+    fixture.detectChanges();
+    const cell = Array.from(
+      (
+        fixture.nativeElement.querySelector(
+          '[data-testid="chart-review-panel-results"]',
+        ) as HTMLElement
+      ).querySelectorAll('td'),
+    )
+      .map((td) => td.textContent!.replace(/\s+/g, ' ').trim())
+      .find((t) => t.startsWith('6,8'))!;
+    expect(cell.startsWith('6,8 g/dL')).withContext(cell).toBeTrue();
+  });
 
   it('QA D777: shows the zone-less UTC server time in the reader zone, like every other screen', () => {
     const chart = populatedChart();

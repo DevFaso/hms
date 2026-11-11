@@ -66,6 +66,16 @@
               </td>
               <td>
                 <span class="type-chip">{{ typeLabelKey(doc.documentType) | translate }}</span>
+                <!-- QA D1048: who the document comes from. -->
+                {{ ' '
+                }}<span class="source-chip" data-testid="document-source">
+                  {{
+                    (doc.issuedByHospital
+                      ? 'PATIENT_DOCUMENTS.SOURCE_HOSPITAL'
+                      : 'PATIENT_DOCUMENTS.SOURCE_PATIENT'
+                    ) | translate
+                  }}
+                </span>
               </td>
               <td>
                 {{
@@ -73,14 +83,14 @@
                 }}
               </td>
               <td>
-                {{ doc.createdAt | serverTime | date: 'medium' }}
+                {{ doc.createdAt | serverTime | dateTime }}
                 @if (doc.uploadedByDisplayName) {
                   <span class="muted">
                     · {{ 'PATIENT_DOCUMENTS.BY' | translate }} {{ doc.uploadedByDisplayName }}
                   </span>
                 }
               </td>
-              <td>{{ formatSize(doc.fileSizeBytes) ?? '—' }}</td>
+              <td>{{ formatSize(doc.fileSizeBytes) | dash }}</td>
               <td>
                 <button
                   type="button"

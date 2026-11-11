@@ -6,6 +6,7 @@ import { of, throwError } from 'rxjs';
 
 import { MortalityComponent } from './mortality';
 import {
+  DeathDispute,
   DeathRecordResponse,
   MortalityRegister,
   MortalityService,
@@ -14,6 +15,8 @@ import {
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 
 function mockDeath(overrides: Partial<DeathRecordResponse> = {}): DeathRecordResponse {
   return {
@@ -41,30 +44,162 @@ function mockRegister(overrides: Partial<MortalityRegister> = {}): MortalityRegi
     maternalDeaths: 0,
     lateMaternalDeaths: 0,
     perinatalDeaths: 0,
+    perinatalEligibilityUnknown: 0,
+    perinatalBelowGestation: 0,
     stillbirths: 0,
+    earlyNeonatalDeaths: 0,
+    lateNeonatalDeaths: 0,
     deaths: [mockDeath()],
     ...overrides,
   } as MortalityRegister;
 }
 
+describe('MortalityComponent, QA D1488 / D1490', () => {
+  let fixtureComponent: MortalityComponent;
+  let spy: jasmine.SpyObj<MortalityService>;
+  let confirmSpy: jasmine.SpyObj<ConfirmService>;
+
+  beforeEach(async () => {
+    spy = jasmine.createSpyObj('MortalityService', [
+      'getRegister',
+      'recordDeath',
+      'amendDeathRecord',
+      'getForPatient',
+      'markEnteredInError',
+      'openDisputes',
+      'upholdDeath',
+    ]);
+    spy.openDisputes.and.returnValue(of([]));
+    spy.upholdDeath.and.returnValue(of({} as DeathDispute));
+    spy.getRegister.and.returnValue(of(mockRegister()));
+    spy.markEnteredInError.and.returnValue(of(mockDeath()));
+    confirmSpy = jasmine.createSpyObj('ConfirmService', ['ask']);
+    confirmSpy.ask.and.resolveTo(true);
+    await TestBed.configureTestingModule({
+      imports: [MortalityComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: MortalityService, useValue: spy },
+        { provide: ConfirmService, useValue: confirmSpy },
+        {
+          provide: RoleContextService,
+          useValue: {
+            hasAnyActiveRole: () => true,
+            isSuperAdmin: () => false,
+            hasHospitalScope: () => true,
+            activeHospitalId: 'h1',
+          },
+        },
+      ],
+    }).compileComponents();
+    fixtureComponent = TestBed.createComponent(MortalityComponent).componentInstance;
+  });
+
+  it('hides and clears the maternal classification for a patient recorded male, unknown sex keeps it', () => {
+    fixtureComponent.form.maternalDeath = true;
+    fixtureComponent.onPatientPicked({ id: 'p1', gender: 'M' } as PatientResponse);
+    expect(fixtureComponent.maternalHidden()).toBeTrue();
+    expect(fixtureComponent.form.maternalDeath).toBeFalse();
+
+    fixtureComponent.onPatientPicked({ id: 'p2' } as PatientResponse);
+    expect(fixtureComponent.maternalHidden()).toBeFalse();
+  });
+
+  it('marks a record entered in error only with a reason and a confirmation', async () => {
+    fixtureComponent.openEnteredInError(mockDeath());
+    fixtureComponent.errorReason = '   ';
+    await fixtureComponent.submitEnteredInError();
+    expect(spy.markEnteredInError).not.toHaveBeenCalled();
+
+    fixtureComponent.errorReason = ' Wrong patient ';
+    await fixtureComponent.submitEnteredInError();
+    expect(confirmSpy.ask).toHaveBeenCalled();
+    expect(spy.markEnteredInError).toHaveBeenCalledWith(mockDeath().id, 'Wrong patient');
+    expect(fixtureComponent.errorRecord()).toBeNull();
+  });
+
+  it('an empty reason is starred and marked, and nothing is sent', () => {
+    const fixture = TestBed.createComponent(MortalityComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    fixture.componentInstance.openEnteredInError(mockDeath());
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="mort-entered-in-error-submit"]',
+      sent: spy.markEnteredInError,
+    });
+    expect(marked).toContain('e-reason');
+    fixture.nativeElement.remove();
+  });
+
+  it('entered in error from a dispute reaches a death outside the period shown', () => {
+    fixtureComponent.register.set(mockRegister({ deaths: [] }));
+    spy.getForPatient.and.returnValue(of(mockDeath()));
+    fixtureComponent.openEnteredInErrorFor({
+      patientId: 'p1',
+      deathRecordId: 'd1',
+    } as DeathDispute);
+    expect(spy.getForPatient).toHaveBeenCalledWith('p1');
+    expect(fixtureComponent.errorRecord()?.id).toBe('d1');
+  });
+
+  it('upholding needs a reason: empty is marked and nothing is sent', () => {
+    const fixture = TestBed.createComponent(MortalityComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    fixture.componentInstance.openUphold({ id: 'x1', patientName: 'Awa' } as DeathDispute);
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="mort-uphold-submit"]',
+      sent: spy.upholdDeath,
+    });
+    expect(marked).toContain('u-reason');
+    fixture.nativeElement.remove();
+  });
+
+  it('upholds with the reason after the confirmation, and reloads the disputes', async () => {
+    fixtureComponent.openUphold({ id: 'x1' } as DeathDispute);
+    fixtureComponent.upholdReason = ' Family confirmed ';
+    spy.openDisputes.calls.reset();
+    await fixtureComponent.submitUphold();
+    expect(confirmSpy.ask).toHaveBeenCalled();
+    expect(spy.upholdDeath).toHaveBeenCalledWith('x1', 'Family confirmed');
+    expect(spy.openDisputes).toHaveBeenCalled();
+  });
+
+  it('sends nothing when the confirmation is declined', async () => {
+    confirmSpy.ask.and.resolveTo(false);
+    fixtureComponent.openEnteredInError(mockDeath());
+    fixtureComponent.errorReason = 'Wrong patient';
+    await fixtureComponent.submitEnteredInError();
+    expect(spy.markEnteredInError).not.toHaveBeenCalled();
+  });
+});
+
 describe('MortalityComponent', () => {
   let component: MortalityComponent;
   let mortalitySpy: jasmine.SpyObj<MortalityService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
+  let scopeReady: boolean;
 
   beforeEach(async () => {
+    scopeReady = true;
     mortalitySpy = jasmine.createSpyObj('MortalityService', [
       'getRegister',
       'recordDeath',
       'amendDeathRecord',
       'getForPatient',
+      'openDisputes',
     ]);
+    mortalitySpy.openDisputes.and.returnValue(of([]));
     mortalitySpy.getRegister.and.returnValue(of(mockRegister()));
 
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
     const roleCtx = {
       hasAnyActiveRole: () => true,
       isSuperAdmin: () => false,
+      hasHospitalScope: () => scopeReady,
       activeHospitalId: 'h1',
     } as unknown as RoleContextService;
 
@@ -103,28 +238,98 @@ describe('MortalityComponent', () => {
     expect(component.register()).toBeNull();
   });
 
-  it('asks before recording a death and does nothing when declined', () => {
-    spyOn(window, 'confirm').and.returnValue(false);
+  it('a refused disputes list (403) says nothing, hides its section and the register rows still render', () => {
+    mortalitySpy.openDisputes.and.returnValue(throwError(() => ({ status: 403 })));
+    const fixture = TestBed.createComponent(MortalityComponent);
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    expect(toastSpy.error).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.register()?.totalDeaths).toBe(1);
+    expect(root.textContent).toContain('Awa Traoré');
+    expect(root.querySelector('[data-testid="dispute-uphold"]')).toBeNull();
+  });
+
+  it('any other disputes failure says so in its own words, never as the register failing', () => {
+    mortalitySpy.openDisputes.and.returnValue(throwError(() => ({ status: 500 })));
+    const fixture = TestBed.createComponent(MortalityComponent);
+    fixture.detectChanges();
+
+    expect(toastSpy.error).toHaveBeenCalledOnceWith('MORTALITY.DISPUTES_LOAD_ERROR');
+    expect(toastSpy.error).not.toHaveBeenCalledWith('MORTALITY.LOAD_ERROR');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Awa Traoré');
+  });
+
+  it('a super-admin in global view does not ask for disputes until a hospital is selected', () => {
+    scopeReady = false;
+    const fixture = TestBed.createComponent(MortalityComponent);
+    fixture.detectChanges();
+
+    expect(mortalitySpy.openDisputes).not.toHaveBeenCalled();
+    expect(mortalitySpy.getRegister).toHaveBeenCalled();
+  });
+
+  it('QA D1451: the three boxes answer a real click, and the backdrop still closes the dialog', async () => {
+    const fixture = TestBed.createComponent(MortalityComponent);
+    const root = fixture.nativeElement as HTMLElement;
+    const settle = async () => {
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    };
+    fixture.componentInstance.openRecord();
+    await settle();
+    const boxes = () => [
+      ...root.querySelectorAll<HTMLInputElement>('.modal-body input[type="checkbox"]'),
+    ];
+    expect(boxes().length).toBe(3);
+    for (const index of [0, 1, 2]) {
+      boxes()[index].click();
+      await settle();
+      expect(boxes()[index].checked).withContext(`box ${index}`).toBeTrue();
+      boxes()[index].closest('label')!.click();
+      await settle();
+      expect(boxes()[index].checked).withContext(`label ${index}`).toBeFalse();
+      boxes()[index].click();
+      await settle();
+    }
+    const form = fixture.componentInstance.form;
+    expect([form.maternalDeath, form.perinatalDeath, form.autopsyRequested]).toEqual([
+      true,
+      true,
+      true,
+    ]);
+
+    root.querySelector<HTMLElement>('.modal-header')!.click();
+    await settle();
+    expect(root.querySelector('.modal-backdrop')).not.toBeNull();
+    root.querySelector<HTMLElement>('.modal-backdrop')!.click();
+    await settle();
+    expect(root.querySelector('.modal-backdrop')).toBeNull();
+  });
+
+  it('asks before recording a death and does nothing when declined', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
     component.openRecord();
     component.form.patientId = 'p1';
     component.form.diedAt = '2026-08-24T10:00';
     component.form.immediateCause = 'Sepsis';
-    component.submitRecord();
+    await component.submitRecord();
     expect(mortalitySpy.recordDeath).not.toHaveBeenCalled();
   });
 
-  it('does not submit without a patient, a time, or an immediate cause', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('does not submit without a patient, a time, or an immediate cause', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     component.openRecord();
     component.form.patientId = 'p1';
     component.form.diedAt = '';
     component.form.immediateCause = 'Sepsis';
-    component.submitRecord();
+    await component.submitRecord();
     expect(mortalitySpy.recordDeath).not.toHaveBeenCalled();
   });
 
-  it('records a death and reports what the cascade closed', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('records a death and reports what the cascade closed', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     const response: RecordDeathResponse = {
       deathRecord: mockDeath(),
       closure: {
@@ -140,7 +345,7 @@ describe('MortalityComponent', () => {
     component.form.patientId = 'p1';
     component.form.diedAt = '2026-08-24T10:00';
     component.form.immediateCause = '  Sepsis  ';
-    component.submitRecord();
+    await component.submitRecord();
 
     const [payload] = mortalitySpy.recordDeath.calls.mostRecent().args;
     expect(payload.immediateCause).toBe('Sepsis');
@@ -152,8 +357,8 @@ describe('MortalityComponent', () => {
     expect(component.lastClosure()?.appointmentsCancelled).toBe(3);
   });
 
-  it('omits the maternal timing when the death is not maternal', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('omits the maternal timing when the death is not maternal', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     mortalitySpy.recordDeath.and.returnValue(
       of({ deathRecord: mockDeath(), closure: {} } as RecordDeathResponse),
     );
@@ -162,14 +367,14 @@ describe('MortalityComponent', () => {
     component.form.diedAt = '2026-08-24T10:00';
     component.form.immediateCause = 'Sepsis';
     component.form.maternalDeath = false;
-    component.submitRecord();
+    await component.submitRecord();
 
     const [payload] = mortalitySpy.recordDeath.calls.mostRecent().args;
     expect(payload.maternalDeathTiming).toBeUndefined();
   });
 
-  it('sends the maternal timing when the death is maternal', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('sends the maternal timing when the death is maternal', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     mortalitySpy.recordDeath.and.returnValue(
       of({ deathRecord: mockDeath(), closure: {} } as RecordDeathResponse),
     );
@@ -179,20 +384,109 @@ describe('MortalityComponent', () => {
     component.form.immediateCause = 'Postpartum haemorrhage';
     component.form.maternalDeath = true;
     component.form.maternalDeathTiming = 'WITHIN_42_DAYS_POSTPARTUM';
-    component.submitRecord();
+    await component.submitRecord();
 
     const [payload] = mortalitySpy.recordDeath.calls.mostRecent().args;
     expect(payload.maternalDeathTiming).toBe('WITHIN_42_DAYS_POSTPARTUM');
   });
 
-  it('reports a rejected recording rather than pretending it worked', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('CR-08: sends the birth facts only with the classification, and leaves empty ones absent', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+    mortalitySpy.recordDeath.and.returnValue(
+      of({ deathRecord: mockDeath(), closure: {} } as RecordDeathResponse),
+    );
+    component.openRecord();
+    component.form.patientId = 'p1';
+    component.form.diedAt = '2026-08-24T10:00';
+    component.form.immediateCause = 'Sepsis';
+    component.form.bornAt = '2026-08-20T10:00';
+    component.form.gestationalAgeWeeks = 38;
+    component.form.birthStatus = 'LIVE_BIRTH';
+    await component.submitRecord();
+    let [payload] = mortalitySpy.recordDeath.calls.mostRecent().args;
+    expect([payload.bornAt, payload.birthStatus, payload.gestationalAgeWeeks]).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ]);
+
+    component.openRecord();
+    component.form.patientId = 'p1';
+    component.form.diedAt = '2026-08-24T10:00';
+    component.form.immediateCause = 'Sepsis';
+    component.form.perinatalDeath = true;
+    component.form.perinatalType = 'EARLY_NEONATAL';
+    await component.submitRecord();
+    [payload] = mortalitySpy.recordDeath.calls.mostRecent().args;
+    expect(payload.bornAt).toBeUndefined();
+    expect(payload.gestationalAgeWeeks).toBeUndefined();
+    expect(payload.birthStatus).toBe('UNKNOWN');
+
+    component.openRecord();
+    component.form.patientId = 'p1';
+    component.form.diedAt = '2026-08-24T10:00';
+    component.form.immediateCause = 'Sepsis';
+    component.form.perinatalDeath = true;
+    component.form.perinatalType = 'EARLY_NEONATAL';
+    component.form.bornAt = '2026-08-20T10:00';
+    component.form.gestationalAgeWeeks = 38;
+    component.form.birthStatus = 'LIVE_BIRTH';
+    await component.submitRecord();
+    [payload] = mortalitySpy.recordDeath.calls.mostRecent().args;
+    expect(payload.bornAt).toBe(new Date(2026, 7, 20, 10, 0).toISOString().slice(0, 19));
+    expect(payload.gestationalAgeWeeks).toBe(38);
+    expect(payload.birthStatus).toBe('LIVE_BIRTH');
+  });
+
+  it('CR-07: states the perinatal definition, and shows late neonatal deaths and unconfirmed rows apart', () => {
+    mortalitySpy.getRegister.and.returnValue(
+      of(
+        mockRegister({
+          perinatalDeaths: 2,
+          stillbirths: 1,
+          earlyNeonatalDeaths: 1,
+          lateNeonatalDeaths: 3,
+          perinatalEligibilityUnknown: 1,
+          perinatalBelowGestation: 1,
+          deaths: [
+            mockDeath({
+              id: 'late',
+              perinatalDeath: true,
+              perinatalType: 'LATE_NEONATAL',
+              perinatalEligibility: 'NOT_ELIGIBLE',
+            }),
+            mockDeath({
+              id: 'early',
+              perinatalDeath: true,
+              perinatalType: 'EARLY_NEONATAL',
+              perinatalEligibility: 'UNKNOWN',
+            }),
+          ],
+        }),
+      ),
+    );
+    const fixture = TestBed.createComponent(MortalityComponent);
+    fixture.detectChanges();
+    const page: HTMLElement = fixture.nativeElement;
+    const text = (id: string) => page.querySelector(`[data-testid="${id}"]`)?.textContent ?? null;
+
+    expect(text('perinatal-definition')).toContain('MORTALITY.PERINATAL_DEFINITION');
+    expect(text('late-neonatal-card')).toContain('3');
+    expect(text('late-neonatal-card')).toContain('MORTALITY.LATE_NEONATAL_NOTE');
+    expect(text('perinatal-eligibility-unknown')).toContain('1');
+    expect(text('perinatal-below-gestation')).toContain('1');
+    expect(text('register-not-in-perinatal')).toContain('MORTALITY.ELIGIBILITY_NOT_ELIGIBLE');
+    expect(text('register-eligibility-unknown')).toContain('MORTALITY.ELIGIBILITY_UNKNOWN');
+  });
+
+  it('reports a rejected recording rather than pretending it worked', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     mortalitySpy.recordDeath.and.returnValue(throwError(() => new Error('409')));
     component.openRecord();
     component.form.patientId = 'p1';
     component.form.diedAt = '2026-08-24T10:00';
     component.form.immediateCause = 'Sepsis';
-    component.submitRecord();
+    await component.submitRecord();
 
     expect(toastSpy.error).toHaveBeenCalled();
     expect(component.recording()).toBeFalse();

@@ -27,7 +27,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import lombok.EqualsAndHashCode;
-import org.hibernate.annotations.Check;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.LastModifiedBy;
 
@@ -49,7 +48,6 @@ import java.util.Set;
         @Index(name = "idx_bi_hospital", columnList = "hospital_id")
     }
 )
-@Check(constraints = "amount_paid <= total_amount")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = {"patient", "hospital", "encounter", "invoiceItems", "creditedToInvoice", "createdByUser"})
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
@@ -137,6 +135,20 @@ public class BillingInvoice extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", insertable = false, updatable = false)
     private User createdByUser;
+
+    /**
+     * QA D1069: why an issued invoice was cancelled, when and by whom (V251).
+     * A staff cancellation requires the reason; a check-in copay folded into
+     * its visit invoice is closed by {@link #creditedToInvoice} instead.
+     */
+    @Column(name = "cancel_reason", length = 500)
+    private String cancelReason;
+
+    @Column(name = "cancelled_at")
+    private java.time.LocalDateTime cancelledAt;
+
+    @Column(name = "cancelled_by")
+    private java.util.UUID cancelledBy;
 
     /* ---------- Helpers ---------- */
 

@@ -1,3 +1,6 @@
+import { LabValuePipe, LabRangePipe } from '../../shared/pipes/lab-value.pipe';
+import { MaternityService } from '../../services/maternity.service';
+import { ongoingPregnancy } from '../../maternity/pregnancy-dates';
 import {
   Component,
   Input,
@@ -32,7 +35,10 @@ import {
   PatientTimeline,
   PatientLabResult,
   TimelineEntry,
+  WithheldResult,
 } from '../../services/patient.service';
+import { Observable, defer, map } from 'rxjs';
+import { allRows, PageSlice } from '../../shared/all-pages';
 import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
@@ -41,10 +47,16 @@ import { actionRoles } from '../../core/action-permissions';
 import { RegistrationService } from '../../services/registration.service';
 import { LabService, LabOrderResponse } from '../../services/lab.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { RangePagerComponent } from '../../shared/range-pager/range-pager.component';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
 import { shortOrderCode } from '../../shared/lab/order-code';
+import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
+import { refusalReason } from '../../shared/refusal-reason';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
 
 /** How many lab rows the section asks for; the backend caps `limit` at 100. */
@@ -61,12 +73,19 @@ const UNSCOPED_KEY = 'UNSCOPED';
   selector: 'app-patient-chart',
   standalone: true,
   imports: [
+    DateTimePipe,
+    SubmitGuardDirective,
+    LabValuePipe,
+    LabRangePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
     EnumLabelPipe,
     RestrictedRowsComponent,
+    DialogFocusDirective,
+    LabCorrectionBadgeComponent,
+    RangePagerComponent,
   ],
   templateUrl: './patient-chart.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -82,6 +101,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * sections re-read on their next visit.
    */
   @Input() refreshToken = 0;
+  /** QA D1005 review: the pregnancy line is asked for only when the patient may be pregnant. */
+  @Input() patientGender: string | null | undefined = undefined;
 
   /** E9 #64 — "Ouvrir avec motif" on a restricted line; the host opens the declaration. */
   readonly openRestricted = output<void>();
@@ -93,6 +114,37 @@ export class PatientChartComponent implements OnInit, OnChanges {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly registrations = inject(RegistrationService);
+  private readonly maternity = inject(MaternityService);
+
+  /**
+   * QA D1005: the ongoing pregnancy (gestational age today and due date) on
+   * the chart, read from the patient's current maternal history the way the
+   * maternity list reads it; null when there is none or it is over.
+   */
+  readonly pregnancy = signal<{ weeks: number; days: number; dueDate: string } | null>(null);
+
+  private loadPregnancy(): void {
+    this.pregnancy.set(null);
+    const gender = (this.patientGender ?? '').toUpperCase();
+    if (
+      !this.patientId ||
+      (gender !== 'FEMALE' && gender !== 'F') ||
+      // rbac-inline-ok: a read, not a write button: only the roles GET /maternal-history/patient/{id}/current admits ask for it (no 403 for everyone else).
+      !this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'])
+    ) {
+      return;
+    }
+    const asked = this.patientId;
+    this.maternity.currentForPatient(asked).subscribe({
+      next: (history) => {
+        if (asked !== this.patientId) return;
+        // QA D1067: a delivered woman has no pregnancy in progress; QA D1082:
+        // no history at all answers 204 (null), not a 404.
+        this.pregnancy.set(ongoingPregnancy(history));
+      },
+      error: () => this.pregnancy.set(null),
+    });
+  }
 
   section = signal<ChartSection>('allergies');
 
@@ -127,6 +179,11 @@ export class PatientChartComponent implements OnInit, OnChanges {
   readonly canEditProblems = computed(() =>
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.editProblems]),
   );
+  /** QA D1224: removing a diagnosis (with a reason) is wider than recording one. */
+  readonly canRemoveProblems = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('diagnosisRemove')),
+  );
+  readonly showProblemActions = computed(() => this.canEditProblems() || this.canRemoveProblems());
   readonly canViewUpdates = computed(() =>
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewUpdates]),
   );
@@ -199,6 +256,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
   ];
 
   /* ── Chart updates ── */
+
   updates = signal<ChartUpdate[]>([]);
   updatesLoading = signal(false);
   /** QA D504 — other hospitals' chart updates are held back by the patient's opt-out. */
@@ -344,6 +402,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.section.set(this.firstVisibleSection());
     this.loadCurrentSection();
     this.loadRegistrationHere();
+    this.loadPregnancy();
   }
 
   /**
@@ -642,8 +701,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
         this.closeAllergyModal();
         this.loadAllergies();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('CHART.ALLERGY_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('CHART.ALLERGY_SAVE_ERROR'));
         this.allergySaving.set(false);
       },
     });
@@ -674,7 +733,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
           this.closeDeactivateAllergy();
           this.loadAllergies();
         },
-        error: () => this.toast.error(this.translate.instant('CHART.ALLERGY_SAVE_ERROR')),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('CHART.ALLERGY_SAVE_ERROR'),
+          ),
       });
   }
 
@@ -769,8 +831,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
         this.closeProblemModal();
         this.loadProblems();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('CHART.PROBLEM_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('CHART.PROBLEM_SAVE_ERROR'));
         this.problemSaving.set(false);
       },
     });
@@ -801,7 +863,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
           this.closeDeleteProblem();
           this.loadProblems();
         },
-        error: () => this.toast.error(this.translate.instant('CHART.PROBLEM_SAVE_ERROR')),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('CHART.PROBLEM_SAVE_ERROR'),
+          ),
       });
   }
 
@@ -809,19 +874,33 @@ export class PatientChartComponent implements OnInit, OnChanges {
 
   loadUpdates(): void {
     this.updatesLoading.set(true);
-    this.patientService
-      .listChartUpdates(this.patientId, { hospitalId: this.hospitalId() || undefined, size: 20 })
-      .subscribe({
-        next: (result) => {
-          this.updates.set(result?.items?.content ?? []);
-          this.updatesWithheld.set(result?.withheld ?? false);
-          this.updatesLoading.set(false);
-        },
-        error: () => {
-          this.toast.error(this.translate.instant('CHART.UPDATES_LOAD_ERROR'));
-          this.updatesLoading.set(false);
-        },
-      });
+    // QA D1347: every version (all pages), not the 20 newest.
+    this.allChartUpdates(this.hospitalId() || undefined).subscribe({
+      next: (result) => {
+        this.updates.set(result?.items ?? []);
+        this.updatesWithheld.set(result?.withheld ?? false);
+        this.updatesLoading.set(false);
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('CHART.UPDATES_LOAD_ERROR'));
+        this.updatesLoading.set(false);
+      },
+    });
+  }
+
+  /** Every chart update (all pages), withheld when any page says so (QA D1347). */
+  private allChartUpdates(hospitalId?: string): Observable<WithheldResult<ChartUpdate[]>> {
+    return defer(() => {
+      let withheld = false;
+      return allRows((page, size) =>
+        this.patientService.listChartUpdates(this.patientId, { hospitalId, page, size }).pipe(
+          map((res) => {
+            withheld = withheld || res.withheld;
+            return res.items as PageSlice<ChartUpdate>;
+          }),
+        ),
+      ).pipe(map((items) => ({ items, withheld })));
+    });
   }
 
   toggleUpdate(update: ChartUpdate): void {
@@ -864,8 +943,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
           this.closeUpdateModal();
           this.loadUpdates();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('CHART.UPDATE_SAVE_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('CHART.UPDATE_SAVE_ERROR'));
           this.updateSaving.set(false);
         },
       });
@@ -996,7 +1075,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
    */
   isUngradedResult(result: PatientLabResult): boolean {
     const status = result.status ?? 'NORMAL';
-    return result.unitMismatch === true && (status === 'NORMAL' || status === 'UNKNOWN');
+    return (
+      (result.unitMismatch === true || result.gradeUnknown === true) &&
+      (status === 'NORMAL' || status === 'UNKNOWN')
+    );
   }
 
   /** Colour class for a RELEASED row only; a pending row gets none. */
@@ -1027,7 +1109,12 @@ export class PatientChartComponent implements OnInit, OnChanges {
    */
   labStatusKey(result: PatientLabResult): string {
     if (this.isPendingResult(result)) return 'CHART.LAB_STATUS_PENDING';
-    if (this.isUngradedResult(result)) return 'CHART.LAB_STATUS_NOT_GRADED_UNITS';
+    if (this.isUngradedResult(result)) {
+      // QA D1394: a comparator that settles no grade is not a question of units.
+      return result.gradeUnknown === true && result.unitMismatch !== true
+        ? 'CHART.LAB_STATUS_GRADE_UNKNOWN'
+        : 'CHART.LAB_STATUS_NOT_GRADED_UNITS';
+    }
     switch (result.status) {
       case 'NORMAL':
       case 'ABNORMAL':
@@ -1066,9 +1153,15 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.loadTimeline(this.timelineReason.trim());
   }
 
-  private loadTimeline(reason: string): void {
+  /** QA D1380: another page of the timeline, read with the reason already stated. */
+  loadTimelinePage(page: number): void {
+    const reason = this.timeline()?.accessReason?.trim();
+    if (reason) this.loadTimeline(reason, page);
+  }
+
+  private loadTimeline(reason: string, page = 0): void {
     this.timelineLoading.set(true);
-    this.patientService.getDoctorTimeline(this.patientId, reason).subscribe({
+    this.patientService.getDoctorTimeline(this.patientId, reason, page).subscribe({
       next: (timeline) => {
         this.timeline.set(timeline);
         this.timelineLoading.set(false);
@@ -1109,11 +1202,62 @@ export class PatientChartComponent implements OnInit, OnChanges {
         return 'medication';
       case 'LAB_RESULT':
         return 'science';
+      case 'LAB_ORDER':
+        return 'biotech';
       case 'ALLERGY':
         return 'warning';
+      case 'DIAGNOSIS':
+        return 'diagnosis';
+      case 'IMAGING':
+        return 'radiology';
+      case 'NOTE':
+        return 'description';
+      case 'REFERRAL':
+        return 'forward_to_inbox';
+      // QA D959 (round 18): surgical history had no icon of its own.
+      case 'PROCEDURE':
+        return 'medical_services';
+      // QA D959 (round 17): the visit's other documents.
+      case 'TREATMENT_PLAN':
+        return 'assignment';
+      case 'CONSULTATION':
+        return 'group';
+      case 'DISCHARGE_SUMMARY':
+        return 'logout';
+      case 'DOCUMENT':
+        return 'verified';
+      // QA D959 (round 18): transfusions, procedure orders, OB/GYN referrals,
+      // nursing notes, vaccinations and deliveries.
+      case 'TRANSFUSION':
+        return 'bloodtype';
+      case 'PROCEDURE_ORDER':
+        return 'healing';
+      case 'OBGYN_REFERRAL':
+        return 'pregnant_woman';
+      case 'NURSING_NOTE':
+        return 'clinical_notes';
+      case 'IMMUNIZATION':
+        return 'vaccines';
+      case 'DELIVERY':
+        return 'child_care';
+      case 'DEATH':
+        return 'deceased';
+      case 'MICRO_CULTURE':
+        return 'microbiology';
       default:
         return 'event_note';
     }
+  }
+
+  /**
+   * QA D996: what kind of row it is. A visit reads its own type
+   * ("Hospitalisation", "Urgence") instead of "Consultation" for every one.
+   */
+  timelineKind(e: TimelineEntry): { domain: string; value: string } {
+    const type = e.category === 'ENCOUNTER' ? e.metadata?.['encounterType'] : null;
+    return typeof type === 'string' && type
+      ? { domain: 'encounterType', value: type }
+      : { domain: 'timelineCategory', value: e.category };
   }
 
   /**
@@ -1126,6 +1270,18 @@ export class PatientChartComponent implements OnInit, OnChanges {
    */
   entryHospital(entry: TimelineEntry): string | null {
     return entry.metadata?.sourceHospitalName ?? null;
+  }
+
+  /**
+   * QA D1113: a dose transcribed from a vaccination card or another
+   * facility's record names the hospital that RECORDED it; the server sends
+   * no source hospital for it, because it was not given there.
+   */
+  entryRecordedAt(entry: TimelineEntry): string | null {
+    const recordedAt = entry.metadata?.['recordedAtHospitalName'];
+    return entry.metadata?.['transcribed'] === true && typeof recordedAt === 'string' && recordedAt
+      ? recordedAt
+      : null;
   }
 
   /** Attending, prescriber, or the clinician who ORDERED the result. */

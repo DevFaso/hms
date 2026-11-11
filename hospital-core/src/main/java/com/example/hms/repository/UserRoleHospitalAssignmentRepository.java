@@ -103,6 +103,9 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
 
     List<UserRoleHospitalAssignment> findByRoleId(UUID roleId);
 
+    /** Whether any assignment, live or retired, still carries this role. */
+    boolean existsByRoleId(UUID roleId);
+
     Optional<UserRoleHospitalAssignment> findFirstByHospitalIdAndRole_Name(UUID hospitalId, String roleName);
 
     Optional<UserRoleHospitalAssignment> findByUserIdAndHospitalIdAndRole_Name(UUID userId, UUID hospitalId, String roleName);
@@ -173,6 +176,23 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
                                                 @Param("roleCode") String roleCode);
 
     /**
+     * QA D902: every live assignment holding one of these role codes (active,
+     * on an active, undeleted account). Not a lock by itself: a caller that
+     * decides "another one remains" from it first takes
+     * {@link RoleRepository#lockRolesWithCodes} on those codes, so the count
+     * is read after any racing removal has committed.
+     */
+    @Query("""
+        SELECT a
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.user.isActive = TRUE
+          AND a.user.isDeleted = FALSE
+          AND UPPER(a.role.code) IN (:roleCodes)
+    """)
+    List<UserRoleHospitalAssignment> findLiveAssignmentsWithRoleCodes(@Param("roleCodes") Set<String> roleCodes);
+
+    /**
      * QA D157 (#891 review): a controlled-substance witness must be an active,
      * undeleted account as well as hold an active assignment.
      */
@@ -189,6 +209,19 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
     boolean existsActiveWitness(@Param("userId") UUID userId,
                                 @Param("hospitalId") UUID hospitalId,
                                 @Param("roleCodes") Set<String> roleCodes);
+
+    /** The live holders of these roles at one hospital; the same test {@link #existsActiveWitness} applies. */
+    @Query("""
+        SELECT a.user
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.user.isActive = TRUE
+          AND a.user.isDeleted = FALSE
+          AND a.hospital.id = :hospitalId
+          AND UPPER(a.role.code) IN (:roleCodes)
+    """)
+    List<com.example.hms.model.User> findLiveUsersAtHospitalWithRoleCodes(@Param("hospitalId") UUID hospitalId,
+                                                                          @Param("roleCodes") Set<String> roleCodes);
 
     /* ------------ Fetch graphs for DTO mapping ------------ */
 

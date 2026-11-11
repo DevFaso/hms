@@ -96,7 +96,10 @@ class PatientVitalSignServiceImplTest {
             patientChartAccess,
             recordAccessPolicy,
             reachRecorder,
-            news2EscalationService,
+            new com.example.hms.service.vitals.VitalSignJudgement(
+            org.mockito.Mockito.mock(com.example.hms.repository.NewbornAssessmentRepository.class), news2EscalationService,
+            org.mockito.Mockito.mock(com.example.hms.service.NotificationService.class),
+            com.example.hms.i18n.TestMessageSources.bundles()),
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository));
     }
 
@@ -151,6 +154,53 @@ class PatientVitalSignServiceImplTest {
         assertThat(captor.getValue().getRecordedByAssignment()).isEqualTo(staffAssignment);
     }
 
+    /** QA D1077 (round 19): POST /patients/{id}/vitals stored 56 cm for a 67-year-old. */
+    @Test
+    void recordVital_refusesAHeadCircumferenceForAnAdult_D1077() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID recorderUserId = UUID.randomUUID();
+        Patient patient = minimalPatient(patientId);
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(67));
+        Hospital hospital = minimalHospital(hospitalId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.of(minimalRegistration(patient, hospital)));
+        when(staffRepository.findByUserIdAndHospitalId(recorderUserId, hospitalId))
+            .thenReturn(Optional.of(minimalStaff(recorderUserId, hospital, minimalAssignment(hospital, true))));
+        PatientVitalSignRequestDTO request = PatientVitalSignRequestDTO.builder()
+            .hospitalId(hospitalId).recordedAt(LocalDateTime.now()).headCircumferenceCm(56.0).build();
+
+        assertThatThrownBy(() -> service.recordVital(patientId, request, recorderUserId))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("vitals.headCircumference.notApplicable");
+        verify(vitalSignRepository, never()).save(any());
+    }
+
+    @Test
+    void recordVital_keepsAChildsHeadCircumference_D1077() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID recorderUserId = UUID.randomUUID();
+        Patient patient = minimalPatient(patientId);
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(2));
+        Hospital hospital = minimalHospital(hospitalId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.of(minimalRegistration(patient, hospital)));
+        when(staffRepository.findByUserIdAndHospitalId(recorderUserId, hospitalId))
+            .thenReturn(Optional.of(minimalStaff(recorderUserId, hospital, minimalAssignment(hospital, true))));
+        when(vitalSignRepository.save(any(PatientVitalSign.class))).thenAnswer(inv -> inv.getArgument(0));
+        PatientVitalSignRequestDTO request = PatientVitalSignRequestDTO.builder()
+            .hospitalId(hospitalId).recordedAt(LocalDateTime.now()).headCircumferenceCm(47.0).build();
+
+        service.recordVital(patientId, request, recorderUserId);
+
+        ArgumentCaptor<PatientVitalSign> captor = ArgumentCaptor.forClass(PatientVitalSign.class);
+        verify(vitalSignRepository).save(captor.capture());
+        assertThat(captor.getValue().getHeadCircumferenceCm()).isEqualTo(47.0);
+    }
+
     @Test
     void recordVitalThrowsWhenAssignmentHospitalMismatch() {
         UUID patientId = UUID.randomUUID();
@@ -178,7 +228,8 @@ class PatientVitalSignServiceImplTest {
 
         assertThatThrownBy(() -> service.recordVital(patientId, request, recorderUserId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("assignment is not associated");
+            // QA D1232 (round 24): a keyed refusal now (this test runs without bundles).
+            .hasFieldOrPropertyWithValue("messageKey", "vitals.recorderAssignmentOtherHospital");
 
         verify(vitalSignRepository, never()).save(any());
     }
@@ -211,7 +262,8 @@ class PatientVitalSignServiceImplTest {
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Recorder staff is not assigned");
+            // QA D1232 (round 24): a keyed refusal now (this test runs without bundles).
+            .hasFieldOrPropertyWithValue("messageKey", "vitals.recorderStaffOtherHospital");
     }
 
     @Test
@@ -293,7 +345,8 @@ class PatientVitalSignServiceImplTest {
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Registration does not belong");
+            // QA D1232 (round 24): a keyed refusal now (this test runs without bundles).
+            .hasFieldOrPropertyWithValue("messageKey", "vitals.registrationOtherPatient");
     }
 
     @Test
@@ -324,7 +377,8 @@ class PatientVitalSignServiceImplTest {
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Assignment is not active");
+            // QA D1232 (round 24): a keyed refusal now (this test runs without bundles).
+            .hasFieldOrPropertyWithValue("messageKey", "vitals.assignmentInactive");
     }
 
     @Test
@@ -481,6 +535,41 @@ class PatientVitalSignServiceImplTest {
         assertThat(responses.get(0).getPatientId()).isEqualTo(patientId);
         verify(patientChartAccess, never()).require(any(), any());
         org.mockito.Mockito.verifyNoInteractions(reachRecorder);
+    }
+
+    @Test
+    void getVitalsPageForPatientPortal_pagesTheWholeHistoryWithItsTotal_D1379() {
+        // QA D1379 (D1347 class): /my-vitals showed the 10 newest of 45 records.
+        UUID patientId = UUID.randomUUID();
+        PatientVitalSign vitalSign = PatientVitalSign.builder()
+            .patient(minimalPatient(patientId))
+            .recordedAt(LocalDateTime.now())
+            .build();
+        vitalSign.setId(UUID.randomUUID());
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(minimalPatient(patientId));
+        when(vitalSignRepository.findPageByPatient_IdOrderByRecordedAtDesc(patientId, PageRequest.of(4, 10)))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(vitalSign), PageRequest.of(4, 10), 41));
+
+        org.springframework.data.domain.Page<PatientVitalSignResponseDTO> page =
+            service.getVitalsPageForPatientPortal(patientId, 4, 10);
+
+        assertThat(page.getTotalElements()).isEqualTo(41);
+        assertThat(page.getContent()).singleElement()
+            .extracting(PatientVitalSignResponseDTO::getPatientId).isEqualTo(patientId);
+        verify(patientChartAccess, never()).require(any(), any());
+    }
+
+    @Test
+    void getVitalsPageForPatientPortal_lowersAnOversizedPageAndANegativeIndex_D1379() {
+        UUID patientId = UUID.randomUUID();
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(minimalPatient(patientId));
+        when(vitalSignRepository.findPageByPatient_IdOrderByRecordedAtDesc(any(), any()))
+            .thenReturn(org.springframework.data.domain.Page.empty());
+
+        service.getVitalsPageForPatientPortal(patientId, -3, 5000);
+
+        verify(vitalSignRepository).findPageByPatient_IdOrderByRecordedAtDesc(patientId,
+            PageRequest.of(0, com.example.hms.service.PatientVitalSignService.PORTAL_PAGE_MAX));
     }
 
     @Test

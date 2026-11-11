@@ -18,19 +18,19 @@
         <div class="profile-stats">
           @if (summary()!.profile.dateOfBirth) {
             <span class="profile-stat"
-              >{{ 'PORTAL.RECORDS.DATE_OF_BIRTH' | translate }}:
+              >{{ 'PORTAL.RECORDS.DATE_OF_BIRTH' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ summary()!.profile.dateOfBirth | serverTime | date: 'mediumDate' }}</span
             >
           }
           @if (summary()!.profile.bloodType) {
             <span class="profile-stat"
-              >{{ 'PORTAL.RECORDS.BLOOD_TYPE' | translate }}:
+              >{{ 'PORTAL.RECORDS.BLOOD_TYPE' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ summary()!.profile.bloodType }}</span
             >
           }
           @if (summary()!.profile.gender) {
             <span class="profile-stat"
-              >{{ 'PORTAL.RECORDS.GENDER' | translate }}:
+              >{{ 'PORTAL.RECORDS.GENDER' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ summary()!.profile.gender | enumLabel: 'gender' }}</span
             >
           }
@@ -42,7 +42,8 @@
             <ul>
               @for (r of hospitalRecords(); track r.hospitalId) {
                 <li class="profile-stat" [attr.data-testid]="'my-record-number-' + r.hospitalId">
-                  {{ r.hospitalName || ('PORTAL.RECORDS.UNKNOWN_HOSPITAL' | translate) }} :
+                  {{ r.hospitalName || ('PORTAL.RECORDS.UNKNOWN_HOSPITAL' | translate)
+                  }}{{ 'COMMON.COLON' | translate }}
                   <strong>{{ r.mrn }}</strong>
                 </li>
               }
@@ -62,7 +63,7 @@
         </h2>
         <div class="card-content">
           @if (medications().length) {
-            @for (m of medications().slice(0, 4); track m.id) {
+            @for (m of medications().slice(0, cardRows); track m.id) {
               <div class="card-item">
                 <span class="card-item-name">{{ m.medicationName }}</span>
                 @if (m.dosage) {
@@ -70,9 +71,9 @@
                 }
               </div>
             }
-            @if (medications().length > 4) {
+            @if (moreMedications() > 0) {
               <span class="card-more"
-                >+ {{ medications().length - 4 }} {{ 'PORTAL.RECORDS.MORE' | translate }}</span
+                >+ {{ moreMedications() }} {{ 'PORTAL.RECORDS.MORE' | translate }}</span
               >
             }
           } @else {
@@ -93,7 +94,7 @@
         </h2>
         <div class="card-content">
           @if (labs().length) {
-            @for (l of labs().slice(0, 4); track l.id) {
+            @for (l of labs().slice(0, cardRows); track l.id) {
               <div class="card-item" [class.card-item-abnormal]="l.isAbnormal">
                 <span class="card-item-name">{{ l.testName }}</span>
                 <span class="card-item-detail">{{
@@ -101,9 +102,9 @@
                 }}</span>
               </div>
             }
-            @if (labs().length > 4) {
+            @if (moreLabs() > 0) {
               <span class="card-more"
-                >+ {{ labs().length - 4 }} {{ 'PORTAL.RECORDS.MORE' | translate }}</span
+                >+ {{ moreLabs() }} {{ 'PORTAL.RECORDS.MORE' | translate }}</span
               >
             }
           } @else {
@@ -124,15 +125,14 @@
         </h2>
         <div class="card-content">
           @if (summary()?.activeDiagnoses?.length) {
-            @for (d of summary()!.activeDiagnoses.slice(0, 5); track d) {
+            @for (d of summary()!.activeDiagnoses.slice(0, conditionRows); track d) {
               <div class="card-item">
                 <span class="card-item-name">{{ d }}</span>
               </div>
             }
-            @if (summary()!.activeDiagnoses.length > 5) {
+            @if (moreConditions() > 0) {
               <span class="card-more"
-                >+ {{ summary()!.activeDiagnoses.length - 5 }}
-                {{ 'PORTAL.RECORDS.MORE' | translate }}</span
+                >+ {{ moreConditions() }} {{ 'PORTAL.RECORDS.MORE' | translate }}</span
               >
             }
           } @else {
@@ -153,7 +153,7 @@
         </h2>
         <div class="card-content">
           @if (immunizations().length) {
-            @for (im of immunizations().slice(0, 4); track im.id) {
+            @for (im of immunizations().slice(0, cardRows); track im.id) {
               <div class="card-item">
                 <span class="card-item-name">{{ im.vaccineName }}</span>
                 <span class="card-item-detail">{{
@@ -161,9 +161,9 @@
                 }}</span>
               </div>
             }
-            @if (immunizations().length > 4) {
+            @if (moreImmunizations() > 0) {
               <span class="card-more"
-                >+ {{ immunizations().length - 4 }} {{ 'PORTAL.RECORDS.MORE' | translate }}</span
+                >+ {{ moreImmunizations() }} {{ 'PORTAL.RECORDS.MORE' | translate }}</span
               >
             }
           } @else {

@@ -1,3 +1,4 @@
+import { PersonNamePipe } from '../../shared/pipes/person-name.pipe';
 import {
   Component,
   EventEmitter,
@@ -8,12 +9,25 @@ import {
   inject,
   signal,
   ChangeDetectionStrategy,
+  booleanAttribute,
 } from '@angular/core';
 
 import { TranslateModule } from '@ngx-translate/core';
 import { forkJoin, of, Subject, Subscription } from 'rxjs';
-import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
-import { PatientService, PatientResponse } from '../../services/patient.service';
+import { catchError, debounceTime, switchMap } from 'rxjs/operators';
+import {
+  PatientService,
+  PatientResponse,
+  searchPatientsByTerm,
+} from '../../services/patient.service';
+import { patientSubline } from './patient-subline';
+import { rankPeopleByName } from '../person-search';
+import { birthDateQuery, isCompactDate } from '../patient-query';
+import { ListEscapeDirective } from '../a11y/list-escape.directive';
+
+/** How many patients a search asks for, and how many the list shows (QA D1239). */
+const SEARCH_SIZE = 20;
+const SHOWN = 8;
 
 /**
  * Debounced patient typeahead with the shared chip/dropdown idiom.
@@ -24,7 +38,7 @@ import { PatientService, PatientResponse } from '../../services/patient.service'
 @Component({
   selector: 'app-patient-picker',
   standalone: true,
-  imports: [TranslateModule],
+  imports: [PersonNamePipe, TranslateModule, ListEscapeDirective],
   templateUrl: './patient-picker.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-picker.component.scss',
@@ -34,6 +48,14 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
 
   /** id for the input element so an external <label for> keeps working. */
   @Input() inputId = 'patient-picker-input';
+  /**
+   * QA D1245: the form needs a patient. The search input then carries
+   * `required` (a submit guard with `submitGuardRequired`, or listing the
+   * input's id, refuses the send and names the field); while the input is
+   * shown no patient is picked, so whatever it holds is only a query
+   * (`data-submit-blank`).
+   */
+  @Input({ transform: booleanAttribute }) required = false;
   /**
    * Hospital scope for name search. Exact identifiers (phone/email/MRN) also
    * query the cross-hospital lookup regardless of this input.
@@ -64,7 +86,6 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
     this.searchSub = this.search$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         // catchError INSIDE switchMap: a failed lookup must not kill the stream.
         // Two sources merged: /patients/search matches names within the hospital
         // scope, /patients/lookup matches exact identifiers (phone/email/MRN)
@@ -73,16 +94,16 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
         switchMap((q) => {
           this.searchLoading.set(true);
           this.noMatch.set(false);
-          const scoped = this.patientService
-            .search({
-              name: q,
-              hospitalId: this.hospitalId ?? undefined,
-              size: 8,
-              // QA D80: an admitted patient whose record is inactive must still
-              // be found by the task, handoff and discharge pickers.
-              includeInactive: true,
-            })
-            .pipe(catchError(() => of([] as PatientResponse[])));
+          // QA D1274: a birth date or an e-mail is searched by that field too.
+          const scoped = searchPatientsByTerm(this.patientService, q, {
+            hospitalId: this.hospitalId ?? undefined,
+            // QA D1239: more than the list shows, so the ranking below
+            // has the patient whose name starts with the query to offer.
+            size: SEARCH_SIZE,
+            // QA D80: an admitted patient whose record is inactive must still
+            // be found by the task, handoff and discharge pickers.
+            includeInactive: true,
+          }).pipe(catchError(() => of([] as PatientResponse[])));
           // Cross-hospital lookup fires only for EXACT identifiers (phone/email/
           // MRN) — free-text name fragments must never leave the hospital scope.
           const exact = this.looksLikeIdentifier(q)
@@ -96,9 +117,18 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
       .subscribe(([scoped, exact]) => {
         const merged: PatientResponse[] = [];
         for (const p of [...(exact ?? []), ...(scoped ?? [])]) {
-          if (!merged.some((m) => m.id === p.id)) merged.push(p);
+          const kept = merged.findIndex((m) => m.id === p.id);
+          if (kept < 0) {
+            merged.push(p);
+          } else if (!merged[kept].mrn?.trim() && p.mrn?.trim()) {
+            // QA D903: the hospital-scoped search knows this hospital's MRN even
+            // when the exact-identifier hit came back without one.
+            merged[kept] = { ...merged[kept], mrn: p.mrn };
+          }
         }
-        const items = merged.slice(0, 8);
+        // QA D1239: "Awa" filled the eight places with Sawadogos; a name that
+        // starts with the query now comes before one that only contains it.
+        const items = rankPeopleByName(merged, this.query()).slice(0, SHOWN);
         this.suggestions.set(items);
         this.dropdownOpen.set(items.length > 0);
         this.noMatch.set(items.length === 0);
@@ -117,6 +147,8 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
    */
   private looksLikeIdentifier(q: string): boolean {
     const trimmed = q.trim();
+    // QA D1274: "2020-03-15" is a birth date, never a phone number (eight digits may be both).
+    if (birthDateQuery(trimmed) !== null && !isCompactDate(trimmed)) return false;
     return (
       trimmed.includes('@') ||
       /^mrn-/i.test(trimmed) ||
@@ -150,6 +182,16 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
     this.suggestions.set([]);
     this.dropdownOpen.set(false);
     this.selectedChange.emit(null);
+  }
+
+  /**
+   * QA D903: the line under the name identifies the patient AT THIS HOSPITAL —
+   * the MRN the server resolved for the request's hospital scope. Contact
+   * details are only the fallback for a record that carries no MRN (e.g. a
+   * preselected patient rebuilt from a row that had none).
+   */
+  subline(p: PatientResponse): string {
+    return patientSubline(p);
   }
 
   initials(p: PatientResponse): string {

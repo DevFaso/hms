@@ -9,7 +9,7 @@ const NAIVE_ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
  * as the BROWSER's local time, so a reader outside UTC saw the UTC clock.
  * Marking the string as UTC lets `DatePipe` convert it to the reader's zone:
  *
- *     {{ row.eventTimestamp | serverTime | date: 'medium' }}
+ *     {{ row.eventTimestamp | serverTime | dateTime }}
  *
  * Values that already carry a zone (`Z`, `+01:00`), dates without a time,
  * numbers and Date objects pass through untouched.

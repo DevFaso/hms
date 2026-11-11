@@ -117,6 +117,37 @@ public class PreAuthorizeMatcherPairingTest extends BaseIT {
     }
 
     @Test
+    @DisplayName("QA D1224: no accepted narrower pair under /patients - every chart sub-resource reaches its annotation")
+    void noPatientSubResourceIsShadowedByABlanketMatcher() {
+        assertThat(ACCEPTED.keySet())
+            .as("a /patients route a blanket matcher hides from a role its annotation admits is a defect (QA D1224),"
+                + " never an accepted pair: carve the route out of the blanket in SecurityConfig")
+            .noneMatch(pair -> pair.split(" ")[1].startsWith("/patients"));
+    }
+
+    @Test
+    @DisplayName("QA D1224: clinicians pass the edge on allergy and diagnosis writes; deleting a patient stays admin-only")
+    void chartWritesReachTheirAnnotationAndWholePatientDeleteStaysAdminOnly() {
+        String patient = "/patients/" + SAMPLE_ID;
+        for (String role : List.of("ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST")) {
+            assertThat(matcherAdmits("DELETE", patient + "/allergies/" + SAMPLE_ID, role)).as(role).isTrue();
+            assertThat(matcherAdmits("PUT", patient + "/allergies/" + SAMPLE_ID, role)).as(role).isTrue();
+        }
+        for (String role : List.of("ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE")) {
+            assertThat(matcherAdmits("DELETE", patient + "/diagnoses/" + SAMPLE_ID, role)).as(role).isTrue();
+        }
+        for (String role : List.of("ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_RECEPTIONIST",
+                "ROLE_PHARMACIST", "ROLE_LAB_SCIENTIST")) {
+            assertThat(matcherAdmits("DELETE", patient, role)).as("whole-patient delete, " + role).isFalse();
+        }
+        assertThat(matcherAdmits("DELETE", patient, "ROLE_HOSPITAL_ADMIN")).isTrue();
+        assertThat(matcherAdmits("DELETE", patient, "ROLE_SUPER_ADMIN")).isTrue();
+        // The carve-out is the chart sub-resources only: a receptionist still cannot delete clinical entries.
+        assertThat(matcherAdmits("DELETE", patient + "/allergies/" + SAMPLE_ID, "ROLE_RECEPTIONIST")).isFalse();
+        assertThat(matcherAdmits("DELETE", patient + "/diagnoses/" + SAMPLE_ID, "ROLE_HOSPITAL_ADMIN")).isFalse();
+    }
+
+    @Test
     @DisplayName("the pairing sees a refusal: deleting a hospital refuses a doctor at the matcher, not a super-admin")
     void pairingDetectsARefusal() {
         String hospital = "/hospitals/" + SAMPLE_ID;
@@ -195,22 +226,8 @@ public class PreAuthorizeMatcherPairingTest extends BaseIT {
     }
 
     private static Map<String, String> acceptedNarrowerMatchers() {
-        String chartDelete = "Found by this ratchet: the annotation admits the role, the blanket DELETE /patients/** "
-            + "matcher (HOSPITAL_ADMIN, SUPER_ADMIN) refuses it, so a clinician cannot remove the entry. Which layer "
-            + "is right is a product decision about deleting chart entries, recorded on the PR, not changed here";
-        String chartUpdate = "Found by this ratchet: the annotation admits a pharmacist, the PUT /patients/** matcher "
-            + "does not; whether a pharmacist edits an allergy is a product decision, recorded on the PR";
         String labPr = "Found by this ratchet; the lab files are owned by another PR of this batch, recorded on the PR";
         Map<String, String> accepted = new TreeMap<>();
-        accepted.put("DELETE /patients/{id}/allergies/{allergyId} ROLE_DOCTOR", chartDelete);
-        accepted.put("DELETE /patients/{id}/allergies/{allergyId} ROLE_NURSE", chartDelete);
-        accepted.put("DELETE /patients/{id}/allergies/{allergyId} ROLE_PHARMACIST", chartDelete);
-        accepted.put("DELETE /patients/{id}/diagnoses/{diagnosisId} ROLE_DOCTOR", chartDelete);
-        accepted.put("DELETE /patients/{patientId}/photo ROLE_DOCTOR", chartDelete);
-        accepted.put("DELETE /patients/{patientId}/photo ROLE_MIDWIFE", chartDelete);
-        accepted.put("DELETE /patients/{patientId}/photo ROLE_NURSE", chartDelete);
-        accepted.put("DELETE /patients/{patientId}/photo ROLE_RECEPTIONIST", chartDelete);
-        accepted.put("PUT /patients/{id}/allergies/{allergyId} ROLE_PHARMACIST", chartUpdate);
         accepted.put("GET /lab-qc-events/summary ROLE_ADMIN", labPr);
         accepted.put("GET /lab-specimens/{specimenId}/label.pdf ROLE_HOSPITAL_ADMIN", labPr);
         return accepted;

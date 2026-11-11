@@ -22,13 +22,23 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class WorkQueuePrescriptionDTO {
+public class WorkQueuePrescriptionDTO implements com.example.hms.payload.dto.prescription.AllergyReviewCarrier {
+
+    /** Existing when a recorded death was disputed: a prescriber's review comes first. */
+    private boolean heldForReview;
 
     private UUID id;
     private String medicationName;
     private String dosage;
     private String frequency;
     private BigDecimal quantity;
+    /**
+     * QA D1001: what may still be dispensed on this order (every fill owed,
+     * refills included, minus the fills not cancelled) - the ceiling the
+     * dispense refuses above. The form pre-fills it instead of the prescribed
+     * quantity; null when the order carries no quantity at all.
+     */
+    private BigDecimal remainingQuantity;
     private String quantityUnit;
     private String status;
     private LocalDateTime createdAt;
@@ -75,6 +85,34 @@ public class WorkQueuePrescriptionDTO {
      * {@code GET /prescriptions/{id}} refuses.
      */
     private LocalDateTime clarificationResolvedAt;
+
+    /**
+     * QA D1101 (round 19): true when the prescriber passed an allergy or a
+     * critical decision-support alert with a reason. A cue only - like the
+     * clarification above, the reason is clinical narrative and is read on
+     * the order ({@code GET /prescriptions/{id}}), not in this projection.
+     */
+    private Boolean alertOverridden;
+
+    /**
+     * QA D1555: the allergy cards of this order against the patient's CURRENT allergies (an allergy
+     * recorded after the signature included): the stop, whose {@code exceptionKey} the fill sends back
+     * with the pharmacist's reason, then any cross-reactivity warning. Absent when there is none.
+     */
+    private java.util.List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> allergyAlerts;
+
+
+    /**
+     * QA D1584: the allergy stop's review state, read with the cards from the same re-check the gate
+     * runs (awaiting review, CONTINUE with the plan, or STOP). Null when no card stops the drug.
+     */
+    private com.example.hms.payload.dto.prescription.AllergyReviewStateDTO allergyReview;
+
+    /** The cards travel as {@code allergyAlerts}; absent (null) when there is none. */
+    @Override
+    public void setAllergyCards(java.util.List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cards) {
+        this.allergyAlerts = cards == null || cards.isEmpty() ? null : cards;
+    }
 
     /**
      * Refill context for the dispensing decision. Null on a prescription that
@@ -153,6 +191,8 @@ public class WorkQueuePrescriptionDTO {
     public static class Patient {
         private UUID id;
         private String firstName;
+        /** QA D1036: the middle name, so the work queue shows the patient's whole name. */
+        private String middleName;
         private String lastName;
     }
 

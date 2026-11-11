@@ -355,6 +355,19 @@ public class ActingScopeResolver {
     }
 
     /**
+     * The hospital a verified super-admin is pinned to (a hospital they
+     * selected), or {@code null} for global view, any refusal and any caller
+     * who is not a verified super-admin. For the admin review deciders, which
+     * admit a super-admin at the hospital selected and nowhere else
+     * ({@code CallerIdentity.isSuperAdminFor}). Reading it seals the scope.
+     */
+    public static UUID superAdminPinnedHospitalIdOrNull() {
+        HospitalContextHolder.seal();
+        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
+        return context.isSuperAdmin() ? pinnedHospitalIdOf(context) : null;
+    }
+
+    /**
      * The scope a context describes, without sealing it. The filters and the
      * repository filter read it this way.
      */

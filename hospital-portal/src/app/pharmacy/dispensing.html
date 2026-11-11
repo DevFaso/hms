@@ -1,6 +1,10 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <p class="workspace-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">medication</span
+        ><span>{{ 'PHARMACY_WORKSPACE.LABEL' | translate }}</span>
+      </p>
       <h1 class="page-title">{{ 'PHARMACY.DISPENSING_TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'PHARMACY.DISPENSING_SUBTITLE' | translate }}</p>
     </div>
@@ -24,6 +28,13 @@
     </div>
   </div>
 
+  <div class="workspace-strip">
+    <p>
+      <strong>{{ queueLoading() ? '—' : workQueue().length }}</strong
+      ><span>{{ 'PHARMACY_WORKSPACE.LOADED_QUEUE' | translate }}</span>
+    </p>
+    <p>{{ 'PHARMACY_WORKSPACE.DISPENSE_HINT' | translate }}</p>
+  </div>
   <!-- Roadmap row 4 / T-68 — offline-queue banner. Renders only when the
        user has dispenses waiting to sync, so it stays out of the way during
        normal online use. The "Sync now" button is a manual escape hatch for
@@ -56,30 +67,63 @@
     </output>
   }
 
-  <!-- Dispensing Form (slide-in when a prescription is selected) -->
+  <!-- Dispensing Form (slide-in when a prescription is selected)
+       QA D1335 (round 29; the D1307 class): opened from a queue row's
+       "Dispenser", above the queue — it takes the keyboard (its first field),
+       keeps Escape to itself (asking first over typed text) and gives focus
+       back to the row's button when it closes. -->
   @if (showForm()) {
-    <div class="form-card form-card-accent">
+    <div
+      class="form-card form-card-accent"
+      data-testid="dispense-form"
+      appInlineSubForm
+      #dispenseForm="inlineSubForm"
+      (dismissed)="closeForm()"
+    >
       <div class="form-header">
         <h3>
           <span class="material-symbols-outlined">medication</span>
           {{ 'PHARMACY.DISPENSE_MEDICATION' | translate }}
         </h3>
-        <button class="btn-text" (click)="closeForm()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="btn-text"
+          (click)="closeForm()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
 
       <div class="rx-summary">
-        <span class="rx-label">{{ 'PHARMACY.PRESCRIPTION' | translate }}:</span>
+        <span class="rx-label"
+          >{{ 'PHARMACY.PRESCRIPTION' | translate }}{{ 'COMMON.COLON' | translate }}</span
+        >
         <strong>{{ selectedPrescription?.medicationName }}</strong>
-        <span class="rx-meta">
+        {{ ' '
+        }}<span class="rx-meta">
           {{ selectedPrescription?.dosage }} · {{ selectedPrescription?.frequency }}
         </span>
-        <span class="rx-meta">
-          {{ 'PHARMACY.PATIENT' | translate }}: {{ selectedPrescription?.patient?.firstName }}
-          {{ selectedPrescription?.patient?.lastName }}
+        {{ ' '
+        }}<span class="rx-meta">
+          {{ 'PHARMACY.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ selectedPrescription?.patient | personName }}
         </span>
       </div>
+
+      <!-- QA D1555: the order's allergy cards against the patient's current allergies. -->
+      @if (selectedPrescription?.allergyAlerts?.length) {
+        <section
+          class="field full-width"
+          role="alert"
+          [attr.aria-label]="'PHARMACY.ALLERGY_ALERTS_TITLE' | translate"
+          data-testid="dispense-allergy-alerts"
+        >
+          <h4>{{ 'PHARMACY.ALLERGY_ALERTS_TITLE' | translate }}</h4>
+          <app-cds-card-list [cards]="selectedPrescription!.allergyAlerts!" />
+          <!-- QA D1584: reviewed or not, and the prescriber's plan to verify and dispense it under. -->
+          <app-allergy-review-state [review]="selectedPrescription!.allergyReview" />
+        </section>
+      }
 
       <form (ngSubmit)="submitDispense()">
         <div class="form-row">
@@ -108,12 +152,16 @@
             />
           </div>
           <div class="field">
-            <label for="unit">{{ 'PHARMACY.UNIT' | translate }}</label>
+            <!-- QA D1141: prefilled from the order's unit, and required (the
+                 server refuses a fill without one too). -->
+            <label for="unit">{{ 'PHARMACY.UNIT' | translate }} *</label>
             <input
               id="unit"
               type="text"
+              maxlength="60"
               [(ngModel)]="form.unit"
               name="unit"
+              required
               [placeholder]="'PHARMACY.UNIT_PLACEHOLDER' | translate"
             />
           </div>
@@ -136,12 +184,73 @@
                 </option>
               }
             </select>
+            @if (otherFormLots() > 0) {
+              <!-- QA D1163: lots of another form than the order are not offered. -->
+              <small class="field-hint" data-testid="other-form-lots">{{
+                'PHARMACY.LOTS_OTHER_FORM'
+                  | translate: { count: otherFormLots(), unit: orderUnit() ?? '' }
+              }}</small>
+            }
           </div>
+          <!-- QA D964: first expired, first out. Taking a later-dated lot while a
+               shorter-dated one could serve the fill needs a reason. -->
+          @if (earlierLot(); as earlier) {
+            <div class="field fefo-field" data-testid="fefo-warning">
+              <label for="fefoReason">{{ 'PHARMACY.FEFO_REASON' | translate }} *</label>
+              {{ ' '
+              }}<small class="field-hint" role="alert">{{
+                'PHARMACY.FEFO_WARNING'
+                  | translate
+                    : {
+                        lot: earlier.lotNumber,
+                        date: (earlier.expiryDate | serverTime | date: 'mediumDate'),
+                        left: earlier.remainingQuantity,
+                      }
+              }}</small>
+              <input
+                id="fefoReason"
+                type="text"
+                maxlength="300"
+                data-testid="fefo-reason"
+                [(ngModel)]="form.fefoOverrideReason"
+                name="fefoOverrideReason"
+                required
+              />
+            </div>
+          }
+          <!-- QA D1029: a fill larger than the shortest-dated lot empties it
+               first and takes the rest from the next lot, one fill per lot. -->
+          @if (fefoSplit(); as split) {
+            @if (split.length > 1) {
+              <div class="field full-width" data-testid="fefo-split">
+                <small class="field-hint" role="status">
+                  {{ 'PHARMACY.FEFO_SPLIT_HINT' | translate }}
+                  @for (part of split; track part.lot.id; let last = $last) {
+                    {{
+                      'PHARMACY.FEFO_SPLIT_PART'
+                        | translate
+                          : {
+                              quantity: part.quantity,
+                              lot: part.lot.lotNumber,
+                              date: (part.lot.expiryDate | serverTime | date: 'MMM yyyy'),
+                            }
+                    }}{{ last ? '' : ', ' }}
+                  }
+                </small>
+              </div>
+            }
+          }
           <!-- QA D654: a controlled substance leaves the shelf in front of a witness -->
           @if (lotIsControlled()) {
             <div class="field">
               <label for="dispWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
-              <select id="dispWitness" [(ngModel)]="form.witnessedBy" name="dispWitness" required>
+              <select
+                id="dispWitness"
+                data-server-field="witnessedBy"
+                [(ngModel)]="form.witnessedBy"
+                name="dispWitness"
+                required
+              >
                 <option [ngValue]="undefined">
                   {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
                 </option>
@@ -160,18 +269,46 @@
               {{ 'PHARMACY.SUBSTITUTION' | translate }}
             </label>
           </div>
+          <!-- QA D1102 class: a serious interaction stops the fill until the
+               pharmacist gives the reason to dispense anyway. -->
+          @if (cdsAlerts().length > 0) {
+            <div class="field full-width" data-testid="cds-override">
+              <label for="cdsOverrideReason"
+                >{{ 'PHARMACY.CDS_OVERRIDE.LABEL' | translate }} *</label
+              >
+              <ul class="field-hint" role="alert">
+                @for (alert of cdsAlerts(); track $index) {
+                  <li>{{ alert }}</li>
+                }
+              </ul>
+              <input
+                id="cdsOverrideReason"
+                type="text"
+                maxlength="500"
+                data-testid="cds-override-reason"
+                [(ngModel)]="form.cdsOverrideReason"
+                name="cdsOverrideReason"
+                required
+              />
+              @if (cdsOverrideMissing()) {
+                <small class="field-hint">{{ 'PHARMACY.CDS_OVERRIDE.HINT' | translate }}</small>
+              }
+            </div>
+          }
           <!-- QA D512: every fill is verified by a pharmacist; the dispensing
                pharmacist attests it here, recorded under their own name. -->
           <div class="field checkbox-field">
             <label>
               <input
+                id="verifyAttest"
                 type="checkbox"
+                required
                 data-testid="verify-attest"
                 [ngModel]="verifyAttested()"
                 (ngModelChange)="verifyAttested.set($event)"
                 name="verifyAttested"
               />
-              {{ 'PHARMACY.VERIFY_ATTEST' | translate }}
+              {{ 'PHARMACY.VERIFY_ATTEST' | translate }} *
             </label>
           </div>
         </div>
@@ -248,6 +385,7 @@
           </div>
         </div>
 
+        <app-inline-discard-ask [form]="dispenseForm" />
         <div class="form-actions">
           <button type="button" class="btn-secondary" (click)="closeForm()">
             {{ 'COMMON.CANCEL' | translate }}
@@ -255,7 +393,11 @@
           <button
             type="submit"
             class="btn-primary"
-            [disabled]="saving() || form.quantityDispensed <= 0 || !verifyAttested()"
+            data-testid="dispense-submit"
+            [disabled]="saving()"
+            [appSubmitGuard]="dispenseBlockReason(false)"
+            submitGuardRequired
+            [submitGuardFields]="['qtyDispensed', 'unit', 'verifyAttest']"
           >
             @if (saving()) {
               <span class="spinner"></span>
@@ -269,7 +411,10 @@
               type="button"
               class="btn-secondary"
               data-testid="mark-ready"
-              [disabled]="saving() || form.quantityDispensed <= 0 || !verifyAttested()"
+              [disabled]="saving()"
+              [appSubmitGuard]="dispenseBlockReason(true)"
+              submitGuardRequired
+              [submitGuardFields]="['qtyDispensed', 'unit', 'verifyAttest']"
               (click)="submitReady()"
             >
               {{ 'PHARMACY.MARK_READY' | translate }}
@@ -281,8 +426,21 @@
   }
 
   <!-- G15: hand over a prepared fill, or cancel the preparation -->
+  <!-- QA D1555 / Policy 4: held for an authorized prescriber's review. -->
+  @if (allergyHold(); as hold) {
+    <app-allergy-hold-dialog [refusal]="hold" (closed)="allergyHold.set(null)" />
+  }
   @if (readyAction(); as action) {
-    <div class="form-card form-card-accent" data-testid="ready-action">
+    <!-- QA D1307 class (round 28): opened from a queue row, the form takes the
+         keyboard (its first field), keeps Escape to itself and gives focus back
+         to the row's button when it closes. -->
+    <div
+      class="form-card form-card-accent"
+      data-testid="ready-action"
+      appInlineSubForm
+      #readyForm="inlineSubForm"
+      (dismissed)="closeReadyAction()"
+    >
       <div class="form-header">
         <h3>
           @if (action.kind === 'handOver') {
@@ -304,12 +462,24 @@
       </div>
       <div class="rx-summary">
         <strong>{{ action.rx.medicationName }}</strong>
-        <span class="rx-meta">
-          {{ 'PHARMACY.PATIENT' | translate }}: {{ action.rx.patient?.firstName }}
-          {{ action.rx.patient?.lastName }}
+        {{ ' '
+        }}<span class="rx-meta">
+          {{ 'PHARMACY.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ action.rx.patient | personName }}
         </span>
       </div>
       @if (action.kind === 'handOver') {
+        <!-- QA D1584: the hand-over shows the allergy cards and the prescriber's review too. -->
+        @if (action.rx.allergyAlerts?.length) {
+          <section
+            role="alert"
+            [attr.aria-label]="'PHARMACY.ALLERGY_ALERTS_TITLE' | translate"
+            data-testid="hand-over-allergy-alerts"
+          >
+            <app-cds-card-list [cards]="action.rx.allergyAlerts!" />
+            <app-allergy-review-state [review]="action.rx.allergyReview" />
+          </section>
+        }
         <p>{{ 'PHARMACY.HAND_OVER_CONFIRM' | translate }}</p>
         <div class="form-row">
           <div class="field full-width">
@@ -368,6 +538,7 @@
           </button>
         </div>
       }
+      <app-inline-discard-ask [form]="readyForm" />
     </div>
   }
 
@@ -377,6 +548,9 @@
     <div
       class="form-card form-card-accent"
       role="alertdialog"
+      aria-modal="true"
+      appDialogFocus
+      (dialogDismiss)="cancelClaimAction()"
       aria-labelledby="claim-take-over-title"
       aria-describedby="claim-take-over-text"
       data-testid="claim-take-over"
@@ -389,9 +563,10 @@
       </div>
       <div class="rx-summary">
         <strong>{{ action.rx.medicationName }}</strong>
-        <span class="rx-meta">
-          {{ 'PHARMACY.PATIENT' | translate }}: {{ action.rx.patient?.firstName }}
-          {{ action.rx.patient?.lastName }}
+        {{ ' '
+        }}<span class="rx-meta">
+          {{ 'PHARMACY.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ action.rx.patient | personName }}
         </span>
       </div>
       <p id="claim-take-over-text" data-testid="claim-take-over-text">
@@ -429,8 +604,8 @@
 
   <!-- Work Queue -->
   <div class="section-card">
-    <h2 class="section-title">
-      <span class="material-symbols-outlined">assignment</span>
+    <h2 class="section-title" id="dispensing-queue-title">
+      <span class="material-symbols-outlined" aria-hidden="true">assignment</span>
       {{ 'PHARMACY.WORK_QUEUE' | translate }}
     </h2>
 
@@ -462,7 +637,12 @@
         <p>{{ 'PHARMACY.NO_PENDING_RX' | translate }}</p>
       </div>
     } @else {
-      <div class="table-responsive">
+      <div
+        class="table-responsive"
+        tabindex="0"
+        role="region"
+        aria-labelledby="dispensing-queue-title"
+      >
         <table class="data-table">
           <thead>
             <tr>
@@ -479,10 +659,31 @@
           <tbody>
             @for (rx of workQueue(); track rx.id) {
               <tr>
-                <td>{{ rx.patient?.firstName }} {{ rx.patient?.lastName }}</td>
-                <td>{{ rx.medicationName }}</td>
+                <td>{{ rx.patient | personName }}</td>
+                <td>
+                  {{ rx.medicationName }}
+                  @if (rx.heldForReview) {
+                    <span class="review-hold-flag" data-testid="queue-review-hold">{{
+                      'ORDER_REVIEW.HELD_FLAG' | translate
+                    }}</span>
+                  }
+                  @if (rx.alertOverridden) {
+                    {{ ' '
+                    }}<span class="cell-sub" [attr.data-testid]="'rx-alert-overridden-' + rx.id">{{
+                      'PHARMACY.ALERT_OVERRIDDEN' | translate
+                    }}</span>
+                  }
+                </td>
                 <td>{{ rx.dosage }}</td>
-                <td>{{ rx.quantity }} {{ rx.quantityUnit }}</td>
+                <td>
+                  {{ rx.quantity }} {{ rx.quantityUnit }}
+                  <!-- QA D1001: a partly filled order says what is still owed -->
+                  @if (isPartlyDispensed(rx)) {
+                    <span class="cell-sub" [attr.data-testid]="'rx-remaining-' + rx.id">{{
+                      'PHARMACY.QTY_REMAINING' | translate: { qty: rx.remainingQuantity }
+                    }}</span>
+                  }
+                </td>
                 <td>
                   <span class="badge badge-info">{{
                     rx.status | enumLabel: 'prescriptionStatus'
@@ -502,7 +703,8 @@
                   }
                   <!-- G15: a fill prepared and waiting at the counter. -->
                   @if (rx.readyForCollection; as ready) {
-                    <span
+                    {{ ' '
+                    }}<span
                       class="badge badge-success"
                       [attr.data-testid]="'rx-ready-' + rx.id"
                       [title]="
@@ -585,7 +787,7 @@
                     <span class="refill-note">{{ 'PHARMACY.REFILL_NONE' | translate }}</span>
                   }
                 </td>
-                <td>{{ rx.staff?.user?.firstName }} {{ rx.staff?.user?.lastName }}</td>
+                <td>{{ rx.staff?.user | personName }}</td>
                 <td>
                   @if (rx.readyForCollection) {
                     <!-- G15: a prepared fill is handed over or its preparation
@@ -704,39 +906,74 @@
 
       <!-- Pagination -->
       <div class="pagination">
-        <button class="btn-text" [disabled]="queuePage === 0" (click)="prevPage()">
+        <button
+          [attr.aria-label]="'COMMON.PREVIOUS' | translate"
+          class="btn-text"
+          [disabled]="queuePage === 0"
+          (click)="prevPage()"
+        >
           <span class="material-symbols-outlined">chevron_left</span>
         </button>
         <span class="page-info">{{ queuePage + 1 }} / {{ queueTotalPages || 1 }}</span>
-        <button class="btn-text" [disabled]="queuePage >= queueTotalPages - 1" (click)="nextPage()">
+        <button
+          [attr.aria-label]="'COMMON.NEXT' | translate"
+          class="btn-text"
+          [disabled]="queuePage >= queueTotalPages - 1"
+          (click)="nextPage()"
+        >
           <span class="material-symbols-outlined">chevron_right</span>
         </button>
       </div>
     }
   </div>
 
-  <!-- Recent Dispenses -->
-  <div class="section-card">
-    <h2 class="section-title">
-      <span class="material-symbols-outlined">history</span>
+  <!-- Recent Dispenses
+       QA D1336 (round 29): after a cancel, focus waits on this section's
+       heading (never on a look-alike row of the queue above). -->
+  <div class="section-card" data-focus-return="#recent-dispenses-title">
+    <h2 class="section-title" id="recent-dispenses-title" tabindex="-1">
+      <span class="material-symbols-outlined" aria-hidden="true">history</span>
       {{ 'PHARMACY.RECENT_DISPENSES' | translate }}
     </h2>
 
-    <!-- QA D654: a controlled fill goes back on the shelf in front of a witness -->
+    <!-- QA D1069: every cancel says why; QA D654: a controlled fill goes back in front of a witness -->
+    <!-- QA D1307 (round 28): the row's cancel button opened this form above the
+         table and kept the focus, so a keyboard or screen-reader user never
+         reached the reason. The form takes the keyboard (the reason field),
+         keeps Escape to itself, and gives focus back to the row on close. -->
     @if (cancelWitnessFor()) {
-      <div class="form-row" data-testid="cancel-witness">
+      <div
+        class="form-row"
+        data-testid="cancel-witness"
+        appInlineSubForm
+        #cancelForm="inlineSubForm"
+        (dismissed)="cancelWitnessFor.set(null)"
+      >
         <div class="field">
-          <label for="cancelWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
-          <select id="cancelWitness" [(ngModel)]="cancelWitnessId" name="cancelWitness" required>
-            <option [ngValue]="undefined">
-              {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
-            </option>
-            @for (w of witnessCandidates(); track w.userId) {
-              <option [ngValue]="w.userId">{{ w.displayName }}</option>
-            }
-          </select>
+          <label for="dispenseCancelReason">{{ 'PHARMACY.CANCEL_REASON' | translate }} *</label>
+          <textarea
+            id="dispenseCancelReason"
+            rows="2"
+            maxlength="500"
+            [(ngModel)]="dispenseCancelReason"
+            name="dispenseCancelReason"
+            required
+          ></textarea>
           <small class="field-hint">{{ 'PHARMACY.CANCEL_DISPENSE_CONFIRM' | translate }}</small>
         </div>
+        @if (cancelNeedsWitness()) {
+          <div class="field">
+            <label for="cancelWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
+            <select id="cancelWitness" [(ngModel)]="cancelWitnessId" name="cancelWitness" required>
+              <option [ngValue]="undefined">
+                {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
+              </option>
+              @for (w of witnessCandidates(); track w.userId) {
+                <option [ngValue]="w.userId">{{ w.displayName }}</option>
+              }
+            </select>
+          </div>
+        }
         <div class="field">
           <button type="button" class="btn btn-secondary" (click)="cancelWitnessFor.set(null)">
             {{ 'COMMON.CANCEL' | translate }}
@@ -745,6 +982,7 @@
             {{ 'COMMON.CONFIRM' | translate }}
           </button>
         </div>
+        <app-inline-discard-ask [form]="cancelForm" />
       </div>
     }
 
@@ -756,10 +994,18 @@
         <p>{{ 'PHARMACY.NO_DISPENSES_YET' | translate }}</p>
       </div>
     } @else {
-      <div class="table-responsive">
+      <div
+        class="table-responsive"
+        tabindex="0"
+        role="region"
+        aria-labelledby="recent-dispenses-title"
+      >
         <table class="data-table">
           <thead>
             <tr>
+              <!-- QA D1128: newest first (the server's order), with the patient, so
+                   a wrong fill made today is found and cancelled here. -->
+              <th>{{ 'PHARMACY.PATIENT' | translate }}</th>
               <th>{{ 'PHARMACY.MEDICATION' | translate }}</th>
               <th>{{ 'PHARMACY.QTY_DISPENSED' | translate }}</th>
               <th>{{ 'PHARMACY.STATUS' | translate }}</th>
@@ -772,6 +1018,7 @@
           <tbody>
             @for (d of recentDispenses(); track d.id) {
               <tr>
+                <td data-testid="recent-dispense-patient">{{ d.patientName || '—' }}</td>
                 <td>{{ d.medicationName }}</td>
                 <td>{{ d.quantityDispensed }} {{ d.unit }}</td>
                 <td>
@@ -800,7 +1047,10 @@
                       }
                     </span>
                   } @else {
-                    <span class="badge badge-muted">{{ 'PHARMACY.NOT_SCANNED' | translate }}</span>
+                    {{ ' '
+                    }}<span class="badge badge-muted">{{
+                      'PHARMACY.NOT_SCANNED' | translate
+                    }}</span>
                   }
                 </td>
                 <td>{{ d.dispensedByName }}</td>
@@ -809,7 +1059,11 @@
                   <!-- G15: a PENDING row is a prepared fill; it is cancelled
                        from the work queue (stock back, patient told). -->
                   @if (d.status !== 'CANCELLED' && d.status !== 'PENDING') {
-                    <button class="btn-action danger" (click)="cancelDispense(d.id)">
+                    <button
+                      [attr.aria-label]="'PHARMACY.CANCEL_DISPENSE' | translate"
+                      class="btn-action danger"
+                      (click)="cancelDispense(d.id)"
+                    >
                       <span class="material-symbols-outlined">cancel</span>
                     </button>
                   }

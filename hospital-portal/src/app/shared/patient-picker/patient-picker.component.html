@@ -2,14 +2,17 @@
   <div class="picker-chip">
     <div class="chip-avatar">{{ initials(sp) }}</div>
     <div class="chip-info">
-      <span class="chip-name">{{ sp.firstName }} {{ sp.lastName }}</span>
-      <span class="chip-sub">{{ sp.email || sp.phoneNumberPrimary }}</span>
+      <span class="chip-name">{{ sp | personName }}</span>
+      @if (subline(sp); as sub) {
+        {{ ' ' }}<span class="chip-sub">{{ sub }}</span>
+      }
     </div>
     <button
       type="button"
       class="chip-clear"
       (click)="clear()"
       [title]="'COMMON.CHANGE_PATIENT' | translate"
+      [attr.aria-label]="'COMMON.CHANGE_PATIENT' | translate"
     >
       <span class="material-symbols-outlined">close</span>
     </button>
@@ -20,12 +23,18 @@
     <input
       [attr.aria-label]="'COMMON.SEARCH_PATIENT' | translate"
       [id]="inputId"
+      [required]="required"
+      [attr.aria-required]="required ? 'true' : null"
+      data-submit-blank="true"
       class="picker-input"
+      data-escape-discards
       type="text"
       [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
       [value]="query()"
       (input)="onQueryChange($any($event.target).value)"
       (blur)="dropdownOpen.set(false)"
+      [appListEscape]="dropdownOpen()"
+      (listEscape)="dropdownOpen.set(false)"
       autocomplete="off"
     />
     @if (searchLoading()) {
@@ -46,8 +55,10 @@
           >
             <div class="opt-avatar">{{ initials(p) }}</div>
             <div class="opt-info">
-              <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
-              <span class="opt-meta">{{ p.email || p.phoneNumberPrimary }}</span>
+              <span class="opt-name">{{ p | personName }}</span>
+              @if (subline(p); as sub) {
+                {{ ' ' }}<span class="opt-meta">{{ sub }}</span>
+              }
             </div>
           </div>
         }

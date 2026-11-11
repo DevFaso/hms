@@ -1,12 +1,14 @@
 import { EncounterResponse, EncounterService } from '../services/encounter.service';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
+import { MfaService } from '../auth/mfa.service';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { signal } from '@angular/core';
-import { Observable, of, Subject, throwError } from 'rxjs';
+import { BehaviorSubject, Observable, of, Subject, throwError } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 import {
   ATTENTION_REASONS,
@@ -14,6 +16,10 @@ import {
   PrescriptionsComponent,
   TAB_BY_STATUS,
 } from './prescriptions';
+import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
 import {
   PrescriptionService,
   CommunityPharmacyService,
@@ -33,6 +39,7 @@ import { PatientResponse, PatientService } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 /**
  * Regression guard for the "Send prescription by SMS" dialog.
@@ -44,6 +51,37 @@ import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
  * the page, dropping it out of the backdrop's flex centring, and swallowing
  * every click (the backdrop's own handler closes the modal).
  */
+/**
+ * QA D1412: `/prescriptions` reads one page with the server's total; these tests
+ * state the tenant's rows through the `list` spy, and this answers each page and
+ * count from them, filtered by status as the server does.
+ */
+function matchesSearch(row: PrescriptionResponse, search: string | undefined): boolean {
+  const term = search?.trim().toLowerCase();
+  return !term || (row.medicationName ?? '').toLowerCase().includes(term);
+}
+
+function pageFromList(spy: jasmine.SpyObj<PrescriptionService>): void {
+  spy.page.and.callFake((filters, page, size) =>
+    spy.list().pipe(
+      map((rows) => {
+        const statuses = filters.statuses ?? [];
+        const kept = (
+          statuses.length ? rows.filter((r) => statuses.includes(r.status as string)) : rows
+        ).filter((r) => matchesSearch(r, filters.search));
+        return {
+          content: kept.slice(page * size, (page + 1) * size),
+          totalElements: kept.length,
+          totalPages: Math.ceil(kept.length / size),
+          number: page,
+          size,
+          last: (page + 1) * size >= kept.length,
+        };
+      }),
+    ),
+  );
+}
+
 describe('PrescriptionsComponent — SMS dispatch modal', () => {
   let fixture: ComponentFixture<PrescriptionsComponent>;
   let component: PrescriptionsComponent;
@@ -52,8 +90,10 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
   beforeEach(async () => {
     prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
+      'page',
       'dispatchSms',
     ]);
+    pageFromList(prescriptionService);
     prescriptionService.list.and.returnValue(of([]));
 
     const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
@@ -97,6 +137,7 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
             isSuperAdmin: signal(false),
             globalView: signal(false),
             activeHospitalId: 'h-1',
+            effectiveHospitalIdForRequest: signal('h-1'),
             hasAnyActiveRole: () => true,
             // The real service exposes these too, and the clarification
             // control reads them for doctor equivalence. A stub carrying only
@@ -107,7 +148,10 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
         },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+          useValue: {
+            snapshot: { queryParamMap: convertToParamMap({}) },
+            queryParamMap: of(convertToParamMap({})),
+          },
         },
       ],
     }).compileComponents();
@@ -121,6 +165,46 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
     component.showDispatchModal.set(true);
     fixture.detectChanges();
   }
+
+  // QA D912 (#967 review): the reopened chip passed an empty email although
+  // the row carries the patient's.
+  it('falls back to the row phone on a reopened prescription chip (QA D912)', () => {
+    // The re-test: Fatimata Zongo has a phone and no email.
+    component.openEdit({
+      id: 'rx-10',
+      patientId: 'p-fatimata',
+      patientFullName: 'Fatimata Zongo',
+      patientEmail: '',
+      patientPhone: '70001003',
+      status: 'DRAFT',
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.picker-chip .chip-sub')?.textContent?.trim()).toBe('70001003');
+  });
+
+  it('falls back to the row email on a reopened prescription chip (QA D912)', () => {
+    component.openEdit({
+      id: 'rx-9',
+      patientId: 'p-awa',
+      patientFullName: 'Awa Kaboré',
+      patientEmail: 'awa.kabore@example.test',
+      status: 'DRAFT',
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.picker-chip .chip-sub')?.textContent?.trim()).toBe(
+      'awa.kabore@example.test',
+    );
+  });
+
+  // QA D903/D912: the chip showed the email, or an empty line for a
+  // phone-only patient, instead of this hospital's MRN.
+  it('names the patient by MRN in the chip and the options (QA D912)', () => {
+    component.openCreate();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, component)).toEqual(EXPECTED_PICKER_SUBLINES);
+  });
 
   it('never offers a completed or cancelled encounter for a new order (QA D739)', () => {
     const encounters = TestBed.inject(EncounterService);
@@ -199,18 +283,16 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
     );
     component.dispatchTarget.set({ id: 'rx-1', status: 'SIGNED' } as PrescriptionResponse);
     component.dispatchPharmacyId = 'ph-1';
-    const listCallsBefore = prescriptionService.list.calls.count();
+    const listCallsBefore = prescriptionService.page.calls.count();
 
     component.submitDispatch();
 
     expect(prescriptionService.dispatchSms).toHaveBeenCalledWith('rx-1', 'ph-1', undefined);
-    expect(prescriptionService.list.calls.count())
+    expect(prescriptionService.page.calls.count())
       .withContext(
         'without a reload the row keeps its pre-dispatch status and its SMS button, and a second click supersedes the decision just made',
       )
-      // Two calls per reload since G12: the unfiltered page and the
-      // status-filtered "Needs attention" bucket.
-      .toBe(listCallsBefore + 2);
+      .toBeGreaterThan(listCallsBefore);
     expect(component.dispatching()).toBeFalse();
   });
 
@@ -220,13 +302,13 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
     );
     component.dispatchTarget.set({ id: 'rx-1', status: 'SIGNED' } as PrescriptionResponse);
     component.dispatchPharmacyId = 'ph-1';
-    const listCallsBefore = prescriptionService.list.calls.count();
+    const listCallsBefore = prescriptionService.page.calls.count();
 
     component.submitDispatch();
 
-    expect(prescriptionService.list.calls.count())
+    expect(prescriptionService.page.calls.count())
       .withContext('the backend committed TRANSMISSION_FAILED; a stale row would still read SIGNED')
-      .toBe(listCallsBefore + 2);
+      .toBeGreaterThan(listCallsBefore);
     expect(component.dispatching()).toBeFalse();
     expect(component.dispatchTarget())
       .withContext('the modal stays open for a retry or another pharmacy')
@@ -275,11 +357,14 @@ describe('PrescriptionsComponent — signing', () => {
   beforeEach(async () => {
     prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
+      'page',
       'sign',
       'cosign',
       'update',
       'create',
+      'getById',
     ]);
+    pageFromList(prescriptionService);
     prescriptionService.list.and.returnValue(of([]));
     prescriptionService.sign.and.returnValue(of(rx('rx-1', 'SIGNED')));
 
@@ -323,6 +408,7 @@ describe('PrescriptionsComponent — signing', () => {
             isSuperAdmin: signal(false),
             globalView: signal(false),
             activeHospitalId: 'h-1',
+            effectiveHospitalIdForRequest: signal('h-1'),
             hasAnyActiveRole: () => true,
             // The real service exposes these too, and the clarification
             // control reads them for doctor equivalence. A stub carrying only
@@ -333,7 +419,10 @@ describe('PrescriptionsComponent — signing', () => {
         },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+          useValue: {
+            snapshot: { queryParamMap: convertToParamMap({}) },
+            queryParamMap: of(convertToParamMap({})),
+          },
         },
       ],
     }).compileComponents();
@@ -343,9 +432,96 @@ describe('PrescriptionsComponent — signing', () => {
     fixture.detectChanges();
   });
 
+  it('QA D934: a doctor is offered Sign on a nurse or midwife draft, not on a colleague doctor draft', () => {
+    spyOn(component, 'ownPrescriberStaffId').and.returnValue('me');
+    const colleague = {
+      ...rx('c1', 'PENDING_SIGNATURE'),
+      staffId: 'other',
+    } as PrescriptionResponse;
+    const midwifeDraft = {
+      ...rx('c2', 'PENDING_SIGNATURE'),
+      staffId: 'midwife',
+      awaitingPhysicianSignature: true,
+    } as PrescriptionResponse;
+    expect(component.canSign(colleague)).toBeFalse();
+    expect(component.canSign(midwifeDraft)).toBeTrue();
+    expect(
+      component.canSign({ ...midwifeDraft, status: 'SIGNED' } as PrescriptionResponse),
+    ).toBeFalse();
+  });
+
+  it('QA D922: picking a catalogue item sends its id; typing over it clears the id', () => {
+    component.openCreate();
+    const morphine = {
+      id: 'cat-1',
+      nameFr: 'Morphine',
+      genericName: 'morphine',
+      strength: '10',
+      strengthUnit: 'mg/ml',
+      controlled: true,
+    } as never;
+    component.catalogOptions.set([morphine]);
+    component.onMedicationNameChange('Morphine 10 mg/ml');
+    expect(component.form.medicationCatalogItemId).toBe('cat-1');
+    expect(component.pickedCatalogItem()?.controlled).toBeTrue();
+    component.onMedicationNameChange('Morphine 10 mg/ml retard');
+    expect(component.form.medicationCatalogItemId).toBeNull();
+  });
+
+  it('review of #975: a catalogue pick (and its controlled hint) does not carry into the next order', () => {
+    component.openCreate();
+    const morphine = {
+      id: 'cat-1',
+      nameFr: 'Morphine',
+      strength: '10',
+      strengthUnit: 'mg/ml',
+      controlled: true,
+    } as never;
+    component.catalogOptions.set([morphine]);
+    component.onMedicationNameChange('Morphine 10 mg/ml');
+    expect(component.pickedCatalogItem()?.controlled).toBeTrue();
+
+    component.closeModal();
+    expect(component.pickedCatalogItem()).toBeNull();
+
+    component.onMedicationNameChange('Morphine 10 mg/ml');
+    component.openCreate();
+    expect(component.pickedCatalogItem()).toBeNull();
+    expect(component.form.medicationCatalogItemId).toBeFalsy();
+  });
+
+  it('QA D922: two catalogue items reading the same send no id, and a form tells them apart', () => {
+    component.openCreate();
+    const tablet = { id: 'cat-t', nameFr: 'Codéine', strength: '30', strengthUnit: 'mg' } as never;
+    const syrup = { id: 'cat-s', nameFr: 'Codéine', strength: '30', strengthUnit: 'mg' } as never;
+    component.catalogOptions.set([tablet, syrup]);
+    component.onMedicationNameChange('Codéine 30 mg');
+    expect(component.form.medicationCatalogItemId).toBeNull();
+    expect(component.pickedCatalogItem()).toBeNull();
+
+    const tabletWithForm = { ...(tablet as object), form: 'TABLET' } as never;
+    component.catalogOptions.set([tabletWithForm, syrup]);
+    expect(component.catalogLabel(tabletWithForm)).not.toBe(component.catalogLabel(syrup));
+    component.onMedicationNameChange(component.catalogLabel(tabletWithForm));
+    expect(component.form.medicationCatalogItemId).toBe('cat-t');
+  });
+
+  it('QA D922: the catalogue id of an order being edited is kept', () => {
+    component.openEdit({
+      ...rx('e1', 'DRAFT'),
+      medicationName: 'Morphine',
+      medicationCatalogItemId: 'cat-1',
+      route: 'INTRAVENOUS',
+    } as PrescriptionResponse);
+    expect(component.form.medicationCatalogItemId).toBe('cat-1');
+    // QA D950: a stored English word opens on the form's own option.
+    expect(component.form.route).toBe('IV');
+  });
+
   it('QA D706: a new prescription without a quantity to dispense is not sent', () => {
     component.openCreate();
     component.form.medicationName = 'Morphine 10 mg';
+    component.form.frequency = 'q6h';
     component.form.quantity = null;
     component.submitForm();
 
@@ -357,6 +533,7 @@ describe('PrescriptionsComponent — signing', () => {
     prescriptionService.create.and.returnValue(of({ id: 'rx-new' } as PrescriptionResponse));
     component.openCreate();
     component.form.medicationName = 'Morphine 10 mg';
+    component.form.frequency = 'q6h';
     component.form.quantity = 3;
     component.form.quantityUnit = 'ampoules';
     component.submitForm();
@@ -466,13 +643,13 @@ describe('PrescriptionsComponent — signing', () => {
     expect(el.querySelector('[data-testid="rx-withdrawal-reason"]')).not.toBeNull();
 
     const save = el.querySelector('.modal-actions .btn-primary') as HTMLButtonElement;
-    expect(save.disabled).withContext('nothing chosen yet').toBeTrue();
+    expect(isSubmitBlocked(save)).withContext('nothing chosen yet').toBeTrue();
     component.form.status = 'CANCELLED';
     fixture.detectChanges();
-    expect(save.disabled).withContext('no reason yet').toBeTrue();
+    expect(isSubmitBlocked(save)).withContext('no reason yet').toBeTrue();
     component.form.withdrawalReason = 'Wrong patient';
     fixture.detectChanges();
-    expect(save.disabled).toBeFalse();
+    expect(isSubmitBlocked(save)).toBeFalse();
 
     component.closeModal();
     component.openEdit(rx('d', 'DRAFT'));
@@ -481,6 +658,29 @@ describe('PrescriptionsComponent — signing', () => {
     fixture.detectChanges();
     expect(el.querySelector('[data-testid="rx-signed-hint"]')).toBeNull();
     expect((el.querySelector('#rx-dosage') as HTMLInputElement).readOnly).toBeFalse();
+  });
+
+  it('QA D1098 class: withdrawing an order awaiting clarification asks for the reason the server requires', async () => {
+    component.openEdit({
+      ...rx('c1a2', 'PENDING_CLARIFICATION'),
+      medicationName: 'amoxicilline',
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="rx-withdrawal-reason"]'))
+      .withContext('no withdrawal chosen: no reason asked')
+      .toBeNull();
+    const save = el.querySelector('.modal-actions .btn-primary') as HTMLButtonElement;
+    component.form.status = 'CANCELLED';
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="rx-withdrawal-reason"]')).not.toBeNull();
+    expect(isSubmitBlocked(save)).withContext('no reason yet').toBeTrue();
+    component.form.withdrawalReason = 'Contre-indiqué';
+    fixture.detectChanges();
+    expect(isSubmitBlocked(save)).toBeFalse();
   });
 
   it('does not offer SIGNED in the editable status list', () => {
@@ -506,6 +706,37 @@ describe('PrescriptionsComponent — signing', () => {
     // D129: a new prescription is never offered a withdrawn status.
     component.openCreate();
     expect(component.statusOptions().map((s) => s.value)).toEqual(['DRAFT', 'PENDING_SIGNATURE']);
+  });
+
+  // QA D1537 review (round 40): the server never puts a signed order back to a draft or to
+  // awaiting signature, whatever status the pharmacy moved it to; the form offers it only a withdrawal.
+  for (const status of [
+    'SIGNED',
+    'TRANSMITTED',
+    'TRANSMISSION_FAILED',
+    'PENDING_CLARIFICATION',
+    'DISPENSED',
+    'PARTIALLY_FILLED',
+    'PENDING_STOCK',
+    'SENT_TO_PARTNER',
+    'PARTNER_ACCEPTED',
+    'PARTNER_REJECTED',
+    'PARTNER_DISPENSED',
+    'PRINTED_FOR_PATIENT',
+  ]) {
+    it(`QA D1537: a ${status} order is offered only the withdrawal statuses`, () => {
+      component.openEdit(rx(`s-${status}`, status));
+      expect(component.statusOptions().map((s) => s.value)).toEqual(['CANCELLED', 'DISCONTINUED']);
+    });
+  }
+
+  it('QA D1537: a draft or an order awaiting signature keeps every editable status', () => {
+    for (const status of ['DRAFT', 'PENDING_SIGNATURE']) {
+      component.openEdit(rx(`p-${status}`, status));
+      expect(component.statusOptions().map((s) => s.value))
+        .withContext(status)
+        .toEqual(['DRAFT', 'PENDING_SIGNATURE', 'CANCELLED', 'DISCONTINUED']);
+    }
   });
 
   it('offers signing only for a prescription still awaiting a signature', () => {
@@ -658,6 +889,751 @@ describe('PrescriptionsComponent — signing', () => {
     expect(toast.error).toHaveBeenCalledWith('t:PRESCRIPTIONS.TOAST.ACTION_FORBIDDEN');
   });
 
+  describe('controlled-drug signature re-authentication (round 18)', () => {
+    let mfa: MfaService;
+
+    beforeEach(() => {
+      mfa = TestBed.inject(MfaService);
+    });
+
+    it('a controlled order opens the re-authentication dialog instead of signing', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+
+      expect(prescriptionService.sign).not.toHaveBeenCalled();
+      expect(component.signReauthTarget()?.id).toBe('rx-1');
+      expect(component.signReauthUsesCode()).toBeFalse();
+    });
+
+    it('sends the password, once, and clears it after a signature', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+      component.signReauthSecret = 's3cret';
+
+      component.submitSignReauth();
+
+      expect(prescriptionService.sign).toHaveBeenCalledWith('rx-1', { password: 's3cret' });
+      expect(component.signReauthTarget()).toBeNull();
+      expect(component.signReauthSecret).toBe('');
+    });
+
+    it('sends the authenticator code when one is enrolled', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: true }));
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+      component.signReauthSecret = ' 123456 ';
+
+      component.submitSignReauth();
+
+      expect(prescriptionService.sign).toHaveBeenCalledWith('rx-1', { mfaCode: '123456' });
+    });
+
+    it('a refused re-authentication stays in the dialog with the reason and an empty field', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      prescriptionService.sign.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 403,
+              error: { message: 'Code incorrect', code: 'mfa.stepup.invalid' },
+            }),
+        ),
+      );
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+      component.signReauthSecret = 'wrong';
+
+      component.submitSignReauth();
+
+      expect(component.signReauthTarget()?.id).toBe('rx-1');
+      expect(component.signReauthError()).toBe('Code incorrect');
+      expect(component.signReauthSecret).toBe('');
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('a catalogue-controlled order the list did not flag opens the dialog on the step-up refusal', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      prescriptionService.sign.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 403,
+              error: { message: 'Saisissez votre mot de passe', code: 'mfa.stepup.required' },
+            }),
+        ),
+      );
+
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+
+      expect(component.signReauthTarget()?.id).toBe('rx-1');
+      expect(component.signReauthError()).toBe('Saisissez votre mot de passe');
+    });
+  });
+
+  // QA D1183 (round 23, portal half): POST /prescriptions/{id}/sign now runs
+  // the allergy stop (a documented allergy, or the CRITICAL "Vérification des
+  // allergies impossible" for a free-text drug the server cannot place while
+  // the patient has a drug-class allergy) and refuses without an
+  // acknowledgement. The sign button showed the refusal as a toast and the
+  // order could never be signed: the request had no way to carry the reason.
+  describe('QA D1183: the allergy stop at the signature', () => {
+    const unverifiable = {
+      summary: 'Vérification des allergies impossible',
+      detail:
+        "Le nom « Septrine » n'a pas pu être rapproché d'une substance active ; le patient est allergique aux sulfamides.",
+      indicator: 'critical',
+      source: { label: 'HMS' },
+    };
+    const refusal = () =>
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: {
+              error: 'CDS Critical Advisory',
+              message: 'Vérification des allergies impossible',
+              cdsAdvisories: [unverifiable],
+            },
+          }),
+      );
+    const dialog = () =>
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        '[data-testid="rx-sign-reauth"]',
+      );
+    const type = (el: HTMLInputElement | HTMLTextAreaElement, value: string) => {
+      el.value = value;
+      el.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    };
+
+    it('shows the card with its detail, refuses a blank reason, and signs with allergyOverrideReason', async () => {
+      prescriptionService.sign.and.returnValues(refusal(), of(rx('rx-1', 'SIGNED')));
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const box = dialog()!;
+      expect(box).withContext('the sign dialog opens on the refusal').not.toBeNull();
+      const cards = box.querySelector('[data-testid="rx-sign-allergy-cards"]')!;
+      expect(cards.textContent).toContain('Vérification des allergies impossible');
+      expect(cards.textContent).toContain('Septrine');
+      expect(box.querySelector('#rx-sign-reauth-secret'))
+        .withContext('not a controlled drug: no password')
+        .toBeNull();
+      expect(toast.error).not.toHaveBeenCalled();
+
+      const submit = box.querySelector<HTMLButtonElement>('[data-testid="rx-sign-submit"]')!;
+      submit.click();
+      fixture.detectChanges();
+      expect(prescriptionService.sign).toHaveBeenCalledTimes(1);
+
+      type(
+        box.querySelector<HTMLTextAreaElement>('#rx-sign-allergy-reason')!,
+        'Tolérance documentée, avis allergologue',
+      );
+      submit.click();
+      fixture.detectChanges();
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual([
+        'rx-1',
+        { allergyOverrideReason: 'Tolérance documentée, avis allergologue' },
+      ]);
+      expect(component.signReauthTarget()).toBeNull();
+      expect(toast.success).toHaveBeenCalled();
+    });
+
+    /** CR-02: a held dose finding: the token the refusal carried goes back with the reason. */
+    const heldRefusal = (token: string) =>
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: {
+              message: 'Paracétamol : au-dessus du maximum',
+              cdsAdvisories: [
+                {
+                  summary: 'Paracétamol : 1500 mg par prise',
+                  indicator: 'warning',
+                  source: { label: 'Paracétamol adulte' },
+                  reasonAtSignature: true,
+                  exceptionKey: token,
+                },
+              ],
+            },
+          }),
+      );
+
+    it('CR-02: a dose exception sends its reason with the token of the refusal', () => {
+      prescriptionService.sign.and.returnValues(heldRefusal('tok-1'), of(rx('rx-1', 'SIGNED')));
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+      fixture.detectChanges();
+
+      expect(component.signAlertIsException()).toBeTrue();
+      expect(component.signDialogIncomplete()).withContext('no reason yet').toBeTrue();
+      component.signAllergyReason = 'Dose de charge unique, décision du prescripteur';
+      component.submitSignReauth();
+
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual([
+        'rx-1',
+        {
+          allergyOverrideReason: 'Dose de charge unique, décision du prescripteur',
+          doseExceptionToken: 'tok-1',
+        },
+      ]);
+      expect(component.signReauthTarget()).toBeNull();
+    });
+
+    it('CR-01: an urgent signature asks for the reason, then sends the flag, the reason and the token', () => {
+      prescriptionService.sign.and.returnValues(heldRefusal('tok-u'), of(rx('rx-1', 'SIGNED')));
+      component.signUrgently({ ...rx('rx-1', 'DRAFT'), pediatricDoseReviewRequired: true });
+      fixture.detectChanges();
+
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual([
+        'rx-1',
+        { urgentDoseException: true },
+      ]);
+      component.signAllergyReason = 'Sepsis, personne sur place';
+      component.submitSignReauth();
+
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual([
+        'rx-1',
+        {
+          urgentDoseException: true,
+          allergyOverrideReason: 'Sepsis, personne sur place',
+          doseExceptionToken: 'tok-u',
+        },
+      ]);
+      expect(component.signUrgent()).toBeFalse();
+    });
+
+    it('A child above the limit: the prescriber decides alone, and the urgent box adds the flag', () => {
+      const aboveLimit = throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: {
+              message: 'Au-dessus du maximum',
+              cdsAdvisories: [
+                {
+                  summary: 'Dose au-dessus du maximum',
+                  indicator: 'critical',
+                  source: { label: 'x' },
+                  reasonAtSignature: true,
+                  exceptionKey: 'tok-a',
+                },
+              ],
+            },
+          }),
+      );
+      prescriptionService.sign.and.returnValues(aboveLimit, of(rx('rx-1', 'SIGNED')));
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+      fixture.detectChanges();
+
+      expect(component.signAlertIsAboveLimit()).toBeTrue();
+      component.signAllergyReason = 'Crise, seul sur place';
+      component.signUrgent.set(true);
+      component.submitSignReauth();
+
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual([
+        'rx-1',
+        {
+          urgentDoseException: true,
+          allergyOverrideReason: 'Crise, seul sur place',
+          doseExceptionToken: 'tok-a',
+        },
+      ]);
+    });
+
+    it('Policy 3: an allergy acknowledged at creation is asked again, and the reason goes back with its token', () => {
+      const allergyStop = throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: {
+              message: 'Pour signer, reconnaissez l’allergie',
+              field: 'allergyOverrideReason',
+              cdsAdvisories: [
+                {
+                  summary: 'Alerte allergie : Pénicilline',
+                  indicator: 'critical',
+                  source: { label: 'x' },
+                  exceptionKey: 'allergy:tok-p',
+                },
+              ],
+            },
+          }),
+      );
+      prescriptionService.sign.and.returnValues(allergyStop, of(rx('rx-1', 'SIGNED')));
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+      fixture.detectChanges();
+
+      expect(component.signAllergyCards().length).toBe(1);
+      expect(component.signAlertIsException())
+        .withContext('an allergy, not a dose exception')
+        .toBeFalse();
+      expect(component.signAlertIsAboveLimit())
+        .withContext('no urgent box for an allergy')
+        .toBeFalse();
+      expect(component.signDialogIncomplete()).withContext('the reason is required').toBeTrue();
+      component.signAllergyReason = 'Test cutané négatif';
+      component.submitSignReauth();
+
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual([
+        'rx-1',
+        { allergyOverrideReason: 'Test cutané négatif', doseExceptionToken: 'allergy:tok-p' },
+      ]);
+    });
+
+    it('CR-01: the signer of an urgent exception is not offered its review', () => {
+      spyOn<any>(component, 'ownPrescriberStaffId').and.returnValue('staff-a');
+      spyOn((component as any).roleContext, 'hasAnyActiveRole').and.returnValue(true);
+      const urgent = {
+        ...rx('rx-1', 'SIGNED'),
+        staffId: 'staff-nurse',
+        pediatricDoseReviewRequired: true,
+        pediatricDoseUrgentExceptionAt: '2026-11-07T02:00:00',
+      };
+      expect(component.canRecordDoseReview({ ...urgent, signedByStaffId: 'staff-a' })).toBeFalse();
+      expect(component.canRecordDoseReview({ ...urgent, signedByStaffId: 'staff-b' })).toBeTrue();
+    });
+
+    it('CR-01: a routine signature never sends the urgent flag, and the action is offered only for a due review', () => {
+      prescriptionService.sign.and.returnValue(of(rx('rx-1', 'SIGNED')));
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual(['rx-1']);
+      spyOn(component, 'canSign').and.returnValue(true);
+      expect(component.canSignUrgently(rx('rx-1', 'DRAFT'))).toBeFalse();
+      expect(
+        component.canSignUrgently({ ...rx('rx-1', 'DRAFT'), pediatricDoseReviewRequired: true }),
+      ).toBeTrue();
+    });
+
+    it('CR-02: a stale exception reopens on the current alerts, asks again and says why', () => {
+      prescriptionService.sign.and.returnValues(heldRefusal('tok-1'), heldRefusal('tok-2'));
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+      fixture.detectChanges();
+      component.signAllergyReason = 'Décision sur la version précédente';
+      component.submitSignReauth();
+      fixture.detectChanges();
+
+      expect(component.signReauthTarget()).withContext('the dialog stays').not.toBeNull();
+      expect(component.signAllergyCards()[0].exceptionKey).toBe('tok-2');
+      expect(component.signAllergyReason).withContext('the decision is made again').toBe('');
+      expect(component.signReauthError()).toContain('au-dessus du maximum');
+    });
+
+    it('a controlled drug asks for the reason and the re-authentication again, sent together', () => {
+      const mfa = TestBed.inject(MfaService);
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      prescriptionService.sign.and.returnValues(refusal(), of(rx('rx-1', 'SIGNED')));
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+      component.signReauthSecret = 's3cret';
+      component.submitSignReauth();
+      fixture.detectChanges();
+
+      expect(component.signAllergyCards().length).toBe(1);
+      expect(component.signAlertIsCritical()).toBeFalse();
+      component.signAllergyCards.set([
+        { ...component.signAllergyCards()[0], reasonAtSignature: true },
+      ]);
+      expect(component.signAlertIsCritical()).toBeTrue();
+      component.signAllergyCards.set([
+        { ...component.signAllergyCards()[0], reasonAtSignature: null },
+      ]);
+      expect(component.signReauthSecret).withContext('the secret is never kept').toBe('');
+      expect(component.signDialogIncomplete()).toBeTrue();
+      component.signReauthSecret = 's3cret';
+      component.signAllergyReason = 'Bénéfice supérieur au risque';
+      component.submitSignReauth();
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual([
+        'rx-1',
+        { password: 's3cret', allergyOverrideReason: 'Bénéfice supérieur au risque' },
+      ]);
+    });
+
+    it('a second refusal after the reason was given is shown, not looped', () => {
+      prescriptionService.sign.and.returnValues(refusal(), refusal());
+      // QA D1142: a 400 re-reads the row.
+      prescriptionService.getById.and.returnValue(of(rx('rx-1', 'DRAFT')));
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+      component.signAllergyReason = 'Motif';
+      component.submitSignReauth();
+      expect(component.signReauthTarget()).toBeNull();
+      expect(toast.error).toHaveBeenCalledWith('Vérification des allergies impossible');
+    });
+  });
+
+  // QA D1183: create and edit reach the safety net for a free-text name too;
+  // its card is shown with its detail and the existing override is sent.
+  it('QA D1183: the unverifiable card at creation is shown with its detail; the override reason is sent', () => {
+    const card = {
+      summary: 'Vérification des allergies impossible',
+      detail: "« Septrine » n'a pas pu être rapproché d'une substance active.",
+      indicator: 'critical',
+      source: { label: 'HMS' },
+    };
+    // A copy of each body as sent: closing the modal resets the same form object afterwards.
+    const sent: Record<string, unknown>[] = [];
+    prescriptionService.create.and.callFake((req) => {
+      sent.push({ ...req });
+      return sent.length === 1
+        ? throwError(
+            () =>
+              new HttpErrorResponse({
+                status: 400,
+                error: { message: card.summary, cdsAdvisories: [card] },
+              }),
+          )
+        : of(rx('rx-9', 'DRAFT'));
+    });
+    component.openCreate();
+    component.form = {
+      ...component.form,
+      medicationName: 'Septrine',
+      frequency: 'q6h',
+      quantity: 10,
+    } as never;
+    component.submitForm();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="cds-advisories"]')?.textContent).toContain('Septrine');
+    expect(component.cdsCriticalBlocked()).toBeTrue();
+    component.form.forceOverride = true;
+    component.form.overrideReason = 'Cotrimoxazole déjà toléré';
+    component.submitForm();
+    expect(sent.length).toBe(2);
+    expect(sent[1]).toEqual(
+      jasmine.objectContaining({
+        forceOverride: true,
+        overrideReason: 'Cotrimoxazole déjà toléré',
+      }),
+    );
+  });
+
+  // QA D1345 (round 30): a create the server accepted with an advisory
+  // ("Doublon possible") left the dialog in create mode, so a second press of
+  // Créer posted a duplicate order. The dialog now stays to show the cards,
+  // locked, with Close as its only action.
+  it('QA D1345: after a create with an advisory the dialog cannot create the order again', async () => {
+    const duplicate = {
+      summary: 'Doublon possible',
+      indicator: 'warning',
+      source: { label: 'HMS' },
+    };
+    prescriptionService.create.and.returnValue(
+      of({ ...rx('rx-dup', 'DRAFT'), cdsAdvisories: [duplicate] } as PrescriptionResponse),
+    );
+    component.openCreate();
+    component.form = {
+      ...component.form,
+      medicationName: 'Paracétamol 500 mg',
+      frequency: 'q6h',
+      quantity: 9,
+    } as never;
+    component.submitForm();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(component.createdWithAdvisories()).toBeTrue();
+    expect(host.querySelector('[data-testid="cds-advisories"]')?.textContent).toContain(
+      'Doublon possible',
+    );
+    const hint = host.querySelector<HTMLElement>('[data-testid="rx-created-hint"]')!;
+    expect(hint.hidden).withContext('the locked form says why').toBeFalse();
+    expect(hint.textContent).toContain('PRESCRIPTIONS.CREATED_WITH_ADVISORIES');
+    const fields = host.querySelector<HTMLFieldSetElement>('[data-testid="rx-form-fields"]')!;
+    expect(fields.disabled).withContext('every field is locked').toBeTrue();
+    const buttons = Array.from(host.querySelectorAll<HTMLButtonElement>('.modal-actions button'));
+    expect(buttons.map((b) => b.getAttribute('data-testid'))).toEqual(['rx-created-close']);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(document.activeElement?.getAttribute('data-testid')).toBe('rx-created-close');
+
+    // A second submit (a double press, Enter) never posts again.
+    component.submitForm();
+    expect(prescriptionService.create).toHaveBeenCalledTimes(1);
+
+    buttons[0].click();
+    fixture.detectChanges();
+    expect(component.showModal()).toBeFalse();
+    expect(component.createdWithAdvisories()).toBeFalse();
+    component.openCreate();
+    expect(component.createdWithAdvisories())
+      .withContext('a new form is a create form again')
+      .toBeFalse();
+  });
+
+  it('QA D1345: an edit with an advisory keeps its own Update (not a create, nothing to duplicate)', () => {
+    const card = { summary: 'Interaction', indicator: 'info', source: { label: 'HMS' } };
+    prescriptionService.update.and.returnValue(
+      of({ ...rx('rx-1', 'DRAFT'), cdsAdvisories: [card] } as PrescriptionResponse),
+    );
+    component.openEdit(rx('rx-1', 'DRAFT'));
+    component.form.quantity = 5;
+    component.submitForm();
+    expect(component.createdWithAdvisories()).toBeFalse();
+  });
+
+  // QA round 30 (user decision 2026-11-02) / QA D1378 (round 32): an order
+  // the prescriber TICKS as needed states the minimum interval between two
+  // doses; the field shows from the tick (never from the frequency text), is
+  // refused on itself when blank, and is never sent on an order not ticked.
+  describe('QA round 30 / D1378: the PRN tick and its minimum interval', () => {
+    const host = () => fixture.nativeElement as HTMLElement;
+    const field = () => host().querySelector<HTMLInputElement>('#rx-prnMinIntervalHours');
+    const tick = () => host().querySelector<HTMLInputElement>('#rx-asNeeded');
+
+    it('is asked of an order ticked as needed, refused blank, and sent with the tick', () => {
+      prescriptionService.create.and.returnValue(of(rx('rx-prn', 'DRAFT')));
+      component.openCreate();
+      component.form = {
+        ...component.form,
+        medicationName: 'Paracétamol',
+        quantity: 10,
+        frequency: 'SOS',
+      } as never;
+      fixture.detectChanges();
+      expect(tick()).withContext('the explicit tick').not.toBeNull();
+      expect(tick()!.getAttribute('data-server-field')).toBe('asNeeded');
+      expect(field()).withContext('no field from the text alone, even "SOS"').toBeNull();
+      component.onAsNeededChange(true);
+      fixture.detectChanges();
+      expect(field()).not.toBeNull();
+
+      component.submitForm();
+      fixture.detectChanges();
+      expect(prescriptionService.create).not.toHaveBeenCalled();
+      expect(field()!.getAttribute('aria-invalid')).toBe('true');
+
+      component.form.prnMinIntervalHours = 0;
+      component.submitForm();
+      expect(prescriptionService.create).not.toHaveBeenCalled();
+
+      component.form.prnMinIntervalHours = 4;
+      component.submitForm();
+      expect(prescriptionService.create).toHaveBeenCalledTimes(1);
+      expect(prescriptionService.create.calls.mostRecent().args[0]).toEqual(
+        jasmine.objectContaining({ frequency: 'SOS', asNeeded: true, prnMinIntervalHours: 4 }),
+      );
+    });
+
+    it('QA D1491: a new order states its frequency; an older order written with none stays editable', () => {
+      prescriptionService.create.calls.reset();
+      prescriptionService.update.calls.reset();
+      prescriptionService.update.and.returnValue(of(rx('rx-old', 'DRAFT')));
+      component.openCreate();
+      fixture.detectChanges();
+      expect(host().querySelector('label[for="rx-frequency"]')?.textContent).toContain('*');
+      component.form = {
+        ...component.form,
+        medicationName: 'Amoxicilline',
+        quantity: 3,
+        frequency: '   ',
+      } as never;
+      component.submitForm();
+      expect(prescriptionService.create).not.toHaveBeenCalled();
+      expect(component['formError']()).toBe('PRESCRIPTIONS.FREQUENCY_REQUIRED');
+
+      component.openEdit({ ...rx('rx-old', 'DRAFT'), frequency: undefined } as never);
+      component.submitForm();
+      expect(prescriptionService.update).withContext('as it was').toHaveBeenCalled();
+
+      prescriptionService.update.calls.reset();
+      component.openEdit({ ...rx('rx-old', 'DRAFT'), frequency: 'q6h' } as never);
+      component.form.frequency = '';
+      component.submitForm();
+      expect(prescriptionService.update).withContext('emptied').not.toHaveBeenCalled();
+    });
+
+    it('QA D1406: ticking clears the refusal that asked for the tick, and so does a new frequency', () => {
+      prescriptionService.create.and.returnValue(
+        throwError(() => ({
+          status: 400,
+          error: { message: 'Cette fréquence se lit « si besoin ».' },
+        })),
+      );
+      component.openCreate();
+      component.form = {
+        ...component.form,
+        medicationName: 'Paracétamol',
+        quantity: 10,
+        frequency: 'SOS',
+      } as never;
+      component.submitForm();
+      expect(component['formError']()).toContain('si besoin');
+
+      component.onAsNeededChange(true);
+      expect(component['formError']()).withContext('the tick answers it').toBe('');
+
+      component['formError'].set('old refusal');
+      component.onFrequencyChange('q6h');
+      expect(component.form.frequency).toBe('q6h');
+      expect(component['formError']()).withContext('a new frequency answers it').toBe('');
+    });
+
+    it('QA D1391 / D1395: the hint under the frequency says what the server will answer', () => {
+      component.openCreate();
+      component.form.frequency = 'q6h';
+      expect(component.frequencyHintKey()).toBeNull();
+      component.form.frequency = 'TPI-SP';
+      expect(component.frequencyHintKey()).withContext('D1391: a regimen is a schedule').toBeNull();
+      component.form.frequency = 'pour douleur';
+      expect(component.frequencyHintKey()).toBe('PRESCRIPTIONS.FREQUENCY_READS_AS_NEEDED');
+      component.form.frequency = 'max 4/j';
+      expect(component.frequencyHintKey()).toBe('PRESCRIPTIONS.FREQUENCY_UNREADABLE');
+      component.form.asNeeded = true;
+      expect(component.frequencyHintKey()).withContext('ticked: nothing to say').toBeNull();
+    });
+
+    describe('QA D1419 / D1440: a wording the MAR cannot schedule is a question', () => {
+      const asked = {
+        status: 400,
+        error: {
+          message: 'Cette formulation ne peut pas être planifiée',
+          fieldErrors: { frequencyConfirmed: 'Cette formulation ne peut pas être planifiée' },
+        },
+      };
+
+      function submit(frequency: string): void {
+        component.openCreate();
+        component.form = {
+          ...component.form,
+          medicationName: 'Fansidar',
+          quantity: 3,
+          frequency,
+        } as never;
+        component.submitForm();
+        fixture.detectChanges();
+      }
+
+      it('the first refusal shows the box, in one place, and the answer creates the order', () => {
+        prescriptionService.create.and.returnValue(throwError(() => asked));
+        const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+        toast.error.calls.reset();
+        submit('SP + AQ');
+
+        const el = fixture.nativeElement as HTMLElement;
+        const box = el.querySelector<HTMLInputElement>('[data-testid="rx-frequency-confirmed"]');
+        expect(box).withContext('the box appears on the refusal').not.toBeNull();
+        expect(box?.getAttribute('data-server-field')).toBe('frequencyConfirmed');
+        expect(
+          prescriptionService.create.calls.mostRecent().args[0].frequencyConfirmed,
+        ).toBeFalse();
+        // One clear message, at the field: no hint, no banner, no toast over Create.
+        expect(el.querySelector('[data-testid="rx-frequency-hint"]')).toBeNull();
+        expect(el.querySelector('[data-testid="rx-form-error"]')).toBeNull();
+        expect(toast.error).not.toHaveBeenCalled();
+
+        prescriptionService.create.and.returnValue(of(rx('rx-sp', 'DRAFT')));
+        component.form.frequencyConfirmed = true;
+        component.submitForm();
+        const sent = prescriptionService.create.calls.mostRecent().args[0];
+        expect(sent.frequencyConfirmed).toBeTrue();
+        expect(sent.asNeeded).withContext('never nudged into as-needed').toBeFalse();
+      });
+
+      it('a new wording drops the question and its answer', () => {
+        prescriptionService.create.and.returnValue(throwError(() => asked));
+        submit('SP + AQ');
+        component.form.frequencyConfirmed = true;
+        component.onFrequencyChange('q6h');
+        fixture.detectChanges();
+        expect(component.frequencyConfirmAsked()).toBeFalse();
+        expect(component.form.frequencyConfirmed).toBeFalse();
+      });
+
+      it('a condition is refused on the tick, with no box and one message', () => {
+        prescriptionService.create.and.returnValue(
+          throwError(() => ({
+            status: 400,
+            error: { message: 'si besoin', fieldErrors: { asNeeded: 'si besoin' } },
+          })),
+        );
+        const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+        toast.error.calls.reset();
+        submit('pour douleur');
+        const el = fixture.nativeElement as HTMLElement;
+        expect(el.querySelector('[data-testid="rx-frequency-confirmed"]')).toBeNull();
+        expect(el.querySelector('[data-testid="rx-frequency-hint"]')).toBeNull();
+        expect(el.querySelector('[data-testid="rx-form-error"]')).toBeNull();
+        expect(toast.error).not.toHaveBeenCalled();
+      });
+
+      it('a refusal naming the question and another field still shows the box', () => {
+        prescriptionService.create.and.returnValue(
+          throwError(() => ({
+            status: 400,
+            error: {
+              message: 'both',
+              fieldErrors: { frequencyConfirmed: 'asked', dosage: 'dose' },
+            },
+          })),
+        );
+        submit('SP + AQ');
+        expect(component.frequencyConfirmAsked()).toBeTrue();
+        expect(component['formError']()).toBe('both');
+      });
+
+      it('a refusal that names another field keeps its banner', () => {
+        prescriptionService.create.and.returnValue(
+          throwError(() => ({
+            status: 400,
+            error: { message: 'dose', fieldErrors: { dosage: 'dose' } },
+          })),
+        );
+        submit('q6h');
+        expect(component['formError']()).toBe('dose');
+      });
+    });
+
+    it('QA D1391: unticking an order is told about its frequency, which the server now judges', () => {
+      component.openEdit({ ...rx('rx-old', 'DRAFT'), frequency: 'si douleur', asNeeded: true });
+      component.onAsNeededChange(false);
+      expect(component.frequencyHintKey()).toBe('PRESCRIPTIONS.FREQUENCY_READS_AS_NEEDED');
+    });
+
+    it('QA D1391: an edit is not told about the frequency the order already carries', () => {
+      component.openEdit({ ...rx('rx-old', 'DRAFT'), frequency: 'SOS' });
+      expect(component.frequencyHintKey()).toBeNull();
+      component.form.frequency = 'pour douleur';
+      expect(component.frequencyHintKey()).toBe('PRESCRIPTIONS.FREQUENCY_READS_AS_NEEDED');
+    });
+
+    it('unticking hides the field and sends no interval, the tick false', () => {
+      prescriptionService.create.and.returnValue(of(rx('rx-tid', 'DRAFT')));
+      component.openCreate();
+      component.form = {
+        ...component.form,
+        medicationName: 'Amoxicilline',
+        quantity: 21,
+        frequency: '3 fois par jour',
+      } as never;
+      component.onAsNeededChange(true);
+      component.form.prnMinIntervalHours = 6;
+      component.onAsNeededChange(false);
+      fixture.detectChanges();
+      expect(field()).toBeNull();
+      component.submitForm();
+      const sent = prescriptionService.create.calls.mostRecent().args[0];
+      expect(sent.prnMinIntervalHours).toBeNull();
+      expect(sent.asNeeded).toBeFalse();
+    });
+
+    it('an edit opens with the tick and the interval the order carries', () => {
+      component.openEdit({
+        ...rx('rx-1', 'DRAFT'),
+        frequency: 'PRN',
+        asNeeded: true,
+        prnMinIntervalHours: 8,
+      });
+      expect(component.form.prnMinIntervalHours).toBe(8);
+      expect(component.form.asNeeded).toBeTrue();
+      expect(component.prnIntervalShown()).toBeTrue();
+      component.openEdit({ ...rx('rx-2', 'DRAFT'), frequency: 'SOS' });
+      expect(component.form.asNeeded).toBeFalse();
+      expect(component.prnIntervalShown()).toBeFalse();
+    });
+  });
+
   it('a non-403 failure without a body falls back to the generic sign failure', () => {
     const translate = TestBed.inject(TranslateService);
     spyOn(translate, 'instant').and.callFake(((key: string) => `t:${key}`) as never);
@@ -668,6 +1644,37 @@ describe('PrescriptionsComponent — signing', () => {
     component.signPrescription(rx('rx-1', 'DRAFT'));
 
     expect(toast.error).toHaveBeenCalledWith('t:PRESCRIPTIONS.TOAST.SIGN_FAILED');
+  });
+
+  it('QA D1142: a refused signature re-reads the order, so an infant order newly awaiting its dose review offers the review', () => {
+    const legacy = { ...rx('rx-infant', 'DRAFT'), pediatricDoseReviewRequired: false };
+    component.prescriptions.set([legacy as PrescriptionResponse]);
+    prescriptionService.sign.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: { message: 'Enregistrez la revue de dose avant de signer.' },
+          }),
+      ),
+    );
+    prescriptionService.getById.and.returnValue(
+      of({ ...legacy, pediatricDoseReviewRequired: true } as PrescriptionResponse),
+    );
+
+    component.signPrescription(legacy as PrescriptionResponse);
+
+    expect(prescriptionService.getById).toHaveBeenCalledWith('rx-infant');
+    const row = component.prescriptions().find((r) => r.id === 'rx-infant')!;
+    expect(component.awaitsDoseReview(row)).toBeTrue();
+  });
+
+  it('QA D1142: a refusal that is not a business rule (403) leaves the list as it was', () => {
+    prescriptionService.sign.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 403, error: { message: 'Accès refusé' } })),
+    );
+    component.signPrescription(rx('rx-2', 'DRAFT'));
+    expect(prescriptionService.getById).not.toHaveBeenCalled();
   });
 });
 
@@ -702,10 +1709,14 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
 
     prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
+      'page',
       'pharmacistVerify',
+      'recordPediatricDoseReview',
     ]);
+    pageFromList(prescriptionService);
     prescriptionService.list.and.returnValue(of([]));
     prescriptionService.pharmacistVerify.and.returnValue(of(verifiable()));
+    prescriptionService.recordPediatricDoseReview.and.returnValue(of(verifiable()));
 
     const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
     staffService.list.and.returnValue(of([]));
@@ -747,6 +1758,7 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
             isSuperAdmin: signal(false),
             globalView: signal(false),
             activeHospitalId: 'h-1',
+            effectiveHospitalIdForRequest: signal('h-1'),
             // Mirrors the real service: the caller's active role decides.
             hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
             get activeRoles() {
@@ -761,7 +1773,10 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
         },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+          useValue: {
+            snapshot: { queryParamMap: convertToParamMap({}) },
+            queryParamMap: of(convertToParamMap({})),
+          },
         },
       ],
     }).compileComponents();
@@ -883,6 +1898,43 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     expect(component.verifying()).toBeFalse();
   });
 
+  it('Policy 4: an allergy hold shows the card and who was notified, and sends no reason of its own', () => {
+    const refusal = {
+      status: 400,
+      error: {
+        field: 'allergyPrescriberReview',
+        message: 'Allergy conflict awaiting prescriber review. Allergy alert Notified: Awa Traore.',
+        cdsAdvisories: [
+          {
+            summary: 'Allergy alert',
+            indicator: 'critical',
+            source: { label: 'HMS' },
+            exceptionKey: 'allergy:tok',
+          },
+        ],
+      },
+    };
+    prescriptionService.pharmacistVerify.and.returnValue(throwError(() => refusal as unknown));
+
+    component.openVerifyModal(verifiable());
+    component.submitPharmacistVerify();
+
+    expect(component.allergyHold()?.why).toContain('Notified: Awa Traore');
+    expect(component.allergyHold()?.cards.length).toBe(1);
+    expect(toast.error).not.toHaveBeenCalled();
+    // Nothing on the component sends a staff reason: the only release is the prescriber's review.
+    expect((component as unknown as Record<string, unknown>)['confirmAllergyAck']).toBeUndefined();
+    expect(prescriptionService.pharmacistVerify).toHaveBeenCalledTimes(1);
+  });
+
+  it('Policy 4: the review action is offered on a signed order of this hospital to the prescriber roles only', () => {
+    const signed = verifiable();
+    // A pharmacist is never a reviewer by role (the server checks prescribing authority).
+    expect(component.canReviewAllergy(signed)).toBeFalse();
+    expect(component.canReviewAllergy({ ...signed, status: 'DRAFT' })).toBeFalse();
+    expect(component.canReviewAllergy({ ...signed, status: 'CANCELLED' })).toBeFalse();
+  });
+
   it('surfaces the backend refusal verbatim rather than a generic failure', () => {
     // "A prescription cannot be verified by the clinician who prescribed it"
     // tells a pharmacist to fetch a colleague; "Verification failed" does not.
@@ -899,6 +1951,113 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     // pharmacist may want to keep while they resolve the refusal.
     expect(component.showVerifyModal()).toBeTrue();
     expect(component.verifying()).toBeFalse();
+  });
+
+  /* ── QA D1096: the paediatric dose review ─────────────────────────── */
+
+  function awaitingReview(id = 'rx-neo'): PrescriptionResponse {
+    return rx(id, 'PENDING_SIGNATURE', {
+      pediatricDoseReviewRequired: true,
+      staffId: 'staff-prescriber',
+    });
+  }
+
+  it('QA D1096: a pharmacist and a physician are offered the dose review; a nurse is not', () => {
+    expect(component.canRecordDoseReview(awaitingReview())).toBeTrue();
+    activeRoles = ['ROLE_DOCTOR'];
+    expect(component.canRecordDoseReview(awaitingReview())).toBeTrue();
+    activeRoles = ['ROLE_NURSE'];
+    expect(component.canRecordDoseReview(awaitingReview())).toBeFalse();
+    activeRoles = ['ROLE_PHARMACIST'];
+    expect(
+      component.canRecordDoseReview(
+        rx('done', 'PENDING_SIGNATURE', {
+          pediatricDoseReviewRequired: true,
+          pediatricDoseReviewedAt: '2026-10-31T10:00:00',
+        }),
+      ),
+    ).toBeFalse();
+    expect(
+      component.canRecordDoseReview(rx('gone', 'CANCELLED', { pediatricDoseReviewRequired: true })),
+    ).toBeFalse();
+  });
+
+  it('QA D1096: the row says the review is due and offers the action', () => {
+    component.filtered.set([awaitingReview('rx-neo'), rx('rx-plain', 'PENDING_SIGNATURE')]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="rx-dose-review-due-rx-neo"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="rx-dose-review-rx-neo"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="rx-dose-review-rx-plain"]')).toBeNull();
+  });
+
+  it('QA D1096: a missing reason is said in the dialog, the button stays usable, nothing is sent', () => {
+    component.openDoseReview(awaitingReview());
+    fixture.detectChanges();
+    const submit = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="rx-dose-review-submit"]',
+    ) as HTMLButtonElement;
+    expect(submit.disabled).toBeFalse();
+    submit.click();
+    fixture.detectChanges();
+    expect(prescriptionService.recordPediatricDoseReview).not.toHaveBeenCalled();
+    // QA D1143: the message is said once, under the reason box (it was also
+    // repeated in the dialog-level alert).
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('#rx-dose-review-reason-invalid-msg')).not.toBeNull();
+    expect(host.querySelector('[data-testid="rx-dose-review-error"]')).toBeNull();
+    const dialog = host.querySelector('[data-testid="rx-dose-review-modal"]') as HTMLElement;
+    expect(dialog.querySelectorAll('[role="alert"]').length).toBe(1);
+    // ... and the label sits above its box (the field is stacked, not inline).
+    const label = host.querySelector('label[for="rx-dose-review-reason"]');
+    expect(label?.parentElement?.classList).toContain('form-field--stacked');
+  });
+
+  it('QA D1096: the review is sent with its reason; a refusal stays in the dialog', () => {
+    component.openDoseReview(awaitingReview());
+    component.doseReviewReason = 'Neonatal dose checked: 10 mg/kg q6h';
+    component.submitDoseReview();
+    expect(prescriptionService.recordPediatricDoseReview).toHaveBeenCalledWith(
+      'rx-neo',
+      'Neonatal dose checked: 10 mg/kg q6h',
+    );
+    expect(component.doseReviewTarget()).toBeNull();
+
+    const message =
+      'The prescriber cannot review their own order: ask a pharmacist or another physician.';
+    prescriptionService.recordPediatricDoseReview.and.returnValue(
+      throwError(() => ({ error: { message } }) as unknown),
+    );
+    component.openDoseReview(awaitingReview());
+    component.doseReviewReason = 'ok';
+    component.submitDoseReview();
+    expect(component.doseReviewError()).toBe(message);
+    expect(component.doseReviewTarget()).not.toBeNull();
+  });
+
+  /* ── QA D1101: the override reason is shown again ─────────────────── */
+
+  it('QA D1101: the detail and the verification dialog show why the alert was passed', () => {
+    const overridden = rx('rx-over', 'SIGNED', {
+      requiresPharmacistVerification: true,
+      overrideReason: 'Severe malaria, dose confirmed with the paediatrician',
+      allergyOverride: false,
+    });
+    component.selectedPrescription.set(overridden);
+    fixture.detectChanges();
+    const detail = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="rx-override-reason"]',
+    ) as HTMLElement;
+    expect(detail.textContent).toContain('Severe malaria, dose confirmed with the paediatrician');
+    expect(detail.textContent).toContain('PRESCRIPTIONS.OVERRIDE.CDS_REASON');
+
+    component.selectedPrescription.set(null);
+    component.openVerifyModal(overridden);
+    fixture.detectChanges();
+    const inDialog = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="rx-verify-override-reason"]',
+    ) as HTMLElement;
+    expect(inDialog.textContent).toContain('Severe malaria');
   });
 
   it('renders the verification state in the detail panel, pending included', () => {
@@ -996,12 +2155,8 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
   interface SetupOptions {
     list?: PrescriptionResponse[];
-    /**
-     * G12 — what the status-filtered "Needs attention" request returns.
-     * Defaults to an empty page; pass a throwing observable to exercise the
-     * fallback.
-     */
-    attention?: Observable<PrescriptionResponse[]>;
+    /** The whole list read, when it must fail or arrive late; overrides `list`. */
+    list$?: Observable<PrescriptionResponse[]>;
     roles?: string[];
     superAdmin?: boolean;
     globalView?: boolean;
@@ -1014,12 +2169,12 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
     const prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
+      'page',
     ]);
-    // G12: the page and the status-filtered attention bucket are two calls
-    // against the same method, told apart by the `statuses` filter.
-    prescriptionService.list.and.callFake((filters?: { statuses?: string[] }) =>
-      filters?.statuses ? (opts.attention ?? of([])) : of(opts.list ?? []),
-    );
+    pageFromList(prescriptionService);
+    // QA D1347: `list` reads EVERY page (its own spec proves that), so the
+    // page asks for it once, unfiltered.
+    prescriptionService.list.and.callFake(() => opts.list$ ?? of(opts.list ?? []));
 
     prescriptionServiceSpy = prescriptionService;
 
@@ -1074,6 +2229,7 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
             isSuperAdmin: signal(opts.superAdmin ?? false),
             globalView: signal(opts.globalView ?? false),
             activeHospitalId: opts.globalView ? null : 'h-1',
+            effectiveHospitalIdForRequest: signal(opts.globalView ? null : 'h-1'),
             // Mirrors RoleContextService.hasAnyActiveRole: when an active
             // role is set, only THAT role counts. A stub answering off the
             // whole held set makes every active-role gate on this page
@@ -1092,7 +2248,10 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
         },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+          useValue: {
+            snapshot: { queryParamMap: convertToParamMap({}) },
+            queryParamMap: of(convertToParamMap({})),
+          },
         },
       ],
     }).compileComponents();
@@ -1644,68 +2803,345 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
   /* ── G12: the status filter ───────────────────────────────────────── */
 
-  it('asks the backend for the whole attention bucket, by status', async () => {
+  it('QA D1412: reads one page and the server total of each tab, never the whole list', async () => {
     await setup();
 
-    const statuses = prescriptionServiceSpy.list.calls
+    expect(prescriptionServiceSpy.list.calls.allArgs().filter((args) => args.length > 0))
+      .withContext('no whole-list read without a search')
+      .toEqual([]);
+    const rowsRead = prescriptionServiceSpy.page.calls
       .allArgs()
-      .map((args) => (args[0] as { statuses?: string[] } | undefined)?.statuses)
-      .find((s) => !!s);
-
-    expect(statuses)
-      .withContext('the page is a slice of the tenant; the attention tab must not be')
-      .toEqual(ATTENTION_REASONS.map((r) => r.status));
+      .filter(([, , size]) => size === PrescriptionsComponent.PAGE_ROWS);
+    expect(rowsRead.length).toBe(1);
+    expect(rowsRead[0][0].statuses).toEqual([]);
+    const counted = prescriptionServiceSpy.page.calls.allArgs().filter(([, , size]) => size === 1);
+    expect(counted.length).withContext('one count per tab').toBe(6);
   });
 
-  it('merges an attention row the page never reached and counts it', async () => {
-    // The defect: the clinical inbox says an order awaits clarification and
-    // the page, being the newest 200 rows, does not contain it.
-    const onPage = makeRx({ id: 'rx-page', status: 'SIGNED', createdAt: '2026-09-20T08:00:00' });
-    const older = makeRx({
-      id: 'rx-old',
-      status: 'PENDING_CLARIFICATION',
-      createdAt: '2026-01-02T08:00:00',
+  /** The search box, its wait for the next keystroke over. */
+  function search(term: string): void {
+    jasmine.clock().install();
+    try {
+      component.searchTerm = term;
+      component.onSearchInput();
+      jasmine.clock().tick(PrescriptionsComponent.SEARCH_DELAY_MS);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  }
+
+  it('QA D1441: a search hides the unfiltered rows and says it is searching until the answer is known', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) =>
+      makeRx({ id: 'rx-' + i, status: 'SIGNED', createdAt: '2026-09-20T08:00:00' }),
+    );
+    await setup({ list: rows });
+    fixture.detectChanges();
+    expect(component.filtered().length).toBe(50);
+
+    const answer$ = new Subject<PrescriptionResponse[]>();
+    prescriptionServiceSpy.list.and.returnValue(answer$);
+    search('zzzzzz');
+    fixture.detectChanges();
+
+    expect(component.filtered()).withContext('no stale rows').toEqual([]);
+    expect(el('[data-testid="rx-list-pager"]')).withContext('no stale total').toBeNull();
+    expect(el('[data-testid="rx-list-loading"]')?.textContent).toContain('PRESCRIPTIONS.SEARCHING');
+
+    answer$.next(rows);
+    answer$.complete();
+    fixture.detectChanges();
+    expect(component.filtered()).toEqual([]);
+    expect(component.listTotal()).toBe(0);
+    expect(el('[data-testid="rx-list-loading"]')).toBeNull();
+  });
+
+  it('QA D1441: a search whose read fails leaves the list as it was', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) =>
+      makeRx({ id: 'rx-' + i, status: 'SIGNED', createdAt: '2026-09-20T08:00:00' }),
+    );
+    await setup({ list: rows });
+    fixture.detectChanges();
+    const total = component.listTotal();
+
+    prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+    search('zzzzzz');
+    fixture.detectChanges();
+
+    expect(component.filtered().length).toBe(50);
+    expect(component.listTotal()).toBe(total);
+  });
+
+  it('QA D1314: a failed search puts back the page it hid, under the pager of that page', async () => {
+    const rows = Array.from({ length: 120 }, (_, i) => makeRx({ id: 'rx-' + i, status: 'SIGNED' }));
+    await setup({ list: rows });
+    component.onListPage(1);
+    const shown = component.filtered().map((p) => p.id);
+
+    prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+    search('zzzzzz');
+
+    expect(component.filtered().map((p) => p.id)).toEqual(shown);
+    expect(component.listPage()).toBe(1);
+  });
+
+  it('QA D1314: a search at the last hospital never comes back under the next one', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) => makeRx({ id: 'rx-' + i, status: 'SIGNED' }));
+    await setup({ list: rows });
+
+    jasmine.clock().install();
+    try {
+      component.searchTerm = 'zzzzzz';
+      component.onSearchInput();
+      prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+      component.onScopeChange('other-hospital');
+      prescriptionServiceSpy.page.calls.reset();
+      jasmine.clock().tick(PrescriptionsComponent.SEARCH_DELAY_MS);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+
+    expect(component.filtered()).withContext("none of the last hospital's rows").toEqual([]);
+    expect(prescriptionServiceSpy.page.calls.count())
+      .withContext('the delay was cancelled')
+      .toBe(0);
+  });
+
+  it('QA D1412: the pager shows the server total and every row is reachable', async () => {
+    const rows = Array.from({ length: 120 }, (_, i) =>
+      makeRx({ id: 'rx-' + i, status: 'SIGNED', createdAt: '2026-09-20T08:00:00' }),
+    );
+    await setup({ list: rows });
+    fixture.detectChanges();
+
+    expect(component.filtered().length).toBe(50);
+    expect(component.listTotal()).toBe(120);
+    expect(document.querySelectorAll('.data-row').length).toBeLessThanOrEqual(50);
+    expect(el('[data-testid="rx-list-pager"]')).not.toBeNull();
+
+    const seen = new Set(component.filtered().map((p) => p.id));
+    component.onListPage(1);
+    component.filtered().forEach((p) => seen.add(p.id));
+    component.onListPage(2);
+    component.filtered().forEach((p) => seen.add(p.id));
+    expect(seen.size).withContext('every row, page by page').toBe(120);
+  });
+
+  it('QA D1412: a tab pages its own status from the server, from its first page', async () => {
+    const rows = [
+      ...Array.from({ length: 60 }, (_, i) => makeRx({ id: 's' + i, status: 'SIGNED' })),
+      makeRx({ id: 'd1', status: 'DRAFT' }),
+    ];
+    await setup({ list: rows });
+    component.onListPage(1);
+    component.setTab('draft');
+
+    expect(component.listPage()).toBe(0);
+    expect(component.filtered().map((p) => p.id)).toEqual(['d1']);
+    expect(component.listTotal()).toBe(1);
+    expect(component.countInTab('all')).toBe(61);
+  });
+
+  it('QA D1412: the search reaches a row on any page, then the pages come back', async () => {
+    const rows = Array.from({ length: 120 }, (_, i) =>
+      makeRx({
+        id: 'rx-' + i,
+        status: 'SIGNED',
+        medicationName: i === 110 ? 'Morphine' : 'Paracetamol',
+      }),
+    );
+    await setup({ list: rows });
+    expect(component.filtered().map((p) => p.id)).not.toContain('rx-110');
+
+    search('morph');
+    expect(component.filtered().map((p) => p.id)).toEqual(['rx-110']);
+    expect(component.listTotal()).toBe(1);
+
+    search('');
+    expect(component.filtered().length).toBe(50);
+    expect(component.listTotal()).toBe(120);
+  });
+
+  it('QA D1314: a search asks the server for one page of matches, never the whole tab', async () => {
+    await setup({ list: [makeRx({ id: 'a', status: 'SIGNED', medicationName: 'Morphine' })] });
+    prescriptionServiceSpy.list.calls.reset();
+    prescriptionServiceSpy.page.calls.reset();
+
+    component.setTab('inPharmacy');
+    prescriptionServiceSpy.page.calls.reset();
+    search('Morph');
+
+    const [filters, page, size] = prescriptionServiceSpy.page.calls.mostRecent().args;
+    expect(filters.search).toBe('Morph');
+    expect(filters.statuses?.length).withContext("the tab's statuses").toBeGreaterThan(0);
+    expect(page).toBe(0);
+    expect(size).toBe(PrescriptionsComponent.PAGE_ROWS);
+    expect(prescriptionServiceSpy.page.calls.count()).toBe(1);
+  });
+
+  it('QA D1314: a burst of keystrokes asks once, for what was typed last', async () => {
+    await setup({ list: [makeRx({ id: 'a', status: 'SIGNED', medicationName: 'Morphine' })] });
+    prescriptionServiceSpy.page.calls.reset();
+
+    jasmine.clock().install();
+    try {
+      for (const typed of ['M', 'Mo', 'Mor']) {
+        component.searchTerm = typed;
+        component.onSearchInput();
+        jasmine.clock().tick(PrescriptionsComponent.SEARCH_DELAY_MS - 1);
+      }
+      expect(prescriptionServiceSpy.page.calls.count()).withContext('still typing').toBe(0);
+      jasmine.clock().tick(1);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+    expect(prescriptionServiceSpy.page.calls.count()).toBe(1);
+    expect(prescriptionServiceSpy.page.calls.mostRecent().args[0].search).toBe('Mor');
+  });
+
+  it('QA D1314: a page move inside a search reads that page of the matches', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) =>
+      makeRx({ id: 'rx-' + i, status: 'SIGNED', medicationName: 'Morphine' }),
+    );
+    await setup({ list: rows });
+    search('morph');
+    prescriptionServiceSpy.page.calls.reset();
+
+    component.onListPage(1);
+
+    const [filters, page] = prescriptionServiceSpy.page.calls.mostRecent().args;
+    expect(filters.search).toBe('morph');
+    expect(page).toBe(1);
+    expect(component.filtered().length).toBe(10);
+  });
+
+  it('QA D1412: a search past its last page shows the page that is left', async () => {
+    const rows = Array.from({ length: 51 }, (_, i) =>
+      makeRx({ id: 'rx-' + i, status: 'SIGNED', medicationName: 'Morphine' }),
+    );
+    await setup({ list: rows });
+    search('morph');
+    component.onListPage(1);
+    expect(component.filtered().length).toBe(1);
+
+    prescriptionServiceSpy.list.and.returnValue(of(rows.slice(0, 50)));
+    component.load();
+
+    expect(component.listPage()).toBe(0);
+    expect(component.filtered().length).toBe(50);
+  });
+
+  it('QA D1412: a page move that fails stays on the page shown', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) => makeRx({ id: 'rx-' + i, status: 'SIGNED' }));
+    await setup({ list: rows });
+    prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+
+    component.onListPage(1);
+
+    expect(component.listPage()).toBe(0);
+    expect(component.filtered().length).toBe(50);
+  });
+
+  it('QA D1412: no row of the last scope or tab stays on screen while the next reads or fails', async () => {
+    await setup({ list: [makeRx({ id: 'rx-a', status: 'SIGNED' })] });
+    prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+
+    component.setTab('draft');
+    expect(component.filtered()).toEqual([]);
+
+    prescriptionServiceSpy.list.and.returnValue(of([makeRx({ id: 'rx-a', status: 'SIGNED' })]));
+    component.setTab('all');
+    expect(component.filtered().length).toBe(1);
+    prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+    component.onScopeChange('other-hospital');
+    expect(component.filtered()).toEqual([]);
+  });
+
+  it('QA D1452: a draft the MAR cannot schedule says so to its prescriber', async () => {
+    await setup({
+      list: [
+        makeRx({ id: 'asked', status: 'DRAFT', frequencyUnread: true }),
+        makeRx({ id: 'read', status: 'DRAFT', frequencyUnread: false }),
+      ],
     });
-    await setup({ list: [onPage], attention: of([older]) });
+    fixture.detectChanges();
 
-    expect(component.prescriptions().map((p) => p.id)).toEqual(['rx-page', 'rx-old']);
+    const notes = (fixture.nativeElement as HTMLElement).querySelectorAll(
+      '[data-testid="rx-row-frequency-unread"]',
+    );
+    expect(notes.length).toBe(1);
+  });
+
+  it('QA D1412: when the only row of a page leaves its tab, the tab is read again', async () => {
+    const rows = [makeRx({ id: 'd1', status: 'DRAFT' }), makeRx({ id: 'd2', status: 'DRAFT' })];
+    await setup({ list: rows });
+    component.setTab('draft');
+    prescriptionServiceSpy.list.and.returnValue(of([rows[1]]));
+    component.prescriptions.set([{ ...rows[0], status: 'SIGNED' }]);
+
+    component.applyFilter();
+
+    expect(component.filtered().map((p) => p.id)).toEqual(['d2']);
+  });
+
+  it('QA D1412: past the last page (the last row went) the page before is shown', async () => {
+    const rows = Array.from({ length: 51 }, (_, i) => makeRx({ id: 'rx-' + i, status: 'SIGNED' }));
+    await setup({ list: rows });
+    component.onListPage(1);
+    expect(component.filtered().length).toBe(1);
+
+    prescriptionServiceSpy.list.and.returnValue(of(rows.slice(0, 50)));
+    component.load();
+
+    expect(component.listPage()).toBe(0);
+    expect(component.filtered().length).toBe(50);
+  });
+
+  it('QA D1347: counts every prescription of a list longer than one page, with no "minimum" banner', async () => {
+    // The defect: the tabs counted the newest 200, so an older order waiting
+    // on the prescriber was neither listed nor counted.
+    const rows = Array.from({ length: 450 }, (_, i) =>
+      makeRx({ id: 'rx-' + i, status: 'SIGNED', createdAt: '2026-09-20T08:00:00' }),
+    );
+    rows.push(
+      makeRx({ id: 'rx-old', status: 'PENDING_CLARIFICATION', createdAt: '2026-01-02T08:00:00' }),
+    );
+    await setup({ list: rows });
+
+    expect(component.countInTab('all')).toBe(451);
     expect(component.countInTab('attention')).toBe(1);
-
     component.setTab('attention');
     expect(component.filtered().map((p) => p.id)).toEqual(['rx-old']);
+    expect(el('[data-testid="rx-list-truncated"]')).toBeNull();
   });
 
-  it('does not double-count a row both queries returned', async () => {
-    const shared = makeRx({ id: 'rx-1', status: 'PENDING_CLARIFICATION' });
-    await setup({ list: [shared], attention: of([shared]) });
+  it('QA D1347: a reload cancels the read still in flight, so a stale list never lands last', async () => {
+    const stale = new Subject<PrescriptionResponse[]>();
+    await setup({ list$: stale });
+    prescriptionServiceSpy.list.and.returnValue(of([makeRx({ id: 'rx-new', status: 'SIGNED' })]));
+    component.load();
 
-    expect(component.prescriptions().length).toBe(1);
-    expect(component.countInTab('attention')).toBe(1);
+    stale.next([makeRx({ id: 'rx-stale', status: 'SIGNED' })]);
+
+    expect(stale.observed).withContext('the first read is cancelled').toBeFalse();
+    expect(component.prescriptions().map((p) => p.id)).toEqual(['rx-new']);
   });
 
-  it('keeps the page when the attention query fails', async () => {
-    await setup({
-      list: [makeRx({ id: 'rx-1', status: 'SIGNED' })],
-      attention: throwError(() => new Error('boom')),
-    });
-
-    // Nothing is swallowed as empty data: the page is still there, and the
-    // truncation banner goes on saying the counts are a lower bound — which
-    // is what this page did before the filter existed.
+  it('QA D1347: says the load failed and keeps the list when the read fails (never a partial list)', async () => {
+    const list$ = new Subject<PrescriptionResponse[]>();
+    await setup({ list$ });
+    list$.next([makeRx({ id: 'rx-1', status: 'SIGNED' })]);
+    list$.complete();
     expect(component.prescriptions().map((p) => p.id)).toEqual(['rx-1']);
-  });
 
-  it('does not let the merged attention rows make an untruncated page look truncated', async () => {
-    const page200 = Array.from({ length: PrescriptionService.LIST_PAGE_SIZE - 1 }, (_, i) =>
-      makeRx({ id: 'rx-' + i, status: 'SIGNED' }),
-    );
-    await setup({
-      list: page200,
-      attention: of([makeRx({ id: 'rx-old', status: 'PENDING_CLARIFICATION' })]),
-    });
+    // A reload past the paging helper's ceiling fails: the toast says so and
+    // nothing already listed is replaced by a part of the list.
+    prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('more than 200 pages')));
+    component.load();
 
-    expect(component.prescriptions().length).toBe(PrescriptionService.LIST_PAGE_SIZE);
-    expect(component.listTruncated()).toBeFalse();
+    const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+    expect(toast.error).toHaveBeenCalledWith('PRESCRIPTIONS.TOAST.LOAD_FAILED');
+    expect(component.prescriptions().map((p) => p.id)).toEqual(['rx-1']);
+    expect(component.loading()).toBeFalse();
   });
 
   it('drops a routing remainder that a later fill has made stale', async () => {
@@ -1736,18 +3172,112 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
     component.viewDetail(rx);
 
+    // QA D1347: page 0 of an every-page read (transfer size 200), and the
+    // routing decisions carry an id tiebreak so no row moves between pages.
     expect(pharmacyService.listDispensesByPrescription).toHaveBeenCalledWith(
       'rx-1',
       0,
-      20,
+      200,
       'dispensedAt,desc',
     );
     expect(pharmacyService.listRoutingDecisionsByPrescription).toHaveBeenCalledWith(
       'rx-1',
       0,
-      20,
-      'decidedAt,desc',
+      200,
+      ['decidedAt,desc', 'id,desc'],
     );
+  });
+
+  /** Page `number` of `totalPages`, as the Spring endpoint answers it. */
+  function pageOf<T>(
+    content: T[],
+    number: number,
+    totalPages: number,
+    totalElements: number,
+  ): ApiResponse<Page<T>> {
+    return { data: { content, totalElements, totalPages, size: 200, number } };
+  }
+
+  it('QA D1347: reads EVERY page of the fills and sums them all into the balance', async () => {
+    // 30 ordered; 10 on the first page and 15 on the second. One page read
+    // would report 20 owed; the whole list says 5.
+    const rx = makeRx({ status: 'PARTIALLY_FILLED', quantity: 30, quantityUnit: 'tablets' });
+    await setup({ list: [rx] });
+    pharmacyService.listDispensesByPrescription.and.callFake((_id: string, pageIndex = 0) =>
+      of(
+        pageIndex === 0
+          ? pageOf([makeDispense({ id: 'd-1', quantityDispensed: 10 })], 0, 2, 2)
+          : pageOf(
+              [
+                makeDispense({
+                  id: 'd-2',
+                  quantityDispensed: 15,
+                  dispensedAt: '2026-09-01T09:00:00',
+                }),
+              ],
+              1,
+              2,
+              2,
+            ),
+      ),
+    );
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(pharmacyService.listDispensesByPrescription.calls.allArgs().map((a) => a[1])).toEqual([
+      0, 1,
+    ]);
+    expect(component.dispenseHistory().map((d) => d.id)).toEqual(['d-1', 'd-2']);
+    expect(component.dispenseError()).toBeFalse();
+    expect(component.outstandingQuantity()).withContext('30 − 10 − 15').toBe(5);
+  });
+
+  it('QA D1347: reads EVERY page of the routing decisions', async () => {
+    const rx = makeRx({ status: 'DISPENSED' });
+    await setup({ list: [rx] });
+    pharmacyService.listRoutingDecisionsByPrescription.and.callFake((_id: string, pageIndex = 0) =>
+      of(
+        pageIndex === 0
+          ? pageOf([makeRouting({ id: 'rd-new', decidedAt: '2026-09-03T08:00:00' })], 0, 2, 2)
+          : pageOf([makeRouting({ id: 'rd-old', decidedAt: '2026-09-01T08:00:00' })], 1, 2, 2),
+      ),
+    );
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(
+      pharmacyService.listRoutingDecisionsByPrescription.calls.allArgs().map((a) => a[1]),
+    ).toEqual([0, 1]);
+    expect(component.routingHistory().map((r) => r.id)).toEqual(['rd-new', 'rd-old']);
+    expect(component.routingError()).toBeFalse();
+  });
+
+  it('QA D1347: past the paging ceiling the fills say they failed to load — no partial balance', async () => {
+    // A server that always claims another page: the helper fails rather than
+    // return the part it read, and the panel says the fills did not load.
+    const rx = makeRx({ status: 'PARTIALLY_FILLED', quantity: 30, quantityUnit: 'tablets' });
+    await setup({ list: [rx] });
+    pharmacyService.listDispensesByPrescription.and.callFake((_id: string, pageIndex = 0) =>
+      of(
+        pageOf(
+          [makeDispense({ id: 'd-' + pageIndex, quantityDispensed: 1 })],
+          pageIndex,
+          100000,
+          100000,
+        ),
+      ),
+    );
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.dispenseError()).toBeTrue();
+    expect(component.dispenseHistory()).toEqual([]);
+    expect(component.outstandingQuantity())
+      .withContext('no snapshot, and never 30 minus the fills read so far')
+      .toBeNull();
   });
 
   it('cancels the in-flight history when another prescription is opened', async () => {
@@ -2145,23 +3675,6 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(labels).not.toContain('PRESCRIPTIONS.PHARMACY.LAST_DISPATCHED_AT');
   });
 
-  it('says so when the list is capped, instead of letting a count lie', async () => {
-    const full = Array.from({ length: PrescriptionService.LIST_PAGE_SIZE }, (_, i) =>
-      makeRx({ id: 'rx-' + i, status: 'SIGNED' }),
-    );
-    await setup({ list: full });
-
-    expect(component.listTruncated()).toBeTrue();
-    expect(el('[data-testid="rx-list-truncated"]')).not.toBeNull();
-  });
-
-  it('says nothing about a cap when the list came back short of one', async () => {
-    await setup({ list: [makeRx({ status: 'SIGNED' })] });
-
-    expect(component.listTruncated()).toBeFalse();
-    expect(el('[data-testid="rx-list-truncated"]')).toBeNull();
-  });
-
   it('treats a dispatch older than the latest re-route as past, not current', async () => {
     // routeToPartner sets the pharmacy columns to the NEW partner and never
     // touches the dispatch ones, so "Held by B / Dispatched T1 / SMS Sent"
@@ -2266,13 +3779,63 @@ describe('PrescriptionService — list paging', () => {
 
   afterEach(() => httpMock.verify());
 
-  it('asks for a real page of the newest prescriptions, not an arbitrary twenty', () => {
+  it('asks for a real page of the newest prescriptions, with an id tiebreak', () => {
     service.list().subscribe();
 
     const req = httpMock.expectOne((r) => r.url === '/prescriptions');
     expect(req.request.params.get('size')).toBe(String(PrescriptionService.LIST_PAGE_SIZE));
-    expect(req.request.params.get('sort')).toBe('createdAt,desc');
+    expect(req.request.params.get('page')).toBe('0');
+    expect(req.request.params.getAll('sort')).toEqual(['createdAt,desc', 'id,desc']);
     req.flush({ content: [] });
+  });
+
+  it('QA D1347: reads EVERY page, keeping the filters on each, and returns every row', () => {
+    let rows: PrescriptionResponse[] | undefined;
+    service
+      .list({ patientId: 'p-1', statuses: ['SIGNED', 'PENDING_CLARIFICATION'] })
+      .subscribe((r) => (rows = r));
+
+    const first = httpMock.expectOne((r) => r.url === '/prescriptions');
+    expect(first.request.params.get('page')).toBe('0');
+    first.flush({
+      content: [{ id: 'rx-1' }, { id: 'rx-2' }],
+      totalElements: 3,
+      totalPages: 2,
+      number: 0,
+      last: false,
+    });
+    expect(rows).withContext('not the first page alone').toBeUndefined();
+
+    const second = httpMock.expectOne((r) => r.url === '/prescriptions');
+    expect(second.request.params.get('page')).toBe('1');
+    expect(second.request.params.get('patientId')).toBe('p-1');
+    expect(second.request.params.getAll('status')).toEqual(['SIGNED', 'PENDING_CLARIFICATION']);
+    expect(second.request.params.getAll('sort')).toEqual(['createdAt,desc', 'id,desc']);
+    second.flush({
+      content: [{ id: 'rx-3' }],
+      totalElements: 3,
+      totalPages: 2,
+      number: 1,
+      last: true,
+    });
+
+    expect(rows!.map((r) => r.id)).toEqual(['rx-1', 'rx-2', 'rx-3']);
+  });
+
+  it('QA D1347: fails instead of returning a partial list when one page fails', () => {
+    let failed = false;
+    let rows: PrescriptionResponse[] | undefined;
+    service.list().subscribe({ next: (r) => (rows = r), error: () => (failed = true) });
+
+    httpMock
+      .expectOne((r) => r.url === '/prescriptions')
+      .flush({ content: [{ id: 'rx-1' }], totalElements: 2, totalPages: 2, number: 0 });
+    httpMock
+      .expectOne((r) => r.url === '/prescriptions')
+      .flush('boom', { status: 500, statusText: 'Server Error' });
+
+    expect(failed).toBeTrue();
+    expect(rows).toBeUndefined();
   });
 });
 
@@ -2304,9 +3867,11 @@ describe('PrescriptionsComponent — answering a pharmacist clarification', () =
     activeRoles = roles;
     prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
+      'page',
       'resolveClarification',
       'getById',
     ]);
+    pageFromList(prescriptionService);
     prescriptionService.list.and.returnValue(of([pendingClarification()]));
     prescriptionService.resolveClarification.and.returnValue(of(pendingClarification()));
 
@@ -2347,6 +3912,7 @@ describe('PrescriptionsComponent — answering a pharmacist clarification', () =
             isSuperAdmin: signal(false),
             globalView: signal(false),
             activeHospitalId: 'h-1',
+            effectiveHospitalIdForRequest: signal('h-1'),
             hasAnyActiveRole: (wanted: string[]) => wanted.some((r) => activeRoles.includes(r)),
             get activeRoles() {
               return activeRoles;
@@ -2358,7 +3924,10 @@ describe('PrescriptionsComponent — answering a pharmacist clarification', () =
         },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+          useValue: {
+            snapshot: { queryParamMap: convertToParamMap({}) },
+            queryParamMap: of(convertToParamMap({})),
+          },
         },
       ],
     }).compileComponents();
@@ -2434,13 +4003,16 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
   const PENDING_ID = 'pending-row';
   const DISPENSED_ID = 'f98f8393-bfb5-4d4c-854e-a75c6384bd31';
 
-  async function render(role: string) {
+  async function render(role: string, scope: string | null = 'h-1', patientId?: string) {
+    const queryParamMap = new BehaviorSubject(convertToParamMap(patientId ? { patientId } : {}));
     const prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
+      'page',
       'sign',
       'cosign',
       'update',
     ]);
+    pageFromList(prescriptionService);
     prescriptionService.list.and.returnValue(of([]));
     const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
     staffService.list.and.returnValue(of([]));
@@ -2472,6 +4044,7 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
             isSuperAdmin: signal(false),
             globalView: signal(false),
             activeHospitalId: 'h-1',
+            effectiveHospitalIdForRequest: signal(scope),
             hasAnyActiveRole: (roles: string[]) => roles.includes(role),
             activeRoles: [role],
             activeRole: role,
@@ -2479,7 +4052,7 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
         },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+          useValue: { snapshot: { queryParamMap: queryParamMap.value }, queryParamMap },
         },
       ],
     }).compileComponents();
@@ -2492,7 +4065,13 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
       { id: DISPENSED_ID, status: 'DISPENSED' } as PrescriptionResponse,
     ]);
     fixture.detectChanges();
-    return { fixture, prescriptionService, el: fixture.nativeElement as HTMLElement };
+    return {
+      fixture,
+      prescriptionService,
+      queryParamMap,
+      toast,
+      el: fixture.nativeElement as HTMLElement,
+    };
   }
 
   for (const role of ['ROLE_NURSE', 'ROLE_MIDWIFE']) {
@@ -2506,6 +4085,255 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
           .withContext(id)
           .toBeNull();
       }
+    });
+  }
+
+  it("policy 2026-11-09: another hospital's signed order names its origin and offers no write action", async () => {
+    const { fixture, el } = await render('ROLE_DOCTOR');
+    fixture.componentInstance.filtered.set([
+      {
+        id: 'foreign-rx',
+        status: 'SIGNED',
+        hospitalId: 'h-2',
+        hospitalName: 'Hôpital B',
+        staffFullName: 'Dr B',
+        signedAt: '2026-11-01T10:00:00',
+        requiresPharmacistVerification: true,
+      } as PrescriptionResponse,
+    ]);
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="rx-foreign-origin-foreign-rx"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="rx-foreign-signed-foreign-rx"]')).not.toBeNull();
+    expect(el.querySelector('.edit-link')).toBeNull();
+    expect(el.querySelector('[data-testid="rx-dispatch-sms-foreign-rx"]')).toBeNull();
+    expect(el.querySelector('[data-testid="rx-pharmacist-verify-foreign-rx"]')).toBeNull();
+    expect(el.querySelector('.view-link')).not.toBeNull();
+  });
+
+  it('updates patient context on reused-route navigation and restores the tenant list when removed', async () => {
+    const { fixture, prescriptionService, queryParamMap } = await render(
+      'ROLE_DOCTOR',
+      'h-1',
+      'p-1',
+    );
+    expect(prescriptionService.list).toHaveBeenCalledWith(
+      jasmine.objectContaining({ patientId: 'p-1' }),
+    );
+    prescriptionService.list.calls.reset();
+    queryParamMap.next(convertToParamMap({ patientId: 'p-2' }));
+    expect(prescriptionService.list).toHaveBeenCalledWith(
+      jasmine.objectContaining({ patientId: 'p-2' }),
+    );
+    prescriptionService.page.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 50, last: true }),
+    );
+    prescriptionService.list.calls.reset();
+    prescriptionService.page.calls.reset();
+    queryParamMap.next(convertToParamMap({}));
+    expect(prescriptionService.list).not.toHaveBeenCalled();
+    expect(prescriptionService.page).toHaveBeenCalledWith(
+      jasmine.objectContaining({ search: '' }),
+      0,
+      50,
+    );
+    expect(fixture.componentInstance.listPage()).toBe(0);
+  });
+
+  it('keeps a successful empty prescription search when a verifier cannot list patient charts', async () => {
+    const { fixture, prescriptionService, toast } = await render('ROLE_PHARMACY_VERIFIER');
+    const patientService = TestBed.inject(PatientService) as jasmine.SpyObj<PatientService>;
+    patientService.list.and.returnValue(throwError(() => new HttpErrorResponse({ status: 403 })));
+    prescriptionService.page.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 50, last: true }),
+    );
+    toast.error.calls.reset();
+    fixture.componentInstance.searchTerm = 'no match';
+    fixture.componentInstance.load();
+    expect(patientService.list).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.filtered()).toEqual([]);
+    expect(fixture.componentInstance.listTotal()).toBe(0);
+    expect(fixture.componentInstance.loading()).toBeFalse();
+  });
+
+  it('keeps an empty prescription result if the optional patient lookup fails', async () => {
+    const { fixture, prescriptionService, toast } = await render('ROLE_DOCTOR');
+    const patientService = TestBed.inject(PatientService) as jasmine.SpyObj<PatientService>;
+    patientService.list.and.returnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
+    prescriptionService.page.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 50, last: true }),
+    );
+    toast.error.calls.reset();
+    fixture.componentInstance.searchTerm = 'no match';
+    fixture.componentInstance.load();
+    expect(patientService.list).toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.filtered()).toEqual([]);
+    expect(fixture.componentInstance.loading()).toBeFalse();
+  });
+
+  // D1573: a list filtered to one patient reads the patient's orders, other hospitals' included.
+  it('D1573: a search naming one patient reads their orders by patient and shows the foreign signed one read-only', async () => {
+    const { fixture, prescriptionService, el } = await render('ROLE_DOCTOR');
+    const own = {
+      id: 'own-rx',
+      patientId: 'p-1',
+      patientFullName: 'Awa Kaboré',
+      status: 'SIGNED',
+      hospitalId: 'h-1',
+    } as PrescriptionResponse;
+    const foreign = {
+      id: 'foreign-rx',
+      patientId: 'p-1',
+      patientFullName: 'Awa Kaboré',
+      status: 'SIGNED',
+      hospitalId: 'h-2',
+      hospitalName: 'Hôpital A',
+      staffFullName: 'Dr A',
+      signedAt: '2026-11-01T10:00:00',
+    } as PrescriptionResponse;
+    prescriptionService.page.and.returnValue(
+      of({ content: [own], totalElements: 1, totalPages: 1, number: 0, size: 50, last: true }),
+    );
+    prescriptionService.list.and.returnValue(of([own, foreign]));
+    prescriptionService.list.calls.reset();
+    fixture.componentInstance.searchTerm = 'awa';
+    fixture.componentInstance.load();
+    fixture.detectChanges();
+    expect(prescriptionService.list).toHaveBeenCalledWith(
+      jasmine.objectContaining({ patientId: 'p-1' }),
+    );
+    expect(el.querySelector('[data-testid="rx-foreign-origin-foreign-rx"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="rx-foreign-signed-foreign-rx"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="rx-foreign-origin-own-rx"]')).toBeNull();
+    const foreignRow = el
+      .querySelector('[data-testid="rx-foreign-origin-foreign-rx"]')
+      ?.closest('tr');
+    expect(foreignRow).not.toBeNull();
+    expect(foreignRow?.querySelector('.edit-link')).toBeNull();
+    expect(
+      foreignRow?.querySelector(
+        '[data-testid^="rx-sign-"], [data-testid^="rx-cosign-"], [data-testid^="rx-dispatch-sms-"], [data-testid^="rx-pharmacist-verify-"]',
+      ),
+    ).toBeNull();
+  });
+
+  it('keeps the resolved patient when paging through foreign orders and resets on a new search', async () => {
+    const { fixture, prescriptionService } = await render('ROLE_DOCTOR');
+    const component = fixture.componentInstance;
+    const own = {
+      id: 'own',
+      patientId: 'p-1',
+      patientFullName: 'Awa Kaboré',
+      status: 'SIGNED',
+      hospitalId: 'h-1',
+    } as PrescriptionResponse;
+    const foreign = Array.from({ length: 50 }, (_, i) => ({
+      ...own,
+      id: `foreign-${i}`,
+      hospitalId: 'h-2',
+    }));
+    prescriptionService.page.and.returnValue(
+      of({ content: [own], totalElements: 1, totalPages: 1, number: 0, size: 50, last: true }),
+    );
+    prescriptionService.list.and.returnValue(of([own, ...foreign]));
+    component.searchTerm = 'awa';
+    component.load();
+    prescriptionService.page.calls.reset();
+    component.onListPage(1);
+    expect(prescriptionService.page).not.toHaveBeenCalled();
+    expect(component.listPage()).toBe(1);
+    expect(component.listTotal()).toBe(51);
+    expect(component.filtered().map((row) => row.id)).toEqual(['foreign-49']);
+
+    component.searchTerm = 'paracetamol';
+    component.load();
+    expect(prescriptionService.page).toHaveBeenCalled();
+    prescriptionService.page.calls.reset();
+    component.searchTerm = 'awa';
+    component.onScopeChange('h-3');
+    expect(prescriptionService.page).toHaveBeenCalled();
+  });
+
+  it('does not narrow a multi-page name search to the patient on its first page', async () => {
+    const { fixture, prescriptionService } = await render('ROLE_DOCTOR');
+    const rows = Array.from(
+      { length: 50 },
+      (_, i) =>
+        ({
+          id: `rx-${i}`,
+          patientId: 'p-1',
+          patientFullName: 'Awa Kaboré',
+          status: 'SIGNED',
+        }) as PrescriptionResponse,
+    );
+    prescriptionService.page.and.returnValue(
+      of({ content: rows, totalElements: 51, totalPages: 2, number: 0, size: 50, last: false }),
+    );
+    prescriptionService.list.calls.reset();
+    fixture.componentInstance.searchTerm = 'awa';
+    fixture.componentInstance.load();
+    expect(prescriptionService.list).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.listTotal()).toBe(51);
+  });
+
+  it('D1573: a drug search that hits one patient stays a drug search', async () => {
+    const { fixture, prescriptionService } = await render('ROLE_DOCTOR');
+    const own = {
+      id: 'own-rx',
+      patientId: 'p-1',
+      patientFullName: 'Awa Kaboré',
+      medicationName: 'Paracetamol',
+      status: 'SIGNED',
+    } as PrescriptionResponse;
+    prescriptionService.page.and.returnValue(
+      of({ content: [own], totalElements: 1, totalPages: 1, number: 0, size: 50, last: true }),
+    );
+    prescriptionService.list.calls.reset();
+    fixture.componentInstance.searchTerm = 'paracetamol';
+    fixture.componentInstance.load();
+    fixture.detectChanges();
+    expect(prescriptionService.list).not.toHaveBeenCalled();
+  });
+
+  it('D1573: a search with no local row resolves a single patient and lists their foreign orders', async () => {
+    const { fixture, prescriptionService, el } = await render('ROLE_DOCTOR');
+    const patientService = TestBed.inject(PatientService) as jasmine.SpyObj<PatientService>;
+    patientService.list.and.returnValue(of([{ id: 'p-9' } as PatientResponse]));
+    prescriptionService.page.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 50, last: true }),
+    );
+    prescriptionService.list.and.returnValue(
+      of([
+        {
+          id: 'foreign-only',
+          patientId: 'p-9',
+          status: 'SIGNED',
+          hospitalId: 'h-2',
+          hospitalName: 'Hôpital A',
+        } as PrescriptionResponse,
+      ]),
+    );
+    prescriptionService.list.calls.reset();
+    fixture.componentInstance.searchTerm = 'zongo';
+    fixture.componentInstance.load();
+    fixture.detectChanges();
+    expect(prescriptionService.list).toHaveBeenCalledWith(
+      jasmine.objectContaining({ patientId: 'p-9' }),
+    );
+    expect(el.querySelector('[data-testid="rx-foreign-origin-foreign-only"]')).not.toBeNull();
+  });
+
+  for (const [label, scope, foreign] of [
+    ['a scoped super-admin (home h-1) who selected h-2: h-2 rows are theirs', 'h-2', false],
+    ['global view: no row is elsewhere', null, false],
+    ['a normal user at h-1: an h-2 row is foreign', 'h-1', true],
+  ] as const) {
+    it(`isForeign for an h-2 row: ${label}`, async () => {
+      const { fixture } = await render('ROLE_DOCTOR', scope);
+      expect(
+        fixture.componentInstance.isForeign({ id: 'x', hospitalId: 'h-2' } as PrescriptionResponse),
+      ).toBe(foreign);
     });
   }
 

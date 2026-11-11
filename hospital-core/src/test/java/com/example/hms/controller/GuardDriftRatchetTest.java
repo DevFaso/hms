@@ -117,6 +117,8 @@ class GuardDriftRatchetTest {
         "The physician's own dashboard panels; /critical-alerts is question (a) as found 2026-09-26, pending the clinical decision in tasklist \"Nurse/midwife read drift\"";
     private static final String MEDICATIONHISTORYCONTROLLER_REASON =
         "Pharmacy fills; the pharmacy files are owned by another PR of this batch";
+    private static final String ORDER_REVIEW_REASON =
+        "A held order is decided on current prescribing authority, by the user's ruling; a nurse's role is not that";
     private static final String MORTALITYCONTROLLER_REASON =
         "Certifying and amending a death record is a physician act";
     private static final String OBGYNREFERRALCONTROLLER_REASON =
@@ -125,8 +127,6 @@ class GuardDriftRatchetTest {
         "Diagnoses are made by physicians; the doctor record and timeline are the physician's own views";
     private static final String PRESCRIPTIONCONTROLLER_REASON =
         "Signing, co-signing and resolving a clarification are prescribing acts";
-    private static final String PROCEDUREORDERCONTROLLER_REASON =
-        "The ordering provider cancels the order";
     private static final String ROIWORKLISTCONTROLLER_REASON =
         "Release-of-information decisions; as found 2026-09-26, pending the clinical decision in tasklist \"Nurse/midwife read drift\"";
     private static final String STOCKOUTROUTINGCONTROLLER_REASON =
@@ -142,7 +142,8 @@ class GuardDriftRatchetTest {
 
     private static Map<String, String> doctorWithoutNurse() {
         Map<String, String> listed = new TreeMap<>();
-        listed.put("AdmissionController.admitPatient", ADMISSIONCONTROLLER_REASON);
+        listed.put("AdmissionController.admitPatient",
+            "Doctor and midwife only (policy 2: a midwife admits a woman in labour, the service refuses her any other type); nurses never admit, QA D84");
         listed.put("AdmissionController.cancelAdmission", ADMISSIONCONTROLLER_REASON);
         listed.put("AdmissionController.createOrderSet", ADMISSIONCONTROLLER_REASON);
         listed.put("AdmissionController.deactivateOrderSet", ADMISSIONCONTROLLER_REASON);
@@ -176,9 +177,10 @@ class GuardDriftRatchetTest {
         listed.put("DischargeSummaryController.updateDischargeSummary", DISCHARGESUMMARYCONTROLLER_REASON);
         listed.put("DispenseController.listByPrescription", DISPENSECONTROLLER_REASON);
         listed.put("EncounterController.cosignEncounterNote", ENCOUNTERCONTROLLER_REASON);
+        listed.put("EncounterController.issueMedicalCertificate",
+            "QA D961: a medical certificate or sick-leave note is signed by the licensed physician who examined the patient");
         listed.put("EncounterController.startEncounter", ENCOUNTERCONTROLLER_REASON);
         listed.put("GeneralReferralController.acknowledgeReferral", GENERALREFERRALCONTROLLER_REASON);
-        listed.put("GeneralReferralController.cancelReferral", GENERALREFERRALCONTROLLER_REASON);
         listed.put("GeneralReferralController.completeReferral", GENERALREFERRALCONTROLLER_REASON);
         listed.put("GeneralReferralController.getOverdueReferrals", GENERALREFERRALCONTROLLER_REASON);
         listed.put("GeneralReferralController.getReferralsByHospital", GENERALREFERRALCONTROLLER_REASON);
@@ -212,22 +214,31 @@ class GuardDriftRatchetTest {
         listed.put("MedicationHistoryController.createPharmacyFill", MEDICATIONHISTORYCONTROLLER_REASON);
         listed.put("MedicationHistoryController.updatePharmacyFill", MEDICATIONHISTORYCONTROLLER_REASON);
         listed.put("MortalityController.amendDeathRecord", MORTALITYCONTROLLER_REASON);
+        listed.put("OrderReviewHoldController.continueOrder", ORDER_REVIEW_REASON);
+        listed.put("OrderReviewHoldController.replaceOrder", ORDER_REVIEW_REASON);
+        listed.put("OrderReviewHoldController.stopOrder", ORDER_REVIEW_REASON);
+        listed.put("MortalityController.disputeDeath", "The user's ruling: only a doctor at that hospital disputes a recorded death");
         listed.put("MortalityController.recordDeath", MORTALITYCONTROLLER_REASON);
         listed.put("ObgynReferralController.acknowledgeReferral", OBGYNREFERRALCONTROLLER_REASON);
         listed.put("ObgynReferralController.addMessage", OBGYNREFERRALCONTROLLER_REASON);
+        // QA D1026: the cancel admits exactly the create's roles (midwife, doctor), so its author may withdraw it.
+        listed.put("ObgynReferralController.cancelReferral", OBGYNREFERRALCONTROLLER_REASON);
         listed.put("ObgynReferralController.completeReferral", OBGYNREFERRALCONTROLLER_REASON);
         listed.put("ObgynReferralController.createReferral", OBGYNREFERRALCONTROLLER_REASON);
         listed.put("ObgynReferralController.getReferralsForObgyn", OBGYNREFERRALCONTROLLER_REASON);
         listed.put("ObgynReferralController.startReferral", OBGYNREFERRALCONTROLLER_REASON);
         listed.put("PatientController.createPatientDiagnosis", PATIENTCONTROLLER_REASON);
-        listed.put("PatientController.deletePatientDiagnosis", PATIENTCONTROLLER_REASON);
         listed.put("PatientController.getDoctorRecord", PATIENTCONTROLLER_REASON);
         listed.put("PatientController.getDoctorTimeline", PATIENTCONTROLLER_REASON);
         listed.put("PatientController.updatePatientDiagnosis", PATIENTCONTROLLER_REASON);
+        // Policy 4: a nurse never releases an allergy conflict by role alone; prescribing authority, as /sign.
+        listed.put("PrescriptionController.allergyConflict", PRESCRIPTIONCONTROLLER_REASON);
+        listed.put("PrescriptionController.allergyReview", PRESCRIPTIONCONTROLLER_REASON);
         listed.put("PrescriptionController.cosign", PRESCRIPTIONCONTROLLER_REASON);
+        listed.put("PrescriptionController.pediatricDoseReview",
+            "QA D1096: the paediatric dose review the decision support asks of 'a pharmacist or physician'; a nurse does not judge a dose");
         listed.put("PrescriptionController.resolveClarification", PRESCRIPTIONCONTROLLER_REASON);
         listed.put("PrescriptionController.sign", PRESCRIPTIONCONTROLLER_REASON);
-        listed.put("ProcedureOrderController.cancelProcedureOrder", PROCEDUREORDERCONTROLLER_REASON);
         listed.put("RoiWorklistController.deny", ROIWORKLISTCONTROLLER_REASON);
         listed.put("RoiWorklistController.fulfil", ROIWORKLISTCONTROLLER_REASON);
         listed.put("StockOutRoutingController.listByPrescription", STOCKOUTROUTINGCONTROLLER_REASON);
@@ -239,9 +250,7 @@ class GuardDriftRatchetTest {
         listed.put("UltrasoundController.cancelOrder", ULTRASOUNDCONTROLLER_REASON);
         listed.put("UltrasoundController.createOrUpdateReport", ULTRASOUNDCONTROLLER_REASON);
         listed.put("UltrasoundController.createOrder", ULTRASOUNDCONTROLLER_REASON);
-        listed.put("UltrasoundController.getAnatomyScanTemplate", ULTRASOUNDCONTROLLER_REASON);
         listed.put("UltrasoundController.getHighRiskOrders", ULTRASOUNDCONTROLLER_REASON);
-        listed.put("UltrasoundController.getNuchalTranslucencyTemplate", ULTRASOUNDCONTROLLER_REASON);
         listed.put("UltrasoundController.getOrdersByHospitalId", ULTRASOUNDCONTROLLER_REASON);
         listed.put("UltrasoundController.getPendingOrders", ULTRASOUNDCONTROLLER_REASON);
         listed.put("UltrasoundController.getReportsRequiringFollowUp", ULTRASOUNDCONTROLLER_REASON);

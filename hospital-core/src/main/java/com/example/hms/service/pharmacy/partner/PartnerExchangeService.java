@@ -322,6 +322,17 @@ public class PartnerExchangeService {
                     ? withdrawnOrders.recordDispenseOfWithdrawn(decision, rx, "Partner SMS")
                     : withdrawnOrders.closeOffer(decision, rx, "Partner SMS " + action);
         }
+        boolean heldForReview = com.example.hms.service.support.OrderReviewHoldGuard.isHeld(
+                com.example.hms.enums.OrderReviewType.PRESCRIPTION, rx != null ? rx.getId() : null);
+        if (heldForReview && action == PartnerSmsReplyParser.Action.ACCEPT) {
+            // A held order is not accepted, and the patient is not told to collect it.
+            PrescriptionRoutingDecision recalled = withdrawnOrders.recallOffer(decision, rx);
+            prescriptionRepository.save(rx);
+            return recalled;
+        }
+        if (heldForReview && action == PartnerSmsReplyParser.Action.CONFIRM_DISPENSE) {
+            withdrawnOrders.raiseDispenseOfHeld(decision, rx, "Partner SMS");
+        }
         switch (action) {
             case ACCEPT -> {
                 decision.setStatus(RoutingDecisionStatus.ACCEPTED);

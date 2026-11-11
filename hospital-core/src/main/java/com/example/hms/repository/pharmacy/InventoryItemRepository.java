@@ -25,6 +25,13 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
     boolean existsByPharmacyIdAndActiveTrue(UUID pharmacyId);
 
     /**
+     * QA D967: every item of a pharmacy with its catalogue entry, deactivated
+     * ones included (a controlled drug taken off the list keeps its register).
+     */
+    @Query("SELECT i FROM InventoryItem i LEFT JOIN FETCH i.medicationCatalogItem WHERE i.pharmacy.id = :pharmacyId")
+    List<InventoryItem> findAllWithCatalogItemByPharmacyId(@Param("pharmacyId") UUID pharmacyId);
+
+    /**
      * QA D270: the item row, locked for the rest of the transaction, so two
      * manual returns cannot both fit under the same not-yet-returned total.
      */
@@ -45,6 +52,15 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
     Page<InventoryItem> findByPharmacyHospitalIdAndActiveTrue(UUID hospitalId, Pageable pageable);
 
     List<InventoryItem> findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(UUID hospitalId, UUID medicationCatalogItemId);
+
+    /**
+     * QA D899: every active item of the hospital's pharmacies with its catalog
+     * item loaded, so the stock check can match a free-text order to the
+     * shelf by the dispense DRUG rule without one query per item.
+     */
+    @Query("SELECT i FROM InventoryItem i JOIN FETCH i.medicationCatalogItem "
+         + "WHERE i.pharmacy.hospital.id = :hospitalId AND i.active = true")
+    List<InventoryItem> findActiveWithCatalogItemByHospitalId(@Param("hospitalId") UUID hospitalId);
 
     /*
      * Atomic stock movements (#825 security finding 1). Read-modify-write on

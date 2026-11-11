@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import {
   Component,
   computed,
@@ -18,9 +19,27 @@ import { UserService, UserSummary } from '../services/user.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { PermissionService } from '../core/permission.service';
+import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { localDateString } from '../shared/date-utils';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+
+/**
+ * QA r41 (L2): the field reasons of one refusal as one sentence each. Some reasons end in a
+ * period and some do not, so joining them with ". " printed ".." between two of them.
+ */
+export function joinReasons(reasons: unknown[]): string {
+  const parts = reasons
+    .map((r) =>
+      String(r ?? '')
+        .trim()
+        .replace(/[.!?]+$/, ''),
+    )
+    .filter((r) => r.length > 0);
+  return parts.length ? `${parts.join('. ')}.` : '';
+}
 
 /** A user whose only role is ROLE_PATIENT (a patient portal account). */
 function isPatientOnlyUser(u: Pick<UserSummary, 'roleName'>): boolean {
@@ -35,7 +54,13 @@ function canonicalJobTitle(title: string | null | undefined): string {
 @Component({
   selector: 'app-staff-list',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './staff-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './staff-list.scss',
@@ -48,6 +73,7 @@ export class StaffListComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly permissions = inject(PermissionService);
   private readonly translate = inject(TranslateService);
+  private readonly auth = inject(AuthService);
 
   /** True when the user can create/edit/delete staff (admin roles only). */
   readonly canManageStaff = this.permissions.hasPermission('Manage Staff');
@@ -120,7 +146,7 @@ export class StaffListComponent implements OnInit {
    * Grouped by clinical category — no free-text allowed.
    */
   readonly specializations = [
-    // Doctors (all require licence)
+    // Doctors (licence optional)
     'GENERAL_PRACTICE',
     'CARDIOLOGY',
     'NEUROLOGY',
@@ -131,12 +157,12 @@ export class StaffListComponent implements OnInit {
     'ONCOLOGY',
     'RADIOLOGY',
     'PSYCHIATRY',
-    // Nurses (all require licence)
+    // Nurses (licence optional)
     'GENERAL_NURSE',
     'ICU_NURSE',
     'PEDIATRIC_NURSE',
     'SURGICAL_NURSE',
-    // Pharmacists (all require licence)
+    // Pharmacists (licence optional)
     'CLINICAL_PHARMACY',
     'HOSPITAL_PHARMACY',
     // Lab staff (LAB_TECHNICIAN + PATHOLOGY require licence; MICROBIOLOGY role-dependent)
@@ -148,7 +174,9 @@ export class StaffListComponent implements OnInit {
   ];
 
   /**
-   * Job titles that require a medical licence number.
+   * Job titles that take a medical licence number. The number is OPTIONAL for all of them
+   * (clinicians are credentialed on their diploma; decision 2026-11-09): the field is shown for
+   * these titles, never required, and an empty one is simply not sent.
    *
    * Rules (aligned with international medical standards + backend validation):
    *   ✅ ALL doctors/clinicians     — DOCTOR, PHYSICIAN, SURGEON, ANESTHESIOLOGIST,
@@ -207,9 +235,10 @@ export class StaffListComponent implements OnInit {
     // QA D790: the account picker of the create form reads the administrators'
     // directory; the staff page's readers (reception, lab managers) never open it.
     if (this.canManageStaff) {
-      this.userService.list(0, 500).subscribe({
+      // QA D1347: every user (all pages), not the first 500.
+      allRows((page, size) => this.userService.list(page, size)).subscribe({
         // QA D122: a patient account is never offered as a new staff member.
-        next: (page) => this.users.set((page.content ?? []).filter((u) => !isPatientOnlyUser(u))),
+        next: (list) => this.users.set(list.filter((u) => !isPatientOnlyUser(u))),
       });
     }
   }
@@ -390,7 +419,7 @@ export class StaffListComponent implements OnInit {
           existing ? 'STAFF.UPDATE_FAILED' : 'STAFF.CREATE_FAILED',
         );
         if (body?.fieldErrors) {
-          msg = Object.values(body.fieldErrors).join('. ');
+          msg = joinReasons(Object.values(body.fieldErrors));
         } else if (body?.message) {
           msg = body.message;
         }
@@ -401,6 +430,15 @@ export class StaffListComponent implements OnInit {
   }
 
   // ---------- Delete ----------
+  /**
+   * QA D916: the signed-in admin's own card offers no "Deactivate", as on
+   * /users and /admin-assignments (D902); the server refuses it anyway.
+   */
+  isOwnCard(member: StaffResponse): boolean {
+    const me = this.auth.getUserProfile()?.id ?? this.auth.getUserId();
+    return !!me && member.userId === me;
+  }
+
   confirmDelete(member: StaffResponse): void {
     this.deletingStaff.set(member);
     this.showDeleteConfirm.set(true);

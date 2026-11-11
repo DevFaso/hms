@@ -19,6 +19,10 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
+import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
 
 function mockConsult(overrides: Partial<ConsultationResponse> = {}): ConsultationResponse {
   return {
@@ -276,6 +280,23 @@ describe('ConsultationsComponent', () => {
     expect(component.showModal()).toBeTrue();
   });
 
+  it('QA D1306: an empty form marks each blank field, not only a toast', () => {
+    const fixture = TestBed.createComponent(ConsultationsComponent);
+    const cmp = fixture.componentInstance;
+    cmp.ngOnInit();
+    cmp.openCreate();
+    cmp.form.hospitalId = 'h1';
+    fixture.detectChanges();
+
+    cmp.submitForm();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('#con-specialty')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('#con-reason')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('#con-hospitalId')?.getAttribute('aria-invalid')).not.toBe('true');
+    expect(toastSpy.error).toHaveBeenCalled();
+  });
+
   it("QA D890: the server's field reason is shown under the field's label, not a generic toast", () => {
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('fr', {
@@ -369,6 +390,18 @@ describe('ConsultationsComponent', () => {
     component.submitAssign();
     expect(consultSpy.assign).toHaveBeenCalledWith('c1', 'st1', undefined);
     expect(component.showAssignModal()).toBeFalse();
+  });
+
+  // QA D903/D912: the chip showed the email, or an empty line for a
+  // phone-only patient, instead of this hospital's MRN.
+  it('names the patient by MRN in the chip and the options (QA D912)', () => {
+    const fixture = TestBed.createComponent(ConsultationsComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openCreate();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, fixture.componentInstance)).toEqual(
+      EXPECTED_PICKER_SUBLINES,
+    );
   });
 
   it('offers Reassign while the consult is held, not only when ASSIGNED (D749)', () => {

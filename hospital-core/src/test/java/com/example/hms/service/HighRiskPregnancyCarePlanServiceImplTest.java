@@ -408,6 +408,33 @@ class HighRiskPregnancyCarePlanServiceImplTest {
         assertThat(service.getPlan(planId, USERNAME)).isNotNull();
     }
 
+    /** QA D1182 class (round 22): the edit of a recorded plan is held to a content rule, after the scope check. */
+    @Test
+    void anEmptyEditOfAPlanIsRefusedAndAnActiveFlagAloneIsAnEdit() {
+        UUID planId = UUID.randomUUID();
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(providerUser()));
+        HighRiskPregnancyCarePlan own = basePlan(planId);
+        com.example.hms.model.PatientHospitalRegistration registration = new com.example.hms.model.PatientHospitalRegistration();
+        registration.setHospital(own.getHospital());
+        registration.setActive(true);
+        registration.setMrn("MRN-HRP-1");
+        own.getPatient().getHospitalRegistrations().add(registration);
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.of(own));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(own.getHospital().getId());
+
+        HighRiskPregnancyCarePlanRequestDTO empty = new HighRiskPregnancyCarePlanRequestDTO();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.updatePlan(planId, empty, USERNAME))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("highRiskPlan.contentRequired");
+        verify(carePlanRepository, never()).save(any());
+
+        HighRiskPregnancyCarePlanRequestDTO close = new HighRiskPregnancyCarePlanRequestDTO();
+        close.setActive(Boolean.FALSE);
+        org.mockito.Mockito.lenient().when(carePlanRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        org.assertj.core.api.Assertions.assertThatCode(() -> service.updatePlan(planId, close, USERNAME))
+            .doesNotThrowAnyException();
+    }
+
     @Test
     void aPatientsOwnPlanIsNotHeldToAHospital() {
         UUID planId = UUID.randomUUID();

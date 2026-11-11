@@ -76,6 +76,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class UserServiceImpl implements UserService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_EMAIL = "email";
+    private static final String FIELD_USERNAME = "username";
+
 
     /** QA D790: the chat picker's page, wide enough for a hospital's staff and bounded. */
     private static final int MAX_CHAT_RECIPIENTS = 500;
@@ -318,7 +322,13 @@ public class UserServiceImpl implements UserService {
 
         // Normalised only once the caller may grant these roles: a refused
         // caller gets the 403, never a phone-format 400.
-        final String phone = normalizeRegistrationPhone(request);
+        final String typedPhone = normalizeRegistrationPhone(request);
+        // QA D1061: a patient's own account takes the phone as its login only
+        // when no OTHER person holds it. A child registered under a parent's
+        // number is a new person with no login phone; the number stays the
+        // contact on the child's patient record. It used to answer 409
+        // "already registered", so the desk invented a number.
+        final String phone = isPatient ? loginPhoneFor(typedPhone, request) : typedPhone;
         request.setPhoneNumber(phone);
 
         // ---- 0a) Duplicate checks ----
@@ -341,12 +351,12 @@ public class UserServiceImpl implements UserService {
             // button in the user list are the way out.
             if (username != null) {
                 userRepository.findByUsername(username).ifPresent(existing -> {
-                    throw conflictFor("username", username, existing);
+                    throw conflictFor(FIELD_USERNAME, username, existing);
                 });
             }
             if (email != null) {
                 userRepository.findByEmail(email).ifPresent(existing -> {
-                    throw conflictFor("email", email, existing);
+                    throw conflictFor(FIELD_EMAIL, email, existing);
                 });
             }
             if (phone != null && !phone.isBlank()) {
@@ -473,8 +483,11 @@ public class UserServiceImpl implements UserService {
         // ---- 6a) Generated credentials nobody can deliver ----
         // No e-mail on file and no real SMS transport: the staff UI shows them
         // once, from this response only. Never logged, never persisted in clear.
+        // QA D1061: a dependant with no login phone (registered under a
+        // guardian's number) has no channel either, whatever the SMS transport.
         if (generatedPassword != null && (email == null || email.isBlank())
-                && (smsService == null || !smsService.deliversRealSms())) {
+                && (user.getPhoneNumber() == null || user.getPhoneNumber().isBlank()
+                    || smsService == null || !smsService.deliversRealSms())) {
             result.setTemporaryUsername(user.getUsername());
             result.setTemporaryPassword(generatedPassword);
         }
@@ -733,7 +746,8 @@ public class UserServiceImpl implements UserService {
         String e164 = com.example.hms.utility.PhoneNumbers.toE164(
                 raw, com.example.hms.utility.PhoneNumbers.callingCodeForCountry(country));
         if (e164 == null) {
-            throw new BusinessException(MessageUtil.resolve("adminSignup.phoneNumber.invalid"));
+            // QA D1299: the refused number is named, so the form marks it.
+            throw new com.example.hms.exception.FieldBusinessException("phoneNumber", "adminSignup.phoneNumber.invalid");
         }
         return e164;
     }
@@ -898,6 +912,40 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
+     * QA D1061: {@code phone} as the new patient account's login phone, or
+     * null when the account holding it is another person (a parent, a spouse):
+     * same number, different name or date of birth. The same person keeps the
+     * existing behaviour (linked at another hospital, refused as already
+     * registered here). Real registration desks file a dependant under the
+     * guardian's contact number; one phone is not one person.
+     */
+    private String loginPhoneFor(String phone, AdminSignupRequest request) {
+        if (phone == null) {
+            return null;
+        }
+        Optional<User> holder = findByPhoneInAnyForm(phone);
+        // The registrar's own discarded attempt keeps the phone, so it is
+        // reclaimed (QA D40) even when its name was corrected since.
+        if (holder.isEmpty() || isDiscardedRegistration(holder.get()) || isSamePerson(holder.get(), request)) {
+            return phone;
+        }
+        log.info("[REGISTER] the phone belongs to another person: the new patient account gets no login phone");
+        return null;
+    }
+
+    /** Whether the registration names the person behind {@code holder} (PatientMatchKeys.sameIdentity). */
+    private boolean isSamePerson(User holder, AdminSignupRequest request) {
+        com.example.hms.payload.dto.PatientRequestDTO patientRequest = request.getPatient();
+        String first = patientRequest != null && hasText(patientRequest.getFirstName()) ? patientRequest.getFirstName() : request.getFirstName();
+        String last = patientRequest != null && hasText(patientRequest.getLastName()) ? patientRequest.getLastName() : request.getLastName();
+        java.time.LocalDate dob = patientRequest != null ? patientRequest.getDateOfBirth() : null;
+        return patientRepository.findByUserId(holder.getId())
+            .map(existing -> com.example.hms.utility.PatientMatchKeys.sameIdentity(existing, first, last, dob))
+            .orElseGet(() -> com.example.hms.utility.PatientMatchKeys.sameIdentity(
+                holder.getFirstName(), holder.getLastName(), null, first, last, dob));
+    }
+
+    /**
      * An account a registration created and then discarded itself: a
      * soft-deleted patient account that was never activated and never got a
      * patient record (the portal's compensation delete after a failed patient
@@ -1048,7 +1096,8 @@ public class UserServiceImpl implements UserService {
 
         UUID provided = request.getHospitalId();
         if (provided == null) {
-            throw new BusinessException("users.hospital.requiredForStaff");
+            // QA D1282 (sweep): named, so the form marks the field.
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "users.hospital.requiredForStaff");
         }
         return hospitalRepository.findById(provided)
                 .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, provided))
@@ -1377,13 +1426,20 @@ public class UserServiceImpl implements UserService {
         }
         // The deleted view is the super-admin's: a scoped call never asks for it.
         boolean scoped = !scope.everyone();
+        // QA D919: a scoped caller asking for the deleted worklist gets an empty
+        // page, never the live list (the rule the controllers apply, kept here
+        // for every other caller of this listing).
+        if (scoped && onlyDeleted) {
+            return Page.empty(pageable);
+        }
         // QA D430: a non-administrator lists colleagues only, never patient accounts.
         Page<User> users = scope.seesPatientContacts()
             ? userRepository.findAllPaged(
                 !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable)
             : userRepository.findStaffDirectoryPaged(
                 scoped, directoryHospitals(scope), !scoped && includeDeleted, !scoped && onlyDeleted, pageable);
-        return users.map(u -> directoryRow(u, scope));
+        Set<UUID> manageable = accountAccess.manageableAmong(users.getContent());
+        return users.map(u -> directoryRow(u, scope, manageable));
     }
 
     @Override
@@ -1396,6 +1452,9 @@ public class UserServiceImpl implements UserService {
             return Page.empty(pageable);
         }
         boolean scoped = !scope.everyone();
+        if (scoped && onlyDeleted) {
+            return Page.empty(pageable); // QA D919, as getAllUsers
+        }
         // The free-text box also finds an account by e-mail or phone (D119);
         // phones are stored in E.164, so "70 20 20 20" is matched on its digits.
         // QA D198: a caller who cannot read contact details cannot search on them either.
@@ -1405,7 +1464,8 @@ public class UserServiceImpl implements UserService {
                 !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable)
             : userRepository.searchStaffDirectory(name, phoneDigits(name), role, email, false,
                 !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
-        return users.map(u -> directoryRow(u, scope));
+        Set<UUID> manageable = accountAccess.manageableAmong(users.getContent());
+        return users.map(u -> directoryRow(u, scope, manageable));
     }
 
     @Override
@@ -1441,12 +1501,19 @@ public class UserServiceImpl implements UserService {
      * account without a loaded profile slipped past, and staff addresses are no
      * business of a nurse's directory either. Administrators keep the full row.
      */
-    private UserSummaryDTO directoryRow(User user, DirectoryScope scope) {
+    private UserSummaryDTO directoryRow(User user, DirectoryScope scope, Set<UUID> manageable) {
         UserSummaryDTO dto = userMapper.toSummaryDTO(user);
-        if (dto != null && !scope.seesPatientContacts()) {
+        if (dto == null) {
+            return null;
+        }
+        if (!scope.seesPatientContacts()) {
             dto.setEmail(null);
             dto.setUsername(null);
         }
+        // QA D914: the list offered edit and delete on accounts a hospital admin
+        // may not administer, and the save came back "user not found". Decided
+        // for the whole page at once (UserAccountAccess.manageableAmong).
+        dto.setManageable(manageable.contains(user.getId()));
         return dto;
     }
 
@@ -1479,14 +1546,30 @@ public class UserServiceImpl implements UserService {
         // and a FAILURE row.
         User user = userRepository.findById(id)
                 .orElseThrow(() -> userNotFound(id));
+        // QA D902: an account never deletes itself (a super-admin's
+        // canDelete is true for every account, their own included). Another
+        // administrator does it. Asked first, so a hospital admin's own
+        // account reads this, not the D914 "not yours" refusal below.
+        if (accountAccess.isSelf(user)) {
+            throw new ConflictException(MessageUtil.resolve("user.delete.self"));
+        }
         if (!accountAccess.canDelete(user)) {
-            throw refused(AuditEventType.USER_DELETE, "delete", id);
+            throw refused(AuditEventType.USER_DELETE, "delete", user);
+        }
+        // QA D920: GET answers a deleted account as missing for everyone but
+        // the super-admin, so delete does too; "already deleted" told a
+        // hospital admin about an account they cannot see.
+        if (user.isDeleted() && !accountAccess.callerSeesDeletedAccounts()) {
+            throw refused(AuditEventType.USER_DELETE, "delete", user);
         }
         // QA D327: a second delete of a deleted account changed nothing yet
         // answered success and wrote a second USER_DELETE audit row.
         if (user.isDeleted()) {
             throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("user.alreadyDeleted"));
         }
+        // QA D902: decided while the account is still live - once it is
+        // switched off below, its super-admin row no longer counts as one.
+        assignmentService.requireSuperAdminRemainsWithoutUser(id);
 
         // Read before anything is switched off: the restore puts back this
         // answer, since afterwards nothing on the account or its rows can
@@ -1525,8 +1608,16 @@ public class UserServiceImpl implements UserService {
         // inactive, and an administrator reactivates the ones still wanted.
         User user = userRepository.findById(id)
                 .orElseThrow(() -> userNotFound(id));
+        // QA D920 (review round 13): the deleted view is the super-admin's, so
+        // for anyone else every restore is refused like a missing id, live
+        // account or deleted one alike; a 409 for a live account against a
+        // restore of a deleted one told a hospital admin which ids were deleted.
+        if (!accountAccess.callerSeesDeletedAccounts()) {
+            recordRefusal(AuditEventType.USER_RESTORE, "restore", user.getId());
+            throw userNotFound(id);
+        }
         if (!accountAccess.canAdminister(user)) {
-            throw refused(AuditEventType.USER_RESTORE, "restore", id);
+            throw refused(AuditEventType.USER_RESTORE, "restore", user);
         }
         // QA D327: restoring an account that is not deleted re-ran the
         // restore (and could switch a never-activated account's state) and
@@ -1618,11 +1709,48 @@ public class UserServiceImpl implements UserService {
         if (hasText(dto.getEmail())) {
             user.setEmail(dto.getEmail());
         }
+        // QA D1170 (round 21): a name sent blank is refused, not skipped. It
+        // used to be dropped silently and the profile page reported success
+        // while the old name stayed. Absent (null) still keeps the stored one.
+        requireNotBlankWhenSent(dto.getFirstName(), "firstName", "user.update.firstName.blank");
+        requireNotBlankWhenSent(dto.getLastName(), "lastName", "user.update.lastName.blank");
         if (hasText(dto.getFirstName())) {
-            user.setFirstName(dto.getFirstName());
+            user.setFirstName(dto.getFirstName().trim());
         }
         if (hasText(dto.getLastName())) {
-            user.setLastName(dto.getLastName());
+            user.setLastName(dto.getLastName().trim());
+        }
+    }
+
+    private static void requireNotBlankWhenSent(String value, String field, String messageKey) {
+        if (value != null && value.isBlank()) {
+            throw new com.example.hms.exception.FieldBusinessException(field, messageKey);
+        }
+    }
+
+    /**
+     * Who may edit this account, and whether it can be edited at all.
+     * Editing your own account is the profile page: contact fields only,
+     * whoever you are. Anyone else's account needs an administrator of it
+     * (UserAccountAccess.canAdminister) and is otherwise refused exactly like
+     * a missing id, with a FAILURE row.
+     */
+    private void requireEditableBy(User user, UpdateUserRequestDTO dto) {
+        if (accountAccess.isSelf(user)) {
+            requireSelfServiceChangesOnly(user, dto);
+        } else if (!accountAccess.canAdminister(user)) {
+            throw refused(AuditEventType.USER_UPDATE, "update", user);
+        }
+        // QA D920: a deleted account is missing for everyone but the
+        // super-admin, as GET answers; "restore it first" pointed a hospital
+        // admin at a restore they are not offered.
+        if (user.isDeleted() && !accountAccess.callerSeesDeletedAccounts()) {
+            throw refused(AuditEventType.USER_UPDATE, "update", user);
+        }
+        // A deleted account is restored first, then edited: an edit would
+        // otherwise rewrite a tombstone nobody can see (D126).
+        if (user.isDeleted()) {
+            throw new BusinessException(MessageUtil.resolve("user.update.deleted"));
         }
     }
 
@@ -1632,20 +1760,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> userNotFound(id));
 
-        // Editing your own account is the profile page: contact fields only,
-        // whoever you are. Anyone else's account needs an administrator of it
-        // (UserAccountAccess.canAdminister) and is otherwise refused exactly
-        // like a missing id, with a FAILURE row.
-        if (accountAccess.isSelf(user)) {
-            requireSelfServiceChangesOnly(user, dto);
-        } else if (!accountAccess.canAdminister(user)) {
-            throw refused(AuditEventType.USER_UPDATE, "update", id);
-        }
-        // A deleted account is restored first, then edited: an edit would
-        // otherwise rewrite a tombstone nobody can see (D126).
-        if (user.isDeleted()) {
-            throw new BusinessException(MessageUtil.resolve("user.update.deleted"));
-        }
+        requireEditableBy(user, dto);
         requireIdentifiersFree(user, dto);
         requireRolesUnchanged(user, dto);
 
@@ -1659,6 +1774,11 @@ public class UserServiceImpl implements UserService {
             user.setPhoneNumber(normalizePhone(dto.getPhoneNumber(), activeHospitalFromContext()));
         }
         if (dto.getActive() != null) {
+            // QA D902: switching off an account that holds the last live
+            // super-admin assignment would leave the platform with none.
+            if (Boolean.FALSE.equals(dto.getActive()) && user.isActive()) {
+                assignmentService.requireSuperAdminRemainsWithoutUser(user.getId());
+            }
             reactivated = applyActive(user, dto.getActive());
         }
 
@@ -1753,16 +1873,16 @@ public class UserServiceImpl implements UserService {
      */
     private static void requireSelfServiceChangesOnly(User user, UpdateUserRequestDTO dto) {
         if (dto.getActive() != null && !dto.getActive().equals(user.isActive())) {
-            throw new BusinessException(MessageUtil.resolve("user.update.self.active"));
+            throw new com.example.hms.exception.FieldBusinessException("active", MessageUtil.resolve("user.update.self.active"));
         }
         if (hasText(dto.getPassword())) {
-            throw new BusinessException(MessageUtil.resolve("user.update.self.password"));
+            throw new com.example.hms.exception.FieldBusinessException("password", MessageUtil.resolve("user.update.self.password"));
         }
         if (hasText(dto.getUsername()) && !dto.getUsername().equals(user.getUsername())) {
-            throw new BusinessException(MessageUtil.resolve("user.update.self.username"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_USERNAME, MessageUtil.resolve("user.update.self.username"));
         }
         if (hasText(dto.getEmail()) && !dto.getEmail().equals(user.getEmail())) {
-            throw new BusinessException(MessageUtil.resolve("user.update.self.email"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_EMAIL, MessageUtil.resolve("user.update.self.email"));
         }
     }
 
@@ -1812,21 +1932,36 @@ public class UserServiceImpl implements UserService {
     private void requireIdentifiersFree(User user, UpdateUserRequestDTO dto) {
         if (hasText(dto.getUsername()) && !dto.getUsername().equals(user.getUsername())
                 && userRepository.existsUsernameOnOtherAccount(dto.getUsername(), user.getId())) {
-            throw new BusinessException(MessageUtil.resolve("user.update.username.taken"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_USERNAME, "user.update.username.taken");
         }
         if (hasText(dto.getEmail()) && !dto.getEmail().equals(user.getEmail())
                 && userRepository.existsEmailOnOtherAccount(dto.getEmail(), user.getId())) {
-            throw new BusinessException(MessageUtil.resolve("user.update.email.taken"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_EMAIL, "user.update.email.taken");
         }
     }
 
     /**
      * A refused cross-account write: recorded as a FAILURE (actor id and
-     * target id only: no names, never the submitted values), then answered
-     * exactly like a missing account. The audit service writes in its own
-     * transaction, so the row survives this one's rollback.
+     * target id only: no names, never the submitted values). The audit service
+     * writes in its own transaction, so the row survives this one's rollback.
+     *
+     * <p>QA D914: an account the caller can READ (GET /users/{id} answers it)
+     * is refused as what it is - a 403 saying only a super-admin may change
+     * it - not as a missing account the caller just opened. Anything the
+     * caller cannot read is still answered exactly like a missing id, so the
+     * refusal is no existence oracle.
      */
-    private ResourceNotFoundException refused(AuditEventType type, String action, UUID targetId) {
+    private RuntimeException refused(AuditEventType type, String action, User target) {
+        // A deleted account is answered as missing: GET does not show it either.
+        RuntimeException answer = !target.isDeleted() && accountAccess.canView(target)
+                ? new com.example.hms.exception.ClientSafeAccessDeniedException(
+                    MessageUtil.resolve("user.administer.notYours"))
+                : userNotFound(target.getId());
+        recordRefusal(type, action, target.getId());
+        return answer;
+    }
+
+    private void recordRefusal(AuditEventType type, String action, UUID targetId) {
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .userId(accountAccess.currentUserId().orElse(null))
                 .eventType(type)
@@ -1835,7 +1970,6 @@ public class UserServiceImpl implements UserService {
                 .entityType("USER")
                 .status(AuditStatus.FAILURE)
                 .build());
-        return userNotFound(targetId);
     }
 
     /**
@@ -1928,17 +2062,34 @@ public class UserServiceImpl implements UserService {
      * Email Verification
      * --------------------------------
      */
+    /**
+     * Activates the account behind an emailed link and its ROLE_PATIENT
+     * assignments in ONE transaction (QA D921); the Patient row is not touched.
+     * {@code AuthController#verifyEmail} used to do this itself: the account
+     * save committed on its own, then the assignment loop read
+     * {@code assignment.getRole()} with no session (open-in-view is off), so
+     * every link answered 500 and left the account active with its patient
+     * role still off and the token consumed. Here the lazy reads run inside
+     * the transaction, and a failure rolls the whole activation back, token
+     * included, so the link still works on the next try.
+     *
+     * @return false when the address is unknown, the token does not match or
+     *         has expired, or an administrator switched the account off
+     */
     @Override
     @Transactional
     public boolean verifyEmail(String email, String token) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", email));
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            return false;
+        }
 
         if (user.getActivationToken() == null
+                || token == null
                 || !token.equals(user.getActivationToken())
                 || user.getActivationTokenExpiresAt() == null
                 || user.getActivationTokenExpiresAt().isBefore(LocalDateTime.now())) {
-            log.warn("⚠️ Invalid or expired activation token for: {}", email);
+            log.warn("⚠️ Invalid or expired activation token for user {}", user.getId());
             return false;
         }
 
@@ -1953,27 +2104,37 @@ public class UserServiceImpl implements UserService {
         user.setActivationToken(null);
         user.setActivationTokenExpiresAt(null);
         userRepository.save(user);
-        // NOTE: this method has no caller in main — AuthController#verifyEmail
-        // implements verification itself and is the path that runs. The reset
-        // is kept, and deferred like every other one, so wiring this method up
-        // later cannot reintroduce the bug the rest of this class just fixed:
-        // the patient activation below writes after this point, and a rollback
-        // there would otherwise leave the counter cleared for an account that
-        // stayed inactive. (Note for whoever wires it up: unlike
-        // AuthController#verifyEmail this method does NOT activate the user's
-        // ROLE_PATIENT assignments — it only flips the Patient row.)
+        // Refusals collected while the account was inactive must not outlive
+        // the activation: the disabled arm of /auth/login counts toward the
+        // lockout, so five attempts before verifying would otherwise leave the
+        // holder locked out at the moment the link finally works. Deferred to
+        // the commit, so a rollback below cannot leave the counter cleared for
+        // an account that stayed inactive.
         final UUID verifiedId = user.getId();
         TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(verifiedId));
 
-        // Activate the Patient entity to match the now-verified User
-        patientRepository.findByUserId(user.getId()).ifPresent(patient -> {
-            if (!patient.isActive()) {
-                patient.setActive(true);
-                patientRepository.save(patient);
+        int activated = 0;
+        for (UserRoleHospitalAssignment assignment : assignmentRepository.findByUserId(user.getId())) {
+            // QA D789: a patient row at a hospital archived since stays off;
+            // the account itself is still verified.
+            if (assignment.getRole() != null
+                    && ROLE_PATIENT.equalsIgnoreCase(assignment.getRole().getCode())
+                    && !Boolean.TRUE.equals(assignment.getActive())
+                    && (assignment.getHospital() == null
+                        || !com.example.hms.security.provider.FacilityAssignmentGuard
+                            .isClosed(assignment.getHospital().getLifecycleState()))) {
+                assignment.setActive(true);
+                assignmentRepository.save(assignment);
+                activated++;
             }
-        });
+        }
 
-        log.info("✅ Email verified: {}", user.getEmail());
+        // The Patient row's active flag is the record's administrative soft
+        // delete, not the account's state (createPatient, QA D27/V188): the
+        // link verifies the account and never brings back a record staff
+        // switched off.
+
+        log.info("✅ Email verified for user {}. Activated {} patient assignment(s).", user.getId(), activated);
         return true;
     }
 
@@ -2099,7 +2260,7 @@ public class UserServiceImpl implements UserService {
             // Any letter case, deleted accounts included: the same rule as an
             // administrator's rename (requireIdentifiersFree).
             if (userRepository.existsUsernameOnOtherAccount(newUsername, userId)) {
-                throw new BusinessException(MessageUtil.resolve("account.setup.username.taken"));
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_USERNAME, "account.setup.username.taken");
             }
             user.setUsername(newUsername);
             user.setForceUsernameChange(false);

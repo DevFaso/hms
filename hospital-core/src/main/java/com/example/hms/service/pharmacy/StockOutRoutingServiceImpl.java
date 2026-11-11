@@ -62,6 +62,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     private final PrescriptionRoutingMapper routingMapper;
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
+    /** QA D899: the dispense DRUG rule, so a stock check and a fill agree on which drug an order is. */
+    private final DispenseVerificationService dispenseVerificationService;
     private final com.example.hms.service.pharmacy.partner.PartnerNotificationChannel partnerChannel;
     private final PrescriberPharmacyNotifier prescriberNotifier;
     private final com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
@@ -156,13 +158,15 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         }
         UUID orderHospitalId = prescription.getHospital().getId();
 
-        // Find the medication catalog item for this prescription
-        MedicationCatalogItem catalogItem = resolveCatalogItem(prescription, orderHospitalId);
+        // QA D899: resolved by the rule the dispense lot picker applies, so
+        // the shelf this answers about is the shelf the fill then takes from.
+        List<MedicationCatalogItem> catalogItems = resolveCatalogItems(prescription, orderHospitalId);
 
         BigDecimal totalOnHand = BigDecimal.ZERO;
 
-        // Single query for hospital-wide on-hand stock avoids N+1 across dispensaries.
-        if (catalogItem != null) {
+        // One query per resolved item (almost always one) for hospital-wide
+        // on-hand stock, which avoids N+1 across dispensaries.
+        for (MedicationCatalogItem catalogItem : catalogItems) {
             List<InventoryItem> items = inventoryItemRepository
                     .findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
                             orderHospitalId, catalogItem.getId());
@@ -175,7 +179,15 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             }
         }
 
-        BigDecimal needed = prescription.getQuantity() != null ? prescription.getQuantity() : BigDecimal.ONE;
+        // QA D913 (#967 review): what the shelf must cover is what is still
+        // OWED, the same remainder route, back-order and print use. A partially
+        // filled order (routable) was compared against its full prescribed
+        // quantity, and a legacy order without one against an invented 1 instead
+        // of its regimen estimate. Unknown stays unknown (null on the wire, the
+        // page then says "insufficient" without numbers); the comparison still
+        // needs at least one unit on the shelf.
+        BigDecimal remaining = remainingQuantity(prescription);
+        BigDecimal needed = remaining != null ? remaining : BigDecimal.ONE;
         boolean sufficient = totalOnHand.compareTo(needed) >= 0;
 
         List<PartnerOptionDTO> partnerOptions = new ArrayList<>();
@@ -183,12 +195,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             List<Pharmacy> partners = pharmacyRepository.findByHospitalIdAndPharmacyTypeInAndActiveTrue(
                     orderHospitalId, EXTERNAL_PHARMACY_TYPES);
             for (Pharmacy partner : partners) {
-                boolean hasOnFormulary = false;
-                if (catalogItem != null) {
-                    hasOnFormulary = inventoryItemRepository
-                            .findByPharmacyIdAndMedicationCatalogItemId(partner.getId(), catalogItem.getId())
-                            .isPresent();
-                }
+                boolean hasOnFormulary = catalogItems.stream()
+                        .anyMatch(catalogItem -> inventoryItemRepository
+                                .findByPharmacyIdAndMedicationCatalogItemId(partner.getId(), catalogItem.getId())
+                                .isPresent());
                 partnerOptions.add(PartnerOptionDTO.builder()
                         .pharmacyId(partner.getId())
                         .pharmacyName(partner.getName())
@@ -207,9 +217,32 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 .pharmacyName(null)
                 .pharmacyId(null)
                 .quantityOnHand(totalOnHand)
+                .quantityRequired(remaining)
                 .sufficient(sufficient)
                 .partnerPharmacies(partnerOptions)
+                .prescriptionStatus(prescription.getStatus() != null ? prescription.getStatus().name() : null)
+                .routable(ROUTABLE_STATUSES.contains(prescription.getStatus()))
                 .build();
+    }
+
+    /**
+     * QA D1555: the one allergy re-check after the signature. A required setter: the application
+     * always wires it; only a service built by hand in a unit test has none.
+     */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setAllergyRecheck(com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck) {
+        this.allergyRecheck = allergyRecheck;
+    }
+
+    /** QA D1555: the routing gate of the re-check (AllergyRecheckGuardTest). */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement requireAllergyAcknowledged(Prescription prescription) {
+        if (allergyRecheck == null) {
+            return null;
+        }
+        return allergyRecheck.requirePrescriberReview(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.PARTNER_ROUTING, prescription,
+                prescription.getMedicationName());
     }
 
     @Override
@@ -221,7 +254,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         UUID targetPharmacyId = dto.getTargetPharmacyId();
         if (targetPharmacyId == null) {
-            throw new BusinessException("stock.routing.targetRequired");
+            // QA D1282 (sweep): named, so the form marks the field.
+            throw new com.example.hms.exception.FieldBusinessException("targetPharmacyId", "stock.routing.targetRequired");
         }
 
         Pharmacy targetPharmacy = pharmacyRepository.findById(targetPharmacyId)
@@ -241,6 +275,12 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         String targetPhone = targetPharmacy.getPhoneNumber();
         if (targetPhone == null || targetPhone.isBlank()) {
             throw new BusinessException("stock.routing.targetNoPhone");
+        }
+        // QA D1555: the partner fills it outside, so the order's drug is read against the patient's
+        // CURRENT allergies before it leaves; the acknowledgement is kept on the routing decision.
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(prescription);
+        if (allergyAck != null) {
+            dto.setReason(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dto.getReason(), allergyAck, 1024, "reason"));
         }
 
         User currentUser = resolveCurrentUser();
@@ -265,6 +305,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         queueClaimService.releaseOnExit(prescription, QueueClaimReleaseReason.ROUTED,
                 currentUser.getId(), QueueClaimExitActor.QUEUE_ROLE);
 
+        if (allergyAck != null && allergyRecheck != null) {
+            allergyRecheck.auditAfterCommit(allergyAck, currentUser.getId(), hospitalId,
+                    patient != null ? patient.getId() : null, prescriptionId);
+        }
         logAudit(AuditEventType.PRESCRIPTION_SENT_TO_PARTNER,
                 PRESCRIPTION_PREFIX + prescriptionId + " routed to partner pharmacy " + targetPharmacy.getName(),
                 prescriptionId.toString());
@@ -303,7 +347,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 .routingType(RoutingType.PRINT)
                 .decidedByUser(currentUser)
                 .decidedForPatient(patient)
-                .reason("Prescription printed for patient to fill at external pharmacy")
+                // QA D1000: a key, rendered in the reader's language by the mapper.
+                .reason(com.example.hms.mapper.pharmacy.RoutingReasonText.PRINT_KEY)
                 .remainingQuantity(remaining)
                 .status(RoutingDecisionStatus.COMPLETED)
                 .decidedAt(LocalDateTime.now())
@@ -344,7 +389,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 .routingType(RoutingType.BACKORDER)
                 .decidedByUser(currentUser)
                 .decidedForPatient(patient)
-                .reason("Medication out of stock; placed on back order")
+                .reason(com.example.hms.mapper.pharmacy.RoutingReasonText.BACK_ORDER_KEY)
                 .remainingQuantity(remaining)
                 .estimatedRestockDate(estimatedRestockDate)
                 .status(RoutingDecisionStatus.PENDING)
@@ -400,6 +445,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         }
 
         if (accepted) {
+            com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescription.getId(), "accepted");
             decision.setStatus(RoutingDecisionStatus.ACCEPTED);
             prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
         } else {
@@ -460,6 +506,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         if (prescription.getStatus() == PrescriptionStatus.PENDING_CLARIFICATION) {
             throw new BusinessException("stock.routing.awaitingClarification");
         }
+        if (com.example.hms.service.support.OrderReviewHoldGuard.isHeld(
+                com.example.hms.enums.OrderReviewType.PRESCRIPTION, prescription.getId())) {
+            withdrawnOrders.raiseDispenseOfHeld(decision, prescription, "Pharmacist-recorded partner dispense");
+        }
         prescription.setStatus(PrescriptionStatus.PARTNER_DISPENSED);
         prescriptionRepository.save(prescription);
         prescriberNotifier.notifyPrescriber(prescription, PrescriptionStatus.PARTNER_DISPENSED);
@@ -490,13 +540,14 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         enforceDecisionHospitalScopeForWrite(decision, hospitalId);
 
         if (reason == null || reason.isBlank()) {
-            throw new BusinessException("stock.routing.noShowReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "stock.routing.noShowReasonRequired");
         }
         if (decision.getRoutingType() != RoutingType.PARTNER) {
             throw new BusinessException("stock.routing.noShowNotPartner");
         }
         if (decision.getStatus() != RoutingDecisionStatus.ACCEPTED) {
-            throw new BusinessException("stock.routing.noShowNotAccepted", String.valueOf(decision.getStatus()));
+            throw new BusinessException("stock.routing.noShowNotAccepted",
+                RoutingDecisionStatus.labelOf(decision.getStatus()));
         }
 
         String words = reason.trim();
@@ -707,6 +758,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     }
 
     private void validateRoutableStatus(Prescription prescription) {
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(prescription.getPatient());
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescription.getId(), "prescriptionId");
         if (!ROUTABLE_STATUSES.contains(prescription.getStatus())) {
             throw new BusinessException("stock.routing.notRoutable", prescription.getStatus() == null ? "" : prescription.getStatus().localizedLabel());
         }
@@ -718,13 +771,57 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         }
     }
 
-    private MedicationCatalogItem resolveCatalogItem(Prescription prescription, UUID hospitalId) {
-        if (prescription.getMedicationCode() != null && !prescription.getMedicationCode().isBlank()) {
-            return medicationCatalogItemRepository
-                    .findByHospitalIdAndCode(hospitalId, prescription.getMedicationCode())
-                    .orElse(null);
+    /**
+     * QA D899: the catalog item(s) a prescription is for, at the order's own
+     * hospital. This used to be the exact {@code medicationCode} and nothing
+     * else, so every order written as free text ("Amoxicilline", no code)
+     * resolved to no item and was reported "out of stock, 0 on hand" while
+     * the dispense lot picker offered the 300-unit lot and the fill went
+     * through. The order of evidence is the dispense one:
+     * <ol>
+     *   <li>the catalog item picked at order time (V221), when it is this
+     *       hospital's;</li>
+     *   <li>the exact formulary code;</li>
+     *   <li>otherwise every catalog item stocked here that the dispense DRUG
+     *       check accepts ({@link DispenseVerificationService#matchesPrescribedDrug}:
+     *       RxNorm/ATC code, then the accent- and case-folded name).</li>
+     * </ol>
+     * An order with neither code nor name resolves to nothing: the DRUG check
+     * is permissive there (it would accept any lot), which must not turn into
+     * "the whole shelf is in stock" here.
+     */
+    private List<MedicationCatalogItem> resolveCatalogItems(Prescription prescription, UUID hospitalId) {
+        UUID pickedId = prescription.getMedicationCatalogItemId();
+        if (pickedId != null) {
+            java.util.Optional<MedicationCatalogItem> picked =
+                    medicationCatalogItemRepository.findByIdAndHospital_Id(pickedId, hospitalId);
+            if (picked.isPresent()) {
+                return List.of(picked.get());
+            }
         }
-        return null;
+        String code = prescription.getMedicationCode();
+        boolean hasCode = code != null && !code.isBlank();
+        if (hasCode) {
+            java.util.Optional<MedicationCatalogItem> coded =
+                    medicationCatalogItemRepository.findByHospitalIdAndCode(hospitalId, code.trim());
+            if (coded.isPresent()) {
+                return List.of(coded.get());
+            }
+        }
+        String name = prescription.getMedicationName();
+        if (!hasCode && (name == null || name.isBlank())) {
+            return List.of();
+        }
+        java.util.Map<UUID, MedicationCatalogItem> matched = new java.util.LinkedHashMap<>();
+        for (InventoryItem item : inventoryItemRepository.findActiveWithCatalogItemByHospitalId(hospitalId)) {
+            MedicationCatalogItem catalogItem = item.getMedicationCatalogItem();
+            if (catalogItem != null && catalogItem.getId() != null
+                    && !matched.containsKey(catalogItem.getId())
+                    && dispenseVerificationService.matchesPrescribedDrug(prescription, catalogItem)) {
+                matched.put(catalogItem.getId(), catalogItem);
+            }
+        }
+        return new ArrayList<>(matched.values());
     }
 
     private User resolveCurrentUser() {

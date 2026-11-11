@@ -26,7 +26,8 @@
               {{ dept.hospitalName }}
             </span>
           }
-          <span class="status-badge" [class.active]="dept.active" [class.inactive]="!dept.active">
+          {{ ' '
+          }}<span class="status-badge" [class.active]="dept.active" [class.inactive]="!dept.active">
             {{ dept.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
           </span>
         </div>

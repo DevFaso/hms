@@ -71,7 +71,9 @@ public class TreatmentRelationshipResolverImpl implements TreatmentRelationshipR
         AdmissionStatus.PENDING, AdmissionStatus.ACTIVE,
         AdmissionStatus.ON_LEAVE, AdmissionStatus.AWAITING_DISCHARGE);
     private static final Set<AdmissionStatus> ADMISSION_TAILED = EnumSet.of(
-        AdmissionStatus.DISCHARGED, AdmissionStatus.TRANSFERRED);
+        AdmissionStatus.DISCHARGED, AdmissionStatus.TRANSFERRED,
+        // QA D1516: the stay's clinicians keep the chart, to readmit after a voided death closed it.
+        AdmissionStatus.CLOSED_IN_ERROR);
 
     private static final Set<EncounterStatus> ENCOUNTER_TERMINAL = EncounterStatus.CLOSED;
 

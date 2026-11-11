@@ -2,7 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import fr from '../../assets/i18n/fr.json';
 import { of, throwError } from 'rxjs';
 import { ProfileComponent } from './profile';
 import { AuthService } from '../auth/auth.service';
@@ -10,6 +11,7 @@ import { MfaEnrollmentResponse, MfaService } from '../auth/mfa.service';
 import { OidcAuthService } from '../auth/oidc-auth.service';
 import { ToastService } from '../core/toast.service';
 import { CredentialHealth, ProfileService, UserProfile } from '../services/profile.service';
+import { PatientPortalService } from '../services/patient-portal.service';
 
 const user: UserProfile = {
   id: 'u1',
@@ -98,6 +100,7 @@ describe('ProfileComponent — replacing the authenticator', () => {
         { provide: AuthService, useValue: auth },
         { provide: MfaService, useValue: mfa },
         { provide: OidcAuthService, useValue: { authenticated: signal(false) } },
+        { provide: PatientPortalService, useValue: { updateMyProfile: () => of({}) } },
       ],
     }).compileComponents();
 
@@ -110,6 +113,18 @@ describe('ProfileComponent — replacing the authenticator', () => {
 
   const el = (selector: string): HTMLElement | null =>
     fixture.nativeElement.querySelector(selector);
+
+  it('counts the recovery contacts in French (QA D917)', async () => {
+    await setUp(false);
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    fixture.detectChanges();
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('0 configuré(s), 0 vérifié(s)');
+    expect(text).not.toContain('configured');
+  });
 
   it('offers to replace an active authenticator, never to set one up again', async () => {
     await setUp(true);

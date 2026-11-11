@@ -168,6 +168,14 @@ public class Dispense extends BaseEntity {
     private ReadyCancelReason cancelReason;
 
     /**
+     * QA D1069 (V254): why the pharmacist cancelled a completed fill, in their
+     * words. Mandatory on that cancel: it voids the payment and puts the stock
+     * back. Null on every other row.
+     */
+    @Column(name = "cancel_note", length = 500)
+    private String cancelNote;
+
+    /**
      * Roadmap row 4 / T-68 — optional client-supplied idempotency key for
      * POST /pharmacy/dispense replay from the offline queue.
      *

@@ -49,11 +49,16 @@ public class PartographEntryRequestDTO {
     private String drugsGiven;
     private String ivFluids;
 
-    @Min(0) @Max(300)
+    // QA D1424: the same bounds as every other vitals form (VitalSignLimits); 70/120
+    // used to be stored and to raise "severe hypertension".
+    @Min(value = VitalSignLimits.HEART_RATE_MIN, message = "{vitals.heartRate.range}")
+    @Max(value = VitalSignLimits.HEART_RATE_MAX, message = "{vitals.heartRate.range}")
     private Integer pulseBpm;
-    @Min(0) @Max(350)
+    @Min(value = VitalSignLimits.SYSTOLIC_MIN, message = "{vitals.systolic.range}")
+    @Max(value = VitalSignLimits.SYSTOLIC_MAX, message = "{vitals.systolic.range}")
     private Integer systolicBpMmHg;
-    @Min(0) @Max(250)
+    @Min(value = VitalSignLimits.DIASTOLIC_MIN, message = "{vitals.diastolic.range}")
+    @Max(value = VitalSignLimits.DIASTOLIC_MAX, message = "{vitals.diastolic.range}")
     private Integer diastolicBpMmHg;
     @DecimalMin(value = VitalSignLimits.TEMPERATURE_MIN_C, message = "{vitals.temperature.range}")
     @DecimalMax(value = VitalSignLimits.TEMPERATURE_MAX_C, message = "{vitals.temperature.range}")
@@ -64,4 +69,12 @@ public class PartographEntryRequestDTO {
     private String urineAcetone;
 
     private String notes;
+
+    /** QA D1424 (D111): a diastolic at or above the systolic is a swapped entry. */
+    @com.example.hms.validation.ReportedOn("diastolicBpMmHg")
+    @jakarta.validation.constraints.AssertTrue(message = "{vitals.bloodPressure.invalid}")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isBloodPressureOrdered() {
+        return VitalSignLimits.bloodPressureOrdered(systolicBpMmHg, diastolicBpMmHg);
+    }
 }

@@ -1,6 +1,5 @@
 package com.example.hms.service;
 
-import com.example.hms.utility.ElapsedTime;
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.LabOrderStatus;
@@ -125,8 +124,9 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         // Waiting > threshold: active encounters whose elapsed time > 30 min
         List<Encounter> activeEncounters = encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS);
         long waitingLong = activeEncounters.stream()
-                .filter(e -> e.getEncounterDate() != null)
-                .filter(e -> ElapsedTime.minutesBetween(e.getEncounterDate(), LocalDateTime.now()) > LONG_WAIT_THRESHOLD_MINUTES)
+                // QA D1039: from the arrival, never from the visit day's midnight.
+                .filter(e -> com.example.hms.utility.EncounterWait.since(e) != null)
+                .filter(e -> com.example.hms.utility.EncounterWait.minutes(e, LocalDateTime.now()) > LONG_WAIT_THRESHOLD_MINUTES)
                 .count();
 
         // Pending consults
@@ -297,7 +297,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         UUID apptHospitalId = appt.getHospital() != null ? appt.getHospital().getId() : null;
         return DoctorWorklistItemDTO.builder()
                 .patientId(p.getId())
-                .patientName(p.getFirstName() + " " + p.getLastName())
+                .patientName(p.getFullName())
                 .mrn(p.getMrnForHospital(apptHospitalId))
                 .age(computeAge(p))
                 .sex(p.getGender())
@@ -314,7 +314,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         UUID consultHospitalId = consult.getHospital() != null ? consult.getHospital().getId() : null;
         return DoctorWorklistItemDTO.builder()
                 .patientId(p.getId())
-                .patientName(p.getFirstName() + " " + p.getLastName())
+                .patientName(p.getFullName())
                 .mrn(p.getMrnForHospital(consultHospitalId))
                 .age(computeAge(p))
                 .sex(p.getGender())
@@ -332,11 +332,10 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
 
     private DoctorWorklistItemDTO buildWorklistItem(Patient p, Encounter enc, String mappedStatus, Map<UUID, String> patientRoomBed) {
         int age = computeAge(p);
-        int waitMinutes = enc.getEncounterDate() != null
-                ? (int) Math.min(ElapsedTime.minutesBetween(enc.getEncounterDate(), LocalDateTime.now()), Integer.MAX_VALUE)
-                : 0;
-
         String location = enc.getDepartment() != null ? enc.getDepartment().getName() : null;
+        // QA D1039: from the arrival, never from the visit day's midnight.
+        int waitMinutes = (int) Math.min(
+                com.example.hms.utility.EncounterWait.minutes(enc, LocalDateTime.now(java.time.ZoneId.systemDefault())), Integer.MAX_VALUE);
         String[] roomBed = parseRoomBed(patientRoomBed.get(p.getId()));
         String latestVitalsSummary = fetchVitalsSummary(p.getId());
 
@@ -344,7 +343,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         return DoctorWorklistItemDTO.builder()
                 .patientId(p.getId())
                 .encounterId(enc.getId())
-                .patientName(p.getFirstName() + " " + p.getLastName())
+                .patientName(p.getFullName())
                 .mrn(p.getMrnForHospital(encHospitalId))
                 .age(age)
                 .sex(p.getGender())

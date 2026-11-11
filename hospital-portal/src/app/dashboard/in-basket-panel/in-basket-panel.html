@@ -4,7 +4,8 @@
     <h3 class="panel-title">
       <span>{{ 'inBasket.title' | translate }}</span>
       @if (badgeCount() > 0) {
-        <span class="badge" [attr.aria-label]="'inBasket.unreadCount' | translate">{{
+        {{ ' '
+        }}<span class="badge" [attr.aria-label]="'inBasket.unreadCount' | translate">{{
           badgeCount()
         }}</span>
       }
@@ -92,16 +93,21 @@
               <span class="item-header">
                 <span class="item-title">{{ item.title }}</span>
                 @if (item.priority === 'CRITICAL') {
-                  <span class="priority-badge critical">{{ 'inBasket.critical' | translate }}</span>
+                  {{ ' '
+                  }}<span class="priority-badge critical">{{
+                    'inBasket.critical' | translate
+                  }}</span>
                 }
                 @if (item.priority === 'URGENT') {
-                  <span class="priority-badge urgent">{{ 'inBasket.urgent' | translate }}</span>
+                  {{ ' '
+                  }}<span class="priority-badge urgent">{{ 'inBasket.urgent' | translate }}</span>
                 }
               </span>
               @if (item.body) {
                 <span class="item-body">{{ item.body }}</span>
               }
-              <span class="item-meta">
+              {{ ' '
+              }}<span class="item-meta">
                 @if (item.patientName) {
                   <span class="meta-patient">{{ item.patientName }}</span>
                 }
@@ -113,6 +119,16 @@
             </span>
           </button>
           <span class="item-actions">
+            @if (isAllergyReview(item)) {
+              <button
+                type="button"
+                class="btn-review"
+                data-testid="in-basket-allergy-review"
+                (click)="allergyReviewFor.set(item.referenceId)"
+              >
+                {{ 'ALLERGY_REVIEW.OPEN' | translate }}
+              </button>
+            }
             @if (item.status !== 'ACKNOWLEDGED') {
               <button
                 class="btn-acknowledge"
@@ -134,3 +150,11 @@
     </ul>
   }
 </section>
+<!-- Policy 4: the prescriber reviews the allergy conflict the notice is about. -->
+@if (allergyReviewFor(); as reviewId) {
+  <app-allergy-review-dialog
+    [prescriptionId]="reviewId"
+    (closed)="allergyReviewFor.set(null)"
+    (reviewed)="onAllergyReviewed()"
+  />
+}

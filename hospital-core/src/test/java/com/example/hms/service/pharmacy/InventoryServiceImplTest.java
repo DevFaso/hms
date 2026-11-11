@@ -811,7 +811,10 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.receiveStock(dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class)
-                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.aboveReceived"));
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.aboveReceived"))
+                    // QA D1354 (round 30): on the quantity the lot cannot hold.
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasFieldOrPropertyWithValue("field", "remainingQuantity");
             verify(stockLotRepository, never()).save(any());
             verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         }
@@ -1225,6 +1228,30 @@ class InventoryServiceImplTest {
             verify(notificationService).created(
                     any(String.class), eq("pharmacist1"), eq("REORDER_ALERT"));
             verify(auditEventLogService).logEvent(any(AuditEventRequestDTO.class));
+        }
+
+        @Test
+        @DisplayName("QA D894: a French caller still writes the audit row in English, the shape the portal reads")
+        void d894_auditTextIsEnglishWhateverTheCallerLanguage() {
+            stubHospitalScope();
+            when(inventoryItemRepository.findBelowReorderThresholdByHospital(hospitalId))
+                    .thenReturn(List.of(inventoryItem));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                service.triggerReorderAlerts();
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+
+            org.mockito.ArgumentCaptor<AuditEventRequestDTO> audit =
+                    org.mockito.ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(audit.capture());
+            assertThat(audit.getValue().getEventDescription())
+                    .startsWith("Low stock alert: ")
+                    .contains(" on hand, reorder threshold ")
+                    .doesNotContain("Alerte");
         }
 
         @Test

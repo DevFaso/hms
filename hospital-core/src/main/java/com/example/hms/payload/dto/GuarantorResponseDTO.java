@@ -25,6 +25,9 @@ public class GuarantorResponseDTO {
     private String address;
     private boolean primary;
     private boolean active;
+    /** QA D1247 (round 25): why and when the guarantor was deactivated. */
+    private String deactivationReason;
+    private LocalDateTime deactivatedAt;
     private String notes;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

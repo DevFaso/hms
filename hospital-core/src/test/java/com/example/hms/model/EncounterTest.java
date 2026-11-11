@@ -91,6 +91,7 @@ class EncounterTest {
                 patient, new HashSet<>(), null, staff, hospital,
                 EncounterType.EMERGENCY, null, null, null, date,
                 EncounterStatus.COMPLETED, "notes", null, null,
+                null, // deskChiefComplaint (V265)
                 null, null, null, null, null,
                 null, null, null, // checkoutTimestamp, followUpInstructions, dischargeDiagnoses (MVP 6)
                 null, // admissionId (V193, QA D134)

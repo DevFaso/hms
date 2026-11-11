@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.config.SecurityConstants;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.BusinessException;
@@ -9,6 +10,7 @@ import com.example.hms.security.LoginAttemptService;
 import com.example.hms.utility.TransactionCallbacks;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.event.AssignmentCreatedEvent;
+import com.example.hms.service.i18n.PatientLocaleResolver;
 import com.example.hms.mapper.UserRoleHospitalAssignmentMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Organization;
@@ -42,11 +44,13 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
+import com.example.hms.service.support.AssignmentReferences;
 import com.example.hms.service.support.UserAccountAccess;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.MessageSource;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -65,8 +69,10 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -76,6 +82,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.i18n.LocaleContextHolder;
 import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.security.provider.FacilityAssignmentGuard;
@@ -85,11 +93,19 @@ import com.example.hms.security.provider.FacilityAssignmentGuard;
 @Slf4j
 @Transactional
 public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAssignmentService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_ACTIVE = "active";
+
     private static final String UNKNOWN_ROLE = "UNKNOWN_ROLE";
+    private static final String UNKNOWN_USER = "unknown user";
     private static final String AUDIT_ENTITY_ASSIGNMENT = "USER_ROLE_ASSIGNMENT";
 
 
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
+    private static final String MSG_REMOVE_OWN = "users.assignment.removeOwn";
+    private static final String MSG_STAFF_ACCESS_OUT_OF_REACH = "staff.deactivate.accessOutOfReach";
+    /** QA D902: the codes the super-admin role is stored under. */
+    private static final Set<String> SUPER_ADMIN_CODES = Set.of(ROLE_SUPER_ADMIN, "SUPER_ADMIN");
     private static final String ROLE_DOCTOR = "ROLE_DOCTOR";
     private static final String ROLE_PATIENT = "ROLE_PATIENT";
     private static final String MSG_PATIENT_FROM_PATIENT_FORM = "assignments.roles.patientFromPatientForm";
@@ -110,11 +126,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String DEFAULT_ROLE_ASSIGNED_INACTIVE =
         "This role was assigned to this user at this hospital before and is now inactive. Reactivate that assignment instead.";
     private static final String DEFAULT_ROLE_DELETE_CONFLICT = "Cannot delete role. It is assigned to one or more users.";
-    private static final String DEFAULT_USER_NOT_FOUND_PREFIX = "User not found: ";
-    private static final String DEFAULT_ROLE_REQUIRED_MESSAGE = "Role must be specified by either ID or name.";
     private static final String DEFAULT_DOCTOR_CONFLICT_MESSAGE = "An active DOCTOR assignment already exists for this user in the given hospital.";
     private static final String DEFAULT_SUPER_ADMIN_SCOPE_MESSAGE = "assignment.superAdmin.noHospital";
-    private static final String DEFAULT_HOSPITAL_REQUIRED_MESSAGE = "Hospital must be provided for non-SUPER_ADMIN roles.";
     private static final String DEFAULT_INVALID_UUID_MESSAGE = "Invalid UUID value: ";
     private static final String DEFAULT_INVALID_BOOLEAN_MESSAGE = "Invalid boolean value: ";
     private static final String DEFAULT_INVALID_DATE_MESSAGE = "Invalid date value: ";
@@ -125,18 +138,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String MSG_ASSIGNMENT_ALREADY_CONFIRMED = "assignment.confirmation.already";
     private static final String MSG_ASSIGNMENT_ACTOR_MISMATCH = "assignment.confirmation.actor-mismatch";
     private static final String MSG_ASSIGNMENT_NOT_FOUND_BY_CODE = "assignment.notfound.bycode";
-    private static final String DEFAULT_CONFIRMATION_CODE_INVALID = "Invalid confirmation code.";
-    private static final String DEFAULT_ASSIGNMENT_ALREADY_CONFIRMED = "This assignment has already been confirmed.";
     private static final String MSG_ACCOUNT_DISABLED_BY_ADMIN = "assignment.confirmation.accountDisabled";
-    private static final String DEFAULT_ACCOUNT_DISABLED_BY_ADMIN =
-        "This account was disabled by an administrator. Ask them to re-enable it.";
-    private static final String DEFAULT_CONFIRMATION_ACTOR_MISMATCH = "Only the assigner who created this assignment can confirm it.";
-    private static final String DEFAULT_ACTOR_RESOLUTION_FAILURE = "Unable to resolve the current user.";
     private static final String DEFAULT_HOLDER_CHANGE = "assignment.holderChange.superAdminOnly";
-    private static final String DEFAULT_ACTIVATION_THROUGH_CODE =
-        "Only a super-admin can activate an assignment directly. Send the holder a new code "
-            + "(regenerate the code); the assignment activates when they confirm it.";
+    /** QA D915: a key, so the refusal reads in the caller's language. */
+    private static final String DEFAULT_ACTIVATION_THROUGH_CODE = "assignment.activation.throughCode";
     private static final long CONFIRMATION_CODE_EXPIRY_HOURS = 48;
+    /** The checklist of a role with no checklist of its own (its bundle key segment). */
+    private static final String DEFAULT_CHECKLIST_KEY = "DEFAULT";
     private static final List<String> DEFAULT_PROFILE_CHECKLIST = List.of(
         "Review and confirm your personal information",
         "Add at least one emergency contact",
@@ -201,6 +209,19 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private final UserAccountAccess accountAccess;
     /** Role/facility compatibility and one kind of facility per user (provider plan §3.2, §3.2a). */
     private final FacilityAssignmentGuard facilityAssignmentGuard;
+    /** Every other kind of record that still points at an assignment (QA round 14). */
+    private final AssignmentReferences assignmentReferences;
+    /**
+     * QA D1123: the language a patient stated (medical-history tab) for their
+     * activation SMS. Setter-injected and optional: unit tests that build this
+     * service with mocks fall back to the request's language.
+     */
+    private PatientLocaleResolver patientLocaleResolver;
+
+    @Autowired(required = false)
+    void setPatientLocaleResolver(PatientLocaleResolver patientLocaleResolver) {
+        this.patientLocaleResolver = patientLocaleResolver;
+    }
 
     /* ===================== Create ===================== */
 
@@ -214,7 +235,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             dto.setProfileCompletionUrl(profileCompletionUrl(assignment));
             dto.setAssignerConfirmationUrl(assignerConfirmationUrl(assignment));
         }
-        dto.setProfileChecklist(buildRoleProfileChecklist(assignment.getRole()));
+        dto.setProfileChecklist(localizedProfileChecklist(assignment.getRole()));
         dto.setConfirmationVerified(assignment.getConfirmationVerifiedAt() != null);
         return dto;
     }
@@ -257,14 +278,14 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         enforceRoleScopeConstraints(dto, roleCode, adminRequest);
 
-        Hospital hospital = resolveHospitalHumanAware(dto, role, locale);
+        Hospital hospital = resolveHospitalHumanAware(dto, role);
         if (grant != null) {
             requireGrantAt(grant, hospital, roleCode);
         }
         facilityAssignmentGuard.requireCompatible(roleCode, hospital);
         // QA D789: an archived hospital takes no new role (a 409 before anything is saved).
         FacilityAssignmentGuard.requireOpenForAssignment(hospital);
-        User user = resolveUser(dto, locale);
+        User user = resolveUser(dto);
         facilityAssignmentGuard.requireSingleFacilityKind(user, roleCode, hospital, null);
         checkActiveDoctorConflict(dto, user, role, hospital, locale);
         checkExistingAssignment(user, role, hospital, locale);
@@ -281,7 +302,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // creation has one only when an admin registers (none on
         // self-registration or bootstrap).
         assignment.setRegisteredBy(adminRequest
-            ? requireCallerAccount(locale)
+            ? requireCallerAccount()
             : accountAccess.currentUserId().flatMap(userRepository::findById).orElse(null));
 
         UserRoleHospitalAssignment saved = assignmentRepository.save(assignment);
@@ -304,7 +325,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         return saved;
     }
 
-    private User resolveUser(UserRoleHospitalAssignmentRequestDTO dto, Locale locale) {
+    private User resolveUser(UserRoleHospitalAssignmentRequestDTO dto) {
         if (dto.getUserId() != null) {
             return userRepository.findById(dto.getUserId()).orElseThrow(() ->
                 new ResourceNotFoundException(MSG_USER_NOT_FOUND, dto.getUserId()));
@@ -319,11 +340,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_USER_NOT_FOUND, trimmed));
         }
 
-        throw new BusinessException(messageSource.getMessage(
-            MSG_USER_NOT_FOUND,
-            new Object[]{null},
-            DEFAULT_USER_NOT_FOUND_PREFIX + "<unknown>",
-            locale));
+        throw new BusinessException(MSG_USER_NOT_FOUND, (Object) null);
     }
 
     /**
@@ -350,7 +367,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (isRoleCode(roleCode, ROLE_PATIENT)) {
             // Patient assignments start inactive — activated after email verification
             if (Boolean.TRUE.equals(dto.getActive())) {
-                throw new BusinessException("assignment.patient.mustStartInactive");
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_ACTIVE, "assignment.patient.mustStartInactive");
             }
             if (dto.getActive() == null) {
                 dto.setActive(Boolean.FALSE);
@@ -375,7 +392,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (dto.getHospitalId() != null
             || (dto.getHospitalCode() != null && !dto.getHospitalCode().isBlank())
             || (dto.getHospitalName() != null && !dto.getHospitalName().isBlank())) {
-            throw new BusinessException(DEFAULT_SUPER_ADMIN_SCOPE_MESSAGE);
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", DEFAULT_SUPER_ADMIN_SCOPE_MESSAGE);
         }
         boolean verifiedSuperAdmin = adminRequest && roleValidator.isSuperAdminFromJwtClaim();
         if (dto.getActive() == null || (adminRequest && !verifiedSuperAdmin)) {
@@ -420,13 +437,21 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         enforcePatientInactiveConstraint(dto, newRole, target);
         checkTupleDuplicateOnUpdate(id, target, newUser, newRole, newHospital, locale);
+        // QA D902: a new role, a new holder or a switch-off takes the grant
+        // away from whoever held it - never the caller's own, never the last
+        // live super-admin's. Decided before the mapper overwrites the row.
+        if (takesGrantAway(target, newUser, newRole, activeAfter)) {
+            requireNotCallersOwn(target);
+            requireSuperAdminRemains(List.of(target));
+        }
 
         if (Boolean.TRUE.equals(dto.getActive())) {
             checkActiveDoctorConflict(dto, newUser, newRole, newHospital, locale);
         }
         // Resolved before anything on the row changes: a re-invite with no
         // registrar would leave a row nobody can confirm.
-        User newRegistrar = reinvite ? requireCallerAccount(locale) : null;
+        User newRegistrar = reinvite ? requireCallerAccount() : null;
+        boolean wasActive = Boolean.TRUE.equals(target.getActive());
 
         mapper.updateEntity(target, dto, newHospital, newRole);
         target.setUser(newUser);
@@ -438,6 +463,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             facilityAssignmentGuard.requireSingleFacilityKind(newUser, newRoleCode, newHospital, target.getId());
         }
         UserRoleHospitalAssignment saved = assignmentRepository.save(target);
+        if (!wasActive && Boolean.TRUE.equals(saved.getActive())) {
+            restoreLinkedStaff(saved);
+        }
         if (reinvite) {
             eventPublisher.publishEvent(new AssignmentCreatedEvent(saved.getId()));
             recordAssignmentAudit(saved);
@@ -479,15 +507,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      *
      * @throws BusinessException when the caller has no resolvable account
      */
-    private User requireCallerAccount(Locale locale) {
+    private User requireCallerAccount() {
         return accountAccess.currentUserId()
             .flatMap(userRepository::findById)
-            .orElseThrow(() -> new BusinessException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_ACTOR_MISMATCH,
-                    null,
-                    DEFAULT_ACTOR_RESOLUTION_FAILURE,
-                    locale)));
+            .orElseThrow(() -> new BusinessException("assignment.actor.unresolved"));
     }
 
     /**
@@ -515,7 +538,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                                               UserRoleHospitalAssignment target) {
         if (Boolean.TRUE.equals(dto.getActive()) && !Boolean.TRUE.equals(target.getActive())
                 && !roleValidator.isSuperAdminFromJwtClaim()) {
-            throw new BusinessException(DEFAULT_ACTIVATION_THROUGH_CODE);
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_ACTIVE, DEFAULT_ACTIVATION_THROUGH_CODE);
         }
     }
 
@@ -539,7 +562,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private Hospital resolveHospitalForUpdate(UserRoleHospitalAssignmentRequestDTO dto,
                                               UserRoleHospitalAssignment target, Role newRole, Locale locale) {
         if (dto.getHospitalId() != null) {
-            return resolveHospital(dto, newRole, locale);
+            return resolveHospital(dto, newRole);
         }
         return target.getHospital();
     }
@@ -552,7 +575,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         // Patient assignments must remain inactive until email verification activates them
         if (Boolean.TRUE.equals(dto.getActive())) {
-            throw new BusinessException("assignment.patient.cannotActivate");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_ACTIVE, "assignment.patient.cannotActivate");
         }
         if (dto.getActive() == null) {
             dto.setActive(target.getActive());
@@ -831,7 +854,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         for (UUID hospitalId : hospitalIds) {
             Hospital hospital;
             try {
-                hospital = resolveHospitalHumanAware(buildSingleAssignmentRequest(requestDTO, hospitalId), role, locale);
+                hospital = resolveHospitalHumanAware(buildSingleAssignmentRequest(requestDTO, hospitalId), role);
             } catch (BusinessException | ResourceNotFoundException unresolved) {
                 continue;
             }
@@ -871,15 +894,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public UserRoleHospitalAssignmentResponseDTO confirmAssignment(UUID assignmentId, String confirmationCode) {
-        Locale locale = LocaleContextHolder.getLocale();
         String sanitizedCode = confirmationCode != null ? confirmationCode.trim() : null;
         if (sanitizedCode == null || sanitizedCode.isBlank()) {
-            throw new BusinessException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_INVALID_CODE,
-                    null,
-                    DEFAULT_CONFIRMATION_CODE_INVALID,
-                    locale));
+            throw new BusinessException(MSG_ASSIGNMENT_INVALID_CODE);
         }
 
         // Confirming activates the row, so it takes the scope every other
@@ -888,12 +905,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         UserRoleHospitalAssignment assignment = findChangeable(assignmentId);
 
         if (assignment.getConfirmationVerifiedAt() != null) {
-            throw new BusinessException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_ALREADY_CONFIRMED,
-                    null,
-                    DEFAULT_ASSIGNMENT_ALREADY_CONFIRMED,
-                    locale));
+            throw new BusinessException(MSG_ASSIGNMENT_ALREADY_CONFIRMED);
         }
 
         // Only the registrar confirms, and that is decided BEFORE the code is
@@ -902,25 +914,15 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         User registrar = assignment.getRegisteredBy();
         // By id, as a re-invite records the registrar (requireCallerAccount):
         // a phone-login registrar's principal name resolves no account.
-        User actor = requireCallerAccount(locale);
+        User actor = requireCallerAccount();
 
         if (registrar == null || registrar.getId() == null || !registrar.getId().equals(actor.getId())) {
-            throw new BusinessException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_ACTOR_MISMATCH,
-                    null,
-                    DEFAULT_CONFIRMATION_ACTOR_MISMATCH,
-                    locale));
+            throw new BusinessException(MSG_ASSIGNMENT_ACTOR_MISMATCH);
         }
 
         String expectedCode = assignment.getConfirmationCode();
         if (expectedCode == null || !expectedCode.equalsIgnoreCase(sanitizedCode)) {
-            throw new BusinessException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_INVALID_CODE,
-                    null,
-                    DEFAULT_CONFIRMATION_CODE_INVALID,
-                    locale));
+            throw new BusinessException(MSG_ASSIGNMENT_INVALID_CODE);
         }
 
         // Registrar confirmation presents the SAME confirmation code the
@@ -955,7 +957,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .assignmentCode(assignment.getAssignmentCode())
             .roleName(role != null ? role.getName() : null)
             .roleCode(role != null ? getRoleCode(role) : null)
-            .roleDescription(role != null ? role.getDescription() : null)
+            .roleDescription(localizedRoleDescription(role))
             .hospitalName(hospital != null ? hospital.getName() : null)
             .hospitalCode(hospital != null ? hospital.getCode() : null)
             .hospitalAddress(hospital != null ? hospital.getAddress() : null)
@@ -963,7 +965,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .confirmationVerified(assignment.getConfirmationVerifiedAt() != null)
             .confirmationVerifiedAt(assignment.getConfirmationVerifiedAt())
             .profileCompletionUrl(profileCompletionUrl(assignment))
-            .profileChecklist(buildRoleProfileChecklist(role))
+            .profileChecklist(localizedProfileChecklist(role))
             .build();
     }
 
@@ -999,6 +1001,132 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         return buildPublicViewDTO(assignment, exposedUsername, tempPassword);
     }
 
+    /**
+     * QA D1123: "I have a code" — a phone-only holder activates with the
+     * number the desk registered and the one-time code from the SMS, no e-mail
+     * and no link needed. The code decides which pending assignment it is (a
+     * number never picks one alone); a wrong pair answers exactly as a wrong
+     * code does, so the endpoint tells nobody whether a number has an account.
+     *
+     * <p>Brute force: the public path is per-IP rate-limited (RateLimitFilter),
+     * and each number takes {@link #PHONE_ACTIVATION_MAX_FAILURES} wrong codes
+     * per {@link #PHONE_ACTIVATION_WINDOW_MS} window; the code itself expires
+     * after {@link #CONFIRMATION_CODE_EXPIRY_HOURS} hours.
+     */
+    @Override
+    public UserRoleAssignmentPublicViewDTO verifyAssignmentByPhone(String phone, String confirmationCode) {
+        String code = sanitizeConfirmationInput(confirmationCode);
+        String typed = phone != null ? phone.trim() : "";
+        if (typed.isEmpty()) {
+            throw invalidConfirmationCode();
+        }
+        String e164 = com.example.hms.utility.PhoneNumbers.toE164(
+            typed, com.example.hms.utility.PhoneNumbers.DEFAULT_CALLING_CODE);
+        String attemptsKey = e164 != null ? e164 : typed;
+        requireUnderPhoneActivationLimit(attemptsKey);
+
+        Optional<User> holder = (e164 == null ? Optional.<User>empty() : userRepository.findByPhoneNumber(e164))
+            .or(() -> userRepository.findByPhoneNumber(typed));
+        List<UserRoleHospitalAssignment> pending = new ArrayList<>();
+        holder.ifPresent(user -> pending.addAll(assignmentRepository.findByUserId(user.getId())));
+        // QA D1275 (round 27): a patient registered under a number another
+        // person already logs in with (a child on a parent's phone, D1061) has
+        // no login phone; the number is the contact on the patient record, and
+        // the code was sent to it. The code identifies the patient, not the
+        // phone: the pending PATIENT assignments of every patient record whose
+        // number is this one are candidates too. It used to look at the login
+        // holder only, so the right code was refused.
+        Set<UUID> seenUsers = new HashSet<>();
+        holder.ifPresent(user -> seenUsers.add(user.getId()));
+        for (UUID userId : patientUsersAtPhone(typed)) {
+            if (seenUsers.add(userId)) {
+                assignmentRepository.findByUserId(userId).stream()
+                    .filter(this::isPatientRole)
+                    .forEach(pending::add);
+            }
+        }
+        List<UserRoleHospitalAssignment> matching = pending.stream()
+            .filter(a -> !(a.getConfirmationVerifiedAt() != null && Boolean.TRUE.equals(a.getActive())))
+            .filter(a -> a.getConfirmationCode() != null && a.getConfirmationCode().equalsIgnoreCase(code))
+            .toList();
+        if (matching.size() != 1) {
+            recordPhoneActivationFailure(attemptsKey);
+            throw invalidConfirmationCode();
+        }
+        UserRoleAssignmentPublicViewDTO view = verifyAssignmentByCode(matching.get(0).getAssignmentCode(), code);
+        phoneActivationFailures.remove(attemptsKey);
+        return view;
+    }
+
+    /**
+     * QA D1275: the login accounts of the patient records whose contact number
+     * is the typed one (folded like every phone match: the eight subscriber
+     * digits narrow, the full number decides). Empty for a number too short
+     * to name a subscriber.
+     */
+    private List<UUID> patientUsersAtPhone(String typed) {
+        String key = com.example.hms.utility.PatientMatchKeys.phoneKey(typed);
+        if (!com.example.hms.utility.PatientMatchKeys.isSubscriberKey(key)) {
+            return List.of();
+        }
+        return patientRepository.findAllByPhoneSubscriber("%" + key,
+                org.springframework.data.domain.PageRequest.of(0, PatientRepository.PHONE_SUBSCRIBER_CAP)).stream()
+            .filter(p -> p.getUser() != null && p.getUser().getId() != null)
+            .filter(p -> com.example.hms.utility.PatientMatchKeys.samePhone(p.getPhoneNumberPrimary(), typed,
+                com.example.hms.utility.PhoneNumbers.DEFAULT_CALLING_CODE))
+            .map(p -> p.getUser().getId())
+            .distinct()
+            .toList();
+    }
+
+    private static final int PHONE_ACTIVATION_MAX_FAILURES = 5;
+    private static final long PHONE_ACTIVATION_WINDOW_MS = 15L * 60 * 1000;
+    private static final int PHONE_ACTIVATION_TRACKED_MAX = 10_000;
+
+    private static boolean isStale(java.util.Deque<Long> failures, long cutoff) {
+        Long last = failures.peekLast();
+        return last == null || last < cutoff;
+    }
+    /** Wrong-code times per number, oldest first, thread-safe deques (in memory: per instance, reset on restart). */
+    private final Map<String, java.util.Deque<Long>> phoneActivationFailures =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    private void requireUnderPhoneActivationLimit(String key) {
+        java.util.Deque<Long> failures = phoneActivationFailures.get(key);
+        if (failures == null) {
+            return;
+        }
+        long cutoff = System.currentTimeMillis() - PHONE_ACTIVATION_WINDOW_MS;
+        Long oldest = failures.peekFirst();
+        while (oldest != null && oldest < cutoff) {
+            failures.pollFirst();
+            oldest = failures.peekFirst();
+        }
+        if (failures.size() >= PHONE_ACTIVATION_MAX_FAILURES) {
+            // QA D1152: the lock ends by itself after the window; the old text
+            // told the patient to request a new code this page does not offer.
+            throw new BusinessException("assignment.phoneActivation.tooManyAttempts",
+                PHONE_ACTIVATION_WINDOW_MS / 60_000);
+        }
+    }
+
+    private void recordPhoneActivationFailure(String key) {
+        // Bounded: numbers whose wrong codes are all older than the window are
+        // forgotten once the map grows (a caller typing random numbers cannot
+        // grow it without limit; the per-IP rate limit slows it first).
+        if (phoneActivationFailures.size() > PHONE_ACTIVATION_TRACKED_MAX) {
+            long cutoff = System.currentTimeMillis() - PHONE_ACTIVATION_WINDOW_MS;
+            phoneActivationFailures.values().removeIf(d -> isStale(d, cutoff));
+        }
+        phoneActivationFailures
+            .computeIfAbsent(key, k -> new java.util.concurrent.ConcurrentLinkedDeque<>())
+            .addLast(System.currentTimeMillis());
+    }
+
+    private BusinessException invalidConfirmationCode() {
+        return new BusinessException(MSG_ASSIGNMENT_INVALID_CODE);
+    }
+
     private String sanitizeRequiredInput(String value, String messageKey) {
         String sanitized = value != null ? value.trim() : null;
         if (sanitized == null || sanitized.isBlank()) {
@@ -1010,9 +1138,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private String sanitizeConfirmationInput(String confirmationCode) {
         String sanitized = confirmationCode != null ? confirmationCode.trim() : null;
         if (sanitized == null || sanitized.isBlank()) {
-            throw new BusinessException(
-                messageSource.getMessage(MSG_ASSIGNMENT_INVALID_CODE, null,
-                    DEFAULT_CONFIRMATION_CODE_INVALID, LocaleContextHolder.getLocale()));
+            throw new BusinessException(MSG_ASSIGNMENT_INVALID_CODE);
         }
         return sanitized;
     }
@@ -1026,9 +1152,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         String expectedCode = assignment.getConfirmationCode();
         if (expectedCode == null || !expectedCode.equalsIgnoreCase(sanitizedConfirmation)) {
-            throw new BusinessException(
-                messageSource.getMessage(MSG_ASSIGNMENT_INVALID_CODE, null,
-                    DEFAULT_CONFIRMATION_CODE_INVALID, LocaleContextHolder.getLocale()));
+            throw new BusinessException(MSG_ASSIGNMENT_INVALID_CODE);
         }
     }
 
@@ -1037,9 +1161,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // from below, and neither is its assignment: the code is refused
         // outright, with nothing confirmed and no credentials handed out.
         if (assignment.getUser() != null && assignment.getUser().getDeactivatedByAdminAt() != null) {
-            throw new BusinessException(messageSource.getMessage(
-                MSG_ACCOUNT_DISABLED_BY_ADMIN, null, DEFAULT_ACCOUNT_DISABLED_BY_ADMIN,
-                org.springframework.context.i18n.LocaleContextHolder.getLocale()));
+            throw new BusinessException(MSG_ACCOUNT_DISABLED_BY_ADMIN);
         }
         // QA D789: an invitation to a hospital archived since is not switched on.
         FacilityAssignmentGuard.requireOpenForAssignment(assignment.getHospital());
@@ -1056,6 +1178,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         assignment.setActive(true);
         assignment.setTempPlainPassword(null);
         assignmentRepository.save(assignment);
+        restoreLinkedStaff(assignment);
         log.info("✅ Assignment '{}' verified and activated via {}.", assignment.getId(), source);
 
         // Activate the user account if it was pending assignment verification
@@ -1104,7 +1227,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .assignmentCode(assignment.getAssignmentCode())
             .roleName(role != null ? role.getName() : null)
             .roleCode(role != null ? getRoleCode(role) : null)
-            .roleDescription(role != null ? role.getDescription() : null)
+            .roleDescription(localizedRoleDescription(role))
             .hospitalName(hospital != null ? hospital.getName() : null)
             .hospitalCode(hospital != null ? hospital.getCode() : null)
             .hospitalAddress(hospital != null ? hospital.getAddress() : null)
@@ -1112,7 +1235,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .confirmationVerified(assignment.getConfirmationVerifiedAt() != null)
             .confirmationVerifiedAt(assignment.getConfirmationVerifiedAt())
             .profileCompletionUrl(profileCompletionUrl(assignment))
-            .profileChecklist(buildRoleProfileChecklist(role))
+            .profileChecklist(localizedProfileChecklist(role))
             .tempUsername(tempUsername)
             .tempPassword(tempPassword)
             .build();
@@ -1123,7 +1246,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         Objects.requireNonNull(requestDTO, "Request must not be null");
         String csvContent = requestDTO.getCsvContent();
         if (csvContent == null || csvContent.isBlank()) {
-            throw new BusinessException(DEFAULT_PROCESSING_ERROR);
+            throw new com.example.hms.exception.FieldBusinessException("csvContent", DEFAULT_PROCESSING_ERROR);
         }
 
         String delimiter = (requestDTO.getDelimiter() != null && !requestDTO.getDelimiter().isBlank())
@@ -1166,6 +1289,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     @Override
     public void deleteAssignment(UUID id) {
         UserRoleHospitalAssignment doomed = findChangeable(id);
+        // QA D902: a super-admin deleted their own global assignment, the
+        // platform's only one, and lost the role. Never your own row, and
+        // never the last live super-admin's.
+        requireNotCallersOwn(doomed);
+        requireSuperAdminRemains(List.of(doomed));
         // Prevent deletion if a Staff record still references this assignment.
         // Deleting it would leave the staff row with a dangling FK and cause a 500
         // on every /api/staff call that touches that row.
@@ -1179,9 +1307,36 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (encounterRepository.existsByAssignment_Id(id)) {
             throw new ConflictException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.assignment.deleteHasEncounters"));
         }
-        assignmentRepository.deleteById(id);
+        // QA round 14: a department (and twenty-odd other records) can name
+        // the assignment too, and the delete reached the foreign key and came
+        // back as a 500. Every kind of record that still points at it is named.
+        List<String> stillUsedBy = assignmentReferences.referencingEntities(id);
+        if (!stillUsedBy.isEmpty()) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(
+                "users.assignment.deleteStillReferenced", referenceLabels(stillUsedBy)));
+        }
+        try {
+            assignmentRepository.deleteById(id);
+            // Flushed here so a key the metamodel cannot see (a row hidden by a
+            // soft-delete restriction, a column only the database knows) is
+            // refused in words too, not at commit as a 500.
+            assignmentRepository.flush();
+        } catch (DataIntegrityViolationException ex) {
+            log.warn("Assignment {} is still referenced by a database key the pre-check did not see", id);
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(
+                "users.assignment.deleteStillReferenced",
+                com.example.hms.utility.MessageUtil.resolve("users.assignment.reference.other")));
+        }
         dropUserRoleWhenLastAssignment(doomed);
         log.info("🗑️ Deleted assignment ID '{}'", id);
+    }
+
+    /** The referencing entities in the caller's language, e.g. "departments, prescriptions". */
+    private static String referenceLabels(List<String> entities) {
+        return entities.stream()
+            .map(entity -> com.example.hms.utility.MessageUtil.resolve("users.assignment.reference." + entity))
+            .distinct()
+            .collect(java.util.stream.Collectors.joining(", "));
     }
 
     /**
@@ -1211,7 +1366,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public void deactivateProviderStaffAssignments(Collection<UUID> ids) {
-        List<UserRoleHospitalAssignment> retired = findAllChangeable(ids, accountAccess.providerStaffScope()).stream()
+        List<UserRoleHospitalAssignment> rows = findAllChangeable(ids, accountAccess.providerStaffScope());
+        // QA D902: checked on every row before any is switched off.
+        rows.forEach(this::requireNotCallersOwn);
+        requireSuperAdminRemains(rows);
+        List<UserRoleHospitalAssignment> retired = rows.stream()
             .filter(UserRoleHospitalAssignmentServiceImpl::retire)
             .toList();
         if (!retired.isEmpty()) {
@@ -1223,6 +1382,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     @Override
     public void deactivateAssignment(UUID id) {
         UserRoleHospitalAssignment assignment = findChangeable(id);
+        requireNotCallersOwn(assignment);
+        requireSuperAdminRemains(List.of(assignment));
         if (!retire(assignment)) {
             log.info("⏭️ Assignment ID '{}' is already inactive with no live invitation — no change.", id);
             return;
@@ -1247,13 +1408,18 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      * re-inviting goes through the resend path, which issues a new code.
      */
     private static boolean retire(UserRoleHospitalAssignment assignment) {
-        boolean changed = !Boolean.FALSE.equals(assignment.getActive())
-            || assignment.getConfirmationCode() != null
-            || assignment.getTempPlainPassword() != null;
+        boolean changed = stillGrantsAccess(assignment);
         assignment.setActive(false);
         assignment.setConfirmationCode(null);
         assignment.setTempPlainPassword(null);
         return changed;
+    }
+
+    /** Active, or still able to come on through its code: what {@link #retire} takes away. */
+    private static boolean stillGrantsAccess(UserRoleHospitalAssignment assignment) {
+        return !Boolean.FALSE.equals(assignment.getActive())
+            || assignment.getConfirmationCode() != null
+            || assignment.getTempPlainPassword() != null;
     }
 
     /**
@@ -1271,7 +1437,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      */
     @Override
     public void deleteAllAssignmentsForUser(UUID userId) {
+        requireNotCallersOwnAccount(userId);
         List<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUserId(userId);
+        requireSuperAdminRemains(assignments);
         // Every row, including a pending invitation that was never active:
         // its code must stop working too (see retire).
         List<UserRoleHospitalAssignment> deactivated = assignments.stream()
@@ -1312,6 +1480,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      */
     @Override
     public void retireAssignmentsForUserWithinCallerScope(UUID userId) {
+        // QA D902: never the caller's own account, whatever their scope.
+        requireNotCallersOwnAccount(userId);
         UserAccountAccess.AssignmentScope scope = accountAccess.assignmentScope();
         if (scope.everywhere()) {
             deleteAllAssignmentsForUser(userId);
@@ -1321,17 +1491,213 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         boolean shielded = userRepository.findById(userId)
             .map(user -> scope.shields(user, assignments))
             .orElse(false);
-        List<UserRoleHospitalAssignment> deactivated = shielded
+        List<UserRoleHospitalAssignment> candidates = shielded
             ? List.of()
-            : assignments.stream()
-                .filter(scope::mayChange)
-                .filter(UserRoleHospitalAssignmentServiceImpl::retire)
-                .toList();
+            : assignments.stream().filter(scope::mayChange).toList();
+        // QA D902: checked on the rows as they are now - once retire() has
+        // switched them off, none reads as a live super-admin and the check
+        // could never refuse. scope.shields already keeps a super-admin's
+        // account out of a hospital admin's reach; this holds even if it
+        // did not.
+        requireSuperAdminRemains(candidates);
+        List<UserRoleHospitalAssignment> deactivated = candidates.stream()
+            .filter(UserRoleHospitalAssignmentServiceImpl::retire)
+            .toList();
         if (!deactivated.isEmpty()) {
             assignmentRepository.saveAll(deactivated);
         }
         log.info("🔒 Deactivated {} assignment(s) for user ID '{}' within the caller's scope.",
             deactivated.size(), userId);
+    }
+
+    @Override
+    public int retireStaffAccessAtHospital(UUID userId, UUID hospitalId, UUID staffAssignmentId) {
+        if (userId == null) {
+            return 0;
+        }
+        // QA D902: never the caller's own access, whatever their scope.
+        requireNotCallersOwnAccount(userId);
+        // Only an administrator of that hospital switches its staff off: holding
+        // any other role there (a nurse at B who administers A) is not enough.
+        UserAccountAccess.AssignmentScope scope = accountAccess.assignmentScope();
+        if (!scope.everywhere() && (hospitalId == null || !scope.hospitalIds().contains(hospitalId))) {
+            throw new AccessDeniedException("Access denied");
+        }
+        List<UserRoleHospitalAssignment> held = assignmentRepository.findByUserId(userId);
+        List<UserRoleHospitalAssignment> doomed = held.stream()
+            .filter(row -> isStaffAccessAt(row, hospitalId, staffAssignmentId))
+            .filter(UserRoleHospitalAssignmentServiceImpl::stillGrantsAccess)
+            .toList();
+        if (doomed.isEmpty()) {
+            return 0;
+        }
+        // Every row or none: a staff record switched off while an
+        // administrator role at the same hospital stays on would again say
+        // "no longer has access" about someone who still has it.
+        boolean outOfReach = !scope.everywhere()
+            && (scope.shields(doomed.get(0).getUser(), held) || !doomed.stream().allMatch(scope::mayChange));
+        if (outOfReach) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(MSG_STAFF_ACCESS_OUT_OF_REACH));
+        }
+        // QA D902: on the rows as they are now, before retire() switches them off.
+        requireSuperAdminRemains(doomed);
+        User actor = accountAccess.currentUserId().flatMap(userRepository::findById).orElse(null);
+        // Built while the rows are still attached; written only once the
+        // switch-off has committed, so a rollback leaves no revocation behind.
+        List<AuditEventRequestDTO> events = doomed.stream()
+            .map(row -> staffAccessRevokedEvent(row, actor))
+            .toList();
+        doomed.forEach(UserRoleHospitalAssignmentServiceImpl::retire);
+        assignmentRepository.saveAll(doomed);
+        // logEvents never throws: a failed audit must not turn a committed
+        // deactivation into a 500.
+        TransactionCallbacks.afterCommit(() -> auditEventLogService.logEvents(events));
+        log.info("🔒 Staff record deactivated: retired {} assignment(s) for user ID '{}' at hospital '{}'.",
+            doomed.size(), userId, hospitalId);
+        return doomed.size();
+    }
+
+    /**
+     * QA D907: a staff role row at this hospital, or the staff record's own
+     * row when it is a platform-wide one. A patient row is the holder's own
+     * care, never staff access; a row at another hospital is that hospital's.
+     */
+    private boolean isStaffAccessAt(UserRoleHospitalAssignment row, UUID hospitalId, UUID staffAssignmentId) {
+        if (row.getRole() == null || isRoleCode(getRoleCode(row.getRole()), ROLE_PATIENT)) {
+            return false;
+        }
+        if (row.getHospital() == null) {
+            return staffAssignmentId != null && staffAssignmentId.equals(row.getId());
+        }
+        return hospitalId != null && hospitalId.equals(row.getHospital().getId());
+    }
+
+    private AuditEventRequestDTO staffAccessRevokedEvent(UserRoleHospitalAssignment row, User actor) {
+        User assignee = row.getUser();
+        String roleCode = getRoleCode(row.getRole());
+        String assigneeDisplay = resolveDisplayName(assignee, UNKNOWN_USER);
+        Map<String, Object> details = new HashMap<>();
+        details.put("revokedRole", roleCode);
+        details.put("reason", "STAFF_DEACTIVATED");
+        if (assignee != null) {
+            details.put("assigneeId", assignee.getId());
+        }
+        return AuditEventRequestDTO.builder()
+            .userId(actor != null ? actor.getId() : null)
+            .userName(resolveDisplayName(actor, null))
+            .assignmentId(row.getId())
+            .hospitalName(resolveHospitalName(row.getHospital()))
+            .hospitalId(row.getHospital() != null ? row.getHospital().getId() : null)
+            .resourceName(assigneeDisplay)
+            .resourceId(row.getId() != null ? row.getId().toString() : null)
+            .entityType(AUDIT_ENTITY_ASSIGNMENT)
+            .eventType(AuditEventType.ROLE_REVOKED)
+            .eventDescription(String.format("Revoked role '%s' from %s: staff record deactivated",
+                roleCode, assigneeDisplay))
+            .status(AuditStatus.SUCCESS)
+            .details(details)
+            .build();
+    }
+
+    /**
+     * QA D907: the staff record a staff deactivation switched off with this
+     * assignment comes back with it, so /staff does not go on reading
+     * "inactive" for someone who works here again.
+     */
+    private void restoreLinkedStaff(UserRoleHospitalAssignment assignment) {
+        if (assignment.getId() == null) {
+            return;
+        }
+        UUID hospitalId = assignment.getHospital() != null ? assignment.getHospital().getId() : null;
+        // Only a record at the assignment's own hospital: a row a super-admin
+        // moved to another hospital must not revive the old hospital's staff
+        // record when the new hospital's admin re-invites it (#968 review).
+        List<Staff> retired = staffRepository.findByAssignment_Id(assignment.getId()).stream()
+            .filter(staff -> !staff.isActive())
+            .filter(staff -> hospitalId != null && staff.getHospital() != null
+                && hospitalId.equals(staff.getHospital().getId()))
+            .toList();
+        retired.forEach(staff -> staff.setActive(true));
+        if (!retired.isEmpty()) {
+            staffRepository.saveAll(retired);
+            log.info("✅ Restored {} staff record(s) with assignment '{}'.", retired.size(), assignment.getId());
+        }
+    }
+
+    /* ===================== Platform continuity (QA D902) ===================== */
+
+
+    /** Whether this update leaves the row's current holder without its current grant. */
+    private static boolean takesGrantAway(UserRoleHospitalAssignment target, User newUser, Role newRole,
+                                          boolean activeAfter) {
+        boolean switchedOff = Boolean.TRUE.equals(target.getActive()) && !activeAfter;
+        boolean roleChanges = target.getRole() == null || !Objects.equals(newRole.getId(), target.getRole().getId());
+        boolean holderChanges = target.getUser() == null || newUser == null
+            || !Objects.equals(newUser.getId(), target.getUser().getId());
+        return switchedOff || roleChanges || holderChanges;
+    }
+
+    /**
+     * QA D902: nobody removes, deactivates or re-roles their own assignment,
+     * whatever the role. A hospital admin's own admin row is already out of
+     * their reach ({@link #findChangeable} answers 404); a super-admin's was
+     * not, and deleting it took the platform's only super-admin away. Another
+     * administrator does it.
+     */
+    private void requireNotCallersOwn(UserRoleHospitalAssignment row) {
+        if (row.getUser() != null && accountAccess.isSelf(row.getUser())) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(MSG_REMOVE_OWN));
+        }
+    }
+
+    /** {@link #requireNotCallersOwn} for every row of an account at once. */
+    private void requireNotCallersOwnAccount(UUID userId) {
+        if (userId != null && accountAccess.currentUserId().map(userId::equals).orElse(false)) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(MSG_REMOVE_OWN));
+        }
+    }
+
+    /** A super-admin row that signs someone in today: active, on an active, undeleted account. */
+    private boolean isLiveSuperAdmin(UserRoleHospitalAssignment row) {
+        User holder = row.getUser();
+        return Boolean.TRUE.equals(row.getActive())
+            && row.getRole() != null && isRoleCode(getRoleCode(row.getRole()), ROLE_SUPER_ADMIN)
+            && holder != null && holder.isActive() && !holder.isDeleted();
+    }
+
+    /**
+     * QA D902: refuses a change that would take away the last live super-admin
+     * assignment. Before counting the others it locks the super-admin role
+     * rows ({@link RoleRepository#lockRolesWithCodes}), the one lock every
+     * such removal takes - an assignment's, or its account's switch-off or
+     * deletion. Two removals racing each other therefore run one after the
+     * other: the second waits, and its count (a new statement, so a new
+     * READ COMMITTED snapshot) sees what the first committed.
+     *
+     * <p>{@code losing} must be read before the change marks those rows or
+     * their account as no longer live: a row that already reads inactive is
+     * not counted as lost.
+     */
+    private void requireSuperAdminRemains(Collection<UserRoleHospitalAssignment> losing) {
+        Set<UUID> lost = losing.stream()
+            .filter(this::isLiveSuperAdmin)
+            .map(UserRoleHospitalAssignment::getId)
+            .filter(Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+        if (lost.isEmpty()) {
+            return;
+        }
+        roleRepository.lockRolesWithCodes(SUPER_ADMIN_CODES);
+        boolean anotherRemains = assignmentRepository.findLiveAssignmentsWithRoleCodes(SUPER_ADMIN_CODES).stream()
+            .anyMatch(row -> !lost.contains(row.getId()));
+        if (!anotherRemains) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("users.assignment.lastSuperAdmin"));
+        }
+    }
+
+    @Override
+    public void requireSuperAdminRemainsWithoutUser(UUID userId) {
+        requireSuperAdminRemains(assignmentRepository.findByUserId(userId));
     }
 
     /** Roles are platform-wide: deleting one is the super-admin's alone. */
@@ -1341,8 +1707,16 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             throw new AccessDeniedException("Access denied");
         }
         final Locale locale = LocaleContextHolder.getLocale();
-        List<UserRoleHospitalAssignment> attached = assignmentRepository.findByRoleId(roleId);
-        if (!attached.isEmpty()) {
+        // QA D902 (#968 review): the same rule as DELETE /roles/{id} - a
+        // built-in role is never deleted, assigned or not.
+        boolean builtIn = roleRepository.findById(roleId)
+            .map(Role::getCode)
+            .filter(SecurityConstants::isBuiltInRoleCode)
+            .isPresent();
+        if (builtIn) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("role.delete.builtIn"));
+        }
+        if (assignmentRepository.existsByRoleId(roleId)) {
             throw new ConflictException(
                 messageSource.getMessage(MSG_ROLE_DELETE_CONFLICT,
                     null,
@@ -1375,19 +1749,17 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             return roleRepository.findByNameIgnoreCase(dto.getRoleName()).orElseThrow(() ->
                 new ResourceNotFoundException(MSG_ROLE_NOT_FOUND_BY_NAME, dto.getRoleName()));
         }
-        throw new BusinessException(
-            messageSource.getMessage(MSG_ROLE_REQUIRED, null,
-                DEFAULT_ROLE_REQUIRED_MESSAGE, locale));
+        throw new BusinessException(MSG_ROLE_REQUIRED);
     }
 
     /**
      * Hospital is required unless role is global (ROLE_SUPER_ADMIN).
      */
-    private Hospital resolveHospital(UserRoleHospitalAssignmentRequestDTO dto, Role role, Locale locale) {
-        return resolveHospitalHumanAware(dto, role, locale);
+    private Hospital resolveHospital(UserRoleHospitalAssignmentRequestDTO dto, Role role) {
+        return resolveHospitalHumanAware(dto, role);
     }
 
-    private Hospital resolveHospitalHumanAware(UserRoleHospitalAssignmentRequestDTO dto, Role role, Locale locale) {
+    private Hospital resolveHospitalHumanAware(UserRoleHospitalAssignmentRequestDTO dto, Role role) {
         if (dto.getHospitalId() != null) {
             return hospitalRepository.findById(dto.getHospitalId()).orElseThrow(() ->
                 new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND, dto.getHospitalId()));
@@ -1408,9 +1780,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
 
         // All other staff/admin roles require a hospital
-        throw new BusinessException(
-            messageSource.getMessage("hospital.required", null,
-                DEFAULT_HOSPITAL_REQUIRED_MESSAGE, locale));
+        throw new BusinessException("hospital.required");
     }
 
     private void checkActiveDoctorConflict(UserRoleHospitalAssignmentRequestDTO dto,
@@ -1628,7 +1998,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                                       String[] tokens,
                                       Map<String, Integer> headerIndex,
                                       UserRoleAssignmentBulkImportRequestDTO options) {
-        Boolean active = parseBoolean(getColumnValue(tokens, headerIndex, "active", "is_active"), options.getDefaultActive());
+        Boolean active = parseBoolean(getColumnValue(tokens, headerIndex, FIELD_ACTIVE, "is_active"), options.getDefaultActive());
         if (active != null) {
             builder.active(active);
         }
@@ -1907,9 +2277,12 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             Hospital hospital = assignment.getHospital();
             User user = assignment.getUser();
 
+            // QA D1123: every SMS is written in the reader's language (the
+            // request's: the desk's at registration, the holder's own on a
+            // re-send), names the role by its label, never its code.
+            Locale locale = smsLocaleFor(assignment, user);
             String confirmationCode = assignment.getConfirmationCode();
-            String assignmentCode = assignment.getAssignmentCode();
-            String roleDisplay = role != null ? getRoleCode(role) : UNKNOWN_ROLE;
+            String roleLabel = smsRoleLabel(role, locale);
             String hospitalDisplay = resolveHospitalName(hospital);
             String assigneeDisplay = resolveDisplayName(user, user != null ? user.getEmail() : "user");
 
@@ -1917,14 +2290,64 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             // isolated: a throwing registrar/hospital notification used to
             // abort the whole method before the one SMS that matters was even
             // attempted — and before any SMS outcome could be recorded.
-            notifyAssigneeBySms(assignment, user, roleDisplay, hospitalDisplay, confirmationCode, assignmentCode);
+            notifyAssigneeBySms(assignment, user, locale, roleLabel, hospitalDisplay, confirmationCode);
             sendFyiSmsQuietly(assignment.getId(), "Registrar", () ->
-                notifyRegistrarBySms(assignment.getRegisteredBy(), roleDisplay, assigneeDisplay, hospitalDisplay, assignmentCode, confirmationCode));
+                notifyRegistrarBySms(assignment.getRegisteredBy(), locale, roleLabel, assigneeDisplay, hospitalDisplay, confirmationCode));
             sendFyiSmsQuietly(assignment.getId(), "Hospital", () ->
-                notifyHospitalBySms(hospital, assigneeDisplay, roleDisplay, assignmentCode, confirmationCode));
+                notifyHospitalBySms(hospital, locale, assigneeDisplay, roleLabel, confirmationCode));
         } catch (RuntimeException e) {
             log.warn("⚠️ Failed to send SMS notifications for assignment '{}': {}", assignment.getId(), e.getMessage());
         }
+    }
+
+    /** The SMS languages the bundles carry; anything else reads French, the house default. */
+    private static final Set<String> SMS_LANGUAGES = Set.of("fr", "en", "es");
+
+    static Locale smsLocale() {
+        // LocaleContextHolder never answers null (it falls back to the JVM default).
+        String language = LocaleContextHolder.getLocale().getLanguage();
+        return SMS_LANGUAGES.contains(language) ? Locale.forLanguageTag(language) : Locale.FRENCH;
+    }
+
+    /**
+     * A patient's activation SMS is in the language they stated, else the
+     * request's; a staff member's in the request's (staff state none).
+     */
+    private Locale smsLocaleFor(UserRoleHospitalAssignment assignment, User user) {
+        Locale fallback = smsLocale();
+        if (patientLocaleResolver == null || user == null || user.getId() == null || !isPatientRole(assignment)) {
+            return fallback;
+        }
+        return patientLocaleResolver.resolve(patientRepository.findByUserId(user.getId()).orElse(null), fallback);
+    }
+
+    private boolean isPatientRole(UserRoleHospitalAssignment assignment) {
+        return assignment.getRole() != null
+            && stripRolePrefix(ROLE_PATIENT).equalsIgnoreCase(stripRolePrefix(getRoleCode(assignment.getRole())));
+    }
+
+    /**
+     * The role as its reader names it ({@code email.role.label.NURSE} =
+     * "Infirmier(ère)"), the same labels as the activation e-mail. An unknown
+     * role reads as a humanised code ("Lab Manager"), never {@code ROLE_X}.
+     */
+    private String smsRoleLabel(Role role, Locale locale) {
+        String code = role != null ? getRoleCode(role) : null;
+        if (code == null || code.isBlank()) {
+            return "";
+        }
+        String bare = stripRolePrefix(code);
+        String humanised = Arrays.stream(bare.split("_"))
+            .filter(word -> !word.isEmpty())
+            .map(word -> word.charAt(0) + word.substring(1).toLowerCase(Locale.ROOT))
+            .collect(Collectors.joining(" "));
+        return messageSource.getMessage("email.role.label." + bare, null, humanised, locale);
+    }
+
+    /** One SMS sentence from the notification bundle; a missing key reads as the key, never null. */
+    private String smsText(String key, Locale locale, Object... args) {
+        String text = messageSource.getMessage(key, args, key, locale);
+        return text == null ? key : text.strip();
     }
 
     /**
@@ -1941,57 +2364,44 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     private void notifyRegistrarBySms(User registrar,
-                                      String roleDisplay,
+                                      Locale locale,
+                                      String roleLabel,
                                       String assigneeDisplay,
                                       String hospitalDisplay,
-                                      String assignmentCode,
                                       String confirmationCode) {
-        if (registrar == null) {
+        if (registrar == null || !hasText(confirmationCode)) {
             return;
         }
         String phone = registrar.getPhoneNumber();
         if (phone == null || phone.isBlank()) {
             return;
         }
-        String message = String.format(
-            "✅ You assigned role '%s' to %s in '%s'. Assignment: %s%s",
-            roleDisplay,
-            assigneeDisplay,
-            hospitalDisplay,
-            assignmentCode,
-            buildConfirmationSuffix(confirmationCode)
-        );
-        sendSmsSilently(phone, message);
+        sendSmsSilently(phone, smsText("sms.activation.registrar", locale,
+            assigneeDisplay, roleLabel, hospitalDisplay, confirmationCode));
     }
 
     private void notifyHospitalBySms(Hospital hospital,
+                                     Locale locale,
                                      String assigneeDisplay,
-                                     String roleDisplay,
-                                     String assignmentCode,
+                                     String roleLabel,
                                      String confirmationCode) {
-        if (hospital == null) {
+        if (hospital == null || !hasText(confirmationCode)) {
             return;
         }
         String phone = hospital.getPhoneNumber();
         if (phone == null || phone.isBlank()) {
             return;
         }
-        String message = String.format(
-            "📢 New assignment: %s -> role '%s'. Assignment ref: %s%s",
-            assigneeDisplay,
-            roleDisplay,
-            assignmentCode,
-            buildConfirmationSuffix(confirmationCode)
-        );
-        sendSmsSilently(phone, message);
+        sendSmsSilently(phone, smsText("sms.activation.hospital", locale,
+            assigneeDisplay, roleLabel, confirmationCode));
     }
 
     private void notifyAssigneeBySms(UserRoleHospitalAssignment assignment,
                                      User user,
-                                     String roleDisplay,
+                                     Locale locale,
+                                     String roleLabel,
                                      String hospitalDisplay,
-                                     String confirmationCode,
-                                     String assignmentCode) {
+                                     String confirmationCode) {
         if (user == null) {
             return;
         }
@@ -2010,13 +2420,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 ActivationDeliveryTracker.maskPhone(phone), "confirmation code missing");
             return;
         }
-        String message = String.format(
-            "👋 Confirm your '%s' role at '%s'. Use code: %s (reference: %s)",
-            roleDisplay,
-            hospitalDisplay,
-            confirmationCode,
-            assignmentCode
-        );
+        String message = activationSmsText(assignment, locale, roleLabel, hospitalDisplay, confirmationCode);
         // Own try/catch: this is the one SMS the ACTIVATION depends on, so
         // its outcome must not be lumped in with the registrar/hospital FYI
         // messages the outer catch covers.
@@ -2050,10 +2454,27 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
     }
 
-    private String buildConfirmationSuffix(String confirmationCode) {
-        return (confirmationCode != null && !confirmationCode.isBlank())
-            ? ". Staff confirmation code: " + confirmationCode
-            : "";
+    /**
+     * QA D1123: the activation SMS a phone-only holder can act on — the
+     * one-time code and the link to the page that takes it, in their language.
+     * The link carries only the assignment reference; the code is the one
+     * secret in the message (no temporary password, ever).
+     */
+    String activationSmsText(UserRoleHospitalAssignment assignment, Locale locale,
+                             String roleLabel, String hospitalDisplay, String confirmationCode) {
+        String link = profileCompletionUrl(assignment);
+        String linkText = link != null ? link : "";
+        return isPatientRole(assignment)
+            ? smsText("sms.activation.patient", locale, hospitalDisplay, confirmationCode, linkText)
+            : smsText("sms.activation.staff", locale, roleLabel, hospitalDisplay, confirmationCode, linkText);
+    }
+
+    private static String stripRolePrefix(String code) {
+        if (code == null) {
+            return "";
+        }
+        String upper = code.trim().toUpperCase(Locale.ROOT);
+        return upper.startsWith(ROLE_PREFIX) ? upper.substring(ROLE_PREFIX.length()) : upper;
     }
 
     private void sendSmsSilently(String phoneNumber, String message) {
@@ -2063,43 +2484,24 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         smsService.send(phoneNumber, message);
     }
 
-    /** One-time credentials for email-less (phone-first) accounts, sent by SMS. */
-    private void sendCredentialsSmsFallback(UserRoleHospitalAssignment assignment, User user) {
+    /**
+     * One-time credentials of an email-less (phone-first) account. QA D1123:
+     * they are NEVER sent by SMS (a temporary password in an SMS sits on the
+     * handset and in carrier logs). The activation SMS carries the one-time
+     * code and the link; the page that takes the code shows the sign-in
+     * details once (verifyAssignmentByCode). Only the no-phone case is
+     * reported: QA D1061, a dependant registered under a guardian's number,
+     * whose registration response carries the credentials instead.
+     */
+    private void reportCredentialsRoute(UserRoleHospitalAssignment assignment, User user) {
         String tempPassword = assignment.getTempPlainPassword();
         if (tempPassword == null || tempPassword.isBlank()) {
             return;
         }
-        // Credentials must NEVER reach the mock SMS channel — it logs full
-        // message bodies, which would put the temp password into plaintext logs.
-        if (!smsService.deliversRealSms()) {
-            log.warn("⚠️ No real SMS channel configured — one-time credentials for assignment '{}' were NOT delivered; "
-                + "the patient can still activate via the staff-read confirmation code.", assignment.getId());
+        if (user.getPhoneNumber() == null || user.getPhoneNumber().isBlank()) {
             recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
                 NotificationDeliveryStatusDTO.PURPOSE_CREDENTIALS,
-                NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED,
-                ActivationDeliveryTracker.maskPhone(user.getPhoneNumber()),
-                "no real SMS channel — one-time credentials were not delivered");
-            return;
-        }
-        String message = String.format(
-            "🔐 e-Keneya account created. Username: %s Temp password: %s — change it at first login.",
-            user.getUsername(),
-            tempPassword
-        );
-        // Own try/catch: an SMS failure here must not be misfiled as an
-        // EMAIL outcome by sendAssignmentEmailNotification's catch.
-        try {
-            sendSmsSilently(user.getPhoneNumber(), message);
-            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
-                NotificationDeliveryStatusDTO.PURPOSE_CREDENTIALS,
-                NotificationDeliveryStatusDTO.OUTCOME_SENT,
-                ActivationDeliveryTracker.maskPhone(user.getPhoneNumber()), null);
-        } catch (RuntimeException ex) {
-            log.warn("⚠️ Failed to send credentials SMS for assignment '{}': {}", assignment.getId(), ex.getMessage());
-            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
-                NotificationDeliveryStatusDTO.PURPOSE_CREDENTIALS,
-                NotificationDeliveryStatusDTO.OUTCOME_FAILED,
-                ActivationDeliveryTracker.maskPhone(user.getPhoneNumber()), DETAIL_SEE_SERVER_LOGS);
+                NotificationDeliveryStatusDTO.OUTCOME_NO_CONTACT, null, null);
         }
     }
 
@@ -2112,15 +2514,15 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
             String email = user.getEmail();
             if (email == null || email.isBlank()) {
-                // Phone-first patients have no email: deliver the one-time
-                // credentials over SMS instead. The confirmation code already
-                // goes out separately via sendAssignmentSmsNotifications.
+                // Phone-first patients have no email: the activation SMS
+                // (sendAssignmentSmsNotifications) carries the code and the
+                // link; the sign-in details are shown once the code is typed.
                 // NO_CONTACT is informational, not a warning — the portal
                 // only alerts on FAILED / NOT_CONFIGURED / MOCKED.
                 recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_EMAIL,
                     NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
                     NotificationDeliveryStatusDTO.OUTCOME_NO_CONTACT, null, null);
-                sendCredentialsSmsFallback(assignment, user);
+                reportCredentialsRoute(assignment, user);
                 return;
             }
 
@@ -2212,7 +2614,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             }
 
             String roleDisplay = role != null ? getRoleCode(role) : UNKNOWN_ROLE;
-            String assigneeDisplay = resolveDisplayName(assignee, "unknown user");
+            String assigneeDisplay = resolveDisplayName(assignee, UNKNOWN_USER);
 
             AuditEventRequestDTO auditEvent = AuditEventRequestDTO.builder()
                 .userId(registrar.getId())
@@ -2257,7 +2659,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             User assignee = assignment.getUser();
             Role role = assignment.getRole();
 
-            String assigneeDisplay = resolveDisplayName(assignee, "unknown user");
+            String assigneeDisplay = resolveDisplayName(assignee, UNKNOWN_USER);
             String roleDisplay = role != null ? getRoleCode(role) : UNKNOWN_ROLE;
 
             AuditEventRequestDTO auditEvent = AuditEventRequestDTO.builder()
@@ -2283,26 +2685,58 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
     }
 
-    private List<String> buildRoleProfileChecklist(Role role) {
+    /**
+     * QA D941: the welcome page read the seeded English role description in a
+     * French session. A seeded role reads {@code role.description.<CODE>} in
+     * the caller's language; a role an administrator created keeps its own text.
+     */
+    private String localizedRoleDescription(Role role) {
         if (role == null) {
-            return DEFAULT_PROFILE_CHECKLIST;
+            return null;
         }
         String code = getRoleCode(role);
         if (code == null || code.isBlank()) {
-            return DEFAULT_PROFILE_CHECKLIST;
+            return role.getDescription();
         }
         String normalized = code.trim().toUpperCase(Locale.ROOT);
-        List<String> checklist = ROLE_PROFILE_CHECKLISTS.get(normalized);
-        if (checklist != null) {
-            return checklist;
+        String key = "role.description." + (normalized.startsWith(ROLE_PREFIX) ? normalized : ROLE_PREFIX + normalized);
+        // A description an administrator rewrote is theirs; only the seeded text is translated.
+        String seeded = messageSource.getMessage(key, null, null, Locale.ENGLISH);
+        if (seeded == null || (role.getDescription() != null && !role.getDescription().trim().equals(seeded.trim()))) {
+            return role.getDescription();
         }
-        if (!normalized.startsWith(ROLE_PREFIX)) {
-            checklist = ROLE_PROFILE_CHECKLISTS.get(ROLE_PREFIX + normalized);
-            if (checklist != null) {
-                return checklist;
-            }
+        return messageSource.getMessage(key, null, role.getDescription(), LocaleContextHolder.getLocale());
+    }
+
+    /** QA D941: each checklist line in the caller's language, the English line when a key is missing. */
+    private List<String> localizedProfileChecklist(Role role) {
+        String owner = checklistKey(role);
+        List<String> english = buildRoleProfileChecklist(role);
+        Locale locale = LocaleContextHolder.getLocale();
+        List<String> out = new java.util.ArrayList<>(english.size());
+        for (int i = 0; i < english.size(); i++) {
+            out.add(messageSource.getMessage("onboarding.checklist." + owner + "." + (i + 1), null, english.get(i), locale));
         }
-        return DEFAULT_PROFILE_CHECKLIST;
+        return out;
+    }
+
+    /** The checklist's key: the role code it is listed under (with or without ROLE_), else DEFAULT. */
+    private String checklistKey(Role role) {
+        String code = role != null ? getRoleCode(role) : null;
+        if (code == null || code.isBlank()) {
+            return DEFAULT_CHECKLIST_KEY;
+        }
+        String normalized = code.trim().toUpperCase(Locale.ROOT);
+        if (ROLE_PROFILE_CHECKLISTS.containsKey(normalized)) {
+            return normalized;
+        }
+        String prefixed = normalized.startsWith(ROLE_PREFIX) ? normalized : ROLE_PREFIX + normalized;
+        return ROLE_PROFILE_CHECKLISTS.containsKey(prefixed) ? prefixed : DEFAULT_CHECKLIST_KEY;
+    }
+
+    private List<String> buildRoleProfileChecklist(Role role) {
+        String key = checklistKey(role);
+        return DEFAULT_CHECKLIST_KEY.equals(key) ? DEFAULT_PROFILE_CHECKLIST : ROLE_PROFILE_CHECKLISTS.get(key);
     }
 
     @Override
@@ -2372,6 +2806,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // at an archived hospital queued an EMAIL and an SMS activation (200).
         // It is the same re-invitation as regenerate-code: the same 409.
         FacilityAssignmentGuard.requireOpenForAssignment(assignment.getHospital());
+        // QA r22 (setup observation): an assignment already verified has no
+        // activation left to send; re-sending it mailed and texted a live
+        // account its activation code again (200). Same answer as the public
+        // re-send, whose claim skips an active row: refused, 409, localized.
+        if (assignment.getConfirmationVerifiedAt() != null) {
+            throw new com.example.hms.exception.ConflictException("assignment.resend.alreadyVerified");
+        }
         notifyAssignee(assignment);
     }
 

@@ -1,10 +1,22 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { hasValue, missingRequiredMessage } from '../shared/required-fields';
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+  ElementRef,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { of, Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
+import { Subject, of } from 'rxjs';
+import { catchError, debounceTime, map, switchMap } from 'rxjs/operators';
 import { AppointmentService, AppointmentUpsertRequest } from '../services/appointment.service';
+import { SlotInventoryService } from '../services/slot-inventory.service';
+import { OVERBOOK_REASON_FIELD, freeSlotTimes, refusesForOverbookReason } from './published-slot';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { StaffService, isClinicalProvider, StaffResponse } from '../services/staff.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
@@ -13,6 +25,23 @@ import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { localDateString } from '../shared/date-utils';
+import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { comboboxKey } from '../shared/a11y/combobox-keys';
+import { labelledRefusalReason } from '../shared/refusal-reason';
+
+import { rankPeopleByName } from '../shared/person-search';
+/** QA D984: the label each refused field is reported under. */
+const APPOINTMENT_FIELD_LABELS: Readonly<Record<string, string>> = {
+  appointmentDate: 'APPOINTMENTS.DATE',
+  startTime: 'APPOINTMENTS.START_TIME',
+  endTime: 'APPOINTMENTS.END_TIME',
+  reason: 'APPOINTMENTS.REASON',
+  notes: 'APPOINTMENTS.NOTES',
+  overbookReason: 'APPOINTMENTS.OVERBOOK_REASON',
+};
+
+/** The clinician picker's search field. */
+const STAFF_FIELD = 'apptStaffSearch';
 
 interface DeptOption {
   id: string;
@@ -22,7 +51,14 @@ interface DeptOption {
 @Component({
   selector: 'app-appointment-form',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
+  imports: [
+    PersonNamePipe,
+    PatientSublinePipe,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './appointment-form.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-form.scss',
@@ -37,13 +73,25 @@ export class AppointmentFormComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly slots = inject(SlotInventoryService);
 
   saving = signal(false);
+
+  /** QA D1429: the chosen time is not a published free slot, so the form asks why. */
+  offSlot = signal(false);
+  private readonly slotCheck$ = new Subject<void>();
+  /** QA D1474: why this time cannot be booked at all, told at once, before any reason is asked. */
+  timeRefusal = signal<string | null>(null);
+  /** QA D1475: the clinician's free published slots of the chosen day. */
+  freeSlots = signal<string[]>([]);
 
   // ── Patient picker ──────────────────────────────────────
   patientQuery = signal('');
   patientSuggestions = signal<PatientResponse[]>([]);
   patientDropdownOpen = signal(false);
+  /** QA D947: the suggestion the arrow keys are on (-1: none). */
+  patientActive = signal(-1);
   patientSearchLoading = signal(false);
   selectedPatient = signal<PatientResponse | null>(null);
   private readonly patientSearch$ = new Subject<string>();
@@ -52,6 +100,8 @@ export class AppointmentFormComponent implements OnInit {
   staffQuery = signal('');
   staffSuggestions = signal<StaffResponse[]>([]);
   staffDropdownOpen = signal(false);
+  /** QA D947: the suggestion the arrow keys are on (-1: none). */
+  staffActive = signal(-1);
   staffSearchLoading = signal(false);
   selectedStaff = signal<StaffResponse | null>(null);
   private readonly staffSearch$ = new Subject<string>();
@@ -95,7 +145,6 @@ export class AppointmentFormComponent implements OnInit {
   form: AppointmentUpsertRequest = {
     appointmentDate: '',
     startTime: '',
-    endTime: '',
     reason: '',
     notes: '',
   };
@@ -122,6 +171,7 @@ export class AppointmentFormComponent implements OnInit {
         this.allStaff = list.filter(isClinicalProvider);
         this.staffLoaded = true;
         this.setDeptsFromStaff(lockedId);
+        this.applyPendingStaff();
       });
     } else {
       // Multi-hospital admin: load all hospitals for the dropdown.
@@ -132,7 +182,9 @@ export class AppointmentFormComponent implements OnInit {
 
     this.initPatientSearch();
     this.initStaffSearch();
+    this.initSlotCheck();
     this.applyPrefill();
+    this.checkSlot();
   }
 
   /**
@@ -150,11 +202,24 @@ export class AppointmentFormComponent implements OnInit {
     const time = params.get('time');
     if (time && /^\d{2}:\d{2}$/.test(time)) {
       this.form.startTime = time;
-      this.onStartTimeChange();
+      // QA D1060: the visit's length is the clinician's slot length, set by
+      // the server on every booking path; the calendar's suggested duration
+      // (QA D1055) is no longer sent as an end time.
+    }
+    // QA D1055: the provider (and so the department) the calendar was planned with.
+    const staffId = params.get('staffId');
+    if (staffId && /^[0-9a-f-]{36}$/i.test(staffId)) {
+      this.pendingStaffId = staffId;
+      this.applyPendingStaff();
     }
     const reason = params.get('reason');
     if (reason) {
       this.form.reason = reason.trim().slice(0, 255);
+    }
+    // QA D985: booked from the recall list, the booking schedules that recall.
+    const recallId = params.get('recallId');
+    if (recallId && /^[0-9a-f-]{36}$/i.test(recallId)) {
+      this.form.recallId = recallId;
     }
     const patientId = params.get('patientId');
     if (patientId && /^[0-9a-f-]{36}$/i.test(patientId)) {
@@ -165,20 +230,70 @@ export class AppointmentFormComponent implements OnInit {
     }
   }
 
+  private initSlotCheck(): void {
+    this.slotCheck$
+      .pipe(
+        debounceTime(220),
+        switchMap(() => freeSlotTimes(this.slots, this.form.staffId, this.form.appointmentDate)),
+      )
+      .subscribe((free) => {
+        this.freeSlots.set(free ?? []);
+        const time = this.form.startTime?.slice(0, 5);
+        // A failed read asks for nothing: the server decides, and its refusal opens the field.
+        this.offSlot.set(!!free && !!time && !free.includes(time));
+      });
+    // QA D1474: on its own stream, so a slow answer never holds the slots back.
+    this.slotCheck$
+      .pipe(
+        debounceTime(220),
+        switchMap(() => this.readTimeRefusal()),
+      )
+      .subscribe((refusal) => this.timeRefusal.set(refusal));
+  }
+
+  /** QA D1474: a time that cannot be booked at all asks for no overbook reason. */
+  needsOverbookReason(): boolean {
+    return this.offSlot() && !this.timeRefusal();
+  }
+
+  /** The clinician, the date or the time changed: is it still a published free slot? */
+  checkSlot(): void {
+    this.slotCheck$.next();
+  }
+
+  /** Only the desk's warning: the server still decides at the booking, so a failed read says nothing. */
+  private readTimeRefusal() {
+    const { staffId, appointmentDate, startTime } = this.form;
+    if (!staffId || !appointmentDate || !startTime) return of(null);
+    return this.appointmentService.bookingTimeCheck(staffId, appointmentDate, startTime).pipe(
+      map((answer) => answer?.refusal ?? null),
+      catchError(() => of(null)),
+    );
+  }
+
+  /** QA D1475: a free slot picked from the list is the time. */
+  pickFreeSlot(time: string): void {
+    this.form.startTime = time;
+    this.checkSlot();
+  }
+
   // ── Patient search ──────────────────────────────────────
   private initPatientSearch(): void {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          return this.patientService.list(undefined, q || undefined);
+          return this.patientService.list(this.patientSearchHospitalId(), q || undefined);
         }),
       )
       .subscribe({
         next: (list) => {
-          this.patientSuggestions.set(list.slice(0, 8));
+          // QA D1239: ranked by how the name answers the query, then cut.
+          this.patientSuggestions.set(rankPeopleByName(list, this.patientQuery()).slice(0, 8));
+          // QA D947: a new list has no active option; Tab must not pick whoever
+          // now sits where the old highlight was (review round 11).
+          this.patientActive.set(-1);
           this.patientDropdownOpen.set(list.length > 0);
           this.patientSearchLoading.set(false);
         },
@@ -191,11 +306,43 @@ export class AppointmentFormComponent implements OnInit {
     if (q.length >= 1) this.patientSearch$.next(q);
     else {
       this.patientSuggestions.set([]);
+      // QA D947: a new list has no active option; Tab must not pick whoever
+      // now sits where the old highlight was (review round 11).
+      this.patientActive.set(-1);
       this.patientDropdownOpen.set(false);
     }
   }
 
+  /** QA D947: ArrowDown/ArrowUp/Enter/Tab/Escape on the patient picker. */
+  onPatientKeydown(event: KeyboardEvent): void {
+    const options = this.patientDropdownOpen() ? this.patientSuggestions() : [];
+    const step = comboboxKey(event, options.length, this.patientActive());
+    if (step.pick) {
+      this.selectPatient(options[step.active]);
+    } else if (step.close) {
+      this.patientDropdownOpen.set(false);
+    }
+    this.patientActive.set(step.close ? -1 : step.active);
+  }
+
+  /** QA D947: the same keyboard on the staff picker. */
+  onStaffKeydown(event: KeyboardEvent): void {
+    const options = this.staffDropdownOpen() ? this.staffSuggestions() : [];
+    const step = comboboxKey(event, options.length, this.staffActive());
+    if (step.pick) {
+      this.selectStaff(options[step.active]);
+    } else if (step.close) {
+      this.staffDropdownOpen.set(false);
+    }
+    this.staffActive.set(step.close ? -1 : step.active);
+  }
+
   selectPatient(p: PatientResponse): void {
+    // QA D985 (review round 14): picking another patient drops the recall the
+    // form was opened for, as clearing the patient does; it was theirs.
+    if (this.form.patientId && this.form.patientId !== p.id) {
+      delete this.form.recallId;
+    }
     this.selectedPatient.set(p);
     this.form.patientId = p.id;
     delete this.form.patientEmail;
@@ -206,7 +353,18 @@ export class AppointmentFormComponent implements OnInit {
   clearPatient(): void {
     this.selectedPatient.set(null);
     delete this.form.patientId;
+    // The recall belonged to the patient just cleared (QA D985).
+    delete this.form.recallId;
     this.patientQuery.set('');
+  }
+
+  /**
+   * QA D912 (#967 review): the hospital whose patients, and whose MRN, the
+   * typeahead offers: the form's hospital, else the request scope, which for
+   * a super-admin is the hospital the scope chip picked, not their home one.
+   */
+  private patientSearchHospitalId(): string | undefined {
+    return this.form.hospitalId || this.roleContext.effectiveHospitalIdForRequest() || undefined;
   }
 
   patientInitials(p: PatientResponse): string {
@@ -218,7 +376,6 @@ export class AppointmentFormComponent implements OnInit {
     this.staffSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((_q) => {
           this.staffSearchLoading.set(true);
           if (!this.staffLoaded) {
@@ -250,6 +407,9 @@ export class AppointmentFormComponent implements OnInit {
               )
             : this.allStaff;
           this.staffSuggestions.set(filtered.slice(0, 8));
+          // QA D947: a new list has no active option; Tab must not pick whoever
+          // now sits where the old highlight was (review round 11).
+          this.staffActive.set(-1);
           this.staffDropdownOpen.set(filtered.length > 0);
           this.staffSearchLoading.set(false);
         },
@@ -262,7 +422,24 @@ export class AppointmentFormComponent implements OnInit {
     if (q.length >= 1) this.staffSearch$.next(q);
     else {
       this.staffSuggestions.set([]);
+      // QA D947: a new list has no active option; Tab must not pick whoever
+      // now sits where the old highlight was (review round 11).
+      this.staffActive.set(-1);
       this.staffDropdownOpen.set(false);
+    }
+  }
+
+  /** QA D1055: a provider asked for by the link, applied once the staff list is in. */
+  private pendingStaffId: string | null = null;
+
+  private applyPendingStaff(): void {
+    if (!this.pendingStaffId || !this.staffLoaded) return;
+    const staff = this.allStaff.find((s) => s.id === this.pendingStaffId);
+    this.pendingStaffId = null;
+    if (!staff) return;
+    this.selectStaff(staff);
+    if (staff.departmentId && !this.form.departmentId) {
+      this.form.departmentId = staff.departmentId;
     }
   }
 
@@ -272,7 +449,10 @@ export class AppointmentFormComponent implements OnInit {
     // For multi-hospital users, check against the form's selected hospital.
     const activeHospital = this.form.hospitalId ?? this.lockedHospitalId;
     if (activeHospital && s.hospitalId && s.hospitalId !== activeHospital) {
-      this.toast.error(this.translate.instant('APPOINTMENTS.TOAST.STAFF_OTHER_HOSPITAL'));
+      // QA D1306 (round 28): the clinician field is marked, not only a toast.
+      const message = this.translate.instant('APPOINTMENTS.TOAST.STAFF_OTHER_HOSPITAL');
+      refuseFields(this.host.nativeElement, [STAFF_FIELD], [STAFF_FIELD], message);
+      this.toast.error(message);
       return;
     }
 
@@ -281,6 +461,7 @@ export class AppointmentFormComponent implements OnInit {
     delete this.form.staffEmail;
     this.staffDropdownOpen.set(false);
     this.staffQuery.set('');
+    this.checkSlot();
     // Auto-fill hospital when staff is selected (unrestricted users only —
     // locked users already have selectedHospitalId set from ngOnInit)
     if (s.hospitalId && !this.selectedHospitalId()) {
@@ -294,6 +475,7 @@ export class AppointmentFormComponent implements OnInit {
     this.selectedStaff.set(null);
     delete this.form.staffId;
     this.staffQuery.set('');
+    this.checkSlot();
   }
 
   staffInitials(s: StaffResponse): string {
@@ -354,60 +536,39 @@ export class AppointmentFormComponent implements OnInit {
     return this.hospitals().find((h) => h.id === id)?.name ?? id;
   }
 
-  // ── Time validation ────────────────────────────────────
-  timeError = signal<string | null>(null);
-
-  onStartTimeChange(): void {
-    const start = this.form.startTime;
-    if (!start) return;
-    this.timeError.set(null);
-    const [h, m] = start.split(':').map(Number);
-    const totalMin = h * 60 + m + 30;
-    const endH = Math.floor(totalMin / 60) % 24;
-    const endM = totalMin % 60;
-    const autoEnd = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
-    if (!this.form.endTime || this.form.endTime <= start) {
-      this.form.endTime = autoEnd;
-    }
-  }
-
-  onEndTimeChange(): void {
-    if (this.form.startTime && this.form.endTime) {
-      if (this.form.endTime <= this.form.startTime) {
-        this.timeError.set(this.translate.instant('APPOINTMENTS.END_TIME_AFTER_START'));
-      } else {
-        this.timeError.set(null);
-      }
-    }
-  }
-
-  private validateTimes(): boolean {
-    if (!this.form.startTime || !this.form.endTime) return true;
-    if (this.form.endTime <= this.form.startTime) {
-      const msg = this.translate.instant('APPOINTMENTS.END_TIME_AFTER_START');
-      this.timeError.set(msg);
-      this.toast.error(msg);
-      return false;
-    }
-    this.timeError.set(null);
-    return true;
-  }
-
   // ── Submit ───────────────────────────────────────────────
   submit(): void {
-    if (!this.form.appointmentDate || !this.form.startTime) {
-      this.toast.error(this.translate.instant('APPOINTMENTS.TOAST.DATE_TIME_REQUIRED'));
+    // QA D1072: every missing field is marked and the first one focused.
+    // QA D1256 class (round 27): the toast names every gap at once; it named
+    // only the first (date, then patient, then clinician, one per press).
+    const required = [
+      { id: 'date', labelKey: 'APPOINTMENTS.APPOINTMENT_DATE', value: this.form.appointmentDate },
+      { id: 'start', labelKey: 'APPOINTMENTS.START_TIME', value: this.form.startTime },
+      { id: 'apptPatientSearch', labelKey: 'PATIENTS.PATIENT', value: this.form.patientId },
+      { id: STAFF_FIELD, labelKey: 'APPOINTMENTS.DOCTOR_STAFF', value: this.form.staffId },
+      ...(this.needsOverbookReason()
+        ? [
+            {
+              id: OVERBOOK_REASON_FIELD,
+              labelKey: 'APPOINTMENTS.OVERBOOK_REASON',
+              value: this.form.overbookReason?.trim(),
+            },
+          ]
+        : []),
+    ];
+    const allIds = required.map((f) => f.id);
+    const missing = missingRequiredMessage(this.translate, required);
+    if (missing) {
+      refuseFields(
+        this.host.nativeElement,
+        required.filter((f) => !hasValue(f.value)).map((f) => f.id),
+        allIds,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
+      this.toast.error(missing);
       return;
     }
-    if (this.form.endTime && !this.validateTimes()) return;
-    if (!this.form.patientId) {
-      this.toast.error(this.translate.instant('APPOINTMENTS.TOAST.PATIENT_REQUIRED'));
-      return;
-    }
-    if (!this.form.staffId) {
-      this.toast.error(this.translate.instant('APPOINTMENTS.TOAST.STAFF_REQUIRED'));
-      return;
-    }
+    refuseFields(this.host.nativeElement, [], allIds, '');
 
     this.saving.set(true);
 
@@ -424,8 +585,30 @@ export class AppointmentFormComponent implements OnInit {
         this.router.navigate(['/appointments']);
       },
       error: (err) => {
+        // QA D985: a recall the booking cannot answer (closed meanwhile, another
+        // patient's) rolls the booking back; drop it so the next submit books
+        // the visit without it, as the refusal says.
+        if ((err as { error?: { field?: unknown } } | null)?.error?.field === 'recallId') {
+          delete this.form.recallId;
+        }
+        // QA D1429: the slot changed since the form looked: the field opens, on the refusal.
+        if (refusesForOverbookReason(err)) {
+          this.offSlot.set(true);
+          const message = this.translate.instant('APPOINTMENTS.OVERBOOK_HINT');
+          setTimeout(() =>
+            refuseFields(
+              this.host.nativeElement,
+              [OVERBOOK_REASON_FIELD],
+              [OVERBOOK_REASON_FIELD],
+              message,
+            ),
+          );
+        }
+        // QA D984: a validation refusal names the field and its reason
+        // ("Date : must be today or later"), not the generic text.
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('APPOINTMENTS.TOAST.CREATE_FAILED'),
+          labelledRefusalReason(err, this.translate, APPOINTMENT_FIELD_LABELS) ??
+            this.translate.instant('APPOINTMENTS.TOAST.CREATE_FAILED'),
         );
         this.saving.set(false);
       },

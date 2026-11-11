@@ -93,6 +93,23 @@ class PrescriptionClarificationServiceTest {
     class Request {
 
         @Test
+        @DisplayName("policy 2026-11-09: another hospital's prescription can be neither questioned nor resolved here (404)")
+        void aForeignPrescriptionIsNotFound() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.empty());
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            prescription.setHospital(other);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.requestClarification(prescriptionId, "why"))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.resolveClarification(prescriptionId, "ok"))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            verify(prescriptionRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("moves a SIGNED order to PENDING_CLARIFICATION with the reason, audits without it, and notifies the prescriber")
         void happyPath() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -179,7 +196,7 @@ class PrescriptionClarificationServiceTest {
 
             assertThatThrownBy(() -> service.requestClarification(prescriptionId, "why"))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("DISPENSED");
+                    .extracting("messageKey").isEqualTo("pharmacy.clarification.notClarifiable");
             verify(prescriptionRepository, never()).save(any());
             verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
             // G13 AC-9: a refused question keeps the claim
@@ -202,7 +219,7 @@ class PrescriptionClarificationServiceTest {
 
             assertThatThrownBy(() -> service.requestClarification(prescriptionId, "why"))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("PARTNER_ACCEPTED");
+                    .extracting("messageKey").isEqualTo("pharmacy.clarification.notClarifiable");
             verify(prescriptionRepository, never()).save(any());
         }
 
@@ -214,7 +231,7 @@ class PrescriptionClarificationServiceTest {
 
             assertThatThrownBy(() -> service.requestClarification(prescriptionId, "   "))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("reason");
+                    .extracting("messageKey").isEqualTo("pharmacy.clarification.reasonRequired");
         }
 
         @Test
@@ -320,7 +337,7 @@ class PrescriptionClarificationServiceTest {
 
             assertThatThrownBy(() -> service.resolveClarification(prescriptionId, "ok"))
                     .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
-                    .hasMessageContaining("staff profile at the prescribing hospital");
+                    .hasMessageContaining("pharmacy.clarification.resolve.staffProfileRequired");
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_CLARIFICATION);
         }
 
@@ -333,7 +350,7 @@ class PrescriptionClarificationServiceTest {
 
             assertThatThrownBy(() -> service.resolveClarification(prescriptionId, "ok"))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("not awaiting clarification");
+                    .extracting("messageKey").isEqualTo("pharmacy.clarification.notAwaiting");
         }
 
         @Test

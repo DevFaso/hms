@@ -22,9 +22,10 @@
   @if (!loadError()) {
     <form class="order-set-edit__form" (ngSubmit)="save()" data-testid="order-set-edit-form">
       <label>
-        {{ 'ORDER_SETS.FIELD_NAME' | translate }}
+        {{ 'ORDER_SETS.FIELD_NAME' | translate }} *
         <input
           type="text"
+          id="order-set-name"
           [(ngModel)]="form.name"
           name="name"
           required
@@ -42,7 +43,7 @@
         <textarea [(ngModel)]="form.description" name="description" rows="2"></textarea>
       </label>
       <label>
-        {{ 'ORDER_SETS.FIELD_ADMISSION_TYPE' | translate }}
+        {{ 'ORDER_SETS.FIELD_ADMISSION_TYPE' | translate }} *
         <select [(ngModel)]="form.admissionType" name="admissionType" required>
           @for (t of admissionTypes; track t) {
             <option [value]="t">{{ t | enumLabel: 'admissionType' }}</option>
@@ -71,11 +72,13 @@
                 </select>
               </label>
               <label class="order-set-item__name">
-                <span>{{ 'ORDER_SETS.FIELD_ITEM_NAME' | translate }}</span>
+                <span>{{ 'ORDER_SETS.FIELD_ITEM_NAME' | translate }}</span> *
                 <input
                   type="text"
                   [ngModel]="itemName(item)"
                   (ngModelChange)="setItemName(item, $event)"
+                  (blur)="loadCatalogChoices(i)"
+                  [id]="'order-set-item-name-' + i"
                   [name]="'itemName-' + i"
                   required
                   [attr.data-testid]="'order-set-item-name-' + i"
@@ -111,6 +114,24 @@
               />
             </label>
             @if (isMedicationLike(item.orderType)) {
+              @if ((catalogChoices()[i]?.length ?? 0) > 1 || item.medicationCatalogItemId) {
+                <!-- QA D1396: several items carry this name; the exact one, when a controlled drug is among them. -->
+                <label class="order-set-item__synonyms">
+                  <span>{{ 'ORDER_SETS.FIELD_CATALOG_ITEM' | translate }}</span>
+                  <select
+                    [(ngModel)]="item.medicationCatalogItemId"
+                    [name]="'catalogItem-' + i"
+                    [id]="'order-set-item-catalog-' + i"
+                    [attr.data-testid]="'order-set-item-catalog-' + i"
+                    [attr.data-server-field]="'orderItems[' + i + '].medicationCatalogItemId'"
+                  >
+                    <option [ngValue]="undefined"></option>
+                    @for (choice of catalogChoices()[i] ?? []; track choice.id) {
+                      <option [ngValue]="choice.id">{{ catalogChoiceLabel(choice) }}</option>
+                    }
+                  </select>
+                </label>
+              }
               <div class="order-set-item__dose-grid">
                 <label>
                   <span>{{ 'ORDER_SETS.FIELD_DOSE_MIN' | translate }}</span>
@@ -161,18 +182,108 @@
                   </select>
                 </label>
                 <label>
-                  <span>{{ 'ORDER_SETS.FIELD_FREQUENCY' | translate }}</span>
+                  <span>{{ 'ORDER_SETS.FIELD_FREQUENCY' | translate }} *</span>
                   <select
-                    [(ngModel)]="item.frequency"
+                    [ngModel]="item.frequency"
+                    (ngModelChange)="onFrequencyChange(item, $event)"
                     [name]="'frequency-' + i"
+                    [id]="'order-set-item-frequency-' + i"
                     [attr.data-testid]="'order-set-item-frequency-' + i"
+                    [attr.data-server-field]="'orderItems[' + i + '].frequency'"
+                    [attr.aria-required]="'true'"
+                    [attr.aria-invalid]="itemMissingFrequency(i) ? 'true' : null"
                   >
                     <option value=""></option>
                     @for (f of frequencyPresets; track f.value) {
                       <option [value]="f.value">{{ choiceLabel(f) }}</option>
                     }
+                    @if (frequencyOffTheList(item)) {
+                      <option [value]="item.frequency">{{ item.frequency }}</option>
+                    }
                   </select>
                 </label>
+                <!-- QA D1419: a wording the MAR cannot schedule is a question: the box appears on
+                   the server's refusal, marked by the shared interceptor; the answer stays on the item. -->
+                @if (frequencyConfirmShown(item)) {
+                  <label class="checkbox-label">
+                    <input
+                      type="checkbox"
+                      [(ngModel)]="item.frequencyConfirmed"
+                      [name]="'frequencyConfirmed-' + i"
+                      [id]="'order-set-item-frequency-confirmed-' + i"
+                      [attr.data-testid]="'order-set-item-frequency-confirmed-' + i"
+                      [attr.data-server-field]="'orderItems[' + i + '].frequencyConfirmed'"
+                    />
+                    <span>{{ 'PRESCRIPTIONS.FREQUENCY_CONFIRM' | translate }}</span>
+                  </label>
+                }
+                <!-- QA D1396: the quantity to hand over reaches the order the item creates; the
+                   server requires it for a drug the catalogue marks controlled, on this field. -->
+                <label>
+                  <span>{{ 'PRESCRIPTIONS.PRESCRIBED_QUANTITY' | translate }}</span>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="any"
+                    [(ngModel)]="item.quantity"
+                    [name]="'quantity-' + i"
+                    [id]="'order-set-item-quantity-' + i"
+                    [attr.data-testid]="'order-set-item-quantity-' + i"
+                    [attr.data-server-field]="'orderItems[' + i + '].quantity'"
+                    [placeholder]="'PRESCRIPTIONS.PRESCRIBED_QUANTITY_PLACEHOLDER' | translate"
+                  />
+                  <small class="field-hint">{{ 'ORDER_SETS.QUANTITY_HINT' | translate }}</small>
+                </label>
+                <label>
+                  <span>{{ 'PRESCRIPTIONS.PRESCRIBED_QUANTITY_UNIT' | translate }}</span>
+                  <input
+                    type="text"
+                    maxlength="60"
+                    [(ngModel)]="item.quantityUnit"
+                    [name]="'quantityUnit-' + i"
+                    [attr.data-testid]="'order-set-item-quantity-unit-' + i"
+                    [placeholder]="'PRESCRIPTIONS.PRESCRIBED_QUANTITY_UNIT_PLACEHOLDER' | translate"
+                  />
+                </label>
+                <!-- QA D1378 / D1382 (round 32): as-needed is the author's explicit tick;
+                   the server refuses a conditional frequency without it, and a ticked
+                   item without its interval, on the item's own field. -->
+                <label class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    [ngModel]="item.asNeeded === true"
+                    (ngModelChange)="onAsNeededChange(item, $event)"
+                    [name]="'asNeeded-' + i"
+                    [id]="'order-set-item-as-needed-' + i"
+                    [attr.data-testid]="'order-set-item-as-needed-' + i"
+                    [attr.data-server-field]="'orderItems[' + i + '].asNeeded'"
+                  />
+                  <span>{{ 'ORDER_SETS.FREQUENCY.PRN' | translate }}</span>
+                </label>
+                @if (prnIntervalShown(item)) {
+                  <!-- QA round 30: an as-needed item states the minimum interval between doses. -->
+                  <label>
+                    <span>{{ 'PRESCRIPTIONS.PRN_MIN_INTERVAL' | translate }}</span> *
+                    <input
+                      type="number"
+                      min="1"
+                      [max]="prnMaxIntervalHours"
+                      step="1"
+                      required
+                      [(ngModel)]="item.prnMinIntervalHours"
+                      [name]="'prnMinIntervalHours-' + i"
+                      [id]="'order-set-item-prn-' + i"
+                      [attr.data-testid]="'order-set-item-prn-' + i"
+                      [attr.data-server-field]="'orderItems[' + i + '].prnMinIntervalHours'"
+                      [attr.aria-invalid]="itemMissingPrnInterval(i) ? 'true' : null"
+                    />
+                    @if (itemMissingPrnInterval(i)) {
+                      <span class="field-error" role="alert">{{
+                        'PRESCRIPTIONS.PRN_MIN_INTERVAL_REQUIRED' | translate
+                      }}</span>
+                    }
+                  </label>
+                }
               </div>
             }
             <label class="order-set-item__notes">
@@ -189,6 +300,7 @@
         <button
           type="button"
           class="btn-secondary"
+          id="order-set-item-add"
           (click)="addItem()"
           data-testid="order-set-item-add"
         >
@@ -199,6 +311,8 @@
         type="submit"
         class="btn-primary"
         [disabled]="saving()"
+        appSubmitGuard
+        submitGuardRequired
         data-testid="order-set-edit-save"
       >
         {{ 'COMMON.SAVE' | translate }}

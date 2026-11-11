@@ -1,6 +1,7 @@
-<div class="page-container">
+<div class="page-container pharmacy-workspace">
   <div class="page-header">
     <div>
+      <p class="workspace-eyebrow">{{ 'PHARMACY_DASH.WORKSPACE' | translate }}</p>
       <h1 class="page-title">{{ 'PHARMACY.GOODS_RECEIPT_TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'PHARMACY.GOODS_RECEIPT_SUBTITLE' | translate }}</p>
     </div>
@@ -82,6 +83,7 @@
             <label for="grQty">{{ 'PHARMACY.QUANTITY_RECEIVED' | translate }} *</label>
             <input
               id="grQty"
+              data-server-field="initialQuantity remainingQuantity"
               type="number"
               [(ngModel)]="form.initialQuantity"
               name="initialQuantity"
@@ -95,7 +97,13 @@
           <div class="form-row">
             <div class="field">
               <label for="grWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
-              <select id="grWitness" [(ngModel)]="form.witnessedBy" name="grWitness" required>
+              <select
+                id="grWitness"
+                data-server-field="witnessedBy"
+                [(ngModel)]="form.witnessedBy"
+                name="grWitness"
+                required
+              >
                 <option [ngValue]="undefined">
                   {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
                 </option>
@@ -136,7 +144,13 @@
           <button type="button" class="btn-secondary" (click)="closeForm()">
             {{ 'COMMON.CANCEL' | translate }}
           </button>
-          <button type="submit" class="btn-primary" [disabled]="saving()">
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="submit"
+            class="btn-primary"
+            [disabled]="saving()"
+          >
             <span class="material-symbols-outlined">check</span>
             {{
               saving() ? ('COMMON.SAVING' | translate) : ('PHARMACY.CONFIRM_RECEIPT' | translate)
@@ -147,18 +161,69 @@
     </div>
   }
 
+  @if (pharmacyFailed()) {
+    <div class="workspace-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+      <button class="btn-secondary" (click)="loadPharmacies()">
+        {{ 'PHARMACY_DASH.RETRY' | translate }}
+      </button>
+    </div>
+  }
+  @if (itemsFailed()) {
+    <div class="workspace-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <p>{{ 'PHARMACY.INVENTORY_LOAD_FAILED' | translate }}</p>
+      <button class="btn-secondary" (click)="loadInventoryItems()">
+        {{ 'PHARMACY_DASH.RETRY' | translate }}
+      </button>
+    </div>
+  }
+  <p class="workspace-note scope-note">
+    <span class="material-symbols-outlined" aria-hidden="true">info</span
+    >{{ 'PHARMACY_DASH.LOT_SCOPE' | translate: { count: recentLotsLimit } }}
+  </p>
+  <div class="workspace-toolbar">
+    <label class="workspace-search"
+      ><span class="material-symbols-outlined" aria-hidden="true">search</span
+      ><input
+        [(ngModel)]="searchTerm"
+        [attr.aria-label]="'PHARMACY_DASH.SEARCH_LOTS' | translate"
+        [placeholder]="'PHARMACY_DASH.SEARCH_LOTS' | translate" /></label
+    ><span class="workspace-note">{{
+      (recentLots().length === 1 ? 'PHARMACY_DASH.LOT_LOADED' : 'PHARMACY_DASH.LOTS_LOADED')
+        | translate: { count: recentLots().length }
+    }}</span>
+  </div>
   <!-- Recent Lots -->
   <h3 class="section-title">{{ 'PHARMACY.RECENT_LOTS' | translate }}</h3>
-  @if (lotsLoading()) {
+  @if (lotsFailed()) {
+    <div class="workspace-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+      <button class="btn-secondary" (click)="loadRecentLots()">
+        {{ 'PHARMACY_DASH.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (lotsLoading()) {
     <div class="loading-state">
       <div class="spinner"></div>
       <p>{{ 'COMMON.LOADING' | translate }}</p>
     </div>
   } @else if (recentLots().length > 0) {
-    <div class="table-wrapper">
+    @if (visibleLots().length === 0) {
+      <p class="workspace-note" role="status">{{ 'PHARMACY_DASH.NO_MATCHES' | translate }}</p>
+    }
+    <div
+      class="table-wrapper"
+      tabindex="0"
+      role="region"
+      [attr.aria-label]="'PHARMACY.RECENT_LOTS' | translate"
+    >
       <table class="data-table">
         <thead>
           <tr>
+            <th>{{ 'PHARMACY.MEDICATION' | translate }}</th>
             <th>{{ 'PHARMACY.LOT_NUMBER' | translate }}</th>
             <th>{{ 'PHARMACY.RECEIVED_DATE' | translate }}</th>
             <th>{{ 'PHARMACY.EXPIRY_DATE' | translate }}</th>
@@ -169,8 +234,9 @@
           </tr>
         </thead>
         <tbody>
-          @for (lot of recentLots(); track lot.id) {
+          @for (lot of visibleLots(); track lot.id) {
             <tr>
+              <td class="med-name">{{ lotMedication(lot) }}</td>
               <td>
                 <span class="code-chip">{{ lot.lotNumber }}</span>
               </td>
@@ -182,7 +248,7 @@
                   lot.remainingQuantity
                 }}</span>
               </td>
-              <td>{{ lot.supplier ?? '—' }}</td>
+              <td>{{ lot.supplier | dash }}</td>
               <td>
                 {{ lot.unitCost ? (lot.unitCost | cfa) : '—' }}
               </td>

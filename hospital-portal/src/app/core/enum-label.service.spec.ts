@@ -29,6 +29,29 @@ describe('EnumLabelService', () => {
     expect(service.transform('DOCTOR', 'role')).toBe('Médecin');
   });
 
+  it('QA D1062: labels a comma-joined code list code by code, in the page language', () => {
+    translate.setTranslation(
+      'fr',
+      {
+        PORTAL: {
+          ENUM: {
+            PERMISSIONS: {
+              VIEW_APPOINTMENTS: 'Rendez-vous',
+              VIEW_LAB_RESULTS: 'Résultats de laboratoire',
+            },
+          },
+        },
+      },
+      true,
+    );
+    translate.use('fr');
+    expect(service.transform('VIEW_LAB_RESULTS,VIEW_APPOINTMENTS', 'permissions')).toBe(
+      'Résultats de laboratoire, Rendez-vous',
+    );
+    // Free text with a comma is not a code list, and is shown as typed.
+    expect(service.transform('Père, tuteur', 'relationship')).toBe('Père, tuteur');
+  });
+
   it('is the same instance the pipe delegates to', () => {
     translate.setTranslation('en', { PORTAL: { ENUM: { ROLE: { NURSE: 'Charge Nurse' } } } }, true);
     const pipe = TestBed.runInInjectionContext(() => new EnumLabelPipe());
@@ -96,5 +119,29 @@ describe('EnumLabelService', () => {
     expect(service.transform(null, 'role')).toBe('');
     expect(service.transform(undefined, 'role')).toBe('');
     expect(service.transform('', 'role')).toBe('');
+  });
+
+  describe('knownLabel (QA D908)', () => {
+    it('answers a defined label even when it reads like the prettified code', () => {
+      translate.setTranslation(
+        'en',
+        { PORTAL: { ENUM: { LAB_DEFINITION_ACTION: { ACTIVATE: 'Activate' } } } },
+        true,
+      );
+      expect(service.knownLabel('ACTIVATE', 'labDefinitionAction')).toBe('Activate');
+    });
+
+    it('answers null where transform would only prettify, and for a blank value', () => {
+      expect(service.knownLabel('ZZ_NOT_A_CODE', 'labDefinitionAction')).toBeNull();
+      expect(service.transform('ZZ_NOT_A_CODE', 'labDefinitionAction')).toBe('Zz Not A Code');
+      expect(service.knownLabel('')).toBeNull();
+      expect(service.knownLabel(null)).toBeNull();
+    });
+
+    it('reads the curated English map too, and remembers a miss per language', () => {
+      expect(service.knownLabel('ACTIVE', 'status')).toBe('Active');
+      expect(service.knownLabel('ZZ_NOT_A_CODE')).toBeNull();
+      expect(service.knownLabel('ZZ_NOT_A_CODE')).toBeNull();
+    });
   });
 });

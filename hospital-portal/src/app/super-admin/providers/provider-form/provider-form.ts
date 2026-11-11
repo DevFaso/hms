@@ -26,6 +26,7 @@ import {
 import { SuperAdminProviderService } from '../../../services/super-admin-provider.service';
 import { EnumLabelPipe } from '../../../shared/pipes/enum-label.pipe';
 import { ProviderEvidenceFormComponent } from '../provider-evidence-form/provider-evidence-form';
+import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directive';
 
 /**
  * Create a provider facility (`/super-admin/providers/new`, AC-1), or submit
@@ -36,7 +37,14 @@ import { ProviderEvidenceFormComponent } from '../provider-evidence-form/provide
 @Component({
   selector: 'app-provider-form',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule, EnumLabelPipe, ProviderEvidenceFormComponent],
+  imports: [
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    EnumLabelPipe,
+    ProviderEvidenceFormComponent,
+    SubmitGuardDirective,
+  ],
   templateUrl: './provider-form.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './provider-form.scss',

@@ -84,6 +84,12 @@ class StockOutRoutingServiceImplTest {
     @Mock private com.example.hms.service.StayOrderDiscontinuation stayOrderDiscontinuation;
 
 
+
+    /** QA D899: the real dispense DRUG rule, so the stock check is tested against the matcher the fill uses. */
+    @org.mockito.Spy
+    private DispenseVerificationService dispenseVerificationService =
+        new DispenseVerificationService(java.time.Clock.systemUTC());
+
     @InjectMocks
     private StockOutRoutingServiceImpl service;
 
@@ -179,6 +185,8 @@ class StockOutRoutingServiceImplTest {
 
         assertThat(result.getMedicationName()).isEqualTo("Amoxicillin 500mg");
         assertThat(result.getQuantityOnHand()).isEqualByComparingTo(BigDecimal.ONE);
+        // QA D913: the page needs the order's quantity to say "1 / 10", not "out of stock".
+        assertThat(result.getQuantityRequired()).isEqualByComparingTo(BigDecimal.TEN);
         assertThat(result.isSufficient()).isFalse();
         assertThat(result.getPartnerPharmacies()).hasSize(1);
         assertThat(result.getPartnerPharmacies().get(0).getPharmacyId()).isEqualTo(partnerId);
@@ -214,6 +222,19 @@ class StockOutRoutingServiceImplTest {
         } finally {
             org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
         }
+    }
+
+    @Test
+    @DisplayName("QA D1282: routeToPartner with no target pharmacy names the field")
+    void routeToPartnerWithoutATargetNamesTheField() {
+        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                .prescriptionId(prescriptionId).reason("no stock").build();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .hasFieldOrPropertyWithValue("field", "targetPharmacyId");
     }
 
     @Test
@@ -287,7 +308,166 @@ class StockOutRoutingServiceImplTest {
 
         assertThatThrownBy(() -> service.confirmPartnerDispense(decisionId))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("ACCEPTED status");
+                // QA D1090 class: worded for people, the raw status code is gone from the message.
+                .extracting("messageKey").isEqualTo("stock.routing.dispenseNotAccepted");
+    }
+
+    @Nested
+    @DisplayName("QA D899: the stock check resolves the order the way the dispense does")
+    class FreeTextOrderResolution {
+
+        private MedicationCatalogItem amoxicilline;
+        private InventoryItem shelf;
+
+        @BeforeEach
+        void qaCase() {
+            // Prescription de950861: "Amoxicilline", 500 mg, 21 units, no code,
+            // no catalog pick, written through POST /prescriptions.
+            prescription.setMedicationCode(null);
+            prescription.setMedicationCatalogItemId(null);
+            prescription.setMedicationName("Amoxicilline");
+            prescription.setQuantity(BigDecimal.valueOf(21));
+            // A catalog item created in the UI: no formulary code.
+            amoxicilline = MedicationCatalogItem.builder()
+                    .hospital(hospital)
+                    .nameFr("Amoxicilline")
+                    .genericName("Amoxicilline")
+                    .build();
+            amoxicilline.setId(medicationId);
+            shelf = InventoryItem.builder()
+                    .pharmacy(dispensary)
+                    .medicationCatalogItem(amoxicilline)
+                    .quantityOnHand(BigDecimal.valueOf(300))
+                    .active(true)
+                    .build();
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        }
+
+        @Test
+        @DisplayName("a free-text order is in stock when the shelf the fill takes from holds it")
+        void freeTextOrderSeesTheShelfTheFillUses() {
+            MedicationCatalogItem paracetamol = MedicationCatalogItem.builder()
+                    .hospital(hospital).nameFr("Paracetamol 500 mg").genericName("Paracetamol").build();
+            paracetamol.setId(UUID.randomUUID());
+            InventoryItem otherShelf = InventoryItem.builder()
+                    .pharmacy(dispensary).medicationCatalogItem(paracetamol)
+                    .quantityOnHand(BigDecimal.valueOf(900)).active(true).build();
+            when(inventoryItemRepository.findActiveWithCatalogItemByHospitalId(hospitalId))
+                    .thenReturn(List.of(otherShelf, shelf));
+            when(inventoryItemRepository.findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
+                    hospitalId, medicationId)).thenReturn(List.of(shelf));
+
+            StockCheckResultDTO result = service.checkStock(prescriptionId);
+
+            assertThat(result.getQuantityOnHand()).isEqualByComparingTo("300");
+            assertThat(result.isSufficient()).isTrue();
+            assertThat(result.getPartnerPharmacies()).isEmpty();
+            // The paracetamol shelf is never counted for an amoxicillin order.
+            verify(inventoryItemRepository, never()).findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
+                    hospitalId, paracetamol.getId());
+            // And it is the very rule the dispense lot picker filters lots by.
+            assertThat(dispenseVerificationService.matchesPrescribedDrug(prescription, amoxicilline)).isTrue();
+        }
+
+        @Test
+        @DisplayName("the name match folds accents and case, as the DRUG check does")
+        void accentedAndCasedNameStillMatches() {
+            prescription.setMedicationName("AMOXICILLINE 500 mg gélule");
+            when(inventoryItemRepository.findActiveWithCatalogItemByHospitalId(hospitalId))
+                    .thenReturn(List.of(shelf));
+            when(inventoryItemRepository.findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
+                    hospitalId, medicationId)).thenReturn(List.of(shelf));
+
+            assertThat(service.checkStock(prescriptionId).getQuantityOnHand()).isEqualByComparingTo("300");
+        }
+
+        @Test
+        @DisplayName("the catalog item picked at order time wins, without scanning the shelf")
+        void pickedCatalogItemComesFirst() {
+            prescription.setMedicationName("Clamoxyl");
+            prescription.setMedicationCatalogItemId(medicationId);
+            when(medicationCatalogItemRepository.findByIdAndHospital_Id(medicationId, hospitalId))
+                    .thenReturn(Optional.of(amoxicilline));
+            when(inventoryItemRepository.findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
+                    hospitalId, medicationId)).thenReturn(List.of(shelf));
+
+            StockCheckResultDTO result = service.checkStock(prescriptionId);
+
+            assertThat(result.getQuantityOnHand()).isEqualByComparingTo("300");
+            verify(inventoryItemRepository, never()).findActiveWithCatalogItemByHospitalId(any());
+        }
+
+        @Test
+        @DisplayName("a code outside the formulary still resolves by its ATC code, like the DRUG check")
+        void codeMatchedByAtc() {
+            prescription.setMedicationCode("J01CA04");
+            amoxicilline.setAtcCode("J01CA04");
+            when(medicationCatalogItemRepository.findByHospitalIdAndCode(hospitalId, "J01CA04"))
+                    .thenReturn(Optional.empty());
+            when(inventoryItemRepository.findActiveWithCatalogItemByHospitalId(hospitalId))
+                    .thenReturn(List.of(shelf));
+            when(inventoryItemRepository.findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
+                    hospitalId, medicationId)).thenReturn(List.of(shelf));
+
+            assertThat(service.checkStock(prescriptionId).isSufficient()).isTrue();
+        }
+
+        @Test
+        @DisplayName("a different drug on the shelf is not stock for this order, and partners are offered")
+        void otherDrugIsNotStock() {
+            prescription.setMedicationName("Ceftriaxone 1 g");
+            when(inventoryItemRepository.findActiveWithCatalogItemByHospitalId(hospitalId))
+                    .thenReturn(List.of(shelf));
+            when(pharmacyRepository.findByHospitalIdAndPharmacyTypeInAndActiveTrue(
+                    hospitalId, StockOutRoutingServiceImpl.EXTERNAL_PHARMACY_TYPES))
+                    .thenReturn(List.of(partnerPharmacy));
+
+            StockCheckResultDTO result = service.checkStock(prescriptionId);
+
+            assertThat(result.getQuantityOnHand()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(result.isSufficient()).isFalse();
+            assertThat(result.getPartnerPharmacies()).singleElement()
+                    .satisfies(p -> assertThat(p.isHasOnFormulary()).isFalse());
+        }
+
+        @Test
+        @DisplayName("an order with no code and no name is never matched to the whole shelf")
+        void nothingToMatchOnIsNotInStock() {
+            prescription.setMedicationName("  ");
+            when(pharmacyRepository.findByHospitalIdAndPharmacyTypeInAndActiveTrue(
+                    hospitalId, StockOutRoutingServiceImpl.EXTERNAL_PHARMACY_TYPES)).thenReturn(List.of());
+
+            StockCheckResultDTO result = service.checkStock(prescriptionId);
+
+            assertThat(result.getQuantityOnHand()).isEqualByComparingTo(BigDecimal.ZERO);
+            verify(inventoryItemRepository, never()).findActiveWithCatalogItemByHospitalId(any());
+        }
+
+        @Test
+        @DisplayName("a partner stocking the name-matched item is offered as having it on formulary")
+        void partnerFormularyUsesTheResolvedItem() {
+            shelf.setQuantityOnHand(BigDecimal.valueOf(5));
+            InventoryItem partnerShelf = InventoryItem.builder()
+                    .pharmacy(partnerPharmacy).medicationCatalogItem(amoxicilline)
+                    .quantityOnHand(BigDecimal.valueOf(40)).active(true).build();
+            when(inventoryItemRepository.findActiveWithCatalogItemByHospitalId(hospitalId))
+                    .thenReturn(List.of(shelf, partnerShelf));
+            when(inventoryItemRepository.findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
+                    hospitalId, medicationId)).thenReturn(List.of(shelf, partnerShelf));
+            when(pharmacyRepository.findByHospitalIdAndPharmacyTypeInAndActiveTrue(
+                    hospitalId, StockOutRoutingServiceImpl.EXTERNAL_PHARMACY_TYPES))
+                    .thenReturn(List.of(partnerPharmacy));
+            when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(partnerId, medicationId))
+                    .thenReturn(Optional.of(partnerShelf));
+
+            StockCheckResultDTO result = service.checkStock(prescriptionId);
+
+            // Only the hospital dispensary counts as on hand; the partner is an option.
+            assertThat(result.getQuantityOnHand()).isEqualByComparingTo("5");
+            assertThat(result.getPartnerPharmacies()).singleElement()
+                    .satisfies(p -> assertThat(p.isHasOnFormulary()).isTrue());
+        }
     }
 
     @Test
@@ -311,6 +491,51 @@ class StockOutRoutingServiceImplTest {
 
         assertThat(result.isSufficient()).isTrue();
         assertThat(result.getPartnerPharmacies()).isEmpty();
+    }
+
+    /** Stubs a dispensary holding {@code onHand} of the order's drug. */
+    private void stubDispensaryStock(BigDecimal onHand) {
+        InventoryItem dispensaryInventory = InventoryItem.builder()
+                .pharmacy(dispensary)
+                .medicationCatalogItem(catalogItem)
+                .quantityOnHand(onHand)
+                .active(true)
+                .build();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(medicationCatalogItemRepository.findByHospitalIdAndCode(hospitalId, "AMOX500"))
+                .thenReturn(Optional.of(catalogItem));
+        when(inventoryItemRepository.findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
+                hospitalId, medicationId)).thenReturn(List.of(dispensaryInventory));
+    }
+
+    @Test
+    @DisplayName("QA D913: a partially filled order needs only what is still owed")
+    void checkStockComparesTheRemainder() {
+        // 8 of the 10 prescribed are already handed over; 5 on the shelf cover the 2 owed.
+        prescription.setStatus(PrescriptionStatus.PARTIALLY_FILLED);
+        when(dispenseRepository.sumQuantityDispensedForPrescription(
+                prescriptionId, com.example.hms.repository.pharmacy.DispenseRepository.NOT_A_FILL))
+                .thenReturn(BigDecimal.valueOf(8));
+        stubDispensaryStock(BigDecimal.valueOf(5));
+
+        StockCheckResultDTO result = service.checkStock(prescriptionId);
+
+        assertThat(result.getQuantityRequired()).isEqualByComparingTo("2");
+        assertThat(result.isSufficient()).isTrue();
+        assertThat(result.getPartnerPharmacies()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("QA D913: an order with no quantity and no readable regimen sends no required quantity")
+    void checkStockDoesNotInventARequiredQuantity() {
+        prescription.setQuantity(null);
+        stubDispensaryStock(BigDecimal.ZERO);
+
+        StockCheckResultDTO result = service.checkStock(prescriptionId);
+
+        assertThat(result.getQuantityRequired()).isNull();
+        assertThat(result.isSufficient()).isFalse();
     }
 
     @Test
@@ -523,7 +748,8 @@ class StockOutRoutingServiceImplTest {
 
         assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("PARTNER_PHARMACY");
+                // QA D1371 class (changed assertion): the message names the choices, not raw codes.
+                .hasMessageContaining("partner pharmacy");
     }
 
     @Test
@@ -1026,7 +1252,11 @@ class StockOutRoutingServiceImplTest {
 
             assertThatThrownBy(() -> service.partnerNoShow(decision.getId(), "never came"))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("ACCEPTED");
+                    // QA D1090 class: the status is passed as its label, never the raw code.
+                    .satisfies(e -> {
+                        assertThat(((BusinessException) e).getMessageKey()).isEqualTo("stock.routing.noShowNotAccepted");
+                        assertThat(((BusinessException) e).getArgs()).doesNotContain("PENDING");
+                    });
             verify(prescriptionRepository, never()).save(any());
         }
 
@@ -1342,6 +1572,31 @@ class StockOutRoutingServiceImplTest {
             verify(prescriptionRepository, never()).save(any());
             verify(partnerChannel, never()).notifyPatientAccepted(any(), any());
             verifyNoInteractions(prescriberNotifier);
+        }
+    }
+
+    @Test
+    @DisplayName("a pharmacist cannot record a partner's acceptance of a held order; a refusal stays open")
+    void partnerRespondRefusesAcceptingAHeldOrder() {
+        PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                .prescription(prescription)
+                .targetPharmacy(partnerPharmacy)
+                .decidedByUser(currentUser)
+                .decidedForPatient(patient)
+                .routingType(RoutingType.PARTNER)
+                .status(RoutingDecisionStatus.PENDING)
+                .build();
+        UUID decisionId = UUID.randomUUID();
+        decision.setId(decisionId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(routingDecisionRepository.findById(decisionId)).thenReturn(Optional.of(decision));
+        com.example.hms.service.support.OrderReviewHoldGuard.useHolds((type, id) -> true);
+        try {
+            assertThatThrownBy(() -> service.partnerRespond(decisionId, true))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+            assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.PENDING);
+        } finally {
+            com.example.hms.service.support.OrderReviewHoldGuard.useHolds(null);
         }
     }
 }

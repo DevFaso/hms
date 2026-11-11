@@ -31,6 +31,12 @@ public final class CallerIdentity {
         return PrincipalUserIds.of(auth).orElse(null);
     }
 
+    /** True when the two staff records belong to the same user (QA D955 class: requester vs approver). */
+    public static boolean sameUser(Staff a, Staff b) {
+        return a != null && b != null && a.getUser() != null && b.getUser() != null
+            && a.getUser().getId() != null && a.getUser().getId().equals(b.getUser().getId());
+    }
+
     /** True when {@code staff} is the caller's own staff record. */
     public static boolean isCaller(Staff staff) {
         UUID caller = currentUserId();
@@ -60,10 +66,52 @@ public final class CallerIdentity {
         }
     }
 
+    /**
+     * QA D1112 (round 19): an authorship check says what the rule is. A doctor
+     * finalizing a colleague's discharge summary read "Vous ne pouvez agir
+     * qu'en votre propre nom" ({@code identity.notCaller}), which is the
+     * refusal for naming someone else in a request, not for touching a record
+     * someone else wrote. Refuse (403) with {@code messageKey}, the object's
+     * own rule ("Seul le médecin qui a rédigé ce résumé peut le finaliser."),
+     * unless {@code author} is the caller's staff record.
+     * {@code AuthorshipRefusalKeyGuardTest} keeps {@code requireCaller} for
+     * the acting-on-behalf checks only.
+     */
+    public static void requireAuthor(Staff author, String messageKey) {
+        if (!isCaller(author)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw(messageKey));
+        }
+    }
+
+    /** {@link #requireAuthor}, except for a verified super-admin in global view. */
+    public static void requireAuthorUnlessSuperAdmin(Staff author, String messageKey) {
+        if (!isGlobalSuperAdmin()) {
+            requireAuthor(author, messageKey);
+        }
+    }
+
     /** True for a verified super-admin in global view, as the one resolver decides it. */
     public static boolean isGlobalSuperAdmin() {
         return com.example.hms.security.tenant.ActingScopeResolver.currentScope()
             instanceof com.example.hms.security.tenant.ActingScope.Global;
+    }
+
+    /**
+     * True for a verified super-admin who may decide for {@code hospitalId}: in
+     * global view, or pinned to that very hospital (a hospital selected in the
+     * portal). The admin review deciders ask this instead of
+     * {@link #isGlobalSuperAdmin()} alone, which refused a super-admin as soon
+     * as they selected a hospital although the endpoint's role check admits
+     * SUPER_ADMIN. A super-admin pinned to another hospital is not admitted.
+     * {@code SuperAdminReviewDeciderGuardTest} keeps the mortality review
+     * endpoints on it.
+     */
+    public static boolean isSuperAdminFor(UUID hospitalId) {
+        if (isGlobalSuperAdmin()) {
+            return true;
+        }
+        return hospitalId != null
+            && hospitalId.equals(com.example.hms.security.tenant.ActingScopeResolver.superAdminPinnedHospitalIdOrNull());
     }
 
     /**

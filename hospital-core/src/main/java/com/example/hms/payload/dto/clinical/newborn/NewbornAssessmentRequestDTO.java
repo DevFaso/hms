@@ -2,9 +2,10 @@ package com.example.hms.payload.dto.clinical.newborn;
 
 import com.example.hms.payload.dto.VitalSignLimits;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.DecimalMax;
+import com.example.hms.enums.NewbornDangerSignObservation;
 import com.example.hms.enums.NewbornEducationTopic;
 import com.example.hms.enums.NewbornFollowUpAction;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.AllArgsConstructor;
@@ -24,6 +25,11 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class NewbornAssessmentRequestDTO {
+
+    private static final String DANGER_SIGN_DOC = "Danger sign, provisional WHO postnatal pathway (not every sign of it). "
+        + "Omitted, null or NOT_ASSESSED means not assessed, never absent. PRESENT raises its own urgent finding. Never required.";
+    private static final String SUPPORT_ATTESTATION = "True only when the clinician attests that this support was "
+        + "actually started. Stored as submitted: an alert never sets it; alerts only recommend and request follow-up.";
 
     private UUID hospitalId;
     private UUID registrationId;
@@ -60,15 +66,30 @@ public class NewbornAssessmentRequestDTO {
 
     private String apgarNotes;
 
-    @DecimalMin(value = VitalSignLimits.TEMPERATURE_MIN_C, message = "{vitals.temperature.range}")
-    @DecimalMax(value = VitalSignLimits.TEMPERATURE_MAX_C, message = "{vitals.temperature.range}")
+    @DecimalMin(value = "0", message = "{newborn.vitals.negative}")
     private Double temperatureCelsius;
+    // QA D1424: warnings and escalation, never a limit that prevents saving an observation
+    // (NewbornAlertRules holds the sources). Only what cannot exist by definition is refused:
+    // a negative number, a saturation above 100 %. A high value saves, flagged to remeasure,
+    // and its urgent alert fires.
+    @Min(value = 0, message = "{newborn.vitals.negative}")
     private Integer heartRateBpm;
+    @Min(value = 0, message = "{newborn.vitals.negative}")
     private Integer respirationsPerMin;
+    @Min(value = 0, message = "{newborn.vitals.negative}")
     private Integer systolicBpMmHg;
+    @Min(value = 0, message = "{newborn.vitals.negative}")
     private Integer diastolicBpMmHg;
+    @Min(value = VitalSignLimits.SPO2_MIN, message = "{vitals.spo2.range}")
+    @Max(value = VitalSignLimits.SPO2_MAX, message = "{vitals.spo2.range}")
     private Integer oxygenSaturationPercent;
+    /** The unit is in the field's name. A value in another unit comes as {@link #glucoseValue}. */
+    @Min(value = 0, message = "{newborn.vitals.negative}")
     private Integer glucoseMgDl;
+    /** QA D1424: a glucose as entered; refused on {@link #glucoseUnit} without its unit. */
+    @DecimalMin(value = "0", message = "{newborn.vitals.negative}")
+    private Double glucoseValue;
+    private com.example.hms.enums.GlucoseUnit glucoseUnit;
 
     private String examGeneralAppearance;
     private String examHeadNeck;
@@ -80,6 +101,15 @@ public class NewbornAssessmentRequestDTO {
     private String examNeurological;
     private String examMusculoskeletal;
     private String examNotes;
+
+    @Schema(description = DANGER_SIGN_DOC)
+    private NewbornDangerSignObservation poorFeeding;
+    @Schema(description = DANGER_SIGN_DOC)
+    private NewbornDangerSignObservation convulsions;
+    @Schema(description = DANGER_SIGN_DOC)
+    private NewbornDangerSignObservation severeChestIndrawing;
+    @Schema(description = DANGER_SIGN_DOC + " PRESENT here means the baby makes no spontaneous movement.")
+    private NewbornDangerSignObservation absentSpontaneousMovement;
 
     private String followUpNotes;
 
@@ -93,7 +123,26 @@ public class NewbornAssessmentRequestDTO {
     private Boolean parentEducationCompleted;
 
     private Boolean escalationRecommended;
+    @Schema(description = SUPPORT_ATTESTATION)
     private Boolean respiratorySupportInitiated;
+    @Schema(description = SUPPORT_ATTESTATION)
     private Boolean glucoseProtocolInitiated;
+    @Schema(description = SUPPORT_ATTESTATION)
     private Boolean thermoregulationSupportInitiated;
+
+    /** QA D1424: 5.6 means nothing without its unit, and the alerts read the number. */
+    @com.example.hms.validation.ReportedOn("glucoseUnit")
+    @jakarta.validation.constraints.AssertTrue(message = "{maternity.newborn.glucoseUnitRequired}")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isGlucoseUnitGiven() {
+        return glucoseValue == null || glucoseUnit != null;
+    }
+
+    /** QA D1424 (D111): a diastolic at or above the systolic is a swapped entry. */
+    @com.example.hms.validation.ReportedOn("diastolicBpMmHg")
+    @jakarta.validation.constraints.AssertTrue(message = "{vitals.bloodPressure.invalid}")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isBloodPressureOrdered() {
+        return VitalSignLimits.bloodPressureOrdered(systolicBpMmHg, diastolicBpMmHg);
+    }
 }

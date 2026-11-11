@@ -200,7 +200,8 @@
                 <td>{{ formatMeasure(p.weightKg, 'kg') }}</td>
                 <td>{{ formatMeasure(p.heightCm, 'cm') }}</td>
                 <td>{{ formatMeasure(p.headCircumferenceCm, 'cm') }}</td>
-                <td>{{ sourceLabel(p.source) }}</td>
+                <!-- QA D1117: every source in words (TRIAGE, NURSE_STATION, DELIVERY…), never the code -->
+                <td>{{ (p.source | enumLabel: 'vitalSource') || '—' }}</td>
               </tr>
             }
           </tbody>

@@ -1,21 +1,26 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
+import { LOCALE_ID, signal } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localeFr from '@angular/common/locales/fr';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError, Subject } from 'rxjs';
 
 import { ToastService } from '../core/toast.service';
 import { PharmacyService } from '../services/pharmacy.service';
 import { StockRoutingComponent } from './stock-routing';
 import { RoleContextService } from '../core/role-context.service';
+import { PrintLabelService } from '../services/print-label.service';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 describe('StockRoutingComponent', () => {
   let component: StockRoutingComponent;
   let fixture: ComponentFixture<StockRoutingComponent>;
   let pharmacySvc: jasmine.SpyObj<PharmacyService>;
   let toastSvc: jasmine.SpyObj<ToastService>;
+  let printSvc: jasmine.SpyObj<PrintLabelService>;
   /** Only the scope gate is read here; a writable signal so a test can flip it. */
   const hasHospitalScope = signal(true);
   const roleContextStub = { hasHospitalScope } as unknown as RoleContextService;
@@ -71,8 +76,13 @@ describe('StockRoutingComponent', () => {
       'partnerRespond',
       'confirmPartnerDispense',
       'getDispenseWorkQueue',
+      'getPrintedPrescriptionCopy',
     ]);
     toastSvc = jasmine.createSpyObj('ToastService', ['success', 'error']);
+    printSvc = jasmine.createSpyObj('PrintLabelService', ['openForPrint']);
+    pharmacySvc.getPrintedPrescriptionCopy.and.returnValue(
+      of(new Blob(['%PDF-1.4'], { type: 'application/pdf' })) as any,
+    );
 
     pharmacySvc.checkStock.and.returnValue(of(stockCheckResponse as any));
     pharmacySvc.listRoutingDecisionsByPrescription.and.returnValue(of(decisionsResponse as any));
@@ -110,6 +120,7 @@ describe('StockRoutingComponent', () => {
         provideHttpClientTesting(),
         { provide: PharmacyService, useValue: pharmacySvc },
         { provide: ToastService, useValue: toastSvc },
+        { provide: PrintLabelService, useValue: printSvc },
         { provide: RoleContextService, useValue: roleContextStub },
         // P-05: component now reads :prescriptionId from the route — provide an
         // empty paramMap by default so the existing tests don't auto-trigger
@@ -137,6 +148,7 @@ describe('StockRoutingComponent', () => {
         provideHttpClientTesting(),
         { provide: PharmacyService, useValue: pharmacySvc },
         { provide: ToastService, useValue: toastSvc },
+        { provide: PrintLabelService, useValue: printSvc },
         { provide: RoleContextService, useValue: roleContextStub },
         {
           provide: ActivatedRoute,
@@ -153,6 +165,22 @@ describe('StockRoutingComponent', () => {
     expect(pharmacySvc.checkStock).toHaveBeenCalledWith('rx-deep-1');
     // QA D888: the deep link still works alongside the search.
     expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalled();
+    // The linked order may be absent from the loaded queue page.
+    expect(c.selected()).toBeNull();
+    const steps = Array.from(
+      f.nativeElement.querySelectorAll('.workspace-steps li'),
+    ) as HTMLElement[];
+    expect(steps.map((step) => step.getAttribute('aria-current'))).toEqual([null, null, 'step']);
+    expect(steps.map((step) => step.classList.contains('current'))).toEqual([false, false, true]);
+
+    const pending = new Subject<any>();
+    pharmacySvc.checkStock.and.returnValue(pending);
+    c.checkStock();
+    f.detectChanges();
+    expect(steps.map((step) => step.getAttribute('aria-current'))).toEqual([null, 'step', null]);
+    pending.next(stockCheckResponse);
+    f.detectChanges();
+    expect(steps.map((step) => step.getAttribute('aria-current'))).toEqual([null, null, 'step']);
   });
 
   it('QA D888: offers no raw prescription-id box, only a search over the queue', () => {
@@ -392,7 +420,7 @@ describe('StockRoutingComponent', () => {
 
   it('should show backend error when stock check fails', () => {
     pharmacySvc.checkStock.and.returnValue(
-      throwError(() => ({ error: { message: 'Stock lookup failed' } })),
+      throwError(() => ({ status: 400, error: { message: 'Stock lookup failed' } })),
     );
     component.prescriptionId = 'rx-1';
 
@@ -578,23 +606,23 @@ describe('StockRoutingComponent', () => {
 
     const backOrder = fixture.nativeElement.querySelector('[data-testid="open-back-order"]');
     const print = fixture.nativeElement.querySelector('[data-testid="print-for-patient"]');
-    expect(backOrder.disabled).toBeTrue();
-    expect(print.disabled).toBeTrue();
+    expect(isSubmitBlocked(backOrder)).toBeTrue();
+    expect(isSubmitBlocked(print)).toBeTrue();
     // "Route here" is the control that starts a routing, and it carries its
     // own disabled condition — a second [disabled] binding silently replaced
     // the gate here once, so it is asserted rather than assumed.
     expect(
-      fixture.nativeElement.querySelector('[data-testid="route-here-partner-1"]').disabled,
+      isSubmitBlocked(fixture.nativeElement.querySelector('[data-testid="route-here-partner-1"]')),
     ).toBeTrue();
 
     hasHospitalScope.set(true);
     fixture.detectChanges();
 
     expect(
-      fixture.nativeElement.querySelector('[data-testid="open-back-order"]').disabled,
+      isSubmitBlocked(fixture.nativeElement.querySelector('[data-testid="open-back-order"]')),
     ).toBeFalse();
     expect(
-      fixture.nativeElement.querySelector('[data-testid="print-for-patient"]').disabled,
+      isSubmitBlocked(fixture.nativeElement.querySelector('[data-testid="print-for-patient"]')),
     ).toBeFalse();
     expect(
       fixture.nativeElement.querySelector('[data-testid="route-here-partner-1"]').disabled,
@@ -606,5 +634,159 @@ describe('StockRoutingComponent', () => {
     expect(component.statusBadgeClass('COMPLETED')).toBe('badge-success');
     expect(component.routingTypeBadgeClass('BACKORDER')).toBe('badge-warning');
     expect(component.routingTypeBadgeClass('PRINT')).toBe('badge-secondary');
+  });
+
+  describe('stock status (QA D913)', () => {
+    /** Checks `data` for rx-1 and returns the rendered status badge. */
+    function statusBadgeFor(data: Record<string, unknown>): HTMLElement {
+      pharmacySvc.checkStock.and.returnValue(
+        of({ data: { ...stockCheckResponse.data, ...data } } as any),
+      );
+      component.prescriptionId = 'rx-1';
+      component.checkStock();
+      fixture.detectChanges();
+      return fixture.nativeElement.querySelector('[data-testid="stock-status"]');
+    }
+
+    beforeEach(() => {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('fr', {
+        PHARMACY: {
+          IN_STOCK: 'En stock',
+          OUT_OF_STOCK: 'En rupture de stock',
+          INSUFFICIENT_STOCK: 'Stock insuffisant',
+          INSUFFICIENT_STOCK_OF: 'Stock insuffisant ({{onHand}} / {{required}})',
+        },
+      });
+      translate.use('fr');
+    });
+
+    it('says insufficient, with on hand and required, when some but not enough is on hand', () => {
+      // The re-test: 50 Ocytocine on the shelf for an order of 60.
+      const badge = statusBadgeFor({ quantityOnHand: 50, quantityRequired: 60, sufficient: false });
+
+      expect(component.stockStatus()).toBe('INSUFFICIENT');
+      expect(badge.textContent?.trim()).toBe('Stock insuffisant (50 / 60)');
+      expect(badge.classList).toContain('badge-warning');
+      expect(badge.classList).not.toContain('badge-danger');
+    });
+
+    it('says insufficient without numbers when the server does not send the required quantity', () => {
+      const badge = statusBadgeFor({
+        quantityOnHand: 50,
+        quantityRequired: undefined,
+        sufficient: false,
+      });
+
+      expect(badge.textContent?.trim()).toBe('Stock insuffisant');
+    });
+
+    it("formats the quantities in the reader's locale (12,5 in French)", async () => {
+      registerLocaleData(localeFr, 'fr');
+      TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({
+        imports: [StockRoutingComponent, TranslateModule.forRoot()],
+        providers: [
+          provideHttpClient(withXhr()),
+          provideHttpClientTesting(),
+          { provide: PharmacyService, useValue: pharmacySvc },
+          { provide: ToastService, useValue: toastSvc },
+          { provide: PrintLabelService, useValue: printSvc },
+          { provide: RoleContextService, useValue: roleContextStub },
+          {
+            provide: ActivatedRoute,
+            useValue: { snapshot: { paramMap: convertToParamMap({}) } },
+          },
+          { provide: LOCALE_ID, useValue: 'fr' },
+        ],
+      }).compileComponents();
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('fr', {
+        PHARMACY: { INSUFFICIENT_STOCK_OF: 'Stock insuffisant ({{onHand}} / {{required}})' },
+      });
+      translate.use('fr');
+      fixture = TestBed.createComponent(StockRoutingComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+
+      const badge = statusBadgeFor({
+        quantityOnHand: 12.5,
+        quantityRequired: 60,
+        sufficient: false,
+      });
+
+      expect(badge.textContent?.trim()).toBe('Stock insuffisant (12,5 / 60)');
+    });
+
+    it('keeps "out of stock" for an empty shelf only', () => {
+      const badge = statusBadgeFor({ quantityOnHand: 0, quantityRequired: 60, sufficient: false });
+
+      expect(component.stockStatus()).toBe('OUT_OF_STOCK');
+      expect(badge.textContent?.trim()).toBe('En rupture de stock');
+      expect(badge.classList).toContain('badge-danger');
+    });
+
+    it('says in stock when the shelf covers the order', () => {
+      const badge = statusBadgeFor({ quantityOnHand: 300, quantityRequired: 60, sufficient: true });
+
+      expect(component.stockStatus()).toBe('IN_STOCK');
+      expect(badge.textContent?.trim()).toBe('En stock');
+      expect(badge.classList).toContain('badge-success');
+    });
+  });
+
+  describe('QA D966: print for the patient produces the copy', () => {
+    it('records the decision, then opens the printed copy for printing', () => {
+      component.prescriptionId = 'rx-1';
+      component.printForPatient();
+
+      expect(pharmacySvc.printForPatient).toHaveBeenCalledWith('rx-1');
+      expect(pharmacySvc.getPrintedPrescriptionCopy).toHaveBeenCalledWith('rx-1');
+      expect(printSvc.openForPrint).toHaveBeenCalled();
+    });
+
+    it('says so when the copy cannot be opened, instead of a silent "printed"', () => {
+      pharmacySvc.getPrintedPrescriptionCopy.and.returnValue(throwError(() => new Error('x')));
+      component.prescriptionId = 'rx-1';
+      component.printForPatient();
+
+      expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY.PRINT_COPY_FAILED');
+    });
+
+    it('a printed order offers its copy again, not the routing buttons that would fail', () => {
+      pharmacySvc.checkStock.and.returnValue(
+        of({
+          data: {
+            ...stockCheckResponse.data,
+            prescriptionStatus: 'PRINTED_FOR_PATIENT',
+            routable: false,
+          },
+        } as any),
+      );
+      component.prescriptionId = 'rx-1';
+      component.checkStock();
+      fixture.detectChanges();
+      const el: HTMLElement = fixture.nativeElement;
+
+      expect(el.querySelector('[data-testid="print-for-patient"]')).toBeNull();
+      expect(el.querySelector('[data-testid="open-back-order"]')).toBeNull();
+      (el.querySelector('[data-testid="reprint-copy"]') as HTMLButtonElement).click();
+      expect(printSvc.openForPrint).toHaveBeenCalled();
+    });
+  });
+
+  it('exposes exactly one current step while selecting and checking stock', () => {
+    const el: HTMLElement = fixture.nativeElement;
+    const current = () =>
+      Array.from(el.querySelectorAll('.workspace-steps li')).map((li) =>
+        li.getAttribute('aria-current'),
+      );
+    expect(current()).toEqual(['step', null, null]);
+    component.selected.set(component.queue()[0]);
+    fixture.detectChanges();
+    expect(current()).toEqual([null, 'step', null]);
+    component.stockResult.set(stockCheckResponse.data);
+    fixture.detectChanges();
+    expect(current()).toEqual([null, null, 'step']);
   });
 });

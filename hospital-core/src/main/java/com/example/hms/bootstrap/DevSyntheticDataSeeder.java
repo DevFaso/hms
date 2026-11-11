@@ -747,7 +747,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             .providerName("Blue Shield Insurance")
             .policyNumber(policyNumber)
             .groupNumber("HMO-PLATINUM")
-            .subscriberName(patient.getFirstName() + " " + patient.getLastName())
+            .subscriberName(patient.getFullName())
             .subscriberRelationship("SELF")
             .effectiveDate(LocalDate.now(SEED_ZONE).minusYears(1))
             .expirationDate(LocalDate.now(SEED_ZONE).plusYears(1))

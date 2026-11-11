@@ -1,3 +1,4 @@
+@use '../shared/styles/operations-dashboard';
 .roi-page {
   padding: 1.5rem;
   max-width: 1100px;
@@ -32,7 +33,7 @@
   padding: 0.5rem 0.875rem;
   border: none;
   border-radius: 8px;
-  background: #7c3aed;
+  background: #086d5e;
   color: #fff;
   font-size: 0.8125rem;
   font-weight: 600;
@@ -43,7 +44,7 @@
   }
 
   &:hover {
-    background: #6d28d9;
+    background: #07594e;
   }
 
   &:disabled {
@@ -81,7 +82,7 @@
   padding: 0;
   font-size: 0.8125rem;
   font-weight: 600;
-  color: #7c3aed;
+  color: #086d5e;
   cursor: pointer;
 
   &.danger {
@@ -161,7 +162,7 @@ table {
     }
 
     a {
-      color: #7c3aed;
+      color: #086d5e;
       font-weight: 600;
       text-decoration: none;
 
@@ -180,6 +181,8 @@ table {
 }
 
 .modal {
+  // The shared slideUp transform conflicts with this dialog's fixed centering.
+  animation: none;
   position: fixed;
   top: 50%;
   left: 50%;
@@ -193,7 +196,7 @@ table {
   overflow-y: auto;
 
   &:focus-visible {
-    outline: 2px solid #7c3aed;
+    outline: 2px solid #086d5e;
     outline-offset: 2px;
   }
 
@@ -280,13 +283,13 @@ table {
   cursor: pointer;
 
   &.active {
-    background: #7c3aed;
-    border-color: #7c3aed;
+    background: #086d5e;
+    border-color: #086d5e;
     color: #fff;
   }
 
   &:focus-visible {
-    outline: 2px solid #7c3aed;
+    outline: 2px solid #086d5e;
     outline-offset: 2px;
   }
 }
@@ -302,4 +305,268 @@ table {
   display: flex;
   gap: 0.625rem;
   white-space: nowrap;
+}
+
+@include operations-dashboard.layout;
+:host {
+  display: block;
+  min-width: 0;
+}
+.roi-page {
+  padding: 28px 32px;
+}
+.roi-page .summary-cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.page-header .header-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+}
+.page-subtitle {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.queue-status {
+  padding: 7px 12px;
+  background: #e7f4ef;
+  color: #075d52;
+  border: 1px solid #bbdcd1;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.request-directory {
+  padding: 0;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.directory-heading {
+  padding: 22px 22px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.directory-heading h2 {
+  margin: 0 0 7px;
+  font-size: 17px;
+}
+.directory-heading p {
+  margin: 0;
+  color: #52667b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.directory-icon {
+  color: #086d5e;
+  background: #e6f3ee;
+  padding: 10px;
+  border-radius: 11px;
+}
+.tabs {
+  margin: 0;
+  padding: 0 22px 18px;
+  border-bottom: 1px solid #e4ebf1;
+  gap: 8px;
+}
+.tab {
+  border-radius: 8px;
+  min-height: 36px;
+}
+.queue-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 18px 22px;
+  background: #fafcfd;
+}
+.queue-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 280px;
+  background: #fff;
+  border: 1px solid #cdd9e2;
+  border-radius: 9px;
+  padding: 0 12px;
+}
+.queue-search .material-symbols-outlined {
+  color: #52667b;
+  font-size: 20px;
+}
+.queue-search input {
+  width: 100%;
+  padding: 12px 0;
+  border: 0;
+  background: transparent;
+  color: #172d43;
+  font: inherit;
+  font-size: 13px;
+  min-width: 0;
+  outline: none;
+}
+.queue-search:focus-within {
+  outline: 2px solid #128575;
+  outline-offset: 2px;
+}
+.requester-filter select {
+  border: 1px solid #cdd9e2;
+  border-radius: 9px;
+  padding: 12px;
+  background: #fff;
+  color: #172d43;
+  font: inherit;
+  font-size: 13px;
+  max-width: 100%;
+}
+.queue-empty {
+  padding: 48px 22px;
+  text-align: center;
+  color: #52667b;
+}
+.queue-empty > .material-symbols-outlined {
+  display: inline-grid;
+  place-items: center;
+  font-size: 30px;
+  width: 62px;
+  height: 62px;
+  color: #0b7563;
+  background: #eaf5f0;
+  border-radius: 18px;
+  margin-bottom: 14px;
+}
+.queue-empty h3 {
+  font-size: 15px;
+  margin: 0 0 8px;
+  color: #172d43;
+}
+.queue-empty p {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0 0 16px;
+}
+.queue-empty.error-hint {
+  background: #fff8ef;
+}
+.queue-empty.error-hint h3 {
+  color: #805012;
+}
+.queue-footer {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px 22px;
+  color: #52667b;
+  font-size: 11px;
+  border-top: 1px solid #e5edf2;
+  background: #fafcfd;
+}
+.limit-notice {
+  margin: 0;
+  padding: 12px 22px;
+  background: #fff8e9;
+  color: #805012;
+  font-size: 12px;
+}
+.request-directory table th {
+  padding: 14px 20px;
+  background: #f6f9fb;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #52667b;
+}
+.request-directory table td {
+  padding: 20px;
+  line-height: 1.6;
+  font-size: 13px;
+  vertical-align: top;
+}
+.request-directory table tbody tr:hover {
+  background: #f8fcfa;
+}
+.patient-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.patient-link .material-symbols-outlined {
+  color: #086d5e;
+  background: #e7f4ef;
+  padding: 7px;
+  border-radius: 10px;
+  font-size: 20px;
+}
+.scope-cell strong,
+.scope-cell span {
+  display: block;
+}
+.scope-cell strong {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.scope-cell span {
+  color: #52667b;
+  font-size: 12px;
+}
+.actions-cell .btn-link {
+  border: 1px solid #cadfd7;
+  border-radius: 6px;
+  padding: 6px 9px;
+  margin: 0 5px 5px 0;
+  font-size: 11px;
+  background: #f1faf6;
+  color: #075d52;
+}
+.actions-cell .btn-link.danger {
+  border-color: #efd5d8;
+  background: #fff6f6;
+  color: #a32132;
+}
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid #128575;
+  outline-offset: 3px;
+}
+@media (max-width: 1000px) {
+  .roi-page {
+    padding: 24px;
+  }
+}
+@media (max-width: 600px) {
+  .roi-page {
+    padding: 18px 12px;
+  }
+  .roi-page .summary-cards {
+    grid-template-columns: 1fr;
+  }
+  .queue-toolbar,
+  .directory-heading {
+    padding: 16px;
+  }
+  .tabs {
+    padding: 0 16px 16px;
+  }
+  .requester-filter {
+    width: 100%;
+  }
+  .requester-filter select {
+    width: 100%;
+  }
+  .directory-icon {
+    display: none;
+  }
+  .request-directory table {
+    min-width: 780px;
+  }
+  .queue-empty {
+    padding: 32px 16px;
+  }
 }

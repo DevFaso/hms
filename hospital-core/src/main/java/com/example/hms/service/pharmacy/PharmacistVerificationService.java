@@ -83,6 +83,11 @@ public class PharmacistVerificationService {
         return controlledResolver != null ? controlledResolver.isControlled(p) : p.isControlledSubstance();
     }
 
+    /** QA D922: the same controlled answer, for the MAR row's "controlled substance" flag. */
+    public boolean isControlledSubstance(Prescription prescription) {
+        return prescription != null && controlled(prescription);
+    }
+
     /**
      * Whether this prescription may not be administered until a pharmacist
      * has verified it.
@@ -93,8 +98,12 @@ public class PharmacistVerificationService {
      * the gate once it is in.
      */
     public boolean requiresVerification(Prescription prescription) {
-        return prescription != null
-            && (controlled(prescription) || prescription.isRequiresCosign());
+        return prescription != null && requiresVerification(prescription, controlled(prescription));
+    }
+
+    /** The same rule for a caller that already resolved {@code controlled} (the MAR row shows it too). */
+    public boolean requiresVerification(Prescription prescription, boolean controlled) {
+        return prescription != null && (controlled || prescription.isRequiresCosign());
     }
 
     /** Whether a pharmacist has verified the CURRENT version of this prescription. */
@@ -134,9 +143,41 @@ public class PharmacistVerificationService {
      * The verification ceremony. Server identity, server clock — a client
      * cannot assert who verified or when, the same stance the signing and
      * co-signing ceremonies take.
+     *
+     * <p>Policy 4: an allergy conflict is released only by the prescriber's review on the order,
+     * never by anything the pharmacist sends.
      */
     @Transactional
     public Prescription verify(UUID prescriptionId, String note) {
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescriptionId, "prescriptionId");
+        return verifyInTransaction(prescriptionId, note);
+    }
+
+    /**
+     * QA D1555: the one allergy re-check after the signature. A required setter: the application
+     * always wires it; only a service built by hand in a unit test has none.
+     */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setAllergyRecheck(com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck) {
+        this.allergyRecheck = allergyRecheck;
+    }
+
+    /**
+     * QA D1555: a drug the patient's CURRENT allergies stop is verified only with the pharmacist's
+     * acknowledgement of that allergy and a reason (AllergyRecheckGuardTest).
+     */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement requireAllergyAcknowledged(Prescription prescription) {
+        if (allergyRecheck == null) {
+            return null;
+        }
+        return allergyRecheck.requirePrescriberReview(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.PHARMACIST_VERIFICATION, prescription,
+            prescription.getMedicationName());
+    }
+
+    /** Shared ceremony; both public entry points establish the transaction before delegating. */
+    private Prescription verifyInTransaction(UUID prescriptionId, String note) {
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
             .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
 
@@ -185,10 +226,19 @@ public class PharmacistVerificationService {
                 "pharmacy.r7.selfVerification");
         }
 
+        // QA D1555: the order's drug against the patient's CURRENT allergies, before the stamp.
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(prescription);
+
         prescription.setPharmacistVerifiedAt(LocalDateTime.now(clock));
         prescription.setPharmacistVerifiedBy(verifier);
-        prescription.setPharmacistVerificationNote(trimToNull(note));
-        return prescriptionRepository.save(prescription);
+        prescription.setPharmacistVerificationNote(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(trimToNull(note), allergyAck, 1000, "note"));
+        Prescription saved = prescriptionRepository.save(prescription);
+        if (allergyAck != null) {
+            allergyRecheck.auditAfterCommit(allergyAck, currentUserId,
+                prescription.getHospital() != null ? prescription.getHospital().getId() : null,
+                prescription.getPatient() != null ? prescription.getPatient().getId() : null, prescription.getId());
+        }
+        return saved;
     }
 
     /**

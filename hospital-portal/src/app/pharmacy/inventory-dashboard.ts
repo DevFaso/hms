@@ -1,9 +1,21 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { allRows } from '../shared/all-pages';
+import { refusalReason } from '../shared/refusal-reason';
+import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
+import {
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { actionRoles } from '../core/action-permissions';
 import {
   PharmacyService,
   PharmacyResponse,
@@ -14,12 +26,33 @@ import {
 } from '../services/pharmacy.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { serverDateOrInstant } from '../shared/date-utils';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { DashPipe } from '../shared/pipes/dash.pipe';
+import { missingRequiredMessage } from '../shared/required-fields';
+
+/** The add-item field the form may refuse (QA D1306). */
+const CI_FIELD_IDS = ['ciMed'];
 
 @Component({
   selector: 'app-inventory-dashboard',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, CfaPipe],
+  imports: [
+    DashPipe,
+    SubmitGuardDirective,
+    FocusOnRenderDirective,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CfaPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './inventory-dashboard.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './inventory-dashboard.scss',
@@ -29,8 +62,40 @@ export class InventoryDashboardComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
+  searchTerm = '';
+  private scopeVersion = 0;
+  private stockVersion = 0;
+  private alertsVersion = 0;
+  private expiryVersion = 0;
+  pharmacyFailed = signal(false);
+  stockFailed = signal(false);
+  alertsFailed = signal(false);
+  expiryFailed = signal(false);
+  visibleStock(): InventoryItemResponse[] {
+    const query = this.searchTerm.trim().toLocaleLowerCase();
+    return this.inventoryItems().filter(
+      (item) =>
+        !query ||
+        [item.medicationName, item.medicationCode].some((value) =>
+          value?.toLocaleLowerCase().includes(query),
+        ),
+    );
+  }
+  stockCount(status: string): number {
+    return this.inventoryItems().filter((item) => this.getStockStatusClass(item) === status).length;
+  }
   activeTab = signal<'stock' | 'alerts' | 'expiry'>('stock');
+
+  /**
+   * QA D965: "Trigger alerts" only for the roles the endpoint admits (store
+   * manager, hospital admin, super-admin); the pharmacist and the inventory
+   * clerk were offered it and got a 403 and the 403 page.
+   */
+  canTriggerAlerts(): boolean {
+    return this.roleContext.hasAnyActiveRoleExactly(actionRoles('inventoryReorderTrigger'));
+  }
 
   // Pharmacy selection
   pharmacies = signal<PharmacyResponse[]>([]);
@@ -66,21 +131,30 @@ export class InventoryDashboardComponent implements OnInit {
     this.loadPharmacies();
   }
 
-  private loadPharmacies(): void {
-    this.svc.listPharmacies(0, 100).subscribe({
-      next: (page) => {
-        this.pharmacies.set(page?.content ?? []);
+  loadPharmacies(): void {
+    this.pharmacyFailed.set(false);
+    // Keep the upstream complete pharmacy selector (QA D1347).
+    allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
+      next: (list) => {
+        this.pharmacies.set(list);
         this.pharmaciesLoaded.set(true);
-        const list = page?.content ?? [];
         if (list.length > 0) {
           this.selectedPharmacyId = list[0].id;
           this.loadTabData();
         }
       },
+      error: () => this.pharmacyFailed.set(true),
     });
   }
 
   onPharmacyChange(): void {
+    this.scopeVersion++;
+    this.inventoryItems.set([]);
+    this.alertItems.set([]);
+    this.expiringLots.set([]);
+    this.editingPriceId.set(null);
+    this.searchTerm = '';
+    this.totalPages = 0;
     this.currentPage = 0;
     this.loadTabData();
   }
@@ -99,46 +173,61 @@ export class InventoryDashboardComponent implements OnInit {
   }
 
   loadStockLevels(): void {
+    const scope = this.scopeVersion;
+    const version = ++this.stockVersion;
+    this.stockFailed.set(false);
     this.stockLoading.set(true);
     this.svc
       .listInventoryByPharmacy(this.selectedPharmacyId, this.currentPage, this.pageSize)
       .subscribe({
         next: (res) => {
+          if (scope !== this.scopeVersion || version !== this.stockVersion) return;
           const page = res?.data;
           this.inventoryItems.set(page?.content ?? []);
           this.totalPages = page?.totalPages ?? 0;
           this.stockLoading.set(false);
         },
         error: () => {
-          this.toast.error(this.translate.instant('PHARMACY.INVENTORY_LOAD_FAILED'));
+          if (scope !== this.scopeVersion || version !== this.stockVersion) return;
+          this.stockFailed.set(true);
           this.stockLoading.set(false);
         },
       });
   }
 
   loadReorderAlerts(): void {
+    const scope = this.scopeVersion;
+    const version = ++this.alertsVersion;
+    this.alertsFailed.set(false);
     this.alertsLoading.set(true);
     this.svc.getReorderAlertsByPharmacy(this.selectedPharmacyId).subscribe({
       next: (res) => {
+        if (scope !== this.scopeVersion || version !== this.alertsVersion) return;
         this.alertItems.set(res?.data ?? []);
         this.alertsLoading.set(false);
       },
       error: () => {
-        this.toast.error(this.translate.instant('PHARMACY.ALERTS_LOAD_FAILED'));
+        if (scope !== this.scopeVersion || version !== this.alertsVersion) return;
+        this.alertsFailed.set(true);
         this.alertsLoading.set(false);
       },
     });
   }
 
   loadExpiringLots(): void {
+    const scope = this.scopeVersion;
+    const version = ++this.expiryVersion;
+    this.expiryFailed.set(false);
     this.expiryLoading.set(true);
     this.svc.getExpiringSoon(this.selectedPharmacyId, this.daysAhead).subscribe({
       next: (res) => {
+        if (scope !== this.scopeVersion || version !== this.expiryVersion) return;
         this.expiringLots.set(res?.data ?? []);
         this.expiryLoading.set(false);
       },
       error: () => {
-        this.toast.error(this.translate.instant('PHARMACY.EXPIRING_LOAD_FAILED'));
+        if (scope !== this.scopeVersion || version !== this.expiryVersion) return;
+        this.expiryFailed.set(true);
         this.expiryLoading.set(false);
       },
     });
@@ -147,7 +236,10 @@ export class InventoryDashboardComponent implements OnInit {
   triggerReorderAlerts(): void {
     this.svc.triggerReorderAlerts().subscribe({
       next: () => this.toast.success(this.translate.instant('PHARMACY.ALERTS_TRIGGERED')),
-      error: () => this.toast.error(this.translate.instant('PHARMACY.ALERTS_TRIGGER_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.ALERTS_TRIGGER_FAILED'),
+        ),
     });
   }
 
@@ -174,8 +266,9 @@ export class InventoryDashboardComponent implements OnInit {
   }
 
   private loadMedications(): void {
-    this.svc.listMedications(0, 200).subscribe({
-      next: (page) => this.medications.set(page?.content ?? []),
+    // QA D1347: every catalogue medication (all pages), not the first 200.
+    allRows((page, size) => this.svc.listMedications(page, size)).subscribe({
+      next: (list) => this.medications.set(list),
     });
   }
 
@@ -184,10 +277,21 @@ export class InventoryDashboardComponent implements OnInit {
   }
 
   submitCreateForm(): void {
+    const root = this.host.nativeElement;
     if (!this.createForm.pharmacyId || !this.createForm.medicationCatalogItemId) {
-      this.toast.error(this.translate.instant('PHARMACY.ITEM_REQUIRED_FIELDS'));
+      // QA D1306 (round 28): the blank medication is marked, not only a toast.
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'PHARMACY.SELECT_PHARMACY', value: this.createForm.pharmacyId },
+          { labelKey: 'PHARMACY.MEDICATION', value: this.createForm.medicationCatalogItemId },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
+      const blank = this.createForm.medicationCatalogItemId ? [] : CI_FIELD_IDS;
+      refuseFields(root, blank, CI_FIELD_IDS, this.translate.instant('COMMON.FIELD_REQUIRED'));
+      this.toast.error(message);
       return;
     }
+    refuseFields(root, [], CI_FIELD_IDS, '');
     this.saving.set(true);
     this.svc.createInventoryItem(this.createForm).subscribe({
       next: () => {
@@ -198,7 +302,7 @@ export class InventoryDashboardComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PHARMACY.ITEM_CREATE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PHARMACY.ITEM_CREATE_FAILED'),
         );
         this.saving.set(false);
       },
@@ -208,8 +312,12 @@ export class InventoryDashboardComponent implements OnInit {
   /** QA D264: the checkout charges quantity x this price, so the pharmacy sets it here. */
   savePrice(item: InventoryItemResponse, raw: string): void {
     const price = Number(raw);
+    const priceId = `price-input-${item.id}`;
     if (raw === '' || !Number.isInteger(price) || price < 0) {
-      this.toast.error(this.translate.instant('PHARMACY.PRICE_INVALID'));
+      // QA D1306 (round 28): the price box is marked, not only a toast.
+      const message = this.translate.instant('PHARMACY.PRICE_INVALID');
+      refuseFields(this.host.nativeElement, [priceId], [priceId], message);
+      this.toast.error(message);
       return;
     }
     this.svc
@@ -237,7 +345,7 @@ export class InventoryDashboardComponent implements OnInit {
         },
         error: (err) => {
           this.toast.error(
-            err?.error?.message ?? this.translate.instant('PHARMACY.PRICE_SAVE_FAILED'),
+            refusalReason(err) ?? this.translate.instant('PHARMACY.PRICE_SAVE_FAILED'),
           );
         },
       });

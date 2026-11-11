@@ -39,7 +39,7 @@ public interface AdmissionOrderSetRepository extends JpaRepository<AdmissionOrde
      * Find order sets by name (search)
      */
     @Query("SELECT aos FROM AdmissionOrderSet aos WHERE aos.hospital.id = :hospitalId " +
-           "AND LOWER(aos.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
+           "AND LOWER(aos.name) LIKE LOWER(CONCAT('%', CAST(:searchTerm AS string), '%')) " +
            "AND aos.active = true ORDER BY aos.name ASC")
     List<AdmissionOrderSet> searchByName(@Param("hospitalId") UUID hospitalId, @Param("searchTerm") String searchTerm);
 

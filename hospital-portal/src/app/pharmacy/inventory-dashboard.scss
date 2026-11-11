@@ -1,3 +1,4 @@
+@use '../shared/styles/pharmacy-workspace' as pharmacy;
 @use '../shared/styles/page-common';
 
 .header-actions {
@@ -261,4 +262,24 @@ tr.expiring-soon td {
 .price-edit {
   margin-left: 4px;
   vertical-align: middle;
+}
+
+@include pharmacy.workspace;
+
+.pharmacy-workspace {
+  .alert-detail.reorder {
+    color: #075e53;
+  }
+  .expiry-badge {
+    color: #075e53;
+    background: #e2f5ec;
+  }
+  .expiry-badge.urgent {
+    color: #85450b;
+    background: #fff4d6;
+  }
+  .expiry-badge.expired {
+    color: #a61f32;
+    background: #ffedf0;
+  }
 }

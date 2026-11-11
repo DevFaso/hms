@@ -30,6 +30,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -372,7 +373,7 @@ class UserControllerTest {
         authenticateAs("impostor", false, "ROLE_SUPER_ADMIN");
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                .get("/users").param("onlyDeleted", "true"))
+                .get("/users").param("includeDeleted", "true"))
             .andExpect(status().isOk());
 
         verify(userService).getAllUsers(0, 10, false, false);
@@ -415,10 +416,29 @@ class UserControllerTest {
         authenticateAs("hadmin", "ROLE_HOSPITAL_ADMIN");
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                .get("/users").param("includeDeleted", "true").param("onlyDeleted", "true"))
+                .get("/users").param("includeDeleted", "true"))
             .andExpect(status().isOk());
 
         verify(userService).getAllUsers(0, 10, false, false);
+    }
+
+    @Test
+    void onlyDeleted_isAnEmptyPageForHospitalAdmin_notTheLiveList() throws Exception {
+        // QA D919: the "Supprimé" filter showed a hospital admin every LIVE
+        // account, with edit and delete buttons, because the flag was dropped
+        // and the live view answered instead.
+        authenticateAs("hadmin", "ROLE_HOSPITAL_ADMIN");
+
+        for (String path : java.util.List.of("/users", "/users/search")) {
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                    .get(path).param("includeDeleted", "true").param("onlyDeleted", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty());
+        }
+
+        verify(userService, never()).getAllUsers(
+            org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt(),
+            org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test
@@ -432,5 +452,25 @@ class UserControllerTest {
                 .with(SecurityMockMvcRequestPostProcessors.user("superadmin")
                     .authorities(AuthorityUtils.createAuthorityList("ROLE_SUPER_ADMIN"))))
             .andExpect(status().isNotFound());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "en, User deleted.",
+        "fr, Utilisateur supprimé.",
+        "es, Usuario eliminado."
+    })
+    void deleteUser_answersInTheReadersLanguage(String language, String expected) throws Exception {
+        // QA D911: the answer was "User deleted successfully." whatever the
+        // reader's language.
+        UUID id = UUID.randomUUID();
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/users/{id}", id)
+                .header("Accept-Language", language)
+                .with(SecurityMockMvcRequestPostProcessors.user("superadmin")
+                    .authorities(AuthorityUtils.createAuthorityList("ROLE_SUPER_ADMIN"))))
+            .andExpect(status().isOk())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.message").value(expected));
+        verify(userService).deleteUser(id);
     }
 }

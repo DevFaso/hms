@@ -11,6 +11,8 @@ import java.util.UUID;
 @Repository
 public interface MtmReviewRepository extends JpaRepository<MtmReview, UUID> {
 
+    /** QA D900: the list shows each patient's name, so the patient comes with the page. */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = "patient")
     Page<MtmReview> findByHospital_Id(UUID hospitalId, Pageable pageable);
 
     Page<MtmReview> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId, Pageable pageable);

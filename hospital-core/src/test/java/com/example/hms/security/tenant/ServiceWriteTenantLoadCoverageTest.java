@@ -67,6 +67,10 @@ class ServiceWriteTenantLoadCoverageTest {
         "\\.equals\\([^;]*getHospital", "Objects\\.equals\\([^;]*[Hh]ospital")));
 
     private static final Pattern SIGNATURE = Pattern.compile("^\\s*(public|private|protected)[^=;(]*\\s(\\w+)\\s*\\([^;]*$");
+    // A PCP assignment-to-hospital comparison proves consistency, not the caller's scope.
+    // Keep the stronger actor check when scanning these newly reachable clinical writes.
+    private static final Pattern PCP_ACTING_CHECK = Pattern.compile(
+        "TenantOwnership|requirePinned|requireActiveHospitalId|currentScope\\(\\)|pinnedHospitalId");
     /**
      * QA D602: a named by-id loader ({@code findDetailedById}, ...) is a by-id load
      * too; the shift PUT loaded through one and nothing saw it. Excluded are the
@@ -96,9 +100,9 @@ class ServiceWriteTenantLoadCoverageTest {
 
     /** Class.method#call → why the method needs no tenant check of its own. Frozen: it only shrinks. */
     private static final Map<String, String> RECORDED = Map.ofEntries(
-        entry("AdmissionOrderSetServiceImpl.deactivate#findById", ACTOR + "; the order set itself is loaded scoped"),
         entry("AppointmentServiceImpl.resolvePatient#findByIdUnscoped", PATIENT),
         entry("AppointmentServiceImpl.resolveStaff#findById", ACTOR),
+        entry("AppointmentServiceImpl.bookingTimeRefusal#findById", ACTOR + "; hasHospitalAccess answers another hospital's as unknown"),
         entry("AuditEventLogServiceImpl.resolveAssignment#findById", "the caller's own assignment, checked against the caller"),
         entry("BillingInvoiceServiceImpl.creditCheckInCopays#findById", CALLER_CHECKS + " (invoice writes load through loadInScope)"),
         entry("BillingInvoiceServiceImpl.recomputeAndPersistTotals#findById", CALLER_CHECKS + " (invoice item writes check writableInvoice first)"),
@@ -107,6 +111,12 @@ class ServiceWriteTenantLoadCoverageTest {
             + " acting hospital does not know; the caller is checked as privileged at the hospital, and the"
             + " declaration is audited and, after an opt-out, notified to the patient"),
         entry("CareGapTraceService.traceOne#findById", SYSTEM),
+        entry("OrderReviewHoldServiceImpl.lockRequest#findById", "the order the hold row names; loadHeld answered the row at the acting hospital, and a row holds only its own hospital's order"),
+        entry("OrderReviewHoldServiceImpl.replaceOrder#findById", "the named new order, refused unless it is this patient's at this hospital (belongsTo), as a missing one is"),
+        entry("OrderReviewHoldServiceImpl.currentVersion#findById", CALLER_CHECKS + " (only the version of an order its own write just scoped, updatePrescription or the blood group screen)"),
+        entry("OrderReviewHoldServiceImpl.toRow#findById", "the order the hold row names, read to label a row already scoped to the acting hospital"),
+        entry("DeathDisputeServiceImpl.escalateUnreviewed#findById", SYSTEM + "; the death record named by the dispute row"),
+        entry("DeathDisputeServiceImpl.escalateUnreviewed#findByIdUnscoped", SYSTEM + "; the patient named by the dispute row"),
         entry("ChatMessageServiceImpl.sendMessage#findById", "resolves the message recipient; no clinical row is written"),
         entry("ConsultationServiceImpl.getConsultationEntity#findById", CALLER_CHECKS + " (getConsultationInScope)"),
         entry("ConsultationServiceImpl.resolveStaff#findById", ACTOR),
@@ -130,6 +140,9 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("ObstetricAlertEscalationWorker.escalateOne#findByIdUnscoped", SYSTEM + " (QA D659: the patient the escalation row was raised for, to name her in the reminder; the reminder goes only to that row's hospital staff)"),
         entry("ObstetricAlertEscalationWorker.escalateOne#findById", SYSTEM + " (the escalation row carries its own hospital; no user scope exists in a sweep)"),
         entry("PatientChartAccess.requireOwnRecord#findByIdUnscoped", OWN_ROW + " (the patient's own chart)"),
+        entry("PatientPortalServiceImpl.verifyProxyAccess#findByIdUnscoped", "QA D1212 (round 23): the grantor's"
+            + " record, read only after the caller's active, unexpired, in-scope proxy grant FROM that grantor is verified;"
+            + " the grant is patient-owned, not a hospital's, so the proxy's tenancy is not the bound"),
         entry("PatientEducationServiceImpl.incrementResourceViewCount#findById", SHARED),
         entry("PatientEducationServiceImpl.submitQuestion#findById", UNSWEPT),
         entry("PatientEducationServiceImpl.trackProgress#findById", UNSWEPT),
@@ -137,6 +150,8 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("PatientPortalServiceImpl.requestMedicationRefill#findById", OWN_ROW + " (the patient's own prescription)"),
         entry("PatientServiceImpl.fetchPatient#findByIdUnscoped", PATIENT),
         entry("PatientVitalSignServiceImpl.resolveAssignment#findById", ACTOR),
+        entry("PrescriptionCopyPdfService.copyForPatient#findById", OWN_ROW
+            + " (QA D966: a read; 404 unless the prescription is the calling patient's own)"),
         entry("PatientVitalSignServiceImpl.resolveRegistration#findById", UNSWEPT),
         entry("PermissionServiceImpl.createPermission#findById", ACTOR),
         entry("PharmacySaleServiceImpl.buildLine#findById", SHARED),
@@ -209,6 +224,53 @@ class ServiceWriteTenantLoadCoverageTest {
         assertThat(scanSource("AdmissionServiceImpl", checked, fields, repos)).isEmpty();
         assertThat(scanSource("AdmissionServiceImpl", unchecked.replace("dischargePatient", "getAdmission"), fields, repos))
             .as("a public read is out of scope").isEmpty();
+    }
+
+    @Test
+    void anAssignmentHospitalComparisonDoesNotScopeAPrimaryCareWrite() {
+        String source = """
+            public void updatePrimaryCare(UUID id, Request req) {
+                var link = pcpRepo.findById(id).orElseThrow();
+                if (!assignment.getHospital().getId().equals(link.getHospital().getId())) {
+                    throw new RuntimeException();
+                }
+            }
+            """;
+        assertThat(scanSource("PatientPrimaryCareServiceImpl", source,
+            Map.of("pcpRepo", "PatientPrimaryCareRepository"), Set.of("PatientPrimaryCareRepository")))
+            .containsExactly("PatientPrimaryCareServiceImpl.updatePrimaryCare#findById");
+    }
+
+    /**
+     * QA r41 (running-app check): hospital A's admin read hospital B's patient's primary-care
+     * links (current and history) by patient id. Every read of a patient's links in the
+     * primary-care service goes through the acting hospital (a global or super-admin context
+     * keeps every link): a method that reads them by patient without it fails here.
+     */
+    @Test
+    void everyPrimaryCareReadByPatientIsScopedToTheActingHospital() throws IOException {
+        String source = Files.readString(MAIN.resolve("service/PatientPrimaryCareServiceImpl.java"),
+            StandardCharsets.UTF_8);
+        Matcher method = Pattern.compile("public [^{;=]*\\s(\\w+)\\s*\\([^)]*\\)\\s*\\{").matcher(source);
+        List<String> unscoped = new java.util.ArrayList<>();
+        int reads = 0;
+        while (method.find()) {
+            int depth = 1;
+            int i = method.end();
+            while (i < source.length() && depth > 0) {
+                char c = source.charAt(i++);
+                depth += c == '{' ? 1 : c == '}' ? -1 : 0;
+            }
+            String body = source.substring(method.end(), i);
+            if (body.contains("pcpRepo.findByPatient_Id")) {
+                reads++;
+                if (!body.contains("actingHospitalIdOrNullForGlobal") && !body.contains("TenantOwnership.require")) {
+                    unscoped.add(method.group(1));
+                }
+            }
+        }
+        assertThat(reads).as("primary-care reads by patient found").isGreaterThanOrEqualTo(2);
+        assertThat(unscoped).as("primary-care reads by patient without the acting hospital").isEmpty();
     }
 
     @Test
@@ -296,7 +358,8 @@ class ServiceWriteTenantLoadCoverageTest {
             }
             i = j + 1;
             String text = body.toString();
-            if ((PUBLIC_READ.matcher(name).find() && !isPrivate) || TENANT_CHECKS.matcher(text).find()) {
+            Pattern checks = "PatientPrimaryCareServiceImpl".equals(className) ? PCP_ACTING_CHECK : TENANT_CHECKS;
+            if ((PUBLIC_READ.matcher(name).find() && !isPrivate) || checks.matcher(text).find()) {
                 continue;
             }
             Matcher call = BY_ID_CALL.matcher(text);

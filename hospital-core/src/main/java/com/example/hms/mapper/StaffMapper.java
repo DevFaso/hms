@@ -57,12 +57,24 @@ public class StaffMapper {
         dto.setStartDate(staff.getStartDate());
         dto.setEndDate(staff.getEndDate());
         // Active means working AND able to sign in: an account that was never
-        // activated (users.is_active = false) is not active staff (D221).
-        dto.setActive(staff.isActive() && (staff.getUser() == null || staff.getUser().isActive()));
+        // activated (users.is_active = false) is not active staff (D221), and
+        // neither is one whose role here was switched off (QA D907).
+        dto.setActive(staff.isActive() && (staff.getUser() == null || staff.getUser().isActive())
+            && assignmentGrantsAccess(staff));
         dto.setCreatedAt(staff.getCreatedAt());
         dto.setUpdatedAt(staff.getUpdatedAt());
 
         return dto;
+    }
+
+    /** The staff record's role assignment is on (a dangling or missing one is not judged here). */
+    private static boolean assignmentGrantsAccess(Staff staff) {
+        try {
+            UserRoleHospitalAssignment assignment = staff.getAssignment();
+            return assignment == null || !Boolean.FALSE.equals(assignment.getActive());
+        } catch (EntityNotFoundException e) {
+            return true;
+        }
     }
 
     private void populateUserInfo(StaffResponseDTO dto, User user) {
@@ -109,7 +121,7 @@ public class StaffMapper {
         .hospital(hospital)
         .department(department)
         .assignment(assignment)
-        .jobTitle(dto.getJobTitle() != null ? JobTitle.valueOf(dto.getJobTitle()) : null)
+        .jobTitle(jobTitle(dto.getJobTitle()))
         .employmentType(dto.getEmploymentType())
         .specialization(dto.getSpecialization() != null ? dto.getSpecialization().name() : null)
         .licenseNumber(dto.getLicenseNumber())
@@ -127,7 +139,7 @@ public class StaffMapper {
         staff.setDepartment(department);
         staff.setAssignment(assignment);
 
-    staff.setJobTitle(dto.getJobTitle() != null ? JobTitle.valueOf(dto.getJobTitle()) : null);
+    staff.setJobTitle(jobTitle(dto.getJobTitle()));
         staff.setEmploymentType(dto.getEmploymentType());
     staff.setSpecialization(dto.getSpecialization() != null ? dto.getSpecialization().name() : null);
         staff.setLicenseNumber(dto.getLicenseNumber());
@@ -145,5 +157,23 @@ public class StaffMapper {
                 staff.getUser().getFirstName() + " " + staff.getUser().getLastName(),
                 staff.getJobTitle()
         );
+    }
+
+    /**
+     * The job title a request names, whatever its case ("nurse", "NURSE"); null when it is
+     * blank or names no title. The service refuses an unknown title on its field before
+     * the mapper is reached (#1096 review).
+     */
+    public static JobTitle jobTitle(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String name = raw.trim().toUpperCase(java.util.Locale.ROOT);
+        for (JobTitle title : JobTitle.values()) {
+            if (title.name().equals(name)) {
+                return title;
+            }
+        }
+        return null;
     }
 }

@@ -46,7 +46,7 @@ public class PermissionMatrixServiceImpl implements PermissionMatrixService {
     public PermissionMatrixSnapshotResponseDTO publishSnapshot(PermissionMatrixSnapshotRequestDTO request, String initiatedBy, Locale locale) {
         Objects.requireNonNull(request, "Permission matrix request cannot be null");
         if (request.getRows() == null || request.getRows().isEmpty()) {
-            throw new BusinessException("permission.matrix.rows.required");
+            throw new com.example.hms.exception.FieldBusinessException("rows", "permission.matrix.rows.required");
         }
 
         String publisher = (initiatedBy != null && !initiatedBy.isBlank()) ? initiatedBy : "system";

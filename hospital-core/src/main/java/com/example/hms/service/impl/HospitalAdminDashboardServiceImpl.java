@@ -268,7 +268,7 @@ public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboard
         return backlog.stream().map(c -> HospitalAdminSummaryDTO.ConsultBacklogItem.builder()
             .consultationId(c.getId().toString())
             .patientName(c.getPatient() != null
-                ? c.getPatient().getFirstName() + " " + c.getPatient().getLastName() : "Unknown")
+                ? c.getPatient().getFullName() : "Unknown")
             .specialtyRequested(c.getSpecialtyRequested())
             .urgency(c.getUrgency() != null ? c.getUrgency().name() : null)
             .status(c.getStatus().name())

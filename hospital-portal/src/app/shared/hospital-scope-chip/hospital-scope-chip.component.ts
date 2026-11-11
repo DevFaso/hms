@@ -9,6 +9,7 @@ import {
   OnInit,
   Output,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -88,6 +89,8 @@ export class HospitalScopeChipComponent implements OnInit {
    * (docs/super-admin-cross-tenant-design.md).
    */
   @Input() preserveScope = false;
+  /** Facility-only pages cannot offer a global read or clear to an unusable global state. */
+  @Input() hospitalRequired = false;
 
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
   protected readonly globalView = this.roleContext.globalView;
@@ -96,6 +99,34 @@ export class HospitalScopeChipComponent implements OnInit {
   /** Cached display name for the currently scoped hospital (null in global view). */
   private readonly _selectedHospitalName = signal<string | null>(null);
   protected readonly selectedHospitalName = computed(() => this._selectedHospitalName());
+  private namedHospitalId: string | null = null;
+
+  constructor() {
+    effect((onCleanup) => {
+      // The shell keeps this chip mounted while URL drill-downs replace its outlet.
+      // Page-owned chips continue to initialise/synchronise their own URL scope.
+      if (!this.preserveScope || !this.isSuperAdmin()) return;
+      const id = this.selectedHospitalId();
+      if (this.globalView() || !id) {
+        this.namedHospitalId = null;
+        this._selectedHospitalName.set(null);
+        return;
+      }
+      if (this.namedHospitalId === id) return;
+      this._selectedHospitalName.set(null);
+      const subscription = this.hospitalService.getById(id).subscribe({
+        next: (hospital) => {
+          if (this.selectedHospitalId() !== id) return;
+          this.namedHospitalId = id;
+          this._selectedHospitalName.set(hospital.name);
+        },
+        error: () => {
+          if (this.selectedHospitalId() === id) this._selectedHospitalName.set(null);
+        },
+      });
+      onCleanup(() => subscription.unsubscribe());
+    });
+  }
 
   protected readonly overlayOpen = signal<boolean>(false);
 
@@ -110,6 +141,7 @@ export class HospitalScopeChipComponent implements OnInit {
    * round trip.
    */
   setSelectedHospitalName(name: string | null): void {
+    this.namedHospitalId = name ? this.selectedHospitalId() : null;
     this._selectedHospitalName.set(name);
   }
 
@@ -123,15 +155,14 @@ export class HospitalScopeChipComponent implements OnInit {
     // Calling it again here lets the chip work even on pages that
     // forgot the pre-load step (degraded UX — first load races, then
     // self-corrects on the chip's emission).
-    const scopedId = this.preserveScope
-      ? this.roleContext.selectedHospitalId()
-      : this.scopeUrl.applyUrlScopeSync(this.route);
+    if (this.preserveScope) return;
+    const scopedId = this.scopeUrl.applyUrlScopeSync(this.route);
     if (scopedId) {
       this.hospitalService
         .getById(scopedId)
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
-          next: (h) => this._selectedHospitalName.set(h.name),
+          next: (hospital) => this._selectedHospitalName.set(hospital.name),
           error: () => this._selectedHospitalName.set(null),
         });
     }
@@ -153,6 +184,7 @@ export class HospitalScopeChipComponent implements OnInit {
   }
 
   protected onSelectAll(): void {
+    if (this.hospitalRequired) return;
     const changed = !this.roleContext.globalView();
     this.roleContext.enableGlobalView();
     this._selectedHospitalName.set(null);
@@ -171,6 +203,7 @@ export class HospitalScopeChipComponent implements OnInit {
       this.roleContext.globalView() ||
       this.roleContext.effectiveHospitalIdForRequest() !== hospital.id;
     this.roleContext.scopeToHospital(hospital.id);
+    this.namedHospitalId = hospital.id;
     this._selectedHospitalName.set(hospital.name);
     this.overlayOpen.set(false);
     if (changed) {

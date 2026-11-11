@@ -15,9 +15,16 @@
     "HOSPITAL_ADMIN predates HOSPITAL_ADMINISTRATOR. Both pairs are the same",
     "job, so one label is the honest answer and the English keeps the two",
     "spellings only because the enum does. Retiring the legacy constants is a",
-    "data migration, not a wording change."
+    "data migration, not a wording change.",
+    "",
+    "CODE_STATUS (QA D1148): Patient.codeStatus is free text that carries",
+    "either the short DNR or the directive type's name DO_NOT_RESUSCITATE for",
+    "the same order; one label is the honest answer."
   ],
   "allowed": [
+    "CODE_STATUS[en]:DNR+DO_NOT_RESUSCITATE",
+    "CODE_STATUS[fr]:DNR+DO_NOT_RESUSCITATE",
+    "CODE_STATUS[es]:DNR+DO_NOT_RESUSCITATE",
     "ALERT_SEVERITY[en]:WARN+WARNING",
     "ALERT_SEVERITY[es]:WARN+WARNING",
     "ALERT_SEVERITY[fr]:WARN+WARNING",
@@ -37,8 +44,6 @@
     "PERMISSIONS[fr]:BILLING+VIEW_BILLING",
     "PERMISSIONS[fr]:LAB_RESULTS+VIEW_LAB_RESULTS",
     "PERMISSIONS[fr]:MEDICATIONS+VIEW_MEDICATIONS",
-    "STATUS[es]:ACKNOWLEDGED+CONFIRMED",
-    "STATUS[fr]:ACKNOWLEDGED+CONFIRMED",
     "STATUS[fr]:DENIED+REJECTED"
   ]
 }

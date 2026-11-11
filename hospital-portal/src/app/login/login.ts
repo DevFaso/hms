@@ -22,14 +22,25 @@ import { safeReturnUrl } from '../auth/return-url';
 import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
+import { toE164 } from '../shared/phone-number';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 const SUPER_ADMIN_ROLE = 'ROLE_SUPER_ADMIN';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, RouterModule, TranslateModule, BrandMarkComponent, RoleLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    FormsModule,
+    RouterModule,
+    TranslateModule,
+    BrandMarkComponent,
+    RoleLabelPipe,
+  ],
   templateUrl: './login.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./login.scss'],
@@ -44,6 +55,7 @@ export class Login implements OnInit, AfterViewInit {
    * docs/ui/accessibility.md §6.8.
    */
   @ViewChild('usernameInput') private usernameInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('bootstrapPhoneInput') private bootstrapPhoneInput?: ElementRef<HTMLInputElement>;
 
   username = '';
   password = '';
@@ -72,6 +84,12 @@ export class Login implements OnInit, AfterViewInit {
     lastName: '',
     phoneNumber: '',
   };
+  /**
+   * QA D906: the phone field's own error, shown under it. A browser that
+   * autofilled the e-mail address there used to get only the server's banner
+   * at the top of the card, with nothing pointing at the field.
+   */
+  bootstrapPhoneError = '';
 
   /** Forgot-password state */
   forgotPasswordMode = false;
@@ -176,6 +194,7 @@ export class Login implements OnInit, AfterViewInit {
     if (!this.isBrowser || this.bootstrapLoading) return;
     this.error = '';
     this.bootstrapSuccess = '';
+    this.bootstrapPhoneError = '';
 
     if (
       !this.bootstrap.username ||
@@ -186,6 +205,13 @@ export class Login implements OnInit, AfterViewInit {
       !this.bootstrap.phoneNumber
     ) {
       this.error = this.translate.instant('LOGIN.ALL_FIELDS_REQUIRED');
+      return;
+    }
+    // QA D906: the server's rule (PhoneNumbers.toE164), checked here so the
+    // field is flagged and focused before anything is sent.
+    if (toE164(this.bootstrap.phoneNumber) === null) {
+      this.bootstrapPhoneError = this.translate.instant('USERS.PHONE_INVALID');
+      this.bootstrapPhoneInput?.nativeElement.focus();
       return;
     }
     if (this.bootstrap.password.length < 8) {

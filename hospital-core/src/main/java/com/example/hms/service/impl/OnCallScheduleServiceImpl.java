@@ -137,10 +137,10 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
         // member, or a desk / back-office role, is not cover (QA D117).
         if (!staff.isActive() || staff.getUser() == null || !staff.getUser().isActive()
             || staff.getUser().isDeleted()) {
-            throw new BusinessException(MessageUtil.resolve("onCall.staff.inactive"));
+            throw new com.example.hms.exception.FieldBusinessException("staffId", MessageUtil.resolve("onCall.staff.inactive"));
         }
         if (!ON_CALL_JOB_TITLES.contains(staff.getJobTitle())) {
-            throw new BusinessException(MessageUtil.resolve("onCall.staff.notClinical"));
+            throw new com.example.hms.exception.FieldBusinessException("staffId", MessageUtil.resolve("onCall.staff.notClinical"));
         }
         return staff;
     }
@@ -167,7 +167,7 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
 
     private void validateWindow(OnCallScheduleRequestDTO request) {
         if (!request.getEndTime().isAfter(request.getStartTime())) {
-            throw new BusinessException("onCall.shift.endBeforeStart");
+            throw new com.example.hms.exception.FieldBusinessException("endTime", "onCall.shift.endBeforeStart");
         }
     }
 

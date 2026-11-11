@@ -1,6 +1,8 @@
+import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
+  ElementRef,
   computed,
   inject,
   OnDestroy,
@@ -8,6 +10,7 @@ import {
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { focusFirstInvalid, refuseFields } from '../shared/forms/invalid-fields';
 
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
@@ -23,17 +26,22 @@ import {
 import { ToastService } from '../core/toast.service';
 import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warnings';
 import { RoleContextService } from '../core/role-context.service';
+import { AuthService } from '../auth/auth.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { isStepUpRefusal, stepUpRefusalKey } from '../services/step-up';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 const PATIENT_ROLE_CODES = new Set(['ROLE_PATIENT', 'PATIENT']);
 
 /** Local (70202020) or international (+226 70 20 20 20 / 00226...) - the server normalises to E.164. */
 const PHONE_PATTERN = /^\+?[\d\s.()-]{8,20}$/;
+
+/** QA D1306 (round 28): the fields the create/edit form may refuse, so a fixed one loses its mark. */
+const USER_FORM_IDS = ['firstName', 'lastName', 'username', 'email', 'phoneNumber', 'user-roles'];
 
 const MEDICAL_ROLE_CODES = new Set([
   'ROLE_DOCTOR',
@@ -104,17 +112,26 @@ const SPECIALIZATIONS = [
 @Component({
   selector: 'app-user-list',
   standalone: true,
-  imports: [FormsModule, TranslateModule, RoleLabelPipe, EnumLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    DialogFocusDirective,
+    FormsModule,
+    TranslateModule,
+    RoleLabelPipe,
+    EnumLabelPipe,
+  ],
   templateUrl: './user-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './user-list.scss',
 })
 export class UserListComponent implements OnInit, OnDestroy {
   private readonly userService = inject(UserService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly roleService = inject(RoleService);
   private readonly hospitalService = inject(HospitalService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly auth = inject(AuthService);
   private readonly impersonation = inject(ImpersonationService);
   private readonly router = inject(Router);
   private readonly translate = inject(TranslateService);
@@ -130,6 +147,16 @@ export class UserListComponent implements OnInit, OnDestroy {
   /* Filter state */
   roleFilter = '';
   statusFilter = '';
+
+  /**
+   * QA D919: the deleted view and the restore are the super-admin's (the
+   * server answers anyone else an empty worklist, and 404 on a deleted
+   * account), so nobody else is offered the "Deleted" filter or told an
+   * account can be restored from it.
+   */
+  canSeeDeleted(): boolean {
+    return this.roleContext.isSuperAdmin();
+  }
   showFilters = signal(false);
 
   currentPage = signal(0);
@@ -231,15 +258,15 @@ export class UserListComponent implements OnInit, OnDestroy {
     // The Deleted view itself pages SERVER-side (onlyDeleted): filtering a
     // mixed 20-row page client-side could show "no matches" while the ghost
     // sat on a later page - the invisible-ghost bug wearing a new hat.
-    const deletedView = this.statusFilter === 'deleted';
+    const deletedView = this.statusFilter === 'deleted' && this.canSeeDeleted();
     const request$ = hasServerFilter
       ? this.userService.search(page, 20, {
           ...(this.roleFilter ? { role: this.roleFilter } : {}),
           ...(term ? { name: term } : {}),
-          includeDeleted: true,
+          includeDeleted: this.canSeeDeleted(),
           ...(deletedView ? { onlyDeleted: true } : {}),
         })
-      : this.userService.list(page, 20, true, deletedView);
+      : this.userService.list(page, 20, this.canSeeDeleted(), deletedView);
 
     request$.subscribe({
       next: (res) => {
@@ -454,30 +481,47 @@ export class UserListComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * The first rule the create/edit form breaks: its message key and the
+   * blank fields to mark. Username and password are never asked on create:
+   * the server generates one-time credentials. Edits keep the username field.
+   */
+  private createRefusal(isEdit: boolean): { key: string; ids: string[] } | null {
+    const f = this.createForm;
+    const blank = [
+      f.firstName ? null : 'firstName',
+      f.lastName ? null : 'lastName',
+      isEdit && !f.username ? 'username' : null,
+      this.emailRequired && !f.email?.trim() ? 'email' : null,
+      !isEdit && !f.phoneNumber?.trim() ? 'phoneNumber' : null,
+    ].filter((id): id is string => id !== null);
+    if (blank.length > 0) return { key: 'USERS.TOAST.REQUIRED_FIELDS', ids: blank };
+    if (!isEdit && this.selectedRoles.length === 0) {
+      return { key: 'USERS.TOAST.ROLE_REQUIRED', ids: ['user-roles'] };
+    }
+    return null;
+  }
+
   submitCreate(): void {
     const isEdit = !!this.editing();
-    // Username and password are never asked on create: the server generates
-    // one-time credentials. Edits keep the username field.
-    if (
-      (isEdit && !this.createForm.username) ||
-      (this.emailRequired && !this.createForm.email?.trim()) ||
-      (!isEdit && !this.createForm.phoneNumber?.trim()) ||
-      !this.createForm.firstName ||
-      !this.createForm.lastName
-    ) {
-      this.toast.error(this.translate.instant('USERS.TOAST.REQUIRED_FIELDS'));
+    const root = this.host.nativeElement;
+    const refusal = this.createRefusal(isEdit);
+    if (refusal) {
+      // QA D1306 (round 28): the blank fields are marked, not only a toast.
+      const message = this.translate.instant(refusal.key);
+      refuseFields(root, refusal.ids, USER_FORM_IDS, message);
+      this.toast.error(message);
       return;
     }
-    if (!isEdit && this.selectedRoles.length === 0) {
-      this.toast.error(this.translate.instant('USERS.TOAST.ROLE_REQUIRED'));
-      return;
-    }
+    refuseFields(root, [], USER_FORM_IDS, '');
     const phone = this.createForm.phoneNumber?.trim();
     if (phone && !PHONE_PATTERN.test(phone)) {
       this.fieldErrors.update((prev) => ({
         ...prev,
         phoneNumber: this.translate.instant('USERS.PHONE_INVALID'),
       }));
+      // QA D1306 (round 28): focus the phone field the template marks, not only a toast.
+      focusFirstInvalid(root, ['phoneNumber']);
       this.toast.error(this.translate.instant('USERS.PHONE_INVALID'));
       return;
     }
@@ -562,6 +606,7 @@ export class UserListComponent implements OnInit, OnDestroy {
             ...prev,
             [body.field]: body.message ?? 'Already in use',
           }));
+          focusFirstInvalid(root, [body.field]);
           this.toast.error(body.message ?? this.translate.instant('USERS.TOAST.CONFLICT'));
           return;
         }
@@ -569,6 +614,8 @@ export class UserListComponent implements OnInit, OnDestroy {
         // 400 with fieldErrors map (from @Valid / Bean Validation)
         if (status === 400 && body?.fieldErrors) {
           this.fieldErrors.set(body.fieldErrors as Record<string, string>);
+          // QA D1306 (round 28): focus the first field the server refused (the template marks it).
+          focusFirstInvalid(root, Object.keys(body.fieldErrors));
           this.toast.error(this.translate.instant('USERS.TOAST.VALIDATION_ERRORS'));
           return;
         }
@@ -643,6 +690,21 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   // ── MVP-4: support impersonation ────────────────────────────────────
   /** True when the current user is a super admin and the row is impersonable. */
+  /** QA D902: the signed-in account is never offered its own delete (the server refuses it). */
+  isSelf(user: UserSummary): boolean {
+    const me = this.auth.getUserProfile()?.id ?? this.auth.getUserId();
+    return !!me && user.id === me;
+  }
+
+  /**
+   * QA D914: an account a hospital admin may not administer (it is also
+   * managed at another hospital, or holds an admin role) offers no edit or
+   * delete; saving it answered "user not found".
+   */
+  isManageable(user: UserSummary): boolean {
+    return user.manageable !== false;
+  }
+
   canImpersonate(user: UserSummary): boolean {
     if (!this.roleContext.isSuperAdmin()) return false;
     if (user.deleted || !user.active) return false;
@@ -670,7 +732,15 @@ export class UserListComponent implements OnInit, OnDestroy {
     const target = this.impersonateTarget();
     const reason = this.impersonateReason.trim();
     if (!target || reason.length < 5) {
-      this.impersonateError.set(this.translate.instant('USERS.TOAST.IMPERSONATE_REASON_TOO_SHORT'));
+      // QA D1281 class: the short reason is marked where it is typed.
+      const message = this.translate.instant('USERS.TOAST.IMPERSONATE_REASON_TOO_SHORT');
+      refuseFields(
+        this.host.nativeElement,
+        ['impersonate-reason'],
+        ['impersonate-reason'],
+        message,
+      );
+      this.impersonateError.set(message);
       return;
     }
     this.impersonating.set(true);

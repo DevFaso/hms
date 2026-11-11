@@ -56,7 +56,8 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
     private final PatientChartAccess patientChartAccess;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
-    private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
+    /** QA D1564: the one judgement of a vital set, newborns included. */
+    private final com.example.hms.service.vitals.VitalSignJudgement vitalSignJudgement;
     private final com.example.hms.service.support.DischargedPatientGuard dischargedPatientGuard;
 
     @Override
@@ -71,6 +72,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         // A hospital named in the body (no registration found) is a claim: the
         // patient must be registered there, as for every other chart write.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital == null ? null : hospital.getId());
+        com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(patient, request.getRecordedAt(), "recordedAt");
         // QA D525: the chart's vitals endpoint skipped the nurse station's
         // discharged-patient check; both now go through the same guard. A
         // patient reporting their own home reading (the portal path) is not
@@ -86,11 +88,11 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
 
         if (assignment != null && assignment.getHospital() != null && hospital != null
             && !assignment.getHospital().getId().equals(hospital.getId())) {
-            throw new BusinessException("Recorder assignment is not associated with the resolved hospital context.");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "vitals.recorderAssignmentOtherHospital");
         }
         if (staff != null && hospital != null && staff.getHospital() != null
             && !staff.getHospital().getId().equals(hospital.getId())) {
-            throw new BusinessException("Recorder staff is not assigned to the resolved hospital context.");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "vitals.recorderStaffOtherHospital");
         }
 
         PatientVitalSign entity = PatientVitalSign.builder()
@@ -102,21 +104,26 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
             .build();
 
         vitalSignMapper.applyRequestToEntity(request, entity);
+        // QA D1077 (round 19): this endpoint stored a head circumference for a
+        // 67-year-old; the nurse station's rule now holds on every vitals write.
+        com.example.hms.service.support.PatientMeasureRules.requireVitalSignApplicable(
+            entity, null, java.time.LocalDate.now(java.time.ZoneId.systemDefault()));
 
-        // NEWS2 MEDIUM+ auto-flags the bundle significant (P3 #25b): the
-        // aggregate catches multi-parameter deterioration that no single
-        // caller-supplied flag or per-vital threshold would.
-        if (com.example.hms.utility.NewsScoreCalculator.applies(entity)
-                && com.example.hms.utility.NewsScoreCalculator.score(entity).total() >= 5) {
-            entity.setClinicallySignificant(true);
-        }
+        // QA D1564: the shared judgement. A caller's flag is kept; the per-vital limits
+        // and NEWS2 MEDIUM+ (P3 #25b) flag the bundle too, and a newborn's set is judged
+        // against the newborn bands instead of the adult limits.
+        com.example.hms.service.vitals.VitalSignJudgement.Judgement judgement = vitalSignJudgement.judge(entity);
 
         PatientVitalSign saved = vitalSignRepository.save(entity);
-        // QA D207: the same NEWS2 escalation as the nurse station's capture.
+        // QA D207: the same NEWS2 escalation as the nurse station's capture (and D1564's newborn notices).
         String recorderUsername = staff != null && staff.getUser() != null ? staff.getUser().getUsername() : null;
-        news2EscalationService.escalateIfNeeded(saved, patientId, hospital != null ? hospital.getId() : null,
-            recorderUsername);
-        return vitalSignMapper.toResponse(saved);
+        vitalSignJudgement.escalate(saved, judgement, patientId, hospital != null ? hospital.getId() : null,
+            recorderUsername, null);
+        PatientVitalSignResponseDTO response = vitalSignMapper.toResponse(saved);
+        if (response != null) {
+            response.setNewbornAlerts(vitalSignJudgement.alerts(judgement));
+        }
+        return response;
     }
 
     /**
@@ -159,6 +166,18 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
             .stream()
             .map(vitalSignMapper::toResponse)
             .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<PatientVitalSignResponseDTO> getVitalsPageForPatientPortal(UUID patientId,
+                                                                                                          int page,
+                                                                                                          int size) {
+        Patient patient = patientChartAccess.requireOwnRecord(patientId);
+        int pageSize = Math.clamp(size, 1, PORTAL_PAGE_MAX);
+        return vitalSignRepository.findPageByPatient_IdOrderByRecordedAtDesc(patient.getId(),
+                PageRequest.of(Math.max(page, 0), pageSize))
+            .map(vitalSignMapper::toResponse);
     }
 
     /**
@@ -222,7 +241,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         PatientHospitalRegistration registration = registrationRepository.findById(registrationId)
             .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
         if (!registration.getPatient().getId().equals(patient.getId())) {
-            throw new BusinessException("Registration does not belong to the specified patient.");
+            throw new com.example.hms.exception.FieldBusinessException("registrationId", "vitals.registrationOtherPatient");
         }
         return registration;
     }
@@ -240,7 +259,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         if (patient.getHospitalId() != null) {
             return hospitalRepository.findClinicalById(patient.getHospitalId()).orElse(null);
         }
-        throw new BusinessException("Unable to resolve hospital context for vital sign capture.");
+        throw new BusinessException("vitals.hospitalUnresolved");
     }
 
     private Staff resolveRecorderStaff(UUID staffId, UUID recorderUserId, Hospital hospital) {
@@ -266,7 +285,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
             UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", assignmentId));
             if (!Boolean.TRUE.equals(assignment.getActive())) {
-                throw new BusinessException("Assignment is not active for vital sign capture.");
+                throw new com.example.hms.exception.FieldBusinessException("recordedByAssignmentId", "vitals.assignmentInactive");
             }
             return assignment;
         }

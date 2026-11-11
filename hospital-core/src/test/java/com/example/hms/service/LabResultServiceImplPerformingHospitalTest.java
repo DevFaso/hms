@@ -450,11 +450,33 @@ class LabResultServiceImplPerformingHospitalTest {
         PageRequest page = PageRequest.of(0, 10);
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
         when(labResultRepository.findHandledByHospitalForReader(performing.getId(), false, true,
-                new UUID(0L, 0L), true, new UUID(0L, 0L), page))
+                new UUID(0L, 0L), true, new UUID(0L, 0L), newestFirst(page)))
             .thenReturn(new PageImpl<>(List.of(result)));
         when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
 
         assertThat(service.getLabResultsPage(page, Locale.ENGLISH).getContent()).containsExactly(mapped);
+    }
+
+    /** QA D1361: the list query has no ORDER BY, so an unsorted read is newest result first. */
+    private static PageRequest newestFirst(PageRequest page) {
+        return PageRequest.of(page.getPageNumber(), page.getPageSize(),
+            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "resultDate"));
+    }
+
+    /** QA D1361: an unsorted list read pages newest result first; a caller's own sort is kept. */
+    @Test
+    void anUnsortedListReadIsNewestResultFirstAndACallersSortIsKept() {
+        PageRequest unsorted = PageRequest.of(3, 20);
+        assertThat(LabResultServiceImpl.newestResultFirst(unsorted)).isEqualTo(newestFirst(unsorted));
+        PageRequest sorted = PageRequest.of(1, 20, org.springframework.data.domain.Sort.by("resultValue"));
+        assertThat(LabResultServiceImpl.newestResultFirst(sorted)).isSameAs(sorted);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(labResultRepository.findHandledByHospitalForReader(performing.getId(), false, true,
+                new UUID(0L, 0L), true, new UUID(0L, 0L), newestFirst(unsorted)))
+            .thenReturn(new PageImpl<>(List.of(result)));
+        when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
+
+        assertThat(service.getLabResultsPage(unsorted, Locale.ENGLISH).getContent()).containsExactly(mapped);
     }
 
     /** QA D211: a doctor's list is released-only and honours patientId. */
@@ -464,7 +486,7 @@ class LabResultServiceImplPerformingHospitalTest {
         UUID patientId = UUID.randomUUID();
         result.setReleased(true);
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
-        when(labResultRepository.findHandledByHospitalForReader(performing.getId(), true, false, patientId, true, new UUID(0L, 0L), page))
+        when(labResultRepository.findHandledByHospitalForReader(performing.getId(), true, false, patientId, true, new UUID(0L, 0L), newestFirst(page)))
             .thenReturn(new PageImpl<>(List.of(result)));
         when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
 
@@ -484,7 +506,7 @@ class LabResultServiceImplPerformingHospitalTest {
         newer.setId(UUID.randomUUID());
         newer.setReleased(true);
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
-        when(labResultRepository.findHandledByHospitalForReader(performing.getId(), true, false, patientId, true, new UUID(0L, 0L), page))
+        when(labResultRepository.findHandledByHospitalForReader(performing.getId(), true, false, patientId, true, new UUID(0L, 0L), newestFirst(page)))
             .thenReturn(new PageImpl<>(List.of(result), page, 2));
         when(labResultRepository.findByLabOrder_IdIn(any())).thenReturn(List.of(result, newer));
 

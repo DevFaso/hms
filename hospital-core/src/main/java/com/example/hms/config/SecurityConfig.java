@@ -24,6 +24,8 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -37,6 +39,7 @@ import org.springframework.security.oauth2.server.resource.web.BearerTokenResolv
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
@@ -45,6 +48,9 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.List;
 
 import static com.example.hms.config.SecurityConstants.ROLE_DOCTOR;
@@ -109,6 +115,18 @@ public class SecurityConfig {
         "/patients/*/growth-chart", "/patients/*/growth-chart/**",
         "/patients/*/intake-output", "/patients/*/intake-output/**"
     };
+
+    /**
+     * QA D1224 (round 24): the roles that pass the edge on a WRITE (PUT, PATCH,
+     * DELETE) of a chart sub-resource. The clinicians who chart; each
+     * controller's {@code @PreAuthorize} is the precise gate.
+     */
+    static final String[] CHART_WRITE_AUTHORITIES = {
+        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_PHARMACIST
+    };
+
+    /** QA D1224: the patient photo (its own WRITE_ROLES, not the whole-patient delete). */
+    static final String API_PATIENT_PHOTO = "/patients/*/photo";
 
     /**
      * E8 #52 — the patient's own sharing opt-out: the one /patients/* surface a
@@ -269,6 +287,20 @@ public class SecurityConfig {
     /** The provider MFA gate (AC-13), carried by the confinement filter; same slice reason. */
     private final ObjectProvider<ProviderMfaGate> providerMfaGateProvider;
 
+    /**
+     * Shared secret that authorizes a Prometheus scrape of {@code /actuator/prometheus}.
+     *
+     * <p>Blank (the default) means the endpoint is closed to everyone — which is the correct
+     * production posture here, because Railway publishes the management port on the same public
+     * hostname as the API and metrics carry the whole endpoint inventory. Prod/dev export metrics
+     * by push instead (OTEL Java agent -> Grafana Cloud OTLP gateway).
+     *
+     * <p>Set {@code METRICS_SCRAPE_TOKEN} only where something must genuinely pull, e.g. the local
+     * docker-compose Alloy collector or a Grafana Cloud hosted-Prometheus scrape job.
+     */
+    @Value("${app.observability.metrics.scrape-token:}")
+    private String metricsScrapeToken;
+
     @Value("${app.cors.allowed-origins:http://localhost:4200}")
     private String allowedOrigins;
 
@@ -384,13 +416,69 @@ public class SecurityConfig {
         // TRACE is intentionally excluded (should be denied/disabled)
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
         cfg.setAllowedHeaders(List.of("*"));
-        cfg.setExposedHeaders(List.of("Authorization", "Content-Type", "X-Records-Withheld"));
+        // QA D1009: the browser keeps the document name the server gives.
+        cfg.setExposedHeaders(List.of("Authorization", "Content-Type", "Content-Disposition", "X-Records-Withheld"));
         cfg.setAllowCredentials(true);
         cfg.setMaxAge(3600L);
 
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", cfg);
         return source;
+    }
+
+    /**
+     * Authorizes {@code GET /actuator/prometheus} against the configured scrape token.
+     *
+     * <p>Deliberately an {@link AuthorizationManager} rather than a servlet {@code Filter}: adding a
+     * filter bean with dependencies to this context breaks every {@code @WebMvcTest} controller
+     * slice, which has already cost this codebase a 257-failure run (PR #536).
+     *
+     * <p>The token may arrive as {@code Authorization: Bearer <token>} (what Prometheus, Alloy and
+     * Grafana Cloud all emit natively) or as {@code X-Metrics-Token}. Comparison is constant-time so
+     * the endpoint cannot be used as a timing oracle for the token.
+     */
+    private AuthorizationManager<RequestAuthorizationContext> metricsScrapeAuthorization() {
+        return (authentication, context) -> {
+            if (metricsScrapeToken == null || metricsScrapeToken.isBlank()) {
+                return new AuthorizationDecision(false);
+            }
+            // Trim the configured value as well as the presented one. Railway's UI happily
+            // stores a trailing newline on a pasted secret, and an untrimmed comparison would
+            // then reject every correct scrape with a 403 nothing in the logs explains.
+            byte[] expected = metricsScrapeToken.trim().getBytes(StandardCharsets.UTF_8);
+            for (String presented : presentedScrapeTokens(context.getRequest())) {
+                if (MessageDigest.isEqual(presented.getBytes(StandardCharsets.UTF_8), expected)) {
+                    return new AuthorizationDecision(true);
+                }
+            }
+            return new AuthorizationDecision(false);
+        };
+    }
+
+    /**
+     * Extracts the presented scrape credentials, most specific first.
+     *
+     * <p>Returns every candidate rather than the first one found. A scraper behind a proxy that
+     * injects its own {@code Authorization: Bearer <jwt>} would otherwise have that unrelated JWT
+     * shadow a perfectly good {@code X-Metrics-Token}, and the scrape would 403 for a reason
+     * nothing in the logs explains.
+     */
+    private static List<String> presentedScrapeTokens(HttpServletRequest request) {
+        List<String> candidates = new ArrayList<>(2);
+
+        String headerToken = request.getHeader("X-Metrics-Token");
+        if (headerToken != null && !headerToken.isBlank()) {
+            candidates.add(headerToken.trim());
+        }
+
+        String authorization = request.getHeader("Authorization");
+        if (authorization != null && authorization.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            String bearer = authorization.substring(7).trim();
+            if (!bearer.isEmpty()) {
+                candidates.add(bearer);
+            }
+        }
+        return candidates;
     }
 
     @Bean
@@ -509,7 +597,19 @@ public class SecurityConfig {
 
                 // -------------------- Public / Health --------------------
                 .requestMatchers("/error").permitAll()
-                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                // Metrics scrape is NOT public: the series expose the full URI inventory,
+                // JVM/DB internals and business counters. Production ships metrics by PUSH
+                // (OTEL agent -> Grafana Cloud OTLP), so this endpoint stays closed unless a
+                // scrape token is configured. See docs/GRAFANA_CLOUD_SETUP.md.
+                .requestMatchers("/actuator/prometheus").access(metricsScrapeAuthorization())
+                // Default-deny for the rest of the actuator surface. Without this, anything
+                // added to management.endpoints.web.exposure.include falls through to
+                // anyRequest().authenticated() and is readable by ANY valid token, including
+                // a patient app's — which is exactly how /actuator/metrics came to expose the
+                // URI inventory and business counters. Exposing a new endpoint should be a
+                // deliberate act, not an accidental one.
+                .requestMatchers("/actuator/**").hasAuthority(ROLE_SUPER_ADMIN)
                 .requestMatchers("/.well-known/jwks.json").permitAll()
                 // FHIR conformance discovery — public per HL7 FHIR R4 spec
                 // (clients query /fhir/metadata before authenticating)
@@ -570,10 +670,32 @@ public class SecurityConfig {
                 // /patients/** blanket below, which HOSPITAL_ADMIN and ADMIN keep
                 // for demographics. Same list as the blanket minus those two.
                 .requestMatchers(HttpMethod.GET, API_PATIENT_CHART_PATTERNS)
-                .hasAnyAuthority(ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
                         ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN)
+
+                // QA D1224 (round 24): the WRITES on a chart sub-resource reach
+                // their own @PreAuthorize. The blanket DELETE /patients/** below
+                // (HOSPITAL_ADMIN, SUPER_ADMIN - deleting a whole patient) refused
+                // every clinician deactivating an allergy or removing a diagnosis
+                // with a reason, and PUT /patients/** refused the pharmacist the
+                // allergy edit its annotation admits. The clinical roles pass the
+                // edge; the controller annotation decides per surface, and
+                // PreAuthorizeMatcherPairingTest holds every pair. Whole-patient
+                // deletion is not a chart sub-resource and stays admin-only.
+                .requestMatchers(HttpMethod.DELETE, API_PATIENT_CHART_PATTERNS)
+                .hasAnyAuthority(CHART_WRITE_AUTHORITIES)
+                .requestMatchers(HttpMethod.PUT, API_PATIENT_CHART_PATTERNS)
+                .hasAnyAuthority(CHART_WRITE_AUTHORITIES)
+                .requestMatchers(HttpMethod.PATCH, API_PATIENT_CHART_PATTERNS)
+                .hasAnyAuthority(CHART_WRITE_AUTHORITIES)
+                // QA D1224 class: removing the photo is the photo controller's
+                // WRITE_ROLES (who uploads a photo also replaces or removes it),
+                // not the whole-patient delete rule.
+                .requestMatchers(HttpMethod.DELETE, API_PATIENT_PHOTO)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR,
+                        ROLE_SUPER_ADMIN)
 
                 // -------------------- Patients --------------------
                 // PHARMACIST: the shared patient picker (/patients/search, /patients/lookup)
@@ -794,8 +916,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
+                // QA D973: the receptionist who opens an invoice reads its lines.
                 .requestMatchers(HttpMethod.GET, API_INVOICE_ITEMS_PATTERN)
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT, ROLE_RECEPTIONIST)
 
                 .requestMatchers(HttpMethod.POST, API_INVOICE_ITEMS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
@@ -978,6 +1101,17 @@ public class SecurityConfig {
                 // endpoints (/me/patient/documents/{id}/download,
                 // /chat/attachments/{id}/download).
                 .requestMatchers(HttpMethod.GET, "/uploads/profile-images/**").permitAll()
+
+                // QA round 33: a caller who may not prescribe is answered 403 at the
+                // edge. Spring validates a @Valid body BEFORE a method's @PreAuthorize,
+                // so a receptionist's refused body read a 400 about the frequency: the
+                // answer told her why the order was wrong, not that it is not hers to
+                // write. The same roles as the two handlers' annotations
+                // (PreAuthorizeMatcherPairingTest holds the pair).
+                .requestMatchers(HttpMethod.POST, "/prescriptions")
+                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                .requestMatchers(HttpMethod.PUT, "/prescriptions/*")
+                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
 
                 .anyRequest().authenticated()
             )

@@ -47,4 +47,6 @@ public class WaitlistEntryResponseDTO {
 
     private LocalDateTime createdAt;
     private String createdBy;
+    /** QA D1157: why the entry was closed. */
+    private String closeReason;
 }

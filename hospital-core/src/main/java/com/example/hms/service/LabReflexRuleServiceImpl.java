@@ -1,6 +1,5 @@
 package com.example.hms.service;
 
-import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabReflexRuleMapper;
 import com.example.hms.model.LabReflexRule;
@@ -74,15 +73,12 @@ public class LabReflexRuleServiceImpl implements LabReflexRuleService {
     }
 
     private void validateRequest(LabReflexRuleRequestDTO request) {
-        if (request.getTriggerTestDefinitionId() == null) {
-            throw new BusinessException("lab.reflex.triggerRequired");
-        }
-        if (request.getReflexTestDefinitionId() == null) {
-            throw new BusinessException("lab.reflex.reflexRequired");
-        }
-        if (request.getCondition() == null || request.getCondition().isBlank()) {
-            throw new BusinessException("lab.reflex.conditionRequired");
-        }
+        // QA round 29 sweep (D1318 class): the three named in one answer, not one per request.
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(request.getTriggerTestDefinitionId(), "triggerTestDefinitionId", "lab.reflex.trigger.required")
+            .requireValue(request.getReflexTestDefinitionId(), "reflexTestDefinitionId", "lab.reflex.reflex.required")
+            .requireValue(request.getCondition(), "condition", "lab.reflex.conditionRequired")
+            .orThrow();
     }
 
     private LabTestDefinition loadTestDef(UUID id) {

@@ -17,7 +17,12 @@
           {{ 'LAB_INSTRUMENTS.ADD' | translate }}
         </button>
       }
-      <button class="btn-refresh" (click)="loadInstruments()" [disabled]="loading()">
+      <button
+        [attr.aria-label]="'COMMON.REFRESH' | translate"
+        class="btn-refresh"
+        (click)="loadInstruments()"
+        [disabled]="loading()"
+      >
         <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
       </button>
     </div>
@@ -28,11 +33,16 @@
     <div class="form-overlay" (click)="cancelForm()" (keydown.escape)="cancelForm()" tabindex="-1">
       <div
         class="form-card"
-        (click)="$event.stopPropagation()"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="lab-instruments-dialog-title-1"
+        appModalDialog
+        (escaped)="cancelForm()"
         (keydown.escape)="$event.stopPropagation()"
+        (click)="$event.stopPropagation()"
         tabindex="-1"
       >
-        <h2>
+        <h2 id="lab-instruments-dialog-title-1">
           {{
             (editingId() ? 'LAB_INSTRUMENTS.EDIT_TITLE' : 'LAB_INSTRUMENTS.ADD_TITLE') | translate
           }}
@@ -78,7 +88,13 @@
             <button type="button" class="btn-secondary" (click)="cancelForm()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               @if (saving()) {
                 <span class="material-symbols-outlined spin">progress_activity</span>
               }
@@ -149,14 +165,22 @@
                 @if (instr.calibrationOverdue) {
                   <span class="overdue-badge">{{ 'LAB_INSTRUMENTS.OVERDUE' | translate }}</span>
                 } @else {
-                  {{ instr.nextCalibrationDate ?? '—' }}
+                  {{
+                    instr.nextCalibrationDate
+                      ? (instr.nextCalibrationDate | serverTime | date: 'mediumDate')
+                      : '—'
+                  }}
                 }
               </td>
               <td>
                 @if (instr.maintenanceOverdue) {
                   <span class="overdue-badge">{{ 'LAB_INSTRUMENTS.OVERDUE' | translate }}</span>
                 } @else {
-                  {{ instr.nextMaintenanceDate ?? '—' }}
+                  {{
+                    instr.nextMaintenanceDate
+                      ? (instr.nextMaintenanceDate | serverTime | date: 'mediumDate')
+                      : '—'
+                  }}
                 }
               </td>
               @if (canManage()) {
@@ -165,6 +189,7 @@
                     class="btn-icon"
                     (click)="openEdit(instr)"
                     title="{{ 'COMMON.EDIT' | translate }}"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
                   >
                     <span class="material-symbols-outlined">edit</span>
                   </button>
@@ -172,6 +197,7 @@
                     class="btn-icon danger"
                     (click)="deactivate(instr)"
                     title="{{ 'COMMON.DELETE' | translate }}"
+                    [attr.aria-label]="'COMMON.DELETE' | translate"
                   >
                     <span class="material-symbols-outlined">delete</span>
                   </button>

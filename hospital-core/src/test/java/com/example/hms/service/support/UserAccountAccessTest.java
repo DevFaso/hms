@@ -38,6 +38,10 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -698,6 +702,56 @@ class UserAccountAccessTest {
             User self = account(callerId);
             when(assignmentRepository.findByUserId(callerId)).thenReturn(List.of(assignment("ROLE_PATIENT", hospitalA, true)));
             assertThat(access.canDelete(self)).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("QA D914: the directory's manageable flag, one page at a time")
+    class ManageableAmong {
+
+        private User withAssignments(UserRoleHospitalAssignment... rows) {
+            User target = account(UUID.randomUUID());
+            for (UserRoleHospitalAssignment row : rows) {
+                row.setUser(target);
+            }
+            return target;
+        }
+
+        @Test
+        @DisplayName("a hospital admin manages local staff, not one also at another hospital nor an admin")
+        void hospitalAdminManagesOnlyLocalStaff() {
+            signIn(false, "ROLE_HOSPITAL_ADMIN");
+            callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true));
+            UserRoleHospitalAssignment localNurse = assignment("ROLE_NURSE", hospitalA, true);
+            UserRoleHospitalAssignment sharedHere = assignment("ROLE_NURSE", hospitalA, true);
+            UserRoleHospitalAssignment sharedThere = assignment("ROLE_NURSE", hospitalB, true);
+            UserRoleHospitalAssignment peerAdmin = assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true);
+            User local = withAssignments(localNurse);
+            User shared = withAssignments(sharedHere, sharedThere);
+            User peer = withAssignments(peerAdmin);
+            when(assignmentRepository.findByUserIdIn(any()))
+                .thenReturn(List.of(localNurse, sharedHere, sharedThere, peerAdmin));
+
+            assertThat(access.manageableAmong(List.of(local, shared, peer))).containsExactly(local.getId());
+            // One read of the page's assignments, never one per row, and no
+            // registration lookup: a patient's registration elsewhere is not
+            // the caller's to learn from a list.
+            verify(assignmentRepository).findByUserIdIn(any());
+            verify(assignmentRepository, never()).findByUserId(any());
+            verifyNoInteractions(registrationRepository);
+        }
+
+        @Test
+        @DisplayName("a super-admin manages every row; a caller who administers nowhere manages none")
+        void superAdminAllAndNonAdminNone() {
+            User a = account(UUID.randomUUID());
+            User b = account(UUID.randomUUID());
+            signIn(true, "ROLE_SUPER_ADMIN");
+            assertThat(access.manageableAmong(List.of(a, b))).containsExactlyInAnyOrder(a.getId(), b.getId());
+
+            signIn(false, "ROLE_DOCTOR");
+            callerHolds(assignment("ROLE_DOCTOR", hospitalA, true));
+            assertThat(access.manageableAmong(List.of(a, b))).isEmpty();
         }
     }
 }

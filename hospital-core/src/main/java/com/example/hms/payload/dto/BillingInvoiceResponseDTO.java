@@ -32,7 +32,6 @@ public class BillingInvoiceResponseDTO {
     // Encounter
     /** The encounter's code, which the edit form sends back as encounterReference (QA D148). */
     private String encounterCode;
-    private String encounterDescription;
     private String encounterType;
     private String encounterStatus;
     private String encounterDate;
@@ -43,6 +42,9 @@ public class BillingInvoiceResponseDTO {
 
     /** QA D428: the visit invoice a folded check-in copay was credited to. */
     private String creditedToInvoiceNumber;
+
+    /** QA D936: a copay taken at check-in, credited to the visit invoice once one is issued. */
+    private boolean checkInCopay;
 
     /**
      * QA D421: what the patient has declared and staff have not confirmed
@@ -57,6 +59,8 @@ public class BillingInvoiceResponseDTO {
     private BigDecimal totalAmount;
     private BigDecimal amountPaid;
     private BigDecimal balanceDue; // Calculated: totalAmount - amountPaid
+    /** QA D1466: the amount paid above the total, owed back to the patient (a copay above the visit total). */
+    private BigDecimal refundDue;
 
     // Insurance Information
     private List<PatientInsuranceSummaryDTO> patientInsurances;
@@ -69,6 +73,10 @@ public class BillingInvoiceResponseDTO {
 
     private String status;
     private String notes;
+
+    /** QA D1069: why, and when (ISO, server time), a cancelled invoice was cancelled. */
+    private String cancelReason;
+    private String cancelledAt;
 
     // Optional alias
     private String patientName;

@@ -30,6 +30,7 @@ public class UltrasoundMapper {
 
         return UltrasoundOrderResponseDTO.builder()
             .id(order.getId())
+            .authorUserId(order.getOrderedByUserId())
             .patientId(order.getPatient() != null ? order.getPatient().getId() : null)
             .patientDisplayName(resolvePatientDisplayName(order.getPatient()))
             .patientMrn(resolvePatientMrn(order.getPatient()))
@@ -45,6 +46,7 @@ public class UltrasoundMapper {
             .scheduledTime(order.getScheduledTime())
             .appointmentLocation(order.getAppointmentLocation())
             .priority(order.getPriority())
+            .obstetricRuleSkipped(order.isObstetricRuleSkipped())
             .isHighRiskPregnancy(order.getIsHighRiskPregnancy())
             .highRiskNotes(order.getHighRiskNotes())
             .specialInstructions(order.getSpecialInstructions())
@@ -207,6 +209,8 @@ public class UltrasoundMapper {
             .reportReviewedByProvider(report.getReportReviewedByProvider())
             .providerReviewNotes(report.getProviderReviewNotes())
             .patientNotified(report.getPatientNotified())
+            // QA D1525: display only (a null on a legacy row reads "no answer", on a stated row "not assessed")
+            .observationsStated(!Boolean.FALSE.equals(report.getObservationsStated()))
             .patientNotifiedAt(report.getPatientNotifiedAt())
             .createdAt(report.getCreatedAt())
             .updatedAt(report.getUpdatedAt())
@@ -249,7 +253,7 @@ public class UltrasoundMapper {
             .estimatedDueDate(dto.getEstimatedDueDate())
             .dueDateConfirmed(Boolean.TRUE.equals(dto.getDueDateConfirmed()))
             // Fetal count and position
-            .numberOfFetuses(dto.getNumberOfFetuses() != null ? dto.getNumberOfFetuses() : 1)
+            .numberOfFetuses(dto.getNumberOfFetuses())
             .fetalPosition(dto.getFetalPosition())
             // Second trimester
             .biparietalDiameterMm(dto.getBiparietalDiameterMm())
@@ -269,9 +273,10 @@ public class UltrasoundMapper {
             .uterineArteryDoppler(dto.getUterineArteryDoppler())
             // Fetal well-being
             .fetalHeartRate(dto.getFetalHeartRate())
-            .fetalCardiacActivity(dto.getFetalCardiacActivity() == null || dto.getFetalCardiacActivity())
-            .fetalMovementObserved(dto.getFetalMovementObserved() == null || dto.getFetalMovementObserved())
-            .fetalToneNormal(dto.getFetalToneNormal() == null || dto.getFetalToneNormal())
+            // QA D1525: tri-state, null stays "not assessed" (it was turned into TRUE)
+            .fetalCardiacActivity(dto.getFetalCardiacActivity())
+            .fetalMovementObserved(dto.getFetalMovementObserved())
+            .fetalToneNormal(dto.getFetalToneNormal())
             // Anatomy
             .anatomySurveyComplete(Boolean.TRUE.equals(dto.getAnatomySurveyComplete()))
             .anatomyFindings(dto.getAnatomyFindings())
@@ -279,7 +284,7 @@ public class UltrasoundMapper {
             .findingCategory(dto.getFindingCategory())
             .findingsSummary(dto.getFindingsSummary())
             .interpretation(dto.getInterpretation())
-            .anomaliesDetected(Boolean.TRUE.equals(dto.getAnomaliesDetected()))
+            .anomaliesDetected(dto.getAnomaliesDetected()) // QA D1525: null = not stated
             .anomalyDescription(dto.getAnomalyDescription())
             // Genetic screening
             .geneticScreeningRecommended(Boolean.TRUE.equals(dto.getGeneticScreeningRecommended()))
@@ -395,7 +400,14 @@ public class UltrasoundMapper {
             return null;
         }
 
-        String firstName = safeTrim(patient.getFirstName());
+        // QA D1036: "Last, First Middle" - the given names whole, middle name included.
+        String firstName = safeTrim(java.util.stream.Stream.of(patient.getFirstName(), patient.getMiddleName())
+            .filter(part -> part != null && !part.isBlank())
+            .map(String::trim)
+            .collect(java.util.stream.Collectors.joining(" ")));
+        if (firstName != null && firstName.isEmpty()) {
+            firstName = null;
+        }
         String lastName = safeTrim(patient.getLastName());
 
         if (lastName != null && firstName != null) {

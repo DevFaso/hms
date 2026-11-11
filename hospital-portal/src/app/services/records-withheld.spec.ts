@@ -70,7 +70,8 @@ describe('Clinical list reads — withheld signal (QA D504)', () => {
     {
       name: 'encounters',
       call: () => TestBed.inject(EncounterService).listForPatient('p1'),
-      url: '/encounters?patientId=p1',
+      // QA D1347: every page, newest first with an id tie-break.
+      url: '/encounters?patientId=p1&page=0&size=200&sort=encounterDate,desc&sort=id,desc',
       body: { content: [] },
     },
   ];

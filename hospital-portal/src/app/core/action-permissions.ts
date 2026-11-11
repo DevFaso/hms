@@ -71,6 +71,17 @@ export const ACTION_PERMISSIONS = {
       'ROLE_SUPER_ADMIN',
     ],
   },
+  labSpecimenReject: {
+    endpoint: 'LabSpecimenController#rejectSpecimen',
+    roles: [
+      'ROLE_LAB_TECHNICIAN',
+      'ROLE_LAB_SCIENTIST',
+      'ROLE_LAB_MANAGER',
+      'ROLE_LAB_DIRECTOR',
+      'ROLE_QUALITY_MANAGER',
+      'ROLE_SUPER_ADMIN',
+    ],
+  },
   imagingReportsByHospital: {
     endpoint: 'ImagingResultController#getReportsByHospital',
     roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
@@ -89,7 +100,8 @@ export const ACTION_PERMISSIONS = {
   },
   admissionCreate: {
     endpoint: 'AdmissionController#admitPatient',
-    roles: ['ROLE_DOCTOR'],
+    // A midwife admits a woman in labour only (policy 2); the form narrows to it.
+    roles: ['ROLE_DOCTOR', 'ROLE_MIDWIFE'],
   },
   admissionUpdate: {
     endpoint: 'AdmissionController#updateAdmission',
@@ -127,15 +139,72 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'EncounterController#delete',
     roles: ['ROLE_SUPER_ADMIN'],
   },
+  /**
+   * QA D1463: the patient tracker's card actions. The triage form and the
+   * check-out dialog open on GET /encounters/{id}, so those two need this read too.
+   */
+  encounterRead: {
+    endpoint: 'EncounterController#getById',
+    roles: [
+      'ROLE_DOCTOR',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_PATIENT',
+      'ROLE_RADIOLOGIST',
+      'ROLE_ANESTHESIOLOGIST',
+      'ROLE_PHYSIOTHERAPIST',
+      'ROLE_SUPER_ADMIN',
+    ],
+  },
+  encounterTriage: {
+    endpoint: 'EncounterController#submitTriage',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR'],
+  },
+  encounterCompleteTriage: {
+    endpoint: 'EncounterController#completeTriage',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR'],
+  },
+  encounterCompleteExamination: {
+    endpoint: 'EncounterController#completeExamination',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  },
+  encounterReadyForDischarge: {
+    endpoint: 'EncounterController#markReadyForDischarge',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  },
+  encounterCheckout: {
+    endpoint: 'EncounterController#checkOut',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  },
+  // QA D1015: the midwife starts the visits booked with her (the service
+  // refuses her any other one).
   encounterStart: {
     endpoint: 'EncounterController#startEncounter',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'],
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_MIDWIFE'],
+  },
+  // QA D954: closing a visit nobody has seen (LWBS / cancelled).
+  encounterCloseUnseen: {
+    endpoint: 'EncounterController#closeUnseen',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST'],
+  },
+  // QA D961: a medical certificate is a physician's act. Product decision
+  // 2026-10-28: any licensed physician (general practitioner, physician,
+  // surgeon, anaesthesiologist, radiologist); never a nurse or a midwife.
+  encounterMedicalCertificate: {
+    endpoint: 'EncounterController#issueMedicalCertificate',
+    roles: [
+      'ROLE_DOCTOR',
+      'ROLE_PHYSICIAN',
+      'ROLE_SURGEON',
+      'ROLE_ANESTHESIOLOGIST',
+      'ROLE_RADIOLOGIST',
+    ],
   },
   referralCreate: {
     endpoint: 'GeneralReferralController#createReferral',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
-  // QA D661: the receiving-side and cancel actions are physician-only.
+  // QA D661: the receiving-side actions are physician-only.
   referralAcknowledge: {
     endpoint: 'GeneralReferralController#acknowledgeReferral',
     roles: ['ROLE_DOCTOR'],
@@ -156,9 +225,11 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'GeneralReferralController#rejectReferral',
     roles: ['ROLE_DOCTOR'],
   },
+  // QA D1026 class: the referrer withdraws it, whoever may write one (the page
+  // also checks that the caller is the referrer).
   referralCancel: {
     endpoint: 'GeneralReferralController#cancelReferral',
-    roles: ['ROLE_DOCTOR'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   // QA D611/D677: signing is the prescriber's own act; nurses and midwives
   // may draft and edit, but POST /sign and /cosign admit ROLE_DOCTOR only.
@@ -178,17 +249,34 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'PrescriptionController#cosign',
     roles: ['ROLE_DOCTOR'],
   },
+  // Policy 4: a prescriber reviews an allergy conflict on a signed order (the service narrows it to
+  // a prescriber of the order's hospital).
+  prescriptionAllergyReview: {
+    endpoint: 'PrescriptionController#allergyReview',
+    roles: ['ROLE_DOCTOR'],
+  },
   allergyCreate: {
     endpoint: 'PatientController#createPatientAllergy',
-    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'],
   },
   allergyUpdate: {
     endpoint: 'PatientController#updatePatientAllergy',
-    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'],
   },
   allergyDeactivate: {
     endpoint: 'PatientController#deactivatePatientAllergy',
-    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'],
+  },
+  // QA D1224: a diagnosis entered in error is removed (with a reason) by a
+  // doctor, nurse or midwife; recording or recoding one stays the doctor's.
+  diagnosisRemove: {
+    endpoint: 'PatientController#deletePatientDiagnosis',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  },
+  // QA D965: sending the reorder alerts is the store's act, not the pharmacist's.
+  inventoryReorderTrigger: {
+    endpoint: 'pharmacy.InventoryController#triggerReorderAlerts',
+    roles: ['ROLE_STORE_MANAGER', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
   },
 } as const satisfies Record<string, ActionPermission>;
 

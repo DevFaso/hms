@@ -1,3 +1,8 @@
+import { ResultEvolutionComponent } from '../shared/result-evolution.component';
+import { ResultRangeComponent } from '../shared/result-range.component';
+import { refusalReason } from '../../shared/refusal-reason';
+import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
+import { textMatches } from '../../shared/person-search';
 import {
   Component,
   inject,
@@ -15,6 +20,7 @@ import {
   LabService,
   LabResultResponse,
   LabResultTrendPoint,
+  LabResultReferenceRange,
   LabResultRequest,
   LabOrderResponse,
   LabResultComparison,
@@ -26,16 +32,16 @@ import { AuthService } from '../../auth/auth.service';
 import { HospitalScopeUrlService } from '../../core/hospital-scope-url.service';
 import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
-import { currentLocale } from '../../shared/i18n/app-locale';
 import { shortOrderCode } from '../../shared/lab/order-code';
-import {
-  nowLocalDatetime,
-  toLocalInputValue,
-  toServerDateTime,
-  serverInstant,
-} from '../../shared/date-utils';
+import { nowLocalDatetime, toLocalInputValue, toServerDateTime } from '../../shared/date-utils';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { labSeverityFlag, labSeverityTone, labReleaseNeedsReview } from '../shared/lab-severity';
+import { LabValuePipe, formatLabNumber } from '../shared/lab-value.pipe';
+import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 /**
  * D49: the order code the API sends is the order's UUID. Readers get its first
  * eight characters, enough to tell two orders apart on one screen.
@@ -45,10 +51,47 @@ export { shortOrderCode };
 /** D49 (moved to shared/date-utils for the admission form, QA D622). */
 export { toServerDateTime, toLocalInputValue };
 
+/**
+ * QA D1176: the order statuses that never take a NEW result — one is already
+ * recorded (RESULTED, VERIFIED, COMPLETED: the server answers 409
+ * "labresult.alreadyRecorded") or the order is closed (CANCELLED,
+ * ENTERED_IN_ERROR).
+ */
+const ORDER_STATUSES_WITHOUT_NEW_RESULT: ReadonlySet<string> = new Set([
+  'RESULTED',
+  'VERIFIED',
+  'COMPLETED',
+  'CANCELLED',
+  'ENTERED_IN_ERROR',
+]);
+
+/**
+ * QA D1204 / D1176 (round 22): the server refuses a hand-entered result on an
+ * order whose specimen was never taken or was rejected
+ * (LabResultServiceImpl.requireSpecimenTaken: status ORDERED or PENDING,
+ * "Aucun prélèvement n'a encore été enregistré…"). The picker offered them
+ * and the refusal came only after "Créer". The server exempts point-of-care
+ * tests, but that flag is neither sent with an order nor settable from the
+ * portal, so no order the portal can show is exempt.
+ * `scripts/lib/lab-result-picker.test.mjs` holds this list to the server's.
+ */
+export const ORDER_STATUSES_AWAITING_SPECIMEN: ReadonlySet<string> = new Set([
+  'ORDERED',
+  'PENDING',
+]);
+
 @Component({
   selector: 'app-lab-results',
   standalone: true,
   imports: [
+    ResultEvolutionComponent,
+    ResultRangeComponent,
+    DateTimePipe,
+    SubmitGuardDirective,
+    MeasurePipe,
+    LabCorrectionBadgeComponent,
+    ModalDialogDirective,
+    LabValuePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -125,6 +168,24 @@ export class LabResultsComponent implements OnInit {
   loading = signal(true);
   results = signal<LabResultResponse[]>([]);
   filtered = signal<LabResultResponse[]>([]);
+  pageSize = signal(10);
+  page = signal(1);
+  pageCount = computed(() => Math.max(1, Math.ceil(this.filtered().length / this.pageSize())));
+  hasNextPage = computed(() => this.currentPage() * this.pageSize() < this.filtered().length);
+  currentPage = computed(() => Math.min(this.page(), this.pageCount()));
+  pageStart = computed(() => (this.currentPage() - 1) * this.pageSize());
+  pageEnd = computed(() => Math.min(this.pageStart() + this.pageSize(), this.filtered().length));
+  pagedResults = computed(() => this.filtered().slice(this.pageStart(), this.pageEnd()));
+  detailHistory = signal<LabResultTrendPoint[]>([]);
+  detailHistoryLoading = signal(false);
+  detailHistoryError = signal(false);
+  private detailRequest = 0;
+
+  setPageSize(size: number): void {
+    this.pageSize.set([10, 25, 50].includes(Number(size)) ? Number(size) : 10);
+    this.page.set(1);
+  }
+
   searchTerm = '';
   activeTab = signal<'all' | 'released' | 'pending' | 'critical'>('all');
 
@@ -248,7 +309,10 @@ export class LabResultsComponent implements OnInit {
     return this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
   }
 
+  /** The orders "New result" offers (QA D1176), plus the order of a result being edited or corrected. */
   orders = signal<LabOrderResponse[]>([]);
+  /** Every order a result can be filed against, whatever its status. */
+  private resultableOrders: LabOrderResponse[] = [];
   private activeAssignmentId = '';
 
   /* ── CRUD signals ── */
@@ -279,13 +343,15 @@ export class LabResultsComponent implements OnInit {
     this.loadResults();
     // QA D645: an order whose test definition no longer resolves has nothing a
     // result can be entered against; it is not offered ("— — —" in the picker).
-    this.labService.listOrders({ size: 500 }).subscribe((list) =>
+    // QA D1347: every order in scope (all pages), not the 500 newest.
+    this.labService.listOrders().subscribe((list) => {
       // QA D645/D648: an order whose test definition was deleted carries a
       // "deleted test" label but cannot take a result; it stays out of the picker.
-      this.orders.set(
-        list.filter((o) => !o.labTestDefinitionMissing && !!(o.labTestName || o.labTestCode)),
-      ),
-    );
+      this.resultableOrders = list.filter(
+        (o) => !o.labTestDefinitionMissing && !!(o.labTestName || o.labTestCode),
+      );
+      this.orders.set(this.pickableOrders());
+    });
     this.profileService.getAssignments().subscribe({
       next: (assignments) => {
         const active = assignments.find((a: { active: boolean }) => a.active);
@@ -296,6 +362,8 @@ export class LabResultsComponent implements OnInit {
 
   /** Re-fetch under the new scope when the chip emits. */
   onScopeChange(_hospitalId: string | null): void {
+    this.closeDetail();
+    this.page.set(1);
     this.loadResults();
   }
 
@@ -313,6 +381,20 @@ export class LabResultsComponent implements OnInit {
 
   /* ── CRUD ── */
 
+  /**
+   * QA D1176: "New result" listed every order; one that already carries a
+   * result (or is closed) was refused with a 409 only after the form was
+   * filled. Such orders are corrected from their released result instead.
+   */
+  private pickableOrders(keepOrderId?: string | null): LabOrderResponse[] {
+    return this.resultableOrders.filter(
+      (o) =>
+        o.id === keepOrderId ||
+        (!ORDER_STATUSES_WITHOUT_NEW_RESULT.has(o.status) &&
+          !ORDER_STATUSES_AWAITING_SPECIMEN.has(o.status)),
+    );
+  }
+
   openCreate(): void {
     this.form = this.emptyForm();
     this.editing.set(false);
@@ -327,6 +409,7 @@ export class LabResultsComponent implements OnInit {
    * marked superseded and both stay on record.
    */
   openCorrection(r: LabResultResponse): void {
+    this.orders.set(this.pickableOrders(r.labOrderId));
     this.form = {
       ...this.emptyForm(),
       labOrderId: r.labOrderId ?? '',
@@ -346,6 +429,7 @@ export class LabResultsComponent implements OnInit {
   }
 
   openEdit(r: LabResultResponse): void {
+    this.orders.set(this.pickableOrders(r.labOrderId));
     this.form = {
       labOrderId: r.labOrderId ?? '',
       assignmentId: this.activeAssignmentId,
@@ -363,19 +447,43 @@ export class LabResultsComponent implements OnInit {
 
   closeModal(): void {
     this.showModal.set(false);
+    // The order an edit or a correction added back leaves the "New result" picker.
+    if (this.resultableOrders.length > 0) this.orders.set(this.pickableOrders());
   }
 
   onOrderChange(orderId: string): void {
     const order = this.orders().find((o) => o.id === orderId);
     if (order) {
       this.form.patientId = order.patientId ?? '';
+      // QA D1095: units come from the test definition. The field is
+      // prefilled with it (and required when the test has one), so a value is
+      // never saved bare.
+      this.form.resultUnit = order.labTestUnit ?? '';
     }
+  }
+
+  /** QA D1095: the selected order's test unit, which the unit field requires. */
+  /** QA D1394: the value states a limit ("> 6,5"), which the server grades from its bound. */
+  valueHasComparator(): boolean {
+    return /^\s*[<>\u2264\u2265]/.test(this.form.resultValue ?? '');
+  }
+
+  selectedTestUnit(): string {
+    return (
+      this.orders()
+        .find((o) => o.id === this.form.labOrderId)
+        ?.labTestUnit?.trim() ?? ''
+    );
   }
 
   submitForm(): void {
     const selectedOrder = this.orders().find((o) => o.id === this.form.labOrderId);
     this.form.assignmentId = this.activeAssignmentId;
     this.form.patientId = selectedOrder?.patientId ?? this.form.patientId ?? '';
+    // QA D1095: a test with a unit takes its result in a unit (blank was saved as "0,40").
+    if (!this.form.resultUnit?.trim() && this.selectedTestUnit()) {
+      this.form.resultUnit = this.selectedTestUnit();
+    }
     if (!this.form.labOrderId || !this.form.assignmentId || !this.form.patientId) {
       this.toast.error(this.translate.instant('LAB_RESULTS.SAVE_VALIDATION_ERROR'));
       return;
@@ -393,10 +501,14 @@ export class LabResultsComponent implements OnInit {
         : this.labService.createResult(payload);
 
     op.subscribe({
-      next: () => {
+      next: (saved) => {
         this.toast.success(
           this.translate.instant(this.editing() ? 'LAB_RESULTS.UPDATED' : 'LAB_RESULTS.CREATED'),
         );
+        // QA D1394: the server graded it and could not: say so at once, not at release.
+        if (labReleaseNeedsReview(saved ?? {})) {
+          this.toast.warning(this.translate.instant('LAB_RESULTS.SAVED_NOT_GRADED'));
+        }
         this.closeModal();
         this.saving.set(false);
         this.loadResults();
@@ -407,12 +519,7 @@ export class LabResultsComponent implements OnInit {
         // ("ask an administrator to mark this test as point-of-care"), and a
         // generic "could not save" throws that away and leaves the ward
         // thinking the system is broken.
-        const serverMessage = err?.error?.message;
-        this.toast.error(
-          typeof serverMessage === 'string' && serverMessage.trim()
-            ? serverMessage
-            : this.translate.instant('LAB_RESULTS.SAVE_ERROR'),
-        );
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_RESULTS.SAVE_ERROR'));
         this.saving.set(false);
       },
     });
@@ -439,8 +546,8 @@ export class LabResultsComponent implements OnInit {
         this.deleting.set(false);
         this.loadResults();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB_RESULTS.DELETE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_RESULTS.DELETE_ERROR'));
         this.deleting.set(false);
       },
     });
@@ -485,7 +592,9 @@ export class LabResultsComponent implements OnInit {
   }
 
   releaseResult(r: LabResultResponse): void {
-    if (this.isSelfRelease(r)) {
+    // QA D1092: a value no range can grade is released only once someone
+    // has read the warning, in the same confirmation dialog.
+    if (this.isSelfRelease(r) || labReleaseNeedsReview(r)) {
       this.selfReleaseTarget.set(r);
       return;
     }
@@ -496,15 +605,15 @@ export class LabResultsComponent implements OnInit {
     const target = this.selfReleaseTarget();
     if (!target) return;
     this.selfReleaseTarget.set(null);
-    this.sendRelease(target, true);
+    this.sendRelease(target, this.isSelfRelease(target), labReleaseNeedsReview(target));
   }
 
   cancelSelfRelease(): void {
     this.selfReleaseTarget.set(null);
   }
 
-  private sendRelease(r: LabResultResponse, selfRelease: boolean): void {
-    this.labService.releaseResult(r.id, selfRelease).subscribe({
+  private sendRelease(r: LabResultResponse, selfRelease: boolean, ungradedConfirmed = false): void {
+    this.labService.releaseResult(r.id, selfRelease, ungradedConfirmed).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('LAB_RESULTS.RELEASED'));
         this.loadResults();
@@ -524,11 +633,13 @@ export class LabResultsComponent implements OnInit {
 
   loadResults(): void {
     this.loading.set(true);
-    this.labService.listResults({ size: 200 }).subscribe({
-      next: (list) => {
+    // QA D1347: every result in scope (all pages), not the 200 newest, so the
+    // counters and the search reach every one.
+    this.labService.listAllResults().subscribe({
+      next: ({ rows: list }) => {
         this.results.set(list);
         this.computeStats(list);
-        this.applyFilter();
+        this.applyFilter(false);
         this.loading.set(false);
       },
       error: () => {
@@ -562,7 +673,7 @@ export class LabResultsComponent implements OnInit {
       next: (list) => {
         this.criticalList.set(list ?? []);
         this.criticalLoading.set(false);
-        this.applyFilter();
+        this.applyFilter(false);
       },
       error: () => {
         this.toast.error(this.translate.instant('LAB_RESULTS.CRITICAL_LOAD_ERROR'));
@@ -571,7 +682,7 @@ export class LabResultsComponent implements OnInit {
     });
   }
 
-  applyFilter(): void {
+  applyFilter(resetPage = true): void {
     const tab = this.activeTab();
     let list = tab === 'critical' ? this.criticalList() : this.results();
     if (tab === 'released') {
@@ -584,32 +695,60 @@ export class LabResultsComponent implements OnInit {
       list = list.filter(
         (r) =>
           (r.labOrderCode ?? '').toLowerCase().includes(term) ||
-          (r.patientFullName ?? '').toLowerCase().includes(term) ||
+          textMatches(r.patientFullName, term) ||
           (r.labTestName ?? '').toLowerCase().includes(term) ||
           (r.resultValue ?? '').toLowerCase().includes(term),
       );
     }
     this.filtered.set(list);
+    if (resetPage) this.page.set(1);
+    else this.page.set(this.currentPage());
   }
 
   viewResult(r: LabResultResponse): void {
     this.selectedResult.set(r);
+    const request = ++this.detailRequest;
+    this.detailHistory.set([]);
+    this.detailHistoryLoading.set(true);
+    this.detailHistoryError.set(false);
+    this.labService.getResult(r.id).subscribe({
+      next: (detail) => {
+        if (request !== this.detailRequest) return;
+        this.detailHistoryLoading.set(false);
+        if (detail?.id !== r.id || detail.patientId !== r.patientId) {
+          this.detailHistoryError.set(true);
+          return;
+        }
+        this.selectedResult.set(detail);
+        this.detailHistory.set(
+          detail.trendHistory?.length
+            ? detail.trendHistory
+            : [
+                {
+                  resultDate: detail.resultDate,
+                  resultValue: detail.resultValue,
+                  resultUnit: detail.resultUnit,
+                  corrected: !!detail.supersedesResultId,
+                },
+              ],
+        );
+      },
+      error: () => {
+        if (request !== this.detailRequest) return;
+        this.detailHistoryLoading.set(false);
+        this.detailHistoryError.set(true);
+      },
+    });
   }
 
   closeDetail(): void {
+    ++this.detailRequest;
     this.selectedResult.set(null);
   }
 
   getReleasedByDisplay(r: LabResultResponse): string {
     const actor = (r.releasedByFullName ?? '').trim();
     return actor || this.translate.instant('LAB_RESULTS.AUTOVERIFICATION');
-  }
-
-  sortedTrendHistory(r: LabResultResponse): LabResultTrendPoint[] {
-    const history = r.trendHistory ?? [];
-    return [...history].sort(
-      (a, b) => serverInstant(b.resultDate).getTime() - serverInstant(a.resultDate).getTime(),
-    );
   }
 
   formatReferenceRange(range: {
@@ -621,34 +760,54 @@ export class LabResultsComponent implements OnInit {
     const max = range.maxValue;
     const unit = range.unit ? ` ${range.unit}` : '';
 
+    // QA D1002: the limits in the reader's number format ("0,7 – 1,1 g/L").
     if (min != null && max != null) {
-      return `${min} – ${max}${unit}`;
+      return `${formatLabNumber(min)} – ${formatLabNumber(max)}${unit}`;
     }
     if (min != null) {
-      return `≥ ${min}${unit}`;
+      return `≥ ${formatLabNumber(min)}${unit}`;
     }
     if (max != null) {
-      return `≤ ${max}${unit}`;
+      return `≤ ${formatLabNumber(max)}${unit}`;
     }
     return '—';
   }
 
-  formatReferenceRangeAge(range: { ageMin?: number | null; ageMax?: number | null }): string {
+  formatReferenceRangeAge(range: {
+    ageMin?: number | null;
+    ageMax?: number | null;
+    ageUnit?: string | null;
+  }): string {
     const ageMin = range.ageMin;
     const ageMax = range.ageMax;
-    if (ageMin != null && ageMax != null) return `${ageMin}–${ageMax}`;
-    if (ageMin != null) return `${ageMin}+`;
-    if (ageMax != null) return `0–${ageMax}`;
-    return 'All ages';
+    // Round 18: a band in days or months says so ("0–7 jours"); years stay as before.
+    const unit = (range.ageUnit ?? 'YEARS').toUpperCase();
+    // Round 18: free-text source and the unit word come from fixed keys.
+    const suffix =
+      unit === 'DAYS'
+        ? ' ' + this.translate.instant('LAB_TEST_CONFIG.AGE_UNIT_DAYS')
+        : unit === 'MONTHS'
+          ? ' ' + this.translate.instant('LAB_TEST_CONFIG.AGE_UNIT_MONTHS')
+          : '';
+    if (ageMin != null && ageMax != null) return `${ageMin}–${ageMax}${suffix}`;
+    if (ageMin != null) return `${ageMin}+${suffix}`;
+    if (ageMax != null) return `0–${ageMax}${suffix}`;
+    return this.translate.instant('LAB_RESULTS.ALL_AGES');
   }
 
-  formatTrendDelta(sortedHistory: LabResultTrendPoint[], index: number): string {
-    const current = Number(sortedHistory[index]?.resultValue);
-    const previous = Number(sortedHistory[index + 1]?.resultValue);
-    if (!Number.isFinite(current) || !Number.isFinite(previous)) return '—';
-    const delta = current - previous;
-    const sign = delta > 0 ? '+' : '';
-    return `${sign}${new Intl.NumberFormat(currentLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(delta)}`;
+  /** Round 18: whether this listed range is the one the result was graded against. */
+  isGradedRange(result: LabResultResponse, range: LabResultReferenceRange): boolean {
+    const graded = result.gradedReferenceRange;
+    if (!graded) return false;
+    return (
+      graded.minValue === range.minValue &&
+      graded.maxValue === range.maxValue &&
+      (graded.unit ?? null) === (range.unit ?? null) &&
+      (graded.gender ?? null) === (range.gender ?? null) &&
+      (graded.ageMin ?? null) === (range.ageMin ?? null) &&
+      (graded.ageMax ?? null) === (range.ageMax ?? null) &&
+      (graded.ageUnit ?? null) === (range.ageUnit ?? null)
+    );
   }
 
   /* ── Sign / acknowledge / compare ── */
@@ -680,8 +839,8 @@ export class LabResultsComponent implements OnInit {
           this.closeSign();
           this.loadResults();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('LAB_RESULTS.SIGN_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_RESULTS.SIGN_ERROR'));
           this.signSubmitting.set(false);
         },
       });
@@ -706,7 +865,9 @@ export class LabResultsComponent implements OnInit {
    * that always failed for exactly the results that matter most.
    */
   isCritical(r: LabResultResponse): boolean {
-    return !!r.criticalNotifiedAt || (r.severityFlag ?? '').toUpperCase() === 'CRITICAL';
+    return (
+      !!r.criticalNotifiedAt || labSeverityFlag({ severityFlag: r.severityFlag }) === 'CRITICAL'
+    );
   }
 
   openReadBack(r: LabResultResponse): void {
@@ -736,14 +897,14 @@ export class LabResultsComponent implements OnInit {
           list.map((row) => (row.id === target.id ? { ...row, ...updated } : row));
         this.results.update(patch);
         this.criticalList.update((list) => list.filter((row) => row.id !== target.id));
-        this.applyFilter();
+        this.applyFilter(false);
         this.closeReadBack();
       },
       error: (err: { error?: { message?: string } }) => {
         // A mismatch is the interesting case, and the server explains it in
         // clinical terms — show that rather than a generic failure.
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('LAB_RESULTS.READ_BACK_ERROR'),
+          refusalReason(err) ?? this.translate.instant('LAB_RESULTS.READ_BACK_ERROR'),
         );
         this.readBackSubmitting.set(false);
       },
@@ -759,9 +920,12 @@ export class LabResultsComponent implements OnInit {
           list.map((row) => (row.id === r.id ? { ...row, acknowledged: true } : row));
         this.results.update(patch);
         this.criticalList.update((list) => list.filter((row) => row.id !== r.id));
-        this.applyFilter();
+        this.applyFilter(false);
       },
-      error: () => this.toast.error(this.translate.instant('LAB_RESULTS.ACKNOWLEDGE_ERROR')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_RESULTS.ACKNOWLEDGE_ERROR'),
+        ),
     });
   }
 
@@ -772,8 +936,8 @@ export class LabResultsComponent implements OnInit {
         this.comparison.set(cmp);
         this.comparisonLoading.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB_RESULTS.COMPARE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_RESULTS.COMPARE_ERROR'));
         this.comparisonLoading.set(false);
       },
     });
@@ -798,15 +962,14 @@ export class LabResultsComponent implements OnInit {
     }
   }
 
+  /** QA D969: drawn from the one grade reading every lab screen shares (lab-severity.ts). */
   getSeverityClass(flag: string): string {
-    switch (flag?.toUpperCase()) {
-      case 'CRITICAL':
+    switch (labSeverityTone(labSeverityFlag({ severityFlag: flag }))) {
+      case 'critical':
         return 'severity-badge severity-critical';
-      case 'HIGH':
-      case 'LOW':
-      case 'ABNORMAL':
+      case 'abnormal':
         return 'severity-badge severity-high';
-      case 'NORMAL':
+      case 'normal':
         return 'severity-badge severity-normal';
       default:
         return 'severity-badge';

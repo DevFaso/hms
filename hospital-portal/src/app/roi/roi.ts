@@ -29,7 +29,9 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type DecisionKind = 'fulfil' | 'deny' | 'cancel';
 
 /**
@@ -49,12 +51,14 @@ type DecisionKind = 'fulfil' | 'deny' | 'cancel';
   selector: 'app-roi',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,
     RouterModule,
     TranslateModule,
     PatientPickerComponent,
+    ModalDialogDirective,
   ],
   templateUrl: './roi.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -77,6 +81,34 @@ export class RoiComponent implements OnInit, OnDestroy {
   total = signal(0);
   loading = signal(false);
   loadFailed = signal(false);
+  readonly searchTerm = signal('');
+  readonly requesterFilter = signal<RoiRequesterType | ''>('');
+  readonly visibleRows = computed(() => {
+    const term = this.searchTerm().trim().toLocaleLowerCase();
+    return this.rows().filter(
+      (row) =>
+        (!this.requesterFilter() || row.requesterType === this.requesterFilter()) &&
+        (!term ||
+          [
+            row.patientName,
+            row.patientId,
+            row.requesterName,
+            row.purpose,
+            row.scopeDescription,
+          ].some((value) => value?.toLocaleLowerCase().includes(term))),
+    );
+  });
+  readonly patientRequestsLoaded = computed(
+    () => this.rows().filter((r) => r.requesterType === 'PATIENT').length,
+  );
+  readonly thirdPartyRequestsLoaded = computed(
+    () => this.rows().filter((r) => r.requesterType === 'THIRD_PARTY').length,
+  );
+
+  clearFilters(): void {
+    this.searchTerm.set('');
+    this.requesterFilter.set('');
+  }
 
   /* ── intake modal ── */
   showIntake = signal(false);
@@ -145,6 +177,7 @@ export class RoiComponent implements OnInit, OnDestroy {
 
   setStatus(status: RoiRequestStatus): void {
     this.activeStatus.set(status);
+    this.clearFilters();
     this.load$.next(status);
   }
 

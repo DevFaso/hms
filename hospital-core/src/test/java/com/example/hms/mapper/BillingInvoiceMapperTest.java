@@ -11,6 +11,33 @@ class BillingInvoiceMapperTest {
 
     private final BillingInvoiceMapper mapper = new BillingInvoiceMapper();
 
+    /**
+     * QA D1421: an invoice names its visit by type and date. Every clinical text of the encounter
+     * is planted and none may reach ANY reader's answer: the mapper is the same for all of them.
+     */
+    @Test
+    void noClinicalTextOfTheEncounterReachesTheInvoice_D1421() throws Exception {
+        String planted = "CLINICAL-SENTINEL";
+        Encounter encounter = new Encounter();
+        encounter.setNotes(planted);
+        encounter.setChiefComplaint(planted);
+        encounter.setDeskChiefComplaint(planted);
+        encounter.setFollowUpInstructions(planted);
+        encounter.setDischargeDiagnoses(planted);
+        encounter.setExtraFields(java.util.Map.of("note", planted));
+        encounter.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+        encounter.setEncounterDate(java.time.LocalDateTime.of(2026, 11, 3, 8, 30));
+        BillingInvoice invoice = new BillingInvoice();
+        invoice.setEncounter(encounter);
+
+        BillingInvoiceResponseDTO dto = mapper.toBillingInvoiceResponseDTO(invoice);
+
+        String json = new tools.jackson.databind.json.JsonMapper().writeValueAsString(dto);
+        assertThat(json).doesNotContain(planted);
+        assertThat(dto.getEncounterType()).isEqualTo("INPATIENT");
+        assertThat(dto.getEncounterDate()).startsWith("2026-11-03");
+    }
+
     /** QA D148: the edit form sends the encounter code back; without it the link was dropped on save. */
     @Test
     void responseCarriesTheEncounterCode_D148() {

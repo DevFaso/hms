@@ -1,3 +1,4 @@
+import { allRows } from '../../../shared/all-pages';
 import { ChangeDetectionStrategy, Component, OnDestroy, inject, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -15,15 +16,18 @@ import { RoleContextService } from '../../../core/role-context.service';
 import { refusalReason } from '../../../shared/refusal-reason';
 import { ToastService } from '../../../core/toast.service';
 
+import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directive';
 /**
  * Per-hospital editor for HMS-concept-code → DHIS2-dataElement-UID
  * mappings. Filters by datasetUid because DHIS2 dataElements live
  * inside datasets and a code can map differently per dataset.
  */
+import { ConfirmService } from '../../../shared/confirm-dialog/confirm.service';
+
 @Component({
   selector: 'app-dhis2-mapping-editor',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="dhis2-mappings" data-testid="dhis2-mapping-editor">
@@ -104,7 +108,7 @@ import { ToastService } from '../../../core/toast.service';
       <form class="dhis2-mappings__add" (ngSubmit)="onAdd()" data-testid="dhis2-mapping-add-form">
         <h3>{{ 'DHIS2.MAPPINGS.ADD' | translate }}</h3>
         <label>
-          {{ 'DHIS2.MAPPINGS.COL_SYSTEM' | translate }}
+          {{ 'DHIS2.MAPPINGS.COL_SYSTEM' | translate }} *
           <input
             type="text"
             data-testid="dhis2-mapping-add-system"
@@ -114,7 +118,7 @@ import { ToastService } from '../../../core/toast.service';
           />
         </label>
         <label>
-          {{ 'DHIS2.MAPPINGS.COL_CODE' | translate }}
+          {{ 'DHIS2.MAPPINGS.COL_CODE' | translate }} *
           <input
             type="text"
             data-testid="dhis2-mapping-add-code"
@@ -124,7 +128,7 @@ import { ToastService } from '../../../core/toast.service';
           />
         </label>
         <label>
-          {{ 'DHIS2.MAPPINGS.COL_DATAELEMENT' | translate }}
+          {{ 'DHIS2.MAPPINGS.COL_DATAELEMENT' | translate }} *
           <input
             type="text"
             data-testid="dhis2-mapping-add-dataelement"
@@ -162,7 +166,9 @@ import { ToastService } from '../../../core/toast.service';
           type="submit"
           class="btn-primary"
           data-testid="dhis2-mapping-add-submit"
-          [disabled]="!canAdd() || saving()"
+          [disabled]="saving()"
+          [appSubmitGuard]="!canAdd()"
+          submitGuardRequired
         >
           {{ 'COMMON.ADD' | translate }}
         </button>
@@ -207,6 +213,7 @@ export class Dhis2MappingEditorComponent implements OnDestroy {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
   private listSub?: Subscription;
 
   ngOnDestroy(): void {
@@ -254,9 +261,15 @@ export class Dhis2MappingEditorComponent implements OnDestroy {
     });
   }
 
-  protected onDelete(id: string): void {
+  protected async onDelete(id: string): Promise<void> {
     const hospitalId = this.roleContext.activeHospitalId;
     if (!hospitalId) return;
+    // QA CX-010: one click removed the mapping.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'DHIS2.MAPPINGS.DELETE_CONFIRM',
+      confirmKey: 'COMMON.DELETE',
+    });
+    if (!confirmed) return;
     this.dhis2.deleteMapping(id, hospitalId).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('DHIS2.MAPPINGS.DELETED'));
@@ -278,9 +291,13 @@ export class Dhis2MappingEditorComponent implements OnDestroy {
     this.loading.set(true);
     this.error.set(false);
     this.listSub?.unsubscribe();
-    this.listSub = this.dhis2.listMappings(hospitalId, this.filterDatasetUid).subscribe({
-      next: (page) => {
-        this.rows.set(page.content);
+    // QA D1347: every mapping of the data set (all pages), not the first 20.
+    const datasetUid = this.filterDatasetUid;
+    this.listSub = allRows((page, size) =>
+      this.dhis2.listMappings(hospitalId, datasetUid, page, size),
+    ).subscribe({
+      next: (rows) => {
+        this.rows.set(rows);
         this.loading.set(false);
       },
       error: () => {

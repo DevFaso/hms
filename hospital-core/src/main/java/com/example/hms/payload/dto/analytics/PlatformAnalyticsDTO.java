@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -49,7 +50,10 @@ public class PlatformAnalyticsDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class DepartmentUtilization {
+        /** QA CX-003: two hospitals may name a department alike, so a row is told apart by its id and hospital. */
+        private UUID departmentId;
         private String departmentName;
+        private String hospitalName;
         private long appointmentCount;
         private long encounterCount;
     }
@@ -59,6 +63,7 @@ public class PlatformAnalyticsDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class HospitalMetric {
+        private UUID hospitalId;
         private String hospitalName;
         private long patientCount;
         private long appointmentCount;

@@ -27,14 +27,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * rows the login lookup (findByUsernameIgnoreCase) can land on. Ids only,
      * so no entity is loaded or decrypted on the unauthenticated path.
      */
-    @Query("select u.id from User u where lower(u.username) = lower(:username)")
+    @Query("select u.id from User u where lower(u.username) = lower(CAST(:username AS string))")
     List<UUID> findIdsByUsernameIgnoreCase(@Param("username") String username);
 
     /* ---------- Existence checks (case-insensitive where it matters) ---------- */
-    @Query("select (count(u) > 0) from User u where lower(u.username) = lower(:username)")
+    @Query("select (count(u) > 0) from User u where lower(u.username) = lower(CAST(:username AS string))")
     Boolean existsByUsername(@Param("username") String username);
 
-    @Query("select (count(u) > 0) from User u where lower(u.email) = lower(:email)")
+    @Query("select (count(u) > 0) from User u where lower(u.email) = lower(CAST(:email AS string))")
     Boolean existsByEmail(@Param("email") String email);
 
     /**
@@ -42,23 +42,23 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * case? Login resolves usernames case-insensitively while uq_user_username
      * does not, so a case variant would make both accounts unresolvable.
      */
-    @Query("select (count(u) > 0) from User u where lower(u.username) = lower(:username) and u.id <> :id")
+    @Query("select (count(u) > 0) from User u where lower(u.username) = lower(CAST(:username AS string)) and u.id <> :id")
     boolean existsUsernameOnOtherAccount(@Param("username") String username, @Param("id") UUID id);
 
     /** The same question for an email. */
-    @Query("select (count(u) > 0) from User u where lower(u.email) = lower(:email) and u.id <> :id")
+    @Query("select (count(u) > 0) from User u where lower(u.email) = lower(CAST(:email AS string)) and u.id <> :id")
     boolean existsEmailOnOtherAccount(@Param("email") String email, @Param("id") UUID id);
 
     /* ---------- Simple finders ---------- */
-    @Query("select u from User u where lower(u.email) = lower(:email)")
+    @Query("select u from User u where lower(u.email) = lower(CAST(:email AS string))")
     Optional<User> findByEmail(@Param("email") String email);
 
     Optional<User> findByPhoneNumber(String phoneNumber);
 
-    @Query("select max(u.phoneNumber) from User u where u.phoneNumber like concat(:prefix, '%')")
+    @Query("select max(u.phoneNumber) from User u where u.phoneNumber like concat(CAST(:prefix AS string), '%')")
     Optional<String> findMaxPhoneNumberWithPrefix(@Param("prefix") String prefix);
 
-    @Query("select u.username from User u where lower(u.username) like lower(concat(:prefix, '%'))")
+    @Query("select u.username from User u where lower(u.username) like lower(concat(CAST(:prefix AS string), '%'))")
     List<String> findUsernamesByPrefix(@Param("prefix") String prefix);
 
   @Query("select u from User u where lower(u.email) in :emails")
@@ -69,7 +69,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /* Case-insensitive username finders with roles pre-fetched (for auth) */
     @EntityGraph(attributePaths = {"userRoles", "userRoles.role"})
-    @Query("select u from User u where lower(u.username) = lower(:username)")
+    @Query("select u from User u where lower(u.username) = lower(CAST(:username AS string))")
     Optional<User> findByUsername(@Param("username") String username);
 
     @EntityGraph(attributePaths = {"userRoles", "userRoles.role"})
@@ -79,7 +79,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("""
         select u from User u
         where u.isDeleted = false
-          and (lower(u.email) = lower(:identifier) or u.phoneNumber = :identifier)
+          and (lower(u.email) = lower(CAST(:identifier AS string)) or u.phoneNumber = :identifier)
     """)
     Optional<User> findActiveByEmailOrPhone(@Param("identifier") String identifier);
 

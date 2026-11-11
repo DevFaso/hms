@@ -25,11 +25,17 @@ import {
 import { RoleService, RoleResponse } from '../services/role.service';
 import { grantableRoles } from '../core/grantable-roles';
 import { RoleContextService } from '../core/role-context.service';
+import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warnings';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 type ModalKind = 'create' | 'multi' | 'edit' | 'detail' | 'regen' | 'import' | null;
 
 /**
@@ -42,7 +48,16 @@ type ModalKind = 'create' | 'multi' | 'edit' | 'detail' | 'regen' | 'import' | n
 @Component({
   selector: 'app-admin-assignments',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, RoleLabelPipe],
+  imports: [
+    DateTimePipe,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    RoleLabelPipe,
+  ],
   templateUrl: './admin-assignments.html',
   styleUrl: './admin-assignments.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -52,8 +67,11 @@ export class AdminAssignmentsComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
   private readonly roleService = inject(RoleService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
   private readonly route = inject(ActivatedRoute);
 
   /* List state */
@@ -131,6 +149,15 @@ export class AdminAssignmentsComponent implements OnInit {
     const role = this.roles().find((r) => r.id === this.formRoleId());
     return (role?.code ?? '').toUpperCase().replace(/^ROLE_/, '') === 'PATIENT';
   });
+
+  /**
+   * QA D915: only a super-admin switches a row on directly; a hospital admin
+   * sends a new code instead. The edit form does not offer "Active" to them on
+   * a row that is off (the server refuses it): it reads unchecked and locked.
+   */
+  activationLocked(): boolean {
+    return this.modal() === 'edit' && !this.roleContext.isSuperAdmin() && !this.selected()?.active;
+  }
 
   /* Multi-scope form */
   multiHospitalIds = signal<Set<string>>(new Set());
@@ -357,8 +384,10 @@ export class AdminAssignmentsComponent implements OnInit {
         roleId: this.formRoleId(),
         hospitalId: this.formHospitalId() || undefined,
         startDate: this.formStartDate() || undefined,
-        // A patient row keeps the state its verification gave it.
-        active: this.patientRoleSelected() ? undefined : this.formActive(),
+        // A patient row keeps the state its verification gave it, and so
+        // does a row a hospital admin may not switch on (QA D915).
+        active:
+          this.patientRoleSelected() || this.activationLocked() ? undefined : this.formActive(),
       })
       .subscribe({
         next: (updated) => {
@@ -412,34 +441,65 @@ export class AdminAssignmentsComponent implements OnInit {
           this.toast.info(this.translate.instant('DELIVERY.NOTHING_TO_SEND'));
         }
       },
-      error: () => this.toast.error(this.translate.instant('ASSIGN_ADMIN.ACTION_ERROR')),
+      // QA r22: the server refuses (409) to re-send the activation of an
+      // account already activated; its localized reason is shown.
+      error: (err: HttpErrorResponse) => this.toastRefusal(err, 'ASSIGN_ADMIN.ACTION_ERROR'),
     });
   }
 
-  deactivate(row: AssignmentResponse): void {
+  /**
+   * QA D902: the signed-in account's own row. A super-admin deleted their own
+   * global assignment from here and lost the role; the server refuses it now,
+   * and the row offers no delete or deactivate to begin with.
+   */
+  isOwnRow(row: AssignmentResponse): boolean {
+    const me = this.auth.getUserProfile()?.id ?? this.auth.getUserId();
+    return !!me && row.userId === me;
+  }
+
+  async deactivate(row: AssignmentResponse): Promise<void> {
+    // QA CX-010: one click took the role away.
+    const confirmed = await this.confirmService.ask({
+      titleKey: 'ASSIGN_ADMIN.DEACTIVATE_CONFIRM',
+      confirmKey: 'ASSIGN_ADMIN.DEACTIVATE',
+    });
+    if (!confirmed) return;
     this.service.deactivate(row.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ASSIGN_ADMIN.DEACTIVATED'));
         this.patchRow({ ...row, active: false });
       },
-      error: () => this.toast.error(this.translate.instant('ASSIGN_ADMIN.ACTION_ERROR')),
+      // QA D902: a 409 says why in the reader's language (the platform's
+      // last super-admin, your own assignment).
+      error: (err: HttpErrorResponse) => this.toastRefusal(err, 'ASSIGN_ADMIN.ACTION_ERROR'),
     });
   }
 
-  delete(row: AssignmentResponse): void {
-    if (!confirm(this.translate.instant('ASSIGN_ADMIN.DELETE_CONFIRM'))) return;
+  /** The server's own refusal (e.g. the 409 on an activated account) when it has one, else the fallback. */
+  private toastRefusal(err: HttpErrorResponse, fallbackKey: string): void {
+    this.toast.error(refusalReason(err) ?? this.translate.instant(fallbackKey));
+  }
+
+  async delete(row: AssignmentResponse): Promise<void> {
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'ASSIGN_ADMIN.DELETE_CONFIRM',
+        confirmKey: 'COMMON.DELETE',
+      }))
+    )
+      return;
     this.service.delete(row.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ASSIGN_ADMIN.DELETED'));
         this.rows.update((list) => list.filter((r) => r.id !== row.id));
       },
-      error: (err: HttpErrorResponse) => {
-        this.toast.error(
-          err.status === 409
-            ? this.translate.instant('ASSIGN_ADMIN.DELETE_CONFLICT')
-            : this.translate.instant('ASSIGN_ADMIN.ACTION_ERROR'),
-        );
-      },
+      // QA round 14: the server names what still uses the assignment
+      // (staff, encounters, departments...), in the reader's language.
+      error: (err: HttpErrorResponse) =>
+        this.toastRefusal(
+          err,
+          err.status === 409 ? 'ASSIGN_ADMIN.DELETE_CONFLICT' : 'ASSIGN_ADMIN.ACTION_ERROR',
+        ),
     });
   }
 

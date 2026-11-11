@@ -37,7 +37,9 @@ public class LabOrderCustomRepositoryImpl implements LabOrderCustomRepository {
         if (predicates.length > 0) {
             query.where(cb.and(predicates));
         }
-        query.orderBy(cb.desc(root.get(ORDER_DATETIME)));
+        // QA D1347: ties broken on the id, so a worklist read page by page
+        // never repeats one order on two pages and skips another.
+        query.orderBy(cb.desc(root.get(ORDER_DATETIME)), cb.desc(root.get("id")));
 
         // Fetch paginated results
         TypedQuery<LabOrder> typedQuery = entityManager.createQuery(query);

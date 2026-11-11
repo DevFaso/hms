@@ -1,5 +1,6 @@
 package com.example.hms.mapper;
 
+import com.example.hms.config.SecurityConstants;
 import com.example.hms.model.Permission;
 import com.example.hms.model.Role;
 import com.example.hms.payload.dto.PermissionResponseDTO;
@@ -32,6 +33,7 @@ public class RoleMapper {
             .authority(role.getCode())
             .description(role.getDescription())
             .code(role.getCode())
+            .builtIn(SecurityConstants.isBuiltInRoleCode(role.getCode()))
             .createdAt(role.getCreatedAt())
             .updatedAt(role.getUpdatedAt())
             .permissions(role.getPermissions() == null ? Set.of() : role.getPermissions().stream()

@@ -51,6 +51,9 @@ export interface Guarantor {
   address: string | null;
   primary: boolean;
   active: boolean;
+  /** QA D1247: why and when the guarantor was deactivated (shown on the inactive row). */
+  deactivationReason?: string | null;
+  deactivatedAt?: string | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string | null;
@@ -133,10 +136,18 @@ export class RegistrationExtrasService {
     return this.http.put<Guarantor>(`/patients/${patientId}/guarantors/${guarantorId}`, req);
   }
 
-  deactivateGuarantor(patientId: string, guarantorId: string): Observable<Guarantor> {
+  /**
+   * QA D1247: a guarantor is switched off with the reason the desk gave
+   * (asked in a confirmation); the server keeps it in the audit trail.
+   */
+  deactivateGuarantor(
+    patientId: string,
+    guarantorId: string,
+    reason: string,
+  ): Observable<Guarantor> {
     return this.http.post<Guarantor>(
       `/patients/${patientId}/guarantors/${guarantorId}/deactivate`,
-      {},
+      { reason },
     );
   }
 

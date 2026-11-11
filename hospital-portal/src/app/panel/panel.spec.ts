@@ -1,11 +1,16 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 
 import { PanelComponent } from './panel';
-import { PanelAssignment, PanelPage, PanelService } from '../services/panel.service';
+import {
+  PanelAssignment,
+  PanelOverviewRow,
+  PanelPage,
+  PanelService,
+} from '../services/panel.service';
 import { StaffService } from '../services/staff.service';
 import { PatientService } from '../services/patient.service';
 import { HospitalService } from '../services/hospital.service';
@@ -120,10 +125,58 @@ describe('PanelComponent', () => {
   });
 
   it('an overview outage renders unavailable — never an empty hospital', () => {
-    panelService.overview.and.returnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+    const overview = new Subject<never[]>();
+    panelService.overview.and.returnValue(overview);
     fixture.detectChanges();
+    expect(component.overviewLoading()).toBeTrue();
+    overview.error(new HttpErrorResponse({ status: 500 }));
+    fixture.detectChanges();
+    expect(component.overviewLoading()).toBeFalse();
     expect(component.overviewFailed()).toBeTrue();
     expect(component.overviewRows().length).toBe(0);
+    expect(fixture.nativeElement.textContent).toContain('PANEL.OVERVIEW_UNAVAILABLE');
+    expect(fixture.nativeElement.textContent).not.toContain('PANEL.OVERVIEW_EMPTY');
+  });
+
+  it('replaces an overview outage with loading during an action-triggered retry', () => {
+    const retry = new Subject<PanelOverviewRow[]>();
+    panelService.overview.and.returnValues(
+      throwError(() => new HttpErrorResponse({ status: 503 })),
+      retry,
+    );
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.textContent).toContain('PANEL.OVERVIEW_UNAVAILABLE');
+
+    component.openAssign();
+    component.onPatientSelected({ id: 'cdx-patient' } as never);
+    component.formStaffId.set('s1');
+    component.submitAssign();
+    fixture.detectChanges();
+    expect(root.textContent).toContain('COMMON.LOADING');
+    expect(root.textContent).not.toContain('PANEL.OVERVIEW_UNAVAILABLE');
+    expect(root.textContent).not.toContain('PANEL.OVERVIEW_EMPTY');
+
+    retry.next([
+      { providerStaffId: 's1', providerName: 'Cdx Recovery', panelRole: 'CHW', activeCount: 3 },
+    ]);
+    retry.complete();
+    fixture.detectChanges();
+    expect(root.textContent).toContain('Cdx Recovery');
+    expect(root.textContent).not.toContain('COMMON.LOADING');
+    expect(component.overviewLoading()).toBeFalse();
+    expect(component.overviewFailed()).toBeFalse();
+  });
+
+  it('keeps both outage messages visually distinct from ordinary hints', () => {
+    panelService.myPanel.and.returnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
+    panelService.overview.and.returnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
+    fixture.detectChanges();
+    const errors = (fixture.nativeElement as HTMLElement).querySelectorAll('.hint.error-hint');
+    expect(errors.length).toBe(2);
+    for (const message of Array.from(errors)) {
+      expect(getComputedStyle(message).color).toBe('rgb(180, 83, 9)');
+    }
   });
 
   it('carries no scope chip or hint of its own: the route gate owns them', () => {
@@ -166,5 +219,82 @@ describe('PanelComponent', () => {
     });
     expect(panelService.myPanel).toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalled();
+  });
+  it('distinguishes a personal-panel outage from an empty panel', () => {
+    panelService.myPanel.and.returnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
+    fixture.detectChanges();
+    expect(component.myPanelFailed()).toBeTrue();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).not.toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(component.noStaffProfile()).toBeFalse();
+  });
+  it('retries a personal-panel outage and replaces the alert with the loaded panel', () => {
+    panelService.myPanel.and.returnValues(
+      throwError(() => new HttpErrorResponse({ status: 503 })),
+      of(page([assignment({ patientName: 'Cdx Retry' })])),
+    );
+    fixture.detectChanges();
+    const retry = fixture.nativeElement.querySelector('[role="alert"] button') as HTMLButtonElement;
+    expect(retry).not.toBeNull();
+    retry.click();
+    fixture.detectChanges();
+    expect(panelService.myPanel).toHaveBeenCalledTimes(2);
+    expect(component.myPanelLoading()).toBeFalse();
+    expect(component.myPanelFailed()).toBeFalse();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('table')?.textContent).toContain('Cdx Retry');
+  });
+  it('filters the provider overview locally while preserving its source rows', () => {
+    panelService.overview.and.returnValue(
+      of([
+        { providerStaffId: 's1', providerName: 'Cdx Example', panelRole: 'CHW', activeCount: 3 },
+      ]),
+    );
+    fixture.detectChanges();
+    component.providerSearch.set('missing');
+    expect(component.visibleOverviewRows().length).toBe(0);
+    expect(component.overviewRows().length).toBe(1);
+    expect(component.loadedProviders()).toBe(1);
+    expect(panelService.overview).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains the populated overview and search input during an action-triggered refresh', () => {
+    const rows: PanelOverviewRow[] = [
+      { providerStaffId: 's1', providerName: 'Cdx Example', panelRole: 'CHW', activeCount: 3 },
+    ];
+    const refresh = new Subject<PanelOverviewRow[]>();
+    panelService.overview.and.returnValues(of(rows), refresh);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const search = root.querySelector('.care-search input') as HTMLInputElement;
+    search.value = 'Cdx';
+    search.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const table = root.querySelector('[aria-labelledby="panel-overview-heading"]');
+    component.openAssign();
+    component.onPatientSelected({ id: 'cdx-patient' } as never);
+    component.formStaffId.set('s1');
+    component.submitAssign();
+    fixture.detectChanges();
+    expect(component.overviewLoading()).toBeTrue();
+    expect(root.querySelector('.care-search input')).toBe(search);
+    expect(root.querySelector('[aria-labelledby="panel-overview-heading"]')).toBe(table);
+    expect(table?.getAttribute('aria-busy')).toBe('true');
+    expect(table?.parentElement?.querySelector('.hint[role="status"]')).toBeNull();
+    expect(search.value).toBe('Cdx');
+    refresh.next([{ ...rows[0], activeCount: 4 }]);
+    refresh.complete();
+    fixture.detectChanges();
+    expect(table?.getAttribute('aria-busy')).toBe('false');
+    expect(component.overviewLoading()).toBeFalse();
+    expect(table?.textContent).toContain('4');
+  });
+
+  it('does not describe the admin overview to a personal-panel-only clinician', () => {
+    adminRoles = false;
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.page-subtitle')).toBeNull();
+    expect(fixture.nativeElement.querySelector('#my-panel-heading')).not.toBeNull();
+    expect(panelService.overview).not.toHaveBeenCalled();
   });
 });

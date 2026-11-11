@@ -81,6 +81,51 @@ class CdsRuleEngineTest {
         assertThat(kept).containsExactly(active);
     }
 
+    /**
+     * QA D1523: the context's other orders hold the proposals (a draft, an order waiting for its signature)
+     * beside the orders in force, for the duplicate and interaction warnings; withdrawn and rejected ones stay out.
+     */
+    @Test
+    void theOtherOrdersHoldProposalsAndLeaveOutWithdrawnOnes() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        List<Prescription> all = new java.util.ArrayList<>();
+        for (PrescriptionStatus status : PrescriptionStatus.values()) {
+            all.add(Prescription.builder().medicationName(status.name()).status(status).build());
+        }
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(all);
+
+        List<String> kept = engineWith(List.of()).loadActivePrescriptions(patientId, hospitalId).stream()
+            .map(Prescription::getMedicationName).toList();
+
+        assertThat(kept).contains("DRAFT", "PENDING_SIGNATURE", "SIGNED", "DISPENSED")
+            .doesNotContain("CANCELLED", "DISCONTINUED", "PARTNER_REJECTED");
+        assertThat(kept).hasSize(PrescriptionStatus.values().length - 3);
+    }
+
+    /** QA D1523: a second draft of a drug is warned about as a duplicate of the first, naming its status. */
+    @Test
+    void aSecondDraftOfTheSameDrugIsADuplicateOfTheFirst() {
+        UUID hospitalId = UUID.randomUUID();
+        Patient patient = Patient.builder().build();
+        patient.setId(UUID.randomUUID());
+        patient.setDateOfBirth(LocalDate.now().minusYears(40));
+        Prescription firstDraft = Prescription.builder()
+            .medicationName("Amoxicilline 500 mg").status(PrescriptionStatus.DRAFT).build();
+        firstDraft.setId(UUID.randomUUID());
+        firstDraft.setCreatedAt(java.time.LocalDateTime.now().minusMinutes(5));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId))
+            .thenReturn(List.of(firstDraft));
+
+        List<CdsCard> cards = engineWith(List.of(new DuplicateMedicationOrderRule()))
+            .evaluateProposedPrescription(patient, hospitalId, "Amoxicilline 500 mg", null, "500 mg", "PO");
+
+        assertThat(cards).singleElement().satisfies(card -> {
+            assertThat(card.indicator()).isEqualTo(CdsCard.Indicator.WARNING);
+            assertThat(card.detail()).containsIgnoringCase("draft");
+        });
+    }
+
     @Test
     void buildContextResolvesRxnormFromCatalog() {
         UUID hospitalId = UUID.randomUUID();
@@ -99,7 +144,7 @@ class CdsRuleEngineTest {
 
         CdsRuleEngine engine = engineWith(List.of());
         CdsRuleContext ctx = engine.buildContext(p, hospitalId,
-            "Amoxicillin 500", "AMOX-500", "500 mg");
+            "Amoxicillin 500", "AMOX-500", "500 mg", null);
 
         assertThat(ctx.proposedRxnormCode()).isEqualTo("723");
         assertThat(ctx.proposedDoseMg()).isEqualTo(500.0);
@@ -114,13 +159,13 @@ class CdsRuleEngineTest {
         p.setDateOfBirth(LocalDate.now().minusYears(5));
         PatientVitalSign vs = new PatientVitalSign();
         vs.setWeightKg(20.0);
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(p.getId(), hospitalId))
+        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdAndWeightKgIsNotNullOrderByRecordedAtDesc(p.getId(), hospitalId))
             .thenReturn(Optional.of(vs));
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(p.getId(), hospitalId))
             .thenReturn(List.of());
 
         CdsRuleContext ctx = engineWith(List.of()).buildContext(p, hospitalId,
-            "Amoxicillin", null, "500 mg");
+            "Amoxicillin", null, "500 mg", null);
 
         assertThat(ctx.patientWeightKg()).isEqualTo(20.0);
     }
@@ -184,5 +229,21 @@ class CdsRuleEngineTest {
 
     private static CdsRuleContext emptyContext() {
         return new CdsRuleContext(null, null, null, null, null, null, null, null, List.of(), List.of());
+    }
+
+    /** CR-02: a dose rule that throws is no clean check: its card holds the signature. Fail-fast stays off here. */
+    @Test
+    void aDoseRuleThatThrowsLeavesAHeldCardNotSilence() {
+        CdsRule explosive = new CdsRule() {
+            @Override public String id() { return "adult-paracetamol"; }
+            @Override public List<CdsCard> evaluate(CdsRuleContext c) {
+                throw new IllegalStateException("boom");
+            }
+        };
+
+        assertThat(engineWith(List.of(explosive)).evaluate(emptyContext())).singleElement().satisfies(held -> {
+            assertThat(held.needsReasonAtSignature()).isTrue();
+            assertThat(held.exceptionKey()).isEqualTo("checkFailed:adult-paracetamol");
+        });
     }
 }

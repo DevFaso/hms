@@ -33,9 +33,11 @@
         <button
           class="search-clear"
           [title]="'COMMON.CLEAR_SEARCH' | translate"
+          [attr.aria-label]="'COMMON.CLEAR_SEARCH' | translate"
           (click)="searchTerm = ''; onSearchChange()"
+          [attr.aria-label]="'COMMON.CLEAR_SEARCH' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       }
     </div>
@@ -63,13 +65,16 @@
       >
         {{ 'COMMON.INACTIVE' | translate }}
       </button>
-      <button
-        class="status-pill deleted-pill"
-        [class.active]="statusFilter === 'deleted'"
-        (click)="statusFilter = 'deleted'; onStatusFilterChange()"
-      >
-        {{ 'COMMON.DELETED' | translate }}
-      </button>
+      <!-- QA D919: deleted accounts are the super-admin's; nobody else is offered the view. -->
+      @if (canSeeDeleted()) {
+        <button
+          class="status-pill deleted-pill"
+          [class.active]="statusFilter === 'deleted'"
+          (click)="statusFilter = 'deleted'; onStatusFilterChange()"
+        >
+          {{ 'COMMON.DELETED' | translate }}
+        </button>
+      }
     </div>
 
     <button
@@ -170,31 +175,37 @@
               </td>
               <td>
                 <div class="action-group">
-                  @if (!user.deleted) {
+                  @if (!user.deleted && (isSelf(user) || isManageable(user))) {
                     <button
                       class="action-link edit"
                       [title]="'COMMON.EDIT' | translate"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                       (click)="openEdit(user)"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                     >
-                      <span class="material-symbols-outlined">edit</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                     </button>
                   }
                   @if (user.deleted) {
                     <button
                       class="action-link restore"
                       [title]="'USERS.RESTORE_USER' | translate"
+                      [attr.aria-label]="'USERS.RESTORE_USER' | translate"
                       (click)="restoreUser(user)"
                       [disabled]="restoring()"
+                      [attr.aria-label]="'USERS.RESTORE_USER' | translate"
                     >
-                      <span class="material-symbols-outlined">restore</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">restore</span>
                     </button>
-                  } @else {
+                  } @else if (!isSelf(user) && isManageable(user)) {
                     <button
                       class="action-link delete"
                       [title]="'COMMON.DELETE' | translate"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                       (click)="confirmDelete(user)"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                     >
-                      <span class="material-symbols-outlined">delete</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">delete</span>
                     </button>
                   }
                   @if (canImpersonate(user)) {
@@ -202,12 +213,16 @@
                       type="button"
                       class="action-link impersonate"
                       [title]="'IMPERSONATION.IMPERSONATE_USER' | translate"
+                      [attr.aria-label]="'IMPERSONATION.IMPERSONATE_USER' | translate"
                       [attr.data-test]="'impersonate-' + user.username"
                       (click)="openImpersonate(user)"
+                      [attr.aria-label]="'IMPERSONATION.IMPERSONATE_USER' | translate"
                     >
                       <!-- switch_account, not an eye: QA mistook the old
                            visibility glyph for a "view details" action. -->
-                      <span class="material-symbols-outlined">switch_account</span>
+                      <span class="material-symbols-outlined" aria-hidden="true"
+                        >switch_account</span
+                      >
                     </button>
                   }
                 </div>
@@ -221,22 +236,28 @@
     @if (totalPages() > 1) {
       <div class="pagination">
         <button
+          [attr.aria-label]="'COMMON.PREVIOUS' | translate"
           class="page-btn"
           [disabled]="currentPage() === 0"
           (click)="goToPage(currentPage() - 1)"
+          type="button"
+          [attr.aria-label]="'COMMON.PREVIOUS' | translate"
         >
-          <span class="material-symbols-outlined">chevron_left</span>
+          <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
         </button>
         <span class="page-info"
           >{{ 'COMMON.PAGE' | translate }} {{ currentPage() + 1 }} {{ 'COMMON.OF' | translate }}
           {{ totalPages() }}</span
         >
         <button
+          [attr.aria-label]="'COMMON.NEXT' | translate"
           class="page-btn"
           [disabled]="currentPage() >= totalPages() - 1"
           (click)="goToPage(currentPage() + 1)"
+          type="button"
+          [attr.aria-label]="'COMMON.NEXT' | translate"
         >
-          <span class="material-symbols-outlined">chevron_right</span>
+          <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
         </button>
       </div>
     }
@@ -268,19 +289,28 @@
       tabindex="-1"
     >
       <dialog
+        aria-labelledby="user-list-dialog-1-title"
+        aria-modal="true"
         class="modal"
         [open]="showCreate()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeCreate()"
+        (keydown.escape)="$event.stopPropagation()"
+        appDialogFocus
+        (dialogDismiss)="closeCreate()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="user-list-dialog-1-title">
             {{
               editing() ? ('USERS.EDIT_USER' | translate) : ('USERS.REGISTER_NEW_USER' | translate)
             }}
           </h2>
-          <button class="modal-close" (click)="closeCreate()">
+          <button
+            type="button"
+            class="modal-close"
+            (click)="closeCreate()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -297,10 +327,14 @@
                   name="firstName"
                   required
                   [class.input-error]="fieldErrors()['firstName']"
+                  [attr.aria-invalid]="fieldErrors()['firstName'] ? true : null"
+                  [attr.aria-describedby]="fieldErrors()['firstName'] ? 'firstName-error' : null"
                   (ngModelChange)="clearFieldError('firstName')"
                 />
                 @if (fieldErrors()['firstName']) {
-                  <span class="field-error-msg">{{ fieldErrors()['firstName'] }}</span>
+                  <span id="firstName-error" class="field-error-msg" role="alert">{{
+                    fieldErrors()['firstName']
+                  }}</span>
                 }
               </div>
               <div class="field">
@@ -312,10 +346,14 @@
                   name="lastName"
                   required
                   [class.input-error]="fieldErrors()['lastName']"
+                  [attr.aria-invalid]="fieldErrors()['lastName'] ? true : null"
+                  [attr.aria-describedby]="fieldErrors()['lastName'] ? 'lastName-error' : null"
                   (ngModelChange)="clearFieldError('lastName')"
                 />
                 @if (fieldErrors()['lastName']) {
-                  <span class="field-error-msg">{{ fieldErrors()['lastName'] }}</span>
+                  <span id="lastName-error" class="field-error-msg" role="alert">{{
+                    fieldErrors()['lastName']
+                  }}</span>
                 }
               </div>
             </div>
@@ -333,10 +371,14 @@
                     name="username"
                     required
                     [class.input-error]="fieldErrors()['username']"
+                    [attr.aria-invalid]="fieldErrors()['username'] ? true : null"
+                    [attr.aria-describedby]="fieldErrors()['username'] ? 'username-error' : null"
                     (ngModelChange)="clearFieldError('username')"
                   />
                   @if (fieldErrors()['username']) {
-                    <span class="field-error-msg">{{ fieldErrors()['username'] }}</span>
+                    <span id="username-error" class="field-error-msg" role="alert">{{
+                      fieldErrors()['username']
+                    }}</span>
                   }
                 </div>
               }
@@ -351,10 +393,14 @@
                   name="email"
                   [required]="emailRequired"
                   [class.input-error]="fieldErrors()['email']"
+                  [attr.aria-invalid]="fieldErrors()['email'] ? true : null"
+                  [attr.aria-describedby]="fieldErrors()['email'] ? 'email-error' : null"
                   (ngModelChange)="clearFieldError('email')"
                 />
                 @if (fieldErrors()['email']) {
-                  <span class="field-error-msg">{{ fieldErrors()['email'] }}</span>
+                  <span id="email-error" class="field-error-msg" role="alert">{{
+                    fieldErrors()['email']
+                  }}</span>
                 }
                 @if (!emailRequired) {
                   <span class="hint-text">{{
@@ -376,10 +422,14 @@
                     name="password"
                     autocomplete="new-password"
                     [class.input-error]="fieldErrors()['password']"
+                    [attr.aria-invalid]="fieldErrors()['password'] ? true : null"
+                    [attr.aria-describedby]="fieldErrors()['password'] ? 'password-error' : null"
                     (ngModelChange)="clearFieldError('password')"
                   />
                   @if (fieldErrors()['password']) {
-                    <span class="field-error-msg">{{ fieldErrors()['password'] }}</span>
+                    <span id="password-error" class="field-error-msg" role="alert">{{
+                      fieldErrors()['password']
+                    }}</span>
                   }
                 </div>
               }
@@ -393,10 +443,16 @@
                   required
                   placeholder="70 20 20 20"
                   [class.input-error]="fieldErrors()['phoneNumber']"
+                  [attr.aria-invalid]="fieldErrors()['phoneNumber'] ? true : null"
+                  [attr.aria-describedby]="
+                    fieldErrors()['phoneNumber'] ? 'phoneNumber-error' : null
+                  "
                   (ngModelChange)="clearFieldError('phoneNumber')"
                 />
                 @if (fieldErrors()['phoneNumber']) {
-                  <span class="field-error-msg">{{ fieldErrors()['phoneNumber'] }}</span>
+                  <span id="phoneNumber-error" class="field-error-msg" role="alert">{{
+                    fieldErrors()['phoneNumber']
+                  }}</span>
                 }
                 <span class="hint-text">{{ 'USERS.PHONE_HINT' | translate }}</span>
               </div>
@@ -414,7 +470,7 @@
                 <span class="hint-text">{{ 'USERS.ROLES_EDIT_HINT' | translate }}</span>
               </div>
             } @else {
-              <fieldset class="field">
+              <fieldset id="user-roles" class="field" tabindex="-1">
                 <legend>{{ 'USERS.ROLES' | translate }} *</legend>
                 <div class="role-checkbox-group">
                   @for (role of grantableRoles(); track role.id) {
@@ -542,7 +598,13 @@
             <button type="button" class="btn-secondary" (click)="closeCreate()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+              appSubmitGuard
+              submitGuardRequired
+            >
               {{
                 saving()
                   ? ('COMMON.SAVING' | translate)
@@ -561,11 +623,13 @@
   @if (issuedCredentials(); as creds) {
     <div class="modal-backdrop" (keydown.escape)="dismissCredentials()" tabindex="-1">
       <dialog
+        aria-modal="true"
         class="modal"
         open
         data-test="issued-credentials"
         aria-labelledby="issued-credentials-title"
-        (keydown.escape)="dismissCredentials()"
+        appDialogFocus
+        (dialogDismiss)="dismissCredentials()"
         tabindex="-1"
       >
         <div class="modal-header">
@@ -574,11 +638,11 @@
         <div class="modal-body">
           <p>{{ 'USERS.CREDENTIALS_ONCE_HINT' | translate }}</p>
           <p>
-            {{ 'USERS.USERNAME' | translate }} :
+            {{ 'USERS.USERNAME' | translate }}{{ 'COMMON.COLON' | translate }}
             <strong data-test="issued-username">{{ creds.username }}</strong>
           </p>
           <p>
-            {{ 'USERS.TEMPORARY_PASSWORD' | translate }} :
+            {{ 'USERS.TEMPORARY_PASSWORD' | translate }}{{ 'COMMON.COLON' | translate }}
             <strong data-test="issued-password">{{ creds.password }}</strong>
           </p>
         </div>
@@ -600,15 +664,24 @@
       tabindex="-1"
     >
       <dialog
+        aria-labelledby="user-list-dialog-2-title"
+        aria-modal="true"
         class="modal"
         [open]="showDeleteConfirm()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="cancelDelete()"
+        (keydown.escape)="$event.stopPropagation()"
+        appDialogFocus
+        (dialogDismiss)="cancelDelete()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ 'USERS.DELETE_USER' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <h2 id="user-list-dialog-2-title">{{ 'USERS.DELETE_USER' | translate }}</h2>
+          <button
+            type="button"
+            class="modal-close"
+            (click)="cancelDelete()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -621,7 +694,11 @@
               <strong>{{ deletingUser()?.firstName }} {{ deletingUser()?.lastName }}</strong>
             </p>
             <p class="delete-detail">
-              {{ 'USERS.DELETE_WARNING' | translate }}
+              <!-- QA D919: the restore sentence only for who can restore. -->
+              {{
+                (canSeeDeleted() ? 'USERS.DELETE_WARNING' : 'USERS.DELETE_WARNING_NO_RESTORE')
+                  | translate
+              }}
             </p>
           </div>
         </div>
@@ -653,15 +730,24 @@
       data-test="impersonate-modal"
     >
       <dialog
+        aria-labelledby="user-list-dialog-3-title"
+        aria-modal="true"
         class="modal-content modal-md"
         open
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeImpersonate()"
+        (keydown.escape)="$event.stopPropagation()"
+        appDialogFocus
+        (dialogDismiss)="closeImpersonate()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ 'IMPERSONATION.MODAL_TITLE' | translate }}</h2>
-          <button class="modal-close" (click)="closeImpersonate()">
+          <h2 id="user-list-dialog-3-title">{{ 'IMPERSONATION.MODAL_TITLE' | translate }}</h2>
+          <button
+            type="button"
+            class="modal-close"
+            (click)="closeImpersonate()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>

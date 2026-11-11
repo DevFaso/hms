@@ -502,3 +502,469 @@
   padding: 0.75rem 1.25rem;
   border-top: 1px solid var(--color-border, #e2e8f0);
 }
+
+.bed-board-dashboard {
+  max-width: none;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.dashboard-header {
+  align-items: center;
+  margin-bottom: 24px;
+  .page-title {
+    font-size: 1.75rem;
+    letter-spacing: -0.04em;
+  }
+  .page-subtitle {
+    color: #52667b;
+  }
+}
+.dashboard-eyebrow {
+  margin: 0 0 6px;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #08685b;
+}
+.network-overview,
+.hospital-directory {
+  background: #fff;
+  border: 1px solid #dfe7ef;
+  border-radius: 16px;
+  padding: 22px;
+  margin-bottom: 24px;
+}
+.section-heading,
+.board-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+  h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    color: #172d43;
+  }
+  p {
+    margin: 6px 0 0;
+    font-size: 0.8125rem;
+    color: #52667b;
+    line-height: 1.5;
+  }
+}
+.network-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: #08685b;
+  background: #e9f6f2;
+  padding: 8px 12px;
+  border-radius: 20px;
+}
+.network-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.network-metric {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  align-items: center;
+  gap: 6px 12px;
+  border: 1px solid #e7edf3;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 18px;
+  strong {
+    font-size: 2rem;
+    letter-spacing: -0.04em;
+    color: #172d43;
+  }
+  > span:last-child {
+    grid-column: 2;
+    font-size: 0.75rem;
+    color: #52667b;
+  }
+  .material-symbols-outlined {
+    grid-row: span 2;
+    color: #08685b;
+    background: #def3ec;
+    padding: 8px;
+    border-radius: 10px;
+  }
+  &.primary {
+    background: #0b6d60;
+    border-color: #0b6d60;
+    strong,
+    > span:last-child {
+      color: #fff;
+    }
+    .material-symbols-outlined {
+      background: #ffffff20;
+      color: #fff;
+    }
+  }
+}
+.hospital-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 16px;
+}
+.hospital-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  h3 {
+    font-size: 1rem;
+    margin: 0;
+    color: #172d43;
+  }
+  p {
+    margin: 5px 0 0;
+    color: #52667b;
+    font-size: 0.75rem;
+  }
+  .hospital-icon {
+    color: #08685b;
+    background: #e5f5ee;
+    padding: 10px;
+    border-radius: 10px;
+  }
+}
+.capacity-values {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 24px 0;
+  div {
+    display: grid;
+    gap: 5px;
+  }
+  strong {
+    font-size: 1.5rem;
+    color: #172d43;
+  }
+  span {
+    font-size: 0.7rem;
+    color: #52667b;
+  }
+}
+.occupancy-line {
+  display: flex;
+  justify-content: space-between;
+  color: #52667b;
+  font-size: 0.75rem;
+  margin-bottom: 8px;
+}
+.occupancy-track {
+  height: 6px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #edf2f6;
+  span {
+    display: block;
+    height: 100%;
+    max-width: 100%;
+    background: #0d7c6b;
+    border-radius: 6px;
+  }
+}
+.open-hospital {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-top: 20px;
+  padding: 10px 12px;
+  border: 1px solid #b9d9d2;
+  border-radius: 8px;
+  background: #f0faf6;
+  color: #08685b;
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.census-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+.census-tile {
+  padding: 20px;
+  border-radius: 12px;
+  border-color: #dfe7ef;
+  gap: 8px;
+  box-shadow: 0 3px 12px #0f172a05;
+  &:first-child {
+    background: #0b6d60;
+    border-color: #0b6d60;
+    .census-value,
+    .census-label {
+      color: #fff;
+    }
+  }
+}
+.census-value {
+  font-size: 1.875rem;
+  letter-spacing: -0.04em;
+  color: #172d43;
+}
+.census-label {
+  font-size: 0.75rem;
+  color: #52667b;
+  line-height: 1.45;
+}
+.board-heading {
+  margin-top: 26px;
+}
+.board-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #dce4ec;
+  border-radius: 9px;
+  max-width: 100%;
+  box-sizing: border-box;
+  color: #52667b;
+  input {
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font: inherit;
+    font-size: 0.8125rem;
+    width: 280px;
+    min-width: 0;
+    color: #172d43;
+  }
+}
+.filters {
+  padding: 16px 18px;
+  border: 1px solid #dfe7ef;
+  border-radius: 12px;
+  background: #fff;
+  gap: 16px;
+  font-size: 0.8125rem;
+  select {
+    border: 1px solid #dce4ec;
+    border-radius: 8px;
+    background: #fff;
+    padding: 9px 12px;
+    color: #254359;
+    font: inherit;
+    min-width: 180px;
+  }
+  input[type='checkbox'] {
+    accent-color: #0b7b68;
+    width: 16px;
+    height: 16px;
+  }
+  .check {
+    gap: 8px;
+  }
+}
+.board-legend {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: #52667b;
+  margin: 0 0 18px;
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    &::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #8091a3;
+    }
+  }
+  .legend-available::before {
+    background: #21824f;
+  }
+  .legend-occupied::before {
+    background: #3274c4;
+  }
+  .legend-isolation::before {
+    background: #bc6d0c;
+  }
+}
+.ward-block {
+  background: #fff;
+  border: 1px solid #dfe7ef;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.ward-header {
+  align-items: center;
+  padding-bottom: 16px;
+  margin-bottom: 18px;
+  border-color: #edf1f5;
+  h2 {
+    flex-wrap: wrap;
+    font-size: 1rem;
+  }
+  .ward-stats {
+    font-size: 0.75rem;
+    color: #52667b;
+  }
+  .ward-occupancy {
+    flex-basis: 100%;
+  }
+}
+.room-title {
+  color: #52667b;
+  font-size: 0.75rem;
+  margin: 16px 0 10px;
+}
+.bed-grid {
+  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
+  gap: 12px;
+}
+.bed-tile {
+  padding: 16px;
+  border-radius: 10px;
+  min-height: 110px;
+  box-sizing: border-box;
+}
+.bed-head {
+  align-items: center;
+  margin-bottom: 12px;
+}
+.bed-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9375rem;
+  color: #172d43;
+  .material-symbols-outlined {
+    font-size: 20px;
+    color: #52667b;
+  }
+}
+.bed-status {
+  font-size: 0.625rem;
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: #f1f5f9;
+  color: #52667b;
+  text-align: right;
+}
+.bed-available .bed-status {
+  background: #e3f6eb;
+  color: #17683e;
+}
+.occupant-name {
+  font-size: 0.875rem;
+  color: #172d43;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.occupant-meta {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+  color: #254359;
+  dt {
+    color: #52667b;
+  }
+}
+.bed-actions .btn-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 7px 10px;
+  background: #fff;
+  border: 1px solid #ccdbd7;
+  border-radius: 7px;
+  color: #08685b;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.bed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.load-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+  background: #fff7f4;
+  border: 1px solid #f3c5b5;
+  border-radius: 12px;
+  color: #9f291c;
+  margin-bottom: 20px;
+}
+button:focus-visible,
+select:focus-visible,
+.board-search:focus-within {
+  outline: 2px solid #0b7b68;
+  outline-offset: 3px;
+}
+@media (max-width: 1199px) {
+  .census-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .network-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .census-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .network-metric {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 14px;
+  }
+  .network-overview,
+  .hospital-directory,
+  .ward-block {
+    padding: 16px;
+  }
+  .hospital-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .board-search {
+    width: 100%;
+    input {
+      width: 100%;
+    }
+  }
+  .bed-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ward-header h2 {
+    gap: 7px;
+  }
+  .dashboard-header .page-title {
+    font-size: 1.5rem;
+  }
+  .filters {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

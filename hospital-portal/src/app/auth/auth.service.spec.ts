@@ -299,7 +299,8 @@ describe('AuthService — logout revokes the server session', () => {
     req.flush(null, { status: 204, statusText: 'No Content' });
   });
 
-  it('clears the session flags the broadcast gate reads', () => {
+  it('clears session flags and chunk recovery state on logout', () => {
+    sessionStorage.setItem('hms-chunk-reload', 'legacy-private-route');
     localStorage.setItem('auth_token', 'current.jwt.token');
     const roleContext = TestBed.inject(RoleContextService);
     roleContext.setProviderUser(true);
@@ -308,6 +309,7 @@ describe('AuthService — logout revokes the server session', () => {
     service.logout();
     httpMock.expectOne((r) => r.url.endsWith('/api/auth/logout')).flush(null);
 
+    expect(sessionStorage.getItem('hms-chunk-reload')).toBeNull();
     expect(roleContext.providerUser()).toBeFalse();
     expect(roleContext.sessionResolved()).toBeFalse();
   });

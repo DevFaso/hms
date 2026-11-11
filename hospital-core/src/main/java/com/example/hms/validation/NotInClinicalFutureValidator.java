@@ -30,7 +30,17 @@ public class NotInClinicalFutureValidator implements ConstraintValidator<NotInCl
 
     @Override
     public boolean isValid(Object value, ConstraintValidatorContext context) {
-        return isAllowed(value, clock);
+        if (isAllowed(value, clock)) {
+            return true;
+        }
+        // QA D1449: a date-only field is told about a date; the shared wording
+        // spoke of a time of day. A message a field chose for itself is kept.
+        if (value instanceof LocalDate && context != null
+            && NotInClinicalFuture.DEFAULT_MESSAGE.equals(context.getDefaultConstraintMessageTemplate())) {
+            context.disableDefaultConstraintViolation();
+            context.buildConstraintViolationWithTemplate(NotInClinicalFuture.DATE_MESSAGE).addConstraintViolation();
+        }
+        return false;
     }
 
     /** True when {@code value} is null or not in the future as seen from {@code clock}. */

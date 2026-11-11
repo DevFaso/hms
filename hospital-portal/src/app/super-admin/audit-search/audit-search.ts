@@ -40,11 +40,16 @@ const ALL_SOURCES: AuditSource[] = ['SUPPORT', 'FRONTEND', 'PERMISSION_MATRIX', 
 type ActiveTab = 'support' | 'aggregated';
 
 import { EnumLabelService } from '../../core/enum-label.service';
+import { AuditDescriptionService } from '../../audit-logs/audit-description.service';
 import { toLocalInputValue, toServerDateTime } from '../../shared/date-utils';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
+
 @Component({
   selector: 'app-super-admin-audit-search',
   standalone: true,
   imports: [
+    KeyLabelPipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -66,8 +71,26 @@ export class SuperAdminAuditSearchComponent implements OnInit {
     return this.enumLabels.auditEntityLabel(raw);
   }
 
+  private readonly descriptions = inject(AuditDescriptionService);
+
+  /**
+   * QA D894: SUPPORT and PLATFORM_CONFIG rows carry the server's English
+   * audit description (SuperAdminAuditAggregationServiceImpl.toDto), so they
+   * are read through the same patterns as /super-admin/audit-logs. FRONTEND
+   * (portal metadata) and PERMISSION_MATRIX summaries are not audit
+   * descriptions and stay as they are; the raw text is kept in the tooltip.
+   */
+  summaryText(row: AggregatedAuditEvent): string {
+    if (!row.summary) return '';
+    if (row.source !== 'SUPPORT' && row.source !== 'PLATFORM_CONFIG') return row.summary;
+    return this.descriptions.describe({ eventDescription: row.summary });
+  }
+
   private readonly residencyService = inject(DataResidencyService);
   private readonly savedSearchService = inject(AuditSavedSearchService);
+  private readonly confirm = inject(ConfirmService);
+  /** The last delete of a saved search was refused. */
+  readonly savedDeleteFailed = signal(false);
 
   readonly loading = signal(false);
   readonly errored = signal(false);
@@ -356,13 +379,20 @@ export class SuperAdminAuditSearchComponent implements OnInit {
     this.runSearch();
   }
 
-  deleteSaved(saved: SavedAuditSearch): void {
-    this.savedSearchService
-      .delete(saved.id)
-      .pipe(catchError(() => of(null)))
-      .subscribe(() =>
-        this.savedSearches.update((current) => current.filter((s) => s.id !== saved.id)),
-      );
+  async deleteSaved(saved: SavedAuditSearch): Promise<void> {
+    // QA CX-010: the × removed the search on one click.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'AUDIT_SEARCH.SAVED.DELETE_CONFIRM',
+      params: { name: saved.name },
+      confirmKey: 'COMMON.DELETE',
+    });
+    if (!confirmed) return;
+    this.savedDeleteFailed.set(false);
+    this.savedSearchService.delete(saved.id).subscribe({
+      next: () => this.savedSearches.update((current) => current.filter((s) => s.id !== saved.id)),
+      // A refused delete used to drop the chip anyway: the search came back on reload.
+      error: () => this.savedDeleteFailed.set(true),
+    });
   }
 
   private fromIsoForInput(value: string | undefined): string {

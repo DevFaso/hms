@@ -38,6 +38,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 /**
  * Proxy / family-access tests: permission-vocabulary normalization
@@ -111,7 +112,7 @@ class PatientPortalServiceImplProxyTest {
         @DisplayName("canonical VIEW_* scope grants access")
         void canonicalScope_allowed() {
             stubActiveGrant(buildGrant("VIEW_APPOINTMENTS", null));
-            when(patientRepository.findById(grantorPatientId)).thenReturn(Optional.of(grantor));
+            when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
             when(appointmentService.getAppointmentsForVerifiedPatient(grantorPatientId))
                     .thenReturn(List.of(AppointmentResponseDTO.builder().id(UUID.randomUUID()).build()));
 
@@ -121,11 +122,41 @@ class PatientPortalServiceImplProxyTest {
             assertThat(result).hasSize(1);
         }
 
+        /**
+         * QA D1212 (round 23): the grantor is registered only at another
+         * hospital than the proxy's. The tenant-scoped finder sees no such
+         * patient under the proxy's hospital (404 "Patient introuvable"); the
+         * grant is the authority, so the grantor is read unscoped.
+         */
+        @Test
+        @DisplayName("QA D1212: a grantor registered only at another hospital is reached through the grant")
+        void grantorAtAnotherHospital_reached() {
+            stubActiveGrant(buildGrant("VIEW_APPOINTMENTS", null));
+            org.mockito.Mockito.lenient().when(patientRepository.findById(grantorPatientId)).thenReturn(Optional.empty());
+            when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
+            when(appointmentService.getAppointmentsForVerifiedPatient(grantorPatientId))
+                    .thenReturn(List.of(AppointmentResponseDTO.builder().id(UUID.randomUUID()).build()));
+
+            assertThat(service.getProxyAppointments(auth, grantorPatientId, Locale.FRENCH)).hasSize(1);
+            verify(patientRepository, never()).findById(grantorPatientId);
+        }
+
+        @Test
+        @DisplayName("QA D1212: without an active grant the unscoped read never happens")
+        void noGrant_noUnscopedRead() {
+            stubActiveGrant(null);
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                    () -> service.getProxyAppointments(auth, grantorPatientId, Locale.FRENCH))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            verify(patientRepository, never()).findByIdUnscoped(any());
+        }
+
         @Test
         @DisplayName("legacy un-prefixed scope is normalized and grants access")
         void legacyScope_normalized() {
             stubActiveGrant(buildGrant("APPOINTMENTS,LAB_RESULTS", null));
-            when(patientRepository.findById(grantorPatientId)).thenReturn(Optional.of(grantor));
+            when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
             when(appointmentService.getAppointmentsForVerifiedPatient(grantorPatientId))
                     .thenReturn(List.of());
 
@@ -136,7 +167,7 @@ class PatientPortalServiceImplProxyTest {
         @DisplayName("ALL scope grants every domain")
         void allScope_allowed() {
             stubActiveGrant(buildGrant("ALL", null));
-            when(patientRepository.findById(grantorPatientId)).thenReturn(Optional.of(grantor));
+            when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
             when(appointmentService.getAppointmentsForVerifiedPatient(grantorPatientId))
                     .thenReturn(List.of());
 
@@ -169,7 +200,7 @@ class PatientPortalServiceImplProxyTest {
         @DisplayName("future expiry still grants access")
         void futureExpiry_allowed() {
             stubActiveGrant(buildGrant("ALL", LocalDateTime.now().plusDays(30)));
-            when(patientRepository.findById(grantorPatientId)).thenReturn(Optional.of(grantor));
+            when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
             when(appointmentService.getAppointmentsForVerifiedPatient(grantorPatientId))
                     .thenReturn(List.of());
 
@@ -290,6 +321,97 @@ class PatientPortalServiceImplProxyTest {
             ArgumentCaptor<PatientProxy> captor = ArgumentCaptor.forClass(PatientProxy.class);
             verify(patientProxyRepository).save(captor.capture());
             assertThat(captor.getValue().getPermissions()).isEqualTo("VIEW_APPOINTMENTS,VIEW_MEDICATIONS");
+        }
+    }
+
+    @Nested
+    @DisplayName("revokeProxy (QA D1186 class)")
+    class RevokeProxy {
+
+        @Test
+        @DisplayName("a revoked grant is not revoked again: revokedAt keeps the first revocation")
+        void revokedGrantIsNotRevokedAgain_D1186() {
+            User grantorUser = new User();
+            grantorUser.setId(UUID.randomUUID());
+            grantor.setUser(grantorUser);
+            LocalDateTime firstRevocation = LocalDateTime.now().minusDays(3);
+            PatientProxy grant = buildGrant("ALL", null);
+            grant.setStatus(ProxyStatus.REVOKED);
+            grant.setRevokedAt(firstRevocation);
+
+            when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(grantorUser.getId()));
+            when(patientRepository.findByUserId(grantorUser.getId())).thenReturn(Optional.of(grantor));
+            when(patientProxyRepository.findById(grant.getId())).thenReturn(Optional.of(grant));
+
+            UUID grantId = grant.getId();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.revokeProxy(auth, grantId))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .extracting("messageKey").isEqualTo("proxyGrant.alreadyRevoked");
+            assertThat(grant.getRevokedAt()).isEqualTo(firstRevocation);
+            verify(patientProxyRepository, never()).save(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("QA D1464 / D1468: what a new grant may say")
+    class NewGrantRules {
+
+        private void grantorSignedIn() {
+            User grantorUser = new User();
+            grantorUser.setId(UUID.randomUUID());
+            grantor.setUser(grantorUser);
+            when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(grantorUser.getId()));
+            when(patientRepository.findByUserId(grantorUser.getId())).thenReturn(Optional.of(grantor));
+            when(userRepository.findByUsername("caregiver.sam")).thenReturn(Optional.of(proxyUser));
+            when(patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
+                    grantorPatientId, proxyUserId, ProxyStatus.ACTIVE)).thenReturn(Optional.empty());
+        }
+
+        private ProxyGrantRequestDTO.ProxyGrantRequestDTOBuilder grant() {
+            return ProxyGrantRequestDTO.builder().proxyUsername("caregiver.sam")
+                    .relationship(com.example.hms.enums.ProxyRelationship.values()[0]).permissions("ALL");
+        }
+
+        @Test
+        @DisplayName("an end date in the past is refused on its field, and nothing is saved")
+        void pastExpiryRefused() {
+            grantorSignedIn();
+            ProxyGrantRequestDTO dto = grant().expiresAt(java.time.LocalDateTime.of(2020, 1, 1, 0, 0)).build();
+
+            assertThatThrownBy(() -> service.grantProxy(auth, dto))
+                    .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                        refused -> assertThat(refused.getField()).isEqualTo("expiresAt"));
+            verify(patientProxyRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("no end date (open-ended) and an end date ahead are both granted")
+        void openEndedAndFutureGranted() {
+            grantorSignedIn();
+            when(patientProxyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            service.grantProxy(auth, grant().build());
+            service.grantProxy(auth, grant().expiresAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()).plusDays(1)).build());
+
+            verify(patientProxyRepository, times(2)).save(any());
+        }
+
+        @Test
+        @DisplayName("an unknown scope is refused on permissions; every known and legacy scope passes")
+        void unknownScopeRefused() {
+            grantorSignedIn();
+            when(patientProxyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            ProxyGrantRequestDTO banana = grant().permissions("VIEW_BILLING,BANANA").build();
+
+            assertThatThrownBy(() -> service.grantProxy(auth, banana))
+                    .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                        refused -> assertThat(refused.getField()).isEqualTo("permissions"));
+
+            for (String known : List.of("ALL", "VIEW_APPOINTMENTS", "VIEW_MEDICATIONS", "VIEW_LAB_RESULTS", "VIEW_BILLING",
+                    "VIEW_RECORDS", "appointments, Medications", "LAB_RESULTS,BILLING,RECORDS")) {
+                service.grantProxy(auth, grant().permissions(known).build());
+            }
+            verify(patientProxyRepository, times(8)).save(any());
         }
     }
 }

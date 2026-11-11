@@ -46,6 +46,37 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         @org.springframework.data.repository.query.Param("cutoff") java.time.LocalDateTime cutoff,
         @org.springframework.data.repository.query.Param("maxRounds") short maxRounds);
 
+    /**
+     * QA D1553 (Rex P2): the matching read-back, written only while the row has
+     * none. A conditional UPDATE, not check-then-save: of two concurrent
+     * read-backs the second waits on the row lock, re-reads the WHERE and
+     * touches 0 rows, so the first author is never overwritten. 0 means a
+     * read-back was already confirmed.
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @org.springframework.data.jpa.repository.Query(
+        "UPDATE LabResult r SET r.criticalReadBackValue = :value, r.criticalReadBackByUserId = :byUserId, "
+        + "r.criticalReadBackByDisplay = :byDisplay, r.criticalReadBackAt = :at, r.acknowledged = true, "
+        + "r.acknowledgedAt = :at, r.acknowledgedByUserId = :byUserId, r.acknowledgedByDisplay = :byDisplay, "
+        + "r.updatedAt = :at WHERE r.id = :id AND r.criticalReadBackAt IS NULL")
+    int confirmReadBackIfUnconfirmed(@Param("id") UUID id, @Param("value") String value,
+                                     @Param("byUserId") UUID byUserId, @Param("byDisplay") String byDisplay,
+                                     @Param("at") java.time.LocalDateTime at);
+
+    /**
+     * QA D1553 (Rex P2): the record of a mismatched read-back, written only
+     * while the row has no confirmed read-back; 0 rows means one was confirmed
+     * first, and nothing is written.
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @org.springframework.data.jpa.repository.Query(
+        "UPDATE LabResult r SET r.criticalReadBackValue = :value, r.criticalReadBackByUserId = :byUserId, "
+        + "r.criticalReadBackByDisplay = :byDisplay, r.updatedAt = :at "
+        + "WHERE r.id = :id AND r.criticalReadBackAt IS NULL")
+    int recordReadBackMismatchIfUnconfirmed(@Param("id") UUID id, @Param("value") String value,
+                                            @Param("byUserId") UUID byUserId, @Param("byDisplay") String byDisplay,
+                                            @Param("at") java.time.LocalDateTime at);
+
     @Override
     @EntityGraph(attributePaths = {
         "labOrder",
@@ -543,6 +574,9 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * {@code hms.lab.auto-verification.enabled=false} (the default) an ORU
      * observation lands here and stays "pending" for the patient until a
      * lab user releases it, so a worklist MUST be able to find it.
+     *
+     * <p>QA D963: STAT first, then URGENT, then the rest; the page's own sort
+     * (oldest result first by default) orders within each priority.
      */
     @EntityGraph(attributePaths = {
         "labOrder",
@@ -553,6 +587,8 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         SELECT r FROM LabResult r
         WHERE r.released = false
           AND COALESCE(r.labOrder.performingHospital.id, r.labOrder.hospital.id) = :hospitalId
+        ORDER BY
+          CASE r.labOrder.priority WHEN 'STAT' THEN 0 WHEN 'URGENT' THEN 1 ELSE 2 END
     """, countQuery = """
         SELECT COUNT(r) FROM LabResult r
         WHERE r.released = false

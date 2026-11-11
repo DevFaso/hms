@@ -110,4 +110,39 @@ class InBasketMapperTest {
         assertThat(dto.getPriority()).isNull();
         assertThat(dto.getStatus()).isNull();
     }
+
+    /**
+     * QA D1053: the correction item was resolved in French when it was written,
+     * so ES and EN readers saw "Correction : ... Ancienne valeur ...". An item
+     * written with keys is rendered in the reader's language; the stored
+     * French text is what an item without keys (or a key that no longer
+     * renders) shows.
+     */
+    @Test
+    void toDto_rendersAKeyedItemInTheReadersLanguage_D1053() {
+        InBasketMapper localized = new InBasketMapper(new com.example.hms.service.i18n.NotificationLocalizer(
+            com.example.hms.i18n.TestMessageSources.bundles()));
+        InBasketItem item = InBasketItem.builder()
+            .itemType(InBasketItemType.RESULT)
+            .priority(InBasketPriority.URGENT)
+            .title("Correction : TDR paludisme")
+            .body("Ancienne valeur Positif, nouvelle valeur Négatif")
+            .titleKey("lab.result.correction.inBasketTitle")
+            .titleArgs(java.util.List.of("TDR paludisme"))
+            .bodyKey("lab.result.correction.inBasketBody")
+            .bodyArgs(java.util.List.of("Positif", "Négatif"))
+            .build();
+        try {
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+            InBasketItemDTO en = localized.toDto(item);
+            assertThat(en.getTitle()).isEqualTo("Correction: TDR paludisme");
+            assertThat(en.getBody()).isEqualTo("Previous value Positif, new value Négatif");
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.forLanguageTag("es"));
+            assertThat(localized.toDto(item).getBody()).doesNotContain("Ancienne").doesNotContain("Previous");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+        InBasketItem legacy = InBasketItem.builder().title("Correction : X").body("Ancienne valeur A").build();
+        assertThat(localized.toDto(legacy).getTitle()).isEqualTo("Correction : X");
+    }
 }

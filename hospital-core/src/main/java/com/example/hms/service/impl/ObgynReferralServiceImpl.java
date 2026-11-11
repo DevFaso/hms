@@ -3,6 +3,7 @@ package com.example.hms.service.impl;
 import com.example.hms.enums.ObgynReferralStatus;
 import com.example.hms.enums.ObgynReferralUrgency;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.ObgynReferralMapper;
 import com.example.hms.model.Hospital;
@@ -73,6 +74,8 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
     private final ObjectMapper objectMapper;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    /** QA D1538 review: audits an obstetric rule skipped for an emergency. */
+    private final com.example.hms.service.support.ObstetricRuleSkipRecorder skipRecorder;
 
     @Override
     public ObgynReferralResponseDTO createReferral(ObgynReferralCreateRequestDTO request, String username) {
@@ -86,6 +89,13 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         // QA D401: the patient must be registered at the hospital the row is written in.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        // QA D1538 (round 40): every care context (antenatal, intrapartum, postpartum) is a
+        // pregnancy episode, so the maternity rule applies (ObstetricEligibility), refused on
+        // patientId. An URGENT referral is an emergency, which the rule never refuses; one placed for
+        // a patient the rule would refuse is flagged for review and the skip audited.
+        boolean ruleSkipped = com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(patient, "patientId",
+            request.getUrgency() == com.example.hms.enums.ObgynReferralUrgency.URGENT);
         User midwife = resolveUserByUsername(username);
 
         validateAttachmentsForUrgency(request);
@@ -103,6 +113,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
             .ongoingMidwiferyCare(request.isOngoingMidwiferyCare())
             .transferType(request.getTransferType())
             .status(ObgynReferralStatus.SUBMITTED)
+            .obstetricRuleSkipped(ruleSkipped)
             .slaDueAt(calculateSlaDueAt(request.getUrgency()))
             .patientContactSnapshot(buildPatientSnapshot(patient, hospital))
             .midwifeContactSnapshot(buildUserSnapshot(midwife))
@@ -113,6 +124,9 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         applyAttachments(referral, request.getAttachments(), midwife);
 
         ObgynReferral saved = referralRepository.save(referral);
+        if (ruleSkipped) {
+            skipRecorder.record(patient, String.valueOf(request.getUrgency()), com.example.hms.service.support.ObstetricRuleSkipRecorder.ENTITY_REFERRAL, saved.getId(), hospital.getId());
+        }
         log.info("Created OB-GYN referral {} for patient {}", saved.getId(), patient.getId());
         return referralMapper.toResponseDTO(saved);
     }
@@ -167,7 +181,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         ObgynReferral referral = findReferral(referralId);
 
         if (request.getObgynUserId() == null) {
-            throw new BusinessException("obgynReferral.acknowledge.obgynRequired");
+            throw new FieldBusinessException("obgynUserId", "obgynReferral.acknowledge.obgynRequired");
         }
 
         User assignedObgyn = userRepository.findByIdWithRolesAndProfiles(request.getObgynUserId())
@@ -183,6 +197,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
     @Override
     public ObgynReferralResponseDTO startReferral(UUID referralId, String username) {
         ObgynReferral referral = findReferral(referralId);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(referral.getPatient());
         referral.start();
         referral.setUpdatedBy(username);
 
@@ -211,7 +226,10 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         String username
     ) {
         ObgynReferral referral = findReferral(referralId);
-        referral.cancel(request.getReason());
+        requireReferringMidwife(referral);
+        // QA D1098: the DTO's @NotBlank holds at the edge; any other caller states why too.
+        referral.cancel(com.example.hms.service.support.CancelledOrders.requireCancelReason(
+            request == null ? null : request.getReason(), "reason"));
         referral.setUpdatedBy(username);
 
         log.info("Referral {} cancelled by {}", referralId, username);
@@ -284,7 +302,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         }
 
         if (CollectionUtils.isEmpty(request.getAttachments())) {
-            throw new BusinessException(ATTACHMENT_REQUIRED_FOR_HIGH_URGENCY);
+            throw new com.example.hms.exception.FieldBusinessException("attachments", ATTACHMENT_REQUIRED_FOR_HIGH_URGENCY);
         }
     }
 
@@ -295,6 +313,24 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         // hospital's referral answers as unknown, for every write and the by-id read.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(referral.getHospital(), REFERRAL_NOT_FOUND_WITH_ID, referralId);
         return referral;
+    }
+
+    /**
+     * QA D930 class: a referral is cancelled by the midwife who wrote it (or a
+     * verified super-admin in global view), never by any colleague at the
+     * hospital. The referral was resolved in the caller's hospital first, so
+     * the refusal discloses nothing.
+     */
+    private void requireReferringMidwife(ObgynReferral referral) {
+        if (com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()) {
+            return;
+        }
+        java.util.UUID caller = com.example.hms.security.CallerIdentity.currentUserId();
+        User midwife = referral.getMidwife();
+        if (caller == null || midwife == null || !caller.equals(midwife.getId())) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.cancel.referrerOnly"));
+        }
     }
 
     private User resolveUserByUsername(String username) {
@@ -348,6 +384,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         snapshot.put("id", patient.getId());
         snapshot.put("mrn", hospital != null ? patient.getMrnForHospital(hospital.getId()) : null);
         snapshot.put("firstName", patient.getFirstName());
+        snapshot.put("middleName", patient.getMiddleName());
         snapshot.put("lastName", patient.getLastName());
         snapshot.put("dateOfBirth", patient.getDateOfBirth());
         snapshot.put("phone", patient.getPhoneNumberPrimary());

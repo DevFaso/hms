@@ -1,5 +1,6 @@
 import {
   Component,
+  ElementRef,
   OnInit,
   computed,
   inject,
@@ -16,14 +17,32 @@ import {
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { refusalReason } from '../../shared/refusal-reason';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+
+/** QA D1281: the ask-a-question dialog's required field. */
+const ASK_TEXT_ID = 'askText';
 
 type EducationTab = 'assigned' | 'completed' | 'questions';
 
 @Component({
   selector: 'app-my-education',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, DatePipe, FormsModule, EnumLabelPipe, TranslateModule],
+  imports: [
+    DateTimePipe,
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    FormsModule,
+    EnumLabelPipe,
+    TranslateModule,
+    DialogA11yDirective,
+    SubmitGuardDirective,
+  ],
   templateUrl: './my-education.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-education.component.scss', '../patient-portal-pages.scss'],
@@ -32,6 +51,7 @@ export class MyEducationComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   items = signal<PatientEducationItem[]>([]);
   questions = signal<PatientEducationQuestion[]>([]);
@@ -130,10 +150,12 @@ export class MyEducationComponent implements OnInit {
           this.toast.success(this.translate.instant('PORTAL.EDUCATION.SAVED'));
         }
       },
-      error: () => {
+      error: (err: unknown) => {
         this.savingProgress.set(false);
         if (notify) {
-          this.toast.error(this.translate.instant('PORTAL.EDUCATION.SAVE_FAILED'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('PORTAL.EDUCATION.SAVE_FAILED'),
+          );
         }
       },
     });
@@ -141,25 +163,38 @@ export class MyEducationComponent implements OnInit {
 
   // ── Questions ────────────────────────────────────────────────────
 
+  /**
+   * QA D1130: the dialog's open state is its own signal. It was derived as
+   * `askTarget() !== null`, and the general "Poser une question" opens with
+   * no resource (`openAsk(null)`), so it never opened.
+   */
+  readonly askOpen = signal(false);
+
   openAsk(item: PatientEducationItem | null): void {
     this.askTarget.set(item);
     this.askText = '';
     this.askUrgent = false;
+    this.askOpen.set(true);
   }
 
   closeAsk(): void {
+    this.askOpen.set(false);
     this.askTarget.set(null);
     this.askText = '';
   }
 
-  get askOpen(): boolean {
-    return this.askTarget() !== null;
+  /** QA D1281: why the question cannot be sent yet (the guard marks the field), or null. */
+  questionRefusal(): string | null {
+    if (this.askText.trim().length >= 5) return null;
+    return this.translate.instant('PORTAL.EDUCATION.QUESTION_TOO_SHORT');
   }
 
   submitQuestion(): void {
     const text = this.askText.trim();
     if (text.length < 5) {
-      this.toast.error(this.translate.instant('PORTAL.EDUCATION.QUESTION_TOO_SHORT'));
+      const message = this.translate.instant('PORTAL.EDUCATION.QUESTION_TOO_SHORT');
+      refuseFields(this.host.nativeElement, [ASK_TEXT_ID], [ASK_TEXT_ID], message);
+      this.toast.error(message);
       return;
     }
     this.askSubmitting.set(true);
@@ -177,9 +212,11 @@ export class MyEducationComponent implements OnInit {
           this.closeAsk();
           this.toast.success(this.translate.instant('PORTAL.EDUCATION.QUESTION_SENT'));
         },
-        error: () => {
+        error: (err: unknown) => {
           this.askSubmitting.set(false);
-          this.toast.error(this.translate.instant('PORTAL.EDUCATION.QUESTION_FAILED'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('PORTAL.EDUCATION.QUESTION_FAILED'),
+          );
         },
       });
   }

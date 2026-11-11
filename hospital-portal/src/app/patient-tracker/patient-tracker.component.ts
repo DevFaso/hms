@@ -1,5 +1,7 @@
+import { RoleContextService } from '../core/role-context.service';
 import {
   Component,
+  DestroyRef,
   OnInit,
   OnDestroy,
   inject,
@@ -9,8 +11,8 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subscription, interval, of } from 'rxjs';
-import { exhaustMap, catchError } from 'rxjs/operators';
+import { Subscription, interval } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   PatientTrackerService,
   PatientTrackerBoard,
@@ -28,6 +30,26 @@ import {
 } from '../services/encounter.service';
 import { RovingFocusDirective } from '../shared/a11y/roving-focus.directive';
 import { TriageFormComponent } from '../nurse-station/triage-form/triage-form.component';
+import { CloseUnseenDialogComponent } from '../reception/close-unseen-dialog/close-unseen-dialog.component';
+import { ActionKey, actionRoles } from '../core/action-permissions';
+
+/**
+ * QA D1463 (D1431 NOT_FIXED for the admin): what a card offers, per action: every
+ * endpoint the action calls, whose roles `ActionPermissionsMirrorTest` holds to the
+ * server's. A flag naming one role (`frontDeskOnly`) left the hospital admin 54 cards
+ * of buttons that could only answer 403.
+ */
+export const TRACKER_ACTIONS = {
+  assessTriage: ['encounterRead', 'encounterTriage'],
+  completeTriage: ['encounterCompleteTriage'],
+  closeUnseen: ['encounterCloseUnseen'],
+  startVisit: ['encounterStart'],
+  completeExamination: ['encounterCompleteExamination'],
+  readyForDischarge: ['encounterReadyForDischarge'],
+  checkout: ['encounterRead', 'encounterCheckout'],
+} as const satisfies Record<string, readonly ActionKey[]>;
+
+export type TrackerAction = keyof typeof TRACKER_ACTIONS;
 
 export interface TrackerColumn {
   key: keyof Pick<
@@ -45,7 +67,10 @@ export interface TrackerColumn {
 
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { isNeverSeenVisit, mayEndExamination, mayStartVisit } from '../core/encounter-start';
+import { refusalReason } from '../shared/refusal-reason';
 
+import { isFrontDeskOnly } from '../patients/patient-chart/chart-access';
 @Component({
   selector: 'app-patient-tracker',
   standalone: true,
@@ -58,6 +83,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
     RovingFocusDirective,
     TriageFormComponent,
     EnumLabelPipe,
+    CloseUnseenDialogComponent,
   ],
   templateUrl: './patient-tracker.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -67,10 +93,43 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   private readonly trackerService = inject(PatientTrackerService);
   private readonly trackerWs = inject(PatientTrackerWsService);
   private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
   /**
-   * QA D788: a visit IN_PROGRESS is checked out by its clinician (it closes their
-   * consultation); the desk waits until the examination is completed.
+   * QA D954: a patient who leaves before anyone sees them is closed from the
+   * tracker too (the reception's close-unseen dialog, reused), by the roles
+   * the endpoint admits.
    */
+  get canCloseUnseen(): boolean {
+    return this.canOffer('closeUnseen');
+  }
+
+  /** QA D1463: an action shows only to a role every endpoint behind it admits. */
+  canOffer(action: TrackerAction): boolean {
+    return TRACKER_ACTIONS[action].every((endpoint: ActionKey) =>
+      this.roleContext.hasAnyActiveRole(actionRoles(endpoint)),
+    );
+  }
+  readonly closeUnseenItem = signal<PatientTrackerItem | null>(null);
+  /** QA D1108: LWBS is offered until the patient is seen, the server's rule. */
+  readonly isNeverSeenVisit = isNeverSeenVisit;
+
+  openCloseUnseen(item: PatientTrackerItem): void {
+    this.closeUnseenItem.set(item);
+  }
+
+  onUnseenVisitClosed(): void {
+    this.closeUnseenItem.set(null);
+    this.refresh();
+  }
+
+  /**
+   * RCPT-CLIN: the desk gets no acuity from the server, and an absent acuity must
+   * not read as "routine". Only what the card DISPLAYS: what it offers is canOffer.
+   */
+  get frontDeskOnly(): boolean {
+    return isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
+  }
+
   get isClinician(): boolean {
     return this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']);
   }
@@ -87,6 +146,56 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   private static readonly POLL_ONLINE_MS = 120_000;
   private wsConnected = false;
 
+  private readonly destroyRef = inject(DestroyRef);
+  private boardRequest = 0;
+  readonly loadFailed = signal(false);
+  readonly searchTerm = signal('');
+  readonly departmentFilter = signal('');
+  readonly stageFilter = signal('');
+  readonly visibleColumns = computed(() =>
+    this.columns.filter((c) => !this.stageFilter() || c.key === this.stageFilter()),
+  );
+  readonly departments = computed(() =>
+    [
+      ...new Set(
+        this.columns
+          .flatMap((c) => this.getColumnItems(c.key))
+          .map((i) => i.departmentName)
+          .concat(this.departmentFilter())
+          .filter((v): v is string => !!v),
+      ),
+    ].sort(),
+  );
+  readonly visibleCount = computed(() =>
+    this.visibleColumns().reduce((sum, c) => sum + this.getVisibleColumnItems(c.key).length, 0),
+  );
+  getVisibleColumnItems(key: string): PatientTrackerItem[] {
+    const term = this.searchTerm().trim().toLocaleLowerCase();
+    return this.getColumnItems(key).filter(
+      (item) =>
+        (!this.departmentFilter() || item.departmentName === this.departmentFilter()) &&
+        (!term ||
+          [
+            item.patientName,
+            item.mrn,
+            item.assignedProvider,
+            item.roomAssignment,
+            item.departmentName,
+          ].some((v) => v?.toLocaleLowerCase().includes(term))),
+    );
+  }
+  clearFilters(): void {
+    this.searchTerm.set('');
+    this.departmentFilter.set('');
+    this.stageFilter.set('');
+  }
+  formatWait(minutes: number): string {
+    const value = Math.round(minutes);
+    return this.translate.instant(value >= 60 ? 'TRACKER.DURATION_HM' : 'TRACKER.DURATION_M', {
+      hours: Math.floor(value / 60),
+      minutes: value >= 60 ? value % 60 : value,
+    });
+  }
   board = signal<PatientTrackerBoard | null>(null);
   loading = signal(false);
   lastRefreshed = signal<Date | null>(null);
@@ -112,7 +221,7 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.loadBoard();
 
-    const hospitalId = this.auth.getHospitalId();
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     if (hospitalId) {
       this.wsStateSub = this.trackerWs.getConnectionState().subscribe((connected) => {
         this.wsConnected = connected;
@@ -137,37 +246,34 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
     const ms = this.wsConnected
       ? PatientTrackerComponent.POLL_ONLINE_MS
       : PatientTrackerComponent.POLL_OFFLINE_MS;
-    this.refreshSub = interval(ms)
-      .pipe(
-        exhaustMap(() => {
-          const hospitalId = this.auth.getHospitalId();
-          if (!hospitalId) return of(null);
-          return this.trackerService.getTrackerBoard(hospitalId).pipe(catchError(() => of(null)));
-        }),
-      )
-      .subscribe((data) => {
-        if (data) {
-          this.board.set(data);
-          this.lastRefreshed.set(new Date());
-        }
-      });
+    this.refreshSub = interval(ms).subscribe(() => {
+      if (!this.loading()) this.loadBoard();
+    });
   }
 
   loadBoard(): void {
-    const hospitalId = this.auth.getHospitalId();
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     if (!hospitalId) return;
 
+    const request = ++this.boardRequest;
     this.loading.set(true);
-    this.trackerService.getTrackerBoard(hospitalId).subscribe({
-      next: (data) => {
-        this.board.set(data);
-        this.lastRefreshed.set(new Date());
-        this.loading.set(false);
-      },
-      error: () => {
-        this.loading.set(false);
-      },
-    });
+    this.trackerService
+      .getTrackerBoard(hospitalId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (data) => {
+          if (request !== this.boardRequest) return;
+          this.board.set(data);
+          this.loadFailed.set(false);
+          this.lastRefreshed.set(new Date());
+          this.loading.set(false);
+        },
+        error: () => {
+          if (request !== this.boardRequest) return;
+          this.loadFailed.set(true);
+          this.loading.set(false);
+        },
+      });
   }
 
   refresh(): void {
@@ -220,9 +326,7 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
     this.encounterService.getById(item.encounterId).subscribe({
       next: (encounter) => this.triageEncounter.set(encounter),
       error: (err: { error?: { message?: string } } | null) =>
-        this.toast.error(
-          err?.error?.message || this.translate.instant('TRACKER.TRIAGE_INCOMPLETE'),
-        ),
+        this.toast.error(refusalReason(err) ?? this.translate.instant('TRACKER.TRIAGE_INCOMPLETE')),
     });
   }
 
@@ -249,9 +353,68 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
         this.triageInProgress.set(false);
         // QA D155: the server refuses a triage with no vitals or ESI; say so
         // rather than leaving the card where it was without a word.
-        this.toast.error(
-          err?.error?.message || this.translate.instant('TRACKER.TRIAGE_INCOMPLETE'),
-        );
+        this.toast.error(refusalReason(err) ?? this.translate.instant('TRACKER.TRIAGE_INCOMPLETE'));
+      },
+    });
+  }
+
+  /* ── Start — WAITING_FOR_PHYSICIAN → IN_PROGRESS (QA D1015) ─── */
+  get canStartVisit(): boolean {
+    // The role the user acts in, not every role held (D997 class).
+    return this.canOffer('startVisit');
+  }
+
+  /**
+   * QA D1085: per card, the server's rule (core/encounter-start). The column
+   * offered "Démarrer" to a midwife on every waiting visit, and the server
+   * then refused her the ones not booked with her.
+   */
+  canStartItem(item: PatientTrackerItem): boolean {
+    if (!this.canStartVisit) return false;
+    return mayStartVisit(
+      {
+        superAdmin: this.roleContext.isSuperAdmin(),
+        // rbac-inline-ok: mirrors EncounterController#startEncounter's midwifeOnly test (ROLE_DOCTOR held or not).
+        doctor: this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']),
+        // rbac-inline-ok: mirrors EncounterController#startEncounter (a midwife leads her own visits).
+        midwife: this.roleContext.hasAnyActiveRole(['ROLE_MIDWIFE']),
+        userId: this.auth.getUserId(),
+      },
+      item.assignedProviderUserId,
+    );
+  }
+  /**
+   * QA D1099: "Terminer l'examen" and "Sortie" on a visit in progress are the
+   * examining clinician's (core/encounter-start mayEndExamination, the server's
+   * rule); a midwife was offered them on doctors' cards and the server accepted.
+   */
+  canEndExamItem(item: PatientTrackerItem): boolean {
+    if (!this.canOffer('completeExamination')) return false;
+    return mayEndExamination(
+      {
+        superAdmin: this.roleContext.isSuperAdmin(),
+        // rbac-inline-ok: mirrors EncounterClosureRules.requireExaminingClinician (a doctor ends an unassigned visit).
+        doctor: this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']),
+        // rbac-inline-ok: the actor shape of core/encounter-start (unused by this rule).
+        midwife: this.roleContext.hasAnyActiveRole(['ROLE_MIDWIFE']),
+        userId: this.auth.getUserId(),
+      },
+      item.assignedProviderUserId,
+    );
+  }
+  startInProgress = signal(false);
+
+  startVisit(item: PatientTrackerItem): void {
+    this.startInProgress.set(true);
+    this.encounterService.startEncounter(item.encounterId).subscribe({
+      next: () => {
+        this.startInProgress.set(false);
+        this.loadBoard();
+      },
+      error: (err: { error?: { message?: string } } | null) => {
+        this.startInProgress.set(false);
+        // The server's reason (not the assigned clinician) in the reader's language.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('TRACKER.START_FAILED'));
       },
     });
   }
@@ -266,8 +429,12 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
         this.examInProgress.set(false);
         this.loadBoard();
       },
-      error: () => {
+      error: (err: unknown) => {
         this.examInProgress.set(false);
+        // QA D1099: a refusal (not the examining clinician) is read, not swallowed.
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.EXAM_COMPLETE_FAILED'),
+        );
       },
     });
   }
@@ -282,8 +449,11 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
         this.readyInProgress.set(false);
         this.loadBoard();
       },
-      error: () => {
+      error: (err: unknown) => {
         this.readyInProgress.set(false);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.STATUS_UPDATE_FAILED'),
+        );
       },
     });
   }

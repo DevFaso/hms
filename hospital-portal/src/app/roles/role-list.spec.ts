@@ -5,6 +5,7 @@ import { of } from 'rxjs';
 import { RoleListComponent } from './role-list';
 import { RoleResponse, RoleService } from '../services/role.service';
 import { ToastService } from '../core/toast.service';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 /**
  * QA D868: the role cards were titled 'ROLE_DOCTOR ROLE_DOCTOR' and every role
@@ -28,7 +29,7 @@ describe('RoleListComponent (QA D868)', () => {
   });
 
   beforeEach(async () => {
-    roles = jasmine.createSpyObj<RoleService>('RoleService', ['list', 'listPermissions']);
+    roles = jasmine.createSpyObj<RoleService>('RoleService', ['list', 'listPermissions', 'update']);
     roles.list.and.returnValue(
       of([
         role({}),
@@ -113,6 +114,72 @@ describe('RoleListComponent (QA D868)', () => {
     expect(el.querySelector('[data-testid="no-permission-catalogue"]')).not.toBeNull();
     const save = Array.from(el.querySelectorAll('.modal-actions .btn-primary')).at(-1) as
       HTMLButtonElement | undefined;
-    expect(save?.disabled).toBeTrue();
+    expect(isSubmitBlocked(save)).toBeTrue();
+  });
+  it('locks the code of a built-in role and always sends its stored code (QA D902, #968 review)', () => {
+    const component = fixture.componentInstance;
+    const superAdmin = role({
+      id: 'sa',
+      name: 'ROLE_SUPER_ADMIN',
+      authority: 'ROLE_SUPER_ADMIN',
+      code: 'ROLE_SUPER_ADMIN',
+      builtIn: true,
+    });
+    roles.update.and.returnValue(of(superAdmin));
+    component.openEdit(superAdmin);
+    fixture.detectChanges();
+    const code = (fixture.nativeElement as HTMLElement).querySelector(
+      '#roleCode',
+    ) as HTMLInputElement;
+    expect(code.readOnly).toBeTrue();
+    expect(code.getAttribute('aria-describedby')).toBe('roleCodeHint');
+    expect((fixture.nativeElement as HTMLElement).querySelector('#roleCodeHint')).not.toBeNull();
+
+    component.createForm.code = 'ROLE_PLATFORM_OWNER';
+    component.submitCreate();
+    expect(roles.update).toHaveBeenCalledWith(
+      'sa',
+      jasmine.objectContaining({ code: 'ROLE_SUPER_ADMIN' }),
+    );
+  });
+
+  it('keeps the code of a custom role editable', () => {
+    const component = fixture.componentInstance;
+    component.openEdit(role({ id: 'r2', name: 'Chef de garde', code: 'ROLE_CHEF_GARDE' }));
+    fixture.detectChanges();
+    const code = (fixture.nativeElement as HTMLElement).querySelector(
+      '#roleCode',
+    ) as HTMLInputElement;
+    expect(code.readOnly).toBeFalse();
+    expect((fixture.nativeElement as HTMLElement).querySelector('#roleCodeHint')).toBeNull();
+  });
+
+  it('offers no trash icon on a built-in role and never opens its delete dialog (QA D902, #968 review)', () => {
+    const component = fixture.componentInstance;
+    const superAdmin = role({
+      id: 'sa',
+      name: 'ROLE_SUPER_ADMIN',
+      authority: 'ROLE_SUPER_ADMIN',
+      code: 'ROLE_SUPER_ADMIN',
+      builtIn: true,
+    });
+    const custom = role({
+      id: 'r2',
+      name: 'Chef de garde',
+      authority: 'ROLE_CHEF_GARDE',
+      code: 'ROLE_CHEF_GARDE',
+      builtIn: false,
+    });
+    roles.list.and.returnValue(of([superAdmin, custom]));
+    component.loadRoles();
+    fixture.detectChanges();
+    const cards = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.role-card'));
+    expect(cards.map((c) => c.querySelector('.btn-sm.delete') !== null)).toEqual([false, true]);
+
+    component.confirmDelete(superAdmin);
+    expect(component.showDeleteConfirm()).toBeFalse();
+    expect(component.deletingRole()).toBeNull();
+    component.confirmDelete(custom);
+    expect(component.deletingRole()).toBe(custom);
   });
 });

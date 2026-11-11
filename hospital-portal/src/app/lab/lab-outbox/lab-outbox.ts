@@ -1,3 +1,5 @@
+import { refusalReason } from '../../shared/refusal-reason';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import {
   Component,
   OnInit,
@@ -34,7 +36,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 @Component({
   selector: 'app-lab-outbox',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [ModalDialogDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './lab-outbox.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-outbox.scss',
@@ -139,7 +141,7 @@ export class LabOutboxComponent implements OnInit {
       },
       error: (err) => {
         console.error('Failed to load outbox message', err);
-        this.toast.error(this.translate.instant('LAB_OUTBOX.DETAIL_ERROR'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_OUTBOX.DETAIL_ERROR'));
         this.detailLoading.set(false);
       },
     });
@@ -166,7 +168,7 @@ export class LabOutboxComponent implements OnInit {
       error: (err) => {
         // The backend refusal names the actual state — surface it verbatim
         // rather than a generic failure.
-        const message = err?.error?.message ?? this.translate.instant('LAB_OUTBOX.RETRY_ERROR');
+        const message = refusalReason(err) ?? this.translate.instant('LAB_OUTBOX.RETRY_ERROR');
         this.toast.error(message);
         this.retryingId.set(null);
       },

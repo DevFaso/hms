@@ -81,6 +81,26 @@ describe('HospitalTypeaheadComponent', () => {
     const root: HTMLElement = fixture.nativeElement;
     expect(root.querySelector('[data-testid="hospital-typeahead-input"]')).toBeTruthy();
     expect(root.querySelector('[data-testid="hospital-typeahead-all"]')).toBeTruthy();
+    expect(root.querySelector('input')?.getAttribute('aria-label')).toBe(
+      'HOSPITAL_SCOPE.FILTER_BY_HOSPITAL',
+    );
+    expect(root.querySelector('[role="listbox"]')?.getAttribute('aria-label')).toBe(
+      'HOSPITAL_SCOPE.FILTER_BY_HOSPITAL',
+    );
+  });
+
+  it('names the input and results for destination selection', () => {
+    fixture.componentRef.setInput('ariaLabelKey', 'BEDS_NETWORK.TARGET_LABEL');
+    fixture.componentRef.setInput('inputId', 'destination');
+    fixture.detectChanges();
+    initialPage().flush([]);
+    const root: HTMLElement = fixture.nativeElement;
+    expect(root.querySelector('#destination')?.getAttribute('aria-label')).toBe(
+      'BEDS_NETWORK.TARGET_LABEL',
+    );
+    expect(root.querySelector('[role="listbox"]')?.getAttribute('aria-label')).toBe(
+      'BEDS_NETWORK.TARGET_LABEL',
+    );
   });
 
   it('hides the All-hospitals sentinel when [hideAllOption] is true', () => {

@@ -95,6 +95,7 @@ class DoctorWorklistServiceImplTest {
     private Patient stubPatient(UUID patientId, String firstName, String lastName) {
         Patient p = mock(Patient.class);
         lenient().when(p.getId()).thenReturn(patientId);
+        lenient().when(p.getFullName()).thenReturn((firstName + " " + lastName).trim()); // QA D1036: the whole name
         lenient().when(p.getFirstName()).thenReturn(firstName);
         lenient().when(p.getLastName()).thenReturn(lastName);
         lenient().when(p.getDateOfBirth()).thenReturn(LocalDate.of(1985, 6, 15));
