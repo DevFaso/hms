@@ -63,6 +63,15 @@ public class PatientDocumentStaffController {
         + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
         + "'ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
 
+    /**
+     * QA D1599: the front desk and billing (insurance claims) are admitted too, but the service
+     * narrows them to the INSURANCE_DOCUMENT type; every other type reads as missing for them.
+     */
+    static final String ACCESS_ROLES = "hasAnyAuthority("
+        + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
+        + "'ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN',"
+        + "'ROLE_RECEPTIONIST','ROLE_BILLING_SPECIALIST')";
+
     private final PatientDocumentService documentService;
     private final RoleValidator roleValidator;
 
@@ -71,7 +80,7 @@ public class PatientDocumentStaffController {
             + "hospital the patient is registered at; 400 without one, 404 when the patient is not "
             + "registered there.")
     @GetMapping
-    @PreAuthorize(READ_ROLES)
+    @PreAuthorize(ACCESS_ROLES)
     public ResponseEntity<Page<PatientDocumentResponseDTO>> list(
         @PathVariable UUID patientId,
         @RequestParam(required = false) PatientDocumentType documentType,
@@ -83,7 +92,7 @@ public class PatientDocumentStaffController {
 
     @Operation(summary = "Get one uploaded document's metadata")
     @GetMapping("/{documentId}")
-    @PreAuthorize(READ_ROLES)
+    @PreAuthorize(ACCESS_ROLES)
     public ResponseEntity<PatientDocumentResponseDTO> get(
         @PathVariable UUID patientId,
         @PathVariable UUID documentId
@@ -95,7 +104,7 @@ public class PatientDocumentStaffController {
     @Operation(summary = "Download an uploaded document",
         description = "Authenticated, hospital-scoped streaming; every call is audited as DATA_ACCESS.")
     @GetMapping("/{documentId}/download")
-    @PreAuthorize(READ_ROLES)
+    @PreAuthorize(ACCESS_ROLES)
     public ResponseEntity<Resource> download(
         @PathVariable UUID patientId,
         @PathVariable UUID documentId

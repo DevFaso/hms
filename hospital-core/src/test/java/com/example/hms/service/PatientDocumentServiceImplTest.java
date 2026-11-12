@@ -416,14 +416,112 @@ class PatientDocumentServiceImplTest {
             // The outer setUp stubs the patient-side caller; staff reads never
             // touch it, and MockitoExtension is strict about unused stubs.
             org.mockito.Mockito.reset(authUtils);
-            SecurityContextHolder.getContext().setAuthentication(
-                    new UsernamePasswordAuthenticationToken("dr.who", "n/a", List.of()));
+            as("ROLE_DOCTOR");
             lenient().when(authUtils.resolveUserId(any())).thenReturn(Optional.of(staffId));
         }
 
         @AfterEach
         void clearCaller() {
             SecurityContextHolder.clearContext();
+        }
+
+        private void as(String role) {
+            SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                    "someone", "n/a", List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(role))));
+        }
+
+        private PatientUploadedDocument docOfType(PatientDocumentType type) {
+            PatientUploadedDocument doc = PatientUploadedDocument.builder().patient(patient)
+                    .documentType(type).filePath("/uploads/patient-documents/y.pdf").mimeType("application/pdf")
+                    .displayName("card.pdf").build();
+            doc.setId(docId);
+            return doc;
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.ValueSource(strings = {"ROLE_RECEPTIONIST", "ROLE_BILLING_SPECIALIST"})
+        @DisplayName("QA D1599: the front desk opens and downloads an insurance document, audited")
+        void frontDeskOpensInsurance(String role) {
+            as(role);
+            registered();
+            PatientUploadedDocument card = docOfType(PatientDocumentType.INSURANCE_DOCUMENT);
+            Pageable pageable = PageRequest.of(0, 20);
+            when(documentRepository.findForStaffByType(patientId, hospitalId,
+                    PatientDocumentType.INSURANCE_DOCUMENT, pageable)).thenReturn(new PageImpl<>(List.of(card)));
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.of(card));
+            when(documentMapper.toDto(card)).thenReturn(new PatientDocumentResponseDTO());
+            when(fileUploadService.resolveStoredFile("/uploads/patient-documents/y.pdf", "patient-documents"))
+                    .thenReturn(java.nio.file.Path.of("y.pdf"));
+
+            assertThat(service.listForPatient(hospitalId, patientId, null, pageable).getContent()).hasSize(1);
+            assertThat(service.getForPatient(hospitalId, patientId, docId)).isNotNull();
+            assertThat(service.downloadForPatient(hospitalId, patientId, docId).displayName()).isEqualTo("card.pdf");
+            verify(auditEventLogService).logEvent(any());
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(value = PatientDocumentType.class,
+                names = "INSURANCE_DOCUMENT", mode = org.junit.jupiter.params.provider.EnumSource.Mode.EXCLUDE)
+        @DisplayName("QA D1599 guard: for the front desk every type except insurance is neither listed nor readable")
+        void frontDeskReachesInsuranceOnly(PatientDocumentType type) {
+            as("ROLE_RECEPTIONIST");
+            registered();
+            Pageable pageable = PageRequest.of(0, 20);
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.of(docOfType(type)));
+
+            assertThat(service.listForPatient(hospitalId, patientId, type, pageable).getContent()).isEmpty();
+            assertThatThrownBy(() -> service.getForPatient(hospitalId, patientId, docId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.downloadForPatient(hospitalId, patientId, docId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(documentRepository, never()).findForStaff(any(), any(), any());
+            verify(fileUploadService, never()).resolveStoredFile(any(), any());
+            verify(auditEventLogService, never()).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("QA D1599: the patient's free-text note is blanked for the desk and kept for the clinician")
+        void notesAreBlankedForTheDeskOnly() {
+            registered();
+            PatientUploadedDocument card = docOfType(PatientDocumentType.INSURANCE_DOCUMENT);
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.of(card));
+            when(documentMapper.toDto(card)).thenAnswer(inv -> {
+                PatientDocumentResponseDTO dto = new PatientDocumentResponseDTO();
+                dto.setNotes("sees an oncologist");
+                return dto;
+            });
+            as("ROLE_RECEPTIONIST");
+            assertThat(service.getForPatient(hospitalId, patientId, docId).getNotes()).isNull();
+            as("ROLE_DOCTOR");
+            assertThat(service.getForPatient(hospitalId, patientId, docId).getNotes()).isEqualTo("sees an oncologist");
+        }
+
+        @Test
+        @DisplayName("QA D1599: an unfiltered front-desk list never uses the all-types query")
+        void frontDeskUnfilteredListIsInsuranceOnly() {
+            as("ROLE_RECEPTIONIST");
+            registered();
+            Pageable pageable = PageRequest.of(0, 20);
+            when(documentRepository.findForStaffByType(patientId, hospitalId,
+                    PatientDocumentType.INSURANCE_DOCUMENT, pageable)).thenReturn(new PageImpl<>(List.of()));
+            service.listForPatient(hospitalId, patientId, null, pageable);
+            verify(documentRepository, never()).findForStaff(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D1599: another hospital's reception gets 404 for the same patient")
+        void otherHospitalsFrontDeskIsNotFound() {
+            as("ROLE_RECEPTIONIST");
+            when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
+                    .thenReturn(Optional.empty());
+            Pageable pageable = PageRequest.of(0, 20);
+            assertThatThrownBy(() -> service.listForPatient(hospitalId, patientId, null, pageable))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.downloadForPatient(hospitalId, patientId, docId))
+                    .isInstanceOf(ResourceNotFoundException.class);
         }
 
         private PatientHospitalRegistration registered() {
