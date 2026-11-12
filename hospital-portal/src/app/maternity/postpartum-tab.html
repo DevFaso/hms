@@ -248,6 +248,15 @@
               <tr class="data-row">
                 <td>
                   {{ o.observationTime ? (o.observationTime | serverTime | date: 'short') : '—' }}
+                  @if (isForeign(o)) {
+                    <!-- QA D1631: another hospital's record (shared patient), read only here. -->
+                    <div class="muted" data-testid="postpartum-foreign-origin">
+                      {{
+                        'MATERNITY.FOREIGN_RECORDED_AT'
+                          | translate: { hospital: o.hospitalName || '—' }
+                      }}
+                    </div>
+                  }
                 </td>
                 <td>
                   {{ o.temperatureCelsius | measure: '°C' }} · {{ o.systolicBpMmHg ?? '—' }}/{{
@@ -334,6 +343,15 @@
               <tr class="data-row">
                 <td>
                   {{ a.assessmentTime ? (a.assessmentTime | serverTime | date: 'short') : '—' }}
+                  @if (isForeign(a)) {
+                    <!-- QA D1631: another hospital's record (shared patient), read only here. -->
+                    <div class="muted" data-testid="newborn-foreign-origin">
+                      {{
+                        'MATERNITY.FOREIGN_RECORDED_AT'
+                          | translate: { hospital: a.hospitalName || '—' }
+                      }}
+                    </div>
+                  }
                   @if (a.deliveryRecordId) {
                     <!-- The linkage was invisible even when set via API: no
                          template anywhere rendered deliveryRecordId. -->

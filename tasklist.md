@@ -6430,3 +6430,9 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 
 - **Signature revoke, pinned super-admin:** `DigitalSignatureServiceImpl` revoke admits `CallerIdentity.isGlobalSuperAdmin()` or a hospital admin of the signature's hospital, so a super-admin with that hospital selected is refused though `POST /signatures/{id}/revoke` admits SUPER_ADMIN. Not an admin review (it voids a clinician's signature), so left as it is; switch it to `CallerIdentity.isSuperAdminFor(signature hospital)` only if the user wants super-admins to revoke at a selected hospital.
 - **Review list in global view:** `GET /mortality/disputes` still answers 400 `mortality.hospitalRequired` for a super-admin in global view (no hospital to read). The portal now asks only once a hospital is selected; a cross-hospital review list for global view would be a new feature.
+
+## Standing debt — r44 labour cross-hospital, audit role (fix/r44-labour-crosshospital-audit-role)
+
+- **D1632 sibling, record attribution (not audit):** `EncounterServiceImpl` (triage vitals recorder), `InvoiceItemServiceImpl.resolveAssignment`, `PatientInsuranceServiceImpl.resolveStaffAssignment`, `ChatMessageServiceImpl`, `DeliveryChargeService`, `EncounterCheckoutChargeListener`, `DepartmentServiceImpl` and `LabResultServiceImpl.resolveActorDisplay` still take `findFirstByUser_IdAndHospital_IdAndActiveTrue`: a multi-role user's record may name the other role's assignment. Move them to `ActingAssignments.resolve` where the role matters.
+- **D1632, Keycloak sessions:** a Keycloak token carries every realm role of a multi-role user, so the acting role is the first in token order, not the one picked; the legacy JWT path carries the picked role only.
+- **D1631 decision (clinical owners):** may hospital A take over a labour started at hospital B (a transfer in labour)? Today A is refused a second active episode and sees B's read only; no transfer is built.

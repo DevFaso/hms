@@ -195,6 +195,19 @@ describe('AdmissionsComponent', () => {
       expect(component['formAdmissionTypes']()).toEqual(['LABOR_DELIVERY']);
     });
 
+    it('D1634: a midwife admitting sees a neutral provider label', () => {
+      activeRoles = ['ROLE_MIDWIFE'];
+      expect(component['admittingProviderKeys']()).toEqual({
+        label: 'ADMISSIONS.ADMITTING_CLINICIAN',
+        select: 'ADMISSIONS.SELECT_CLINICIAN',
+      });
+    });
+
+    it('D1634: a doctor admitting keeps the physician label', () => {
+      activeRoles = ['ROLE_DOCTOR'];
+      expect(component['admittingProviderKeys']().label).toBe('ADMISSIONS.ADMITTING_PROVIDER');
+    });
+
     it('a doctor keeps every admission type on the form', () => {
       activeRoles = ['ROLE_DOCTOR'];
       expect(component['formAdmissionTypes']().length).toBeGreaterThan(1);

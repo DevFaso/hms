@@ -179,6 +179,8 @@ public class LaborServiceImpl implements LaborService {
     /** QA D605: URGENT alerts reach the on-call team and escalate until acknowledged. */
     private final com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlertEscalation;
     private final com.example.hms.mapper.MaternalHistoryMapper maternalHistoryMapper;
+    /** QA D1631: a start refused because she is in labour at another hospital is audited. */
+    private final com.example.hms.service.AuditEventLogService auditEventLogService;
 
     /* ═══════════════════════ Episodes ═══════════════════════ */
 
@@ -212,6 +214,7 @@ public class LaborServiceImpl implements LaborService {
         if (episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospital.getId(), LaborStatus.ACTIVE)) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.labor.alreadyActive");
         }
+        refuseWhenActiveElsewhere(patientId, hospital.getId(), recorderUserId);
 
         String riskNotes = resolveRecentDeliveryOverride(patientId, request);
 
@@ -263,6 +266,44 @@ public class LaborServiceImpl implements LaborService {
 
         LaborEpisode saved = episodeRepository.save(episode);
         return laborMapper.toEpisodeResponse(saved, 0, false);
+    }
+
+    /**
+     * QA D1631: one woman, one labour. A second ACTIVE episode was opened at
+     * hospital A while her labour at B was still active, and each hospital
+     * then charted a labour the other could not close. The start is refused,
+     * naming the hospital where she is in labour, and the refusal is audited
+     * (its own transaction: the refusal rolls this one back).
+     *
+     * <p>Conservative and provisional: A can still admit her for other care,
+     * and taking over B's labour (a transfer) is a decision for the clinical
+     * owners, not built here.
+     */
+    private void refuseWhenActiveElsewhere(UUID patientId, UUID actingHospitalId, UUID recorderUserId) {
+        java.util.Optional<LaborEpisode> elsewhere =
+            episodeRepository.findFirstByPatient_IdAndStatusOrderByAdmittedAtDesc(patientId, LaborStatus.ACTIVE);
+        if (elsewhere.isEmpty() || elsewhere.get().getHospital() == null
+            || actingHospitalId.equals(elsewhere.get().getHospital().getId())) {
+            return;
+        }
+        Hospital other = elsewhere.get().getHospital();
+        try {
+            auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                .eventType(com.example.hms.enums.AuditEventType.LABOR_EPISODE_START_REFUSED)
+                .status(com.example.hms.enums.AuditStatus.FAILURE)
+                .entityType("LABOR")
+                .resourceId(elsewhere.get().getId().toString())
+                .patientId(patientId)
+                .userId(recorderUserId)
+                .hospitalId(actingHospitalId)
+                .eventDescription("Labour episode start refused: an active labour episode is open at another hospital")
+                .details(java.util.Map.of("activeEpisodeHospitalId", other.getId().toString()))
+                .build());
+        } catch (RuntimeException auditFailure) {
+            log.warn("[LABOR] Could not audit a refused labour start: {}", auditFailure.getMessage());
+        }
+        throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID,
+            "maternity.labor.alreadyActiveElsewhere", other.getName() != null ? other.getName() : "—");
     }
 
     /**
@@ -494,7 +535,7 @@ public class LaborServiceImpl implements LaborService {
     @Override
     @Transactional(readOnly = true)
     public List<PartographEntryResponseDTO> getEntries(UUID patientId, UUID episodeId, UUID hospitalId) {
-        LaborEpisode episode = loadEpisode(patientId, episodeId, hospitalId);
+        LaborEpisode episode = loadEpisodeForRead(patientId, episodeId, hospitalId);
         return entryRepository.findByEpisode_IdOrderByObservationTimeAsc(episode.getId()).stream()
             .map(entry -> laborMapper.toEntryResponse(entry, episode.getActivePhaseStartAt()))
             .toList();
@@ -616,7 +657,7 @@ public class LaborServiceImpl implements LaborService {
     @Override
     @Transactional(readOnly = true)
     public DeliveryRecordResponseDTO getDelivery(UUID patientId, UUID episodeId, UUID hospitalId) {
-        LaborEpisode episode = loadEpisode(patientId, episodeId, hospitalId);
+        LaborEpisode episode = loadEpisodeForRead(patientId, episodeId, hospitalId);
         DeliveryRecord record = deliveryRecordRepository.findByEpisode_Id(episode.getId())
             .orElseThrow(() -> new ResourceNotFoundException("labor.deliveryRecord.notFoundForEpisode", episodeId));
         return laborMapper.toDeliveryResponse(record);
@@ -819,6 +860,37 @@ public class LaborServiceImpl implements LaborService {
     }
 
     /* ═══════════════════════ Resolvers (house pattern) ═══════════════════════ */
+
+    /**
+     * QA D1631: the reads of one episode follow the same rule as the list
+     * ({@link #getEpisodes}): an episode of a hospital the caller may read for
+     * this patient (RecordAccessPolicy) is readable, and the foreign read is
+     * accounted. The list showed hospital B's episode at A, and its partograph
+     * and delivery then answered 404. Writes stay on {@link #loadEpisode}: the
+     * acting hospital's own episodes only.
+     */
+    private LaborEpisode loadEpisodeForRead(UUID patientId, UUID episodeId, UUID hospitalId) {
+        if (hospitalId == null) {
+            return loadEpisode(patientId, episodeId, null);
+        }
+        java.util.Optional<LaborEpisode> own = episodeRepository.findByIdAndHospital_Id(episodeId, hospitalId);
+        if (own.isPresent()) {
+            return loadEpisode(patientId, episodeId, hospitalId);
+        }
+        Objects.requireNonNull(patientId, PATIENT_ID_REQUIRED);
+        UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        LaborEpisode episode = episodeRepository.findById(episodeId)
+            .filter(e -> e.getPatient() != null && patientId.equals(e.getPatient().getId()))
+            .filter(e -> e.getHospital() != null && readable != null && readable.contains(e.getHospital().getId()))
+            .orElseThrow(() -> new ResourceNotFoundException("labor.episode.notFound", episodeId));
+        reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(
+                java.util.Collections.singletonList(CrossHospitalReachRecorder.hospitalIdOf(episode.getHospital())),
+                hospitalId),
+            "Cross-hospital labour episode read on the treatment relationship");
+        return episode;
+    }
 
     private LaborEpisode loadEpisode(UUID patientId, UUID episodeId, UUID hospitalId) {
         Objects.requireNonNull(patientId, PATIENT_ID_REQUIRED);

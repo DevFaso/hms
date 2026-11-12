@@ -78,6 +78,7 @@ class LaborServiceImplTest {
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.repository.PostpartumCarePlanRepository postpartumCarePlanRepository;
     @Mock private com.example.hms.service.DeliveryChargeService deliveryChargeService;
+    @Mock private com.example.hms.service.AuditEventLogService auditEventLogService;
 
     private LaborServiceImpl service;
 
@@ -98,7 +99,7 @@ class LaborServiceImplTest {
             maternalHistoryRepository, staffRepository, userRepository,
             notificationService, new LaborMapper(), recordAccessPolicy, reachRecorder,
             TestMessageSources.bundles(), postpartumCarePlanRepository, deliveryChargeService,
-            obstetricAlertEscalation, new com.example.hms.mapper.MaternalHistoryMapper());
+            obstetricAlertEscalation, new com.example.hms.mapper.MaternalHistoryMapper(), auditEventLogService);
 
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -208,6 +209,72 @@ class LaborServiceImplTest {
         assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("active labor episode");
+    }
+
+    /** QA D1631: one woman, one active labour, whichever hospital opened it. */
+    @Test
+    void startEpisodeRefusesWhileSheIsInLabourAtAnotherHospital() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        other.setName("Hôpital B");
+        LaborEpisode atB = LaborEpisode.builder().patient(patient).hospital(other).status(LaborStatus.ACTIVE)
+            .admittedAt(LocalDateTime.now().minusHours(3)).build();
+        atB.setId(UUID.randomUUID());
+        when(episodeRepository.findFirstByPatient_IdAndStatusOrderByAdmittedAtDesc(patientId, LaborStatus.ACTIVE))
+            .thenReturn(Optional.of(atB));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).gestationalAgeWeeks(39).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                .isEqualTo("maternity.labor.alreadyActiveElsewhere"))
+            .satisfies(e -> assertThat(((BusinessException) e).getArgs()).containsExactly("Hôpital B"));
+        ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType())
+            .isEqualTo(com.example.hms.enums.AuditEventType.LABOR_EPISODE_START_REFUSED);
+        assertThat(audit.getValue().getPatientId()).isEqualTo(patientId);
+        assertThat(audit.getValue().getHospitalId()).isEqualTo(hospitalId);
+        verify(episodeRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    /** QA D1631: the partograph of an episode the list shows from a readable hospital is readable too. */
+    @Test
+    void getEntriesReadsAForeignEpisodeTheListShows() {
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        LaborEpisode atB = LaborEpisode.builder().patient(patient).hospital(other).status(LaborStatus.ACTIVE)
+            .admittedAt(LocalDateTime.now().minusHours(3)).build();
+        UUID foreignId = UUID.randomUUID();
+        atB.setId(foreignId);
+        when(episodeRepository.findByIdAndHospital_Id(foreignId, hospitalId)).thenReturn(Optional.empty());
+        when(episodeRepository.findById(foreignId)).thenReturn(Optional.of(atB));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(entryRepository.findByEpisode_IdOrderByObservationTimeAsc(foreignId)).thenReturn(List.of());
+
+        assertThat(service.getEntries(patientId, foreignId, hospitalId)).isEmpty();
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void getEntriesOfAnUnreadableForeignEpisodeIsNotFound() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        LaborEpisode atB = LaborEpisode.builder().patient(patient).hospital(other).status(LaborStatus.ACTIVE).build();
+        UUID foreignId = UUID.randomUUID();
+        atB.setId(foreignId);
+        when(episodeRepository.findByIdAndHospital_Id(foreignId, hospitalId)).thenReturn(Optional.empty());
+        when(episodeRepository.findById(foreignId)).thenReturn(Optional.of(atB));
+
+        assertThatThrownBy(() -> service.getEntries(patientId, foreignId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test

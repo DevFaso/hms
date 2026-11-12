@@ -102,6 +102,8 @@ export interface PostpartumObservationResponse {
   id: string;
   patientId: string;
   hospitalId?: string;
+  /** QA D1631: the hospital that recorded it, named when it is not this one. */
+  hospitalName?: string | null;
   carePlanId?: string;
   observationTime?: string;
   documentedAt?: string;
@@ -201,6 +203,8 @@ export interface NewbornAssessmentResponse {
   id: string;
   patientId: string;
   hospitalId?: string;
+  /** QA D1631: the hospital that recorded it, named when it is not this one. */
+  hospitalName?: string | null;
   deliveryRecordId?: string | null;
   assessmentTime?: string;
   documentedAt?: string;

@@ -345,12 +345,32 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         // QA D521/D533: no usable assignment, but the emitter named the hospital
         // the action happened at. Anchor on the actor's own active assignment
         // there, so the row reaches that hospital's audit log with its name.
+        // QA D1632: of the actor's assignments there, the one of the role they
+        // act under (the role the emitter named, else the request's token when
+        // it is the actor's own), not the first active row.
         if (assignment == null && user != null && requestDTO.getHospitalId() != null) {
-            assignment = assignmentRepository
-                .findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), requestDTO.getHospitalId())
+            assignment = com.example.hms.security.audit.ActingAssignments
+                .resolve(assignmentRepository, user.getId(), requestDTO.getHospitalId(), actingRolesOf(requestDTO, user))
                 .orElse(null);
         }
         return assignment;
+    }
+
+    /**
+     * The roles the actor is acting under: the one the emitter named, else the
+     * current request's own roles when the request is the actor's (a job or
+     * another user's request says nothing about this actor's role).
+     */
+    private static List<String> actingRolesOf(AuditEventRequestDTO requestDTO, User user) {
+        if (requestDTO.getRoleName() != null && !requestDTO.getRoleName().isBlank()) {
+            return List.of(requestDTO.getRoleName());
+        }
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || user.getUsername() == null || !user.getUsername().equalsIgnoreCase(auth.getName())) {
+            return List.of();
+        }
+        return com.example.hms.security.audit.ActingAssignments.actingRoles(auth);
     }
 
     private String resolveHospitalName(AuditEventRequestDTO requestDTO, UserRoleHospitalAssignment assignment) {

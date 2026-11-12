@@ -567,6 +567,16 @@ export class PostpartumTabComponent {
     }
   }
 
+  /**
+   * QA D1631, the shared-patient read-only idiom (#1103): a row another
+   * hospital recorded is named as theirs. Judged against the hospital the
+   * requests are pinned to; in global view nothing is "elsewhere".
+   */
+  isForeign(record: { hospitalId?: string | null }): boolean {
+    const scope = this.roleContext.effectiveHospitalIdForRequest();
+    return !!record.hospitalId && !!scope && record.hospitalId !== scope;
+  }
+
   private actingHospitalId(): string | undefined {
     return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? undefined;
   }

@@ -49,6 +49,7 @@ public class PostpartumObservationMapper {
             .id(observation.getId())
             .patientId(observation.getPatient() != null ? observation.getPatient().getId() : null)
             .hospitalId(observation.getHospital() != null ? observation.getHospital().getId() : null)
+            .hospitalName(observation.getHospital() != null ? observation.getHospital().getName() : null)
             .carePlanId(effectivePlan != null ? effectivePlan.getId() : null)
             .observationTime(observation.getObservationTime())
             .documentedAt(observation.getDocumentedAt())

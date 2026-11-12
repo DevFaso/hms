@@ -22,6 +22,9 @@ public interface LaborEpisodeRepository extends JpaRepository<LaborEpisode, UUID
      */
     boolean existsByPatient_IdAndStatus(UUID patientId, LaborStatus status);
 
+    /** QA D1631: her newest episode of this status at any hospital (one woman, one active labour). */
+    Optional<LaborEpisode> findFirstByPatient_IdAndStatusOrderByAdmittedAtDesc(UUID patientId, LaborStatus status);
+
     List<LaborEpisode> findByPatient_IdAndHospital_IdOrderByAdmittedAtDesc(
         UUID patientId, UUID hospitalId, Pageable pageable);
 

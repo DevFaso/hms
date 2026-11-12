@@ -299,11 +299,11 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     private void emitDocumentAudit(UUID hospitalId, UUID patientId, StaffReach reach,
                                    PatientUploadedDocument doc, String what) {
         try {
-            UUID actorId = authUtils.resolveUserId(SecurityContextHolder.getContext().getAuthentication())
-                    .orElse(null);
-            UserRoleHospitalAssignment assignment = actorId == null ? null
-                    : assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actorId, hospitalId)
-                            .orElse(null);
+            var auth = SecurityContextHolder.getContext().getAuthentication();
+            UUID actorId = authUtils.resolveUserId(auth).orElse(null);
+            // QA D1632: the assignment of the role the token acts under.
+            UserRoleHospitalAssignment assignment = com.example.hms.security.audit.ActingAssignments
+                    .resolve(assignmentRepository, actorId, hospitalId, auth).orElse(null);
             String description = reach.breakGlassSessionId() == null ? what
                     : what + " under break-the-glass session " + reach.breakGlassSessionId();
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()

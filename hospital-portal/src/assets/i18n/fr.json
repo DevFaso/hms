@@ -153,6 +153,10 @@
   "LABOR": {
     "ACTION_LINE": "Ligne d'action",
     "ACTIVE_EPISODE": "Travail en cours",
+    "FOREIGN": {
+      "ORIGIN": "Travail en cours à {{hospital}}, lecture seule ici",
+      "HINT": "Ce travail est suivi par l’hôpital où il a été ouvert. Vous pouvez l’admettre ici pour d’autres soins ; un second épisode de travail ne peut pas être ouvert tant que celui-ci est en cours."
+    },
     "ACTIVE_PHASE_SINCE": "Phase active depuis",
     "ADMITTED": "Admise",
     "ALERTS": "Alertes",
@@ -1273,6 +1277,7 @@
     "ADMISSION_NOTES": "Notes d'admission",
     "ADMISSION_TYPE": "Type d'admission",
     "ADMITTED": "Admis",
+    "ADMITTING_CLINICIAN": "Soignant responsable de l’admission",
     "ADMITTING_PROVIDER": "Médecin responsable de l'admission",
     "ADMIT_DATE": "Date d'admission",
     "ADMIT_PATIENT": "Admettre un patient",
@@ -1334,6 +1339,7 @@
     "SEARCH": "Rechercher des admissions…",
     "SELECT_BED": "Sélectionner un lit",
     "SELECT_HOSPITAL_FIRST": "Sélectionnez d'abord un hôpital",
+    "SELECT_CLINICIAN": "Sélectionner le soignant",
     "SELECT_PROVIDER": "Sélectionner le médecin",
     "SUBTITLE": "Gérer les admissions hospitalières",
     "TITLE": "Admissions",
@@ -1865,6 +1871,7 @@
       "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} annulé sur la facture {{invoice}}, motif enregistré",
       "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Règle obstétricale non appliquée pour une échographie en urgence",
       "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Règle obstétricale non appliquée pour une orientation gynéco-obstétricale en urgence",
+      "LABOR_EPISODE_START_REFUSED": "Ouverture d’un épisode de travail refusée : un épisode de travail est en cours dans un autre hôpital",
       "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Exception à la règle obstétricale levée sur une échographie",
       "ALLERGY_ACKNOWLEDGED": "Allergie reconnue avec un motif",
       "ALLERGY_PASSED_UNDER_REVIEW": "Conflit allergique franchi selon la revue du prescripteur",
@@ -6607,6 +6614,7 @@
         "PROVIDER_VERIFIED": "Prestataire vérifié",
         "EMERGENCY_BLOOD_RELEASED": "Sang délivré en urgence sans épreuve de compatibilité",
         "OBSTETRIC_RULE_SKIPPED_EMERGENCY": "Règle obstétricale non appliquée en urgence",
+        "LABOR_EPISODE_START_REFUSED": "Ouverture d’un épisode de travail refusée",
         "PRO_ALERT_ACKNOWLEDGED": "Alerte PRO acquittée",
         "PRO_INSTRUMENT_IMPORTED": "Questionnaire PRO importé",
         "PRO_RESPONSE_RECORDED": "Réponse PRO enregistrée",
@@ -10645,6 +10653,7 @@
     "SOCIAL_EMPTY": "Saisissez au moins un élément (habitudes, profession, conditions de vie ou notes) avant d'enregistrer une nouvelle version."
   },
   "MATERNITY": {
+    "FOREIGN_RECORDED_AT": "Enregistré à {{hospital}}, lecture seule ici",
     "GA": "Terme",
     "GA_SHORT": "{{weeks}} SA {{days}} j",
     "GA_TODAY": "Terme aujourd'hui : {{weeks}} SA {{days}} j",

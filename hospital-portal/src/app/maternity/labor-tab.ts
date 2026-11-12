@@ -27,6 +27,7 @@ import {
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
+import { RoleContextService } from '../core/role-context.service';
 import { labelledRefusalReason, refusedFieldReasons } from '../shared/refusal-reason';
 import { FieldLimit, firstOutOfRange, labelKeysOf, rangeMessage } from '../shared/field-limits';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
@@ -183,6 +184,7 @@ export class LaborTabComponent {
   private readonly laborService = inject(LaborService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly roleContext = inject(RoleContextService);
 
   patient = signal<PatientResponse | null>(null);
   episodes = signal<LaborEpisodeResponse[]>([]);
@@ -197,6 +199,25 @@ export class LaborTabComponent {
   );
   /** Newest episode of any status — drives the delivered-summary view. */
   readonly latestEpisode = computed(() => this.episodes()[0] ?? null);
+  /**
+   * QA D1631: the active labour is another hospital's (a shared patient). It
+   * is shown read only, named, with no record button: the server refuses
+   * every write on it, and a second labour while it is open.
+   */
+  readonly activeEpisodeForeign = computed(() => {
+    const episode = this.activeEpisode();
+    return !!episode && this.isForeign(episode);
+  });
+
+  /**
+   * QA D1631, the shared-patient read-only idiom (#1103): a record another
+   * hospital owns is read only here. Judged against the hospital the requests
+   * are pinned to; in global view (no scope) nothing is "elsewhere".
+   */
+  isForeign(record: { hospitalId?: string | null }): boolean {
+    const scope = this.roleContext.effectiveHospitalIdForRequest();
+    return !!record.hospitalId && !!scope && record.hospitalId !== scope;
+  }
 
   /* ── Forms ─────────────────────────────────────────────── */
   startFormOpen = signal(false);

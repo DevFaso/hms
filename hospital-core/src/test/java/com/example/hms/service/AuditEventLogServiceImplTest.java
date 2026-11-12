@@ -114,8 +114,8 @@ class AuditEventLogServiceImplTest {
         UserRoleHospitalAssignment registrarRow = assignmentOf(registrar, hospitalA, "Hopital A");
         when(userRepository.findById(registrar.getId())).thenReturn(Optional.of(registrar));
         when(assignmentRepository.findById(assigneeRow.getId())).thenReturn(Optional.of(assigneeRow));
-        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(registrar.getId(), hospitalA))
-            .thenReturn(Optional.of(registrarRow));
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(registrar.getId(), hospitalA))
+            .thenReturn(java.util.List.of(registrarRow));
         when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
 
@@ -147,8 +147,8 @@ class AuditEventLogServiceImplTest {
         registrarRow.setRole(admin);
         when(userRepository.findById(registrar.getId())).thenReturn(Optional.of(registrar));
         when(assignmentRepository.findById(assigneeRow.getId())).thenReturn(Optional.of(assigneeRow));
-        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(registrar.getId(), hospitalA))
-            .thenReturn(Optional.of(registrarRow));
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(registrar.getId(), hospitalA))
+            .thenReturn(java.util.List.of(registrarRow));
         when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
 
@@ -169,8 +169,8 @@ class AuditEventLogServiceImplTest {
         UUID hospitalA = UUID.randomUUID();
         UserRoleHospitalAssignment row = assignmentOf(receptionist, hospitalA, "Hopital A");
         when(userRepository.findById(receptionist.getId())).thenReturn(Optional.of(receptionist));
-        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(receptionist.getId(), hospitalA))
-            .thenReturn(Optional.of(row));
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(receptionist.getId(), hospitalA))
+            .thenReturn(java.util.List.of(row));
         when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
 
@@ -196,7 +196,7 @@ class AuditEventLogServiceImplTest {
 
         auditService.logEvent(buildNormalRequest(actor.getId()));
 
-        verify(assignmentRepository, never()).findFirstByUser_IdAndHospital_IdAndActiveTrue(any(), any());
+        verify(assignmentRepository, never()).findAllByUser_IdAndHospital_IdAndActiveTrue(any(), any());
     }
 
     // ─── Non-fatal behaviour ──────────────────────────────────────────
@@ -287,8 +287,8 @@ class AuditEventLogServiceImplTest {
         actor.setId(UUID.randomUUID());
         UUID hospitalB = UUID.randomUUID();
         when(userRepository.findById(actor.getId())).thenReturn(Optional.of(actor));
-        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actor.getId(), hospitalB))
-            .thenReturn(Optional.empty());
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(actor.getId(), hospitalB))
+            .thenReturn(java.util.List.of());
         when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
 

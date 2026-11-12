@@ -575,8 +575,8 @@ class PatientDocumentServiceImplTest {
             UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
             assignment.setId(UUID.randomUUID());
             assignment.setRole(nurse);
-            when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(staffId, hospitalId))
-                    .thenReturn(Optional.of(assignment));
+            when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(staffId, hospitalId))
+                    .thenReturn(java.util.List.of(assignment));
             PatientUploadedDocument doc = PatientUploadedDocument.builder()
                     .patient(patient)
                     .documentType(PatientDocumentType.LAB_RESULT)
@@ -620,8 +620,8 @@ class PatientDocumentServiceImplTest {
         @DisplayName("a super-admin scoped by header has no assignment at the hospital — the row still carries the hospital")
         void downloadBySuperAdminAuditsHospitalWithoutAssignment() {
             registered();
-            when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(staffId, hospitalId))
-                    .thenReturn(Optional.empty());
+            when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(staffId, hospitalId))
+                    .thenReturn(java.util.List.of());
             PatientUploadedDocument doc = PatientUploadedDocument.builder()
                     .patient(patient).documentType(PatientDocumentType.OTHER).filePath("/uploads/patient-documents/z.pdf")
                     .build();

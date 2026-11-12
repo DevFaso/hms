@@ -135,6 +135,15 @@ export class AdmissionsComponent implements OnInit {
     // rbac-inline-ok: narrows the form's choices; the admit permission itself is admissionCreate
     () => this.canAdmit() && !this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']),
   );
+  /**
+   * QA D1634: the admitting-provider field's words. A midwife admitting is not
+   * a "Médecin / Médico"; the label and the empty option are neutral then.
+   */
+  protected readonly admittingProviderKeys = computed(() =>
+    this.midwifeAdmitsLabourOnly()
+      ? { label: 'ADMISSIONS.ADMITTING_CLINICIAN', select: 'ADMISSIONS.SELECT_CLINICIAN' }
+      : { label: 'ADMISSIONS.ADMITTING_PROVIDER', select: 'ADMISSIONS.SELECT_PROVIDER' },
+  );
   protected readonly canEditAdmission = computed(() => this.can('admissionUpdate'));
   protected readonly canApplyOrderSets = computed(() => this.can('admissionApplyOrderSets'));
   protected readonly canAssignBed = computed(() => this.can('admissionAssignBed'));

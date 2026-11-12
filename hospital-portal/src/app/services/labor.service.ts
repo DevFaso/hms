@@ -48,6 +48,8 @@ export interface LaborEpisodeResponse {
   patientId: string;
   patientName: string;
   hospitalId: string;
+  /** QA D1631: the hospital that owns the episode; another hospital shows it read only. */
+  hospitalName?: string | null;
   registrationId: string | null;
   maternalHistoryId: string | null;
   admittedByStaffName: string | null;
