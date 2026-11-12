@@ -80,6 +80,7 @@ class LaborServiceImplTest {
     @Mock private com.example.hms.repository.PostpartumCarePlanRepository postpartumCarePlanRepository;
     @Mock private com.example.hms.service.DeliveryChargeService deliveryChargeService;
     @Mock private com.example.hms.service.AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.service.maternity.NewbornRegistrationService newbornRegistration;
 
     private LaborServiceImpl service;
 
@@ -100,7 +101,8 @@ class LaborServiceImplTest {
             maternalHistoryRepository, staffRepository, userRepository,
             notificationService, new LaborMapper(), recordAccessPolicy, reachRecorder,
             TestMessageSources.bundles(), postpartumCarePlanRepository, deliveryChargeService,
-            obstetricAlertEscalation, new com.example.hms.mapper.MaternalHistoryMapper(), auditEventLogService);
+            obstetricAlertEscalation, new com.example.hms.mapper.MaternalHistoryMapper(), auditEventLogService,
+            newbornRegistration);
 
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -676,6 +678,38 @@ class LaborServiceImplTest {
         ArgumentCaptor<DeliveryRecord> saved = ArgumentCaptor.forClass(DeliveryRecord.class);
         verify(deliveryRecordRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
         assertThat(saved.getValue().isBirthTimeStated()).isTrue();
+    }
+
+    /** QA D1592: recording a birth registers its live-born babies, and the response lists them. */
+    @Test
+    void recordDeliveryRegistersTheLiveBornBabies() {
+        var baby = com.example.hms.payload.dto.clinical.labor.DeliveryNewbornDTO.builder()
+            .patientId(UUID.randomUUID()).displayName("Bébé Traore").mrn("MRN-1").birthOrder(1).build();
+        when(newbornRegistration.registerLiveBorn(any(DeliveryRecord.class), org.mockito.ArgumentMatchers.eq(recorderUserId)))
+            .thenReturn(List.of(baby));
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        verify(newbornRegistration).registerLiveBorn(
+            org.mockito.ArgumentMatchers.argThat(d -> d.getPatient() == patient && d.getHospital() == hospital),
+            org.mockito.ArgumentMatchers.eq(recorderUserId));
+        assertThat(response.getNewborns()).containsExactly(baby);
+    }
+
+    /** QA D1592: reading the delivery back lists the babies it registered. */
+    @Test
+    void getDeliveryListsTheRegisteredBabies() {
+        DeliveryRecord record = DeliveryRecord.builder().episode(episode).patient(patient).hospital(hospital)
+            .birthDateTime(java.time.LocalDateTime.now()).deliveryMode(DeliveryMode.SPONTANEOUS_VAGINAL).build();
+        record.setId(UUID.randomUUID());
+        when(deliveryRecordRepository.findByEpisode_Id(episodeId)).thenReturn(Optional.of(record));
+        var baby = com.example.hms.payload.dto.clinical.labor.DeliveryNewbornDTO.builder()
+            .patientId(UUID.randomUUID()).birthOrder(1).build();
+        when(newbornRegistration.newbornsOf(record)).thenReturn(List.of(baby));
+
+        var response = service.getDelivery(patientId, episodeId, hospitalId);
+
+        assertThat(response.getNewborns()).containsExactly(baby);
     }
 
     /** QA D516: recording a birth posts its charge, filed by the recorder. */

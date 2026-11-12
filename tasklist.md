@@ -6467,3 +6467,11 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **D1652, checkout follow-up text:** the checkout's follow-up instructions are merged with the signed note and silently cut to 3000 characters on the discharge summary (`CheckOutMapper.STORED_FOLLOW_UP_MAX`); the merged length is not refused or announced.
 - **D1652, checkout diagnoses:** the checkout's diagnosis list is joined into the 5000-character summary diagnosis with no size check on the list.
 - **D1652, silent truncation helper:** `EncounterServiceImpl.keepIfGiven` still truncates any caller past the column; the checkout dialog now refuses first, other callers (the synthetic checkout) do not.
+
+## Standing debt — newborn registration from a delivery (feat/d1592-newborn-registration)
+
+- **D1592, desk registration of a baby born today:** the reception form still refuses a birth date of today (`PatientIdentityRules.birthDateProblem`, "must be in the past"); only the delivery path accepts today. Decide whether the desk should too.
+- **D1592, multiple births:** the delivery record carries one sex, weight and Apgar (the first baby's); twins after the first are registered with sex unknown. Per-infant birth facts need their own fields.
+- **D1592, live birth of a multiple birth with a stillborn twin:** the record has one `liveBirth` flag for the whole delivery, so it cannot say "one live, one stillborn"; today every infant counted is registered.
+- **D1592, delivery edit:** there is no edit path for a delivery record; when one is added, it must call `NewbornRegistrationService.registerLiveBorn` (the guard enforces it) so a lowered count is flagged for review, never deleted.
+- **D1592, earlier births:** deliveries recorded before this change registered no baby; there is no backfill.

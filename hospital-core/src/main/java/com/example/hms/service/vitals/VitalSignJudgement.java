@@ -65,6 +65,8 @@ public class VitalSignJudgement {
     private final News2EscalationService news2EscalationService;
     private final NotificationService notificationService;
     private final MessageSource messageSource;
+    /** QA D1592: a baby registered from a delivery knows its birth before any assessment is recorded. */
+    private final com.example.hms.repository.DeliveryNewbornRepository deliveryNewbornRepository;
 
     /** What the judgement found: whether the newborn rules applied, and their findings. */
     public record Judgement(boolean newborn, List<NewbornAlertRules.Finding> newbornFindings) {
@@ -191,6 +193,10 @@ public class VitalSignJudgement {
                 patient.getId(), hospitalId);
         return birth
             .map(NewbornAssessment::getDeliveryRecord)
+            .or(() -> deliveryNewbornRepository.findByNewbornPatient_Id(patient.getId())
+                .filter(link -> hospitalId == null
+                    || (link.getHospital() != null && hospitalId.equals(link.getHospital().getId())))
+                .map(com.example.hms.model.labor.DeliveryNewborn::getDeliveryRecord))
             .map(DeliveryRecord::getGestationalAgeWeeksAtBirth)
             .filter(weeks -> weeks < NewbornAlertRules.PRETERM_BELOW_WEEKS)
             .isPresent();

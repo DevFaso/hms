@@ -185,7 +185,8 @@ class NurseTaskServiceImplTest {
             fiveRightsService, objectMapper, new com.example.hms.service.vitals.VitalSignJudgement(
             org.mockito.Mockito.mock(com.example.hms.repository.NewbornAssessmentRepository.class), news2EscalationService,
             org.mockito.Mockito.mock(com.example.hms.service.NotificationService.class),
-            com.example.hms.i18n.TestMessageSources.bundles()),
+            com.example.hms.i18n.TestMessageSources.bundles(),
+            org.mockito.Mockito.mock(com.example.hms.repository.DeliveryNewbornRepository.class)),
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
             assignmentRepository, patientAllergyRepository, administrationWitness, notificationLocalizer, marWardReader));
 
@@ -3859,7 +3860,8 @@ class NurseTaskServiceImplTest {
             fiveRightsService, failingMapper, new com.example.hms.service.vitals.VitalSignJudgement(
             org.mockito.Mockito.mock(com.example.hms.repository.NewbornAssessmentRepository.class), news2EscalationService,
             org.mockito.Mockito.mock(com.example.hms.service.NotificationService.class),
-            com.example.hms.i18n.TestMessageSources.bundles()),
+            com.example.hms.i18n.TestMessageSources.bundles(),
+            org.mockito.Mockito.mock(com.example.hms.repository.DeliveryNewbornRepository.class)),
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
             assignmentRepository, patientAllergyRepository, administrationWitness, notificationLocalizer, marWardReader);
 

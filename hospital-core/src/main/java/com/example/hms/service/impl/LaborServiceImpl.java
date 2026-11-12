@@ -181,6 +181,8 @@ public class LaborServiceImpl implements LaborService {
     private final com.example.hms.mapper.MaternalHistoryMapper maternalHistoryMapper;
     /** QA D1631: a start refused because she is in labour at another hospital is audited. */
     private final com.example.hms.service.AuditEventLogService auditEventLogService;
+    /** QA D1592: every live-born baby of a recorded delivery is registered as its own patient. */
+    private final com.example.hms.service.maternity.NewbornRegistrationService newbornRegistration;
 
     /* ═══════════════════════ Episodes ═══════════════════════ */
 
@@ -612,11 +614,16 @@ public class LaborServiceImpl implements LaborService {
         episodeRepository.save(episode);
 
         DeliveryRecord saved = deliveryRecordRepository.save(record);
+        // QA D1592: in the delivery's transaction - a birth and its babies are one fact.
+        List<com.example.hms.payload.dto.clinical.labor.DeliveryNewbornDTO> newborns =
+            newbornRegistration.registerLiveBorn(saved, recorderUserId);
         chargeDelivery(saved, recorderUserId);
         closeEarlierPostpartumPlans(episode, birthAt);
         publishUrgentAlerts(saved.getAlerts(), episode, documentedBy,
             com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_DELIVERY, saved.getId());
-        return laborMapper.toDeliveryResponse(saved);
+        DeliveryRecordResponseDTO response = laborMapper.toDeliveryResponse(saved);
+        response.setNewborns(newborns);
+        return response;
     }
 
     /**
@@ -677,7 +684,9 @@ public class LaborServiceImpl implements LaborService {
         LaborEpisode episode = loadEpisodeForRead(patientId, episodeId, hospitalId);
         DeliveryRecord record = deliveryRecordRepository.findByEpisode_Id(episode.getId())
             .orElseThrow(() -> new ResourceNotFoundException("labor.deliveryRecord.notFoundForEpisode", episodeId));
-        return laborMapper.toDeliveryResponse(record);
+        DeliveryRecordResponseDTO response = laborMapper.toDeliveryResponse(record);
+        response.setNewborns(newbornRegistration.newbornsOf(record));
+        return response;
     }
 
     /* ═══════════════════════ Alert evaluators ═══════════════════════ */
