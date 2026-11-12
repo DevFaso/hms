@@ -602,7 +602,7 @@ describe('PatientDetailComponent', () => {
       roles.includes('ROLE_PHARMACIST'),
     );
     expect(component.canViewDocuments()).toBeFalse();
-    for (const role of ['ROLE_RECEPTIONIST', 'ROLE_BILLING_SPECIALIST']) {
+    for (const role of ['ROLE_RECEPTIONIST']) {
       roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) => roles.includes(role));
       expect(component.canViewDocuments()).withContext(role).toBeTrue();
       expect(component.documentsInsuranceOnly()).withContext(role).toBeTrue();

@@ -741,8 +741,8 @@ export class PatientDetailComponent implements OnInit {
     'ROLE_SUPER_ADMIN',
   ];
 
-  /** QA D1599: the front desk and billing open insurance papers only (ACCESS_ROLES minus the above). */
-  static readonly DOCUMENT_INSURANCE_ROLES = ['ROLE_RECEPTIONIST', 'ROLE_BILLING_SPECIALIST'];
+  /** QA D1599: the front desk opens insurance papers only (ACCESS_ROLES minus the above). */
+  static readonly DOCUMENT_INSURANCE_ROLES = ['ROLE_RECEPTIONIST'];
 
   canViewDocuments(): boolean {
     return this.roleContext.hasAnyActiveRole([

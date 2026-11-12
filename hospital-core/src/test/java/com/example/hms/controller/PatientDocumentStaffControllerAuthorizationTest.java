@@ -44,7 +44,7 @@ class PatientDocumentStaffControllerAuthorizationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"ROLE_PATIENT", "ROLE_LAB_SCIENTIST", "ROLE_LAB_TECHNICIAN", "ROLE_ACCOUNTANT",
-        "ROLE_PHARMACIST"}) // QA D112
+        "ROLE_PHARMACIST", "ROLE_BILLING_SPECIALIST"}) // QA D112
     void otherRolesMayNot(String role) {
         Set<String> granted = grantedRoles();
         assertThat(granted).isNotEmpty().doesNotContain(role);
@@ -52,7 +52,7 @@ class PatientDocumentStaffControllerAuthorizationTest {
 
     /** QA D1599: reception and billing are admitted, and the service narrows them to insurance. */
     @ParameterizedTest
-    @ValueSource(strings = {"ROLE_RECEPTIONIST", "ROLE_BILLING_SPECIALIST"})
+    @ValueSource(strings = {"ROLE_RECEPTIONIST"})
     void frontDeskIsAdmittedButNeverAsAClinicalReader(String role) {
         assertThat(grantedRoles()).contains(role);
         assertThat(rolesIn(PatientDocumentStaffController.READ_ROLES)).doesNotContain(role);

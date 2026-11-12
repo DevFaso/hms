@@ -439,7 +439,7 @@ class PatientDocumentServiceImplTest {
         }
 
         @org.junit.jupiter.params.ParameterizedTest
-        @org.junit.jupiter.params.provider.ValueSource(strings = {"ROLE_RECEPTIONIST", "ROLE_BILLING_SPECIALIST"})
+        @org.junit.jupiter.params.provider.ValueSource(strings = {"ROLE_RECEPTIONIST"})
         @DisplayName("QA D1599: the front desk opens and downloads an insurance document, audited")
         void frontDeskOpensInsurance(String role) {
             as(role);

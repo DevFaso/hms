@@ -64,13 +64,13 @@ public class PatientDocumentStaffController {
         + "'ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
 
     /**
-     * QA D1599: the front desk and billing (insurance claims) are admitted too, but the service
+     * QA D1599: the front desk is admitted too (billing is not: the /patients/** matcher refuses it), but the service
      * narrows them to the INSURANCE_DOCUMENT type; every other type reads as missing for them.
      */
     static final String ACCESS_ROLES = "hasAnyAuthority("
         + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
         + "'ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN',"
-        + "'ROLE_RECEPTIONIST','ROLE_BILLING_SPECIALIST')";
+        + "'ROLE_RECEPTIONIST')";
 
     private final PatientDocumentService documentService;
     private final RoleValidator roleValidator;
