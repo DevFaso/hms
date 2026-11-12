@@ -2205,6 +2205,9 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **C14 instrument outbox concurrency follow-up (PR #1125; inspected `8adc229e`, `hospital-core/src/main/java/com/example/hms/repository/InstrumentOutboxRepository.java:56`, `service/integration/InstrumentOutboxDispatchService.java:54`, `service/scheduled/InstrumentOutboxDispatchScheduler.java:30` under the same package).** `InstrumentOutboxRepository.findDispatchable` has no row claim/lock; `InstrumentOutboxDispatchService.dispatchPending` sends before persisting ACK. The scheduled caller has ShedLock (`InstrumentOutboxDispatchScheduler.dispatch`), so duplicate sends are not established for ordinary overlapping scheduler ticks. Determine the reachable concurrency/lock-expiry cases and verify durable claim/ACK behavior before closing C8's full-flow gap. No runtime correction is made by the documentation audit.
+- **C14 integration replay follow-up (PR #1125; inspected `8adc229e`, `hospital-core/src/main/java/com/example/hms/service/impl/SuperAdminIntegrationMessageServiceImpl.java:87`).** `SuperAdminIntegrationMessageServiceImpl.replay` deliberately records a symbolic REPLAYED history row for a FAILED original; it neither resends through a connector nor transitions the original to prevent repeated requests. Define and test connector resend and original-request idempotence before treating C9 as real delivery evidence. Existing behavior is recorded as a capability gap, not a newly introduced regression.
+
 - **QA round 19 residuals (fix/r19-scheduling-frontdesk-billing).**
   (1) D1093: the two native patient apps (`patient-android-app`, `patient-ios-app`) book and reschedule
   through the same endpoints with a free time; the server now refuses any time that is not a published,
