@@ -6,6 +6,7 @@ import com.example.hms.service.SmsService;
 import com.example.hms.service.integration.IkoddiGateway;
 import com.example.hms.service.integration.IkoddiGatewayImpl;
 import com.example.hms.service.integration.OrangeSmsGatewayImpl;
+import com.example.hms.service.integration.SmsRecipientAllowlist;
 import com.example.hms.testsupport.SourceScan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Orange is the SMS provider unless {@code app.sms.provider=ikoddi}, and there
@@ -118,5 +120,71 @@ class SmsProviderSelectionGuardTest {
             });
         runner.withPropertyValues("app.sms.provider=IKODDI", "app.ikoddi.enabled=true")
             .run(context -> assertThat(context.getBean(SmsService.class)).isInstanceOf(IkoddiSmsServiceImpl.class));
+    }
+
+    /** The body of {@code signature}'s method in {@code source}, or null when absent. */
+    private static String body(String source, String signature) {
+        int at = source.indexOf(signature);
+        if (at < 0) {
+            return null;
+        }
+        int open = source.indexOf('{', at);
+        return source.substring(open, SourceScan.closingBrace(source, open));
+    }
+
+    @Test
+    @DisplayName("every SMS gateway checks the recipient allowlist in each paid send method")
+    void everyGatewayChecksTheAllowlist() throws IOException {
+        List<String> gateways = new ArrayList<>();
+        List<String> offenders = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
+                String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+                if (!code.contains("implements IkoddiGateway")) {
+                    continue;
+                }
+                String name = file.getFileName().toString();
+                gateways.add(name);
+                String sms = body(code, "public SmsDispatch sendSms(");
+                if (sms == null || !sms.contains("allowlist.permits(")) {
+                    offenders.add(name + "#sendSms");
+                }
+                String otp = body(code, "public OtpDispatch sendOtp(");
+                if (otp == null || !(otp.contains("allowlist.permits(") || otp.contains("UnsupportedOperationException"))) {
+                    offenders.add(name + "#sendOtp");
+                }
+            }
+        }
+        assertThat(gateways).as("the scan must find the gateways")
+            .contains("OrangeSmsGatewayImpl.java", "IkoddiGatewayImpl.java");
+        assertThat(offenders).as("a paid send that skips SMS_RECIPIENT_ALLOWLIST").isEmpty();
+    }
+
+    @Test
+    @DisplayName("SMS_RECIPIENT_ALLOWLIST set: the injected gateway refuses an unlisted number before any request, "
+        + "whichever provider is selected")
+    void allowlistHoldsForEveryProvider() {
+        // An unreachable base URL: if the guard were skipped, the send would fail as unreachable instead.
+        runner.withPropertyValues("app.orange-sms.client-id=id", "app.orange-sms.client-secret=secret",
+                "app.orange-sms.base-url=http://127.0.0.1:1", "app.sms.recipient-allowlist=+22670000001")
+            .run(context -> {
+                IkoddiGateway gateway = context.getBean(IkoddiGateway.class);
+                assertThat(gateway).isInstanceOf(OrangeSmsGatewayImpl.class);
+                assertThatThrownBy(() -> gateway.sendSms(List.of("+22670707070"), "a", null))
+                    .hasMessage(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
+                assertThatThrownBy(() -> context.getBean(SmsService.class).send("+22670707070", "a"))
+                    .hasMessage(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
+            });
+        runner.withPropertyValues("app.sms.provider=ikoddi", "app.ikoddi.enabled=true", "app.ikoddi.api-key=k",
+                "app.ikoddi.organization-id=o", "app.ikoddi.otp-app-id=a", "app.ikoddi.base-url=http://127.0.0.1:1",
+                "app.sms.recipient-allowlist=+22670000001")
+            .run(context -> {
+                IkoddiGateway gateway = context.getBean(IkoddiGateway.class);
+                assertThat(gateway).isInstanceOf(IkoddiGatewayImpl.class);
+                assertThatThrownBy(() -> gateway.sendSms(List.of("+22670707070"), "a", null))
+                    .hasMessage(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
+                assertThatThrownBy(() -> gateway.sendOtp("+22670707070", IkoddiGateway.OtpChannel.SMS))
+                    .hasMessage(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
+            });
     }
 }

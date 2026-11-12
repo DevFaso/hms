@@ -122,6 +122,8 @@ public class OrangeSmsGatewayImpl implements IkoddiGateway {
     private final Clock clock;
     private final LongSupplier nanoTime;
     private final Sleeper sleeper;
+    /** Non-production safety net: when set, only these numbers are texted (see {@link SmsRecipientAllowlist}). */
+    private final SmsRecipientAllowlist allowlist;
 
     private final Object tokenLock = new Object();
     private String accessToken;
@@ -144,10 +146,12 @@ public class OrangeSmsGatewayImpl implements IkoddiGateway {
         @Value("${app.orange-sms.on-net:false}") boolean onNet,
         @Value("${app.ikoddi.country-number-code:226}") String countryNumberCode,
         @Value("${app.orange-sms.connect-timeout-ms:5000}") int connectTimeoutMs,
-        @Value("${app.orange-sms.read-timeout-ms:15000}") int readTimeoutMs
+        @Value("${app.orange-sms.read-timeout-ms:15000}") int readTimeoutMs,
+        @Value("${app.sms.recipient-allowlist:}") String recipientAllowlist
     ) {
         this(legacy, buildClient(restClientBuilder, connectTimeoutMs, readTimeoutMs), baseUrl, clientId, clientSecret,
             new Sender(senderAddress, senderName, onNet), countryNumberCode,
+            SmsRecipientAllowlist.parse(recipientAllowlist, "Orange"),
             Clock.systemUTC(), System::nanoTime, TimeUnit.NANOSECONDS::sleep);
         String selected = provider == null ? "" : provider.trim().toLowerCase(Locale.ROOT);
         if (!selected.isEmpty() && !"orange".equals(selected)) {
@@ -159,8 +163,9 @@ public class OrangeSmsGatewayImpl implements IkoddiGateway {
     @SuppressWarnings("java:S107")
     OrangeSmsGatewayImpl(IkoddiGatewayImpl legacy, RestClient restClient, String baseUrl,
                          String clientId, String clientSecret, Sender sender, String countryNumberCode,
-                         Clock clock, LongSupplier nanoTime, Sleeper sleeper) {
+                         SmsRecipientAllowlist allowlist, Clock clock, LongSupplier nanoTime, Sleeper sleeper) {
         this.legacy = legacy;
+        this.allowlist = allowlist == null ? SmsRecipientAllowlist.unrestricted() : allowlist;
         this.restClient = restClient;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
@@ -243,23 +248,38 @@ public class OrangeSmsGatewayImpl implements IkoddiGateway {
             }
             targets.add(e164);
         }
+        // Recipient allowlist (dev/uat): a number not on it is never sent, whoever the caller is.
+        ArrayNode notAllowlisted = JsonNodeFactory.instance.arrayNode();
+        List<String> allowed = new ArrayList<>(targets.size());
+        for (String target : targets) {
+            if (allowlist.permits(target)) {
+                allowed.add(target);
+            } else {
+                allowlist.logRefused("Orange", target);
+                notAllowlisted.add(mask(target));
+            }
+        }
+        if (allowed.isEmpty()) {
+            throw new IllegalStateException(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
+        }
         ArrayNode accepted = JsonNodeFactory.instance.arrayNode();
-        for (int i = 0; i < targets.size(); i++) {
-            String target = targets.get(i);
+        for (int i = 0; i < allowed.size(); i++) {
+            String target = allowed.get(i);
             try {
                 accepted.add(sendOne(target, message));
             } catch (IllegalStateException ex) {
                 if (i == 0) {
                     throw ex;
                 }
-                int notAttempted = targets.size() - i - 1;
+                int notAttempted = allowed.size() - i - 1;
                 LOG.warn("Orange SMS partial failure: {} of {} recipients accepted, {} failed ({}), {} not attempted. "
                         + "Do not resend the whole batch: the accepted messages were charged.",
-                    i, targets.size(), mask(target), ex.getMessage(), notAttempted);
-                return new SmsDispatch(false, summary(accepted, mask(target), ex.getMessage(), notAttempted));
+                    i, allowed.size(), mask(target), ex.getMessage(), notAttempted);
+                return new SmsDispatch(false,
+                    summary(accepted, notAllowlisted, mask(target), ex.getMessage(), notAttempted));
             }
         }
-        return new SmsDispatch(true, summary(accepted, null, null, 0));
+        return new SmsDispatch(notAllowlisted.isEmpty(), summary(accepted, notAllowlisted, null, null, 0));
     }
 
     /** One paid request. Returns Orange's acceptance record (masked recipient, resource URL). */
@@ -334,10 +354,15 @@ public class OrangeSmsGatewayImpl implements IkoddiGateway {
         return node;
     }
 
-    private static String summary(ArrayNode accepted, String failedRecipient, String failure, int notAttempted) {
+    private static String summary(ArrayNode accepted, ArrayNode notAllowlisted, String failedRecipient,
+                                  String failure, int notAttempted) {
         ObjectNode node = JsonNodeFactory.instance.objectNode();
         node.put("provider", "orange");
         node.set("accepted", accepted);
+        if (!notAllowlisted.isEmpty()) {
+            node.set("notAllowlisted", notAllowlisted);
+            node.put("notAllowlistedReason", SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
+        }
         if (failedRecipient != null) {
             node.put("failedRecipient", failedRecipient);
             node.put("failure", failure);

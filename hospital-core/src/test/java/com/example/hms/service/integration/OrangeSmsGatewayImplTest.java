@@ -75,6 +75,7 @@ class OrangeSmsGatewayImplTest {
     private final AtomicLong fakeNanos = new AtomicLong(1_000_000_000L);
     private final List<Long> sleeps = Collections.synchronizedList(new ArrayList<>());
     private IkoddiGatewayImpl legacy;
+    private SmsRecipientAllowlist allowlist = SmsRecipientAllowlist.unrestricted();
 
     private ListAppender<ILoggingEvent> logs;
     private Logger gatewayLogger;
@@ -132,7 +133,7 @@ class OrangeSmsGatewayImplTest {
         factory.setReadTimeout(Duration.ofMillis(400));
         RestClient client = RestClient.builder().requestFactory(factory).build();
         return new OrangeSmsGatewayImpl(legacy, client, baseUrl, id, secret,
-            new OrangeSmsGatewayImpl.Sender(address, senderName, onNet), "226", clock, fakeNanos::get,
+            new OrangeSmsGatewayImpl.Sender(address, senderName, onNet), "226", allowlist, clock, fakeNanos::get,
             nanos -> {
                 sleeps.add(nanos);
                 fakeNanos.addAndGet(nanos);
@@ -467,6 +468,102 @@ class OrangeSmsGatewayImplTest {
                 (CLIENT_ID + ":" + CLIENT_SECRET).getBytes(StandardCharsets.UTF_8))));
         assertThat(String.join("\n", lines)).contains("+226*****70").contains("[number]");
         assertThat(logs.list).allSatisfy(event -> assertThat(event.getThrowableProxy()).isNull());
+    }
+
+    @Test
+    @DisplayName("allowlist set: an unlisted recipient is not sent, not even a token is fetched, and it is a refusal")
+    void allowlistRefusesUnlisted() {
+        allowlist = SmsRecipientAllowlist.parse("+22670707070", "Orange");
+        OrangeSmsGatewayImpl gateway = gateway("", false);
+
+        assertThatThrownBy(() -> gateway.sendSms(List.of("+22670707071"), "a", null))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
+        assertThat(tokenRequests).isEmpty();
+        assertThat(sendRequests).isEmpty();
+    }
+
+    @Test
+    @DisplayName("allowlist set: a listed number is sent, whatever spelling the desk stored")
+    void allowlistSendsListed() {
+        allowlist = SmsRecipientAllowlist.parse(" +226 70 70 70 70 , +22670707072", "Orange");
+        tokenAnswers.add(Answer.of(200, token(TOKEN_1, "3600")));
+        sendAnswers.add(accepted("r1"));
+
+        IkoddiGateway.SmsDispatch dispatch = gateway("", false).sendSms(List.of("70 70 70 70"), "a", null);
+
+        assertThat(dispatch.delivered()).isTrue();
+        assertThat(sendRequests).hasSize(1);
+        assertThat(sendRequests.get(0).body()).contains("tel:+22670707070");
+    }
+
+    @Test
+    @DisplayName("allowlist set: in a mixed batch only listed numbers are sent and the dispatch reports the rest")
+    void allowlistMixedBatch() {
+        allowlist = SmsRecipientAllowlist.parse("+22670707072", "Orange");
+        tokenAnswers.add(Answer.of(200, token(TOKEN_1, "3600")));
+        sendAnswers.add(accepted("r1"));
+        sendAnswers.add(accepted("never"));
+
+        IkoddiGateway.SmsDispatch dispatch = gateway("", false)
+            .sendSms(List.of("+22670707070", "+22670707072"), "a", null);
+
+        assertThat(sendRequests).hasSize(1);
+        assertThat(sendRequests.get(0).body()).contains("tel:+22670707072");
+        assertThat(dispatch.delivered()).as("not every recipient was accepted").isFalse();
+        assertThat(dispatch.rawResponse())
+            .contains("\"notAllowlisted\":[\"+226*****70\"]")
+            .contains(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED)
+            .doesNotContain("22670707070");
+    }
+
+    @Test
+    @DisplayName("allowlist empty (unset or blank): no restriction, for production")
+    void emptyAllowlistIsUnrestricted() {
+        for (String empty : new String[] {null, "", "   "}) {
+            allowlist = SmsRecipientAllowlist.parse(empty, "Orange");
+            assertThat(allowlist.restricts()).as("'%s' restricts nothing", empty).isFalse();
+        }
+        tokenAnswers.add(Answer.of(200, token(TOKEN_1, "3600")));
+        sendAnswers.add(accepted("r1"));
+
+        assertThat(gateway("", false).sendSms(List.of("+22670707071"), "a", null).delivered()).isTrue();
+        assertThat(sendRequests).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("allowlist set but with no valid entry: restricted to no one, never read as allow-all")
+    void invalidAllowlistAllowsNoOne() {
+        for (String broken : new String[] {",", " , ,", "70707070", "not-a-number", "tel:+22670707070"}) {
+            allowlist = SmsRecipientAllowlist.parse(broken, "Orange");
+            assertThat(allowlist.restricts()).as("'%s' restricts", broken).isTrue();
+            assertThat(allowlist.size()).as("'%s' lists nobody", broken).isZero();
+            OrangeSmsGatewayImpl gateway = gateway("", false);
+            assertThatThrownBy(() -> gateway.sendSms(List.of("+22670707070"), "a", null))
+                .hasMessage(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
+        }
+        assertThat(tokenRequests).isEmpty();
+        assertThat(sendRequests).isEmpty();
+    }
+
+    @Test
+    @DisplayName("allowlist refusals are logged masked")
+    void allowlistLogIsMasked() {
+        allowlist = SmsRecipientAllowlist.parse("+22670707070", "Orange");
+        Logger allowlistLogger = (Logger) LoggerFactory.getLogger(SmsRecipientAllowlist.class);
+        ListAppender<ILoggingEvent> captured = new ListAppender<>();
+        captured.start();
+        allowlistLogger.addAppender(captured);
+        try {
+            OrangeSmsGatewayImpl gateway = gateway("", false);
+            assertThatThrownBy(() -> gateway.sendSms(List.of("+22670707071"), "a", null))
+                .isInstanceOf(IllegalStateException.class);
+        } finally {
+            allowlistLogger.detachAppender(captured);
+        }
+        List<String> lines = captured.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+        assertThat(lines).anyMatch(line -> line.contains("+226*****71") && line.contains("SMS_RECIPIENT_ALLOWLIST"));
+        assertThat(lines).noneMatch(line -> line.contains("22670707071"));
     }
 
     /** A clock the test moves by hand. */
