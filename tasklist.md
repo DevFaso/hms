@@ -6431,6 +6431,13 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Signature revoke, pinned super-admin:** `DigitalSignatureServiceImpl` revoke admits `CallerIdentity.isGlobalSuperAdmin()` or a hospital admin of the signature's hospital, so a super-admin with that hospital selected is refused though `POST /signatures/{id}/revoke` admits SUPER_ADMIN. Not an admin review (it voids a clinician's signature), so left as it is; switch it to `CallerIdentity.isSuperAdminFor(signature hospital)` only if the user wants super-admins to revoke at a selected hospital.
 - **Review list in global view:** `GET /mortality/disputes` still answers 400 `mortality.hospitalRequired` for a super-admin in global view (no hospital to read). The portal now asks only once a hospital is selected; a cross-hospital review list for global view would be a new feature.
 
+## Standing debt — r44 front desk and discharge (fix/r44-frontdesk-discharge)
+
+- **D1590, patient profile:** `PatientProfileDTO` in `patient-portal.service.ts` declares `insuranceProvider`, `insuranceMemberId` and `insurancePlan`, which the backend profile never fills; the patient never sees the coverage recorded for them.
+- **D1590, a patient with no assignment at the hospital:** the coverage is still recorded (patient-level, `GET /patient-insurances/patient/{id}`) but untagged, so the desk misses it; QA to confirm every portal patient holds a ROLE_PATIENT assignment where they book.
+- **D1591, flow board and insurance-issues panel:** the pre-check-in chip is on the cockpit queue and in the check-in dialog only; the flow-board cards do not show it.
+- **D1596, an admission discharged without a separate summary:** the stay summary is written at discharge when the stay has its INPATIENT encounter with a lead (`AdmissionStayEncounterService.recordStayDischargeSummary`); the QA case where the patient saw no text at all was not reproduced from the code, re-test on dev and check the stay had an encounter.
+
 ## Standing debt — r44 billing and panels (fix/r44-billing-panels)
 
 - **D1611, insurance billing is a feature to plan:** no till creates a claim to the payer, so every till now refuses INSURANCE (`billing.payment.insuranceNotAPayment`). Real insurance billing needs: a claim created from the checkout or the invoice (payer, coverage, insurer share vs patient copay), a visit-invoice claim API (none exists), a create action on `/pharmacy/claims` (claims exist only through `POST /pharmacy/claims`), and the patient copay split at the till (a pharmacy payment must equal the whole charge today).
@@ -6438,6 +6445,7 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **D1613, V288 skipped on an existing duplicate:** if an environment already holds two live claims for one dispense, V288 logs a warning and does not create `uq_pc_dispense_live`; reject the duplicates by hand, then create the index (a follow-up migration).
 - **D1612, panel prose in English:** `PanelService` still stores the end reason "Superseded by reassignment" and throws raw English refusals ("Another empanelment change…", "The empanelment is already ended.", "An active hospital context is required."); move them to bundle keys.
 - **D1612, admin and the panels page:** the admin keeps the overview and drilldown but cannot assign or end (E9 #67 decision D5); if hospitals want the admin to reassign a departed provider's patients, that is a change to D5 (`HospitalAdminOffOrdersTest`).
+
 ## Standing debt — announcement scope (fix/d1610-announcement-scope)
 
 - **Recipient-less notification broadcast:** `NotificationWebSocketController.sendNotification` still pushes a notification with a blank recipient to `/topic/notifications`, which every hospital's clients receive; no caller sends one today (guarded by `NotificationFanOutScopeGuardTest`), so decide whether to drop the fallback or refuse a blank recipient.

@@ -911,11 +911,20 @@
         </button>
       </div>
       <div class="modal-body">
+        <!-- QA D1597: a patient with no bed reads "no room assigned", never "N/A";
+             the sentence is built with a colon, so French never needs "de"/"d'". -->
         <p class="discharge-info">
-          {{ 'ADMISSIONS.DISCHARGING' | translate }}
+          {{ 'ADMISSIONS.DISCHARGING_PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
           <strong>{{ dischargingAdm()?.patientName }}</strong>
-          {{ 'ADMISSIONS.FROM_ROOM' | translate }}
-          <strong>{{ dischargingAdm()?.roomBed || 'N/A' }}</strong>
+          ·
+          @if (dischargingAdm()?.roomBed) {
+            {{ 'ADMISSIONS.ROOM' | translate }}{{ 'COMMON.COLON' | translate }}
+            <strong>{{ dischargingAdm()?.roomBed }}</strong>
+          } @else {
+            <strong data-testid="discharge-no-room">{{
+              'ADMISSIONS.NO_ROOM_ASSIGNED' | translate
+            }}</strong>
+          }
         </p>
 
         <div class="form-row">
@@ -961,10 +970,17 @@
             id="discharge-diagnosis"
             maxlength="2000"
             [(ngModel)]="dischargeForm.dischargeDiagnosis"
+            [readonly]="!!staySummary()"
             class="form-textarea"
             rows="2"
             [placeholder]="'ADMISSIONS.DISCHARGE_DIAGNOSIS_PLACEHOLDER' | translate"
           ></textarea>
+          <!-- QA D1596: one diagnosis, the written summary's; it is changed there. -->
+          @if (staySummary()) {
+            <p class="field-hint" data-testid="discharge-diagnosis-from-summary">
+              {{ 'ADMISSIONS.DIAGNOSIS_FROM_SUMMARY' | translate }}
+            </p>
+          }
         </div>
 
         <div class="field">
@@ -983,13 +999,27 @@
           <label for="discharge-instructions">{{
             'ADMISSIONS.DISCHARGE_INSTRUCTIONS' | translate
           }}</label>
-          <textarea
-            id="discharge-instructions"
-            [(ngModel)]="dischargeForm.dischargeInstructions"
-            class="form-textarea"
-            rows="3"
-            [placeholder]="'ADMISSIONS.DISCHARGE_INSTRUCTIONS_PLACEHOLDER' | translate"
-          ></textarea>
+          <!-- QA D1596: these reach the patient through the stay's summary. -->
+          @if (staySummary()?.followUpInstructions; as written) {
+            <p class="field-hint" data-testid="discharge-instructions-in-summary">
+              {{ 'ADMISSIONS.INSTRUCTIONS_IN_SUMMARY' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ written }}
+            </p>
+          }
+          @if (staySummary()?.isFinalized) {
+            <p class="field-hint" data-testid="discharge-summary-finalized">
+              {{ 'ADMISSIONS.SUMMARY_FINALIZED_NO_INSTRUCTIONS' | translate }}
+            </p>
+          } @else {
+            <textarea
+              id="discharge-instructions"
+              maxlength="3000"
+              [(ngModel)]="dischargeForm.dischargeInstructions"
+              class="form-textarea"
+              rows="3"
+              [placeholder]="'ADMISSIONS.DISCHARGE_INSTRUCTIONS_PLACEHOLDER' | translate"
+            ></textarea>
+          }
         </div>
       </div>
       <div class="modal-actions">

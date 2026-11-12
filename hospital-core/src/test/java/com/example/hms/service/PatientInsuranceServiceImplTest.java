@@ -374,7 +374,13 @@ class PatientInsuranceServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
         when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
-        when(patientInsuranceRepository.findByPatient_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(patientId, "AETNA", "POL123"))
+        when(patientInsuranceRepository
+                .findFirstByPatient_IdAndAssignment_Hospital_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
+                    patientId, hospitalId, "AETNA", "POL123"))
+            .thenReturn(Optional.empty());
+        when(patientInsuranceRepository
+                .findFirstByPatient_IdAndAssignmentIsNullAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
+                    patientId, "AETNA", "POL123"))
             .thenReturn(Optional.empty());
         when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
@@ -400,16 +406,21 @@ class PatientInsuranceServiceImplTest {
         when(patientInsuranceRepository.save(any(PatientInsurance.class))).thenAnswer(inv -> inv.getArgument(0));
         when(patientInsuranceMapper.toPatientInsuranceResponseDTO(any())).thenReturn(new PatientInsuranceResponseDTO());
 
-        when(patientInsuranceRepository.findByPatient_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
-                patientId, "CNAMU", "AMU-1")).thenReturn(Optional.empty());
+        when(patientInsuranceRepository
+                .findFirstByPatient_IdAndAssignment_Hospital_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
+                    patientId, hospitalId, "CNAMU", "AMU-1")).thenReturn(Optional.empty());
+        when(patientInsuranceRepository
+                .findFirstByPatient_IdAndAssignmentIsNullAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
+                    patientId, "CNAMU", "AMU-1")).thenReturn(Optional.empty());
         service.upsertAndLinkByNaturalKey(LinkPatientInsuranceRequestDTO.builder()
             .patientId(patientId).hospitalId(hospitalId).payerCode("CNAMU").policyNumber("AMU-1")
             .providerName("  Caisse Nationale AMU ").build(), ctx, locale);
 
         PatientInsurance existing = new PatientInsurance();
         existing.setProviderName("Assurance Faso");
-        when(patientInsuranceRepository.findByPatient_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
-                patientId, "CNAMU", "AMU-2")).thenReturn(Optional.of(existing));
+        when(patientInsuranceRepository
+                .findFirstByPatient_IdAndAssignment_Hospital_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
+                    patientId, hospitalId, "CNAMU", "AMU-2")).thenReturn(Optional.of(existing));
         service.upsertAndLinkByNaturalKey(LinkPatientInsuranceRequestDTO.builder()
             .patientId(patientId).hospitalId(hospitalId).payerCode("CNAMU").policyNumber("AMU-2").build(),
             ctx, locale);
@@ -418,6 +429,168 @@ class PatientInsuranceServiceImplTest {
         verify(patientInsuranceRepository, org.mockito.Mockito.atLeast(2)).save(saved.capture());
         assertThat(saved.getAllValues()).extracting(PatientInsurance::getProviderName)
             .contains("Caisse Nationale AMU", "Assurance Faso");
+    }
+
+    /**
+     * Review of #1131 (the D1590 class): hospital A holds the policy; B's desk
+     * links the same policy. A's row is untouched (still A's, still primary)
+     * and B gets its own row, primary at B.
+     */
+    @Test
+    void upsertAndLinkByNaturalKey_anotherHospitalsRowIsNeverRetagged_review1131() {
+        com.example.hms.model.Hospital hospitalA = new com.example.hms.model.Hospital();
+        hospitalA.setId(UUID.randomUUID());
+        com.example.hms.model.Hospital hospitalB = new com.example.hms.model.Hospital();
+        hospitalB.setId(hospitalId);
+        UserRoleHospitalAssignment atA = new UserRoleHospitalAssignment();
+        atA.setHospital(hospitalA);
+        UserRoleHospitalAssignment atB = new UserRoleHospitalAssignment();
+        atB.setHospital(hospitalB);
+        PatientInsurance rowA = new PatientInsurance();
+        rowA.setId(UUID.randomUUID());
+        rowA.setPatient(patient);
+        rowA.setAssignment(atA);
+        rowA.setPrimary(true);
+        rowA.setPayerCode("CNAMU");
+        rowA.setPolicyNumber("AMU-9");
+        rowA.setProviderName("Caisse Nationale AMU");
+        rowA.setLinkedAs("STAFF");
+
+        ActingContext ctx = new ActingContext(userId, hospitalId, ActingMode.STAFF, null);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
+        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
+            .thenReturn(Optional.of(atB));
+        when(patientInsuranceMapper.toPatientInsuranceResponseDTO(any())).thenReturn(new PatientInsuranceResponseDTO());
+
+        // An in-memory table holding A's row. Every policy finder answers by its
+        // own name: hospital-scoped, untagged-only, or (the old lookup) any row.
+        java.util.List<PatientInsurance> table = new java.util.ArrayList<>(List.of(rowA));
+        java.util.List<UUID> primaryResets = new java.util.ArrayList<>();
+        PatientInsuranceRepository fake = org.mockito.Mockito.mock(PatientInsuranceRepository.class, inv -> {
+            String name = inv.getMethod().getName();
+            if (name.equals("save")) {
+                PatientInsurance row = inv.getArgument(0);
+                if (table.stream().noneMatch(r -> r == row)) table.add(row);
+                return row;
+            }
+            if (name.equals("unsetOtherPrimariesForPatientInHospital")) {
+                primaryResets.add(inv.getArgument(2));
+                return 0;
+            }
+            if (name.startsWith("find") && name.contains("PolicyNumber")) {
+                return table.stream().filter(r -> {
+                    UUID heldBy = r.getAssignment() == null ? null : r.getAssignment().getHospital().getId();
+                    if (name.contains("Assignment_Hospital_Id")) return inv.getArgument(1).equals(heldBy);
+                    if (name.contains("AssignmentIsNull")) return heldBy == null;
+                    return true;
+                }).findFirst();
+            }
+            return org.mockito.Answers.RETURNS_DEFAULTS.answer(inv);
+        });
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "patientInsuranceRepository", fake);
+
+        service.upsertAndLinkByNaturalKey(LinkPatientInsuranceRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).payerCode("CNAMU").policyNumber("AMU-9")
+            .primary(true).build(), ctx, locale);
+
+        assertThat(table).hasSize(2);
+        PatientInsurance rowB = table.get(1);
+        assertThat(rowB).isNotSameAs(rowA);
+        assertThat(rowB.getAssignment()).isSameAs(atB);
+        assertThat(rowB.isPrimary()).isTrue();
+        // A's row is where it was, as it was.
+        assertThat(rowA.getAssignment()).isSameAs(atA);
+        assertThat(rowA.isPrimary()).isTrue();
+        // The primary reset is B's only.
+        assertThat(primaryResets).containsOnly(hospitalId);
+    }
+
+    @Test
+    void linkPatientInsurance_staffCannotRetagAnotherHospitalsRow_review1131() {
+        com.example.hms.model.Hospital hospitalA = new com.example.hms.model.Hospital();
+        hospitalA.setId(UUID.randomUUID());
+        com.example.hms.model.Hospital hospitalB = new com.example.hms.model.Hospital();
+        hospitalB.setId(hospitalId);
+        UserRoleHospitalAssignment atA = new UserRoleHospitalAssignment();
+        atA.setHospital(hospitalA);
+        UserRoleHospitalAssignment atB = new UserRoleHospitalAssignment();
+        atB.setHospital(hospitalB);
+        PatientInsurance rowA = new PatientInsurance();
+        rowA.setId(insuranceId);
+        rowA.setAssignment(atA);
+        ActingContext ctx = new ActingContext(userId, hospitalId, ActingMode.STAFF, null);
+
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(rowA));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
+        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
+            .thenReturn(Optional.of(atB));
+
+        assertThatThrownBy(() -> service.linkPatientInsurance(insuranceId, LinkPatientInsuranceRequestDTO.builder()
+                .patientId(patientId).hospitalId(hospitalId).build(), ctx, locale))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThat(rowA.getAssignment()).isSameAs(atA);
+        verify(patientInsuranceRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    /** Review of #1131: B's desk can neither edit nor delete the row hospital A holds; both answer 404. */
+    @Test
+    void updateAndDelete_anotherHospitalsRowAnswersAsMissing_review1131() {
+        com.example.hms.model.Hospital hospitalA = new com.example.hms.model.Hospital();
+        hospitalA.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment atA = new UserRoleHospitalAssignment();
+        atA.setHospital(hospitalA);
+        PatientInsurance rowA = new PatientInsurance();
+        rowA.setId(insuranceId);
+        rowA.setPatient(patient);
+        rowA.setAssignment(atA);
+        rowA.setProviderName("Caisse Nationale AMU");
+        rowA.setPolicyNumber("AMU-9");
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(rowA));
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        PatientInsuranceRequestDTO edit = new PatientInsuranceRequestDTO();
+        edit.setProviderName("Autre assureur");
+        assertThatThrownBy(() -> service.updatePatientInsurance(insuranceId, edit, locale))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.deletePatientInsurance(insuranceId, locale))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+
+        verify(patientInsuranceMapper, org.mockito.Mockito.never()).updateEntityFromDto(any(), any(), any());
+        verify(patientInsuranceRepository, org.mockito.Mockito.never()).save(any());
+        verify(patientInsuranceRepository, org.mockito.Mockito.never()).deleteById(any());
+        assertThat(rowA.getAssignment()).isSameAs(atA);
+        assertThat(rowA.getProviderName()).isEqualTo("Caisse Nationale AMU");
+    }
+
+    /** Review of #1131: this hospital's row, and a legacy row tagged to no hospital, stay writable. */
+    @Test
+    void delete_thisHospitalsRowAndAnUntaggedRowStayWritable_review1131() {
+        com.example.hms.model.Hospital hospitalB = new com.example.hms.model.Hospital();
+        hospitalB.setId(hospitalId);
+        UserRoleHospitalAssignment atB = new UserRoleHospitalAssignment();
+        atB.setHospital(hospitalB);
+        PatientInsurance rowB = new PatientInsurance();
+        rowB.setId(insuranceId);
+        rowB.setPatient(patient);
+        rowB.setAssignment(atB);
+        UUID legacyId = UUID.randomUUID();
+        PatientInsurance legacy = new PatientInsurance();
+        legacy.setId(legacyId);
+        legacy.setPatient(patient);
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(rowB));
+        when(patientInsuranceRepository.findById(legacyId)).thenReturn(Optional.of(legacy));
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        service.deletePatientInsurance(insuranceId, locale);
+        service.deletePatientInsurance(legacyId, locale);
+
+        verify(patientInsuranceRepository).deleteById(insuranceId);
+        verify(patientInsuranceRepository).deleteById(legacyId);
     }
 
     @Test

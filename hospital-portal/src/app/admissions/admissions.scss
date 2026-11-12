@@ -820,6 +820,14 @@ select:focus-visible {
   font-size: 0.9rem;
 }
 
+/* QA D1596: what the stay's written discharge summary already says. */
+.field-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: #52667b;
+  white-space: pre-line;
+}
+
 .bed-label {
   font-size: 0.75rem;
   color: #52667b;

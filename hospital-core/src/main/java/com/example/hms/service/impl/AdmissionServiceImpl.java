@@ -362,6 +362,10 @@ public class AdmissionServiceImpl implements AdmissionService {
             "admission.dischargingProvider.physician.required");
         // QA D503 class: the discharging provider is the caller, not a colleague named in the body.
         com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(dischargingProvider);
+        // QA D1596: a discharge summary already written for the stay is the one
+        // source of its diagnosis, and the dialog's instructions go into it.
+        String dischargeDiagnosis = stayEncounters.dischargeDiagnosisOfStay(admission,
+            request.getDischargeDiagnosis(), request.getDischargeInstructions());
 
         admission.discharge(
             request.getDischargeDisposition(),
@@ -378,7 +382,7 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         // The stay's encounter carries the discharge (D151), then it and only
         // it is completed (D134).
-        stayEncounters.recordDischarge(admission, request.getDischargeDiagnosis());
+        stayEncounters.recordDischarge(admission, dischargeDiagnosis);
         completeActiveEncounters(admission);
 
         // Free the structured bed (the admission keeps bed/roomBed as history)

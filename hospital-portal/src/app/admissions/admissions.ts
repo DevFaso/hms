@@ -47,6 +47,7 @@ import {
   toServerDateTime,
 } from '../shared/date-utils';
 import { BedService, BedResponse } from '../services/bed.service';
+import { DischargeService, DischargeSummary } from '../services/discharge.service';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { BackdropCloseDirective } from '../shared/a11y/backdrop-close.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
@@ -116,6 +117,7 @@ export class AdmissionsComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly bedService = inject(BedService);
+  private readonly dischargeService = inject(DischargeService);
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -364,6 +366,12 @@ export class AdmissionsComponent implements OnInit {
   showDischargeModal = signal(false);
   dischargingAdm = signal<AdmissionResponse | null>(null);
   discharging = signal(false);
+  /**
+   * QA D1596: the discharge summary already written for the stay. It is the
+   * one source of the diagnosis (shown, not typed again), and a finalized one
+   * takes no further instructions; a draft gets the dialog's added to it.
+   */
+  staySummary = signal<DischargeSummary | null>(null);
   dischargeForm = {
     dischargeDisposition: 'HOME' as string,
     dischargeSummary: '',
@@ -805,12 +813,23 @@ export class AdmissionsComponent implements OnInit {
       // QA D503 class: the server records the caller as the discharging provider.
       dischargingProviderId: this.auth.getUserProfile()?.staffId ?? '',
     };
+    this.staySummary.set(null);
+    const stayEncounterId = a.encounterId;
+    if (stayEncounterId) {
+      this.dischargeService.summaryForEncounter(stayEncounterId).subscribe((summary) => {
+        if (!summary || this.dischargingAdm()?.id !== a.id) return;
+        this.staySummary.set(summary);
+        this.dischargeForm.dischargeDiagnosis = summary.dischargeDiagnosis ?? '';
+        if (summary.isFinalized) this.dischargeForm.dischargeInstructions = '';
+      });
+    }
     this.showDischargeModal.set(true);
   }
 
   cancelDischarge(): void {
     this.showDischargeModal.set(false);
     this.dischargingAdm.set(null);
+    this.staySummary.set(null);
   }
 
   executeDischarge(): void {
@@ -820,8 +839,14 @@ export class AdmissionsComponent implements OnInit {
       .discharge(adm.id, {
         dischargeDisposition: this.dischargeForm.dischargeDisposition,
         dischargeSummary: this.dischargeForm.dischargeSummary,
-        dischargeDiagnosis: this.dischargeForm.dischargeDiagnosis.trim(),
-        dischargeInstructions: this.dischargeForm.dischargeInstructions || undefined,
+        // QA D1596: with a written summary, its diagnosis is the one the server keeps.
+        dischargeDiagnosis: this.staySummary()
+          ? undefined
+          : this.dischargeForm.dischargeDiagnosis.trim(),
+        dischargeInstructions:
+          this.staySummary()?.isFinalized || !this.dischargeForm.dischargeInstructions.trim()
+            ? undefined
+            : this.dischargeForm.dischargeInstructions,
         dischargingProviderId: this.dischargeForm.dischargingProviderId,
       })
       .subscribe({
