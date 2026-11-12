@@ -329,7 +329,7 @@ class AdmissionStayEncounterServiceTest {
         draft.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
         when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
             .thenReturn(Optional.of(stay));
-        when(dischargeSummaryRepository.existsByEncounter_Id(stay.getId())).thenReturn(false);
+        when(dischargeSummaryRepository.findByEncounter_Id(stay.getId())).thenReturn(Optional.empty());
         when(prescriptionRepository.findByEncounter_Id(eq(stay.getId()), any()))
             .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(amox, ward, draft)));
 
@@ -362,11 +362,116 @@ class AdmissionStayEncounterServiceTest {
         stay.setAdmissionId(admission.getId());
         when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
             .thenReturn(Optional.of(stay));
-        when(dischargeSummaryRepository.existsByEncounter_Id(stay.getId())).thenReturn(true);
+        when(dischargeSummaryRepository.findByEncounter_Id(stay.getId()))
+            .thenReturn(Optional.of(new com.example.hms.model.discharge.DischargeSummary()));
 
         service.recordDischarge(admission, "Pneumopathie");
 
         verify(dischargeSummaryRepository, never()).save(any());
+    }
+
+    /* ── QA D1596: the written summary is the one source ─────────────────── */
+
+    private com.example.hms.model.discharge.DischargeSummary writtenSummary(boolean finalized) {
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionId(admission.getId());
+        com.example.hms.model.discharge.DischargeSummary summary = new com.example.hms.model.discharge.DischargeSummary();
+        summary.setDischargeDiagnosis("R50.9 Fièvre");
+        summary.setFollowUpInstructions("Contrôle à J7");
+        summary.setIsFinalized(finalized);
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+        when(dischargeSummaryRepository.findByEncounter_Id(stay.getId())).thenReturn(Optional.of(summary));
+        return summary;
+    }
+
+    @Test
+    void d1596_theDialogsInstructionsReachTheWrittenSummary() {
+        com.example.hms.model.discharge.DischargeSummary summary = writtenSummary(false);
+        admission.setDischargeInstructions("Paracétamol si fièvre, revenir si fièvre > 3 jours.");
+
+        service.recordDischarge(admission, "R50.9 Fièvre");
+
+        verify(dischargeSummaryRepository).save(summary);
+        assertThat(summary.getFollowUpInstructions())
+            .isEqualTo("Contrôle à J7\n\nParacétamol si fièvre, revenir si fièvre > 3 jours.");
+    }
+
+    @Test
+    void d1596_instructionsAlreadyInTheSummaryAreNotAddedTwice() {
+        com.example.hms.model.discharge.DischargeSummary summary = writtenSummary(false);
+        admission.setDischargeInstructions("  contrôle   à J7 ");
+
+        service.recordDischarge(admission, "R50.9 Fièvre");
+
+        verify(dischargeSummaryRepository, never()).save(any());
+        assertThat(summary.getFollowUpInstructions()).isEqualTo("Contrôle à J7");
+    }
+
+    @Test
+    void review1131_instructionsOverflowingTheSummaryAreRefusedOnTheirField_neverDropped() {
+        com.example.hms.model.discharge.DischargeSummary summary = writtenSummary(false);
+        summary.setFollowUpInstructions("a".repeat(2990));
+        admission.setDischargeInstructions("Paracétamol si fièvre, revenir si fièvre > 3 jours.");
+
+        org.assertj.core.api.Assertions
+            .assertThatThrownBy(() -> service.recordDischarge(admission, "R50.9 Fièvre"))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "dischargeInstructions")
+            .hasFieldOrPropertyWithValue("messageKey", "admission.discharge.instructionsTooLong");
+        verify(dischargeSummaryRepository, never()).save(any());
+        assertThat(summary.getFollowUpInstructions()).hasSize(2990);
+    }
+
+    @Test
+    void d1596_aFinalizedSummaryIsNeverChanged() {
+        com.example.hms.model.discharge.DischargeSummary summary = writtenSummary(true);
+        admission.setDischargeInstructions("Paracétamol si fièvre");
+
+        service.recordDischarge(admission, "R50.9 Fièvre");
+
+        verify(dischargeSummaryRepository, never()).save(any());
+        assertThat(summary.getFollowUpInstructions()).isEqualTo("Contrôle à J7");
+    }
+
+    @Test
+    void d1596_withASummaryTheDiagnosisIsItsOwn_aDifferentOneIsRefused() {
+        writtenSummary(false);
+
+        assertThat(service.dischargeDiagnosisOfStay(admission, null, null)).isEqualTo("R50.9 Fièvre");
+        assertThat(service.dischargeDiagnosisOfStay(admission, " r50.9  fièvre ", "Contrôle à J7"))
+            .isEqualTo("R50.9 Fièvre");
+        org.assertj.core.api.Assertions
+            .assertThatThrownBy(() -> service.dischargeDiagnosisOfStay(admission, "R50.9 Fièvre, résolue", null))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "dischargeDiagnosis")
+            .hasFieldOrPropertyWithValue("messageKey", "admission.discharge.diagnosisInSummary");
+    }
+
+    @Test
+    void d1596_aFinalizedSummaryRefusesNewInstructionsRatherThanDroppingThem() {
+        writtenSummary(true);
+
+        org.assertj.core.api.Assertions
+            .assertThatThrownBy(() -> service.dischargeDiagnosisOfStay(admission, null, "Paracétamol si fièvre"))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "dischargeInstructions")
+            .hasFieldOrPropertyWithValue("messageKey", "admission.discharge.summaryFinalized");
+        assertThat(service.dischargeDiagnosisOfStay(admission, null, "Contrôle à J7")).isEqualTo("R50.9 Fièvre");
+    }
+
+    @Test
+    void d1596_withoutASummaryTheDialogsDiagnosisIsRequired() {
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.empty());
+
+        assertThat(service.dischargeDiagnosisOfStay(admission, " Paludisme grave ", null)).isEqualTo("Paludisme grave");
+        org.assertj.core.api.Assertions
+            .assertThatThrownBy(() -> service.dischargeDiagnosisOfStay(admission, "  ", null))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "dischargeDiagnosis")
+            .hasFieldOrPropertyWithValue("messageKey", "admissionDischarge.dischargeDiagnosis.required");
     }
 
     @Test
@@ -386,7 +491,7 @@ class AdmissionStayEncounterServiceTest {
         admission.setFollowUpAppointments(followUps);
         when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
             .thenReturn(Optional.of(stay));
-        when(dischargeSummaryRepository.existsByEncounter_Id(stay.getId())).thenReturn(false);
+        when(dischargeSummaryRepository.findByEncounter_Id(stay.getId())).thenReturn(Optional.empty());
         when(prescriptionRepository.findByEncounter_Id(eq(stay.getId()), any()))
             .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
 
@@ -411,7 +516,7 @@ class AdmissionStayEncounterServiceTest {
         stay.setAdmissionId(admission.getId());
         when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
             .thenReturn(Optional.of(stay));
-        when(dischargeSummaryRepository.existsByEncounter_Id(stay.getId())).thenReturn(false);
+        when(dischargeSummaryRepository.findByEncounter_Id(stay.getId())).thenReturn(Optional.empty());
 
         service.recordDischarge(admission, "Pneumopathie");
 

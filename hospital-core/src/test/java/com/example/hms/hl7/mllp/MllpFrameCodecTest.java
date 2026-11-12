@@ -13,6 +13,31 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class MllpFrameCodecTest {
 
     @Test
+    void readsTwoFramesWhenEveryUnderlyingReadCanSupplyOnlyOneByte() throws Exception {
+        var out = new ByteArrayOutputStream();
+        String first = "MSH|^~\\&|cdx-first\r";
+        String second = "MSH|^~\\&|cdx-deuxi\u00e8me\r";
+        MllpFrameCodec.writeFrame(out, first, StandardCharsets.UTF_8);
+        MllpFrameCodec.writeFrame(out, second, StandardCharsets.UTF_8);
+        var oneByte = new java.io.InputStream() {
+            private final ByteArrayInputStream source = new ByteArrayInputStream(out.toByteArray());
+
+            @Override
+            public int read() {
+                return source.read();
+            }
+
+            @Override
+            public int read(byte[] buffer, int offset, int length) {
+                return source.read(buffer, offset, Math.min(length, 1));
+            }
+        };
+        assertThat(new String(MllpFrameCodec.readFrame(oneByte, 4096), StandardCharsets.UTF_8)).isEqualTo(first);
+        assertThat(new String(MllpFrameCodec.readFrame(oneByte, 4096), StandardCharsets.UTF_8)).isEqualTo(second);
+        assertThat(MllpFrameCodec.readFrame(oneByte, 4096)).isSameAs(MllpFrameCodec.END_OF_STREAM);
+    }
+
+    @Test
     void writesAndReadsRoundTrip() throws Exception {
         String hl7 = "MSH|^~\\&|S|F|R|RF|20260428||ORU^R01|123|P|2.5\rPID|1||X\r";
         ByteArrayOutputStream out = new ByteArrayOutputStream();

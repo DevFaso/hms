@@ -1309,7 +1309,6 @@
     "DISCHARGE_SUMMARY_PLACEHOLDER": "Bref résumé de l'hospitalisation et du résultat...",
     "DISCHARGE_DIAGNOSIS": "Diagnostic de sortie",
     "DISCHARGE_DIAGNOSIS_PLACEHOLDER": "Diagnostic retenu à la sortie",
-    "DISCHARGING": "Sortie de",
     "DISCHARGING_BTN": "Sortie en cours...",
     "DISCHARGING_PROVIDER": "Médecin ayant autorisé la sortie",
     "DISPOSITION_AGAINST_MEDICAL_ADVICE": "Contre avis médical",
@@ -1325,7 +1324,6 @@
     "DISPOSITION_TRANSFERRED_TO_ANOTHER_HOSPITAL": "Transfert vers un autre hôpital",
     "EDIT": "Modifier l'admission",
     "EMPTY_MESSAGE": "Aucune admission. Créez votre première admission.",
-    "FROM_ROOM": "de la chambre",
     "LOADING": "Chargement des admissions…",
     "LOAD_FAILED": "Échec du chargement des admissions",
     "NEW": "Nouvelle admission",
@@ -1369,7 +1367,12 @@
     "ROWS_PER_PAGE": "Lignes par page",
     "PAGE_OF": "Page {{page}} sur {{total}}",
     "PREVIOUS_PAGE": "Page précédente",
-    "NEXT_PAGE": "Page suivante"
+    "NEXT_PAGE": "Page suivante",
+    "DISCHARGING_PATIENT": "Sortie du patient",
+    "NO_ROOM_ASSIGNED": "Aucune chambre attribuée",
+    "DIAGNOSIS_FROM_SUMMARY": "Le diagnostic rédigé dans le résumé de sortie de ce séjour. Modifiez-le dans le résumé.",
+    "INSTRUCTIONS_IN_SUMMARY": "Déjà dans le résumé de sortie",
+    "SUMMARY_FINALIZED_NO_INSTRUCTIONS": "Le résumé de sortie de ce séjour est finalisé : ses consignes sont celles que reçoit le patient."
   },
   "ANALYTICS": {
     "LOAD_FAILED": "Impossible de charger les indicateurs. Réessayez.",
@@ -8224,7 +8227,13 @@
     "NO_MATCHES": "Aucun patient ne correspond à ces filtres",
     "VISIBLE_QUEUE": "Affichées : {{shown}} / {{loaded}} entrées chargées",
     "SUMMARY_UNAVAILABLE": "La synthèse de la journée est indisponible. Actualisez pour réessayer.",
-    "PANEL_UNAVAILABLE": "Cette file de travail est indisponible. Réessayez."
+    "PANEL_UNAVAILABLE": "Cette file de travail est indisponible. Réessayez.",
+    "PRE_CHECK_IN": "Pré-enregistrement",
+    "PRE_CHECKED_IN": "Pré-enregistré",
+    "PRE_CHECKED_IN_CONSENTED": "Pré-enregistré depuis le portail patient, consentement aux soins donné",
+    "PRE_CHECKED_IN_AT": "Fait sur le portail patient le {{when}}",
+    "PRE_CHECKED_IN_AT_CONSENTED": "Fait sur le portail patient le {{when}}, consentement aux soins donné",
+    "CONSENT_GIVEN_AT_PRE_CHECK_IN": "Donné par le patient au pré-enregistrement ; il est reporté sur cette visite."
   },
   "REFERRALS": {
     "ACCEPTED": "Acceptée",

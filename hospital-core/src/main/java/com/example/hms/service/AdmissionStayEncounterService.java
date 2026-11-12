@@ -7,6 +7,7 @@ import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Staff;
 import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.model.discharge.DischargeSummary;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -39,6 +40,8 @@ public class AdmissionStayEncounterService {
     private static final int CLOSER_MAX = 200;
     /** Room for the sentence around the reason, so its closing parenthesis stays. */
     private static final int CLOSER_REASON_MAX = 150;
+    /** discharge_summaries.follow_up_instructions. */
+    private static final int FOLLOW_UP_MAX = 3000;
 
     private final EncounterRepository encounterRepository;
     private final StaffRepository staffRepository;
@@ -353,11 +356,19 @@ public class AdmissionStayEncounterService {
      * and no follow-up. The stay now records one at discharge: the medicines
      * ordered on the stay, the discharge instructions and the follow-ups the
      * discharging physician entered. An existing summary (written on the
-     * discharge screen) is left as it is.
+     * discharge screen) keeps its own content; QA D1596: the instructions the
+     * discharge dialog adds are carried into it, or the patient never read them.
      */
     private void recordStayDischargeSummary(Admission admission, Encounter enc) {
-        if (dischargeSummaryRepository == null || enc.getId() == null
-            || dischargeSummaryRepository.existsByEncounter_Id(enc.getId())) {
+        if (dischargeSummaryRepository == null || enc.getId() == null) {
+            return;
+        }
+        java.util.Optional<DischargeSummary> written = dischargeSummaryRepository.findByEncounter_Id(enc.getId());
+        if (written.isPresent()) {
+            DischargeSummary summary = written.get();
+            if (carryInstructions(summary, admission.getDischargeInstructions())) {
+                dischargeSummaryRepository.save(summary);
+            }
             return;
         }
         Staff provider = admission.getDischargingProvider() != null
@@ -380,6 +391,8 @@ public class AdmissionStayEncounterService {
             ? admission.getDischargeDisposition() : com.example.hms.enums.DischargeDisposition.HOME);
         summary.setDischargeDiagnosis(stayDiagnosisText(admission, enc));
         summary.setFollowUpInstructions(enc.getFollowUpInstructions());
+        // QA D1596: and the dialog's own, when the encounter already had others.
+        carryInstructions(summary, admission.getDischargeInstructions());
         if (!isBlank(admission.getDischargeSummary())) {
             summary.setHospitalCourse(admission.getDischargeSummary());
         }
@@ -486,6 +499,93 @@ public class AdmissionStayEncounterService {
         } catch (java.time.format.DateTimeParseException ex) {
             return null;
         }
+    }
+
+    /**
+     * QA D1596: the discharge summary already written for this stay (on the
+     * discharge screen), if any. It is the one source of the stay's discharge
+     * diagnosis and instructions.
+     */
+    public java.util.Optional<DischargeSummary> writtenStaySummary(Admission admission) {
+        if (dischargeSummaryRepository == null || admission == null || admission.getId() == null) {
+            return java.util.Optional.empty();
+        }
+        return encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId())
+            .filter(enc -> enc.getId() != null)
+            .flatMap(enc -> dischargeSummaryRepository.findByEncounter_Id(enc.getId()));
+    }
+
+    /**
+     * QA D1596: what the discharge dialog may say once a summary is written.
+     * The diagnosis is the summary's (a different one is refused, never kept
+     * beside it); new instructions go into the summary, so a finalized
+     * (signed) summary, or one they would overflow, refuses them rather than
+     * dropping them. With no summary the dialog's diagnosis is required, as
+     * it builds the stay's summary.
+     *
+     * @return the diagnosis the stay is discharged with
+     */
+    public String dischargeDiagnosisOfStay(Admission admission, String statedDiagnosis, String instructions) {
+        java.util.Optional<DischargeSummary> written = writtenStaySummary(admission);
+        if (written.isEmpty()) {
+            if (isBlank(statedDiagnosis)) {
+                throw new com.example.hms.exception.FieldBusinessException("dischargeDiagnosis",
+                    "admissionDischarge.dischargeDiagnosis.required");
+            }
+            return statedDiagnosis.trim();
+        }
+        DischargeSummary summary = written.get();
+        String diagnosis = summary.getDischargeDiagnosis();
+        if (!isBlank(statedDiagnosis) && !sameText(statedDiagnosis, diagnosis)) {
+            throw new com.example.hms.exception.FieldBusinessException("dischargeDiagnosis",
+                "admission.discharge.diagnosisInSummary");
+        }
+        if (!isBlank(instructions) && !containsText(summary.getFollowUpInstructions(), instructions)) {
+            if (Boolean.TRUE.equals(summary.getIsFinalized())) {
+                throw new com.example.hms.exception.FieldBusinessException("dischargeInstructions",
+                    "admission.discharge.summaryFinalized");
+            }
+            if (mergedInstructions(summary.getFollowUpInstructions(), instructions).length() > FOLLOW_UP_MAX) {
+                throw new com.example.hms.exception.FieldBusinessException("dischargeInstructions",
+                    "admission.discharge.instructionsTooLong", FOLLOW_UP_MAX);
+            }
+        }
+        return isBlank(diagnosis) ? (isBlank(statedDiagnosis) ? null : statedDiagnosis.trim()) : diagnosis.trim();
+    }
+
+    /**
+     * QA D1596: the dialog's instructions, added once to a summary still open to edits.
+     * Review of #1131: instructions that would overflow the summary's column are refused
+     * on their field (the discharge rolls back), never dropped in silence.
+     */
+    static boolean carryInstructions(DischargeSummary summary, String instructions) {
+        if (isBlank(instructions) || Boolean.TRUE.equals(summary.getIsFinalized())
+            || containsText(summary.getFollowUpInstructions(), instructions)) {
+            return false;
+        }
+        String merged = mergedInstructions(summary.getFollowUpInstructions(), instructions);
+        if (merged.length() > FOLLOW_UP_MAX) {
+            throw new com.example.hms.exception.FieldBusinessException("dischargeInstructions",
+                "admission.discharge.instructionsTooLong", FOLLOW_UP_MAX);
+        }
+        summary.setFollowUpInstructions(merged);
+        return true;
+    }
+
+    private static String mergedInstructions(String current, String added) {
+        return isBlank(current) ? added.trim() : current.trim() + "\n\n" + added.trim();
+    }
+
+    private static boolean containsText(String haystack, String needle) {
+        return !isBlank(haystack) && normalized(haystack).contains(normalized(needle));
+    }
+
+    private static boolean sameText(String a, String b) {
+        return !isBlank(b) && normalized(a).equals(normalized(b));
+    }
+
+    private static String normalized(String value) {
+        return value.trim().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT);
     }
 
     private static boolean isBlank(String value) {

@@ -39,7 +39,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -325,22 +324,19 @@ class AdmissionControllerTest {
 
         @Test
         @WithMockUser(authorities = "ROLE_DOCTOR")
-        @DisplayName("QA D766: a discharge with no discharge diagnosis is refused with 400")
+        @DisplayName("QA D766 / D1596: a discharge with no diagnosis (and no written summary) is refused with 400")
         void dischargeWithoutDiagnosisIsRefused_D766() throws Exception {
+            // QA D1596: the service decides, as a written discharge summary supplies the diagnosis.
             UUID id = UUID.randomUUID();
             AdmissionDischargeRequestDTO request = buildDischargeRequest();
             request.setDischargeDiagnosis(null);
+            when(admissionService.dischargePatient(eq(id), any(AdmissionDischargeRequestDTO.class)))
+                .thenThrow(new com.example.hms.exception.FieldBusinessException("dischargeDiagnosis",
+                    "admissionDischarge.dischargeDiagnosis.required"));
             mockMvc.perform(post(BASE + "/{admissionId}/discharge", id)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
-            request.setDischargeDiagnosis("   ");
-            mockMvc.perform(post(BASE + "/{admissionId}/discharge", id)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
-
-            verify(admissionService, never()).dischargePatient(any(), any());
         }
     }
 

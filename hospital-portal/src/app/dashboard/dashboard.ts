@@ -1611,7 +1611,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const d = this.labDirectorDashboard();
     if (!d) return [];
     const tatValue: number | string =
-      d.avgTurnaroundMinutesToday != null ? Math.round(d.avgTurnaroundMinutesToday) : 'N/A';
+      // QA D1597 class: no value reads as a dash in every language, never English "N/A".
+      d.avgTurnaroundMinutesToday != null ? Math.round(d.avgTurnaroundMinutesToday) : '—';
     return [
       {
         key: 'pending_director',

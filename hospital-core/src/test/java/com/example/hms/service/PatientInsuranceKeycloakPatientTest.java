@@ -155,7 +155,8 @@ class PatientInsuranceKeycloakPatientTest {
     void linkStampsTheKeycloakUser() {
         Patient own = patient(ownPatientId);
         when(patientRepository.findById(ownPatientId)).thenReturn(Optional.of(own));
-        when(insuranceRepository.findByPatient_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(ownPatientId, "AETNA", "POL1"))
+        when(insuranceRepository.findFirstByPatient_IdAndAssignmentIsNullAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
+                ownPatientId, "AETNA", "POL1"))
             .thenReturn(Optional.empty());
         when(insuranceRepository.save(any(PatientInsurance.class))).thenAnswer(inv -> inv.getArgument(0));
         LinkPatientInsuranceRequestDTO req = LinkPatientInsuranceRequestDTO.builder()

@@ -98,6 +98,21 @@ describe('Reception dashboard', () => {
     c.clearQueueFilters();
     expect(c.filteredQueue().length).toBe(2);
   });
+  it('QA D1591: a row the patient pre-checked in from the portal says so', () => {
+    service.getQueue.and.returnValue(
+      of([
+        { ...row('Cdx One'), preCheckedIn: true, preCheckInConsent: true },
+        row('Cdx Two', 'SCHEDULED'),
+      ]),
+    );
+    const fixture = TestBed.createComponent(ReceptionCockpitComponent);
+    fixture.detectChanges();
+    const chips = (fixture.nativeElement as HTMLElement).querySelectorAll(
+      '[data-testid="queue-prechecked-in"]',
+    );
+    expect(chips.length).toBe(1);
+    expect(chips[0].closest('tr')?.textContent).toContain('Cdx One');
+  });
   it('keeps the selected calendar day in the overview heading', () => {
     const fixture = TestBed.createComponent(ReceptionCockpitComponent);
     fixture.componentInstance.selectedDate.set('2026-11-07');

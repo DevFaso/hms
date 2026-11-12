@@ -1309,7 +1309,6 @@
     "DISCHARGE_SUMMARY_PLACEHOLDER": "Resumen breve de la estancia y el resultado...",
     "DISCHARGE_DIAGNOSIS": "Diagnóstico de alta",
     "DISCHARGE_DIAGNOSIS_PLACEHOLDER": "Diagnóstico final al alta",
-    "DISCHARGING": "Dando de alta a",
     "DISCHARGING_BTN": "Dando de alta...",
     "DISCHARGING_PROVIDER": "Médico que da el alta",
     "DISPOSITION_AGAINST_MEDICAL_ADVICE": "Contra consejo médico",
@@ -1325,7 +1324,6 @@
     "DISPOSITION_TRANSFERRED_TO_ANOTHER_HOSPITAL": "Traslado a otro hospital",
     "EDIT": "Editar admisión",
     "EMPTY_MESSAGE": "Sin admisiones. Cree la primera.",
-    "FROM_ROOM": "de la habitación",
     "LOADING": "Cargando admisiones…",
     "LOAD_FAILED": "Error al cargar las admisiones",
     "NEW": "Nueva admisión",
@@ -1369,7 +1367,12 @@
     "ROWS_PER_PAGE": "Filas por página",
     "PAGE_OF": "Página {{page}} de {{total}}",
     "PREVIOUS_PAGE": "Página anterior",
-    "NEXT_PAGE": "Página siguiente"
+    "NEXT_PAGE": "Página siguiente",
+    "DISCHARGING_PATIENT": "Alta del paciente",
+    "NO_ROOM_ASSIGNED": "Sin habitación asignada",
+    "DIAGNOSIS_FROM_SUMMARY": "El diagnóstico redactado en el resumen de alta de esta estancia. Modifíquelo en el resumen.",
+    "INSTRUCTIONS_IN_SUMMARY": "Ya en el resumen de alta",
+    "SUMMARY_FINALIZED_NO_INSTRUCTIONS": "El resumen de alta de esta estancia está finalizado: sus instrucciones son las que recibe el paciente."
   },
   "ANALYTICS": {
     "LOAD_FAILED": "No se pudieron cargar los indicadores. Inténtelo de nuevo.",
@@ -8224,7 +8227,13 @@
     "NO_MATCHES": "Ningún paciente coincide con estos filtros",
     "VISIBLE_QUEUE": "Mostradas: {{shown}} / {{loaded}} entradas cargadas",
     "SUMMARY_UNAVAILABLE": "El resumen del día no está disponible. Actualice para reintentar.",
-    "PANEL_UNAVAILABLE": "Esta lista de trabajo no está disponible. Reintente."
+    "PANEL_UNAVAILABLE": "Esta lista de trabajo no está disponible. Reintente.",
+    "PRE_CHECK_IN": "Registro previo",
+    "PRE_CHECKED_IN": "Registro previo hecho",
+    "PRE_CHECKED_IN_CONSENTED": "Registro previo hecho en el portal del paciente, consentimiento a la atención dado",
+    "PRE_CHECKED_IN_AT": "Hecho en el portal del paciente el {{when}}",
+    "PRE_CHECKED_IN_AT_CONSENTED": "Hecho en el portal del paciente el {{when}}, consentimiento a la atención dado",
+    "CONSENT_GIVEN_AT_PRE_CHECK_IN": "Dado por el paciente en el registro previo; se traslada a esta visita."
   },
   "REFERRALS": {
     "ACCEPTED": "Aceptada",

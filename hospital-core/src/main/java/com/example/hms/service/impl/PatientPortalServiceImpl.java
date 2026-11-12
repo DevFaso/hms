@@ -22,6 +22,7 @@ import com.example.hms.model.Prescription;
 import com.example.hms.model.RefillRequest;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
+import com.example.hms.model.PatientInsurance;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import com.example.hms.payload.dto.BillingInvoiceResponseDTO;
@@ -195,6 +196,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final StaffRepository staffRepository;
     private final com.example.hms.repository.EncounterRepository encounterRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    /** QA D1590: the coverage the patient enters at pre-check-in, where the desk reads it. */
+    private final com.example.hms.repository.PatientInsuranceRepository patientInsuranceRepository;
     private final StaffAvailabilityService staffAvailabilityService;
     private final com.example.hms.repository.UserRepository userRepository;
     private final com.example.hms.service.NotificationService notificationService;
@@ -2396,6 +2399,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
         // 1) Update demographics if provided
         boolean demographicsUpdated = updatePatientDemographics(patient, dto);
+        // 1b) QA D1590: the coverage typed here was discarded and the desk still
+        // read "insurance problem"; it is recorded where the desk reads it.
+        recordPreCheckInInsurance(patient, appointment, dto);
 
         // 2) Process questionnaire responses
         int qrCount = 0;
@@ -2462,6 +2468,83 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .questionnaireResponsesSubmitted(qrCount)
                 .demographicsUpdated(demographicsUpdated)
                 .build();
+    }
+
+    /**
+     * QA D1590: the coverage the patient types at pre-check-in becomes a
+     * {@code patient_insurances} row tagged with the patient's own assignment
+     * at the appointment's hospital: the rows the front desk reads there
+     * ({@code findByPatient_IdAndAssignment_Hospital_Id}). The payer and the
+     * member number go together (a policy row needs both); the plan is kept
+     * as the policy's group. The same payer and number update THIS hospital's
+     * row instead of duplicating it (review of #1131: never another
+     * hospital's row, which stays where it is, untouched); a row tagged to no
+     * hospital yet is adopted. It becomes the primary policy only when it is
+     * this hospital's row and the hospital holds no primary for the patient
+     * yet, so a policy the desk already chose stays primary.
+     */
+    private void recordPreCheckInInsurance(Patient patient, Appointment appointment, PreCheckInRequestDTO dto) {
+        String provider = trimToNull(dto.getInsuranceProvider());
+        String memberId = trimToNull(dto.getInsuranceMemberId());
+        String plan = trimToNull(dto.getInsurancePlan());
+        if (provider == null && memberId == null && plan == null) {
+            return;
+        }
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(provider, "insuranceProvider", "portal.precheckin.insuranceProviderRequired")
+            .requireValue(memberId, "insuranceMemberId", "portal.precheckin.insuranceMemberIdRequired")
+            .orThrow();
+
+        UUID hospitalId = appointment.getHospital() != null ? appointment.getHospital().getId() : null;
+        UserRoleHospitalAssignment assignment = patientAssignmentAt(patient, hospitalId);
+
+        java.util.Optional<PatientInsurance> here = hospitalId == null || assignment == null
+            ? java.util.Optional.empty()
+            : patientInsuranceRepository
+                .findFirstByPatient_IdAndAssignment_Hospital_IdAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
+                    patient.getId(), hospitalId, provider, memberId);
+        PatientInsurance insurance = here
+            .or(() -> patientInsuranceRepository
+                .findFirstByPatient_IdAndAssignmentIsNullAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
+                    patient.getId(), provider, memberId))
+            .orElseGet(() -> {
+                PatientInsurance created = new PatientInsurance();
+                created.setPatient(patient);
+                created.setProviderName(provider);
+                created.setPolicyNumber(memberId);
+                created.setLinkedAs("PATIENT");
+                created.setLinkedByUserId(patient.getUser() != null ? patient.getUser().getId() : null);
+                return created;
+            });
+        if (plan != null) {
+            insurance.setGroupNumber(plan);
+        }
+        if (insurance.getAssignment() == null && assignment != null) {
+            insurance.setAssignment(assignment);
+        }
+        boolean thisHospitals = insurance.getAssignment() != null && insurance.getAssignment().getHospital() != null
+            && hospitalId != null && hospitalId.equals(insurance.getAssignment().getHospital().getId());
+        if (thisHospitals && !insurance.isPrimary() && patientInsuranceRepository
+                .findByPatient_IdAndPrimaryTrueAndAssignment_Hospital_Id(patient.getId(), hospitalId).isEmpty()) {
+            insurance.setPrimary(true);
+        }
+        patientInsuranceRepository.save(insurance);
+    }
+
+    /** The patient's own role at the hospital (ROLE_PATIENT first), which tags the coverage for its desk. */
+    private UserRoleHospitalAssignment patientAssignmentAt(Patient patient, UUID hospitalId) {
+        UUID userId = patient.getUser() != null ? patient.getUser().getId() : null;
+        if (userId == null || hospitalId == null) {
+            return null;
+        }
+        return assignmentRepository
+            .findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, hospitalId, "ROLE_PATIENT")
+            .or(() -> assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
+            .orElse(null);
+    }
+
+    private static String trimToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     /**

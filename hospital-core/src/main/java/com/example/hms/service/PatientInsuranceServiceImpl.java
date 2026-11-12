@@ -108,7 +108,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Override
     @Transactional
     public PatientInsuranceResponseDTO updatePatientInsurance(UUID insuranceId, PatientInsuranceRequestDTO dto, Locale locale) {
-        PatientInsurance existing = getInsuranceOrThrow(insuranceId);
+        PatientInsurance existing = getWritableInsuranceOrThrow(insuranceId);
         // The record's current owner first: a patient naming their own id in
         // the body must not rewrite, and so take over, another patient's
         // coverage. (The endpoint admits no patient today; the rule is the
@@ -135,7 +135,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Override
     @Transactional
     public void deletePatientInsurance(UUID insuranceId, Locale locale) {
-        PatientInsurance existing = getInsuranceOrThrow(insuranceId);
+        PatientInsurance existing = getWritableInsuranceOrThrow(insuranceId);
         enforceSelfAccessIfPatient(existing.getPatient(), () -> insuranceNotFound(insuranceId));
         patientInsuranceRepository.deleteById(insuranceId);
     }
@@ -170,7 +170,8 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         } else {
             UUID hospitalId = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalId, actorUserId, ctx, locale);
-            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalId));
+            tagForStaffHospital(insurance, resolveStaffAssignment(actorUserId, hospitalId),
+                () -> insuranceNotFound(insuranceId));
         }
 
         // Always attach to patient
@@ -214,6 +215,29 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
 
     private Patient getPatientOrThrow(UUID patientId) {
         return patientRepository.findById(patientId).orElseThrow(() -> patientNotFound(patientId));
+    }
+
+    /**
+     * Review of #1131 (the D1590 class): an edit or a delete by id reaches only
+     * the rows of the hospital the request acts at, plus legacy rows tagged to
+     * no hospital. Another hospital's row answers exactly as a missing one
+     * (404), so B's desk can neither change nor remove A's coverage. A
+     * patient-only caller is held to their own rows by the ownership check
+     * that follows; a verified super-admin in global view has no hospital to
+     * measure against.
+     */
+    private PatientInsurance getWritableInsuranceOrThrow(UUID insuranceId) {
+        PatientInsurance insurance = getInsuranceOrThrow(insuranceId);
+        if (roleValidator.isPatientOnlyFromAuth()) {
+            return insurance;
+        }
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        UserRoleHospitalAssignment held = insurance.getAssignment();
+        UUID heldBy = held != null && held.getHospital() != null ? held.getHospital().getId() : null;
+        if (hospitalId != null && heldBy != null && !heldBy.equals(hospitalId)) {
+            throw insuranceNotFound(insuranceId);
+        }
+        return insurance;
     }
 
     private PatientInsurance getInsuranceOrThrow(UUID insuranceId) {
@@ -273,7 +297,8 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             insurance.setPatient(patient);
             UUID hospitalId = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalId, actorUserId, ctx, locale);
-            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalId));
+            tagForStaffHospital(insurance, resolveStaffAssignment(actorUserId, hospitalId),
+                () -> insuranceNotFound(insuranceId));
         }
 
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
@@ -308,11 +333,13 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             enforceStaffAuthorization(hospitalIdForStaff, actorUserId, ctx, locale);
         }
 
-        PatientInsurance insurance = findOrCreateInsurance(patientId, payerCode, policyNumber, patient);
+        PatientInsurance insurance = findOrCreateInsurance(patientId, payerCode, policyNumber, patient,
+            hospitalIdForStaff);
         applyProviderName(insurance, req.getProviderName(), payerCode);
 
         if (!actAsPatient) {
-            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalIdForStaff));
+            tagForStaffHospital(insurance, resolveStaffAssignment(actorUserId, hospitalIdForStaff),
+                () -> new ResourceNotFoundException("patientinsurance.notfound", insurance.getId()));
         }
 
         applyPrimaryFlag(req, actAsPatient, insurance, patient, hospitalIdForStaff);
@@ -384,6 +411,23 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         }
     }
 
+    /**
+     * Review of #1131 (the D1590 class): a staff link tags the row with the
+     * caller's hospital. A row another hospital already holds is never
+     * re-tagged (it would vanish from that desk and could become this
+     * hospital's primary); it answers exactly as a missing row does.
+     */
+    private static void tagForStaffHospital(PatientInsurance insurance, UserRoleHospitalAssignment assignment,
+                                            Supplier<ResourceNotFoundException> notFound) {
+        UserRoleHospitalAssignment held = insurance.getAssignment();
+        UUID heldBy = held != null && held.getHospital() != null ? held.getHospital().getId() : null;
+        UUID caller = assignment.getHospital() != null ? assignment.getHospital().getId() : null;
+        if (heldBy != null && !heldBy.equals(caller)) {
+            throw notFound.get();
+        }
+        insurance.setAssignment(assignment);
+    }
+
     private UserRoleHospitalAssignment resolveStaffAssignment(UUID actorUserId, UUID hospitalId) {
         return assignmentRepository
             .findFirstByUser_IdAndHospital_IdAndActiveTrue(actorUserId, hospitalId)
@@ -399,9 +443,24 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             .orThrow();
     }
 
-    private PatientInsurance findOrCreateInsurance(UUID patientId, String payerCode, String policyNumber, Patient patient) {
-        PatientInsurance insurance = patientInsuranceRepository
-            .findByPatient_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(patientId, payerCode, policyNumber)
+    /**
+     * Review of #1131 (the D1590 class): the policy as the caller's hospital
+     * holds it, else one tagged to no hospital yet, else a new row. A staff
+     * link at hospital B never finds, and so never re-tags or promotes,
+     * hospital A's row; B gets its own. A patient (no hospital) reaches only
+     * untagged rows.
+     */
+    private PatientInsurance findOrCreateInsurance(UUID patientId, String payerCode, String policyNumber, Patient patient,
+                                                   UUID hospitalId) {
+        java.util.Optional<PatientInsurance> here = hospitalId == null
+            ? java.util.Optional.empty()
+            : patientInsuranceRepository
+                .findFirstByPatient_IdAndAssignment_Hospital_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
+                    patientId, hospitalId, payerCode, policyNumber);
+        PatientInsurance insurance = here
+            .or(() -> patientInsuranceRepository
+                .findFirstByPatient_IdAndAssignmentIsNullAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
+                    patientId, payerCode, policyNumber))
             .orElse(null);
 
         if (insurance == null) {
