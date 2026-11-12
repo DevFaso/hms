@@ -8,7 +8,8 @@ import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { LabValuePipe } from './lab-value.pipe';
 import { LabCorrectionBadgeComponent } from './lab-correction-badge.component';
-import { evolutionSeries, observationDelta } from './result-evolution';
+import { evolutionSeries, exactObservation, observationDelta } from './result-evolution';
+import { convertValue, knownAnalyte, unitConversion } from './lab-unit-conversion';
 import { serverInstant } from '../../shared/date-utils';
 
 @Component({
@@ -49,6 +50,11 @@ import { serverInstant } from '../../shared/date-utils';
             (hasCorrections() ? 'LAB_EVOLUTION.CORRECTION_NOTE' : 'LAB_EVOLUTION.NOTE') | translate
           }}
         </p>
+        @if (hasConversions()) {
+          <p class="hint" data-testid="evolution-conversion-note">
+            {{ 'LAB_EVOLUTION.CONVERSION_NOTE' | translate: { unit: unit() } }}
+          </p>
+        }
         @if (points().length > 1) {
           <figure>
             <figcaption>{{ unit() }} · {{ 'LAB_EVOLUTION.TIME_AXIS' | translate }}</figcaption>
@@ -73,6 +79,12 @@ import { serverInstant } from '../../shared/date-utils';
                 >
                   <title>
                     {{ p.resultDate | serverTime | dateTime }} · {{ p.value | labValue: unit()
+                    }}{{
+                      p.converted
+                        ? ' · ' +
+                          ('LAB_EVOLUTION.CONVERTED_FROM'
+                            | translate: { value: (p.resultValue | labValue: p.originalUnit) })
+                        : ''
                     }}{{ p.corrected ? ' · ' + ('LAB_RESULTS.CORRECTED' | translate) : '' }}
                   </title>
                 </circle>
@@ -107,6 +119,14 @@ import { serverInstant } from '../../shared/date-utils';
                     <td>{{ p.resultDate | serverTime | dateTime }}</td>
                     <td>
                       {{ p.resultValue | labValue: p.resultUnit }}
+                      @if (convertedValue(p); as converted) {
+                        <span class="converted" data-testid="evolution-converted">
+                          ({{
+                            'LAB_EVOLUTION.CONVERTED_TO'
+                              | translate: { value: (converted | labValue: unit()) }
+                          }})
+                        </span>
+                      }
                       <app-lab-correction-badge [corrected]="p.corrected" />
                     </td>
                     <td>{{ deltaAt($index) }}</td>
@@ -204,6 +224,10 @@ import { serverInstant } from '../../shared/date-utils';
       padding: 8px 4px;
       border-bottom: 1px solid #dbe6e5;
     }
+    .converted {
+      color: #405a65;
+      font-style: italic;
+    }
     .empty {
       padding: 12px;
       background: white;
@@ -222,21 +246,49 @@ export class ResultEvolutionComponent {
     computation: () => '',
   });
   preferredUnit = input('');
-  units = computed(() => [
+  /** The test's name and code: they say whether its molar mass is known (glucose). */
+  testName = input<string | null | undefined>('');
+  testCode = input<string | null | undefined>('');
+  analyte = computed(() => knownAnalyte(this.testName(), this.testCode()));
+  /** Recorded units, most recent first. */
+  private recordedUnits = computed(() => [
     ...new Set(
-      this.history()
+      [...this.history()]
+        .sort(
+          (a, b) =>
+            (serverInstant(b.resultDate).getTime() || 0) -
+            (serverInstant(a.resultDate).getTime() || 0),
+        )
         .map((p) => p.resultUnit?.trim())
-        .filter(Boolean),
+        .filter((u): u is string => !!u),
     ),
   ]);
+  /**
+   * The display units a reader can choose: the preferred unit (the range's or the
+   * result's) first when the history is in it or converts to it, then the recorded
+   * units, most recent first. Choosing one plots every point that converts to it.
+   */
+  units = computed(() => {
+    const recorded = this.recordedUnits();
+    const preferred = this.preferredUnit().trim();
+    const usable =
+      !!preferred &&
+      recorded.some((u) => u === preferred || unitConversion(u, preferred, this.analyte()));
+    return usable ? [...new Set([preferred, ...recorded])] : recorded;
+  });
   unit = computed(() =>
-    this.units().includes(this.chosenUnit())
-      ? this.chosenUnit()
-      : this.units().includes(this.preferredUnit().trim())
-        ? this.preferredUnit().trim()
-        : (this.units()[0] ?? ''),
+    this.units().includes(this.chosenUnit()) ? this.chosenUnit() : (this.units()[0] ?? ''),
   );
-  points = computed(() => evolutionSeries(this.history(), this.unit()));
+  points = computed(() => evolutionSeries(this.history(), this.unit(), this.analyte()));
+  hasConversions = computed(() => this.points().some((p) => p.converted));
+  /** The stored value in the plotted unit, when it was recorded in another one and converts. */
+  convertedValue(point: LabResultTrendPoint): number | null {
+    const original = point.resultUnit?.trim();
+    if (!original || original === this.unit()) return null;
+    const conversion = unitConversion(original, this.unit(), this.analyte());
+    const value = exactObservation(point.resultValue);
+    return conversion && Number.isFinite(value) ? convertValue(value, conversion) : null;
+  }
   hasCorrections = computed(() => this.history().some((point) => point.corrected));
   observations = computed(() =>
     [...this.history()].sort((a, b) => {
