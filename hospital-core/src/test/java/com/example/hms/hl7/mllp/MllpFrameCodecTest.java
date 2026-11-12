@@ -16,13 +16,20 @@ class MllpFrameCodecTest {
     void readsTwoFramesWhenEveryUnderlyingReadCanSupplyOnlyOneByte() throws Exception {
         var out = new ByteArrayOutputStream();
         String first = "MSH|^~\\&|cdx-first\r";
-        String second = "MSH|^~\\&|cdx-deuxième\r";
+        String second = "MSH|^~\\&|cdx-deuxi\u00e8me\r";
         MllpFrameCodec.writeFrame(out, first, StandardCharsets.UTF_8);
         MllpFrameCodec.writeFrame(out, second, StandardCharsets.UTF_8);
-        var oneByte = new ByteArrayInputStream(out.toByteArray()) {
+        var oneByte = new java.io.InputStream() {
+            private final ByteArrayInputStream source = new ByteArrayInputStream(out.toByteArray());
+
             @Override
-            public synchronized int read(byte[] buffer, int offset, int length) {
-                return super.read(buffer, offset, Math.min(length, 1));
+            public int read() {
+                return source.read();
+            }
+
+            @Override
+            public int read(byte[] buffer, int offset, int length) {
+                return source.read(buffer, offset, Math.min(length, 1));
             }
         };
         assertThat(new String(MllpFrameCodec.readFrame(oneByte, 4096), StandardCharsets.UTF_8)).isEqualTo(first);
