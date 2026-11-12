@@ -175,6 +175,28 @@ class PhoneVerificationServiceImplTest {
     }
 
     @Test
+    @DisplayName("the sent code verifies even when the server formats numbers with non-Latin digits")
+    void sentCodeVerifiesWithNonLatinDefaultLocale() {
+        Locale previous = Locale.getDefault(Locale.Category.FORMAT);
+        try {
+            Locale.setDefault(Locale.Category.FORMAT, Locale.forLanguageTag("ar-EG"));
+            allowRequest();
+            Sent sent = requestAndCapture();
+            PhoneOtpChallenge saved = sent.saved();
+            when(challengeRepository.findByIdAndRequestedByUserId(saved.getId(), staffUserId))
+                .thenReturn(Optional.of(saved));
+
+            assertThat(service.confirmRegistrationVerification(saved.getId(), codeIn(sent.body()), staffUserId)
+                .verified()).isTrue();
+            assertThat(saved.isConsumed()).isTrue();
+            assertThat(saved.isVerified()).isTrue();
+            verify(ikoddiGateway, never()).verifyOtp(anyString(), anyString(), anyString());
+        } finally {
+            Locale.setDefault(Locale.Category.FORMAT, previous);
+        }
+    }
+
+    @Test
     @DisplayName("the hash is salted per challenge and only an exact six-digit code matches")
     void saltIsPerChallenge() {
         String other = "ffeeddccbbaa99887766554433221100";

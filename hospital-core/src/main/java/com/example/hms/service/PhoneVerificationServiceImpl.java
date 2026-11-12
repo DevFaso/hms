@@ -119,7 +119,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
             challengeRepository.saveAll(active);
         }
 
-        String code = String.format("%06d", RANDOM.nextInt(1_000_000));
+        String code = String.format(Locale.ROOT, "%06d", RANDOM.nextInt(1_000_000));
         byte[] saltBytes = new byte[16];
         RANDOM.nextBytes(saltBytes);
         String salt = HexFormat.of().formatHex(saltBytes);
