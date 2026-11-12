@@ -74,6 +74,9 @@ interface PrefRow {
                     <label class="toggle">
                       <input
                         type="checkbox"
+                        [attr.aria-label]="
+                          (row.labelKey | translate) + ' — ' + (channelLabelKey(ch) | translate)
+                        "
                         [(ngModel)]="row.channels[ch]"
                         (ngModelChange)="dirty.set(true)"
                       />

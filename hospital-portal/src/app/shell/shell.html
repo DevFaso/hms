@@ -473,7 +473,7 @@
 
     <!--
       Page Content.
-      v1.0 row 11: id + tabindex="-1" make this the landing target for
+      v1.0 row 11: id + tabindex make this the landing target for
       the skip-link (docs/ui/accessibility.md §6.9) AND the programmatic
       focus destination on every NavigationEnd (see shell.ts
       ngAfterViewInit). aria-label gives screen-reader users a stable
@@ -483,7 +483,7 @@
       #mainContent
       id="main-content"
       class="content"
-      tabindex="-1"
+      tabindex="0"
       role="main"
       [attr.aria-label]="'SHELL.MAIN_CONTENT_ARIA' | translate"
     >
