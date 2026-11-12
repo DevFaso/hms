@@ -7,7 +7,7 @@ import com.example.hms.model.User;
 import com.example.hms.payload.dto.AnnouncementResponseDTO;
 import com.example.hms.repository.AnnouncementRepository;
 import com.example.hms.repository.HospitalRepository;
-import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import org.junit.jupiter.api.AfterEach;
@@ -54,7 +54,7 @@ class AnnouncementServiceImplTest {
     private NotificationService notificationService;
 
     @Mock
-    private UserRepository userRepository;
+    private UserRoleHospitalAssignmentRepository assignmentRepository;
 
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
@@ -271,7 +271,7 @@ class AnnouncementServiceImplTest {
                 a.setId(savedId);
                 return a;
             });
-            when(userRepository.findByIsDeletedFalse()).thenReturn(List.of());
+            when(assignmentRepository.findLiveStaffUsersPlatformWide()).thenReturn(List.of());
 
             AnnouncementResponseDTO dto = service.createAnnouncement("New policy");
 
@@ -287,23 +287,59 @@ class AnnouncementServiceImplTest {
         }
 
         @Test
-        @DisplayName("QA D983: staff are notified with the ANNOUNCEMENT type; a patient-only account is not")
+        @DisplayName("QA D983: a platform-wide announcement notifies staff with the ANNOUNCEMENT type")
         void notifiesStaffWithItsType() {
             ActingScopeTestSupport.globalSuperAdmin(UUID.randomUUID());
             when(announcementRepository.save(any(Announcement.class))).thenAnswer(inv -> inv.getArgument(0));
-            User nurse = User.builder().username("nurse1").build();
-            nurse.getUserRoles().add(com.example.hms.model.UserRole.builder().user(nurse)
-                .role(com.example.hms.model.Role.builder().code("ROLE_NURSE").build()).build());
-            User patient = User.builder().username("patient1").build();
-            patient.getUserRoles().add(com.example.hms.model.UserRole.builder().user(patient)
-                .role(com.example.hms.model.Role.builder().code("ROLE_PATIENT").build()).build());
-            when(userRepository.findByIsDeletedFalse()).thenReturn(List.of(nurse, patient));
+            when(assignmentRepository.findLiveStaffUsersPlatformWide())
+                .thenReturn(List.of(User.builder().username("nurse1").build()));
 
             service.createAnnouncement("Staff meeting");
 
             verify(notificationService).createNotification(eq("announcement.new.notification"), any(),
                 eq("nurse1"), eq("ANNOUNCEMENT"));
-            verify(notificationService, never()).createNotification(any(), any(), eq("patient1"), any());
+            verify(assignmentRepository, never()).findLiveStaffUsersAtHospital(any());
+        }
+
+        @Test
+        @DisplayName("QA D1610: hospital A's announcement reaches A's staff and nobody at B")
+        void hospitalAnnouncementReachesOnlyItsStaff() {
+            UUID hospitalA = UUID.randomUUID();
+            Hospital hospital = Hospital.builder().build();
+            hospital.setId(hospitalA);
+            HospitalContextHolder.setContext(HospitalContext.builder()
+                .activeHospitalId(hospitalA).permittedHospitalIds(java.util.Set.of(hospitalA)).build());
+            when(hospitalRepository.getReferenceById(hospitalA)).thenReturn(hospital);
+            when(announcementRepository.save(any(Announcement.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(assignmentRepository.findLiveStaffUsersAtHospital(hospitalA)).thenReturn(List.of(
+                User.builder().username("nurse-a").build(), User.builder().username("doctor-a").build()));
+
+            service.createAnnouncement("Coupure d'electricite samedi");
+
+            verify(notificationService).createNotification(eq("announcement.new.notification"), any(),
+                eq("nurse-a"), eq("ANNOUNCEMENT"));
+            verify(notificationService).createNotification(eq("announcement.new.notification"), any(),
+                eq("doctor-a"), eq("ANNOUNCEMENT"));
+            verify(notificationService, org.mockito.Mockito.times(2))
+                .createNotification(any(), any(), any(String.class), any());
+            // Never the platform-wide audience: B's staff are not even read.
+            verify(assignmentRepository, never()).findLiveStaffUsersPlatformWide();
+            org.mockito.Mockito.verifyNoMoreInteractions(notificationService);
+        }
+
+        @Test
+        @DisplayName("QA D1615: a blank text is refused naming the field, and nothing is stored or sent")
+        void blankTextIsRefused() {
+            UUID hospitalA = UUID.randomUUID();
+            HospitalContextHolder.setContext(HospitalContext.builder()
+                .activeHospitalId(hospitalA).permittedHospitalIds(java.util.Set.of(hospitalA)).build());
+
+            for (String blank : new String[] {null, "", "   "}) {
+                com.example.hms.exception.FieldBusinessException ex = assertThrows(
+                    com.example.hms.exception.FieldBusinessException.class, () -> service.createAnnouncement(blank));
+                assertEquals("text", ex.getField());
+            }
+            org.mockito.Mockito.verifyNoInteractions(announcementRepository, notificationService, assignmentRepository);
         }
 
         @Test
@@ -330,7 +366,7 @@ class AnnouncementServiceImplTest {
                 a.setId(savedId);
                 return a;
             });
-            when(userRepository.findByIsDeletedFalse()).thenReturn(List.of());
+            when(assignmentRepository.findLiveStaffUsersAtHospital(hospitalId)).thenReturn(List.of());
 
             service.createAnnouncement("Scoped policy");
 
@@ -374,6 +410,20 @@ class AnnouncementServiceImplTest {
 
             assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
                 () -> service.updateAnnouncement(id, "text"));
+        }
+
+        @Test
+        @DisplayName("QA D1615: an edit to a blank text is refused naming the field, and the text is kept")
+        void blankEditIsRefused() {
+            UUID id = UUID.randomUUID();
+            Announcement existing = buildAnnouncement(id, "Old text", LocalDateTime.now());
+            when(announcementRepository.findById(id)).thenReturn(Optional.of(existing));
+
+            com.example.hms.exception.FieldBusinessException ex = assertThrows(
+                com.example.hms.exception.FieldBusinessException.class, () -> service.updateAnnouncement(id, " "));
+            assertEquals("text", ex.getField());
+            assertEquals("Old text", existing.getText());
+            verify(announcementRepository, never()).save(any(Announcement.class));
         }
     }
 
