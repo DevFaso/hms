@@ -31,6 +31,7 @@ describe('AuditLogsComponent (QA D330)', () => {
         WRITE_POST: 'Création : {{entity}}',
         WRITE_ENTITY_UNKNOWN: 'enregistrement',
         DESC: {
+          LABOR_ACTIVE_DISCLOSURE_ON_REFUSAL: 'Travail actif divulgué',
           LABOR_EPISODE_START_REFUSED_COORDINATION:
             'Ouverture d’un épisode de travail refusée : coordination des soins nécessaire',
           PATIENT_RECORD_VIEWED: 'Dossier patient consulté',
@@ -64,6 +65,17 @@ describe('AuditLogsComponent (QA D330)', () => {
         row({ eventDescription: 'Labour episode start refused: care coordination required' }),
       ),
     ).toBe('Ouverture d’un épisode de travail refusée : coordination des soins nécessaire');
+  });
+
+  it('translates the active labour disclosure on refusal', () => {
+    expect(
+      component.describe(
+        row({
+          eventDescription:
+            'Cross-hospital active labour disclosed when refusing a second labour episode',
+        }),
+      ),
+    ).toBe('Travail actif divulgué');
   });
 
   it('reads a class-name or enum entity type in the reader language', () => {

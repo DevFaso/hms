@@ -1448,6 +1448,11 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: [],
   },
   {
+    key: 'AUDIT.DESC.LABOR_ACTIVE_DISCLOSURE_ON_REFUSAL',
+    re: /^Cross-hospital active labour disclosed when refusing a second labour episode$/,
+    params: [],
+  },
+  {
     re: /^Labour episode start refused: care coordination required$/,
     key: 'AUDIT.DESC.LABOR_EPISODE_START_REFUSED_COORDINATION',
     params: [],

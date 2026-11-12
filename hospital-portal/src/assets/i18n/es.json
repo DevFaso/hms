@@ -1875,6 +1875,7 @@
       "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Regla obstétrica no aplicada a una ecografía de urgencia",
       "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Regla obstétrica no aplicada a una derivación de ginecoobstetricia de urgencia",
       "LABOR_EPISODE_START_REFUSED": "Apertura de episodio de trabajo de parto rechazada: hay un episodio activo en otro hospital",
+      "LABOR_ACTIVE_DISCLOSURE_ON_REFUSAL": "Trabajo de parto activo en otro hospital revelado al rechazar un segundo episodio de parto",
       "LABOR_EPISODE_START_REFUSED_COORDINATION": "Apertura de episodio de trabajo de parto rechazada: se requiere coordinación asistencial",
       "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Excepción a la regla obstétrica retirada en una ecografía",
       "ALLERGY_ACKNOWLEDGED": "Alergia reconocida con un motivo",
