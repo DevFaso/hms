@@ -53,6 +53,8 @@ public class IkoddiGatewayImpl implements IkoddiGateway {
     private final String smsSender;
     private final String countryStringCode;
     private final String countryNumberCode;
+    /** Non-production safety net: when set, only these numbers are texted (see {@link SmsRecipientAllowlist}). */
+    private final SmsRecipientAllowlist allowlist;
 
     @org.springframework.beans.factory.annotation.Autowired
     public IkoddiGatewayImpl(
@@ -66,8 +68,10 @@ public class IkoddiGatewayImpl implements IkoddiGateway {
         @Value("${app.ikoddi.country-string-code:BF}") String countryStringCode,
         @Value("${app.ikoddi.country-number-code:226}") String countryNumberCode,
         @Value("${app.ikoddi.connect-timeout-ms:5000}") int connectTimeoutMs,
-        @Value("${app.ikoddi.read-timeout-ms:15000}") int readTimeoutMs
+        @Value("${app.ikoddi.read-timeout-ms:15000}") int readTimeoutMs,
+        @Value("${app.sms.recipient-allowlist:}") String recipientAllowlist
     ) {
+        this.allowlist = SmsRecipientAllowlist.parse(recipientAllowlist, "IKODDI");
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
         requestFactory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
@@ -85,6 +89,16 @@ public class IkoddiGatewayImpl implements IkoddiGateway {
     IkoddiGatewayImpl(RestClient restClient, boolean enabled, String apiKey,
                       String organizationId, String otpAppId, String smsSender,
                       String countryStringCode, String countryNumberCode) {
+        this(restClient, enabled, apiKey, organizationId, otpAppId, smsSender, countryStringCode, countryNumberCode,
+            SmsRecipientAllowlist.unrestricted());
+    }
+
+    /** Package-private test constructor with a recipient allowlist. */
+    @SuppressWarnings("java:S107")
+    IkoddiGatewayImpl(RestClient restClient, boolean enabled, String apiKey,
+                      String organizationId, String otpAppId, String smsSender,
+                      String countryStringCode, String countryNumberCode, SmsRecipientAllowlist allowlist) {
+        this.allowlist = allowlist;
         this.restClient = restClient;
         this.enabled = enabled;
         this.apiKey = apiKey;
@@ -107,6 +121,10 @@ public class IkoddiGatewayImpl implements IkoddiGateway {
     public OtpDispatch sendOtp(String identityE164, OtpChannel channel) {
         requireOtpConfigured();
         String identity = toIkoddiIdentity(identityE164);
+        if (!allowlist.permits("+" + identity)) {
+            allowlist.logRefused("IKODDI", "+" + identity);
+            throw new IllegalStateException(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
+        }
         try {
             IkoddiOtpResponse response = restClient
                 .post()
@@ -151,7 +169,22 @@ public class IkoddiGatewayImpl implements IkoddiGateway {
     @Override
     public SmsDispatch sendSms(List<String> recipientsE164, String message, String campaignName) {
         requireSmsConfigured();
-        List<String> recipients = recipientsE164.stream().map(this::toIkoddiIdentity).toList();
+        // Recipient allowlist (dev/uat): a number not on it is never sent, whoever the caller is.
+        List<String> recipients = new java.util.ArrayList<>();
+        int refused = 0;
+        for (String raw : recipientsE164) {
+            String identity = toIkoddiIdentity(raw);
+            if (allowlist.permits("+" + identity)) {
+                recipients.add(identity);
+            } else {
+                allowlist.logRefused("IKODDI", "+" + identity);
+                refused++;
+            }
+        }
+        if (recipients.isEmpty()) {
+            throw new IllegalStateException(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
+        }
+        boolean allSent = refused == 0;
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("sentTo", recipients);
         body.put("message", message);
@@ -171,7 +204,8 @@ public class IkoddiGatewayImpl implements IkoddiGateway {
                 .body(body)
                 .retrieve()
                 .body(String.class);
-            return new SmsDispatch(true, response);
+            // Not all accepted when the allowlist held some recipients back.
+            return new SmsDispatch(allSent, response);
         } catch (RestClientResponseException ex) {
             throw requestFailure("SMS send", ex);
         }

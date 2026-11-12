@@ -35,9 +35,15 @@ public class UsernameReminderServiceImpl implements UsernameReminderService {
                 if (smsService != null) {
                     // QA D1123 sibling: the reminder was the English literal
                     // "Hello! Your username is: %s" whatever the reader's language.
-                    smsService.send(user.getPhoneNumber(), messageSource.getMessage(
-                        "sms.username.reminder", new Object[] {user.getUsername()},
-                        "sms.username.reminder", locale));
+                    // The answer must not depend on whether the SMS went out (account
+                    // enumeration): a provider or country refusal is logged, not thrown.
+                    try {
+                        smsService.send(user.getPhoneNumber(), messageSource.getMessage(
+                            "sms.username.reminder", new Object[] {user.getUsername()},
+                            "sms.username.reminder", locale));
+                    } catch (RuntimeException ex) {
+                        log.warn("Username reminder SMS not sent for userId={}: {}", user.getId(), ex.getMessage());
+                    }
                 } else {
                     // If no SMS service, still send by email when possible
                     emailService.sendUsernameReminderEmail(user.getEmail(), user.getUsername(), locale);
