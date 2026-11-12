@@ -21,6 +21,8 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,7 +46,8 @@ class MllpLocalTransportIntegrationTest {
     private final MllpInboundLabService lab = mock(MllpInboundLabService.class);
     private final MllpInboundAdtService adt = mock(MllpInboundAdtService.class);
     private final MllpInboundMergeService merge = mock(MllpInboundMergeService.class);
-    private final Map<String, IntegrationMessageEvent> rows = new ConcurrentHashMap<>();
+    private final Map<UUID, IntegrationMessageEvent> rows = new ConcurrentHashMap<>();
+    private final IntegrationMessageEventRepository repository = mock(IntegrationMessageEventRepository.class);
     private MllpTcpServer server;
     private Hospital hospital;
 
@@ -58,16 +61,18 @@ class MllpLocalTransportIntegrationTest {
             .thenReturn(MllpInboundOutcome.ACCEPTED);
         when(adt.processAdt(any(), eq(hospital), anyString(), anyString(), anyString()))
             .thenReturn(MllpInboundOutcome.ACCEPTED);
-        var repository = mock(IntegrationMessageEventRepository.class);
         when(repository.save(any())).thenAnswer(invocation -> {
             IntegrationMessageEvent row = invocation.getArgument(0);
             if (row.getId() == null) row.setId(UUID.randomUUID());
-            rows.put(row.getCorrelationId(), row);
+            rows.put(row.getId(), row);
             return row;
         });
         when(repository.findFirstByCorrelationIdAndStatusAndReceivedAtAfterOrderByReceivedAtDesc(any(), any(), any()))
-            .thenAnswer(invocation -> Optional.ofNullable(rows.get(invocation.getArgument(0)))
-                .filter(row -> row.getStatus() == invocation.getArgument(1)));
+            .thenAnswer(invocation -> rows.values().stream()
+                .filter(row -> java.util.Objects.equals(row.getCorrelationId(), invocation.getArgument(0)))
+                .filter(row -> row.getStatus() == invocation.getArgument(1))
+                .filter(row -> row.getReceivedAt().isAfter(invocation.getArgument(2, LocalDateTime.class)))
+                .max(Comparator.comparing(IntegrationMessageEvent::getReceivedAt)));
         var dispatcher = new Hl7MessageDispatcher(new Hl7v2MessageBuilder(), allowlist, lab, adt, merge,
             new IntegrationMessageRecorder(repository));
         var properties = new MllpProperties();
@@ -92,12 +97,13 @@ class MllpLocalTransportIntegrationTest {
             + "OBX|1|NM|CDX^Synthetic||1|unit|||N\r";
     }
 
-    private String sendFragmented(String body) throws Exception {
+    private String sendByteWise(String body) throws Exception {
         try (var socket = new Socket(InetAddress.getLoopbackAddress(), server.getBoundPort())) {
             socket.setSoTimeout(5_000);
+            socket.setTcpNoDelay(true);
             var output = socket.getOutputStream();
             output.write(0x0b);
-            // A sender is free to split a frame at any byte, not only at segment boundaries.
+            // Byte-wise writes exercise framing over TCP; the OS still controls packet boundaries.
             for (byte value : body.getBytes(StandardCharsets.UTF_8)) output.write(value);
             output.write(0x1c);
             output.write(0x0d);
@@ -109,7 +115,8 @@ class MllpLocalTransportIntegrationTest {
     @ParameterizedTest
     @ValueSource(strings = {"ADT^A01", "ORU^R01"})
     void inboundAdtAndOruEchoTheControlIdInAnAcceptAcknowledgement(String type) throws Exception {
-        assertThat(sendFragmented(message(type, "CDX-ACCEPT"))).contains("MSA|AA|CDX-ACCEPT");
+        assertThat(sendByteWise(message(type, "CDX-ACCEPT"))).contains("MSA|AA|CDX-ACCEPT");
+        // The dispatcher leaves accepted-message recording to the mocked clinical services.
         assertThat(rows).isEmpty();
         if (type.startsWith("ORU")) {
             verify(lab).processOruR01(anyList(), eq(hospital), eq("CDX"), eq("CDX-FAC"), eq("CDX-ACCEPT"), anyString());
@@ -127,28 +134,80 @@ class MllpLocalTransportIntegrationTest {
             .thenReturn(MllpInboundOutcome.REJECTED_NOT_FOUND);
         when(adt.processAdt(any(), eq(hospital), anyString(), anyString(), anyString()))
             .thenReturn(MllpInboundOutcome.REJECTED_NOT_FOUND);
-        assertThat(sendFragmented(message(type, "CDX-REFUSE"))).contains("MSA|AE|CDX-REFUSE").doesNotContain("MSA|AA|", "Server-side handler error");
+        assertThat(sendByteWise(message(type, "CDX-REFUSE"))).contains("MSA|AE|CDX-REFUSE").doesNotContain("MSA|AA|", "Server-side handler error");
+        if (type.startsWith("ORU")) {
+            verify(lab).processOruR01(anyList(), eq(hospital), eq("CDX"), eq("CDX-FAC"), eq("CDX-REFUSE"), anyString());
+            verifyNoInteractions(adt, merge);
+        } else {
+            verify(adt).processAdt(any(), eq(hospital), eq("CDX"), eq("CDX-FAC"), eq("CDX-REFUSE"));
+            verifyNoInteractions(lab, merge);
+        }
     }
 
     @Test
     void disallowedSenderNeverReachesClinicalHandlersAndRepeatedRejectsFoldIntoOneRow() throws Exception {
         String untrusted = message("ORU^R01", "CDX-RETRY").replace("|CDX|CDX-FAC|", "|CDX-UNKNOWN|CDX-UNKNOWN-FAC|");
-        assertThat(sendFragmented(untrusted)).contains("MSA|AR|CDX-RETRY");
-        assertThat(sendFragmented(untrusted)).contains("MSA|AR|CDX-RETRY");
+        assertThat(sendByteWise(untrusted)).contains("MSA|AR|CDX-RETRY");
+        assertThat(sendByteWise(untrusted)).contains("MSA|AR|CDX-RETRY");
         verifyNoInteractions(lab, adt, merge);
         assertThat(rows).hasSize(1);
         assertThat(rows.values()).allSatisfy(row -> {
             assertThat(row.getAttemptCount()).isEqualTo(2);
             assertThat(row.getStatus()).isEqualTo(IntegrationMessageStatus.FAILED);
             assertThat(row.getPayload()).isEqualTo(untrusted);
+            assertThat(row.getOrganizationId()).isNull();
         });
     }
 
     @Test
-    void invalidHeaderIsRejectedAndTheListenerStillAcceptsTheNextConnection() throws Exception {
-        assertThat(sendFragmented("CDX malformed header\r")).contains("MSA|AR|");
+    void differentRejectedSendersWithTheSameControlIdKeepSeparateRows() throws Exception {
+        String first = message("ORU^R01", "CDX-SHARED-ID").replace("|CDX|CDX-FAC|", "|UNKNOWN-A|FAC-A|");
+        String second = message("ORU^R01", "CDX-SHARED-ID").replace("|CDX|CDX-FAC|", "|UNKNOWN-B|FAC-B|");
+        assertThat(sendByteWise(first)).contains("MSA|AR|CDX-SHARED-ID");
+        assertThat(sendByteWise(second)).contains("MSA|AR|CDX-SHARED-ID");
         verifyNoInteractions(lab, adt, merge);
-        assertThat(sendFragmented(message("ORU^R01", "CDX-AFTER-BAD"))).contains("MSA|AA|CDX-AFTER-BAD");
+        assertThat(rows).hasSize(2);
+        assertThat(rows.values()).extracting(IntegrationMessageEvent::getPayload).containsExactlyInAnyOrder(first, second);
+        assertThat(rows.values()).extracting(IntegrationMessageEvent::getCorrelationId).doesNotHaveDuplicates();
+        assertThat(rows.values()).allSatisfy(row -> {
+            assertThat(row.getAttemptCount()).isEqualTo(1);
+            assertThat(row.getStatus()).isEqualTo(IntegrationMessageStatus.FAILED);
+            assertThat(row.getOrganizationId()).isNull();
+        });
+    }
+
+    @Test
+    void rejectedSenderAfterTheFoldWindowCreatesANewRow() throws Exception {
+        String untrusted = message("ORU^R01", "CDX-EXPIRED").replace("|CDX|CDX-FAC|", "|UNKNOWN|FAC|");
+        assertThat(sendByteWise(untrusted)).contains("MSA|AR|CDX-EXPIRED");
+        IntegrationMessageEvent expired = rows.values().iterator().next();
+        expired.setReceivedAt(LocalDateTime.now().minusHours(25));
+        LocalDateTime earliestCutoff = LocalDateTime.now().minusHours(24);
+        assertThat(sendByteWise(untrusted)).contains("MSA|AR|CDX-EXPIRED");
+        LocalDateTime latestCutoff = LocalDateTime.now().minusHours(24);
+        var cutoff = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(repository, org.mockito.Mockito.times(2))
+            .findFirstByCorrelationIdAndStatusAndReceivedAtAfterOrderByReceivedAtDesc(any(), any(), cutoff.capture());
+        assertThat(cutoff.getAllValues().get(1)).isBetween(earliestCutoff, latestCutoff);
+        verifyNoInteractions(lab, adt, merge);
+        assertThat(rows).hasSize(2);
+        assertThat(rows.values()).allSatisfy(row -> assertThat(row.getAttemptCount()).isEqualTo(1));
+    }
+
+    @Test
+    void invalidHeaderIsRejectedAndTheListenerStillAcceptsTheNextConnection() throws Exception {
+        String malformed = "CDX malformed header\r";
+        assertThat(sendByteWise(malformed)).contains("MSA|AR|");
+        verifyNoInteractions(lab, adt, merge);
+        assertThat(rows).hasSize(1);
+        assertThat(rows.values()).allSatisfy(row -> {
+            assertThat(row.getStatus()).isEqualTo(IntegrationMessageStatus.FAILED);
+            assertThat(row.getPayload()).isEqualTo(malformed);
+            assertThat(row.getCorrelationId()).isNotBlank();
+            assertThat(row.getOrganizationId()).isNull();
+        });
+        assertThat(sendByteWise(message("ORU^R01", "CDX-AFTER-BAD"))).contains("MSA|AA|CDX-AFTER-BAD");
+        assertThat(rows).hasSize(1);
     }
 
     @ParameterizedTest
