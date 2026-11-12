@@ -1,4 +1,6 @@
 import { ClockTimePipe } from '../../shared/pipes/clock-time.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
   Component,
@@ -47,7 +49,14 @@ export function copayAmountMessageKey(amount: number | string | null | undefined
 @Component({
   selector: 'app-checkin-dialog',
   standalone: true,
-  imports: [ClockTimePipe, DialogFocusDirective, FormsModule, TranslateModule],
+  imports: [
+    ClockTimePipe,
+    DateTimePipe,
+    ServerTimePipe,
+    DialogFocusDirective,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './checkin-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './checkin-dialog.component.scss',
@@ -79,6 +88,15 @@ export class CheckinDialogComponent {
   consentSignedName = signal('');
   notes = signal('');
   saving = signal(false);
+
+  /**
+   * QA D1591: the patient consented to care at pre-check-in; the box shows it
+   * ticked and fixed, and the check-in carries that consent onto the visit
+   * (the server links it) instead of recording a second one.
+   */
+  get consentGivenAtPreCheckIn(): boolean {
+    return !!this.queueItem?.preCheckInConsent;
+  }
 
   get canSubmit(): boolean {
     return !!this.queueItem?.appointmentId && this.refusals().length === 0 && !this.saving();
@@ -144,7 +162,7 @@ export class CheckinDialogComponent {
       insuranceVerified: this.insuranceVerified(),
       notes: this.notes() || null,
     };
-    if (this.consentObtained()) {
+    if (this.consentObtained() && !this.consentGivenAtPreCheckIn) {
       request.consentObtained = true;
       request.consentMethod = 'ELECTRONIC';
       request.consentSignedName = this.consentSignedName().trim() || null;

@@ -99,6 +99,7 @@ class ReceptionServiceImplTest {
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.repository.UserRepository userRepo;
     @Mock private com.example.hms.service.TreatmentConsentService treatmentConsentService;
+    @Mock private com.example.hms.repository.PatientTreatmentConsentRepository consentRepo;
     @Mock private AppointmentSlotRepository slotRepo;
     @Mock private SlotInventoryService slotInventoryService;
     @Mock private PatientOutreachNotifier outreachNotifier;
@@ -522,6 +523,36 @@ class ReceptionServiceImplTest {
 
             service.getQueue(hospitalToday, hospitalId, "ALL", null, null);
             verify(encounterRepo).findOpenStartedBefore(eq(hospitalId), eq(hospitalToday.atStartOfDay()), any());
+        }
+
+        @Test
+        @DisplayName("QA D1591: the queue row says the patient pre-checked in, when, and that they consented")
+        void queueCarriesThePreCheckIn_D1591() {
+            Appointment appt = makeAppointment(AppointmentStatus.SCHEDULED);
+            Appointment other = makeAppointment(AppointmentStatus.SCHEDULED);
+            LocalDateTime when = LocalDateTime.of(2026, 11, 12, 8, 15);
+            when(appt.getPreCheckedIn()).thenReturn(true);
+            when(appt.getPreCheckinTimestamp()).thenReturn(when);
+            UUID apptId = appt.getId();
+            when(consentRepo.existsByAppointment_IdAndSourceAndStatus(apptId,
+                    com.example.hms.enums.TreatmentConsentSource.PRE_CHECK_IN,
+                    com.example.hms.enums.TreatmentConsentStatus.ACTIVE)).thenReturn(true);
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(List.of(appt, other));
+            when(encounterRepo.findByAppointmentIdIn(any())).thenReturn(Collections.emptyList());
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+            stubEmptyInsuranceAndInvoices();
+
+            List<ReceptionQueueItemDTO> rows = service.getQueue(today, hospitalId, "ALL", null, null);
+            ReceptionQueueItemDTO pre = rows.stream().filter(r -> apptId.equals(r.getAppointmentId())).findFirst().orElseThrow();
+            ReceptionQueueItemDTO plain = rows.stream().filter(r -> !apptId.equals(r.getAppointmentId())).findFirst().orElseThrow();
+
+            assertThat(pre.isPreCheckedIn()).isTrue();
+            assertThat(pre.getPreCheckinTimestamp()).isEqualTo(when);
+            assertThat(pre.isPreCheckInConsent()).isTrue();
+            assertThat(plain.isPreCheckedIn()).isFalse();
+            assertThat(plain.isPreCheckInConsent()).isFalse();
         }
 
         @Test
@@ -2156,6 +2187,53 @@ class ReceptionServiceImplTest {
                 org.mockito.ArgumentMatchers.argThat(req ->
                     "John Doe".equals(req.getSignedName())
                         && req.getAppointmentId().equals(appointmentId)));
+        }
+
+        @Test
+        @DisplayName("QA D1591: the consent given at pre-check-in carries onto the visit, never recorded twice")
+        void checkInCarriesThePreCheckInConsent() {
+            UUID appointmentId = UUID.randomUUID();
+            Staff staff = mock(Staff.class);
+            lenient().when(staff.getHospital()).thenReturn(hospital);
+            UserRoleHospitalAssignment assignment = mock(UserRoleHospitalAssignment.class);
+            lenient().when(assignment.getHospital()).thenReturn(hospital);
+
+            Appointment appointment = new Appointment();
+            appointment.setId(appointmentId);
+            appointment.setStatus(AppointmentStatus.SCHEDULED);
+            appointment.setPatient(patient);
+            appointment.setStaff(staff);
+            appointment.setHospital(hospital);
+            appointment.setDepartment(department);
+            appointment.setAssignment(assignment);
+            appointment.setAppointmentDate(today);
+            appointment.setStartTime(LocalTime.of(9, 0));
+            appointment.setEndTime(LocalTime.of(9, 30));
+
+            com.example.hms.model.PatientTreatmentConsent given = new com.example.hms.model.PatientTreatmentConsent();
+            given.setSource(com.example.hms.enums.TreatmentConsentSource.PRE_CHECK_IN);
+            when(consentRepo.findByAppointment_IdAndStatus(appointmentId,
+                    com.example.hms.enums.TreatmentConsentStatus.ACTIVE)).thenReturn(List.of(given));
+            when(appointmentRepo.findById(appointmentId)).thenReturn(Optional.of(appointment));
+            when(encounterRepo.save(any(Encounter.class))).thenAnswer(inv -> {
+                Encounter e = inv.getArgument(0);
+                e.setId(UUID.randomUUID());
+                return e;
+            });
+            when(appointmentRepo.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(userRepo.findByUsername("receptionist1")).thenReturn(Optional.empty());
+
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointmentId)
+                    .identityConfirmed(true)
+                    .consentObtained(true)
+                    .build();
+
+            service.checkInPatient(request, hospitalId, "receptionist1");
+
+            assertThat(given.getEncounter()).isNotNull();
+            verify(consentRepo).save(given);
+            verify(treatmentConsentService, never()).record(any(), any(), any(), any(), any());
         }
 
         @Test

@@ -47,6 +47,10 @@ export interface ReceptionQueueItem {
   encounterId: string | null;
   hasInsuranceIssue: boolean;
   hasOutstandingBalance: boolean;
+  /** QA D1591: the patient pre-checked in from the portal, when, and whether they consented there. */
+  preCheckedIn?: boolean;
+  preCheckinTimestamp?: string | null;
+  preCheckInConsent?: boolean;
 }
 
 export interface InsuranceSummary {

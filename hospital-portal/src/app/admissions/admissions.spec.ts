@@ -8,6 +8,7 @@ import { Subject, of, throwError } from 'rxjs';
 
 import { AdmissionsComponent } from './admissions';
 import { AdmissionResponse, AdmissionService } from '../services/admission.service';
+import { DischargeService, DischargeSummary } from '../services/discharge.service';
 import { HospitalResponse, HospitalService } from '../services/hospital.service';
 import { StaffResponse, StaffService } from '../services/staff.service';
 import { PatientResponse, PatientService } from '../services/patient.service';
@@ -34,6 +35,7 @@ import {
 describe('AdmissionsComponent', () => {
   let component: AdmissionsComponent;
   let admissionService: jasmine.SpyObj<AdmissionService>;
+  let dischargeService: jasmine.SpyObj<DischargeService>;
   let hospitalService: jasmine.SpyObj<HospitalService>;
   let patientService: jasmine.SpyObj<PatientService>;
   let departmentLookup: jasmine.SpyObj<DepartmentLookupService>;
@@ -68,6 +70,10 @@ describe('AdmissionsComponent', () => {
     superAdmin = signal(false);
     activeRoles = ['ROLE_DOCTOR'];
     requestScope = 'h1';
+    dischargeService = jasmine.createSpyObj<DischargeService>('DischargeService', [
+      'summaryForEncounter',
+    ]);
+    dischargeService.summaryForEncounter.and.returnValue(of(null));
     admissionService = jasmine.createSpyObj<AdmissionService>('AdmissionService', [
       'getAll',
       'create',
@@ -116,6 +122,7 @@ describe('AdmissionsComponent', () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: AdmissionService, useValue: admissionService },
+        { provide: DischargeService, useValue: dischargeService },
         { provide: HospitalService, useValue: hospitalService },
         { provide: StaffService, useValue: staffService },
         { provide: PatientService, useValue: patientService },
@@ -541,6 +548,54 @@ describe('AdmissionsComponent', () => {
       expect(toast.success).toHaveBeenCalledWith('ADMISSIONS.DISCHARGE_SUCCESS');
       expect(component.showDischargeModal()).toBeFalse();
     });
+
+    const written = (overrides: Partial<DischargeSummary> = {}) =>
+      ({
+        id: 's1',
+        encounterId: 'e1',
+        dischargeDiagnosis: 'R50.9 Fièvre',
+        followUpInstructions: 'Contrôle à J7',
+        isFinalized: false,
+        ...overrides,
+      }) as DischargeSummary;
+
+    it("QA D1596: with a written summary, its diagnosis is shown, not typed again, and the dialog's instructions are sent", () => {
+      dischargeService.summaryForEncounter.and.returnValue(of(written()));
+      component.confirmDischarge(adm({ encounterId: 'e1' }));
+      expect(dischargeService.summaryForEncounter).toHaveBeenCalledWith('e1');
+      expect(component.staySummary()?.id).toBe('s1');
+      expect(component.dischargeForm.dischargeDiagnosis).toBe('R50.9 Fièvre');
+
+      component.dischargeForm.dischargeSummary = 'Évolution favorable';
+      component.dischargeForm.dischargeInstructions = 'Paracétamol si fièvre';
+      admissionService.discharge.and.returnValue(of(adm({ status: 'DISCHARGED' })));
+      component.executeDischarge();
+      const body = admissionService.discharge.calls.mostRecent().args[1];
+      expect(body['dischargeDiagnosis']).toBeUndefined();
+      expect(body['dischargeInstructions']).toBe('Paracétamol si fièvre');
+    });
+
+    it('QA D1596: a finalized summary takes no further instructions from the dialog', () => {
+      dischargeService.summaryForEncounter.and.returnValue(of(written({ isFinalized: true })));
+      component.confirmDischarge(adm({ encounterId: 'e1' }));
+      component.dischargeForm.dischargeInstructions = 'typed anyway';
+      admissionService.discharge.and.returnValue(of(adm({ status: 'DISCHARGED' })));
+      component.executeDischarge();
+      expect(
+        admissionService.discharge.calls.mostRecent().args[1]['dischargeInstructions'],
+      ).toBeUndefined();
+    });
+
+    it('QA D1596: without a written summary, the typed diagnosis is sent', () => {
+      component.confirmDischarge(adm({ encounterId: 'e1' }));
+      expect(component.staySummary()).toBeNull();
+      component.dischargeForm.dischargeDiagnosis = ' Paludisme grave ';
+      admissionService.discharge.and.returnValue(of(adm({ status: 'DISCHARGED' })));
+      component.executeDischarge();
+      expect(admissionService.discharge.calls.mostRecent().args[1]['dischargeDiagnosis']).toBe(
+        'Paludisme grave',
+      );
+    });
   });
 
   describe('order sets', () => {
@@ -724,6 +779,7 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
       imports: [AdmissionsComponent, TranslateModule.forRoot()],
       providers: [
         { provide: AdmissionService, useValue: admissions },
+        { provide: DischargeService, useValue: { summaryForEncounter: () => of(null) } },
         { provide: HospitalService, useValue: hospitals },
         { provide: StaffService, useValue: staff },
         { provide: PatientService, useValue: jasmine.createSpyObj('PatientService', ['list']) },
@@ -778,6 +834,21 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
     expect(reason!.getAttribute('aria-invalid')).toBe('true');
     const warning = el.querySelector('.delete-warning')!;
     expect(warning.textContent!.replace(/\s+/g, ' ')).not.toMatch(/Zongo\S/);
+  });
+
+  it('QA D1597: a patient with no bed reads "no room assigned", never "N/A"', () => {
+    const fixture = mount(['ROLE_DOCTOR']);
+    fixture.componentInstance.confirmDischarge({
+      id: 'a1',
+      hospitalId: 'h1',
+      patientId: 'p1',
+      patientName: 'Fatimata Zongo',
+      status: 'ACTIVE',
+    } as AdmissionResponse);
+    fixture.detectChanges();
+    const info = (fixture.nativeElement as HTMLElement).querySelector('.discharge-info')!;
+    expect(info.textContent).not.toContain('N/A');
+    expect(info.querySelector('[data-testid="discharge-no-room"]')).not.toBeNull();
   });
 
   // QA D903/D912: the chip showed the email, or an empty line for a phone-only

@@ -614,7 +614,8 @@
   overflow-wrap: anywhere;
 }
 .flag-chip.warn,
-.flag-chip.danger {
+.flag-chip.danger,
+.flag-chip.info {
   display: inline-block;
   font-size: 9px;
   font-weight: 650;
@@ -630,6 +631,10 @@
 .flag-chip.danger {
   color: #a32132;
   background: #fff0f1;
+}
+.flag-chip.info {
+  color: #1d4f91;
+  background: #e8f1fd;
 }
 .btn-icon {
   border-radius: 7px;

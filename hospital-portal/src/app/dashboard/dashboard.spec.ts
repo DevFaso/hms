@@ -433,7 +433,7 @@ describe('Dashboard navigation & RBAC', () => {
     expect(approvalCard?.value).toBe(3);
   });
 
-  it('labDirectorStatCards TAT should show N/A when avgTurnaroundMinutesToday is null', () => {
+  it('labDirectorStatCards TAT should show a dash (never English N/A) when avgTurnaroundMinutesToday is null', () => {
     const c = createComponent(['ROLE_LAB_DIRECTOR'], []);
     c.isLabDirector.set(true);
     c.labDirectorDashboard.set({
@@ -453,7 +453,7 @@ describe('Dashboard navigation & RBAC', () => {
       recentApprovalAudit: [],
     });
     const tatCard = c.labDirectorStatCards().find((c) => c.key === 'avg_tat');
-    expect(tatCard?.value).toBe('N/A');
+    expect(tatCard?.value).toBe('—');
   });
 
   it('labDirectorNavTiles should return 11 tiles with badges for pending counts', () => {

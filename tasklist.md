@@ -6430,3 +6430,11 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 
 - **Signature revoke, pinned super-admin:** `DigitalSignatureServiceImpl` revoke admits `CallerIdentity.isGlobalSuperAdmin()` or a hospital admin of the signature's hospital, so a super-admin with that hospital selected is refused though `POST /signatures/{id}/revoke` admits SUPER_ADMIN. Not an admin review (it voids a clinician's signature), so left as it is; switch it to `CallerIdentity.isSuperAdminFor(signature hospital)` only if the user wants super-admins to revoke at a selected hospital.
 - **Review list in global view:** `GET /mortality/disputes` still answers 400 `mortality.hospitalRequired` for a super-admin in global view (no hospital to read). The portal now asks only once a hospital is selected; a cross-hospital review list for global view would be a new feature.
+
+## Standing debt — r44 front desk and discharge (fix/r44-frontdesk-discharge)
+
+- **D1590, coverage across hospitals:** a pre-check-in policy that already exists (same payer and member number) keeps the hospital it was first tagged with, so a second hospital's desk does not see it; insurance rows are scoped by assignment, and a patient-level coverage visible to every hospital the patient is registered at would be a model change.
+- **D1590, patient profile:** `PatientProfileDTO` in `patient-portal.service.ts` declares `insuranceProvider`, `insuranceMemberId` and `insurancePlan`, which the backend profile never fills; the patient never sees the coverage recorded for them.
+- **D1590, a patient with no assignment at the hospital:** the coverage is still recorded (patient-level, `GET /patient-insurances/patient/{id}`) but untagged, so the desk misses it; QA to confirm every portal patient holds a ROLE_PATIENT assignment where they book.
+- **D1591, flow board and insurance-issues panel:** the pre-check-in chip is on the cockpit queue and in the check-in dialog only; the flow-board cards do not show it.
+- **D1596, an admission discharged without a separate summary:** the stay summary is written at discharge when the stay has its INPATIENT encounter with a lead (`AdmissionStayEncounterService.recordStayDischargeSummary`); the QA case where the patient saw no text at all was not reproduced from the code, re-test on dev and check the stay had an encounter.

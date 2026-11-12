@@ -394,5 +394,11 @@ function labelOf(root: ParentNode, id: string): string {
     copy.querySelectorAll('input, select, textarea, .invalid-field-msg').forEach((n) => n.remove());
     text = copy.textContent ?? text;
   }
-  return text.replace(/\*/g, '').replace(/\s+/g, ' ').trim();
+  // QA D1600 (round 44): a label that is a sentence ("… pour mes soins.") keeps
+  // no closing period or colon of its own, or the list said "soins.. Cochez".
+  return text
+    .replace(/\*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[\s.:;]+$/u, '');
 }

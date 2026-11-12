@@ -110,6 +110,19 @@ describe('SubmitGuardDirective (QA D1124 / D1089)', () => {
     expect(reason()?.textContent).toBe("Champs obligatoires manquants : J'accepte");
   });
 
+  it('names a sentence label without its own period (QA D1600: "soins.. Cochez")', () => {
+    const ack = el.querySelector('#ack') as HTMLInputElement;
+    ack.parentElement!.lastChild!.textContent = ' Je confirme mon consentement pour mes soins.';
+    ack.required = true;
+    host.fields.set(['ack']);
+    host.guard.set('Cochez la case de consentement pour envoyer.');
+    fixture.detectChanges();
+    button().click();
+    expect(reason()?.textContent).toBe(
+      'Champs obligatoires manquants : Je confirme mon consentement pour mes soins. Cochez la case de consentement pour envoyer.',
+    );
+  });
+
   it('without listed fields it marks nothing (a secondary action never flags the whole form)', () => {
     host.fields.set(null);
     fixture.detectChanges();

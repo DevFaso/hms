@@ -1304,7 +1304,6 @@
     "DISCHARGE_SUMMARY_PLACEHOLDER": "Brief summary of hospital stay and outcome...",
     "DISCHARGE_DIAGNOSIS": "Discharge diagnosis",
     "DISCHARGE_DIAGNOSIS_PLACEHOLDER": "Final diagnosis at discharge",
-    "DISCHARGING": "Discharging",
     "DISCHARGING_BTN": "Discharging...",
     "DISCHARGING_PROVIDER": "Discharging Provider",
     "DISPOSITION_AGAINST_MEDICAL_ADVICE": "Against Medical Advice",
@@ -1320,7 +1319,6 @@
     "DISPOSITION_TRANSFERRED_TO_ANOTHER_HOSPITAL": "Transfer to Another Hospital",
     "EDIT": "Edit Admission",
     "EMPTY_MESSAGE": "No admissions yet. Create your first admission.",
-    "FROM_ROOM": "from room",
     "LOADING": "Loading admissions...",
     "LOAD_FAILED": "Failed to load admissions",
     "NEW": "New Admission",
@@ -1363,7 +1361,12 @@
     "ROWS_PER_PAGE": "Rows per page",
     "PAGE_OF": "Page {{page}} of {{total}}",
     "PREVIOUS_PAGE": "Previous page",
-    "NEXT_PAGE": "Next page"
+    "NEXT_PAGE": "Next page",
+    "DISCHARGING_PATIENT": "Discharging",
+    "NO_ROOM_ASSIGNED": "No room assigned",
+    "DIAGNOSIS_FROM_SUMMARY": "The diagnosis written in the discharge summary of this stay. Change it on the summary.",
+    "INSTRUCTIONS_IN_SUMMARY": "Already in the discharge summary",
+    "SUMMARY_FINALIZED_NO_INSTRUCTIONS": "The discharge summary of this stay is finalized: its instructions are the ones the patient receives."
   },
   "ANALYTICS": {
     "LOAD_FAILED": "The analytics could not be loaded. Try again.",
@@ -8216,7 +8219,13 @@
     "NO_MATCHES": "No patients match these filters",
     "VISIBLE_QUEUE": "Shown: {{shown}} / {{loaded}} loaded queue entries",
     "SUMMARY_UNAVAILABLE": "The daily overview is unavailable. Refresh to retry.",
-    "PANEL_UNAVAILABLE": "This worklist is unavailable. Please retry."
+    "PANEL_UNAVAILABLE": "This worklist is unavailable. Please retry.",
+    "PRE_CHECK_IN": "Pre-check-in",
+    "PRE_CHECKED_IN": "Pre-checked in",
+    "PRE_CHECKED_IN_CONSENTED": "Pre-checked in from the patient portal, consent to care given",
+    "PRE_CHECKED_IN_AT": "Done in the patient portal on {{when}}",
+    "PRE_CHECKED_IN_AT_CONSENTED": "Done in the patient portal on {{when}}, consent to care given",
+    "CONSENT_GIVEN_AT_PRE_CHECK_IN": "Given by the patient at pre-check-in; it is carried onto this visit."
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",

@@ -17,6 +17,10 @@ public interface PatientInsuranceRepository extends JpaRepository<PatientInsuran
     List<PatientInsurance> findByPatient_Id(UUID patientId);
 
     List<PatientInsurance> findByPatient_IdAndAssignment_Hospital_Id(UUID patientId, UUID hospitalId);
+
+    /** QA D1590: the patient's own policy by payer and member number (the table's natural key). */
+    Optional<PatientInsurance> findFirstByPatient_IdAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
+        UUID patientId, String providerName, String policyNumber);
     Optional<PatientInsurance> findByIdAndAssignment_Hospital_Id(UUID id, UUID hospitalId);
     boolean existsByPatient_IdAndPolicyNumberIgnoreCaseAndAssignment_Hospital_Id(UUID patientId, String policyNumber,
                                                                                  UUID hospitalId);

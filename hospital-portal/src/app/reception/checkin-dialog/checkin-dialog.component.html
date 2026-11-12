@@ -60,6 +60,20 @@
             <span class="value">{{ queueItem.providerName }}</span>
           </div>
         }
+        <!-- QA D1591: what the patient did at pre-check-in, consent included. -->
+        @if (queueItem.preCheckedIn) {
+          <div class="info-row" data-testid="checkin-precheckin">
+            <span class="label"
+              >{{ 'RECEPTION.PRE_CHECK_IN' | translate }}{{ 'COMMON.COLON' | translate }}</span
+            >
+            <span class="value">{{
+              (queueItem.preCheckInConsent
+                ? 'RECEPTION.PRE_CHECKED_IN_AT_CONSENTED'
+                : 'RECEPTION.PRE_CHECKED_IN_AT'
+              ) | translate: { when: (queueItem.preCheckinTimestamp | serverTime | dateTime) }
+            }}</span>
+          </div>
+        }
         @if (queueItem.departmentName) {
           <div class="info-row">
             <span class="label"
@@ -105,13 +119,19 @@
           <input
             type="checkbox"
             data-testid="checkin-consent"
-            [checked]="consentObtained()"
+            [checked]="consentObtained() || consentGivenAtPreCheckIn"
+            [disabled]="consentGivenAtPreCheckIn"
             (change)="consentObtained.set($any($event.target).checked)"
           />
           {{ 'RECEPTION.CONSENT_OBTAINED' | translate }}
         </label>
+        @if (consentGivenAtPreCheckIn) {
+          <p class="hint" data-testid="checkin-consent-precheckin">
+            {{ 'RECEPTION.CONSENT_GIVEN_AT_PRE_CHECK_IN' | translate }}
+          </p>
+        }
       </div>
-      @if (consentObtained()) {
+      @if (consentObtained() && !consentGivenAtPreCheckIn) {
         <div class="form-group">
           <label for="consentSignedName">{{ 'RECEPTION.CONSENT_SIGNED_NAME' | translate }}</label>
           <input
