@@ -4,7 +4,7 @@
 
 Assignment: `docs/qa/test-split-codex-claude-2026-11-12.md`, C10. Base: `origin/develop` at `ec1682e152d507666148e58cd69933518b41a9fc`. Executed on 11 November 2026 (client date); report follows the assignment's 12 November filename.
 
-**Partial:** nine new tests compose the real scope resolver, role validator, tenant predicate builder and admission service with repository stubs. They do not prove persisted isolation across all repositories and services. The brief prohibits database access; clarification about a disposable test database remains unanswered, so no database was started or accessed.
+The initial nine composition tests use repository stubs. On 12 November 2026 the user approved disposable in-memory test databases, so the follow-up below adds actual H2 SQL queries and persisted admission service operations. This is targeted repository/service coverage, not proof of isolation across every repository method, clinical service or PostgreSQL deployment.
 
 ## Changes and evidence
 
@@ -14,7 +14,7 @@ Negative cases assert no repository save, unchanged admission status and no mapp
 
 The related source guard tests also ran. Their existing exception lists were not changed. They are ratchets, not proof that every guarded service executes correctly.
 
-No production code, database, shared records, live endpoint, credentials, Railway setting, CI gate, threshold or baseline changed.
+No production code, shared records, live endpoint, credentials, Railway setting, CI gate, threshold or baseline changed. The initial run used no database; the approved follow-up uses disposable H2 only.
 
 ## Verification
 
@@ -32,4 +32,35 @@ No Java formatter/linter is configured in this repository. Java compilation and 
 
 ## Remaining work
 
-Criteria API objects and repositories are mocked: no SQL predicate execution, database row isolation, transaction rollback, concurrent mutation, Spring security-filter behavior, or durable side effects are proved. The requested repository/service integration sweep remains incomplete under the current no-database constraint. These tests do not close the live multi-organization checklist item or authorize a deployment.
+The initial composition suite mocks Criteria API objects and repositories. The follow-up adds real SQL and flushed/reloaded rows for the paths described below; it does not prove PostgreSQL behavior, concurrent mutation, cross-request transaction boundaries, Spring security-filter behavior or every repository/service. Tests roll back their fake records after each case. These tests do not close the live multi-organization checklist item or authorize a deployment.
+
+## Approved in-memory follow-up — 12 November 2026
+
+`OrganisationIsolationJpaTest` uses a real Spring Data JPA slice, the production tenant repository configuration, assignment repository/accessor, scope resolver, role validator and admission repository/service. Its datasource URL is asserted to begin with `jdbc:h2:mem:`. The slice creates a disposable embedded database and transactionally rolls back each case.
+
+Fixtures contain two organizations, three hospitals (including a sibling of A that the A caller is not assigned to), and separate fake `cdx-` users, role assignments, patients, registrations and active admissions. All three hospital callers exercise four paths, for 12 cases:
+
+- Patient find-by-ID, existence, unpaged/paged listing and extended search expose only the assigned hospital; explicitly naming a foreign hospital in search returns no rows.
+- The real admission service reads an own-hospital positive control and refuses reads/cancellations at both foreign hospitals. Flushing and clearing the persistence context confirms all three stored statuses remain active.
+- Successful cancellation changes only the own-hospital row, with its reason and timestamp; flushed/reloaded foreign rows remain active without cancellation metadata. Bed, encounter, billing and registration side effects are stubs, so their persistence is not claimed.
+- Revoking an actual stored assignment produces a refused scope on the next resolver call and blocks a write, leaving the stored admission active.
+
+The first broader run exited 1: 60 cases executed, 51 passed and nine new admission cases failed because H2 double-encoded the model's unused default JSON arrays (`"[]"` could not be read as a JSON object). The fake admissions now use null for the four optional JSON fields. No production mapping or clinical behavior changed. All three new patient SQL cases and the 39 existing related cases passed in that run. Counts are retained in `c10-first-inmemory-counts.json` and the log in `c10-inmemory-tests.log`.
+
+Broader command:
+
+```powershell
+./gradlew.bat :hospital-core:test --tests '*OrganisationIsolationJpaTest' --tests '*OrganisationIsolationCompositionTest' --tests '*PatientRepositoryTenantScopeTest' --tests '*TenantIsolationTest' --tests '*OrganizationReadScopeIT' --tests '*ServiceWriteTenantLoadCoverageTest' --tests '*ActingScopeCoverageTest' -PtestForks=1 --console=plain
+# Initial exit 1 as detailed above; this is not a green whole-suite result.
+```
+
+The existing source guards remain unchanged. Their exception lists, mock service tests and organization-controller tests do not imply that every repository finder was executed. H2 schema foreign-key/teardown warnings also mean this is not a PostgreSQL migration/constraint test.
+
+Final rerun after the fixture correction:
+
+```powershell
+./gradlew.bat :hospital-core:test --tests '*OrganisationIsolationJpaTest' --tests '*OrganisationIsolationCompositionTest' -PtestForks=1 --console=plain
+# Exit 0: 21 passed (12 H2 integration cases and 9 composition cases).
+```
+
+Final log: `c10-inmemory-final-tests.log`. Portal `npm.cmd run lint` and `npm.cmd run format:check` exited 0 (`c10-inmemory-lint.log`, `c10-inmemory-format.log`). Report Prettier check and `git diff --check` exited 0. No Java formatter/linter is configured; Java compilation and the final selected JUnit run passed.
