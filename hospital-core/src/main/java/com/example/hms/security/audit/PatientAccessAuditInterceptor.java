@@ -7,7 +7,6 @@ import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
 import com.example.hms.security.tenant.ActingScopeResolver;
-import com.example.hms.utility.RoleNames;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.BreakGlassService;
 
@@ -80,7 +79,6 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
     private static final String PATIENTS_PREFIX = "/patients/";
     private static final String PATIENT_ID_VAR = "patientId";
     private static final String ID_VAR = "id";
-    private static final String ROLE_PREFIX = "ROLE_";
     private static final String PATIENT_ROLE = "ROLE_PATIENT";
 
     /**
@@ -196,7 +194,7 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
         // assignment at the pinned hospital, as the write-side interceptor
         // does. Only its id crosses into the audit service, which derives the
         // hospital name in its own transaction (no session here).
-        UserRoleHospitalAssignment assignment = resolveAssignment(actorId);
+        UserRoleHospitalAssignment assignment = resolveAssignment(actorId, auth);
         auditService.logEvent(AuditEventRequestDTO.builder()
             .assignmentId(assignment != null ? assignment.getId() : null)
             .eventType(AuditEventType.PATIENT_ACCESS)
@@ -297,32 +295,17 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
                 .anyMatch(authority::equals);
     }
 
-    private UserRoleHospitalAssignment resolveAssignment(UUID actorId) {
+    private UserRoleHospitalAssignment resolveAssignment(UUID actorId, Authentication auth) {
         UserRoleHospitalAssignmentRepository repository =
             assignmentRepositoryProvider == null ? null : assignmentRepositoryProvider.getIfAvailable();
-        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
-        if (repository == null || hospitalId == null || actorId == null) {
-            return null;
-        }
-        return repository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actorId, hospitalId).orElse(null);
+        // QA D1632: the assignment of the role the token acts under, not the first active one.
+        return ActingAssignments.resolve(repository, actorId, ActingScopeResolver.pinnedHospitalIdOrNull(), auth)
+            .orElse(null);
     }
 
     /** The bare role CODE ({@code DOCTOR}), the one format every audit writer uses (QA D187). */
     private static String roleNameOf(UserRoleHospitalAssignment assignment, Authentication auth) {
-        if (assignment != null && assignment.getRole() != null && assignment.getRole().getCode() != null) {
-            return RoleNames.bareRole(assignment.getRole().getCode());
-        }
-        return primaryRole(auth);
-    }
-
-    private static String primaryRole(Authentication auth) {
-        // getAuthorities() is non-null by contract (Spring Security 7 is
-        // @NullMarked); the old null guard was dead code (Sonar S2583).
-        return auth.getAuthorities().stream()
-            .map(GrantedAuthority::getAuthority)
-            .filter(a -> a.startsWith(ROLE_PREFIX))
-            .map(a -> a.substring(ROLE_PREFIX.length()))
-            .findFirst()
-            .orElse(null);
+        // QA D1632: the role the token acts under wins over the row's.
+        return ActingAssignments.roleName(assignment, ActingAssignments.actingRoles(auth));
     }
 }

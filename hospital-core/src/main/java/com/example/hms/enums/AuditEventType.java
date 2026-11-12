@@ -256,6 +256,8 @@ public enum AuditEventType {
     // obstetric rule would refuse (recorded male, or a child). The row carries the rule, the priority,
     // the recorded sex and age at the time; the order itself is flagged for review.
     OBSTETRIC_RULE_SKIPPED_EMERGENCY,
+    /** QA D1631: a labour episode refused because one is already active at another hospital. */
+    LABOR_EPISODE_START_REFUSED,
 
     OTHER
 }

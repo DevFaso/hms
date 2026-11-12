@@ -153,6 +153,10 @@
   "LABOR": {
     "ACTION_LINE": "Línea de acción",
     "ACTIVE_EPISODE": "Trabajo de parto en curso",
+    "FOREIGN": {
+      "ORIGIN": "Trabajo de parto en curso en {{hospital}}, solo lectura aquí",
+      "HINT": "Este trabajo de parto lo registra el hospital donde se abrió. Puede ingresarla aquí para otra atención; no se puede abrir un segundo episodio mientras este siga activo."
+    },
     "ACTIVE_PHASE_SINCE": "Fase activa desde",
     "ADMITTED": "Ingresada",
     "ALERTS": "Alertas",
@@ -1273,6 +1277,7 @@
     "ADMISSION_NOTES": "Notas de admisión",
     "ADMISSION_TYPE": "Tipo de admisión",
     "ADMITTED": "Ingresado",
+    "ADMITTING_CLINICIAN": "Profesional responsable del ingreso",
     "ADMITTING_PROVIDER": "Médico responsable del ingreso",
     "ADMIT_DATE": "Fecha de admisión",
     "ADMIT_PATIENT": "Ingresar paciente",
@@ -1332,6 +1337,7 @@
     "SEARCH": "Buscar admisiones…",
     "SELECT_BED": "Seleccionar una cama",
     "SELECT_HOSPITAL_FIRST": "Seleccione un hospital primero",
+    "SELECT_CLINICIAN": "Seleccionar profesional",
     "SELECT_PROVIDER": "Seleccionar médico",
     "SUBTITLE": "Gestionar admisiones hospitalarias",
     "TITLE": "Ingresos",
@@ -1868,6 +1874,9 @@
       "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} anulado en la factura {{invoice}}, motivo registrado",
       "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Regla obstétrica no aplicada a una ecografía de urgencia",
       "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Regla obstétrica no aplicada a una derivación de ginecoobstetricia de urgencia",
+      "LABOR_EPISODE_START_REFUSED": "Apertura de episodio de trabajo de parto rechazada: hay un episodio activo en otro hospital",
+      "LABOR_ACTIVE_DISCLOSURE_ON_REFUSAL": "Trabajo de parto activo en otro hospital revelado al rechazar un segundo episodio de parto",
+      "LABOR_EPISODE_START_REFUSED_COORDINATION": "Apertura de episodio de trabajo de parto rechazada: se requiere coordinación asistencial",
       "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Excepción a la regla obstétrica retirada en una ecografía",
       "ALLERGY_ACKNOWLEDGED": "Alergia reconocida con un motivo",
       "ALLERGY_PASSED_UNDER_REVIEW": "Conflicto alérgico superado según la revisión del prescriptor",
@@ -6644,6 +6653,7 @@
         "PROVIDER_VERIFIED": "Proveedor verificado",
         "EMERGENCY_BLOOD_RELEASED": "Sangre entregada de urgencia sin prueba cruzada",
         "OBSTETRIC_RULE_SKIPPED_EMERGENCY": "Regla obstétrica no aplicada por urgencia",
+        "LABOR_EPISODE_START_REFUSED": "Apertura de episodio de trabajo de parto rechazada",
         "PRO_ALERT_ACKNOWLEDGED": "Alerta PRO confirmada",
         "PRO_INSTRUMENT_IMPORTED": "Instrumento PRO importado",
         "PRO_RESPONSE_RECORDED": "Respuesta PRO registrada",
@@ -10654,6 +10664,7 @@
     "SOCIAL_EMPTY": "Registre al menos un elemento (hábitos, ocupación, situación de vida o notas) antes de guardar una nueva versión."
   },
   "MATERNITY": {
+    "FOREIGN_RECORDED_AT": "Registrado en {{hospital}}, solo lectura aquí",
     "GA": "Edad gestacional",
     "GA_SHORT": "{{weeks}} sem {{days}} d",
     "GA_TODAY": "Edad gestacional hoy: {{weeks}} semanas {{days}} días",

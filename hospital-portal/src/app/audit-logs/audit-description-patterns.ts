@@ -1442,6 +1442,22 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: [],
   },
   {
+    // QA D1631: a second labour refused while one is active at another hospital.
+    key: 'AUDIT.DESC.LABOR_EPISODE_START_REFUSED',
+    re: /^Labour episode start refused: an active labour episode is open at another hospital$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.LABOR_ACTIVE_DISCLOSURE_ON_REFUSAL',
+    re: /^Cross-hospital active labour disclosed when refusing a second labour episode$/,
+    params: [],
+  },
+  {
+    re: /^Labour episode start refused: care coordination required$/,
+    key: 'AUDIT.DESC.LABOR_EPISODE_START_REFUSED_COORDINATION',
+    params: [],
+  },
+  {
     key: 'AUDIT.DESC.OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND',
     re: /^Obstetric rule skip cleared on an ultrasound order$/,
     params: [],

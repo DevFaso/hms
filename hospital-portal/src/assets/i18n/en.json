@@ -153,6 +153,10 @@
   "LABOR": {
     "ACTION_LINE": "Action line",
     "ACTIVE_EPISODE": "Active labor",
+    "FOREIGN": {
+      "ORIGIN": "Labour in progress at {{hospital}}, read only here",
+      "HINT": "This labour is charted by the hospital where it was started. You can admit her here for other care; a second labour episode cannot be opened while this one is active."
+    },
     "ACTIVE_PHASE_SINCE": "Active phase since",
     "ADMITTED": "Admitted",
     "ALERTS": "Alerts",
@@ -1273,6 +1277,7 @@
     "ADMISSION_NOTES": "Admission Notes",
     "ADMISSION_TYPE": "Admission Type",
     "ADMITTED": "Admitted",
+    "ADMITTING_CLINICIAN": "Admitting clinician",
     "ADMITTING_PROVIDER": "Admitting Provider",
     "ADMIT_DATE": "Admission Date",
     "ADMIT_PATIENT": "Admit Patient",
@@ -1332,6 +1337,7 @@
     "SEARCH": "Search admissions...",
     "SELECT_BED": "Select a bed",
     "SELECT_HOSPITAL_FIRST": "Select a hospital first",
+    "SELECT_CLINICIAN": "Select clinician",
     "SELECT_PROVIDER": "Select provider",
     "SUBTITLE": "Manage hospital admissions",
     "TITLE": "Admissions",
@@ -1868,6 +1874,9 @@
       "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} undone on invoice {{invoice}}, reason recorded",
       "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Obstetric rule skipped for an emergency ultrasound order",
       "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Obstetric rule skipped for an emergency OB/GYN referral",
+      "LABOR_EPISODE_START_REFUSED": "Labour episode start refused: an active labour episode is open at another hospital",
+      "LABOR_ACTIVE_DISCLOSURE_ON_REFUSAL": "Active labour at another hospital disclosed when refusing a second labour episode",
+      "LABOR_EPISODE_START_REFUSED_COORDINATION": "Labour episode start refused: care coordination required",
       "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Obstetric rule skip cleared on an ultrasound order",
       "ALLERGY_ACKNOWLEDGED": "Allergy acknowledged with a reason",
       "ALLERGY_PASSED_UNDER_REVIEW": "Allergy conflict passed under the prescriber's review",
@@ -6644,6 +6653,7 @@
         "PROVIDER_VERIFIED": "Provider Verified",
         "EMERGENCY_BLOOD_RELEASED": "Emergency blood released uncrossmatched",
         "OBSTETRIC_RULE_SKIPPED_EMERGENCY": "Obstetric rule skipped for an emergency",
+        "LABOR_EPISODE_START_REFUSED": "Labour episode start refused",
         "PRO_ALERT_ACKNOWLEDGED": "PRO Alert Acknowledged",
         "PRO_INSTRUMENT_IMPORTED": "PRO Instrument Imported",
         "PRO_RESPONSE_RECORDED": "PRO Response Recorded",
@@ -10654,6 +10664,7 @@
     "SOCIAL_EMPTY": "Record at least one item (habits, occupation, living situation or notes) before saving a new version."
   },
   "MATERNITY": {
+    "FOREIGN_RECORDED_AT": "Recorded at {{hospital}}, read only here",
     "GA": "Gestational age",
     "GA_SHORT": "{{weeks}} wk {{days}} d",
     "GA_TODAY": "Gestational age today: {{weeks}} weeks {{days}} days",

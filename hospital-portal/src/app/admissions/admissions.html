@@ -622,9 +622,10 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="adm-providerId">{{ 'ADMISSIONS.ADMITTING_PROVIDER' | translate }} *</label>
+            <!-- QA D1634: a midwife admitting is not a "Médecin"; the label is neutral then. -->
+            <label for="adm-providerId">{{ admittingProviderKeys().label | translate }} *</label>
             <select id="adm-providerId" [(ngModel)]="form.admittingProviderId" required>
-              <option value="">{{ 'ADMISSIONS.SELECT_PROVIDER' | translate }}</option>
+              <option value="">{{ admittingProviderKeys().select | translate }}</option>
               @for (s of staffMembers(); track s.id) {
                 <option [value]="s.id">{{ s.name }}</option>
               }

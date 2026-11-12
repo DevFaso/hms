@@ -103,6 +103,57 @@ class AuditEventLogServiceImplTest {
     }
 
     @Test
+    @DisplayName("an inherited hospital assignment must not replace the token's acting role")
+    void filesExpandedTokenRoleWithExplicitOrResolvedAssignment() {
+        User actor = new User();
+        actor.setId(UUID.randomUUID());
+        actor.setUsername("operator");
+        UUID hospitalId = UUID.randomUUID();
+        UserRoleHospitalAssignment row = assignmentOf(actor, hospitalId, "Hospital A");
+        com.example.hms.model.Role doctor = new com.example.hms.model.Role();
+        doctor.setCode("ROLE_DOCTOR");
+        row.setRole(doctor);
+        when(userRepository.findById(actor.getId())).thenReturn(Optional.of(actor));
+        when(assignmentRepository.findById(row.getId())).thenReturn(Optional.of(row));
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(actor.getId(), hospitalId))
+            .thenReturn(List.of(row));
+        when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
+        var authorities = com.example.hms.security.RoleExpansion.expand(List.of("ROLE_SUPER_ADMIN")).stream()
+            .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList();
+        var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+            new com.example.hms.security.CustomUserDetails(actor.getId(), "different-login-name", "", true, authorities),
+            null, authorities);
+        try {
+            var jwt = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("test")
+                .header("alg", "none").subject("external-subject").build();
+            var keycloak = new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(
+                jwt, authorities, "operator@example.test");
+            com.example.hms.security.context.HospitalContextHolder.setContext(
+                com.example.hms.security.context.HospitalContext.builder().principalUserId(actor.getId())
+                    .principalUsername(keycloak.getName()).build());
+            for (var authentication : List.of(auth, keycloak)) {
+                org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(authentication);
+                // Break-glass passes an assignment; labour refusal passes only a hospital.
+                for (UUID assignmentId : java.util.Arrays.asList(row.getId(), null)) {
+                    auditService.logEvent(AuditEventRequestDTO.builder()
+                        .userId(actor.getId()).assignmentId(assignmentId).hospitalId(hospitalId)
+                        .eventType(AuditEventType.DATA_ACCESS).status(AuditStatus.SUCCESS).entityType("PATIENT").build());
+                }
+            }
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+        var saved = org.mockito.ArgumentCaptor.forClass(AuditEventLog.class);
+        verify(auditRepository, times(4)).save(saved.capture());
+        assertThat(saved.getAllValues()).allSatisfy(event -> {
+            assertThat(event.getRoleName()).isEqualTo("SUPER_ADMIN");
+            assertThat(event.getAssignment()).isSameAs(row);
+        });
+    }
+
+    @Test
     @DisplayName("D521: a ROLE_ASSIGNED row keyed on the assignee's assignment is re-anchored on the registrar's own")
     void d521_roleAssignedAnchorsOnTheRegistrarsAssignment() {
         User registrar = new User();
@@ -114,8 +165,8 @@ class AuditEventLogServiceImplTest {
         UserRoleHospitalAssignment registrarRow = assignmentOf(registrar, hospitalA, "Hopital A");
         when(userRepository.findById(registrar.getId())).thenReturn(Optional.of(registrar));
         when(assignmentRepository.findById(assigneeRow.getId())).thenReturn(Optional.of(assigneeRow));
-        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(registrar.getId(), hospitalA))
-            .thenReturn(Optional.of(registrarRow));
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(registrar.getId(), hospitalA))
+            .thenReturn(java.util.List.of(registrarRow));
         when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
 
@@ -147,8 +198,8 @@ class AuditEventLogServiceImplTest {
         registrarRow.setRole(admin);
         when(userRepository.findById(registrar.getId())).thenReturn(Optional.of(registrar));
         when(assignmentRepository.findById(assigneeRow.getId())).thenReturn(Optional.of(assigneeRow));
-        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(registrar.getId(), hospitalA))
-            .thenReturn(Optional.of(registrarRow));
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(registrar.getId(), hospitalA))
+            .thenReturn(java.util.List.of(registrarRow));
         when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
 
@@ -169,8 +220,8 @@ class AuditEventLogServiceImplTest {
         UUID hospitalA = UUID.randomUUID();
         UserRoleHospitalAssignment row = assignmentOf(receptionist, hospitalA, "Hopital A");
         when(userRepository.findById(receptionist.getId())).thenReturn(Optional.of(receptionist));
-        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(receptionist.getId(), hospitalA))
-            .thenReturn(Optional.of(row));
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(receptionist.getId(), hospitalA))
+            .thenReturn(java.util.List.of(row));
         when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
 
@@ -196,7 +247,7 @@ class AuditEventLogServiceImplTest {
 
         auditService.logEvent(buildNormalRequest(actor.getId()));
 
-        verify(assignmentRepository, never()).findFirstByUser_IdAndHospital_IdAndActiveTrue(any(), any());
+        verify(assignmentRepository, never()).findAllByUser_IdAndHospital_IdAndActiveTrue(any(), any());
     }
 
     // ─── Non-fatal behaviour ──────────────────────────────────────────
@@ -287,8 +338,8 @@ class AuditEventLogServiceImplTest {
         actor.setId(UUID.randomUUID());
         UUID hospitalB = UUID.randomUUID();
         when(userRepository.findById(actor.getId())).thenReturn(Optional.of(actor));
-        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actor.getId(), hospitalB))
-            .thenReturn(Optional.empty());
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(actor.getId(), hospitalB))
+            .thenReturn(java.util.List.of());
         when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
 

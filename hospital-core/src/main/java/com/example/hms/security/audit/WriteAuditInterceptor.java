@@ -16,7 +16,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
@@ -80,7 +79,6 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
     static final String RESOURCE_ID_ATTRIBUTE = WriteAuditInterceptor.class.getName() + ".resourceId";
     static final String PATIENT_ID_ATTRIBUTE = WriteAuditInterceptor.class.getName() + ".patientId";
     private static final String ID_VAR = "id";
-    private static final String ROLE_PREFIX = "ROLE_";
 
     private final ObjectProvider<AuditEventLogService> auditServiceProvider;
     private final ObjectProvider<ControllerAuthUtils> authUtilsProvider;
@@ -162,7 +160,7 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
             resourceId = firstNonNull(detail.resourceId(), resourceId);
             patientId = firstNonNull(detail.patientId(), patientId);
         }
-        UserRoleHospitalAssignment assignment = resolveAssignment(actorId);
+        UserRoleHospitalAssignment assignment = resolveAssignment(actorId, auth);
 
         auditService.logEvent(AuditEventRequestDTO.builder()
             .eventType(eventType)
@@ -224,13 +222,11 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
      * The LAZY hospital is a dead proxy; the audit service derives the hospital
      * name from {@code assignmentId} under its own transaction.</p>
      */
-    private UserRoleHospitalAssignment resolveAssignment(UUID actorId) {
+    private UserRoleHospitalAssignment resolveAssignment(UUID actorId, Authentication auth) {
         UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         UserRoleHospitalAssignmentRepository repository = assignmentRepositoryProvider.getIfAvailable();
-        if (hospitalId == null || repository == null) {
-            return null;
-        }
-        return repository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actorId, hospitalId).orElse(null);
+        // QA D1632: the assignment of the role the token acts under, not the first active one.
+        return ActingAssignments.resolve(repository, actorId, hospitalId, auth).orElse(null);
     }
 
     static AuditEventType eventTypeFor(String method, WriteAudited annotation) {
@@ -352,27 +348,13 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
 
     /**
      * The assignment's role at this hospital in the same bare form as
-     * {@link #primaryRole} and the read-side interceptor ({@code DOCTOR}, not
+     * the read-side interceptor ({@code DOCTOR}, not
      * {@code ROLE_DOCTOR}), so one actor's rows group under one role name.
      */
     private static String roleNameOf(UserRoleHospitalAssignment assignment, Authentication auth) {
         // The role CODE, not its display name: names are mixed ("HOSPITAL_ADMIN",
         // "ROLE_SUPER_ADMIN", ...) and the read side files the code (QA D187).
-        if (assignment == null || assignment.getRole() == null || assignment.getRole().getCode() == null) {
-            return primaryRole(auth);
-        }
-        String code = assignment.getRole().getCode();
-        return code.startsWith(ROLE_PREFIX) ? code.substring(ROLE_PREFIX.length()) : code;
-    }
-
-    private static String primaryRole(Authentication auth) {
-        // getAuthorities() is non-null by contract (Spring Security 7 is
-        // @NullMarked); the old null guard was dead code (Sonar S2583).
-        return auth.getAuthorities().stream()
-            .map(GrantedAuthority::getAuthority)
-            .filter(a -> a.startsWith(ROLE_PREFIX))
-            .map(a -> a.substring(ROLE_PREFIX.length()))
-            .findFirst()
-            .orElse(null);
+        // QA D1632: the role the token acts under wins over the row's.
+        return ActingAssignments.roleName(assignment, ActingAssignments.actingRoles(auth));
     }
 }

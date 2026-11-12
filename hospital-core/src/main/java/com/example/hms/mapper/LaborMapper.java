@@ -47,6 +47,7 @@ public class LaborMapper {
             .patientId(episode.getPatient() != null ? episode.getPatient().getId() : null)
             .patientName(episode.getPatient() != null ? episode.getPatient().getFullName() : null)
             .hospitalId(episode.getHospital() != null ? episode.getHospital().getId() : null)
+            .hospitalName(episode.getHospital() != null ? episode.getHospital().getName() : null)
             .registrationId(episode.getRegistration() != null ? episode.getRegistration().getId() : null)
             .maternalHistoryId(episode.getMaternalHistory() != null ? episode.getMaternalHistory().getId() : null)
             .admittedByStaffName(episode.getAdmittedByStaff() != null ? episode.getAdmittedByStaff().getFullName() : null)

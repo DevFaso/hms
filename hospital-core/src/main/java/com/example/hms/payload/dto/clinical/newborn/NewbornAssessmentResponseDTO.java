@@ -23,6 +23,8 @@ public class NewbornAssessmentResponseDTO {
     private UUID id;
     private UUID patientId;
     private UUID hospitalId;
+    /** QA D1631: the hospital that owns the record, so another hospital shows it as theirs, read only. */
+    private String hospitalName;
     private UUID registrationId;
 
     /** The delivery this newborn came from, when one was recorded. */

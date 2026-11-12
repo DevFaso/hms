@@ -18,6 +18,8 @@ public class LaborEpisodeResponseDTO {
     private UUID patientId;
     private String patientName;
     private UUID hospitalId;
+    /** QA D1631: the hospital that owns the record, so another hospital shows it as theirs, read only. */
+    private String hospitalName;
     private UUID registrationId;
     private UUID maternalHistoryId;
     private String admittedByStaffName;

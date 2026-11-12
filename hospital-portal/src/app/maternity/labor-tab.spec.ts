@@ -16,6 +16,7 @@ import {
   PartographEntryResponse,
 } from '../services/labor.service';
 import { ToastService } from '../core/toast.service';
+import { RoleContextService } from '../core/role-context.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import fr from '../../assets/i18n/fr.json';
 import es from '../../assets/i18n/es.json';
@@ -136,6 +137,40 @@ describe('LaborTabComponent', () => {
     expect(laborSpy.entries).toHaveBeenCalledWith('p1', 'e1');
     expect(component.activeEpisode()?.id).toBe('e1');
     expect(component.entries().length).toBe(1);
+  });
+
+  it("D1631: another hospital's active labour is shown read only, named, with no record button", () => {
+    TestBed.inject(RoleContextService).activeHospitalId = 'hA';
+    laborSpy.episodes.and.returnValue(
+      of([{ ...episode('eB', 'ACTIVE'), hospitalId: 'hB', hospitalName: 'Hôpital B' }]),
+    );
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(fixture.componentInstance.activeEpisodeForeign()).toBeTrue();
+    expect(host.querySelector('[data-testid="labor-foreign-episode"]')).not.toBeNull();
+    const buttons = Array.from(host.querySelectorAll('button')).map((b) => b.textContent ?? '');
+    expect(buttons.some((t) => t.includes('LABOR.NEW_ENTRY'))).toBeFalse();
+    expect(buttons.some((t) => t.includes('LABOR.RECORD_DELIVERY'))).toBeFalse();
+    expect(buttons.some((t) => t.includes('LABOR.START_EPISODE'))).toBeFalse();
+    // Its partograph is still read.
+    expect(laborSpy.entries).toHaveBeenCalledWith('p1', 'eB');
+  });
+
+  it("D1631: the own hospital's active labour keeps its record buttons", () => {
+    TestBed.inject(RoleContextService).activeHospitalId = 'h1';
+    laborSpy.episodes.and.returnValue(of([episode('e1', 'ACTIVE')]));
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(fixture.componentInstance.activeEpisodeForeign()).toBeFalse();
+    expect(host.querySelector('[data-testid="labor-foreign-episode"]')).toBeNull();
+    const buttons = Array.from(host.querySelectorAll('button')).map((b) => b.textContent ?? '');
+    expect(buttons.some((t) => t.includes('LABOR.NEW_ENTRY'))).toBeTrue();
   });
 
   it('startEpisode posts and reloads on success', () => {

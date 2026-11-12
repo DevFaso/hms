@@ -16,11 +16,9 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.model.PatientHospitalRegistration;
-import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientUploadedDocumentRepository;
 import com.example.hms.repository.UserRepository;
-import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.FileUploadService;
@@ -60,7 +58,6 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     private final FileUploadService fileUploadService;
     private final PatientDocumentMapper documentMapper;
     private final PatientHospitalRegistrationRepository registrationRepository;
-    private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogService auditEventLogService;
     private final RecordAccessPolicy recordAccessPolicy;
     private final HospitalRepository hospitalRepository;
@@ -299,18 +296,18 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     private void emitDocumentAudit(UUID hospitalId, UUID patientId, StaffReach reach,
                                    PatientUploadedDocument doc, String what) {
         try {
-            UUID actorId = authUtils.resolveUserId(SecurityContextHolder.getContext().getAuthentication())
-                    .orElse(null);
-            UserRoleHospitalAssignment assignment = actorId == null ? null
-                    : assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actorId, hospitalId)
-                            .orElse(null);
+            var auth = SecurityContextHolder.getContext().getAuthentication();
+            UUID actorId = authUtils.resolveUserId(auth).orElse(null);
+            // Resolve the assignment inside logEvent's REQUIRES_NEW transaction.
+            // A failed best-effort audit lookup must not poison this clinical read.
             String description = reach.breakGlassSessionId() == null ? what
                     : what + " under break-the-glass session " + reach.breakGlassSessionId();
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .userName(SecurityUtils.getCurrentUsername())
                     .userId(actorId)
-                    .assignmentId(assignment != null ? assignment.getId() : null)
-                    .roleName(assignment != null && assignment.getRole() != null ? assignment.getRole().getName() : null)
+                    .hospitalId(hospitalId)
+                    .roleName(com.example.hms.security.audit.ActingAssignments.roleName(null,
+                            com.example.hms.security.audit.ActingAssignments.actingRoles(auth)))
                     .hospitalName(reach.hospitalName())
                     .patientId(patientId)
                     .eventType(AuditEventType.DATA_ACCESS)

@@ -93,6 +93,13 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
 
     Optional<UserRoleHospitalAssignment> findFirstByUser_IdAndHospital_IdAndActiveTrue(UUID userId, UUID hospitalId);
 
+    /**
+     * QA D1632: every active assignment the user holds at one hospital, so the
+     * caller can pick the one whose role the request is ACTING under
+     * ({@code ActingAssignments}). The role is EAGER; nothing else is read.
+     */
+    List<UserRoleHospitalAssignment> findAllByUser_IdAndHospital_IdAndActiveTrue(UUID userId, UUID hospitalId);
+
     /** QA D516: an active assignment at the hospital holding one of these role codes (oldest first). */
     Optional<UserRoleHospitalAssignment> findFirstByHospital_IdAndRole_CodeInAndActiveTrueOrderByCreatedAtAsc(
         UUID hospitalId, Collection<String> roleCodes);

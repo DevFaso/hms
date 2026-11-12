@@ -130,17 +130,33 @@
         <!-- QA D811: the heading already says the labour is in progress; a
              second "in labour" badge repeated the status. -->
         <h3 class="section-heading">{{ 'LABOR.ACTIVE_EPISODE' | translate }}</h3>
-        <div>
-          <button class="btn-secondary" (click)="entryFormOpen.set(true)">
-            <span class="material-symbols-outlined" aria-hidden="true">add</span>
-            {{ 'LABOR.NEW_ENTRY' | translate }}
-          </button>
-          <button class="btn-primary" (click)="openDeliveryForm()">
-            <span class="material-symbols-outlined" aria-hidden="true">child_care</span>
-            {{ 'LABOR.RECORD_DELIVERY' | translate }}
-          </button>
-        </div>
+        @if (!activeEpisodeForeign()) {
+          <div>
+            <button class="btn-secondary" (click)="entryFormOpen.set(true)">
+              <span class="material-symbols-outlined" aria-hidden="true">add</span>
+              {{ 'LABOR.NEW_ENTRY' | translate }}
+            </button>
+            <button class="btn-primary" (click)="openDeliveryForm()">
+              <span class="material-symbols-outlined" aria-hidden="true">child_care</span>
+              {{ 'LABOR.RECORD_DELIVERY' | translate }}
+            </button>
+          </div>
+        }
       </div>
+      @if (activeEpisodeForeign()) {
+        <!-- QA D1631: another hospital's labour (shared patient) is read only
+             here: where, since when, its status, and no record button. -->
+        <p class="saved-note" role="note" data-testid="labor-foreign-episode">
+          <strong>{{
+            'LABOR.FOREIGN.ORIGIN' | translate: { hospital: episode.hospitalName || '—' }
+          }}</strong>
+          ·
+          {{ 'LABOR.ONSET_TIME' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ episode.laborOnsetAt ?? episode.admittedAt | serverTime | dateTime }}
+          · {{ 'LABOR.STATUS_ACTIVE' | translate }}
+        </p>
+        <p class="muted">{{ 'LABOR.FOREIGN.HINT' | translate }}</p>
+      }
       <p class="muted">
         {{ 'LABOR.ADMITTED' | translate }}{{ 'COMMON.COLON' | translate }}
         {{ episode.admittedAt | serverTime | date: 'short' }}
@@ -183,6 +199,13 @@
           {{ 'LABOR.DELIVERY_SUMMARY' | translate }}
           <span class="risk-badge risk-low">{{ 'LABOR.STATUS_DELIVERED' | translate }}</span>
         </h3>
+        @if (isForeign(episode)) {
+          <p class="muted" data-testid="labor-foreign-delivery">
+            {{
+              'MATERNITY.FOREIGN_RECORDED_AT' | translate: { hospital: episode.hospitalName || '—' }
+            }}
+          </p>
+        }
         <p>
           {{ record.birthDateTime | serverTime | dateTime }} ·
           {{ 'LABOR.MODE_' + record.deliveryMode | translate }}
