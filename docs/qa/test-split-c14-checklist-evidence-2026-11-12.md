@@ -1,12 +1,12 @@
 # C14: checklist evidence audit and proposed hygiene
 
-Audited 11 November 2026 (client date), following `test-split-codex-claude-2026-11-12.md`. This is a **proposal**, not a new live QA run, clinical approval or authorization to close items. No checkbox in the user's checklist is changed.
+Document label: 12 November 2026, matching the local, untracked plan `test-split-codex-claude-2026-11-12.md`. The original audit session recorded 11 November 2026 as its client date; its timezone was not recorded, so these labels do not establish an exact audit timestamp. This is a **proposal**, not a new live QA run, clinical approval or authorization to close items. No checkbox in the user's checklist is changed.
 
 ## Source scope and provenance
 
 The supplied local `C:/dev/hms/docs/qa/no-tested.md` has **51 open entries**. Its SHA-256 at audit time is `a6846db70df1f832fb62e876a9e1bf30b544fe53ecb21598a1a2f58bffbfc38a`. It says last updated 2026-10-27 and requires a running-app re-test or end-to-end test, with a PR and report beside a tick.
 
-The following local reports were cross-checked. These files and the supplied checklist are **not tracked in the inspected checkout/base**, so their references below are local evidence pointers, not claims that a GitHub reviewer can open them in this PR. No raw reports, patient information or test records are copied into this change. Source content must be made available to a reviewer before accepting a proposed completion.
+The following local reports were cross-checked. These files and the supplied checklist are **not tracked in the inspected checkout/base**, so their references below are local evidence pointers, not claims that a GitHub reviewer can open them in this PR. No raw reports, patient information or test records are copied into this change. Source content must be made available to a reviewer before accepting a proposed completion. No canonical shared archive or custodian has been confirmed. Establishing that archive, with a privacy review before sharing, remains an unresolved prerequisite for accepting these dispositions as independently reviewed QA evidence.
 
 | Alias | Filename under `C:/dev/hms/docs/qa/`       | Lines | SHA-256                                                            |
 | ----- | ------------------------------------------ | ----: | ------------------------------------------------------------------ |
@@ -81,6 +81,8 @@ Line numbers refer to the checklist snapshot above. “Retain” means sufficien
 
 ## Proposed checklist edits for review
 
+Connector follow-ups for items 18/20 are recorded in [Standing platform debt](../../tasklist.md#standing-platform-debt--owed-not-parity). The outbox query has no row-level claim, but its scheduled caller does have ShedLock; this audit does not establish duplicate sends during ordinary scheduler overlap. Replay is intentionally symbolic in the current service. Neither is a new runtime regression introduced by this document. External issue creation remains pending.
+
 1. Refresh the stale update/report pointers using the actual audit date and available R43 re-tests; explicitly note the missing R41/R42 source reports. Do not describe this as a new live re-test.
 2. Consolidate the duplicate MFA entries (5/21) and billing-setup entries (1/35), preserving all acceptance conditions and ownership.
 3. Keep all 51 broad checkboxes open in this proposal. Four items (24/25/29/36) have reported narrower successes worth validating against raw logs and landing PRs. A candidate is not an unconditional tick.
@@ -88,18 +90,21 @@ Line numbers refer to the checklist snapshot above. “Retain” means sufficien
 5. Replace historical explanations such as “no messages existed” and “only eight axe routes” with dated, revision-specific notes after the relevant source/PR is reviewed. Retain open connector replay/idempotence and full-audit requirements.
 6. Preserve the owner-only boundaries: SMS consent/provider setup, read-only exception, clinical approvals, prod access, devices, backup/restore, real import and independent security testing.
 
+The local split plan also assigns C5 to FHIR/SMART contract tests and C10 to organisation-isolation tests. Their PR mapping and results were not established by this audit; omission from the supplemental evidence list does not mean completion or cancellation. The purpose/status of PR #1116 is likewise unconfirmed; sequential PR numbers are not evidence of a C-series assignment.
+
 ## Verification of this documentation change
 
-All 51 open checklist lines are represented exactly once by numbered rows above. Source hashes and report line counts were recorded; the checklist hash was rechecked before publication. Only this proposal is committed. No source report or user's dirty checklist is changed.
+All 51 open checklist lines are represented exactly once by numbered rows above. Source hashes and report line counts were recorded. The proposal, supporting verifier and connector follow-up notes are the only changes. No source report or user's dirty checklist is changed.
 
-The initial row-count verifier failed because its regex did not accept Prettier's padded table cells. The corrected verifier accepts whitespace and verifies all 51 rows, the unchanged checklist, and all eight source hashes/line counts. Final commands from the isolated worktree root:
+The committed [verifier](tools/verify-c14.py) checks the 51-row mapping, four candidate rows and source hashes/line counts without changing inputs. It requires Python 3 and access to the exact source corpus; missing or changed sources fail verification. Hash matches establish provenance, not the truth of the QA outcomes. From the repository root, replace `SOURCE_DIRECTORY` with the directory containing `no-tested.md` and the eight reports:
 
 ```powershell
-node C:/dev/hms-qa-c1/hospital-portal/node_modules/prettier/bin/prettier.cjs --write docs/qa/test-split-c14-checklist-evidence-2026-11-12.md
-node C:/dev/hms-qa-c1/hospital-portal/node_modules/prettier/bin/prettier.cjs --check docs/qa/test-split-c14-checklist-evidence-2026-11-12.md
-python C:/Users/tiego/.codex/companions/memory/hms/test-split-2026-11-12/c14-verify.py
+cd hospital-portal
+npm ci --ignore-scripts --no-audit --no-fund
+node node_modules/prettier/bin/prettier.cjs --check ../docs/qa/test-split-c14-checklist-evidence-2026-11-12.md
+cd ..
+python docs/qa/tools/verify-c14.py --source-dir SOURCE_DIRECTORY
 git diff --check
-# Each final command: native exit 0.
 ```
 
-Application lint/tests are not applicable to this doc-only diff; no live, database or provider check was run. The missing R41/R42 reports and untracked source corpus remain explicit review limitations.
+Application test suites are not applicable to this documentation/tooling change; the verifier can be checked against the supplied corpus independently. No live, database or provider check was run. The missing R41/R42 reports and untracked source corpus remain explicit review limitations.
