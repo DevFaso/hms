@@ -223,6 +223,33 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
     List<com.example.hms.model.User> findLiveUsersAtHospitalWithRoleCodes(@Param("hospitalId") UUID hospitalId,
                                                                           @Param("roleCodes") Set<String> roleCodes);
 
+    /**
+     * QA D1610: the staff of ONE hospital, each once: an active, non-patient assignment there on an
+     * undeleted account. An announcement made at a hospital notifies these people and nobody else.
+     */
+    @Query("""
+        SELECT DISTINCT a.user
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.user.isDeleted = FALSE
+          AND a.hospital.id = :hospitalId
+          AND UPPER(a.role.code) NOT IN ('ROLE_PATIENT', 'PATIENT')
+    """)
+    List<com.example.hms.model.User> findLiveStaffUsersAtHospital(@Param("hospitalId") UUID hospitalId);
+
+    /**
+     * QA D1610: the staff of EVERY hospital, each once. Only a platform-wide announcement, posted by a
+     * super-admin in global view, may fan out to them; {@code NotificationFanOutScopeGuardTest} holds that.
+     */
+    @Query("""
+        SELECT DISTINCT a.user
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.user.isDeleted = FALSE
+          AND UPPER(a.role.code) NOT IN ('ROLE_PATIENT', 'PATIENT')
+    """)
+    List<com.example.hms.model.User> findLiveStaffUsersPlatformWide();
+
     /* ------------ Fetch graphs for DTO mapping ------------ */
 
     /** Deep enough for most response DTOs (user/hospital/role/registeredBy). */
