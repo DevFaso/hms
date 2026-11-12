@@ -51,3 +51,11 @@ Logs/artifacts are under `C:/Users/tiego/.codex/companions/memory/hms/test-split
 ## Limits
 
 This is automated initial-render coverage under mocks. It does not establish accessibility of every populated dataset, dialog, interaction or role permutation; detail routes use synthetic IDs and may render an empty/retry state. Contrast, keyboard-only/manual review, assistive technology testing and real-device coverage remain open. CI on the published head remains separate evidence. Do not tick the checklist's **full accessibility audit** solely from these results.
+
+## Published CI blocker
+
+On draft PR #1123 at `3ad2b95e61c2d1654ff2dec806eac6ca74dc3c69`, the a11y smoke, SonarCloud and CodeQL checks passed. The frontend lint/build/test job stopped at `npm run guards` (exit 1), causing the aggregate gate to fail: [job log](https://github.com/DevFaso/hms/actions/runs/43145846884/job/130943413950).
+
+The name guard found zero new defects and six stale pins in `hospital-portal/scripts/a11y-names-baseline.json`: the two assignment filters (`filterActive`, `filterHospitalId`), two governance filters (`auditFilter`, `environment`), and two signature filters (`statusFilter`, `typeFilter`). Their missing-label defects were corrected by this PR. The guard requires deleting those obsolete entries.
+
+The assignment explicitly prohibits baseline edits. None was made. Permission was requested to remove only these six fixed entries; until that exception is granted, this PR remains blocked by the guard. Retained local CI log: `c12-ci-frontend-failure.log`. Local passing tests are not a claim that the complete published CI gate passed.
