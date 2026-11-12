@@ -6430,3 +6430,9 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 
 - **Signature revoke, pinned super-admin:** `DigitalSignatureServiceImpl` revoke admits `CallerIdentity.isGlobalSuperAdmin()` or a hospital admin of the signature's hospital, so a super-admin with that hospital selected is refused though `POST /signatures/{id}/revoke` admits SUPER_ADMIN. Not an admin review (it voids a clinician's signature), so left as it is; switch it to `CallerIdentity.isSuperAdminFor(signature hospital)` only if the user wants super-admins to revoke at a selected hospital.
 - **Review list in global view:** `GET /mortality/disputes` still answers 400 `mortality.hospitalRequired` for a super-admin in global view (no hospital to read). The portal now asks only once a hospital is selected; a cross-hospital review list for global view would be a new feature.
+
+## Standing debt — announcement scope (fix/d1610-announcement-scope)
+
+- **Recipient-less notification broadcast:** `NotificationWebSocketController.sendNotification` still pushes a notification with a blank recipient to `/topic/notifications`, which every hospital's clients receive; no caller sends one today (guarded by `NotificationFanOutScopeGuardTest`), so decide whether to drop the fallback or refuse a blank recipient.
+- **Platform-wide announcement:** a super-admin in global view (no hospital) still posts an announcement that notifies the staff of every hospital; there is no organisation audience on `Announcement`, so a per-organisation announcement would need a column (D1617 audience gap).
+- **Emergency broadcast:** `/topic/emergency-broadcast` (super-admin emergency banner) stays system-wide by design; confirm it should not be per hospital.
