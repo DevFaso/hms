@@ -76,6 +76,8 @@ class PartialUniqueReleaseFlushGuardTest {
         Map.entry("encounters", "Encounter"),
         Map.entry("user_role_hospital_assignment", "UserRoleHospitalAssignment"),
         Map.entry("billing_invoices", "BillingInvoice"),
+        // QA D1613 (V288): one live claim per dispense; a rejection releases the slot.
+        Map.entry("pharmacy_claims", "PharmacyClaim"),
         Map.entry("smart_phrases", "SmartPhrase"));
 
     /** Indexes whose rows no setter can release: the slot is the row's own key, not its state. */
