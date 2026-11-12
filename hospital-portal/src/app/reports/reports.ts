@@ -182,14 +182,30 @@ export class ReportsComponent implements OnInit {
             SERVER_REPORT_FIELDS.map(([, id]) => id),
           );
           const recipientsReason = fieldErrors?.recipients;
-          if (typeof recipientsReason === 'string') {
+          const hasRecipientsReason =
+            typeof recipientsReason === 'string' && recipientsReason.trim() !== '';
+          if (hasRecipientsReason) {
             this.recipientsError.set(recipientsReason);
           }
-          if (refused.length === 0 && typeof recipientsReason !== 'string') {
-            this.toast.error(refusalReason(err) ?? this.translate.instant('REPORTS.CREATE_FAILED'));
+          const handled = new Set<string>([
+            'recipients',
+            ...SERVER_REPORT_FIELDS.map(([field]) => field),
+          ]);
+          const unhandled = Object.entries(fieldErrors ?? {})
+            .filter(([field]) => !handled.has(field))
+            .map(([, reason]) => reason)
+            .filter(
+              (reason): reason is string => typeof reason === 'string' && reason.trim() !== '',
+            );
+          if (unhandled.length > 0 || (refused.length === 0 && !hasRecipientsReason)) {
+            this.toast.error(
+              unhandled.length > 0
+                ? unhandled.join('. ')
+                : (refusalReason(err) ?? this.translate.instant('REPORTS.CREATE_FAILED')),
+            );
           }
           const invalidIds: string[] = refused.map(({ id }) => id);
-          if (typeof recipientsReason === 'string') invalidIds.push('rep-recipients');
+          if (hasRecipientsReason) invalidIds.push('rep-recipients');
           focusFirstInvalid(root, invalidIds);
           this.saving.set(false);
         },
