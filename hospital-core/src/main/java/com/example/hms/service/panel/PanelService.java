@@ -57,6 +57,19 @@ public class PanelService {
     /** Worklist page-size ceiling: a panel read is a page, never a dump. */
     static final int MAX_PANEL_PAGE = 200;
 
+    /**
+     * QA D1614 (round 44): who may own a panel, as a primary provider or a CHW.
+     * The clinical roles that work a panel: the same set that may open
+     * {@code /panels/my} and write empanelments ({@code PatientPanelController}),
+     * and the "active providers" set of {@code StaffRepository}. A billing
+     * specialist, a receptionist, a pharmacist, lab staff or an administrator
+     * used to be accepted as a patient's primary provider. Physicians and
+     * surgeons are doctors (role audit decision C2, the authority expansion
+     * in {@code JwtTokenProvider}).
+     */
+    static final java.util.Set<String> PANEL_OWNER_ROLES = java.util.Set.of(
+        "ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON", "ROLE_NURSE", "ROLE_MIDWIFE");
+
     private final PanelAssignmentRepository panelRepository;
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
@@ -72,6 +85,7 @@ public class PanelService {
         Patient patient = requirePatientInTenant(patientId, hospitalId);
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         Staff provider = requireStaffInTenant(request.getProviderStaffId(), hospitalId);
+        requireClinicalOwner(provider);
 
         LocalDate today = LocalDate.now(clock);
         LocalDate assignedOn = request.getAssignedOn() != null ? request.getAssignedOn() : today;
@@ -259,6 +273,18 @@ public class PanelService {
             .filter(Staff::isActive)
             .filter(s -> s.getHospital() != null && hospitalId.equals(s.getHospital().getId()))
             .orElseThrow(() -> new ResourceNotFoundException("staff.notfound", staffId));
+    }
+
+    /** QA D1614: the owner's own role assignment at this hospital is a live clinical one. */
+    private static void requireClinicalOwner(Staff provider) {
+        com.example.hms.model.UserRoleHospitalAssignment assignment = provider.getAssignment();
+        String code = assignment == null || !Boolean.TRUE.equals(assignment.getActive())
+                || assignment.getRole() == null || assignment.getRole().getCode() == null
+            ? "" : assignment.getRole().getCode().trim().toUpperCase(java.util.Locale.ROOT);
+        String qualified = code.startsWith("ROLE_") ? code : "ROLE_" + code;
+        if (!PANEL_OWNER_ROLES.contains(qualified)) {
+            throw new com.example.hms.exception.FieldBusinessException("providerStaffId", "panel.owner.notClinical");
+        }
     }
 
     /**

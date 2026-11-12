@@ -107,6 +107,17 @@ class PanelServiceTest {
         provider.setHospital(hospital);
         provider.setName("Dr. Diallo");
         provider.setActive(true);
+        provider.setAssignment(assignmentWithRole("ROLE_DOCTOR"));
+    }
+
+    private com.example.hms.model.UserRoleHospitalAssignment assignmentWithRole(String code) {
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode(code);
+        com.example.hms.model.UserRoleHospitalAssignment assignment = new com.example.hms.model.UserRoleHospitalAssignment();
+        assignment.setRole(role);
+        assignment.setHospital(hospital);
+        assignment.setActive(true);
+        return assignment;
     }
 
     private void asClinicianAtHospital() {
@@ -265,6 +276,54 @@ class PanelServiceTest {
         assertThatThrownBy(() -> service.assign(patientId, request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("landed at the same time");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "ROLE_BILLING_SPECIALIST", "ROLE_RECEPTIONIST", "ROLE_PHARMACIST", "ROLE_LAB_SCIENTIST", "ROLE_HOSPITAL_ADMIN"})
+    @DisplayName("QA D1614: a non-clinical staff member cannot own a panel, refused on providerStaffId")
+    void assignRefusesNonClinicalOwner(String code) {
+        asClinicianAtHospital();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        provider.setAssignment(assignmentWithRole(code));
+        when(staffRepository.findById(provider.getId())).thenReturn(Optional.of(provider));
+        PanelAssignmentRequestDTO request = PanelAssignmentRequestDTO.builder()
+            .providerStaffId(provider.getId()).panelRole(PanelRole.CHW).build();
+
+        assertThatThrownBy(() -> service.assign(patientId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                .isEqualTo("providerStaffId"))
+            .extracting("messageKey").isEqualTo("panel.owner.notClinical");
+        verify(panelRepository, never()).saveAndFlush(any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"ROLE_NURSE", "MIDWIFE", "ROLE_SURGEON"})
+    @DisplayName("QA D1614: nurses, midwives and doctors (surgeons included) own panels, in either code form")
+    void assignAcceptsClinicalOwners(String code) {
+        asClinicianAtHospital();
+        stubHappyAssignCollaborators();
+        provider.setAssignment(assignmentWithRole(code));
+        when(panelRepository.findByPatient_IdAndHospital_IdAndPanelRoleAndStatus(
+                patientId, hospitalId, PanelRole.PRIMARY_PROVIDER, PanelAssignmentStatus.ACTIVE))
+            .thenReturn(Optional.empty());
+
+        assertThat(service.assign(patientId, assignRequest()).getStatus()).isEqualTo(PanelAssignmentStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("QA D1614: an owner whose role assignment is inactive is refused")
+    void assignRefusesInactiveRoleAssignment() {
+        asClinicianAtHospital();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        provider.getAssignment().setActive(false);
+        when(staffRepository.findById(provider.getId())).thenReturn(Optional.of(provider));
+        PanelAssignmentRequestDTO request = assignRequest();
+
+        assertThatThrownBy(() -> service.assign(patientId, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("panel.owner.notClinical");
     }
 
     @Test

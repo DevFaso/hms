@@ -1215,7 +1215,7 @@ export class BillingComponent implements OnInit {
 
   /** QA D1007: the server refuses these methods without a transaction reference. */
   paymentReferenceRequired(): boolean {
-    return ['MOBILE_MONEY', 'INSURANCE', 'BANK_TRANSFER'].includes(this.paymentMethod());
+    return ['MOBILE_MONEY', 'BANK_TRANSFER'].includes(this.paymentMethod());
   }
 
   closePayment(): void {
