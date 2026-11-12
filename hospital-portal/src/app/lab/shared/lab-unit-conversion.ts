@@ -131,6 +131,15 @@ export function unitConversion(
 
 /** `value` in the target unit, without float noise; molar-mass results keep 4 significant digits. */
 export function convertValue(value: number, conversion: UnitConversion): number {
-  const raw = value * conversion.factor;
-  return Number(raw.toPrecision(conversion.exact ? 12 : 4));
+  return roundSignificant(value * conversion.factor, conversion.exact ? 12 : 4);
+}
+
+/** A number (not text: the screens format it per locale) rounded to `digits` significant digits. */
+function roundSignificant(value: number, digits: number): number {
+  if (!Number.isFinite(value) || value === 0) return value;
+  const power = digits - 1 - Math.floor(Math.log10(Math.abs(value)));
+  // Divide by a whole power of ten rather than multiply by a fraction: 10^-1 is not exact.
+  return power >= 0
+    ? Math.round(value * 10 ** power) / 10 ** power
+    : Math.round(value / 10 ** -power) * 10 ** -power;
 }
