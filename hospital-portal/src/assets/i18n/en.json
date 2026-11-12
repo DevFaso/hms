@@ -1875,6 +1875,7 @@
       "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Obstetric rule skipped for an emergency ultrasound order",
       "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Obstetric rule skipped for an emergency OB/GYN referral",
       "LABOR_EPISODE_START_REFUSED": "Labour episode start refused: an active labour episode is open at another hospital",
+      "LABOR_EPISODE_START_REFUSED_COORDINATION": "Labour episode start refused: care coordination required",
       "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Obstetric rule skip cleared on an ultrasound order",
       "ALLERGY_ACKNOWLEDGED": "Allergy acknowledged with a reason",
       "ALLERGY_PASSED_UNDER_REVIEW": "Allergy conflict passed under the prescriber's review",

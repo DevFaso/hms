@@ -1875,6 +1875,7 @@
       "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Règle obstétricale non appliquée pour une échographie en urgence",
       "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Règle obstétricale non appliquée pour une orientation gynéco-obstétricale en urgence",
       "LABOR_EPISODE_START_REFUSED": "Ouverture d’un épisode de travail refusée : un épisode de travail est en cours dans un autre hôpital",
+      "LABOR_EPISODE_START_REFUSED_COORDINATION": "Ouverture d’un épisode de travail refusée : coordination des soins nécessaire",
       "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Exception à la règle obstétricale levée sur une échographie",
       "ALLERGY_ACKNOWLEDGED": "Allergie reconnue avec un motif",
       "ALLERGY_PASSED_UNDER_REVIEW": "Conflit allergique franchi selon la revue du prescripteur",

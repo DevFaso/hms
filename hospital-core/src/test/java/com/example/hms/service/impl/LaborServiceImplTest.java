@@ -324,6 +324,27 @@ class LaborServiceImplTest {
     }
 
     @Test
+    void foreignEpisodeOfAnotherPatientIsNotReadableEvenAtAReadableHospital() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        Patient otherPatient = new Patient();
+        otherPatient.setId(UUID.randomUUID());
+        LaborEpisode foreign = LaborEpisode.builder().patient(otherPatient).hospital(other)
+            .status(LaborStatus.DELIVERED).build();
+        UUID foreignId = UUID.randomUUID();
+        foreign.setId(foreignId);
+        when(episodeRepository.findById(foreignId)).thenReturn(Optional.of(foreign));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, other.getId()));
+
+        assertThatThrownBy(() -> service.getEntries(patientId, foreignId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.getDelivery(patientId, foreignId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verifyNoInteractions(reachRecorder, entryRepository, deliveryRecordRepository);
+    }
+
+    @Test
     void getDeliveryDoesNotReadOrAccountAnUnreadableForeignEpisode() {
         Hospital other = new Hospital();
         other.setId(UUID.randomUUID());

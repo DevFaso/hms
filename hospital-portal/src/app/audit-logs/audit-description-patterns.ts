@@ -1448,6 +1448,11 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: [],
   },
   {
+    re: /^Labour episode start refused: care coordination required$/,
+    key: 'AUDIT.DESC.LABOR_EPISODE_START_REFUSED_COORDINATION',
+    params: [],
+  },
+  {
     key: 'AUDIT.DESC.OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND',
     re: /^Obstetric rule skip cleared on an ultrasound order$/,
     params: [],
