@@ -31,6 +31,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -164,9 +166,10 @@ class Dhis2ExportRunPersistenceTest {
         assertThat(row.getStatus()).isEqualTo(Dhis2OutboxStatus.SENT);
     }
 
-    @Test
-    @DisplayName("finalizeReconciled: 4xx -> FAILED, outbox FAILED, lastExportAt NOT updated")
-    void finalizeReconciledFailed() {
+    @ParameterizedTest
+    @CsvSource({"401,0,0", "401,2,0", "503,2,1"})
+    @DisplayName("finalizeReconciled: non-2xx -> FAILED regardless of counts, lastExportAt NOT updated")
+    void finalizeReconciledFailed(int status, int imported, int ignored) {
         Dhis2ExportRun run = pendingRun();
         run.setId(UUID.randomUUID());
         when(runRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -174,9 +177,10 @@ class Dhis2ExportRunPersistenceTest {
         when(outboxRepository.findByRun_Id(run.getId())).thenReturn(List.of(row));
 
         var result = persistence.finalizeReconciled(run, config,
-            new DhisHttpResponse(401, 0, 0, "unauthorized"));
+            new DhisHttpResponse(status, imported, ignored, "rejected"));
 
         assertThat(result.getStatus()).isEqualTo(Dhis2ExportStatus.FAILED);
+        assertThat(result.getHttpStatus()).isEqualTo(status);
         assertThat(row.getStatus()).isEqualTo(Dhis2OutboxStatus.FAILED);
         assertThat(config.getLastExportAt()).isNull();
     }

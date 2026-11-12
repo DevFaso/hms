@@ -1,5 +1,6 @@
 package com.example.hms.service.integration;
 
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.integration.Dhis2AuthMode;
 import com.example.hms.model.integration.Dhis2ExportRun;
 import com.example.hms.model.integration.Dhis2FacilityConfig;
@@ -12,7 +13,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -30,6 +32,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -39,6 +42,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -56,7 +60,7 @@ class DhisAdxPushContractIntegrationTest {
     private DhisAdxExportServiceImpl service;
     private MockRestServiceServer receiver;
     private MockedStatic<OutboundUrlGuard> guard;
-    private byte[] dnsAnswer = new byte[] {93, (byte) 184, (byte) 216, 34};
+    private List<byte[]> dnsAnswers = List.of(new byte[] {93, (byte) 184, (byte) 216, 34});
     private int lookups;
 
     @BeforeEach
@@ -86,8 +90,11 @@ class DhisAdxPushContractIntegrationTest {
             if (invocation.getMethod().getName().equals("resolvePublic")) {
                 lookups++;
                 String host = invocation.getArgument(0);
-                return OutboundUrlGuard.requireAllPublic(host,
-                    new InetAddress[] {InetAddress.getByAddress(host, dnsAnswer)});
+                var answers = new InetAddress[dnsAnswers.size()];
+                for (int i = 0; i < answers.length; i++) {
+                    answers[i] = InetAddress.getByAddress(host, dnsAnswers.get(i));
+                }
+                return OutboundUrlGuard.requireAllPublic(host, answers);
             }
             return invocation.callRealMethod();
         });
@@ -108,8 +115,11 @@ class DhisAdxPushContractIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"200,0", "200,1", "401,0"})
-    void receiverGetsAdxAggregateAndResponseReachesReconciliation(int status, int ignored) {
+    @CsvSource({"200,2,0", "200,2,1", "401,0,0"})
+    void receiverGetsAdxAggregateAndResponseReachesReconciliation(int status, int imported, int ignored) {
+        String responseBody = status == 401
+            ? "{\"httpStatus\":\"Unauthorized\",\"httpStatusCode\":401,\"status\":\"ERROR\",\"message\":\"Unauthorized\"}"
+            : "{\"response\":{\"importCount\":{\"imported\":2,\"ignored\":" + ignored + "}}}";
         receiver.expect(requestTo(BASE_URL + "/api/dataValueSets"))
             .andExpect(method(HttpMethod.POST))
             .andExpect(header("Content-Type", "application/adx+xml"))
@@ -118,18 +128,20 @@ class DhisAdxPushContractIntegrationTest {
             .andExpect(header("X-Request-Id", run.getRequestId().toString()))
             .andExpect(request -> assertAdx(((MockClientHttpRequest) request).getBodyAsString(StandardCharsets.UTF_8)))
             .andRespond(withStatus(HttpStatus.valueOf(status)).contentType(MediaType.APPLICATION_JSON)
-                .body("{\"response\":{\"importCount\":{\"imported\":2,\"ignored\":" + ignored + "}}}"));
+                .body(responseBody));
         when(persistence.finalizeReconciled(eq(run), eq(config), any())).thenAnswer(invocation -> {
             DhisHttpResponse response = invocation.getArgument(2);
             assertThat(response.httpStatus()).isEqualTo(status);
-            assertThat(response.importedCount()).isEqualTo(2);
+            assertThat(response.importedCount()).isEqualTo(imported);
             assertThat(response.ignoredCount()).isEqualTo(ignored);
+            assertThat(response.body()).isEqualTo(responseBody);
             return run;
         });
         assertThat(trigger()).isSameAs(run);
         assertThat(lookups).isEqualTo(1);
+        verify(persistence).persistPending(eq(hospitalId), eq("cdxDataset1"), eq("202610"), eq(null), any());
         verify(persistence).finalizeReconciled(eq(run), eq(config), any());
-        verify(persistence, never()).finalizeFailed(any(), eq(0), anyString());
+        verifyNoMoreInteractions(persistence);
     }
 
     private void assertAdx(String xml) {
@@ -142,7 +154,9 @@ class DhisAdxPushContractIntegrationTest {
             assertThat(root.getLocalName()).isEqualTo("adx");
             assertThat(root.getNamespaceURI()).isEqualTo("urn:ihe:qrph:adx:2015");
             assertThat(root.getAttribute("exported")).isNotBlank();
-            Element group = (Element) root.getFirstChild();
+            var groups = root.getElementsByTagNameNS("urn:ihe:qrph:adx:2015", "group");
+            assertThat(groups.getLength()).isEqualTo(1);
+            Element group = (Element) groups.item(0);
             assertThat(group.getAttribute("orgUnit")).isEqualTo("cdxOrgUnit1");
             assertThat(group.getAttribute("period")).isEqualTo("202610");
             assertThat(group.getAttribute("dataSet")).isEqualTo("cdxDataset1");
@@ -163,25 +177,44 @@ class DhisAdxPushContractIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"http://cdx-dhis.example.invalid", "https://localhost/dhis",
-        "https://cdx.internal/dhis", "https://user:pass@cdx-dhis.example.invalid"})
-    void invalidDestinationNeverReachesReceiver(String unsafe) {
+    @CsvSource({"http://cdx-dhis.example.invalid,httpsRequired", "https://localhost/dhis,publicHostRequired",
+        "https://cdx.internal/dhis,publicHostRequired", "https://user:pass@cdx-dhis.example.invalid,credentials"})
+    void invalidDestinationNeverReachesReceiver(String unsafe, String reason) {
         config.setBaseUrl(unsafe);
         when(persistence.finalizeFailed(eq(run), eq(0), anyString())).thenReturn(run);
         assertThat(trigger()).isSameAs(run);
         assertThat(lookups).isZero();
-        verify(persistence).finalizeFailed(eq(run), eq(0), anyString());
+        assertDestinationRefusal(reason);
         verify(persistence, never()).finalizeReconciled(any(), any(), any());
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"127.0.0.1", "10.0.0.5", "169.254.169.254", "192.168.1.4"})
-    void publicLookingNameResolvingInsideNeverReachesReceiver(String answer) throws Exception {
-        dnsAnswer = InetAddress.getByName(answer).getAddress(); // numeric literals only; no DNS
+    @MethodSource("nonPublicAnswers")
+    void publicLookingNameResolvingInsideNeverReachesReceiver(List<String> answers) throws Exception {
+        var bytes = new java.util.ArrayList<byte[]>();
+        for (String answer : answers) {
+            bytes.add(InetAddress.getByName(answer).getAddress()); // numeric literals only; no DNS
+        }
+        dnsAnswers = bytes;
         when(persistence.finalizeFailed(eq(run), eq(0), anyString())).thenReturn(run);
         assertThat(trigger()).isSameAs(run);
         assertThat(lookups).isEqualTo(1);
-        verify(persistence).finalizeFailed(eq(run), eq(0), anyString());
+        assertDestinationRefusal("publicHostRequired");
         verify(persistence, never()).finalizeReconciled(any(), any(), any());
+    }
+
+    private void assertDestinationRefusal(String reason) {
+        var message = ArgumentCaptor.forClass(String.class);
+        verify(persistence).finalizeFailed(eq(run), eq(0), message.capture());
+        assertThat(message.getValue()).isEqualTo(new FieldBusinessException(
+            "baseUrl", "dhis2FacilityConfig.baseUrl." + reason).getMessage());
+    }
+
+    static Stream<List<String>> nonPublicAnswers() {
+        return Stream.of(List.of("127.0.0.1"), List.of("10.0.0.5"),
+            List.of("169.254.169.254"), List.of("192.168.1.4"),
+            List.of("93.184.216.34", "10.0.0.5"), List.of("::1"), List.of("fd00::1"),
+            List.of("fe80::1"), List.of("::ffff:127.0.0.1"), List.of("::ffff:169.254.169.254"),
+            List.of("0.0.0.0"), List.of("100.64.0.1"));
     }
 }
