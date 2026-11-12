@@ -2003,6 +2003,27 @@ class ReceptionServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D1611: a copay by insurance is refused on copayMethod, before anything is written")
+        void aCopayByInsuranceIsRefused_D1611() {
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(UUID.randomUUID())
+                    .copayAmount(new java.math.BigDecimal("2000"))
+                    .copayMethod(com.example.hms.enums.PaymentMethod.INSURANCE)
+                    .copayReference("MUT-R44-001")
+                    .identityConfirmed(true)
+                    .build();
+
+            com.example.hms.exception.FieldBusinessException refused = org.junit.jupiter.api.Assertions.assertThrows(
+                com.example.hms.exception.FieldBusinessException.class,
+                () -> service.checkInPatient(request, hospitalId, "receptionist1"));
+
+            assertThat(refused.getField()).isEqualTo("copayMethod");
+            assertThat(refused.getMessageKey()).isEqualTo("billing.payment.insuranceNotAPayment");
+            verify(appointmentRepo, never()).lockById(any());
+            org.mockito.Mockito.verifyNoInteractions(billingInvoiceService);
+        }
+
+        @Test
         @DisplayName("QA D975: the copay is recorded in the method and with the reference the desk chose, and the receipt ids come back")
         void copayKeepsItsMethodAndReference_D975() {
             Appointment appointment = scheduledAppointment();

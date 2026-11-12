@@ -3456,4 +3456,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V288-r44-one-live-pharmacy-claim-per-dispense" author="hms-team" runOnChange="false">
+        <sqlFile path="V288__r44_one_live_pharmacy_claim_per_dispense.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

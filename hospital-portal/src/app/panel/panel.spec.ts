@@ -11,7 +11,7 @@ import {
   PanelPage,
   PanelService,
 } from '../services/panel.service';
-import { StaffService } from '../services/staff.service';
+import { StaffResponse, StaffService } from '../services/staff.service';
 import { PatientService } from '../services/patient.service';
 import { HospitalService } from '../services/hospital.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -46,11 +46,14 @@ describe('PanelComponent', () => {
   let component: PanelComponent;
   let panelService: jasmine.SpyObj<PanelService>;
   let toast: jasmine.SpyObj<ToastService>;
-  let adminRoles: boolean;
+  /** The caller's active roles; the role context answers from them. */
+  let heldRoles: string[];
+  let staffList: StaffResponse[];
   let scopedHospitalId: string | null;
 
   beforeEach(async () => {
-    adminRoles = true;
+    heldRoles = ['ROLE_SUPER_ADMIN'];
+    staffList = [];
     scopedHospitalId = 'h1';
     panelService = jasmine.createSpyObj<PanelService>('PanelService', [
       'myPanel',
@@ -83,7 +86,7 @@ describe('PanelComponent', () => {
       providers: [
         provideRouter([]),
         { provide: PanelService, useValue: panelService },
-        { provide: StaffService, useValue: { list: () => of([]) } },
+        { provide: StaffService, useValue: { list: () => of(staffList) } },
         {
           provide: PatientService,
           useValue: { search: () => of([]), lookup: () => of([]), list: () => of([]) },
@@ -99,7 +102,7 @@ describe('PanelComponent', () => {
             globalView: () => scopedHospitalId === null,
             selectedHospitalId: () => scopedHospitalId,
             permittedHospitalIds: ['h1'],
-            hasAnyActiveRole: () => adminRoles,
+            hasAnyActiveRole: (roles: string[]) => roles.some((r) => heldRoles.includes(r)),
           },
         },
         { provide: ToastService, useValue: toast },
@@ -291,10 +294,73 @@ describe('PanelComponent', () => {
   });
 
   it('does not describe the admin overview to a personal-panel-only clinician', () => {
-    adminRoles = false;
+    heldRoles = ['ROLE_DOCTOR'];
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.page-subtitle')).toBeNull();
     expect(fixture.nativeElement.querySelector('#my-panel-heading')).not.toBeNull();
     expect(panelService.overview).not.toHaveBeenCalled();
+  });
+
+  /**
+   * QA D1612 (round 44): the hospital admin opens /panels for the overview, but the
+   * server keeps that role off per-patient panels (E9 #67, decision D5). "Rattacher
+   * un patient" answered 403 and landed on the access-denied page; the End buttons
+   * in the drilldown did the same.
+   */
+  it('shows the hospital admin no assign or end action the server would refuse', () => {
+    heldRoles = ['ROLE_HOSPITAL_ADMIN'];
+    panelService.overview.and.returnValue(
+      of([{ providerStaffId: 's1', providerName: 'Dr. Diallo', panelRole: 'CHW', activeCount: 1 }]),
+    );
+    panelService.providerPanel.and.returnValue(of(page([assignment()])));
+    fixture.detectChanges();
+    component.openDrilldown({
+      providerStaffId: 's1',
+      providerName: 'Dr. Diallo',
+      panelRole: 'CHW',
+      activeCount: 1,
+    });
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(component.canEmpanel()).toBeFalse();
+    expect(el.querySelector('[data-testid="open-assign"]')).toBeNull();
+    expect(el.querySelector('[data-testid="drilldown-end"]')).toBeNull();
+    expect(el.querySelectorAll('.btn-link.danger').length).toBe(0);
+    // The overview and its drilldown stay: the server lets the admin read them.
+    expect(el.textContent).toContain('Awa Traore');
+
+    component.openAssign();
+    component.openEnd(assignment());
+    expect(component.showAssign()).toBeFalse();
+    expect(component.ending()).toBeNull();
+  });
+
+  it('offers assign and end to a clinician', () => {
+    heldRoles = ['ROLE_NURSE'];
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="open-assign"]')).not.toBeNull();
+    expect(el.querySelectorAll('.btn-link.danger').length).toBe(1);
+  });
+
+  /** QA D1614 (round 44): only clinical staff can own a panel; the server refuses the others. */
+  it('offers only doctors, nurses and midwives as panel owners', () => {
+    staffList = [
+      { id: 'd', name: 'Dr. Diallo', roleCode: 'ROLE_DOCTOR' },
+      { id: 's', name: 'Dr. Sawadogo', roleCode: 'ROLE_SURGEON' },
+      { id: 'n', name: 'Nurse Ouédraogo', roleCode: 'NURSE' },
+      { id: 'm', name: 'Midwife Kaboré', roleCode: 'ROLE_MIDWIFE' },
+      { id: 'b', name: 'Estelle Kafando', roleCode: 'ROLE_BILLING_SPECIALIST' },
+      { id: 'r', name: 'Clarisse Tapsoba', roleCode: 'ROLE_RECEPTIONIST' },
+      { id: 'p', name: 'Pharmacist', roleCode: 'ROLE_PHARMACIST' },
+      { id: 'a', name: 'Admin', roleCode: 'ROLE_HOSPITAL_ADMIN' },
+      { id: 'x', name: 'No role' },
+    ] as StaffResponse[];
+    heldRoles = ['ROLE_DOCTOR'];
+    fixture.detectChanges();
+    component.openAssign();
+
+    expect(component.filteredStaff().map((s) => s.id)).toEqual(['d', 's', 'n', 'm']);
   });
 });

@@ -29,6 +29,38 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { bareRole } from '../core/role-token';
+
+/**
+ * QA D1612 (round 44): the roles `PatientPanelController` lets write an
+ * empanelment (assign and end). The hospital admin opens `/panels` for the
+ * overview, but the server keeps that role off per-patient panels (E9 #67,
+ * decision D5), so the write buttons are shown to these roles only.
+ */
+export const PANEL_WRITE_ROLES: readonly string[] = [
+  'ROLE_NURSE',
+  'ROLE_MIDWIFE',
+  'ROLE_DOCTOR',
+  'ROLE_SUPER_ADMIN',
+];
+
+/**
+ * QA D1614 (round 44): who may own a panel, mirroring `PanelService.PANEL_OWNER_ROLES`
+ * (doctors, physicians and surgeons, nurses, midwives). Bare codes, as `bareRole` reads them.
+ */
+export const PANEL_OWNER_ROLES: readonly string[] = [
+  'DOCTOR',
+  'PHYSICIAN',
+  'SURGEON',
+  'NURSE',
+  'MIDWIFE',
+];
+
+/** Whether a staff member may own a panel (the owner select offers only these). */
+export function canOwnPanel(staff: StaffResponse): boolean {
+  const code = bareRole(staff.roleCode)?.toUpperCase();
+  return !!code && PANEL_OWNER_ROLES.includes(code);
+}
 /**
  * Panel management (Tier 2 item 37).
  *
@@ -121,11 +153,14 @@ export class PanelComponent implements OnInit {
   readonly isAdmin = computed(() =>
     this.roleCtx.hasAnyActiveRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']),
   );
+  /** QA D1612: assign and end are offered only to the roles the server lets write them. */
+  readonly canEmpanel = computed(() => this.roleCtx.hasAnyActiveRole([...PANEL_WRITE_ROLES]));
 
   /** The staff select filtered client-side; see the ceiling note in openAssign. */
   readonly filteredStaff = computed(() => {
     const term = this.staffFilter().trim().toLowerCase();
-    const options = this.staffOptions();
+    // QA D1614: only clinical staff can own a panel; the server refuses the others.
+    const options = this.staffOptions().filter(canOwnPanel);
     if (!term) return options;
     return options.filter((s) => (s.name ?? '').toLowerCase().includes(term));
   });
@@ -184,6 +219,7 @@ export class PanelComponent implements OnInit {
   }
 
   openAssign(event?: Event): void {
+    if (!this.canEmpanel()) return;
     this.dialogOpener = (event?.currentTarget as HTMLElement) ?? null;
     this.showAssign.set(true);
     this.selectedPatient.set(null);
@@ -257,6 +293,7 @@ export class PanelComponent implements OnInit {
   }
 
   openEnd(assignment: PanelAssignment, event?: Event): void {
+    if (!this.canEmpanel()) return;
     this.dialogOpener = (event?.currentTarget as HTMLElement) ?? null;
     this.ending.set(assignment);
     this.endReason.set('');
