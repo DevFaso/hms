@@ -145,6 +145,10 @@ class GuardDriftRatchetTest {
         listed.put("AdmissionController.admitPatient",
             "Doctor and midwife only (policy 2: a midwife admits a woman in labour, the service refuses her any other type); nurses never admit, QA D84");
         listed.put("AdmissionController.cancelAdmission", ADMISSIONCONTROLLER_REASON);
+        listed.put("LaborController.transferEpisode",
+            "Labour transfer (provisional rule, 2026-11-12): only those who may admit a labour (doctor, midwife under policy 2) hand one to another hospital; nurses never admit");
+        listed.put("LaborController.recordArrivalWithoutHandover",
+            "Labour transfer (provisional rule, 2026-11-12): recording an arrival without handover opens a labour episode, which only those who may admit a labour (doctor, midwife under policy 2) do");
         listed.put("AdmissionController.createOrderSet", ADMISSIONCONTROLLER_REASON);
         listed.put("AdmissionController.deactivateOrderSet", ADMISSIONCONTROLLER_REASON);
         listed.put("AdmissionController.dischargePatient", ADMISSIONCONTROLLER_REASON);

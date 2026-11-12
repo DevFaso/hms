@@ -415,6 +415,8 @@ public class LaborServiceImpl implements LaborService {
         String reason = requireReason(request, request == null ? null : request.getReason());
         UUID sourceHospitalId = requireActingHospital(request.getHospitalId());
         LaborEpisode source = loadEpisode(patientId, episodeId, sourceHospitalId);
+        // QA D401: a write at the acting hospital is for a patient registered there.
+        patientRegistrationGuard.requireRegisteredAt(patientId, sourceHospitalId);
         requireMayAdmitLabourAt(callerUserId, sourceHospitalId);
         if (request.getDestinationHospitalId() == null) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_DESTINATION, "maternity.labor.transfer.destinationRequired");
