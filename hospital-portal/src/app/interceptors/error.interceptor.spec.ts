@@ -261,6 +261,30 @@ describe('errorInterceptor', () => {
     }));
   });
 
+  it('an idle-timeout refresh refusal signs out once and never replays the clinical request', fakeAsync(() => {
+    auth.getRefreshToken.and.returnValue('cdx-refresh-stub');
+    auth.refreshTokenRequest.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 401,
+            statusText: 'Unauthorized',
+            error: { message: 'Session timed out due to inactivity. Please log in again.' },
+          }),
+      ),
+    );
+    http.get('/cdx-clinical-read').subscribe({ error: () => undefined });
+    httpMock
+      .expectOne('/cdx-clinical-read')
+      .flush(null, { status: 401, statusText: 'Unauthorized' });
+    tick(REFRESH_SUPERSEDED_DELAY_MS * (REFRESH_SUPERSEDED_RETRIES + 1));
+    expect(auth.refreshTokenRequest).toHaveBeenCalledTimes(1);
+    expect(auth.logout).toHaveBeenCalledTimes(1);
+    expect(router.navigate).toHaveBeenCalledWith(['/login']);
+    httpMock.expectNone('/cdx-clinical-read');
+    expect(auth.setToken).not.toHaveBeenCalled();
+  }));
+
   it('on 401 with no session evidence, logs out without attempting refresh', () => {
     let error: HttpErrorResponse | undefined;
     http.get('/data').subscribe({ error: (e) => (error = e) });
