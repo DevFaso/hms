@@ -58,4 +58,6 @@ On draft PR #1123 at `3ad2b95e61c2d1654ff2dec806eac6ca74dc3c69`, the a11y smoke,
 
 The name guard found zero new defects and six stale pins in `hospital-portal/scripts/a11y-names-baseline.json`: the two assignment filters (`filterActive`, `filterHospitalId`), two governance filters (`auditFilter`, `environment`), and two signature filters (`statusFilter`, `typeFilter`). Their missing-label defects were corrected by this PR. The guard requires deleting those obsolete entries.
 
-The assignment explicitly prohibits baseline edits. None was made. Permission was requested to remove only these six fixed entries; until that exception is granted, this PR remains blocked by the guard. Retained local CI log: `c12-ci-frontend-failure.log`. Local passing tests are not a claim that the complete published CI gate passed.
+The assignment explicitly prohibits baseline edits. None was made. On 12 November 2026 the user explicitly decided: **keep the baseline untouched and leave C12 blocked**. Do not remove these six pins as an automatic CI repair. Retained local CI log: `c12-ci-frontend-failure.log`. Local passing tests are not a claim that the complete published CI gate passed.
+
+This decision-only report update was checked with Prettier and `git diff --check` (both exit 0). Application source and baseline files were unchanged; application tests were not repeated for this documentation-only update.
