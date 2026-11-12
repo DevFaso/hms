@@ -125,6 +125,22 @@ app.auth.oidc.required=${OIDC_REQUIRED:false}
 | `OTEL_METRICS_EXPORTER` | public | `none` | `none` | **MUST** when the endpoint is set. Stops the *agent* exporting metrics. Metrics are owned by the Micrometer OTLP registry; leaving the agent's exporter on duplicates every series and doubles free-tier consumption. One exporter per signal: agent = traces + logs, Micrometer = metrics. |
 | `OTEL_METRICS_EXPORT_URL` | public | `<endpoint>/v1/metrics` | same | **MUST** when `OTEL_METRICS_ENABLED=true`. Micrometer wants a FULL signal URL (Boot's default is `…:4318/v1/metrics`), not the gateway base that `OTEL_EXPORTER_OTLP_ENDPOINT` holds for the agent. Pointing it at the bare `/otlp` makes every 60s push a rejected POST and the business counters never arrive. |
 | `SPLUNK_HEC_ENABLED` (+ `SPLUNK_HEC_URL` / `_TOKEN`) | secret | `false` | `false` | **MAY.** Additive SIEM log shipping. Enabling without URL + token fails the context at boot by design (`SplunkLoggingProperties`). Has never been enabled in either environment. |
+| `SMS_PROVIDER` | public | unset (`orange`) | unset (`orange`) | **MAY.** `app.sms.provider`: `orange` (default) or `ikoddi`. Exactly one provider sends; there is no automatic fallback. Until the selected provider has its credentials, SMS stays on the logging mock and the portal hides phone verification. |
+| `ORANGE_SMS_CLIENT_ID` | secret | from Orange MyApps | from Orange MyApps | **MUST** for real SMS. With the secret below, it switches SMS on. Not the Orange *application* ID (that one only filters the admin statistics and is not configured here). Never commit, log or paste it. |
+| `ORANGE_SMS_CLIENT_SECRET` | secret | from Orange MyApps | from Orange MyApps | **MUST** for real SMS. Rotate it if it was ever shared in chat or a document. The backend builds the Basic header from it; the OAuth token it obtains is reused until shortly before expiry and refreshed once on a 401. |
+| `ORANGE_SMS_BASE_URL` | public | unset (`https://api.orange.com`) | unset | **MAY.** Override only for a trusted test stub. |
+| `ORANGE_SMS_SENDER_ADDRESS` | public | unset (`tel:+2260000`) | unset (`tel:+2260000`) | **MAY.** The country's generic sender address (Burkina Faso: `tel:+2260000`). An invalid value disables Orange SMS and logs an error at startup. |
+| `ORANGE_SMS_SENDER_NAME` | public | approved name, or unset | approved name | **SHOULD** in prod: some countries no longer accept the generated default name. It must be approved and whitelisted by Orange first; at most 11 letters, digits or spaces, else Orange SMS is disabled at startup. |
+| `ORANGE_SMS_ON_NET` | public | unset (`false`) | unset (`false`) | **MAY.** `true` only with an Orange-only (`SMS_OCB2`) contract and bundle. |
+| `IKODDI_ENABLED` (+ `IKODDI_API_KEY` / `_ORGANIZATION_ID` / `_OTP_APP_ID`) | secret | keep for the migration window | keep for the migration window | Legacy provider. With `SMS_PROVIDER=orange` these only verify codes IKODDI issued before the switch (they expire after `IKODDI_OTP_TTL_SECONDS`, 5 min); remove them once that window has passed. Required again only for `SMS_PROVIDER=ikoddi`. `IKODDI_COUNTRY_NUMBER_CODE` and `IKODDI_OTP_TTL_SECONDS` keep their names and also apply to Orange and the local codes. |
+
+**Orange SMS pacing is per process, not per account.** Each backend
+instance spaces its sends at five per second, Orange's announced limit.
+Two replicas (or another service on the same Orange account) together can
+exceed it; scale out only with a shared limiter. A send that times out
+or answers 5xx is not retried, since Orange may already have accepted
+(and charged) it; "accepted" means Orange answered 201, not that the
+handset received the message.
 
 > **Observability (Grafana Cloud).** These were absent from this matrix and unset on
 > both backends until 2026-11-01, so the entire pipeline — agent, dashboards, alert

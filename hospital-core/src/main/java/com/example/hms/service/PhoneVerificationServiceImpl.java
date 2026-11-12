@@ -8,15 +8,25 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.PhoneOtpChallenge;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.PhoneOtpChallengeRepository;
+import com.example.hms.exception.FieldBusinessException;
+import com.example.hms.exception.NotificationTransportUnavailableException;
 import com.example.hms.service.integration.IkoddiGateway;
+import com.example.hms.utility.SmsCountryPolicy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -30,10 +40,21 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
     private static final int RESEND_COOLDOWN_SECONDS = 60;
     /** Per-staff hourly dispatch cap — SMS sends cost money and can harass. */
     private static final int MAX_SENDS_PER_USER_PER_HOUR = 10;
+    /**
+     * Codes are generated, hashed and checked here: Orange sends plain SMS and
+     * has no OTP service. {@code verification_key} stores
+     * {@code local-sha256:<salt>:<sha256(salt:code)>}, never the code. A key
+     * without this prefix is an IKODDI {@code otpToken} issued before the
+     * switch, still verified remotely until it expires (a few minutes).
+     */
+    static final String LOCAL_CODE_PREFIX = "local-sha256:";
+    static final String OTP_SMS_CAMPAIGN = "phone-verification-code";
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final PhoneOtpChallengeRepository challengeRepository;
     private final IkoddiGateway ikoddiGateway;
     private final AuditEventLogService auditService;
+    private final MessageSource messageSource;
     private final String defaultCountryNumberCode;
     private final long otpTtlSeconds;
     /**
@@ -48,6 +69,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
         PhoneOtpChallengeRepository challengeRepository,
         IkoddiGateway ikoddiGateway,
         AuditEventLogService auditService,
+        MessageSource messageSource,
         @Value("${app.ikoddi.country-number-code:226}") String defaultCountryNumberCode,
         @Value("${app.ikoddi.otp-ttl-seconds:300}") long otpTtlSeconds,
         Clock clock
@@ -55,6 +77,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
         this.challengeRepository = challengeRepository;
         this.ikoddiGateway = ikoddiGateway;
         this.auditService = auditService;
+        this.messageSource = messageSource;
         this.defaultCountryNumberCode = defaultCountryNumberCode;
         this.otpTtlSeconds = otpTtlSeconds;
         this.clock = clock;
@@ -69,6 +92,10 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
     @Override
     public ChallengeView requestRegistrationVerification(String rawPhone, UUID requestedByUserId, UUID hospitalId) {
         String phone = normalizePhone(rawPhone);
+        if (!SmsCountryPolicy.allows(phone)) {
+            // Every code is a paid SMS: only well-formed numbers in the countries we text.
+            throw new FieldBusinessException("phoneNumber", "phoneVerification.phone.countryNotSupported");
+        }
 
         // ── Send-abuse guards: SMS dispatches cost money and can harass a
         // victim's phone. Cooldown per number + hourly cap per staff account. ──
@@ -92,15 +119,22 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
             challengeRepository.saveAll(active);
         }
 
-        IkoddiGateway.OtpDispatch sent = ikoddiGateway.sendOtp(phone, IkoddiGateway.OtpChannel.SMS);
-        if (!sent.accepted()) {
+        String code = String.format("%06d", RANDOM.nextInt(1_000_000));
+        byte[] saltBytes = new byte[16];
+        RANDOM.nextBytes(saltBytes);
+        String salt = HexFormat.of().formatHex(saltBytes);
+        try {
+            // An unconfigured gateway throws NotificationTransportUnavailableException (503), untouched.
+            ikoddiGateway.sendSms(List.of(phone), otpMessage(code), OTP_SMS_CAMPAIGN);
+        } catch (IllegalStateException | IllegalArgumentException ex) {
+            log.warn("OTP SMS to {} not accepted: {}", maskPhone(phone), ex.getMessage());
             throw new BusinessException("phoneVerification.providerRefused");
         }
 
         PhoneOtpChallenge challenge = PhoneOtpChallenge.builder()
             .phoneNumber(phone)
             .purpose(PhoneOtpPurpose.REGISTRATION_PHONE_VERIFICATION)
-            .verificationKey(sent.otpToken())
+            .verificationKey(LOCAL_CODE_PREFIX + salt + ":" + hashCode(salt, code))
             .expiresAt(LocalDateTime.now(clock).plusSeconds(otpTtlSeconds))
             .consumed(false)
             .verified(false)
@@ -136,9 +170,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
             throw new BusinessException("phoneVerification.code.tooManyAttempts");
         }
 
-        IkoddiGateway.OtpVerification verification =
-            ikoddiGateway.verifyOtp(challenge.getPhoneNumber(), code, challenge.getVerificationKey());
-        if (!verification.matched()) {
+        if (!codeMatches(challenge, code)) {
             challenge.setAttempts(challenge.getAttempts() + 1);
             challengeRepository.save(challenge);
             throw new BusinessException("phoneVerification.code.invalid");
@@ -151,6 +183,59 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
             requestedByUserId, challenge.getId());
         return new ChallengeView(challenge.getId(), maskPhone(challenge.getPhoneNumber()),
             challenge.getExpiresAt(), true);
+    }
+
+    /**
+     * A locally issued challenge is checked here in constant time. An IKODDI one
+     * (issued before the switch) is verified remotely; when IKODDI can no longer
+     * be reached for it, the challenge is closed as expired so the desk requests
+     * a new code instead of seeing an outage.
+     */
+    private boolean codeMatches(PhoneOtpChallenge challenge, String code) {
+        String key = challenge.getVerificationKey();
+        if (key != null && key.startsWith(LOCAL_CODE_PREFIX)) {
+            return matchesLocalCode(key.substring(LOCAL_CODE_PREFIX.length()), code);
+        }
+        try {
+            return ikoddiGateway.verifyOtp(challenge.getPhoneNumber(), code, key).matched();
+        } catch (NotificationTransportUnavailableException | IllegalStateException ex) {
+            log.warn("Legacy IKODDI challenge {} cannot be verified any more: {}", challenge.getId(), ex.getMessage());
+            challenge.setConsumed(true);
+            challengeRepository.save(challenge);
+            throw new BusinessException("phoneVerification.code.expired");
+        }
+    }
+
+    /** The SMS body: the code, its lifetime and the never-share warning, in French (no patient record yet). */
+    private String otpMessage(String code) {
+        long minutes = Math.max(1, otpTtlSeconds / 60);
+        return messageSource.getMessage("sms.phoneVerification.code", new Object[] {code, minutes}, Locale.FRENCH);
+    }
+
+    /** Constant-time check of a typed code (spaces ignored) against {@code salt:hash}. */
+    static boolean matchesLocalCode(String saltAndHash, String typed) {
+        int sep = saltAndHash.indexOf(':');
+        if (sep <= 0 || typed == null) {
+            return false;
+        }
+        String normalized = typed.replaceAll("\\s", "");
+        if (!normalized.matches("\\d{6}")) {
+            return false;
+        }
+        String salt = saltAndHash.substring(0, sep);
+        String expected = saltAndHash.substring(sep + 1);
+        return MessageDigest.isEqual(
+            hashCode(salt, normalized).getBytes(StandardCharsets.US_ASCII),
+            expected.getBytes(StandardCharsets.US_ASCII));
+    }
+
+    static String hashCode(String salt, String code) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest((salt + ":" + code).getBytes(StandardCharsets.US_ASCII)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** Attribution trail: which staff account sent/confirmed a code for which number. */
@@ -195,7 +280,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
      */
     String normalizePhone(String rawPhone) {
         if (rawPhone == null) {
-            throw new com.example.hms.exception.FieldBusinessException("phoneNumber", "phoneVerification.phone.required");
+            throw new FieldBusinessException("phoneNumber", "phoneVerification.phone.required");
         }
         String trimmed = rawPhone.trim();
         boolean hasPlus = trimmed.startsWith("+");
@@ -205,7 +290,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
             hasPlus = true;
         }
         if (digits.length() < MIN_DIGITS) {
-            throw new com.example.hms.exception.FieldBusinessException("phoneNumber", "phoneVerification.phone.tooShort");
+            throw new FieldBusinessException("phoneNumber", "phoneVerification.phone.tooShort");
         }
         if (hasPlus || digits.length() > 10) {
             return "+" + digits;
