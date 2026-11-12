@@ -4,6 +4,7 @@ import {
   HttpClient,
   HttpContext,
   HttpErrorResponse,
+  HttpHeaders,
   provideHttpClient,
   withInterceptors,
   withXhr,
@@ -261,29 +262,39 @@ describe('errorInterceptor', () => {
     }));
   });
 
-  it('an idle-timeout refresh refusal signs out once and never replays the clinical request', fakeAsync(() => {
-    auth.getRefreshToken.and.returnValue('cdx-refresh-stub');
-    auth.refreshTokenRequest.and.returnValue(
-      throwError(
-        () =>
-          new HttpErrorResponse({
-            status: 401,
-            statusText: 'Unauthorized',
-            error: { message: 'Session timed out due to inactivity. Please log in again.' },
-          }),
-      ),
-    );
-    http.get('/cdx-clinical-read').subscribe({ error: () => undefined });
-    httpMock
-      .expectOne('/cdx-clinical-read')
-      .flush(null, { status: 401, statusText: 'Unauthorized' });
-    tick(REFRESH_SUPERSEDED_DELAY_MS * (REFRESH_SUPERSEDED_RETRIES + 1));
-    expect(auth.refreshTokenRequest).toHaveBeenCalledTimes(1);
-    expect(auth.logout).toHaveBeenCalledTimes(1);
-    expect(router.navigate).toHaveBeenCalledWith(['/login']);
-    httpMock.expectNone('/cdx-clinical-read');
-    expect(auth.setToken).not.toHaveBeenCalled();
-  }));
+  // Mirrors IdleSessionGate.WWW_AUTHENTICATE_CHALLENGE; handling is the generic 401 refresh path.
+  const idleChallenge =
+    'Bearer realm="Hospital", error="invalid_token", error_description="idle_timeout"';
+  for (const clinicalChallenge of [false, true]) {
+    it(`an idle-timeout refresh refusal signs out once (clinical challenge: ${clinicalChallenge})`, fakeAsync(() => {
+      auth.getRefreshToken.and.returnValue('cdx-refresh-stub');
+      auth.refreshTokenRequest.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 401,
+              statusText: 'Unauthorized',
+              headers: new HttpHeaders({
+                'WWW-Authenticate': idleChallenge,
+              }),
+              error: { message: 'cdx-localized-refusal' },
+            }),
+        ),
+      );
+      http.get('/cdx-clinical-read').subscribe({ error: () => undefined });
+      httpMock.expectOne('/cdx-clinical-read').flush(null, {
+        status: 401,
+        statusText: 'Unauthorized',
+        headers: clinicalChallenge ? { 'WWW-Authenticate': idleChallenge } : {},
+      });
+      tick(REFRESH_SUPERSEDED_DELAY_MS * (REFRESH_SUPERSEDED_RETRIES + 1));
+      expect(auth.refreshTokenRequest).toHaveBeenCalledTimes(1);
+      expect(auth.logout).toHaveBeenCalledTimes(1);
+      expect(router.navigate).toHaveBeenCalledOnceWith(['/login']);
+      httpMock.expectNone('/cdx-clinical-read');
+      expect(auth.setToken).not.toHaveBeenCalled();
+    }));
+  }
 
   it('on 401 with no session evidence, logs out without attempting refresh', () => {
     let error: HttpErrorResponse | undefined;

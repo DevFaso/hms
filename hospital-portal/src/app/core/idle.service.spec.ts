@@ -28,7 +28,7 @@ describe('IdleService repository-only session coverage', () => {
   it('activity renews the window before expiry', fakeAsync(() => {
     idle.start(60_000);
     tick(59_000);
-    document.dispatchEvent(new Event('mousedown'));
+    document.dispatchEvent(new Event('mousedown', { bubbles: true }));
     tick(59_000);
     expect(idle.locked()).toBeFalse();
     tick(1_000);
@@ -46,19 +46,33 @@ describe('IdleService repository-only session coverage', () => {
     expect(idle.locked()).toBeTrue();
   }));
 
-  it('a saved lock survives service recreation until an explicit unlock', fakeAsync(() => {
+  it('a fresh service restores a saved lock and activity does not unlock it', fakeAsync(() => {
+    const previous = idle;
+    previous.stop();
     sessionStorage.setItem('hms_idle_locked', 'true');
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({});
+    idle = TestBed.inject(IdleService);
+    expect(idle).not.toBe(previous);
     idle.start(60_000);
     expect(idle.locked()).toBeTrue();
-    document.dispatchEvent(new Event('keydown'));
+    document.dispatchEvent(new Event('keydown', { bubbles: true }));
     tick(120_000);
     expect(idle.locked()).toBeTrue();
   }));
 
   it('stop removes activity listeners and cancels the pending idle timer', fakeAsync(() => {
+    const added = spyOn(document, 'addEventListener').and.callThrough();
+    const removed = spyOn(document, 'removeEventListener').and.callThrough();
     idle.start(60_000);
+    const registered = added.calls.allArgs();
+    expect(registered.map(([event]) => event)).toContain('mousedown');
+    expect(registered.map(([event]) => event)).toContain('visibilitychange');
     idle.stop();
-    document.dispatchEvent(new Event('mousedown'));
+    for (const [event, listener] of registered) {
+      expect(removed).toHaveBeenCalledWith(event, listener);
+    }
+    document.dispatchEvent(new Event('mousedown', { bubbles: true }));
     tick(120_000);
     expect(idle.locked()).toBeFalse();
   }));

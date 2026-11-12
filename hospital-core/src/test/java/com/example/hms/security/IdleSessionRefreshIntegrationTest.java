@@ -29,7 +29,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -57,15 +56,24 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class IdleSessionRefreshIntegrationTest {
 
     @Autowired private MockMvc mockMvc;
+    private static org.springframework.context.MessageSource previousMessageSource;
 
     @org.junit.jupiter.api.BeforeAll
     static void messageBundles() {
+        previousMessageSource = (org.springframework.context.MessageSource)
+            org.springframework.test.util.ReflectionTestUtils.getField(
+                com.example.hms.utility.MessageUtil.class, "messageSource");
         var source = new org.springframework.context.support.ResourceBundleMessageSource();
         source.setBasenames(java.util.Arrays.stream(com.example.hms.config.MessageBundles.basenames())
             .map(b -> b.substring("classpath:".length())).toArray(String[]::new));
         source.setDefaultEncoding("UTF-8");
         source.setFallbackToSystemLocale(false);
         com.example.hms.utility.MessageUtil.setMessageSource(source);
+    }
+
+    @org.junit.jupiter.api.AfterAll
+    static void restoreMessageSource() {
+        com.example.hms.utility.MessageUtil.setMessageSource(previousMessageSource);
     }
 
     @MockitoBean private UserRepository userRepository;
@@ -99,10 +107,24 @@ class IdleSessionRefreshIntegrationTest {
 
         @org.springframework.context.annotation.Bean
         IdleSessionGate localGate(java.util.concurrent.atomic.AtomicLong now) {
-            java.time.Clock clock = mock(java.time.Clock.class);
-            when(clock.millis()).thenAnswer(invocation -> now.get());
+            java.time.Clock clock = new MutableClock(now, java.time.ZoneOffset.UTC);
             return new IdleSessionGate(new InMemoryIdleSessionTracker(java.time.Duration.ofMinutes(15), clock), "");
         }
+    }
+
+    private static final class MutableClock extends java.time.Clock {
+        private final java.util.concurrent.atomic.AtomicLong now;
+        private final java.time.ZoneId zone;
+
+        MutableClock(java.util.concurrent.atomic.AtomicLong now, java.time.ZoneId zone) {
+            this.now = now;
+            this.zone = zone;
+        }
+
+        @Override public long millis() { return now.get(); }
+        @Override public java.time.Instant instant() { return java.time.Instant.ofEpochMilli(millis()); }
+        @Override public java.time.ZoneId getZone() { return zone; }
+        @Override public java.time.Clock withZone(java.time.ZoneId next) { return new MutableClock(now, next); }
     }
 
     private static final long WINDOW_MS = 15 * 60_000L;
@@ -165,6 +187,8 @@ class IdleSessionRefreshIntegrationTest {
         }
         verify(tokenBlacklistService, never()).claim(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong());
         verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), org.mockito.ArgumentMatchers.any());
+        verify(jwtTokenProvider, never()).generateRefreshToken(any(org.springframework.security.core.Authentication.class), org.mockito.ArgumentMatchers.any());
+        verify(refreshTokenCookieService, never()).write(any(), any(), org.mockito.ArgumentMatchers.anyLong());
         var events = org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
         verify(auditEventLogService, times(2)).logEvent(events.capture());
         assertThat(events.getAllValues()).allSatisfy(event -> {
