@@ -54,7 +54,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 // AuthControllerProperties is a @Component but @WebMvcTest doesn't
 // auto-scan components — import it explicitly so the controller's
 // constructor dependency resolves.
-@org.springframework.context.annotation.Import({AuthControllerProperties.class, LoginLockoutIntegrationTest.LocalThrottle.class})
+@org.springframework.context.annotation.Import({AuthControllerProperties.class, LoginAttemptService.class,
+    com.example.hms.security.InMemoryLoginAttemptStore.class, com.example.hms.config.LocaleConfig.class})
 @org.springframework.test.context.TestPropertySource(properties = {
     "app.mfa.required-roles=",
     "app.frontend.base-url=https://localhost",
@@ -68,7 +69,6 @@ class LoginLockoutIntegrationTest {
     static void messageBundles() {
         previousMessageSource = (org.springframework.context.MessageSource)
             org.springframework.test.util.ReflectionTestUtils.getField(com.example.hms.utility.MessageUtil.class, "messageSource");
-        com.example.hms.utility.MessageUtil.setMessageSource(expectedMessages());
     }
 
     @org.junit.jupiter.api.AfterAll
@@ -76,6 +76,7 @@ class LoginLockoutIntegrationTest {
         com.example.hms.utility.MessageUtil.setMessageSource(previousMessageSource);
     }
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private org.springframework.context.MessageSource messageSource;
 
     @MockitoBean private UserRepository userRepository;
     @MockitoBean private UserRoleHospitalAssignmentRepository assignmentRepository;
@@ -89,7 +90,8 @@ class LoginLockoutIntegrationTest {
     @MockitoBean private com.example.hms.security.IdleSessionGate idleSessionGate;
     @MockitoBean private com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker;
     @Autowired private LoginAttemptService loginAttemptService;
-    @Autowired private com.example.hms.security.InMemoryLoginAttemptStore attemptStore;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    private com.example.hms.security.InMemoryLoginAttemptStore attemptStore;
     @MockitoBean private AuditEventLogService auditEventLogService;
     @MockitoBean private PasswordHistoryService passwordHistoryService;
     @MockitoBean private MfaService mfaService;
@@ -99,29 +101,6 @@ class LoginLockoutIntegrationTest {
     @MockitoBean private com.example.hms.security.provider.ProviderMfaGate providerMfaGate;
 
 
-    /** Spring MVC + the real throttle/store. All persistence, tokens and transports are stubs. */
-    @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods = false)
-    static class LocalThrottle {
-        @org.springframework.context.annotation.Bean
-        com.example.hms.security.InMemoryLoginAttemptStore localAttempts() {
-            return org.mockito.Mockito.spy(new com.example.hms.security.InMemoryLoginAttemptStore());
-        }
-
-        @org.springframework.context.annotation.Bean
-        LoginAttemptService realThrottle(com.example.hms.security.InMemoryLoginAttemptStore store, UserRepository users) {
-            return new LoginAttemptService(store, users);
-        }
-    }
-
-    private static org.springframework.context.MessageSource expectedMessages() {
-        var source = new org.springframework.context.support.ResourceBundleMessageSource();
-        source.setBasenames(java.util.Arrays.stream(com.example.hms.config.MessageBundles.basenames())
-            .map(b -> b.substring("classpath:".length())).toArray(String[]::new));
-        source.setDefaultEncoding("UTF-8");
-        source.setFallbackToSystemLocale(false);
-        return source;
-    }
-
     private static final String USERNAME = "cdx-lockout";
     private static final String SECRET = "cdx-fake-login-secret";
     private static final int FAILURE_LIMIT = 5;
@@ -130,6 +109,7 @@ class LoginLockoutIntegrationTest {
 
     @org.junit.jupiter.api.BeforeEach
     void fakeAccount() {
+        com.example.hms.utility.MessageUtil.setMessageSource(messageSource);
         userId = java.util.UUID.randomUUID();
         when(userRepository.findIdsByUsernameIgnoreCase(USERNAME)).thenReturn(java.util.List.of(userId));
         when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("stub password refusal"));
@@ -250,6 +230,8 @@ class LoginLockoutIntegrationTest {
         // A purged entry starts at one; a retained expired entry increments to two.
         assertThat(attemptStore.recordFailure(key, FAILURE_LIMIT, LOCK_WINDOW_MS, LOCK_WINDOW_MS)).isEqualTo(1);
         attemptStore.clear(key);
+        // Re-seed and let HTTP perform the purge: no service/store read or clear intervenes.
+        attemptStore.recordFailure(key, 1, LOCK_WINDOW_MS, -1);
         for (int i = 0; i < FAILURE_LIMIT; i++) login(USERNAME, "en").andExpect(status().isUnauthorized());
         login(USERNAME, "en").andExpect(status().isLocked());
         verify(authenticationManager, times(FAILURE_LIMIT)).authenticate(any());
