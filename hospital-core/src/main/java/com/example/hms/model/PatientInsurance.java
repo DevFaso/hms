@@ -29,9 +29,13 @@ import java.util.UUID;
     name = "patient_insurances",
     schema = "clinical",
     uniqueConstraints = {
-        // A patient shouldn't have the exact same policy duplicated
+        // A patient shouldn't have the exact same policy duplicated at one hospital.
+        // Review of #1131: each hospital holds its own row of a policy (rows are
+        // hospital-scoped through their assignment), so the key includes it. The
+        // production schema has no such constraint (V1 never created one); this
+        // shapes the entity-built test schema only.
         @UniqueConstraint(name = "uq_insurance_patient_provider_policy",
-            columnNames = {"patient_id", "provider_name", "policy_number"})
+            columnNames = {"patient_id", "provider_name", "policy_number", "assignment_id"})
     },
     indexes = {
         @Index(name = "idx_pi_patient", columnList = "patient_id"),

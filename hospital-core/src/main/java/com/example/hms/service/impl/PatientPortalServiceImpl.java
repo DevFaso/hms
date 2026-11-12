@@ -2476,10 +2476,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      * at the appointment's hospital: the rows the front desk reads there
      * ({@code findByPatient_IdAndAssignment_Hospital_Id}). The payer and the
      * member number go together (a policy row needs both); the plan is kept
-     * as the policy's group. The same payer and number update the existing
-     * row instead of duplicating it. It becomes the primary policy only when
-     * the hospital holds no primary for the patient yet, so a policy the desk
-     * already chose stays primary.
+     * as the policy's group. The same payer and number update THIS hospital's
+     * row instead of duplicating it (review of #1131: never another
+     * hospital's row, which stays where it is, untouched); a row tagged to no
+     * hospital yet is adopted. It becomes the primary policy only when it is
+     * this hospital's row and the hospital holds no primary for the patient
+     * yet, so a policy the desk already chose stays primary.
      */
     private void recordPreCheckInInsurance(Patient patient, Appointment appointment, PreCheckInRequestDTO dto) {
         String provider = trimToNull(dto.getInsuranceProvider());
@@ -2496,8 +2498,15 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         UUID hospitalId = appointment.getHospital() != null ? appointment.getHospital().getId() : null;
         UserRoleHospitalAssignment assignment = patientAssignmentAt(patient, hospitalId);
 
-        PatientInsurance insurance = patientInsuranceRepository
-            .findFirstByPatient_IdAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(patient.getId(), provider, memberId)
+        java.util.Optional<PatientInsurance> here = hospitalId == null || assignment == null
+            ? java.util.Optional.empty()
+            : patientInsuranceRepository
+                .findFirstByPatient_IdAndAssignment_Hospital_IdAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
+                    patient.getId(), hospitalId, provider, memberId);
+        PatientInsurance insurance = here
+            .or(() -> patientInsuranceRepository
+                .findFirstByPatient_IdAndAssignmentIsNullAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
+                    patient.getId(), provider, memberId))
             .orElseGet(() -> {
                 PatientInsurance created = new PatientInsurance();
                 created.setPatient(patient);
@@ -2513,7 +2522,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (insurance.getAssignment() == null && assignment != null) {
             insurance.setAssignment(assignment);
         }
-        if (!insurance.isPrimary() && hospitalId != null && patientInsuranceRepository
+        boolean thisHospitals = insurance.getAssignment() != null && insurance.getAssignment().getHospital() != null
+            && hospitalId != null && hospitalId.equals(insurance.getAssignment().getHospital().getId());
+        if (thisHospitals && !insurance.isPrimary() && patientInsuranceRepository
                 .findByPatient_IdAndPrimaryTrueAndAssignment_Hospital_Id(patient.getId(), hospitalId).isEmpty()) {
             insurance.setPrimary(true);
         }

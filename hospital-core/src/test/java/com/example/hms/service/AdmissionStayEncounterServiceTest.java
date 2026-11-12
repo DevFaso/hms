@@ -410,6 +410,21 @@ class AdmissionStayEncounterServiceTest {
     }
 
     @Test
+    void review1131_instructionsOverflowingTheSummaryAreRefusedOnTheirField_neverDropped() {
+        com.example.hms.model.discharge.DischargeSummary summary = writtenSummary(false);
+        summary.setFollowUpInstructions("a".repeat(2990));
+        admission.setDischargeInstructions("Paracétamol si fièvre, revenir si fièvre > 3 jours.");
+
+        org.assertj.core.api.Assertions
+            .assertThatThrownBy(() -> service.recordDischarge(admission, "R50.9 Fièvre"))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "dischargeInstructions")
+            .hasFieldOrPropertyWithValue("messageKey", "admission.discharge.instructionsTooLong");
+        verify(dischargeSummaryRepository, never()).save(any());
+        assertThat(summary.getFollowUpInstructions()).hasSize(2990);
+    }
+
+    @Test
     void d1596_aFinalizedSummaryIsNeverChanged() {
         com.example.hms.model.discharge.DischargeSummary summary = writtenSummary(true);
         admission.setDischargeInstructions("Paracétamol si fièvre");

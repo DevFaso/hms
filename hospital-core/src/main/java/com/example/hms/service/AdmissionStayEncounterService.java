@@ -553,7 +553,11 @@ public class AdmissionStayEncounterService {
         return isBlank(diagnosis) ? (isBlank(statedDiagnosis) ? null : statedDiagnosis.trim()) : diagnosis.trim();
     }
 
-    /** QA D1596: the dialog's instructions, added once to a summary still open to edits. */
+    /**
+     * QA D1596: the dialog's instructions, added once to a summary still open to edits.
+     * Review of #1131: instructions that would overflow the summary's column are refused
+     * on their field (the discharge rolls back), never dropped in silence.
+     */
     static boolean carryInstructions(DischargeSummary summary, String instructions) {
         if (isBlank(instructions) || Boolean.TRUE.equals(summary.getIsFinalized())
             || containsText(summary.getFollowUpInstructions(), instructions)) {
@@ -561,7 +565,8 @@ public class AdmissionStayEncounterService {
         }
         String merged = mergedInstructions(summary.getFollowUpInstructions(), instructions);
         if (merged.length() > FOLLOW_UP_MAX) {
-            return false;
+            throw new com.example.hms.exception.FieldBusinessException("dischargeInstructions",
+                "admission.discharge.instructionsTooLong", FOLLOW_UP_MAX);
         }
         summary.setFollowUpInstructions(merged);
         return true;

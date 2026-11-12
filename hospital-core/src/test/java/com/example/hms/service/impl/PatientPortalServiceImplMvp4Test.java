@@ -350,7 +350,11 @@ class PatientPortalServiceImplMvp4Test {
             own.setHospital(hospital);
             when(assignmentRepository.findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(
                     userId, hospital.getId(), "ROLE_PATIENT")).thenReturn(Optional.of(own));
-            when(patientInsuranceRepository.findFirstByPatient_IdAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
+            when(patientInsuranceRepository
+                    .findFirstByPatient_IdAndAssignment_Hospital_IdAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
+                    patientId, hospital.getId(), "Mutuelle Faso Santé", "MFS-R44-0001")).thenReturn(Optional.empty());
+            when(patientInsuranceRepository
+                    .findFirstByPatient_IdAndAssignmentIsNullAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
                     patientId, "Mutuelle Faso Santé", "MFS-R44-0001")).thenReturn(Optional.empty());
             when(patientInsuranceRepository.findByPatient_IdAndPrimaryTrueAndAssignment_Hospital_Id(
                     patientId, hospital.getId())).thenReturn(Optional.empty());
@@ -376,8 +380,16 @@ class PatientPortalServiceImplMvp4Test {
             assertThat(row.getLinkedByUserId()).isEqualTo(userId);
         }
 
+        private com.example.hms.model.UserRoleHospitalAssignment patientRoleAt(Hospital at) {
+            com.example.hms.model.UserRoleHospitalAssignment own = new com.example.hms.model.UserRoleHospitalAssignment();
+            own.setHospital(at);
+            when(assignmentRepository.findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(
+                    userId, at.getId(), "ROLE_PATIENT")).thenReturn(Optional.of(own));
+            return own;
+        }
+
         @Test
-        @DisplayName("QA D1590: the same policy is updated, and a primary the desk chose stays primary")
+        @DisplayName("QA D1590: this hospital's same policy is updated, and a primary the desk chose stays primary")
         void samePolicyIsUpdatedAndTheDesksPrimaryKept() {
             stubPatientResolution();
             UUID apptId = UUID.randomUUID();
@@ -385,12 +397,15 @@ class PatientPortalServiceImplMvp4Test {
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appt));
             when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            com.example.hms.model.UserRoleHospitalAssignment own = patientRoleAt(hospital);
             com.example.hms.model.PatientInsurance existing = new com.example.hms.model.PatientInsurance();
             existing.setPatient(patient);
+            existing.setAssignment(own);
             existing.setProviderName("Mutuelle Faso Santé");
             existing.setPolicyNumber("MFS-R44-0001");
-            when(patientInsuranceRepository.findFirstByPatient_IdAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
-                    patientId, "mutuelle faso santé", "mfs-r44-0001")).thenReturn(Optional.of(existing));
+            when(patientInsuranceRepository
+                    .findFirstByPatient_IdAndAssignment_Hospital_IdAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
+                    patientId, hospital.getId(), "mutuelle faso santé", "mfs-r44-0001")).thenReturn(Optional.of(existing));
             when(patientInsuranceRepository.findByPatient_IdAndPrimaryTrueAndAssignment_Hospital_Id(
                     patientId, hospital.getId()))
                     .thenReturn(Optional.of(new com.example.hms.model.PatientInsurance()));
@@ -403,6 +418,72 @@ class PatientPortalServiceImplMvp4Test {
             verify(patientInsuranceRepository).save(existing);
             assertThat(existing.isPrimary()).isFalse();
             assertThat(existing.getGroupNumber()).isNull();
+        }
+
+        @Test
+        @DisplayName("Review of #1131: pre-check-in at A then at B: each hospital holds its own row, A's is untouched")
+        void eachHospitalHoldsItsOwnCoverage() {
+            stubPatientResolution();
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            Hospital hospitalB = new Hospital();
+            hospitalB.setId(UUID.randomUUID());
+            com.example.hms.model.UserRoleHospitalAssignment atA = patientRoleAt(hospital);
+            com.example.hms.model.UserRoleHospitalAssignment atB = patientRoleAt(hospitalB);
+
+            // An in-memory table: each save keeps the row, each lookup reads it by hospital.
+            java.util.List<com.example.hms.model.PatientInsurance> rows = new java.util.ArrayList<>();
+            when(patientInsuranceRepository.save(any())).thenAnswer(inv -> {
+                com.example.hms.model.PatientInsurance row = inv.getArgument(0);
+                if (rows.stream().noneMatch(r -> r == row)) rows.add(row);
+                return row;
+            });
+            when(patientInsuranceRepository
+                    .findFirstByPatient_IdAndAssignment_Hospital_IdAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
+                    any(), any(), any(), any())).thenAnswer(inv -> rows.stream()
+                    .filter(r -> r.getAssignment() != null
+                            && r.getAssignment().getHospital().getId().equals(inv.getArgument(1)))
+                    .findFirst());
+            when(patientInsuranceRepository
+                    .findFirstByPatient_IdAndAssignmentIsNullAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
+                    any(), any(), any())).thenReturn(Optional.empty());
+            when(patientInsuranceRepository.findByPatient_IdAndPrimaryTrueAndAssignment_Hospital_Id(any(), any()))
+                    .thenAnswer(inv -> rows.stream()
+                    .filter(r -> r.isPrimary() && r.getAssignment().getHospital().getId().equals(inv.getArgument(1)))
+                    .findFirst());
+
+            UUID apptA = UUID.randomUUID();
+            when(appointmentRepository.findById(apptA))
+                    .thenReturn(Optional.of(buildAppointment(apptA, AppointmentStatus.SCHEDULED, 3)));
+            PreCheckInRequestDTO atHospitalA = buildDto(apptA);
+            atHospitalA.setInsuranceProvider("Mutuelle Faso Santé");
+            atHospitalA.setInsuranceMemberId("MFS-R44-0001");
+            atHospitalA.setInsurancePlan("Formule Base");
+            service.submitPreCheckIn(auth, atHospitalA);
+
+            // B: the same policy, on an appointment at another hospital.
+            UUID apptB = UUID.randomUUID();
+            Appointment b = buildAppointment(apptB, AppointmentStatus.SCHEDULED, 4);
+            b.setHospital(hospitalB);
+            when(appointmentRepository.findById(apptB)).thenReturn(Optional.of(b));
+            PreCheckInRequestDTO atHospitalB = buildDto(apptB);
+            atHospitalB.setInsuranceProvider("Mutuelle Faso Santé");
+            atHospitalB.setInsuranceMemberId("MFS-R44-0001");
+            atHospitalB.setInsurancePlan("Formule Plus");
+            service.submitPreCheckIn(auth, atHospitalB);
+
+            assertThat(rows).hasSize(2);
+            com.example.hms.model.PatientInsurance rowA = rows.get(0);
+            com.example.hms.model.PatientInsurance rowB = rows.get(1);
+            // A's row stays where it was, as it was: tagged A, primary, its own plan.
+            assertThat(rowA.getAssignment()).isSameAs(atA);
+            assertThat(rowA.isPrimary()).isTrue();
+            assertThat(rowA.getGroupNumber()).isEqualTo("Formule Base");
+            // B holds its own row, which B's desk reads, primary at B.
+            assertThat(rowB).isNotSameAs(rowA);
+            assertThat(rowB.getAssignment()).isSameAs(atB);
+            assertThat(rowB.isPrimary()).isTrue();
+            assertThat(rowB.getGroupNumber()).isEqualTo("Formule Plus");
         }
 
         @Test
