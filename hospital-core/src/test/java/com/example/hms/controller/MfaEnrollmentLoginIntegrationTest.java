@@ -121,7 +121,7 @@ class MfaEnrollmentLoginIntegrationTest {
     void localOnlyCollaborators() {
         user = new User();
         user.setId(UUID.randomUUID());
-        user.setUsername("cdx-mfa-admin");
+        user.setUsername("cdx-mfa-admin-" + user.getId());
         user.setActive(true);
         saved.set(null);
         spentChallenges.clear();
@@ -158,7 +158,7 @@ class MfaEnrollmentLoginIntegrationTest {
         when(jwtTokenProvider.getExpiration(any())).thenReturn(new java.util.Date(4_102_444_800_000L));
         when(jwtTokenProvider.mfaTokenSelectedRoles(any())).thenReturn(Optional.of(List.of("ROLE_SUPER_ADMIN")));
         var details = mock(com.example.hms.security.HospitalUserDetails.class);
-        doReturn(AuthorityUtils.createAuthorityList("ROLE_SUPER_ADMIN")).when(details).getAuthorities();
+        doReturn(AuthorityUtils.createAuthorityList("ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN")).when(details).getAuthorities();
         when(userDetailsService.loadUserByUsername(user.getUsername())).thenReturn(details);
         when(tokenBlacklistService.isBlacklisted(any())).thenAnswer(invocation -> spentChallenges.contains(invocation.getArgument(0)));
         when(tokenBlacklistService.claim(any(), anyLong())).thenAnswer(invocation -> spentChallenges.add(invocation.getArgument(0)));
@@ -187,7 +187,7 @@ class MfaEnrollmentLoginIntegrationTest {
 
     private void confirm(String secret) throws Exception {
         mockMvc.perform(post("/auth/mfa/verify-enrollment").contentType(MediaType.APPLICATION_JSON)
-            .content(objectMapper.writeValueAsString(java.util.Map.of("code", codes.generate(secret, FIXED_STEP)))))
+            .content(objectMapper.writeValueAsString(java.util.Map.of("code", codes.generate(secret, FIXED_STEP - 1)))))
             .andExpect(status().isOk());
         org.assertj.core.api.Assertions.assertThat(saved.get().isEnabled()).isTrue();
     }
@@ -197,14 +197,24 @@ class MfaEnrollmentLoginIntegrationTest {
         String secret = enroll();
         confirm(secret);
         String current = codes.generate(secret, FIXED_STEP);
+        long loginStep = mfaService.currentTotpStep(user.getId(), current).orElseThrow();
         verifyLogin("cdx-challenge-one", current).andExpect(status().isOk())
             .andExpect(jsonPath("$.accessToken").value("cdx-full-access"))
+            .andExpect(jsonPath("$.roles.length()").value(1))
             .andExpect(jsonPath("$.roles[0]").value("ROLE_SUPER_ADMIN"));
         verifyLogin("cdx-challenge-two", current).andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.accessToken").doesNotExist());
-        verifyLogin("cdx-challenge-one", current).andExpect(status().isUnauthorized());
-        verify(jwtTokenProvider, org.mockito.Mockito.times(1)).generateAccessToken(any(TokenUserDescriptor.class), any(java.time.Instant.class));
-        org.assertj.core.api.Assertions.assertThat(saved.get().getLastTotpStep()).isEqualTo(FIXED_STEP);
+        org.assertj.core.api.Assertions.assertThat(spentChallenges).containsExactly("cdx-challenge-one");
+        org.springframework.test.util.ReflectionTestUtils.setField(mfaService, "timeProvider",
+            (dev.samstevens.totp.time.TimeProvider) () -> (FIXED_STEP + 2) * 30);
+        String fresh = codes.generate(secret, FIXED_STEP + 2);
+        org.assertj.core.api.Assertions.assertThat(mfaService.currentTotpStep(user.getId(), fresh).orElseThrow())
+            .isGreaterThan(loginStep);
+        verifyLogin("cdx-challenge-one", fresh).andExpect(status().isUnauthorized());
+        var descriptor = org.mockito.ArgumentCaptor.forClass(TokenUserDescriptor.class);
+        verify(jwtTokenProvider, org.mockito.Mockito.times(1)).generateAccessToken(descriptor.capture(), any(java.time.Instant.class));
+        org.assertj.core.api.Assertions.assertThat(descriptor.getValue().roles()).containsExactly("ROLE_SUPER_ADMIN");
+        org.assertj.core.api.Assertions.assertThat(saved.get().getLastTotpStep()).isEqualTo(loginStep);
     }
 
     @Test
@@ -226,11 +236,39 @@ class MfaEnrollmentLoginIntegrationTest {
     }
 
     @Test
-    void anExpiredChallengeIsRefusedBeforeACurrentCodeCanBeSpent() throws Exception {
+    void anInvalidChallengeIsRefusedBeforeACurrentCodeCanBeSpent() throws Exception {
         String secret = enroll();
         confirm(secret);
-        when(jwtTokenProvider.isMfaToken("cdx-expired-challenge")).thenReturn(false);
-        verifyLogin("cdx-expired-challenge", codes.generate(secret, FIXED_STEP)).andExpect(status().isUnauthorized());
+        when(jwtTokenProvider.isMfaToken("cdx-invalid-challenge")).thenReturn(false);
+        verifyLogin("cdx-invalid-challenge", codes.generate(secret, FIXED_STEP)).andExpect(status().isUnauthorized());
+        org.assertj.core.api.Assertions.assertThat(spentChallenges).isEmpty();
+        org.assertj.core.api.Assertions.assertThat(saved.get().getLastTotpStep()).isNull();
+        verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class), any(java.time.Instant.class));
+    }
+
+    @Test
+    void aCorrectlySignedExpiredChallengeIsRefusedByTheRealJwtParserBeforeSpendingTheCode() throws Exception {
+        String secret = enroll();
+        confirm(secret);
+        var key = io.jsonwebtoken.Jwts.SIG.HS256.key().build();
+        var realTokens = new JwtTokenProvider(userDetailsService,
+            mock(com.example.hms.security.auth.TenantRoleAssignmentAccessor.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(realTokens, "signingKey", key);
+        org.springframework.test.util.ReflectionTestUtils.setField(realTokens, "verificationKey", key);
+        String fresh = realTokens.generateMfaToken(user.getUsername(), List.of("ROLE_SUPER_ADMIN"));
+        org.assertj.core.api.Assertions.assertThat(realTokens.isMfaToken(fresh)).isTrue();
+        var now = java.time.Instant.now();
+        String expired = io.jsonwebtoken.Jwts.builder().id("cdx-expired-challenge")
+            .subject(user.getUsername())
+            .claim(com.example.hms.security.MfaChallengeScope.PURPOSE_CLAIM,
+                com.example.hms.security.MfaChallengeScope.PURPOSE)
+            .issuedAt(java.util.Date.from(now.minusSeconds(600)))
+            .expiration(java.util.Date.from(now.minusSeconds(300))).signWith(key).compact();
+        org.assertj.core.api.Assertions.assertThat(realTokens.isMfaToken(expired)).isFalse();
+        when(jwtTokenProvider.isMfaToken(expired)).thenAnswer(invocation ->
+            realTokens.isMfaToken(invocation.getArgument(0)));
+        verifyLogin(expired, codes.generate(secret, FIXED_STEP)).andExpect(status().isUnauthorized());
+        org.assertj.core.api.Assertions.assertThat(spentChallenges).isEmpty();
         org.assertj.core.api.Assertions.assertThat(saved.get().getLastTotpStep()).isNull();
         verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class), any(java.time.Instant.class));
     }
