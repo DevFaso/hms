@@ -35,4 +35,10 @@ public interface PharmacyClaimRepository extends JpaRepository<PharmacyClaim, UU
      * REJECTED). A rejected claim is the one a resubmission replaces.
      */
     boolean existsByDispenseIdAndClaimStatusNot(UUID dispenseId, PharmacyClaimStatus status);
+
+    /** QA D1613: what the live (non-REJECTED) claims of one dispense ask of the payer. */
+    @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(c.amount), 0) FROM PharmacyClaim c "
+         + "WHERE c.dispense.id = :dispenseId AND c.claimStatus <> com.example.hms.enums.PharmacyClaimStatus.REJECTED")
+    java.math.BigDecimal sumLiveForDispense(
+            @org.springframework.data.repository.query.Param("dispenseId") UUID dispenseId);
 }

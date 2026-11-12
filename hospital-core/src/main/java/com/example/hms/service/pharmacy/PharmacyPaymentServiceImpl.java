@@ -57,6 +57,8 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     private final InventoryItemRepository inventoryItemRepository;
     /** QA D1129: a typed provider reference is recorded once across every till. */
     private final com.example.hms.service.payment.PaymentReferenceRegistry referenceRegistry;
+    /** QA D1613 (Rex on #1130): the insurer's share already claimed on a dispense. */
+    private final com.example.hms.repository.pharmacy.PharmacyClaimRepository claimRepository;
 
     /** QA D1032: the receipt counter. Setter-injected so hand-built test instances keep working. */
     private PharmacyReceiptNumberAllocator receiptNumberAllocator;
@@ -156,6 +158,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         if (replay.isPresent()) {
             return toResponse(replay.get());
         }
+        requireWithinPatientShare(dispense, dto.getAmount());
         requireAmountMatchesCharge(dispense, dto.getAmount());
 
         Patient patient = patientRepository.findById(dto.getPatientId())
@@ -294,6 +297,29 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
      * from the inventory item's unit price; a dispense is paid once, for
      * exactly that charge, and an unpriced one cannot be paid at all.
      */
+    /**
+     * QA D1613 (Rex on #1130): the claim side bounds a claim by the charge less the
+     * patient's payments; this is the other side. With a live (non-REJECTED) claim on
+     * the dispense, the patient owes at most the charge less the claimed amount, so
+     * the full charge collected on top of an insurer claim is refused. The caller
+     * holds the dispense lock the claim service takes too, and a replayed receipt
+     * has already answered before this check.
+     */
+    private void requireWithinPatientShare(Dispense dispense, BigDecimal amount) {
+        BigDecimal claimed = java.util.Objects.requireNonNullElse(
+                claimRepository.sumLiveForDispense(dispense.getId()), BigDecimal.ZERO);
+        if (claimed.signum() <= 0) {
+            return;
+        }
+        BigDecimal charge = DispenseCharge.of(dispense, inventoryItemRepository)
+                .orElseThrow(() -> new BusinessException("pharmacy.payment.noPrice"));
+        BigDecimal patientShare = charge.subtract(claimed).max(BigDecimal.ZERO);
+        if (amount.compareTo(patientShare) > 0) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT,
+                    "pharmacy.payment.claimCoversCharge", claimed, patientShare);
+        }
+    }
+
     private void requireAmountMatchesCharge(Dispense dispense, BigDecimal amount) {
         BigDecimal charge = DispenseCharge.of(dispense, inventoryItemRepository)
                 .orElseThrow(() -> new BusinessException("pharmacy.payment.noPrice"));
