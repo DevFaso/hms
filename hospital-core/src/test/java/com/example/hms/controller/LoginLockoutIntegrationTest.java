@@ -39,7 +39,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -63,15 +62,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class LoginLockoutIntegrationTest {
 
     @Autowired private MockMvc mockMvc;
+    private static org.springframework.context.MessageSource previousMessageSource;
 
     @org.junit.jupiter.api.BeforeAll
     static void messageBundles() {
-        var source = new org.springframework.context.support.ResourceBundleMessageSource();
-        source.setBasenames(java.util.Arrays.stream(com.example.hms.config.MessageBundles.basenames())
-            .map(b -> b.substring("classpath:".length())).toArray(String[]::new));
-        source.setDefaultEncoding("UTF-8");
-        source.setFallbackToSystemLocale(false);
-        com.example.hms.utility.MessageUtil.setMessageSource(source);
+        previousMessageSource = (org.springframework.context.MessageSource)
+            org.springframework.test.util.ReflectionTestUtils.getField(com.example.hms.utility.MessageUtil.class, "messageSource");
+        com.example.hms.utility.MessageUtil.setMessageSource(expectedMessages());
+    }
+
+    @org.junit.jupiter.api.AfterAll
+    static void restoreMessageSource() {
+        com.example.hms.utility.MessageUtil.setMessageSource(previousMessageSource);
     }
     @Autowired private ObjectMapper objectMapper;
 
@@ -102,7 +104,7 @@ class LoginLockoutIntegrationTest {
     static class LocalThrottle {
         @org.springframework.context.annotation.Bean
         com.example.hms.security.InMemoryLoginAttemptStore localAttempts() {
-            return new com.example.hms.security.InMemoryLoginAttemptStore();
+            return org.mockito.Mockito.spy(new com.example.hms.security.InMemoryLoginAttemptStore());
         }
 
         @org.springframework.context.annotation.Bean
@@ -135,6 +137,12 @@ class LoginLockoutIntegrationTest {
 
     @AfterEach
     void clearRequestContext() {
+        // Clear every key observed by this real-store spy, including unknown names.
+        var keys = org.mockito.Mockito.mockingDetails(attemptStore).getInvocations().stream()
+            .filter(invocation -> invocation.getMethod().getName().equals("recordFailure"))
+            .map(invocation -> (String) invocation.getArgument(0)).distinct().toList();
+        keys.forEach(attemptStore::clear);
+        org.mockito.Mockito.clearInvocations(attemptStore);
         SecurityContextHolder.clearContext();
         org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
     }
@@ -154,8 +162,12 @@ class LoginLockoutIntegrationTest {
             login(USERNAME, language).andExpect(status().isUnauthorized());
         }
         assertThat(loginAttemptService.remainingLockMs(USERNAME)).isBetween(LOCK_WINDOW_MS - 60_000, LOCK_WINDOW_MS);
-        String expected = expectedMessages()
-            .getMessage("auth.login.locked", new Object[] {15}, java.util.Locale.forLanguageTag(language));
+        // Independent expectations: bundle fallback must not hide a missing FR/ES translation.
+        String expected = switch (language) {
+            case "fr" -> "Compte temporairement verrouillé. Réessayez dans 15 minutes.";
+            case "es" -> "La cuenta está bloqueada temporalmente. Vuelva a intentarlo en 15 minutos.";
+            default -> "Account is temporarily locked. Try again in 15 minutes.";
+        };
         login(USERNAME, language).andExpect(status().isLocked()).andExpect(jsonPath("$.message").value(expected));
         verify(authenticationManager, times(FAILURE_LIMIT)).authenticate(any());
         verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class));
@@ -175,13 +187,28 @@ class LoginLockoutIntegrationTest {
         String unknown = "cdx-unknown-" + java.util.UUID.randomUUID();
         when(userRepository.findIdsByUsernameIgnoreCase(unknown)).thenReturn(java.util.List.of());
         for (int i = 0; i < FAILURE_LIMIT; i++) {
-            login(USERNAME, "fr").andExpect(status().isUnauthorized());
-            login(unknown, "fr").andExpect(status().isUnauthorized());
+            String knownFailure = login(USERNAME, "fr").andExpect(status().isUnauthorized())
+                .andReturn().getResponse().getContentAsString();
+            String unknownFailure = login(unknown, "fr").andExpect(status().isUnauthorized())
+                .andReturn().getResponse().getContentAsString();
+            assertThat(unknownFailure).isEqualTo(knownFailure).doesNotContain(USERNAME, unknown, userId.toString());
         }
         String knownBody = login(USERNAME, "fr").andExpect(status().isLocked()).andReturn().getResponse().getContentAsString();
         String unknownBody = login(unknown, "fr").andExpect(status().isLocked()).andReturn().getResponse().getContentAsString();
         assertThat(unknownBody).isEqualTo(knownBody).doesNotContain(USERNAME, unknown, userId.toString());
         verify(authenticationManager, times(FAILURE_LIMIT * 2)).authenticate(any());
+        var audits = org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService, times((FAILURE_LIMIT + 1) * 2)).logEvent(audits.capture());
+        for (int i = 0; i < FAILURE_LIMIT; i++) {
+            var unknownAudit = audits.getAllValues().get(i * 2 + 1);
+            assertThat(unknownAudit.getUserId()).isNull();
+            assertThat(unknownAudit.getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.LOGIN_FAILURE);
+            assertThat(unknownAudit.getStatus()).isEqualTo(com.example.hms.enums.AuditStatus.FAILURE);
+        }
+        var unknownLockAudit = audits.getAllValues().get((FAILURE_LIMIT + 1) * 2 - 1);
+        assertThat(unknownLockAudit.getUserName()).isEqualTo(unknown);
+        assertThat(unknownLockAudit.getUserId()).isNull();
+        assertThat(unknownLockAudit.getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.ACCOUNT_LOCKED);
     }
 
     @Test
@@ -207,9 +234,22 @@ class LoginLockoutIntegrationTest {
 
     @Test
     void anExpiredStoreLockIsPurgedAndAllowsAFreshFailureBudgetWithoutWaitingFifteenMinutes() throws Exception {
-        // Seed a past deadline through the real store API, rather than sleeping or changing application policy.
-        attemptStore.recordFailure("user:" + userId, 1, LOCK_WINDOW_MS, -1);
+        // Obtain the key from an actual service-to-store call, without duplicating keyFor's format.
+        loginAttemptService.recordFailure(USERNAME);
+        var keyCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(attemptStore).recordFailure(keyCaptor.capture(), org.mockito.ArgumentMatchers.eq(FAILURE_LIMIT),
+            org.mockito.ArgumentMatchers.eq(LOCK_WINDOW_MS), org.mockito.ArgumentMatchers.eq(LOCK_WINDOW_MS));
+        String key = keyCaptor.getValue();
+        attemptStore.clear(key);
+        attemptStore.recordFailure(key, 1, LOCK_WINDOW_MS, LOCK_WINDOW_MS);
+        assertThat(loginAttemptService.remainingLockMs(USERNAME)).isPositive();
+        attemptStore.clear(key);
+        // Without purge-on-read, this seeded failure consumes one of the five fresh attempts below.
+        attemptStore.recordFailure(key, 1, LOCK_WINDOW_MS, -1);
         assertThat(loginAttemptService.remainingLockMs(USERNAME)).isZero();
+        // A purged entry starts at one; a retained expired entry increments to two.
+        assertThat(attemptStore.recordFailure(key, FAILURE_LIMIT, LOCK_WINDOW_MS, LOCK_WINDOW_MS)).isEqualTo(1);
+        attemptStore.clear(key);
         for (int i = 0; i < FAILURE_LIMIT; i++) login(USERNAME, "en").andExpect(status().isUnauthorized());
         login(USERNAME, "en").andExpect(status().isLocked());
         verify(authenticationManager, times(FAILURE_LIMIT)).authenticate(any());
