@@ -13,7 +13,7 @@ def verify(document: Path, source_dir: Path) -> None:
     if hashlib.sha256(checklist_path.read_bytes()).hexdigest() != expected[1]:
         raise ValueError("Checklist hash mismatch")
     checklist = checklist_path.read_text(encoding="utf-8-sig").splitlines()
-    open_lines = [i for i, line in enumerate(checklist, 1) if re.match(r"- \[ \]", line)]
+    open_lines = [i for i, line in enumerate(checklist, 1) if re.match(r"\s*[-*] \[ \]", line)]
     rows = re.findall(
         r"^\|\s*(\d+)\s*\|\s*(\d+)\s*—[^|]*\|\s*(.*?)\s*\|$", report, re.M
     )
