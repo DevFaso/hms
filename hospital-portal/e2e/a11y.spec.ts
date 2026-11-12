@@ -2,6 +2,9 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
 import { test, expect } from './fixtures/test-fixtures';
+// Register the inventory-driven cases in the existing CI entry point.
+import './a11y-routed-pages';
+import { installLocalIconFonts } from './helpers/local-icon-fonts';
 
 /**
  * v1.0 / Accessibility / axe-core/playwright smoke (roadmap row 10).
@@ -71,11 +74,15 @@ function summarize(violations: Violation[]) {
 }
 
 async function runAxe(page: Page, route: string) {
+  await installLocalIconFonts(page);
   await page.goto(route, { waitUntil: 'domcontentloaded' });
   // Let Angular finish its initial render — the body's data-cy="ready"
   // hook isn't present on every page, so we fall back to networkidle
   // (with a bounded catch — some pages keep polling forever).
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('networkidle').catch(() => {
+    // Some screens poll continuously; navigation and the axe scan still have bounded waits.
+  });
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
 
   const results = await new AxeBuilder({ page })
     // WCAG 2.1 AA is the project target per docs/ui/accessibility.md
