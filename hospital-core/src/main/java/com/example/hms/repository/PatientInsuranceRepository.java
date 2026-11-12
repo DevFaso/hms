@@ -66,9 +66,18 @@ public interface PatientInsuranceRepository extends JpaRepository<PatientInsuran
     """)
     int unsetAllPrimaries(UUID patientId, UUID hospitalId);
 
-    Optional<PatientInsurance> findByPatient_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
-    UUID patientId, String payerCode, String policyNumber
-);
+    /**
+     * Review of #1131: the desk's natural-key link finds the policy as THIS
+     * hospital holds it. The unscoped finder it replaced returned another
+     * hospital's row, which the link then re-tagged to the caller's hospital.
+     * {@code PatientInsuranceScopedLookupGuardTest} refuses an unscoped finder.
+     */
+    Optional<PatientInsurance> findFirstByPatient_IdAndAssignment_Hospital_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
+        UUID patientId, UUID hospitalId, String payerCode, String policyNumber);
+
+    /** The same policy recorded for the patient but tagged to no hospital yet. */
+    Optional<PatientInsurance> findFirstByPatient_IdAndAssignmentIsNullAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
+        UUID patientId, String payerCode, String policyNumber);
 
 boolean existsByPatient_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
     UUID patientId, String payerCode, String policyNumber

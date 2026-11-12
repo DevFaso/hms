@@ -6433,7 +6433,6 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 
 ## Standing debt — r44 front desk and discharge (fix/r44-frontdesk-discharge)
 
-- **D1590 sibling, staff natural-key link (review of #1131):** `PatientInsuranceServiceImpl.upsertAndLinkByNaturalKey` finds the policy by payer and number across every hospital (`findOrCreateInsurance`) and then re-tags it with the linking staff's assignment, so a desk at hospital B moves hospital A's row to B. The pre-check-in path now keeps one row per hospital; the staff path needs the same hospital-scoped lookup (and its tests) in its own PR.
 - **D1590, patient profile:** `PatientProfileDTO` in `patient-portal.service.ts` declares `insuranceProvider`, `insuranceMemberId` and `insurancePlan`, which the backend profile never fills; the patient never sees the coverage recorded for them.
 - **D1590, a patient with no assignment at the hospital:** the coverage is still recorded (patient-level, `GET /patient-insurances/patient/{id}`) but untagged, so the desk misses it; QA to confirm every portal patient holds a ROLE_PATIENT assignment where they book.
 - **D1591, flow board and insurance-issues panel:** the pre-check-in chip is on the cockpit queue and in the check-in dialog only; the flow-board cards do not show it.
@@ -6443,3 +6442,4 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Recipient-less notification broadcast:** `NotificationWebSocketController.sendNotification` still pushes a notification with a blank recipient to `/topic/notifications`, which every hospital's clients receive; no caller sends one today (guarded by `NotificationFanOutScopeGuardTest`), so decide whether to drop the fallback or refuse a blank recipient.
 - **Platform-wide announcement:** a super-admin in global view (no hospital) still posts an announcement that notifies the staff of every hospital; there is no organisation audience on `Announcement`, so a per-organisation announcement would need a column (D1617 audience gap).
 - **Emergency broadcast:** `/topic/emergency-broadcast` (super-admin emergency banner) stays system-wide by design; confirm it should not be per hospital.
+- **D1590 class, edit and delete by id (review of #1131):** `PatientInsuranceServiceImpl.updatePatientInsurance` and `deletePatientInsurance` load a policy by id with no hospital check, so a desk at hospital B can edit or delete a row hospital A holds (they never re-tag it). Scoping them to the caller's hospital is an authorization change for the coverage tab and its tests.
