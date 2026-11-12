@@ -6438,3 +6438,8 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **D1613, V288 skipped on an existing duplicate:** if an environment already holds two live claims for one dispense, V288 logs a warning and does not create `uq_pc_dispense_live`; reject the duplicates by hand, then create the index (a follow-up migration).
 - **D1612, panel prose in English:** `PanelService` still stores the end reason "Superseded by reassignment" and throws raw English refusals ("Another empanelment change…", "The empanelment is already ended.", "An active hospital context is required."); move them to bundle keys.
 - **D1612, admin and the panels page:** the admin keeps the overview and drilldown but cannot assign or end (E9 #67 decision D5); if hospitals want the admin to reassign a departed provider's patients, that is a change to D5 (`HospitalAdminOffOrdersTest`).
+## Standing debt — announcement scope (fix/d1610-announcement-scope)
+
+- **Recipient-less notification broadcast:** `NotificationWebSocketController.sendNotification` still pushes a notification with a blank recipient to `/topic/notifications`, which every hospital's clients receive; no caller sends one today (guarded by `NotificationFanOutScopeGuardTest`), so decide whether to drop the fallback or refuse a blank recipient.
+- **Platform-wide announcement:** a super-admin in global view (no hospital) still posts an announcement that notifies the staff of every hospital; there is no organisation audience on `Announcement`, so a per-organisation announcement would need a column (D1617 audience gap).
+- **Emergency broadcast:** `/topic/emergency-broadcast` (super-admin emergency banner) stays system-wide by design; confirm it should not be per hospital.
