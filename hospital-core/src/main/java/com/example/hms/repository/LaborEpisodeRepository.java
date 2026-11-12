@@ -32,6 +32,17 @@ public interface LaborEpisodeRepository extends JpaRepository<LaborEpisode, UUID
     List<LaborEpisode> findByPatient_IdAndHospital_IdInOrderByAdmittedAtDesc(
         UUID patientId, java.util.Collection<UUID> hospitalIds, Pageable pageable);
 
+    /**
+     * The episode's status as the database holds it now. Read after the
+     * patient lock, so a transition decides on the committed state and not on
+     * an entity loaded before another transition committed.
+     */
+    @org.springframework.data.jpa.repository.Query("SELECT e.status FROM LaborEpisode e WHERE e.id = :id")
+    Optional<LaborStatus> findStatusById(@org.springframework.data.repository.query.Param("id") UUID id);
+
+    /** One woman, one active labour: another active episode than this one, at any hospital. */
+    boolean existsByPatient_IdAndStatusAndIdNot(UUID patientId, LaborStatus status, UUID episodeId);
+
     /** Tenant guard — single-row lookups go through id + hospital. */
     Optional<LaborEpisode> findByIdAndHospital_Id(UUID id, UUID hospitalId);
 }

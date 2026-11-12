@@ -40,4 +40,14 @@ public class LaborEpisodeResponseDTO {
 
     private long entryCount;
     private boolean deliveryRecorded;
+
+    /* Labour transfer between hospitals (provisional rule, 2026-11-12). */
+    /** On a closed episode (TRANSFERRED_OUT, LEFT_WITHOUT_HANDOVER): when, why, and where she went. */
+    private LocalDateTime transferredAt;
+    private String transferReason;
+    private UUID transferHospitalId;
+    private String transferHospitalName;
+    /** On the episode that took over: the episode it continues, and its hospital. */
+    private UUID transferredFromEpisodeId;
+    private String transferredFromHospitalName;
 }

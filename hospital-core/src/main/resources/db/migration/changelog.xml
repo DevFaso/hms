@@ -3463,4 +3463,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V290-labour-transfer-between-hospitals" author="hms-team" runOnChange="false">
+        <sqlFile path="V290__labour_transfer_between_hospitals.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

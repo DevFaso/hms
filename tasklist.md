@@ -6438,7 +6438,7 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 
 - **D1632 sibling, record attribution (not audit):** `EncounterServiceImpl` (triage vitals recorder), `InvoiceItemServiceImpl.resolveAssignment`, `PatientInsuranceServiceImpl.resolveStaffAssignment`, `ChatMessageServiceImpl`, `DeliveryChargeService`, `EncounterCheckoutChargeListener`, `DepartmentServiceImpl` and `LabResultServiceImpl.resolveActorDisplay` still take `findFirstByUser_IdAndHospital_IdAndActiveTrue`: a multi-role user's record may name the other role's assignment. Move them to `ActingAssignments.resolve` where the role matters.
 - **D1632, Keycloak sessions:** a Keycloak token carries every realm role of a multi-role user, so the acting role is the first in token order, not the one picked; the legacy JWT path carries the picked role only.
-- **D1631 decision (clinical owners):** may hospital A take over a labour started at hospital B (a transfer in labour)? Today A is refused a second active episode and sees B's read only; no transfer is built.
+- **D1631 decision (clinical owners):** decided by the user on 2026-11-12 (provisional, pending clinical approval): A may take over B's labour by transfer; built in feat/labour-transfer (see below).
 ## Standing debt — r44 front desk and discharge (fix/r44-frontdesk-discharge)
 
 - **D1590, patient profile:** `PatientProfileDTO` in `patient-portal.service.ts` declares `insuranceProvider`, `insuranceMemberId` and `insurancePlan`, which the backend profile never fills; the patient never sees the coverage recorded for them.
@@ -6467,3 +6467,13 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **D1652, checkout follow-up text:** the checkout's follow-up instructions are merged with the signed note and silently cut to 3000 characters on the discharge summary (`CheckOutMapper.STORED_FOLLOW_UP_MAX`); the merged length is not refused or announced.
 - **D1652, checkout diagnoses:** the checkout's diagnosis list is joined into the 5000-character summary diagnosis with no size check on the list.
 - **D1652, silent truncation helper:** `EncounterServiceImpl.keepIfGiven` still truncates any caller past the column; the checkout dialog now refuses first, other callers (the synthetic checkout) do not.
+
+## Standing debt — labour transfer between hospitals (feat/labour-transfer)
+
+- **Approvals register row** (docs/qa/approvals-register.md is untracked, not in this PR): "Transfert d'un travail en cours entre hôpitaux (avec ou sans transmission) | Responsable d'obstétrique | En attente d'approbation clinique (décision du 2026-11-12)".
+- **Transfer requested by A, confirmed by B:** not built; only B (the episode's hospital) transfers with a handover, and A records an arrival without one.
+- **Destination registration:** B may transfer only to a hospital where she is already registered (B cannot register her at A); otherwise A records the arrival without handover once she is registered there.
+- **Same organisation, sharing closed:** a transfer within one organisation is allowed even when the sharing rule does not let A read B (opt-out, explicit-consent posture); A then gets the linked episode without B's partograph. Confirm, or require the sharing rule as for another organisation.
+- **B's partograph alerts after the transfer:** `ObstetricAlertCurrency` treats a non-active episode as resolved, so B's unacknowledged URGENT partograph alerts stop re-notifying once B's episode closes; A's team gets the transfer notice. Clinical owners to confirm.
+- **Partograph entry racing a transfer:** `addEntry` is not a transition and does not take the patient lock, so an entry charted on B's episode while the transfer commits may land on the closed episode.
+- **V290 skipped on duplicates:** if an environment already holds two active labour episodes for one patient, V290 logs a warning and does not create `uq_labor_episode_patient_active`; close the duplicates, then create the index (a follow-up migration).

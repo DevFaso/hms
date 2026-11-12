@@ -258,6 +258,12 @@ public enum AuditEventType {
     OBSTETRIC_RULE_SKIPPED_EMERGENCY,
     /** QA D1631: a labour episode refused because one is already active at another hospital. */
     LABOR_EPISODE_START_REFUSED,
+    /** Labour transfer (provisional rule, 2026-11-12): the episode's hospital handed an active labour to another. */
+    LABOR_EPISODE_TRANSFERRED_OUT,
+    /** Labour transfer: the receiving hospital's new episode, with or without a handover. */
+    LABOR_EPISODE_TRANSFERRED_IN,
+    /** Labour transfer: she arrived at another hospital without a handover, which closed this episode. */
+    LABOR_EPISODE_LEFT_WITHOUT_HANDOVER,
 
     OTHER
 }

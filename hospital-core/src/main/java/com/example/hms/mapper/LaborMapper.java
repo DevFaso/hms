@@ -58,6 +58,13 @@ public class LaborMapper {
             .gestationalAgeWeeks(episode.getGestationalAgeWeeks())
             .gravida(episode.getGravida())
             .para(episode.getPara())
+            .transferredAt(episode.getTransferredAt())
+            .transferReason(episode.getTransferReason())
+            .transferHospitalId(episode.getTransferHospital() != null ? episode.getTransferHospital().getId() : null)
+            .transferHospitalName(episode.getTransferHospital() != null ? episode.getTransferHospital().getName() : null)
+            .transferredFromEpisodeId(episode.getTransferredFrom() != null ? episode.getTransferredFrom().getId() : null)
+            .transferredFromHospitalName(episode.getTransferredFrom() != null && episode.getTransferredFrom().getHospital() != null
+                ? episode.getTransferredFrom().getHospital().getName() : null)
             .activePhaseStartAt(episode.getActivePhaseStartAt())
             .status(episode.getStatus() != null ? episode.getStatus().name() : null)
             .outcome(episode.getOutcome() != null ? episode.getOutcome().name() : null)
