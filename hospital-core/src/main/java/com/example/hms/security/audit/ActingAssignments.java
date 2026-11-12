@@ -87,18 +87,16 @@ public final class ActingAssignments {
     }
 
     /**
-     * The bare role code the row is filed under: the assignment's when it is
-     * one the request acts under (or the request names none), else the
-     * request's own first role. Null when neither names one.
+     * The request's own first role, before RoleExpansion's inherited roles.
+     * An assignment at the hospital may only match an inherited role; it
+     * anchors the hospital but must not replace the acting role in the log.
+     * Without request roles, use the assignment's role. Null when neither names one.
      */
     public static String roleName(UserRoleHospitalAssignment assignment, Collection<String> actingRoles) {
         String held = assignment == null ? null : codeOf(assignment);
         List<String> acting = actingRoles == null ? List.of()
             : actingRoles.stream().map(RoleNames::bareRole).filter(Objects::nonNull).toList();
-        if (held != null && (acting.isEmpty() || acting.stream().anyMatch(held::equalsIgnoreCase))) {
-            return held;
-        }
-        return acting.isEmpty() ? null : acting.get(0);
+        return acting.isEmpty() ? held : acting.get(0);
     }
 
     private static String codeOf(UserRoleHospitalAssignment assignment) {

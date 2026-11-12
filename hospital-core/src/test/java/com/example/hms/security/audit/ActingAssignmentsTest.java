@@ -76,6 +76,21 @@ class ActingAssignmentsTest {
     }
 
     @Test
+    @DisplayName("an expanded super-admin token keeps its own role when only an inherited role is held locally")
+    void inheritedAssignmentDoesNotReplaceActingRole() {
+        UserRoleHospitalAssignment doctor = row("ROLE_DOCTOR");
+        UserRoleHospitalAssignmentRepository repo = mock(UserRoleHospitalAssignmentRepository.class);
+        when(repo.findAllByUser_IdAndHospital_IdAndActiveTrue(USER, HOSPITAL)).thenReturn(List.of(doctor));
+        var auth = token(com.example.hms.security.RoleExpansion.expand(List.of("ROLE_SUPER_ADMIN"))
+            .toArray(String[]::new));
+
+        var picked = ActingAssignments.resolve(repo, USER, HOSPITAL, auth).orElseThrow();
+
+        assertThat(picked).isSameAs(doctor);
+        assertThat(ActingAssignments.roleName(picked, ActingAssignments.actingRoles(auth))).isEqualTo("SUPER_ADMIN");
+    }
+
+    @Test
     @DisplayName("no hospital or no rows: nothing; no acting role: the row's own")
     void edges() {
         UserRoleHospitalAssignmentRepository repo = mock(UserRoleHospitalAssignmentRepository.class);

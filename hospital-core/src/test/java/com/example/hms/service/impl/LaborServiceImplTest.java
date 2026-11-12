@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.example.hms.enums.DeliveryMode;
@@ -219,6 +220,8 @@ class LaborServiceImplTest {
         Hospital other = new Hospital();
         other.setId(UUID.randomUUID());
         other.setName("Hôpital B");
+        when(recordAccessPolicy.readableHospitalIds(recorderUserId, patientId, hospitalId))
+            .thenReturn(Set.of(hospitalId, other.getId()));
         LaborEpisode atB = LaborEpisode.builder().patient(patient).hospital(other).status(LaborStatus.ACTIVE)
             .admittedAt(LocalDateTime.now().minusHours(3)).build();
         atB.setId(UUID.randomUUID());
@@ -239,7 +242,45 @@ class LaborServiceImplTest {
             .isEqualTo(com.example.hms.enums.AuditEventType.LABOR_EPISODE_START_REFUSED);
         assertThat(audit.getValue().getPatientId()).isEqualTo(patientId);
         assertThat(audit.getValue().getHospitalId()).isEqualTo(hospitalId);
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(recorderUserId), isNull(),
+            eq(Map.of(other.getId().toString(), 1L)), anyString());
+        // The global active check must happen after the shared patient lock, even
+        // when this hospital has no episode row that could itself be locked.
+        var ordered = org.mockito.Mockito.inOrder(patientRegistrationGuard, patientRepository, episodeRepository);
+        ordered.verify(patientRegistrationGuard).requireRegisteredAt(patientId, hospitalId);
+        ordered.verify(patientRepository).lockByIdUnscoped(patientId);
+        ordered.verify(episodeRepository).existsByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, LaborStatus.ACTIVE);
+        ordered.verify(episodeRepository).findFirstByPatient_IdAndStatusOrderByAdmittedAtDesc(patientId, LaborStatus.ACTIVE);
         verify(episodeRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void startEpisodeDoesNotDiscloseAnUnreadableSource() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        other.setName("Protected hospital");
+        LaborEpisode foreign = LaborEpisode.builder().patient(patient).hospital(other).status(LaborStatus.ACTIVE).build();
+        foreign.setId(UUID.randomUUID());
+        when(episodeRepository.findFirstByPatient_IdAndStatusOrderByAdmittedAtDesc(patientId, LaborStatus.ACTIVE))
+            .thenReturn(Optional.of(foreign));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(2)).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> {
+                BusinessException refusal = (BusinessException) e;
+                assertThat(refusal.getMessageKey()).isEqualTo("maternity.labor.coordinationRequired");
+                assertThat(refusal.getArgs()).isEmpty();
+            });
+        var audit = ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getResourceId()).isNull();
+        assertThat(audit.getValue().getDetails()).isEqualTo(Map.of());
+        verifyNoInteractions(reachRecorder);
+        verify(episodeRepository, never()).save(any());
     }
 
     /** QA D1631: the partograph of an episode the list shows from a readable hospital is readable too. */
@@ -264,6 +305,39 @@ class LaborServiceImplTest {
     }
 
     @Test
+    void getDeliveryReadsOnlyAnAuthorizedForeignEpisode() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        LaborEpisode foreign = LaborEpisode.builder().patient(patient).hospital(other).status(LaborStatus.DELIVERED).build();
+        UUID foreignId = UUID.randomUUID();
+        foreign.setId(foreignId);
+        when(episodeRepository.findById(foreignId)).thenReturn(Optional.of(foreign));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, other.getId()));
+        DeliveryRecord delivery = DeliveryRecord.builder().episode(foreign).patient(patient).build();
+        delivery.setId(UUID.randomUUID());
+        when(deliveryRecordRepository.findByEpisode_Id(foreignId)).thenReturn(Optional.of(delivery));
+
+        assertThat(service.getDelivery(patientId, foreignId, hospitalId).getId()).isEqualTo(delivery.getId());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(other.getId().toString(), 1L)), anyString());
+    }
+
+    @Test
+    void getDeliveryDoesNotReadOrAccountAnUnreadableForeignEpisode() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        LaborEpisode foreign = LaborEpisode.builder().patient(patient).hospital(other).status(LaborStatus.DELIVERED).build();
+        UUID foreignId = UUID.randomUUID();
+        foreign.setId(foreignId);
+        when(episodeRepository.findById(foreignId)).thenReturn(Optional.of(foreign));
+
+        assertThatThrownBy(() -> service.getDelivery(patientId, foreignId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verifyNoInteractions(deliveryRecordRepository, reachRecorder);
+    }
+
+    @Test
     void getEntriesOfAnUnreadableForeignEpisodeIsNotFound() {
         Hospital other = new Hospital();
         other.setId(UUID.randomUUID());
@@ -275,6 +349,7 @@ class LaborServiceImplTest {
 
         assertThatThrownBy(() -> service.getEntries(patientId, foreignId, hospitalId))
             .isInstanceOf(ResourceNotFoundException.class);
+        verifyNoInteractions(reachRecorder, entryRepository);
     }
 
     @Test

@@ -211,6 +211,9 @@ public class LaborServiceImpl implements LaborService {
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        // Serialize starts across all hospitals, including when no episode exists yet.
+        // Access was checked above; retain the patient lock until this transaction commits.
+        patientRepository.lockByIdUnscoped(patientId);
         if (episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospital.getId(), LaborStatus.ACTIVE)) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.labor.alreadyActive");
         }
@@ -287,21 +290,35 @@ public class LaborServiceImpl implements LaborService {
             return;
         }
         Hospital other = elsewhere.get().getHospital();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(recorderUserId, patientId, actingHospitalId);
+        boolean mayDiscloseSource = readable != null && readable.contains(other.getId());
         try {
             auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
                 .eventType(com.example.hms.enums.AuditEventType.LABOR_EPISODE_START_REFUSED)
                 .status(com.example.hms.enums.AuditStatus.FAILURE)
                 .entityType("LABOR")
-                .resourceId(elsewhere.get().getId().toString())
+                .resourceId(mayDiscloseSource ? elsewhere.get().getId().toString() : null)
                 .patientId(patientId)
                 .userId(recorderUserId)
                 .hospitalId(actingHospitalId)
-                .eventDescription("Labour episode start refused: an active labour episode is open at another hospital")
-                .details(java.util.Map.of("activeEpisodeHospitalId", other.getId().toString()))
+                .eventDescription(mayDiscloseSource
+                    ? "Labour episode start refused: an active labour episode is open at another hospital"
+                    : "Labour episode start refused: care coordination required")
+                .details(mayDiscloseSource
+                    ? java.util.Map.of("activeEpisodeHospitalId", other.getId().toString()) : java.util.Map.of())
                 .build());
         } catch (RuntimeException auditFailure) {
             log.warn("[LABOR] Could not audit a refused labour start: {}", auditFailure.getMessage());
         }
+        if (!mayDiscloseSource) {
+            // The global safety invariant still applies after opt-out or source
+            // isolation, but its refusal must not disclose the protected source.
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID,
+                "maternity.labor.coordinationRequired");
+        }
+        reachRecorder.recordReach(patientId, actingHospitalId, recorderUserId, null,
+            CrossHospitalReachRecorder.reachOf(java.util.List.of(other.getId()), actingHospitalId),
+            "Cross-hospital active labour disclosed when refusing a second labour episode");
         throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID,
             "maternity.labor.alreadyActiveElsewhere", other.getName() != null ? other.getName() : "—");
     }

@@ -367,7 +367,7 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         }
         org.springframework.security.core.Authentication auth =
             org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || user.getUsername() == null || !user.getUsername().equalsIgnoreCase(auth.getName())) {
+        if (com.example.hms.security.PrincipalUserIds.of(auth).filter(user.getId()::equals).isEmpty()) {
             return List.of();
         }
         return com.example.hms.security.audit.ActingAssignments.actingRoles(auth);
@@ -384,8 +384,9 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
     private String resolveRoleName(AuditEventRequestDTO requestDTO, UserRoleHospitalAssignment assignment,
                                    User user, String hospitalName) {
         String roleName = requestDTO.getRoleName();
-        if ((roleName == null || roleName.isBlank()) && assignment != null && assignment.getRole() != null) {
-            roleName = assignment.getRole().getCode();
+        if (roleName == null || roleName.isBlank()) {
+            roleName = com.example.hms.security.audit.ActingAssignments.roleName(assignment,
+                user == null ? List.of() : actingRolesOf(requestDTO, user));
         }
         if ((roleName == null || roleName.isBlank()) && user != null) {
             roleName = effectiveRoleOf(user, hospitalName);

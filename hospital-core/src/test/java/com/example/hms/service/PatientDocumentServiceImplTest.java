@@ -20,8 +20,6 @@ import com.example.hms.repository.PatientUploadedDocumentRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.model.Hospital;
-import com.example.hms.model.Role;
-import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.service.impl.PatientDocumentServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,6 +55,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
@@ -568,15 +567,12 @@ class PatientDocumentServiceImplTest {
 
         @Test
         @DisplayName("download streams the stored file and writes a DATA_ACCESS row naming the document, not the file name")
-        void downloadStreamsAndAudits() {
+        void downloadStreamsAndAuditsActingRole() {
             registered();
-            Role nurse = new Role();
-            nurse.setName("ROLE_NURSE");
-            UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
-            assignment.setId(UUID.randomUUID());
-            assignment.setRole(nurse);
-            when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(staffId, hospitalId))
-                    .thenReturn(java.util.List.of(assignment));
+            var authorities = com.example.hms.security.RoleExpansion.expand(List.of("ROLE_SUPER_ADMIN")).stream()
+                    .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList();
+            SecurityContextHolder.getContext().setAuthentication(
+                    new UsernamePasswordAuthenticationToken("dr.who", "n/a", authorities));
             PatientUploadedDocument doc = PatientUploadedDocument.builder()
                     .patient(patient)
                     .documentType(PatientDocumentType.LAB_RESULT)
@@ -609,8 +605,10 @@ class PatientDocumentServiceImplTest {
             assertThat(row.getEntityType()).isEqualTo("PATIENT_UPLOADED_DOCUMENT");
             // Structured anchors, so per-hospital audit queries find the row.
             assertThat(row.getHospitalName()).isEqualTo("Hospital A");
-            assertThat(row.getAssignmentId()).isEqualTo(assignment.getId());
-            assertThat(row.getRoleName()).isEqualTo("ROLE_NURSE");
+            assertThat(row.getAssignmentId()).isNull();
+            assertThat(row.getHospitalId()).isEqualTo(hospitalId);
+            verifyNoInteractions(assignmentRepository);
+            assertThat(row.getRoleName()).isEqualTo("SUPER_ADMIN");
             // The patient-chosen file name can itself be PHI; the row must not carry it.
             assertThat(row.getEventDescription()).contains(docId.toString()).contains("LAB_RESULT")
                     .doesNotContain("hiv-results");
@@ -620,8 +618,6 @@ class PatientDocumentServiceImplTest {
         @DisplayName("a super-admin scoped by header has no assignment at the hospital — the row still carries the hospital")
         void downloadBySuperAdminAuditsHospitalWithoutAssignment() {
             registered();
-            when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(staffId, hospitalId))
-                    .thenReturn(java.util.List.of());
             PatientUploadedDocument doc = PatientUploadedDocument.builder()
                     .patient(patient).documentType(PatientDocumentType.OTHER).filePath("/uploads/patient-documents/z.pdf")
                     .build();
