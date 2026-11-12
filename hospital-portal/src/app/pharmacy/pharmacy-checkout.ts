@@ -42,6 +42,20 @@ const CHECKOUT_FIELDS = ['amount', 'ref'];
 /** The fill picker, refused when blank (QA D1306). */
 const DISPENSE_PICK_IDS = ['dispenseId'];
 
+/**
+ * What the pharmacy checkout takes. QA D1611 (round 44): never INSURANCE. It
+ * printed "Total payé" and counted the insurer's share as collected, with no
+ * claim to the payer; the server refuses it now. The insurer's share of a
+ * dispense is a pharmacy claim, not a checkout payment.
+ */
+export const PHARMACY_CHECKOUT_METHODS: readonly {
+  value: PharmacyPaymentMethod;
+  labelKey: string;
+}[] = [
+  { value: 'CASH', labelKey: 'PORTAL.ENUM.PAYMENT_METHOD.CASH' },
+  { value: 'MOBILE_MONEY', labelKey: 'PORTAL.ENUM.PAYMENT_METHOD.MOBILE_MONEY' },
+];
+
 @Component({
   selector: 'app-pharmacy-checkout',
   standalone: true,
@@ -72,11 +86,7 @@ export class PharmacyCheckoutComponent implements OnInit {
   dispense = signal<DispenseResponse | null>(null);
   receipt = signal<PharmacyPaymentResponse | null>(null);
 
-  readonly methods: { value: PharmacyPaymentMethod; labelKey: string }[] = [
-    { value: 'CASH', labelKey: 'PORTAL.ENUM.PAYMENT_METHOD.CASH' },
-    { value: 'MOBILE_MONEY', labelKey: 'PORTAL.ENUM.PAYMENT_METHOD.MOBILE_MONEY' },
-    { value: 'INSURANCE', labelKey: 'PORTAL.ENUM.PAYMENT_METHOD.INSURANCE' },
-  ];
+  readonly methods = PHARMACY_CHECKOUT_METHODS;
 
   ngOnInit(): void {
     this.loadPharmacies();

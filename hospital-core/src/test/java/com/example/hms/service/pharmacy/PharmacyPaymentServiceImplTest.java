@@ -132,6 +132,21 @@ class PharmacyPaymentServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D1611: an insurer's share is refused on paymentMethod, never stored as paid")
+    void d1611_insuranceIsNotAPayment() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.INSURANCE);
+        dto.setReferenceNumber("MUT-R44-001");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                        .isEqualTo("paymentMethod"))
+                .extracting("messageKey").isEqualTo("billing.payment.insuranceNotAPayment");
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("cash payment: persists record and does not call mobile-money gateway")
     void cashPaymentSucceeds() {
         PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);

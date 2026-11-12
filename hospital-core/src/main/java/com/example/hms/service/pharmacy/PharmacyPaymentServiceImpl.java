@@ -318,6 +318,8 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         if (dto.getPaymentMethod() == null) {
             throw new com.example.hms.exception.FieldBusinessException("paymentMethod", "pharmacy.payment.methodRequired");
         }
+        // QA D1611: the insurer's share of a dispense is a claim, not money at the checkout.
+        com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(dto.getPaymentMethod(), "paymentMethod");
         // SUPER_ADMIN may have no active hospital; require one for payment creation.
         if (hospitalId == null) {
             throw new BusinessException("pharmacy.payment.hospitalRequired");

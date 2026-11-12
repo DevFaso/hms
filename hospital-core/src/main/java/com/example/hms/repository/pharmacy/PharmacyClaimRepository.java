@@ -29,4 +29,10 @@ public interface PharmacyClaimRepository extends JpaRepository<PharmacyClaim, UU
 
     List<PharmacyClaim> findByHospitalIdAndClaimStatusIn(UUID hospitalId,
                                                          List<PharmacyClaimStatus> statuses);
+
+    /**
+     * QA D1613: whether a dispense already carries a live claim (any status but
+     * REJECTED). A rejected claim is the one a resubmission replaces.
+     */
+    boolean existsByDispenseIdAndClaimStatusNot(UUID dispenseId, PharmacyClaimStatus status);
 }

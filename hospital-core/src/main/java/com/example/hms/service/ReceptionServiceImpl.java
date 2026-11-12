@@ -1122,6 +1122,11 @@ public class ReceptionServiceImpl implements ReceptionService {
             if (copay.signum() > 0 && request.getCopayMethod() == null) {
                 throw new FieldBusinessException("copayMethod", "billing.payment.methodRequired");
             }
+            // QA D1611: refused before anything is written, as the missing method is.
+            if (copay.signum() > 0) {
+                com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(
+                    request.getCopayMethod(), "copayMethod");
+            }
         }
 
         // QA D936: two check-ins of one appointment (double click, retry) are
