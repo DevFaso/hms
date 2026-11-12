@@ -108,7 +108,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Override
     @Transactional
     public PatientInsuranceResponseDTO updatePatientInsurance(UUID insuranceId, PatientInsuranceRequestDTO dto, Locale locale) {
-        PatientInsurance existing = getInsuranceOrThrow(insuranceId);
+        PatientInsurance existing = getWritableInsuranceOrThrow(insuranceId);
         // The record's current owner first: a patient naming their own id in
         // the body must not rewrite, and so take over, another patient's
         // coverage. (The endpoint admits no patient today; the rule is the
@@ -135,7 +135,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Override
     @Transactional
     public void deletePatientInsurance(UUID insuranceId, Locale locale) {
-        PatientInsurance existing = getInsuranceOrThrow(insuranceId);
+        PatientInsurance existing = getWritableInsuranceOrThrow(insuranceId);
         enforceSelfAccessIfPatient(existing.getPatient(), () -> insuranceNotFound(insuranceId));
         patientInsuranceRepository.deleteById(insuranceId);
     }
@@ -215,6 +215,29 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
 
     private Patient getPatientOrThrow(UUID patientId) {
         return patientRepository.findById(patientId).orElseThrow(() -> patientNotFound(patientId));
+    }
+
+    /**
+     * Review of #1131 (the D1590 class): an edit or a delete by id reaches only
+     * the rows of the hospital the request acts at, plus legacy rows tagged to
+     * no hospital. Another hospital's row answers exactly as a missing one
+     * (404), so B's desk can neither change nor remove A's coverage. A
+     * patient-only caller is held to their own rows by the ownership check
+     * that follows; a verified super-admin in global view has no hospital to
+     * measure against.
+     */
+    private PatientInsurance getWritableInsuranceOrThrow(UUID insuranceId) {
+        PatientInsurance insurance = getInsuranceOrThrow(insuranceId);
+        if (roleValidator.isPatientOnlyFromAuth()) {
+            return insurance;
+        }
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        UserRoleHospitalAssignment held = insurance.getAssignment();
+        UUID heldBy = held != null && held.getHospital() != null ? held.getHospital().getId() : null;
+        if (hospitalId != null && heldBy != null && !heldBy.equals(hospitalId)) {
+            throw insuranceNotFound(insuranceId);
+        }
+        return insurance;
     }
 
     private PatientInsurance getInsuranceOrThrow(UUID insuranceId) {

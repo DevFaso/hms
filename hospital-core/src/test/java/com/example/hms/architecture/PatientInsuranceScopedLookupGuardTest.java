@@ -82,6 +82,40 @@ class PatientInsuranceScopedLookupGuardTest {
             .isEmpty();
     }
 
+    /**
+     * Review of #1131: every insurance write that loads a row by id is
+     * hospital-scoped: through {@code getWritableInsuranceOrThrow} (edit,
+     * delete) or through {@code tagForStaffHospital} (the links). A write
+     * method that loads with the bare {@code getInsuranceOrThrow} and neither
+     * reaches another hospital's row.
+     */
+    @Test
+    void everyInsuranceWriteByIdIsHospitalScoped() throws IOException {
+        String source = Files.readString(SERVICES.resolve("PatientInsuranceServiceImpl.java"), StandardCharsets.UTF_8);
+        Matcher decl = Pattern.compile("(?m)^    (?:public|private|protected)[^(\\n=]*?\\b(\\w+)\\(").matcher(source);
+        List<int[]> starts = new ArrayList<>();
+        List<String> names = new ArrayList<>();
+        while (decl.find()) {
+            starts.add(new int[] {decl.start()});
+            names.add(decl.group(1));
+        }
+        List<String> offenders = new ArrayList<>();
+        for (int i = 0; i < starts.size(); i++) {
+            int from = starts.get(i)[0];
+            int to = i + 1 < starts.size() ? starts.get(i + 1)[0] : source.length();
+            String body = source.substring(from, to);
+            boolean writes = body.contains(".save(") || body.contains(".delete");
+            if (writes && body.contains("getInsuranceOrThrow(")
+                && !body.contains("tagForStaffHospital(")) {
+                offenders.add(names.get(i));
+            }
+        }
+        assertThat(offenders)
+            .as("an insurance write by id that can reach another hospital's row (review of #1131)")
+            .isEmpty();
+        assertThat(source).contains("getWritableInsuranceOrThrow(insuranceId)");
+    }
+
     /** The name of the method declared last before {@code index}. */
     private static String enclosingMethod(String source, int index) {
         Matcher m = Pattern.compile("(?m)^    (?:public|private|protected)[^(\\n=]*?\\b(\\w+)\\(")

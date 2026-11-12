@@ -535,6 +535,64 @@ class PatientInsuranceServiceImplTest {
         verify(patientInsuranceRepository, org.mockito.Mockito.never()).save(any());
     }
 
+    /** Review of #1131: B's desk can neither edit nor delete the row hospital A holds; both answer 404. */
+    @Test
+    void updateAndDelete_anotherHospitalsRowAnswersAsMissing_review1131() {
+        com.example.hms.model.Hospital hospitalA = new com.example.hms.model.Hospital();
+        hospitalA.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment atA = new UserRoleHospitalAssignment();
+        atA.setHospital(hospitalA);
+        PatientInsurance rowA = new PatientInsurance();
+        rowA.setId(insuranceId);
+        rowA.setPatient(patient);
+        rowA.setAssignment(atA);
+        rowA.setProviderName("Caisse Nationale AMU");
+        rowA.setPolicyNumber("AMU-9");
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(rowA));
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        PatientInsuranceRequestDTO edit = new PatientInsuranceRequestDTO();
+        edit.setProviderName("Autre assureur");
+        assertThatThrownBy(() -> service.updatePatientInsurance(insuranceId, edit, locale))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.deletePatientInsurance(insuranceId, locale))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+
+        verify(patientInsuranceMapper, org.mockito.Mockito.never()).updateEntityFromDto(any(), any(), any());
+        verify(patientInsuranceRepository, org.mockito.Mockito.never()).save(any());
+        verify(patientInsuranceRepository, org.mockito.Mockito.never()).deleteById(any());
+        assertThat(rowA.getAssignment()).isSameAs(atA);
+        assertThat(rowA.getProviderName()).isEqualTo("Caisse Nationale AMU");
+    }
+
+    /** Review of #1131: this hospital's row, and a legacy row tagged to no hospital, stay writable. */
+    @Test
+    void delete_thisHospitalsRowAndAnUntaggedRowStayWritable_review1131() {
+        com.example.hms.model.Hospital hospitalB = new com.example.hms.model.Hospital();
+        hospitalB.setId(hospitalId);
+        UserRoleHospitalAssignment atB = new UserRoleHospitalAssignment();
+        atB.setHospital(hospitalB);
+        PatientInsurance rowB = new PatientInsurance();
+        rowB.setId(insuranceId);
+        rowB.setPatient(patient);
+        rowB.setAssignment(atB);
+        UUID legacyId = UUID.randomUUID();
+        PatientInsurance legacy = new PatientInsurance();
+        legacy.setId(legacyId);
+        legacy.setPatient(patient);
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(rowB));
+        when(patientInsuranceRepository.findById(legacyId)).thenReturn(Optional.of(legacy));
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        service.deletePatientInsurance(insuranceId, locale);
+        service.deletePatientInsurance(legacyId, locale);
+
+        verify(patientInsuranceRepository).deleteById(insuranceId);
+        verify(patientInsuranceRepository).deleteById(legacyId);
+    }
+
     @Test
     void upsertAndLinkByNaturalKey_missingPayerCode_throwsBusiness() {
         LinkPatientInsuranceRequestDTO req = LinkPatientInsuranceRequestDTO.builder()
