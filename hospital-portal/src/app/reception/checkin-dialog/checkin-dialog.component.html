@@ -152,6 +152,7 @@
         <label for="chiefComplaint">{{ 'RECEPTION.CHIEF_COMPLAINT' | translate }}</label>
         <textarea
           id="chiefComplaint"
+          maxlength="2000"
           rows="3"
           [ngModel]="chiefComplaint()"
           (ngModelChange)="chiefComplaint.set($event)"
@@ -216,6 +217,7 @@
         <label for="checkinNotes">{{ 'RECEPTION.NOTES' | translate }}</label>
         <textarea
           id="checkinNotes"
+          maxlength="2000"
           rows="2"
           [ngModel]="notes()"
           (ngModelChange)="notes.set($event)"

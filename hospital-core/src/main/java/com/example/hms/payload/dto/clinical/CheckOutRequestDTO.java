@@ -23,12 +23,15 @@ public class CheckOutRequestDTO {
     private List<String> dischargeDiagnoses;
 
     /** Summary of prescriptions issued during the visit. */
+    @jakarta.validation.constraints.Size(max = 3000, message = "{checkout.prescriptionSummary.size}")
     private String prescriptionSummary;
 
     /** Summary of referrals made. */
+    @jakarta.validation.constraints.Size(max = 3000, message = "{checkout.referralSummary.size}")
     private String referralSummary;
 
     /** Patient education material references. */
+    @jakarta.validation.constraints.Size(max = 2000, message = "{checkout.patientEducationMaterials.size}")
     private String patientEducationMaterials;
 
     /**

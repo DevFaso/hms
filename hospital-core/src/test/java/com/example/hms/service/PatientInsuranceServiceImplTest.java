@@ -566,6 +566,48 @@ class PatientInsuranceServiceImplTest {
         assertThat(rowA.getProviderName()).isEqualTo("Caisse Nationale AMU");
     }
 
+    /**
+     * QA D1651: B's staff read hospital A's row by id (200, with A's payer and
+     * policy). A read by id now answers exactly as a missing id, and B's list
+     * holds only B's row and the legacy untagged one.
+     */
+    @Test
+    void readByIdAndList_anotherHospitalsRowIsHidden_qaD1651() {
+        com.example.hms.model.Hospital hospitalA = new com.example.hms.model.Hospital();
+        hospitalA.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment atA = new UserRoleHospitalAssignment();
+        atA.setHospital(hospitalA);
+        com.example.hms.model.Hospital hospitalB = new com.example.hms.model.Hospital();
+        hospitalB.setId(hospitalId);
+        UserRoleHospitalAssignment atB = new UserRoleHospitalAssignment();
+        atB.setHospital(hospitalB);
+        PatientInsurance rowA = new PatientInsurance();
+        rowA.setId(insuranceId);
+        rowA.setPatient(patient);
+        rowA.setAssignment(atA);
+        PatientInsurance rowB = new PatientInsurance();
+        rowB.setId(UUID.randomUUID());
+        rowB.setPatient(patient);
+        rowB.setAssignment(atB);
+        PatientInsurance legacy = new PatientInsurance();
+        legacy.setId(UUID.randomUUID());
+        legacy.setPatient(patient);
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(rowA));
+        when(patientInsuranceRepository.findByPatient_Id(patientId)).thenReturn(List.of(rowA, rowB, legacy));
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
+        PatientInsuranceResponseDTO dtoB = new PatientInsuranceResponseDTO();
+        PatientInsuranceResponseDTO dtoLegacy = new PatientInsuranceResponseDTO();
+        when(patientInsuranceMapper.toPatientInsuranceResponseDTO(rowB)).thenReturn(dtoB);
+        when(patientInsuranceMapper.toPatientInsuranceResponseDTO(legacy)).thenReturn(dtoLegacy);
+
+        assertThatThrownBy(() -> service.getPatientInsuranceById(insuranceId, locale))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThat(service.getInsurancesByPatientId(patientId, locale)).containsExactly(dtoB, dtoLegacy);
+        verify(patientInsuranceMapper, org.mockito.Mockito.never()).toPatientInsuranceResponseDTO(rowA);
+    }
+
     /** Review of #1131: this hospital's row, and a legacy row tagged to no hospital, stay writable. */
     @Test
     void delete_thisHospitalsRowAndAnUntaggedRowStayWritable_review1131() {

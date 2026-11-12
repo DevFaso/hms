@@ -32,6 +32,8 @@ public class AdmissionRequestDTO {
 
     private UUID departmentId;
 
+    @jakarta.validation.constraints.Size(max = 50, message = "{admission.roomBed.size}")
+
     private String roomBed;
 
     @NotNull(message = "{admission.admissionType.required}")
@@ -46,13 +48,20 @@ public class AdmissionRequestDTO {
     private LocalDateTime expectedDischargeDateTime;
 
     @NotBlank(message = "{admission.chiefComplaint.required}")
+    @jakarta.validation.constraints.Size(max = 500, message = "{admission.chiefComplaint.size}")
     private String chiefComplaint;
 
+    @jakarta.validation.constraints.Size(max = 20, message = "{admission.primaryDiagnosisCode.size}")
+
     private String primaryDiagnosisCode;
+
+    @jakarta.validation.constraints.Size(max = 500, message = "{admission.primaryDiagnosisDescription.size}")
 
     private String primaryDiagnosisDescription;
 
     private List<Map<String, String>> secondaryDiagnoses;
+
+    @jakarta.validation.constraints.Size(max = 200, message = "{admission.admissionSource.size}")
 
     private String admissionSource;
 
@@ -66,9 +75,13 @@ public class AdmissionRequestDTO {
      */
     private List<Map<String, Object>> customOrders;
 
+    @jakarta.validation.constraints.Size(max = 2000, message = "{admission.admissionNotes.size}")
+
     private String admissionNotes;
 
     private UUID attendingPhysicianId;
+
+    @jakarta.validation.constraints.Size(max = 100, message = "{admission.insuranceAuthNumber.size}")
 
     private String insuranceAuthNumber;
 
