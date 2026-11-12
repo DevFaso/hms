@@ -6456,3 +6456,11 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Recipient-less notification broadcast:** `NotificationWebSocketController.sendNotification` still pushes a notification with a blank recipient to `/topic/notifications`, which every hospital's clients receive; no caller sends one today (guarded by `NotificationFanOutScopeGuardTest`), so decide whether to drop the fallback or refuse a blank recipient.
 - **Platform-wide announcement:** a super-admin in global view (no hospital) still posts an announcement that notifies the staff of every hospital; there is no organisation audience on `Announcement`, so a per-organisation announcement would need a column (D1617 audience gap).
 - **Emergency broadcast:** `/topic/emergency-broadcast` (super-admin emergency banner) stays system-wide by design; confirm it should not be per hospital.
+
+## Standing debt — insurance read scope and dialog text limits (fix/d1651-d1652)
+
+- **D1651, shared-patient coverage:** a hospital now sees only its own insurance rows and legacy untagged ones; whether a treating hospital (RecordAccessPolicy treatment relationship) should also see another hospital's coverage, read-only, is a policy decision for the user.
+- **D1651, eligibility history:** an eligibility check already recorded against another hospital's insurance row (before this fix) still shows that row on the check; no migration rewrites them.
+- **D1652, checkout follow-up text:** the checkout's follow-up instructions are merged with the signed note and silently cut to 3000 characters on the discharge summary (`CheckOutMapper.STORED_FOLLOW_UP_MAX`); the merged length is not refused or announced.
+- **D1652, checkout diagnoses:** the checkout's diagnosis list is joined into the 5000-character summary diagnosis with no size check on the list.
+- **D1652, silent truncation helper:** `EncounterServiceImpl.keepIfGiven` still truncates any caller past the column; the checkout dialog now refuses first, other callers (the synthetic checkout) do not.

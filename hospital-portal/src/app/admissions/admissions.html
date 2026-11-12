@@ -635,6 +635,7 @@
             <label for="adm-roomBed">{{ 'ADMISSIONS.ROOM_BED' | translate }}</label>
             <input
               id="adm-roomBed"
+              maxlength="50"
               type="text"
               [(ngModel)]="form.roomBed"
               [placeholder]="'ADMISSIONS.ROOM_BED_PLACEHOLDER' | translate"
@@ -703,6 +704,7 @@
           <label for="adm-complaint">{{ 'ADMISSIONS.CHIEF_COMPLAINT' | translate }} *</label>
           <textarea
             id="adm-complaint"
+            maxlength="500"
             [(ngModel)]="form.chiefComplaint"
             rows="2"
             [placeholder]="'ADMISSIONS.CHIEF_COMPLAINT_PLACEHOLDER' | translate"
@@ -713,6 +715,7 @@
           <label for="adm-notes">{{ 'ADMISSIONS.ADMISSION_NOTES' | translate }}</label>
           <textarea
             id="adm-notes"
+            maxlength="2000"
             [(ngModel)]="form.admissionNotes"
             rows="2"
             [placeholder]="'COMMON.ADDITIONAL_NOTES' | translate"
@@ -989,6 +992,7 @@
           <textarea
             required
             id="discharge-summary"
+            maxlength="5000"
             [(ngModel)]="dischargeForm.dischargeSummary"
             class="form-textarea"
             rows="4"
@@ -1014,7 +1018,7 @@
           } @else {
             <textarea
               id="discharge-instructions"
-              maxlength="3000"
+              maxlength="2000"
               [(ngModel)]="dischargeForm.dischargeInstructions"
               class="form-textarea"
               rows="3"

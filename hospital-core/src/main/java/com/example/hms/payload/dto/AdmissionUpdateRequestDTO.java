@@ -19,9 +19,11 @@ import java.util.UUID;
 public class AdmissionUpdateRequestDTO {
 
     private UUID departmentId;
+    @jakarta.validation.constraints.Size(max = 50, message = "{admission.roomBed.size}")
     private String roomBed;
     private AcuityLevel acuityLevel;
     private LocalDateTime expectedDischargeDateTime;
+    @jakarta.validation.constraints.Size(max = 2000, message = "{admission.admissionNotes.size}")
     private String admissionNotes;
     private UUID attendingPhysicianId;
     

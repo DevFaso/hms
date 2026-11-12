@@ -83,14 +83,15 @@ class PatientInsuranceScopedLookupGuardTest {
     }
 
     /**
-     * Review of #1131: every insurance write that loads a row by id is
-     * hospital-scoped: through {@code getWritableInsuranceOrThrow} (edit,
-     * delete) or through {@code tagForStaffHospital} (the links). A write
-     * method that loads with the bare {@code getInsuranceOrThrow} and neither
-     * reaches another hospital's row.
+     * Review of #1131 and QA D1651: every insurance method that loads a row by
+     * id, read or write, is hospital-scoped: through
+     * {@code getScopedInsuranceOrThrow} (read, edit, delete) or through
+     * {@code tagForStaffHospital} (the links). A method that loads with the
+     * bare {@code getInsuranceOrThrow} and neither reaches another hospital's
+     * row (D1651: the GET by id did, and returned A's policy to B).
      */
     @Test
-    void everyInsuranceWriteByIdIsHospitalScoped() throws IOException {
+    void everyInsuranceReadOrWriteByIdIsHospitalScoped() throws IOException {
         String source = Files.readString(SERVICES.resolve("PatientInsuranceServiceImpl.java"), StandardCharsets.UTF_8);
         Matcher decl = Pattern.compile("(?m)^    (?:public|private|protected)[^(\\n=]*?\\b(\\w+)\\(").matcher(source);
         List<int[]> starts = new ArrayList<>();
@@ -104,16 +105,83 @@ class PatientInsuranceScopedLookupGuardTest {
             int from = starts.get(i)[0];
             int to = i + 1 < starts.size() ? starts.get(i + 1)[0] : source.length();
             String body = source.substring(from, to);
-            boolean writes = body.contains(".save(") || body.contains(".delete");
-            if (writes && body.contains("getInsuranceOrThrow(")
-                && !body.contains("tagForStaffHospital(")) {
+            String name = names.get(i);
+            if ("getInsuranceOrThrow".equals(name) || "getScopedInsuranceOrThrow".equals(name)) {
+                continue; // the bare loader and the scoped one itself
+            }
+            if (body.contains(" getInsuranceOrThrow(") && !body.contains("tagForStaffHospital(")) {
                 offenders.add(names.get(i));
             }
         }
         assertThat(offenders)
-            .as("an insurance write by id that can reach another hospital's row (review of #1131)")
+            .as("an insurance read or write by id that can reach another hospital's row (#1131, D1651)")
             .isEmpty();
-        assertThat(source).contains("getWritableInsuranceOrThrow(insuranceId)");
+        assertThat(source).contains("getScopedInsuranceOrThrow(insuranceId)");
+    }
+
+    /**
+     * QA D1651 class, codebase-wide: every place that reads a patient's
+     * coverage by id or as a list (the insurance repository's
+     * {@code findById} / {@code findByPatient_Id}, or the patient's
+     * {@code getPatientInsurances()} collection) filters it to the reader's
+     * hospital with {@link com.example.hms.model.PatientInsurance#isVisibleAt},
+     * in the same method. The hospital-keyed finders are scoped by name and
+     * are not flagged. The dev seeder only appends the row it just saved.
+     */
+    @Test
+    void everyInsuranceReadByIdOrListIsHospitalScoped() throws IOException {
+        Path main = Path.of("src/main/java");
+        Pattern repoField = Pattern.compile("PatientInsuranceRepository\\s+(\\w+)\\s*;");
+        List<String> offenders = new ArrayList<>();
+        List<Path> files;
+        try (var walk = Files.walk(main)) {
+            files = walk.filter(f -> f.toString().endsWith(".java")).toList();
+        }
+        for (Path file : files) {
+            if (file.endsWith("DevSyntheticDataSeeder.java")) {
+                continue;
+            }
+            String source = Files.readString(file, StandardCharsets.UTF_8);
+            List<Pattern> reads = new ArrayList<>();
+            reads.add(Pattern.compile("\\.getPatientInsurances\\(\\)"));
+            Matcher field = repoField.matcher(source);
+            while (field.find()) {
+                String f = Pattern.quote(field.group(1));
+                reads.add(Pattern.compile("\\b" + f + "\\s*\\.\\s*(?:findById|findByPatient_Id|findAll)\\("));
+            }
+            for (Pattern read : reads) {
+                Matcher m = read.matcher(source);
+                while (m.find()) {
+                    String method = enclosingMethod(source, m.start());
+                    if ("getInsuranceOrThrow".equals(method)) {
+                        continue; // its callers are held by the test above
+                    }
+                    String body = methodBody(source, m.start());
+                    if (!body.contains("isVisibleAt(")) {
+                        offenders.add(main.relativize(file) + " " + method + ": " + m.group());
+                    }
+                }
+            }
+        }
+        assertThat(offenders)
+            .as("a read of patient insurance that is not filtered to the reader's hospital (QA D1651)")
+            .isEmpty();
+    }
+
+    /** The source of the method declared last before {@code index}, up to the next declaration. */
+    private static String methodBody(String source, int index) {
+        Pattern decl = Pattern.compile("(?m)^    (?:public|private|protected)[^(\\n=]*?\\b(\\w+)\\(");
+        Matcher before = decl.matcher(source.substring(0, index));
+        int from = 0;
+        while (before.find()) {
+            from = before.start();
+        }
+        Matcher after = decl.matcher(source);
+        int to = source.length();
+        if (after.find(index)) {
+            to = after.start();
+        }
+        return source.substring(from, to);
     }
 
     /** The name of the method declared last before {@code index}. */
