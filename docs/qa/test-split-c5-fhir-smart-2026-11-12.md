@@ -39,6 +39,25 @@ Portal lint/format do not cover Java. No Java formatter/linter is configured; th
 
 ## What remains open
 
-This is servlet/component coverage with mocked tenancy decisions and empty data. It does not prove positive patient-data read/search mapping for every resource, SQL isolation, persisted cross-organisation rows, the Spring authentication filter chain, JWT cryptography, patient-context launch restriction, granted SMART scope enforcement, OAuth code/token exchange or a browser SMART launch. Advertised scopes are not proof that a grant is enforced.
+The original servlet/component suite uses mocked tenancy decisions and empty data. The approved in-memory follow-up below adds actual database, servlet-container and security-chain evidence. Neither suite proves positive populated read/search mapping for every resource, persisted cross-organisation FHIR rows, patient-context launch restriction, granted SMART scope enforcement, OAuth code/token exchange or a browser SMART launch. Advertised scopes are not proof that a grant is enforced.
 
-Existing full-context FHIR/SMART ITs import `TestPostgresConfig`; they were not run under the current no-database instruction. The pending question about disposable in-memory test databases has not been answered; no database was started. C5 remains partial for the full requested data/launch contract. No credentials, providers, dev/prod URLs, gates, thresholds or live QA checklist entries changed. Published CI/Rex remain separate evidence.
+Existing full-context FHIR/SMART ITs import `TestPostgresConfig`. They were initially not run under the no-database instruction. On 12 November 2026 the user explicitly allowed disposable in-memory test databases; this supersedes the earlier pending question. C5 remains partial for the full requested launch/all-resource populated-data contract. No credentials, real providers, dev/prod URLs, gates, thresholds or live QA checklist entries changed. Published CI/Rex remain separate evidence.
+
+## Approved in-memory follow-up — 12 November 2026
+
+Ran the existing full-context FHIR tenant-boundary, capability, SMART-discovery and role-gate suites against the repository's unique-per-context `jdbc:h2:mem:` test profile. `TestPostgresConfig` does not connect to PostgreSQL. Local servlet containers use ephemeral ports, bearer fixtures are generated in-process, and the OIDC decoder uses a local public key rather than provider discovery. No external identity-provider exchange occurs.
+
+Added two parameterized cases to `FhirTenantBoundaryIT`: for every one of the 11 registered clinical providers, both read and search reject missing or signature-tampered HMS tokens with 401, even when the request supplies a valid hospital header. Each case first reads a real persisted in-tenant Patient with a valid signed token as a positive control.
+
+The existing boundary cases additionally exercise populated Patient, Encounter, Condition, MedicationRequest and Immunization reads/searches, unknown-versus-foreign response parity, shared-patient MRN filtering, bound-hospital roles, super-admin pinning and locally signed OIDC-shaped JWTs through the real servlet/security chain. The tests use two hospitals in one organization; cross-organization FHIR isolation is not newly claimed. The role-gate suite uses MockMvc and proves authorization decisions, not HAPI resource dispatch.
+
+Command from `C:/dev/hms-qa-c1`:
+
+```powershell
+./gradlew.bat :hospital-core:test --tests '*FhirTenantBoundaryIT' --tests '*FhirCapabilityStatementIT' --tests '*SmartConfigurationIT' --tests '*FhirRoleGateIT' --tests '*FhirServletStubContractIntegrationTest' -PtestForks=1 --console=plain
+# Exit 0: 88 passed (1 capability, 46 stub contracts, 17 boundary including 2 new, 2 SMART discovery, 22 role-gate).
+```
+
+Portal `npm.cmd run lint`, `npm.cmd run format:check`, report Prettier check and `git diff --check` each exited 0. Java compiled with the selected tests; no Java formatter is configured.
+
+Logs: `c5-inmemory-tests.log`, `c5-inmemory-lint.log`, `c5-inmemory-format.log` in the same local evidence directory. H2 logs warnings about cross-schema admission foreign-key DDL and platform-schema teardown. These do not fail the selected tests, but this run is not PostgreSQL migration/constraint validation. No production correction was needed.
