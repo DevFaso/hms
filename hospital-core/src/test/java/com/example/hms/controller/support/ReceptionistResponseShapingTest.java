@@ -278,7 +278,9 @@ class ReceptionistResponseShapingTest {
     /** The after-visit summary fields the desk keeps: the visit, the patient, whom to call, the follow-up date. */
     private static final Set<String> AVS_KEPT = Set.of("encounterId", "appointmentId", "visitDate", "providerName",
         "departmentName", "hospitalName", "hospitalPhone", "departmentPhone", "patientId", "patientName",
-        "encounterStatus", "appointmentStatus", "checkoutTimestamp", "followUpAppointmentId", "followUpAppointmentDate");
+        "encounterStatus", "appointmentStatus", "checkoutTimestamp", "followUpAppointmentId", "followUpAppointmentDate",
+        // #1138: a status flag ("not finalised"), not clinical content; the desk may see it.
+        "pendingSignature");
 
     @Test
     @DisplayName("2026-11-12: every after-visit summary field is kept or removed, and a removed one is empty")
