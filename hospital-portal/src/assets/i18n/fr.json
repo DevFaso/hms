@@ -155,7 +155,8 @@
     "ACTIVE_EPISODE": "Travail en cours",
     "FOREIGN": {
       "ORIGIN": "Travail en cours à {{hospital}}, lecture seule ici",
-      "HINT": "Ce travail est suivi par l’hôpital où il a été ouvert. Vous pouvez l’admettre ici pour d’autres soins ; un second épisode de travail ne peut pas être ouvert tant que celui-ci est en cours. Si elle est arrivée ici sans transmission, choisissez « Arrivée sans transmission »."
+      "HINT": "Ce travail est suivi par l’hôpital où il a été ouvert. Vous pouvez l’admettre ici pour d’autres soins ; un second épisode de travail ne peut pas être ouvert tant que celui-ci est en cours.",
+      "HINT_ARRIVAL": "Ce travail est suivi par l’hôpital où il a été ouvert. Vous pouvez l’admettre ici pour d’autres soins ; un second épisode de travail ne peut pas être ouvert tant que celui-ci est en cours. Si elle est arrivée ici sans transmission, choisissez « Arrivée sans transmission »."
     },
     "ACTIVE_PHASE_SINCE": "Phase active depuis",
     "ADMITTED": "Admise",

@@ -155,7 +155,8 @@
     "ACTIVE_EPISODE": "Active labor",
     "FOREIGN": {
       "ORIGIN": "Labour in progress at {{hospital}}, read only here",
-      "HINT": "This labour is followed by the hospital where it was opened. You may admit her here for other care; a second labour episode cannot be opened while this one is in progress. If she arrived here without a handover, choose \"Arrived without handover\"."
+      "HINT": "This labour is charted by the hospital where it was started. You can admit her here for other care; a second labour episode cannot be opened while this one is active.",
+      "HINT_ARRIVAL": "This labour is followed by the hospital where it was opened. You may admit her here for other care; a second labour episode cannot be opened while this one is in progress. If she arrived here without a handover, choose \"Arrived without handover\"."
     },
     "ACTIVE_PHASE_SINCE": "Active phase since",
     "ADMITTED": "Admitted",

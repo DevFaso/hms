@@ -1088,6 +1088,18 @@ describe('LaborTabComponent labour transfer (provisional rule, 2026-11-12)', () 
     expect(section?.textContent).toContain('LABOR.TRANSFER.CLOSED_TRANSFERRED');
   });
 
+  it('Rex on #1134: only whoever may record the arrival is told about it', () => {
+    const hint = (f: { nativeElement: unknown }) =>
+      (f.nativeElement as HTMLElement).textContent ?? '';
+    const nurse = render('hA', ['ROLE_NURSE'], [atB()]);
+    expect(hint(nurse)).toContain('LABOR.FOREIGN.HINT');
+    expect(hint(nurse)).not.toContain('LABOR.FOREIGN.HINT_ARRIVAL');
+    nurse.destroy();
+    attached?.remove();
+    const midwife = render('hA', ['ROLE_MIDWIFE'], [atB()]);
+    expect(hint(midwife)).toContain('LABOR.FOREIGN.HINT_ARRIVAL');
+  });
+
   it('every new transfer text reads in French and Spanish', () => {
     const labor = (fr as unknown as { LABOR: Record<string, Record<string, string>> }).LABOR;
     const laborEs = (es as unknown as { LABOR: Record<string, Record<string, string>> }).LABOR;

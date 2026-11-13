@@ -2259,4 +2259,43 @@ class LaborServiceImplTest {
         assertThatThrownBy(() -> service.getDelivery(patientId, earlierAtB.getId(), hospitalId))
             .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    /**
+     * Rex on #1134: after a transfer the labour's partograph spans the episodes
+     * it continues. A birth earlier than an entry charted at the sending hospital
+     * (with a handover, or before an arrival without one) is refused on the
+     * birth field, two hand-overs back as well.
+     */
+    @Test
+    void aBirthEarlierThanAnEntryChartedBeforeTheTransferIsRefused() {
+        LocalDateTime entryAtB = LocalDateTime.now().minusHours(2);
+        LocalDateTime entryAtC = LocalDateTime.now().minusHours(1);
+        LaborEpisode atC = LaborEpisode.builder().patient(patient).status(LaborStatus.LEFT_WITHOUT_HANDOVER).build();
+        atC.setId(UUID.randomUUID());
+        LaborEpisode atB = LaborEpisode.builder().patient(patient).status(LaborStatus.TRANSFERRED_OUT)
+            .transferredFrom(atC).build();
+        atB.setId(UUID.randomUUID());
+        episode.setTransferredFrom(atB);
+        episode.setLaborOnsetAt(entryAtB.minusHours(8));
+        lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(atB.getId()))
+            .thenReturn(Optional.of(LaborPartographEntry.builder().episode(atB).observationTime(entryAtB).build()));
+        lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(atC.getId()))
+            .thenReturn(Optional.of(LaborPartographEntry.builder().episode(atC).observationTime(entryAtC).build()));
+
+        for (LocalDateTime birth : List.of(entryAtB.minusMinutes(10), entryAtC.minusMinutes(10))) {
+            DeliveryRecordRequestDTO request = deliveryRequest();
+            request.setBirthDateTime(birth);
+            assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .hasFieldOrPropertyWithValue("field", "birthDateTime")
+                .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.beforeLastPartograph");
+        }
+        verify(deliveryRecordRepository, never()).save(any(DeliveryRecord.class));
+
+        // After the last entry of the whole chain, the birth is recorded.
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(entryAtC.plusMinutes(5));
+        service.recordDelivery(patientId, episodeId, recorderUserId, request);
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
+    }
 }

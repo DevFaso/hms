@@ -181,7 +181,12 @@
           {{ episode.laborOnsetAt ?? episode.admittedAt | serverTime | dateTime }}
           · {{ 'LABOR.STATUS_ACTIVE' | translate }}
         </p>
-        <p class="muted">{{ 'LABOR.FOREIGN.HINT' | translate }}</p>
+        <!-- Rex on #1134: the arrival path is offered only to whoever may record it. -->
+        <p class="muted">
+          {{
+            (canRecordArrival() ? 'LABOR.FOREIGN.HINT_ARRIVAL' : 'LABOR.FOREIGN.HINT') | translate
+          }}
+        </p>
       }
       <p class="muted">
         {{ 'LABOR.ADMITTED' | translate }}{{ 'COMMON.COLON' | translate }}

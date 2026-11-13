@@ -1023,14 +1023,43 @@ public class LaborServiceImpl implements LaborService {
      * up to the birth), and the placenta is delivered after the birth, never
      * before it. Each refusal names its field.
      */
+    /**
+     * The episodes one labour was charted on: this one, then each episode it
+     * continues by a transfer (TRANSFERRED_OUT) or an arrival without handover
+     * (LEFT_WITHOUT_HANDOVER), oldest last. Bounded, and a link seen twice ends it.
+     */
+    private static List<UUID> labourChain(LaborEpisode episode) {
+        List<UUID> chain = new java.util.ArrayList<>();
+        java.util.Set<UUID> seen = new java.util.HashSet<>();
+        LaborEpisode current = episode;
+        while (current != null && current.getId() != null && seen.add(current.getId()) && chain.size() < MAX_TRANSFER_CHAIN) {
+            chain.add(current.getId());
+            LaborEpisode previous = current.getTransferredFrom();
+            current = previous != null && (previous.getStatus() == LaborStatus.TRANSFERRED_OUT
+                || previous.getStatus() == LaborStatus.LEFT_WITHOUT_HANDOVER) ? previous : null;
+        }
+        return chain;
+    }
+
+    /** More hand-overs than this in one labour is a data error; the chain read stops there. */
+    private static final int MAX_TRANSFER_CHAIN = 20;
+
     private void requireDeliveryTimesInOrder(LaborEpisode episode, LocalDateTime birthAt,
                                              LocalDateTime placentaDeliveredAt) {
         if (episode.getLaborOnsetAt() != null && birthAt.isBefore(episode.getLaborOnsetAt())) {
             throw new com.example.hms.exception.FieldBusinessException("birthDateTime", "labor.delivery.beforeOnset");
         }
-        LocalDateTime lastObservation = entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(episode.getId())
-            .map(LaborPartographEntry::getObservationTime)
-            .orElse(null);
+        // Rex on #1134: after a transfer the labour's partograph spans every
+        // episode it continues, so the birth follows the last entry of the chain.
+        LocalDateTime lastObservation = null;
+        for (UUID chartedEpisodeId : labourChain(episode)) {
+            LocalDateTime last = entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(chartedEpisodeId)
+                .map(LaborPartographEntry::getObservationTime)
+                .orElse(null);
+            if (last != null && (lastObservation == null || last.isAfter(lastObservation))) {
+                lastObservation = last;
+            }
+        }
         if (lastObservation != null && birthAt.isBefore(lastObservation)) {
             throw new com.example.hms.exception.FieldBusinessException("birthDateTime",
                 "labor.delivery.beforeLastPartograph");

@@ -155,7 +155,8 @@
     "ACTIVE_EPISODE": "Trabajo de parto en curso",
     "FOREIGN": {
       "ORIGIN": "Trabajo de parto en curso en {{hospital}}, solo lectura aquí",
-      "HINT": "Este trabajo de parto lo sigue el hospital donde se abrió. Puede admitirla aquí para otra atención; no se puede abrir un segundo episodio de trabajo de parto mientras este siga en curso. Si llegó aquí sin traspaso, elija «Llegada sin traspaso»."
+      "HINT": "Este trabajo de parto lo registra el hospital donde se abrió. Puede ingresarla aquí para otra atención; no se puede abrir un segundo episodio mientras este siga activo.",
+      "HINT_ARRIVAL": "Este trabajo de parto lo sigue el hospital donde se abrió. Puede admitirla aquí para otra atención; no se puede abrir un segundo episodio de trabajo de parto mientras este siga en curso. Si llegó aquí sin traspaso, elija «Llegada sin traspaso»."
     },
     "ACTIVE_PHASE_SINCE": "Fase activa desde",
     "ADMITTED": "Ingresada",
