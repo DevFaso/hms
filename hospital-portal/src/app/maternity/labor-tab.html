@@ -303,6 +303,15 @@
               : ((record.uterotonicGiven ? 'COMMON.YES' : 'COMMON.NO') | translate)
           }}
         </p>
+        @if (record.bornBeforeArrival) {
+          <!-- QA r46 (provisional): a birth recorded as before her arrival, with its reason. -->
+          <p class="saved-note" data-testid="delivery-born-before-arrival">
+            <strong
+              >{{ 'LABOR.BORN_BEFORE_ARRIVAL' | translate }}{{ 'COMMON.COLON' | translate }}</strong
+            >
+            {{ record.bornBeforeArrivalReason }}
+          </p>
+        }
         @if (record.notes) {
           <p class="saved-note" data-testid="delivery-notes">
             <strong>{{ 'LABOR.NOTES' | translate }}{{ 'COMMON.COLON' | translate }}</strong>

@@ -183,6 +183,9 @@ export interface DeliveryRecordResponse {
   estimatedBloodLossMl: number | null;
   perinealTear: PerinealTear | null;
   notes: string | null;
+  /** QA r46 (provisional): born before her arrival here, with its reason. */
+  bornBeforeArrival?: boolean;
+  bornBeforeArrivalReason?: string | null;
   alerts: LaborAlert[];
   /** QA D1592: the babies this delivery registered as patients (empty for a stillbirth). */
   newborns?: DeliveryNewborn[];
