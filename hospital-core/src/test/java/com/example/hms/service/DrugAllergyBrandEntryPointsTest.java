@@ -60,6 +60,7 @@ class DrugAllergyBrandEntryPointsTest {
         "service/EncounterServiceImpl.java", "the nursing intake records allergies and medications side by side",
         "service/PatientRecordPdfService.java", "the record PDF prints both lists",
         "service/PatientServiceImpl.java", "the chart summary lists both",
+        "service/AfterVisitSummarySections.java", "the visit summary prints independent allergy and medication lists without comparing them",
         "service/PatientSnapshotServiceImpl.java", "the snapshot lists both");
 
     @ParameterizedTest(name = "{1} typed, allergy {0}: the prescription check blocks")
