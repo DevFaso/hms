@@ -255,6 +255,11 @@
     "RISK_NOTES": "Risk notes",
     "RECENT_DELIVERY_OVERRIDE": "Override reason (recent delivery)",
     "RECENT_DELIVERY_OVERRIDE_HINT": "Required only when a birth was recorded for this patient in the last 20 weeks.",
+    "BORN_BEFORE_ARRIVAL": "Birth before arrival",
+    "BORN_BEFORE_ARRIVAL_REASON": "Reason born before arrival",
+    "BORN_BEFORE_ARRIVAL_HINT": "Only when the baby was born before she arrived here (in transit): the birth time may then be earlier than this episode's start.",
+    "BORN_BEFORE_ARRIVAL_REASON_REQUIRED": "Give the reason the baby was born before her arrival.",
+    "BORN_BEFORE_ARRIVAL_AFTER_OBSERVATION": "She was already observed here in labour before this birth time: the birth was not before her arrival.",
     "SAVE_DELIVERY": "Save Delivery Record",
     "SAVE_ENTRY": "Save Entry",
     "SEX_FEMALE": "Female",
@@ -1924,6 +1929,7 @@
       "LABOR_EPISODE_TRANSFERRED_OUT": "Labour episode transferred to another hospital with a handover",
       "LABOR_EPISODE_TRANSFERRED_IN": "Labour episode received from another hospital with a handover",
       "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Labour episode closed: she arrived at another hospital without a handover",
+      "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Birth recorded as before her arrival from another hospital",
       "LABOR_EPISODE_HANDOVER_READ": "Labour episode handed over by transfer read at the receiving hospital",
       "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Labour episode opened on arrival from another hospital without a handover"
     },
@@ -6765,7 +6771,8 @@
         "PRESCRIPTION_ALLERGY_REVIEWED": "Allergy conflict reviewed by a prescriber",
         "LABOR_EPISODE_TRANSFERRED_OUT": "Labour transferred out",
         "LABOR_EPISODE_TRANSFERRED_IN": "Labour transferred in",
-        "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Labour left without a handover"
+        "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Labour left without a handover",
+        "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Birth before arrival"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",

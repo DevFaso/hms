@@ -14,6 +14,8 @@ import com.example.hms.repository.EncounterNoteRepository;
 import com.example.hms.repository.InBasketItemRepository;
 import com.example.hms.security.CallerIdentity;
 import com.example.hms.service.i18n.NotificationLocales;
+import com.example.hms.service.i18n.NotificationLocalizer;
+import com.example.hms.utility.DisplayDates;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
@@ -118,7 +120,7 @@ public class UnsignedNoteFollowUp {
         Encounter encounter = note.getEncounter();
         Patient patient = note.getPatient() != null ? note.getPatient() : encounter.getPatient();
         String patientName = patient != null ? patient.getFullName() : null;
-        String visitDate = visitDay(encounter);
+        java.time.LocalDate visitDay = visitDay(encounter);
         CreateInBasketItemRequest item = CreateInBasketItemRequest.builder()
             .recipientUserId(note.getAuthor().getId())
             .hospitalId(note.getHospital().getId())
@@ -127,9 +129,11 @@ public class UnsignedNoteFollowUp {
             .titleKey(TITLE_KEY)
             .titleArgs(new Object[] {patientName})
             .bodyKey(BODY_KEY)
-            .bodyArgs(new Object[] {patientName, visitDate})
+            // QA D1710: the day is stored as a date and written the reader's way when the item is read.
+            .bodyArgs(new Object[] {patientName, NotificationLocalizer.date(visitDay)})
             .title(MessageUtil.resolve(NotificationLocales.STAFF, TITLE_KEY, patientName))
-            .body(MessageUtil.resolve(NotificationLocales.STAFF, BODY_KEY, patientName, visitDate))
+            .body(MessageUtil.resolve(NotificationLocales.STAFF, BODY_KEY, patientName,
+                DisplayDates.date(visitDay, NotificationLocales.STAFF)))
             .referenceId(note.getId())
             .referenceType(REFERENCE_TYPE)
             .encounterId(encounter.getId())
@@ -216,7 +220,7 @@ public class UnsignedNoteFollowUp {
                 now.atZone(clock.getZone())).toHours() : 0L);
     }
 
-    private static String visitDay(Encounter encounter) {
-        return encounter.getEncounterDate() != null ? encounter.getEncounterDate().toLocalDate().toString() : "";
+    private static java.time.LocalDate visitDay(Encounter encounter) {
+        return encounter.getEncounterDate() != null ? encounter.getEncounterDate().toLocalDate() : null;
     }
 }

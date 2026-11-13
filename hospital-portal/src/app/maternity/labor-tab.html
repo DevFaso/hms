@@ -303,6 +303,15 @@
               : ((record.uterotonicGiven ? 'COMMON.YES' : 'COMMON.NO') | translate)
           }}
         </p>
+        @if (record.bornBeforeArrival) {
+          <!-- QA r46 (provisional): a birth recorded as before her arrival, with its reason. -->
+          <p class="saved-note" data-testid="delivery-born-before-arrival">
+            <strong
+              >{{ 'LABOR.BORN_BEFORE_ARRIVAL' | translate }}{{ 'COMMON.COLON' | translate }}</strong
+            >
+            {{ record.bornBeforeArrivalReason }}
+          </p>
+        }
         @if (record.notes) {
           <p class="saved-note" data-testid="delivery-notes">
             <strong>{{ 'LABOR.NOTES' | translate }}{{ 'COMMON.COLON' | translate }}</strong>
@@ -933,6 +942,37 @@
             {{ 'LABOR.RECENT_DELIVERY_OVERRIDE_HINT' | translate }}
           </p>
         </div>
+        @if (bornBeforeArrivalOffered()) {
+          <div class="field checkbox-field">
+            <label>
+              <input
+                id="dl-bba"
+                type="checkbox"
+                data-testid="labor-delivery-bba"
+                aria-describedby="dl-bba-hint"
+                [(ngModel)]="deliveryForm.bornBeforeArrival"
+              />
+              {{ 'LABOR.BORN_BEFORE_ARRIVAL' | translate }}
+            </label>
+            <p id="dl-bba-hint" class="muted">
+              {{ 'LABOR.BORN_BEFORE_ARRIVAL_HINT' | translate }}
+            </p>
+          </div>
+          @if (deliveryForm.bornBeforeArrival) {
+            <div class="field">
+              <label for="dl-bba-reason"
+                >{{ 'LABOR.BORN_BEFORE_ARRIVAL_REASON' | translate }} *</label
+              >
+              <textarea
+                id="dl-bba-reason"
+                required
+                rows="2"
+                maxlength="500"
+                [(ngModel)]="deliveryForm.bornBeforeArrivalReason"
+              ></textarea>
+            </div>
+          }
+        }
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelDelivery()" [disabled]="saving()">

@@ -353,9 +353,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         } else {
             summaries = dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId);
         }
-        return summaries.stream()
-            .map(this::toDto)
-            .toList();
+        return toDtos(summaries);
     }
 
     @Override
@@ -369,9 +367,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<DischargeSummary> summaries = dischargeSummaryRepository.findByHospitalAndDateRange(effectiveHospitalId, startDate, endDate);
-        return summaries.stream()
-            .map(this::toDto)
-            .toList();
+        return toDtos(summaries);
     }
 
     @Override
@@ -380,9 +376,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<DischargeSummary> summaries = dischargeSummaryRepository.findUnfinalizedByHospital(effectiveHospitalId);
-        return summaries.stream()
-            .map(this::toDto)
-            .toList();
+        return toDtos(summaries);
     }
 
     @Override
@@ -391,9 +385,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<DischargeSummary> summaries = dischargeSummaryRepository.findWithPendingTestResults(effectiveHospitalId);
-        return summaries.stream()
-            .map(this::toDto)
-            .toList();
+        return toDtos(summaries);
     }
 
     @Override
@@ -406,9 +398,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         } else {
             summaries = dischargeSummaryRepository.findByDischargingProvider_IdOrderByDischargeDateDesc(providerId);
         }
-        return summaries.stream()
-            .map(this::toDto)
-            .toList();
+        return toDtos(summaries);
     }
 
     @Override
@@ -521,11 +511,34 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     }
 
     private DischargeSummaryResponseDTO toDto(DischargeSummary summary) {
+        return toDto(summary, encountersAwaitingSignature(List.of(summary)));
+    }
+
+    /** QA D1711: a list answers its notes awaiting a signature in one read, as the portal list does. */
+    private List<DischargeSummaryResponseDTO> toDtos(List<DischargeSummary> summaries) {
+        java.util.Set<UUID> pendingSignature = encountersAwaitingSignature(summaries);
+        return summaries.stream()
+            .map(summary -> toDto(summary, pendingSignature))
+            .toList();
+    }
+
+    /**
+     * QA D1711 (round 46): every staff summary answers {@code pendingSignature} with the patient list's own
+     * computation (a note of the visit still waits for its author's signature); it was false on every staff
+     * path, so an API client read an unsigned visit as finalised.
+     */
+    private DischargeSummaryResponseDTO toDto(DischargeSummary summary, java.util.Set<UUID> pendingSignature) {
         DischargeSummaryResponseDTO dto = dischargeSummaryMapper.toResponseDTO(summary);
         if (dto != null) {
             dto.setEditableByCaller(editableByCaller(summary));
+            dto.setPendingSignature(awaitsSignature(summary, pendingSignature));
         }
         return dto;
+    }
+
+    private static boolean awaitsSignature(DischargeSummary summary, java.util.Set<UUID> pendingSignature) {
+        return summary.getEncounter() != null && summary.getEncounter().getId() != null
+            && pendingSignature.contains(summary.getEncounter().getId());
     }
 
     private void enforceHospitalScope(DischargeSummary summary, UUID summaryId) {
@@ -573,8 +586,8 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         List<DischargeSummaryResponseDTO> result = rows.stream()
                 .map(row -> {
                     DischargeSummaryResponseDTO dto = dischargeSummaryMapper.toResponseDTO(row);
-                    if (dto != null && row.getEncounter() != null) {
-                        dto.setPendingSignature(pendingSignature.contains(row.getEncounter().getId()));
+                    if (dto != null) {
+                        dto.setPendingSignature(awaitsSignature(row, pendingSignature));
                     }
                     return dto;
                 })

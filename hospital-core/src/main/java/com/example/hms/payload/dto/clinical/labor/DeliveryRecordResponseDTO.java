@@ -37,6 +37,9 @@ public class DeliveryRecordResponseDTO {
     private String perinealTear;
 
     private String notes;
+    /** QA r46: the birth was recorded as before her arrival here (in transit), with its reason. */
+    private boolean bornBeforeArrival;
+    private String bornBeforeArrivalReason;
     private List<LaborAlertDTO> alerts;
 
     /** QA D1592: the babies this delivery registered as patients (empty for a stillbirth). */

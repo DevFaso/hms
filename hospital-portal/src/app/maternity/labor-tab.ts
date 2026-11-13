@@ -95,6 +95,7 @@ const DELIVERY_LABELS: Record<string, string> = {
   birthDateTime: 'LABOR.BIRTH_TIME',
   placentaDeliveredAt: 'LABOR.PLACENTA_TIME',
   recentDeliveryOverrideReason: 'LABOR.RECENT_DELIVERY_OVERRIDE',
+  bornBeforeArrivalReason: 'LABOR.BORN_BEFORE_ARRIVAL_REASON',
 };
 const EPISODE_LABELS: Record<string, string> = {
   ...labelKeysOf(EPISODE_LIMITS),
@@ -138,6 +139,8 @@ const DELIVERY_FIELD_IDS: Readonly<Record<string, string>> = {
   apgarFiveMinute: 'dl-apgar5',
   estimatedBloodLossMl: 'dl-ebl',
   recentDeliveryOverrideReason: 'dl-override',
+  bornBeforeArrivalReason: 'dl-bba-reason',
+  bornBeforeArrival: 'dl-bba',
 };
 
 /**
@@ -575,6 +578,14 @@ export class LaborTabComponent {
     return this.recentDeliveryBefore(new Date(), null);
   }
 
+  /**
+   * QA r46 (provisional, pending clinical sign-off): the active episode continues a labour from
+   * another hospital, so a birth before her arrival (in transit) may be recorded, marked and explained.
+   */
+  bornBeforeArrivalOffered(): boolean {
+    return !!this.activeEpisode()?.transferredFromEpisodeId;
+  }
+
   /** The delivery form's override reason is required: another birth is recent. */
   deliveryOverrideRequired(): boolean {
     const at = localInputInstant(this.deliveryForm.birthDateTime) ?? new Date();
@@ -693,7 +704,34 @@ export class LaborTabComponent {
       .map((entry) => fromServerDateTime(entry.observationTime))
       .filter((when): when is Date => when !== null)
       .reduce<Date | null>((latest, when) => (!latest || when > latest ? when : latest), null);
-    if (typedBirth && lastObservation && typedBirth < lastObservation) {
+    if (
+      this.deliveryForm.bornBeforeArrival &&
+      !(this.deliveryForm.bornBeforeArrivalReason ?? '').trim()
+    ) {
+      return {
+        id: DELIVERY_FIELD_IDS['bornBeforeArrivalReason'],
+        message: this.translate.instant('LABOR.BORN_BEFORE_ARRIVAL_REASON_REQUIRED'),
+      };
+    }
+    // Rex on #1140: a birth declared before her arrival is bounded by the episodes she came from (the
+    // server checks them), never by what this hospital charted once she was here.
+    const declaredBeforeArrival =
+      this.bornBeforeArrivalOffered() && !!this.deliveryForm.bornBeforeArrival;
+    // Rex on #1140: observed here in labour before the birth means she had arrived; the server refuses the same.
+    const firstObservation = this.entries()
+      .map((entry) => fromServerDateTime(entry.observationTime))
+      .filter((when): when is Date => when !== null)
+      .reduce<Date | null>(
+        (earliest, when) => (!earliest || when < earliest ? when : earliest),
+        null,
+      );
+    if (declaredBeforeArrival && firstObservation && birth >= firstObservation) {
+      return {
+        id: DELIVERY_FIELD_IDS['bornBeforeArrival'],
+        message: this.translate.instant('LABOR.BORN_BEFORE_ARRIVAL_AFTER_OBSERVATION'),
+      };
+    }
+    if (typedBirth && lastObservation && typedBirth < lastObservation && !declaredBeforeArrival) {
       return {
         id: DELIVERY_BIRTH_TIME_ID,
         message: this.translate.instant('LABOR.BIRTH_BEFORE_LAST_ENTRY'),

@@ -545,7 +545,10 @@ public class LaborServiceImpl implements LaborService {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.labor.transfer.notActive");
         }
         if (episodeRepository.existsByPatient_IdAndStatusAndIdNot(source.getPatient().getId(), LaborStatus.ACTIVE, source.getId())) {
-            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.labor.alreadyActive");
+            // QA D1713 (round 46): the other active episode may be at either hospital, or at one the caller may
+            // not see, so the refusal names no hospital ("in this hospital" was wrong for the sending one).
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID,
+                "maternity.labor.transfer.otherActive");
         }
     }
 
@@ -838,6 +841,7 @@ public class LaborServiceImpl implements LaborService {
                 && request.getObservationTime().isBefore(episode.getLaborOnsetAt())) {
             throw new com.example.hms.exception.FieldBusinessException("observationTime", "maternity.partograph.beforeOnset");
         }
+        requireAfterTakeOver(episode, request.getObservationTime(), "observationTime", "maternity.partograph.beforeTransfer");
         // QA D1151 class (round 21): a partograph entry charts an observation.
         com.example.hms.service.support.ClinicalContent.requireAny(FETAL_HEART_RATE_FIELD, "maternity.partograph.findingsRequired",
             request.getFetalHeartRateBpm(), request.getLiquorColour(), request.getMouldingDegree(),
@@ -933,7 +937,8 @@ public class LaborServiceImpl implements LaborService {
         }
 
         LocalDateTime birthAt = request.getBirthDateTime() != null ? request.getBirthDateTime() : LocalDateTime.now();
-        requireDeliveryTimesInOrder(episode, birthAt, request.getPlacentaDeliveredAt());
+        boolean bornBeforeArrival = requireDeliveryTimesInOrder(episode, birthAt, request.getPlacentaDeliveredAt(),
+            request);
         String notes = resolveRecentDeliveryOverride(episode, birthAt, request);
         Staff deliveredBy = resolveStaffOrCaller(request.getDeliveredByStaffId(), episode.getHospital(), recorderUserId);
         User documentedBy = resolveUser(recorderUserId);
@@ -961,6 +966,8 @@ public class LaborServiceImpl implements LaborService {
             .estimatedBloodLossMl(request.getEstimatedBloodLossMl())
             .perinealTear(request.getPerinealTear())
             .notes(notes)
+            .bornBeforeArrival(bornBeforeArrival)
+            .bornBeforeArrivalReason(bornBeforeArrival ? request.getBornBeforeArrivalReason().trim() : null)
             // QA D1592: set until the babies are registered (after commit).
             .newbornRegistrationPending(request.getLiveBirth() == null || request.getLiveBirth())
             .build();
@@ -972,6 +979,9 @@ public class LaborServiceImpl implements LaborService {
         episodeRepository.save(episode);
 
         DeliveryRecord saved = deliveryRecordRepository.save(record);
+        if (bornBeforeArrival) {
+            auditBornBeforeArrival(saved, episode, recorderUserId);
+        }
         chargeDelivery(saved, recorderUserId);
         closeEarlierPostpartumPlans(episode, birthAt);
         publishUrgentAlerts(saved.getAlerts(), episode, documentedBy,
@@ -1044,15 +1054,124 @@ public class LaborServiceImpl implements LaborService {
     /** More hand-overs than this in one labour is a data error; the chain read stops there. */
     private static final int MAX_TRANSFER_CHAIN = 20;
 
-    private void requireDeliveryTimesInOrder(LaborEpisode episode, LocalDateTime birthAt,
-                                             LocalDateTime placentaDeliveredAt) {
+    /**
+     * QA D1712 (round 46, provisional rule pending the clinical owners): an episode that continues a labour from
+     * another hospital ({@code transferredFrom}) holds what happened from her arrival ({@code admittedAt}, the
+     * transfer time) on. Before it she was in the other hospital's custody, so an entry timed earlier would sit
+     * among that hospital's entries, out of order. Every write that times something on the episode is refused
+     * before her arrival, on the field it came in.
+     */
+    static void requireAfterTakeOver(LaborEpisode episode, LocalDateTime at, String field, String messageKey) {
+        if (!beforeTakeOver(episode, at)) {
+            return;
+        }
+        throw new com.example.hms.exception.FieldBusinessException(field, messageKey,
+            com.example.hms.utility.DisplayDates.dateTime(
+                com.example.hms.utility.HospitalTime.at(episode.getAdmittedAt(), episode.getHospital())));
+    }
+
+    /** {@code at} precedes the start of an episode that continues a labour from another hospital. */
+    private static boolean beforeTakeOver(LaborEpisode episode, LocalDateTime at) {
+        return at != null && episode.getTransferredFrom() != null && episode.getAdmittedAt() != null
+            && at.isBefore(episode.getAdmittedAt());
+    }
+
+    /**
+     * QA r46 (D1712 follow-up, provisional rule pending clinical sign-off): a birth before the receiving episode's
+     * start is a birth in transit. With an arrival without handover, that start is when her arrival was recorded
+     * and the episode she left is closed, so refusing it left the baby with no episode to be recorded on. It is
+     * accepted only when the delivery says so, with a reason, and never before the episode she came from began
+     * (its last partograph entry is the chain bound in {@link #requireDeliveryTimesInOrder}).
+     *
+     * <p>Rex on #1140: after a FORMAL handover the receiving episode starts at the handover, before the journey,
+     * and no arrival time is recorded on either path. A birth after that start may still have happened on the
+     * way, and is then declared the same way (mark, reason, audit). Without an arrival time the server cannot
+     * tell such a birth from one after she arrived, so the declaration is required only where the time proves it
+     * (before the episode's start) and offered, never imposed, after it: requiring it would block every birth on
+     * a handed-over episode. The declaration is kept only on an episode that continues another.
+     *
+     * @return true when the birth is recorded as before her arrival
+     */
+    private static boolean requireBornBeforeArrivalStated(LaborEpisode episode, LocalDateTime birthAt,
+                                                          DeliveryRecordRequestDTO request) {
+        if (episode.getTransferredFrom() == null) {
+            return false;
+        }
+        boolean declared = Boolean.TRUE.equals(request.getBornBeforeArrival());
+        if (!declared && !beforeTakeOver(episode, birthAt)) {
+            return false;
+        }
+        if (!declared) {
+            throw new com.example.hms.exception.FieldBusinessException("birthDateTime", "labor.delivery.beforeTransfer",
+                com.example.hms.utility.DisplayDates.dateTime(
+                com.example.hms.utility.HospitalTime.at(episode.getAdmittedAt(), episode.getHospital())));
+        }
+        if (request.getBornBeforeArrivalReason() == null || request.getBornBeforeArrivalReason().isBlank()) {
+            throw new com.example.hms.exception.FieldBusinessException("bornBeforeArrivalReason",
+                "labor.delivery.bornBeforeArrivalReasonRequired");
+        }
+        LaborEpisode previous = episode.getTransferredFrom();
+        if (previous.getAdmittedAt() != null && birthAt.isBefore(previous.getAdmittedAt())) {
+            throw new com.example.hms.exception.FieldBusinessException("birthDateTime",
+                "labor.delivery.beforePreviousEpisode");
+        }
+        return true;
+    }
+
+    /** Rex on #1140: a birth declared before her arrival precedes the receiving episode's first observation. */
+    private void requireBirthBeforeFirstObservationHere(LaborEpisode episode, LocalDateTime birthAt) {
+        LocalDateTime first = entryRepository.findFirstByEpisode_IdOrderByObservationTimeAsc(episode.getId())
+            .map(LaborPartographEntry::getObservationTime)
+            .orElse(null);
+        if (first != null && !birthAt.isBefore(first)) {
+            throw new com.example.hms.exception.FieldBusinessException("bornBeforeArrival",
+                "labor.delivery.bornBeforeArrivalAfterObservation",
+                com.example.hms.utility.DisplayDates.dateTime(
+                    com.example.hms.utility.HospitalTime.at(first, episode.getHospital())));
+        }
+    }
+
+    /** QA r46: a birth recorded before her arrival is audited once the delivery commits (ids only). */
+    private void auditBornBeforeArrival(DeliveryRecord saved, LaborEpisode episode, UUID userId) {
+        UUID hospitalId = episode.getHospital() == null ? null : episode.getHospital().getId();
+        com.example.hms.payload.dto.AuditEventRequestDTO event = com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+            .eventType(com.example.hms.enums.AuditEventType.LABOR_DELIVERY_BORN_BEFORE_ARRIVAL)
+            .status(com.example.hms.enums.AuditStatus.SUCCESS)
+            .entityType(ENTITY_LABOR)
+            .resourceId(saved.getId() == null ? null : saved.getId().toString())
+            .patientId(episode.getPatient() == null ? null : episode.getPatient().getId())
+            .userId(userId)
+            .hospitalId(hospitalId)
+            .eventDescription("Birth recorded as before her arrival from another hospital")
+            .details(java.util.Map.of("episodeId", String.valueOf(episode.getId())))
+            .build();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(event);
+            } catch (RuntimeException auditFailure) {
+                log.warn("[LABOR] Could not audit a birth before arrival: {}", auditFailure.getClass().getSimpleName());
+            }
+        });
+    }
+
+    private boolean requireDeliveryTimesInOrder(LaborEpisode episode, LocalDateTime birthAt,
+                                                LocalDateTime placentaDeliveredAt, DeliveryRecordRequestDTO request) {
         if (episode.getLaborOnsetAt() != null && birthAt.isBefore(episode.getLaborOnsetAt())) {
             throw new com.example.hms.exception.FieldBusinessException("birthDateTime", "labor.delivery.beforeOnset");
         }
+        boolean bornBeforeArrival = requireBornBeforeArrivalStated(episode, birthAt, request);
         // Rex on #1134: after a transfer the labour's partograph spans every
         // episode it continues, so the birth follows the last entry of the chain.
         LocalDateTime lastObservation = null;
         for (UUID chartedEpisodeId : labourChain(episode)) {
+            // Rex on #1140: a birth declared before her arrival is bounded by the episodes she came from. What
+            // the receiving hospital charted once she was there (an admission observation) comes after it; an
+            // observation here BEFORE the birth means she was already here in labour, so the declaration is
+            // refused (provisional rule, tasklist.md).
+            if (bornBeforeArrival && chartedEpisodeId.equals(episode.getId())) {
+                requireBirthBeforeFirstObservationHere(episode, birthAt);
+                continue;
+            }
             LocalDateTime last = entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(chartedEpisodeId)
                 .map(LaborPartographEntry::getObservationTime)
                 .orElse(null);
@@ -1068,6 +1187,7 @@ public class LaborServiceImpl implements LaborService {
             throw new com.example.hms.exception.FieldBusinessException("placentaDeliveredAt",
                 "labor.delivery.placentaBeforeBirth");
         }
+        return bornBeforeArrival;
     }
 
     /**

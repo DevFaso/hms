@@ -255,6 +255,11 @@
     "RISK_NOTES": "Notas de riesgo",
     "RECENT_DELIVERY_OVERRIDE": "Motivo de excepción (parto reciente)",
     "RECENT_DELIVERY_OVERRIDE_HINT": "Obligatorio solo si se registró un nacimiento para esta paciente en las últimas 20 semanas.",
+    "BORN_BEFORE_ARRIVAL": "Nacimiento antes de la llegada",
+    "BORN_BEFORE_ARRIVAL_REASON": "Motivo del nacimiento antes de la llegada",
+    "BORN_BEFORE_ARRIVAL_HINT": "Solo si el nacimiento tuvo lugar antes de que ella llegara aquí (durante el traslado): la hora de nacimiento puede ser entonces anterior al inicio de este episodio.",
+    "BORN_BEFORE_ARRIVAL_REASON_REQUIRED": "Indique por qué el nacimiento tuvo lugar antes de su llegada.",
+    "BORN_BEFORE_ARRIVAL_AFTER_OBSERVATION": "Ya fue observada aquí en trabajo de parto antes de esta hora de nacimiento: el nacimiento no fue anterior a su llegada.",
     "SAVE_DELIVERY": "Guardar registro de parto",
     "SAVE_ENTRY": "Guardar registro",
     "SEX_FEMALE": "Femenino",
@@ -1924,6 +1929,7 @@
       "LABOR_EPISODE_TRANSFERRED_OUT": "Episodio de trabajo de parto trasladado a otro hospital, con traspaso",
       "LABOR_EPISODE_TRANSFERRED_IN": "Episodio de trabajo de parto recibido de otro hospital, con traspaso",
       "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Episodio de trabajo de parto cerrado: llegó a otro hospital sin traspaso",
+      "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Nacimiento registrado antes de su llegada desde otro hospital",
       "LABOR_EPISODE_HANDOVER_READ": "Episodio de trabajo de parto traspasado por traslado, consultado por el hospital receptor",
       "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Episodio de trabajo de parto abierto a su llegada de otro hospital, sin traspaso"
     },
@@ -6765,7 +6771,8 @@
         "PRESCRIPTION_ALLERGY_REVIEWED": "Conflicto alérgico revisado por un prescriptor",
         "LABOR_EPISODE_TRANSFERRED_OUT": "Trabajo de parto trasladado",
         "LABOR_EPISODE_TRANSFERRED_IN": "Trabajo de parto recibido",
-        "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Trabajo de parto salido sin traspaso"
+        "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Trabajo de parto salido sin traspaso",
+        "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Nacimiento antes de la llegada"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",

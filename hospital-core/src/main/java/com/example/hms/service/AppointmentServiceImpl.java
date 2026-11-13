@@ -630,7 +630,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                     patient.getFullName(),
                     hospital.getName(),
                     staff.getUser().getFirstName() + " " + staff.getUser().getLastName(),
-                    saved.getAppointmentDate().toString(),
+                    com.example.hms.utility.DisplayDates.date(saved.getAppointmentDate(), mailLocale),
                     saved.getStartTime().toString() + " - " + saved.getEndTime().toString(),
                     hospital.getEmail(),
                     hospital.getPhoneNumber(),
@@ -1157,7 +1157,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                     pt.getFullName(),
                     h.getName(),
                     st.getUser().getFirstName() + " " + st.getUser().getLastName(),
-                    saved.getAppointmentDate().toString(),
+                    com.example.hms.utility.DisplayDates.date(saved.getAppointmentDate(), mailLocale),
                     saved.getStartTime().toString() + " - " + saved.getEndTime().toString(),
                     h.getEmail(), h.getPhoneNumber(),
                     frontendBaseUrl + appointmentLinks.getReschedulePath() + saved.getId(),
@@ -1267,7 +1267,6 @@ public class AppointmentServiceImpl implements AppointmentService {
         Hospital hospital = appointment.getHospital();
         String patientName = patient.getFullName();
         String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
-        String appointmentDate = appointment.getAppointmentDate().toString();
         String appointmentTime = appointment.getStartTime().toString() + " - " + appointment.getEndTime().toString();
         String hospitalEmail = hospital.getEmail();
         String hospitalPhone = hospital.getPhoneNumber();
@@ -1279,6 +1278,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (patient.getEmail() != null && !patient.getEmail().isBlank()) {
             try {
                 Locale mailLocale = patientLocaleResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
+                // QA D1710 class: the day in the patient's own way of writing it, never the ISO text.
+                String appointmentDate = com.example.hms.utility.DisplayDates.date(appointment.getAppointmentDate(),
+                    mailLocale);
                 switch (newStatus) {
                     case CONFIRMED -> emailService.sendAppointmentConfirmationEmail(
                         patient.getEmail(), patientName, hospital.getName(), staffName,

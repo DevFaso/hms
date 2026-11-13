@@ -276,7 +276,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(timeout = 20)
     public UserResponseDTO createUserWithRolesAndHospital(AdminSignupRequest request) {
-        return createAccount(request, null);
+        return createAccount(request, null, true);
     }
 
     /**
@@ -293,10 +293,15 @@ public class UserServiceImpl implements UserService {
         java.util.Objects.requireNonNull(deliveringHospitalId, "deliveringHospitalId");
         request.setRoleNames(new LinkedHashSet<>(Set.of("PATIENT")));
         request.setHospitalId(deliveringHospitalId);
-        return createAccount(request, UserAccountAccess.Grant.newbornPatientAt(deliveringHospitalId));
+        // #1136 follow-up (QA r46): the baby has no phone and no e-mail, so no activation message, and no
+        // registrar or hospital "new registration" SMS: every birth texted staff. Reception finds the baby in
+        // the patient list; the in-basket is told only when a registration fails.
+        return createAccount(request, UserAccountAccess.Grant.newbornPatientAt(deliveringHospitalId), false);
     }
 
-    private UserResponseDTO createAccount(AdminSignupRequest request, UserAccountAccess.Grant presetGrant) {
+    /** @param invite false for an account nobody can activate (a newborn): no invitation, no FYI SMS. */
+    private UserResponseDTO createAccount(AdminSignupRequest request, UserAccountAccess.Grant presetGrant,
+                                          boolean invite) {
         log.info("[SERVICE] Starting createUserWithRolesAndHospital for username={}, hospitalId={}, roles={}",
                 request.getUsername(), request.getHospitalId(), request.getRoleNames());
 
@@ -467,7 +472,7 @@ public class UserServiceImpl implements UserService {
         // ---- 4) Ensure roles + hospital-scoped assignments ----
         final List<UserRoleHospitalAssignment> ensuredAssignments =
                 ensureRolesAndAssignments(user, roles, staffContextHospitalId,
-                        welcomeMailCarriesCode(newUserCreated, isPatient, roles));
+                        welcomeMailCarriesCode(newUserCreated, isPatient, roles), invite);
         if (reclaimed) {
             // The discard revoked the invitation's code: a fresh one, sent
             // with the new credentials set below (step 4a).
@@ -663,7 +668,7 @@ public class UserServiceImpl implements UserService {
     }
 
     private List<UserRoleHospitalAssignment> ensureRolesAndAssignments(
-            User user, Set<Role> roles, UUID staffContextHospitalId, boolean welcomeMailCarriesCode) {
+            User user, Set<Role> roles, UUID staffContextHospitalId, boolean welcomeMailCarriesCode, boolean invite) {
         final List<UserRoleHospitalAssignment> result = new ArrayList<>();
         for (Role r : roles) {
             addUserRoleIfAbsent(user.getId(), r.getId());
@@ -671,7 +676,7 @@ public class UserServiceImpl implements UserService {
             log.info("[ASSIGN] {} -> user={} hospitalId={} (inactive until code verification)",
                     r.getCode(), user.getUsername(), staffContextHospitalId);
 
-            result.add(ensureAssignmentSmart(user.getId(), r, staffContextHospitalId, welcomeMailCarriesCode));
+            result.add(ensureAssignmentSmart(user.getId(), r, staffContextHospitalId, welcomeMailCarriesCode, invite));
         }
         return result;
     }
@@ -1299,7 +1304,7 @@ public class UserServiceImpl implements UserService {
     }
 
     private UserRoleHospitalAssignment ensureAssignmentSmart(UUID userId, Role role, UUID hospitalId,
-                                                             boolean welcomeMailCarriesCode) {
+                                                             boolean welcomeMailCarriesCode, boolean invite) {
         UUID roleId = role.getId();
 
         // avoid duplicates
@@ -1315,6 +1320,7 @@ public class UserServiceImpl implements UserService {
                     .hospitalId(hospitalId) // may be null for global
                     .active(false)
                     .welcomeMailCarriesCode(welcomeMailCarriesCode)
+                    .noInvitation(!invite)
                     .build());
         }
 

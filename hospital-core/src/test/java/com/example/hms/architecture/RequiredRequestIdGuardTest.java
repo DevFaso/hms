@@ -538,6 +538,8 @@ class RequiredRequestIdGuardTest {
         Map.entry("StaffPaymentRequestDTO.reference", "only for mobile money, insurance or transfer"),
         Map.entry("OrderReviewDecisionDTO.orderVersion", "only to continue an order, not to stop it or assess a treatment"),
         Map.entry("CrossmatchRequestDTO.incompatibilityReason", "only when the verdict is incompatible (QA D1507)"),
+        Map.entry("DeliveryRecordRequestDTO.bornBeforeArrivalReason",
+            "only when a birth marked born before arrival precedes the continued episode's start (QA r46)"),
         Map.entry("DeathRecordRequestDTO.maternalDeathTiming", "only when the death is a maternal death"),
         Map.entry("DeathRecordRequestDTO.perinatalType", "only when the death is a perinatal death"),
         Map.entry("ObgynReferralCreateRequestDTO.attachments", "only for an urgent referral"),

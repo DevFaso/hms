@@ -287,6 +287,67 @@ describe('LaborTabComponent', () => {
     expect(toastSpy.error).toHaveBeenCalledWith('Cette heure ne peut pas être dans le futur.');
   });
 
+  it('QA r46: born before arrival is offered only on a continued episode and needs its reason', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([episode('e1', 'ACTIVE')]);
+    expect(component.bornBeforeArrivalOffered()).toBeFalse();
+
+    component.episodes.set([{ ...episode('e1', 'ACTIVE'), transferredFromEpisodeId: 'eB' }]);
+    expect(component.bornBeforeArrivalOffered()).toBeTrue();
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.deliveryForm.bornBeforeArrival = true;
+    component.submitDelivery();
+    expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalled();
+
+    laborSpy.recordDelivery.and.returnValue(throwError(() => ({ status: 400, error: {} })));
+    component.deliveryForm.bornBeforeArrivalReason = 'Née pendant le trajet';
+    component.submitDelivery();
+    expect(laborSpy.recordDelivery).toHaveBeenCalledWith(
+      'p1',
+      'e1',
+      jasmine.objectContaining({
+        bornBeforeArrival: true,
+        bornBeforeArrivalReason: 'Née pendant le trajet',
+      }),
+    );
+  });
+
+  it('Rex on #1140: an admission entry here never blocks a birth declared before arrival', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([{ ...episode('e1', 'ACTIVE'), transferredFromEpisodeId: 'eB' }]);
+    component.entries.set([{ observationTime: '2026-11-13T23:00:00' } as PartographEntryResponse]);
+    laborSpy.recordDelivery.and.returnValue(throwError(() => ({ status: 400, error: {} })));
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.deliveryForm.birthDateTime = '2026-11-13T00:30';
+
+    component.submitDelivery();
+    expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
+
+    component.deliveryForm.bornBeforeArrival = true;
+    component.deliveryForm.bornBeforeArrivalReason = 'Née pendant le trajet';
+    component.submitDelivery();
+    expect(laborSpy.recordDelivery).toHaveBeenCalled();
+  });
+
+  it('Rex on #1140: an observation here before the birth refuses the declaration', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([{ ...episode('e1', 'ACTIVE'), transferredFromEpisodeId: 'eB' }]);
+    component.entries.set([{ observationTime: '2026-11-12T00:00:00' } as PartographEntryResponse]);
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.deliveryForm.birthDateTime = '2026-11-13T12:00';
+    component.deliveryForm.bornBeforeArrival = true;
+    component.deliveryForm.bornBeforeArrivalReason = 'Née pendant le trajet';
+
+    component.submitDelivery();
+
+    expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalled();
+  });
+
   it('submitDelivery posts and closes the form', () => {
     component.patient.set({ id: 'p1' } as PatientResponse);
     component.episodes.set([episode('e1', 'ACTIVE')]);

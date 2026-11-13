@@ -250,7 +250,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     @Override
     public UserRoleHospitalAssignmentResponseDTO assignRoleOnAccountCreation(UserRoleHospitalAssignmentRequestDTO dto) {
         Locale locale = LocaleContextHolder.getLocale();
-        UserRoleHospitalAssignment assignment = createAssignment(dto, locale, true, false);
+        // #1136 follow-up (QA r46): an account nobody can activate (a newborn) sends no invitation and no FYI.
+        UserRoleHospitalAssignment assignment = createAssignment(dto, locale, !dto.isNoInvitation(), false);
         return toDtoWithLinks(assignment);
     }
 

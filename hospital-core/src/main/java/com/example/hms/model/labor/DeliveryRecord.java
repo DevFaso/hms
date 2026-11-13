@@ -162,6 +162,17 @@ public class DeliveryRecord extends BaseEntity {
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
 
+    /**
+     * QA r46 (D1712 follow-up, provisional): born before her arrival at the hospital of this episode, which
+     * continues a labour from another hospital; the birth time may then precede the episode's start. V291.
+     */
+    @Column(name = "born_before_arrival", nullable = false)
+    @Builder.Default
+    private boolean bornBeforeArrival = false;
+
+    @Column(name = "born_before_arrival_reason", length = 500)
+    private String bornBeforeArrivalReason;
+
     /* ── Alerts ────────────────────────────────────────────────────────── */
 
     @ElementCollection(fetch = FetchType.LAZY)
