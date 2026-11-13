@@ -87,6 +87,7 @@
     "src/app/maternity/birth-plan-tab.html::p.deliveryPreferences.backupDeliveryMethod",
     "src/app/maternity/birth-plan-tab.html::p.deliveryPreferences?.preferredDeliveryMethod",
     "src/app/maternity/birth-plan-tab.html::p.postpartumPreferences?.feedingMethod",
+    "src/app/maternity/labor-tab.html::episode.transferReason",
     "src/app/maternity/maternity.html::h.specialistReferralReason",
     "src/app/maternity/maternity.html::r.cancellationReason",
     "src/app/maternity/maternity.html::r.referralReason",

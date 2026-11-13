@@ -71,6 +71,8 @@ class DeceasedPatientCareGuardTest {
         LabSpecimen#collectSpecimen | LabSpecimenServiceImpl#createSpecimen
         Labor#startEpisode | LaborServiceImpl#startEpisode
         Labor#addEntry | LaborServiceImpl#addEntry
+        Labor#transferEpisode | LaborServiceImpl#transferEpisode
+        Labor#recordArrivalWithoutHandover | LaborServiceImpl#recordArrivalWithoutHandover
         MaternalHistory#createMaternalHistory | MaternalHistoryServiceImpl#createMaternalHistory
         MedicalHistory#createImmunization | ImmunizationServiceImpl#createImmunization
         MtmReview#start | MtmReviewServiceImpl#startReview

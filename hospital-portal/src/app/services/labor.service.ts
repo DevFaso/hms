@@ -2,7 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-export type LaborStatus = 'ACTIVE' | 'DELIVERED' | 'TRANSFERRED' | 'CLOSED';
+export type LaborStatus =
+  'ACTIVE' | 'DELIVERED' | 'TRANSFERRED' | 'CLOSED' | 'TRANSFERRED_OUT' | 'LEFT_WITHOUT_HANDOVER';
 export type MembraneStatus = 'INTACT' | 'SPONTANEOUS_RUPTURE' | 'ARTIFICIAL_RUPTURE';
 export type LiquorColour =
   'MEMBRANES_INTACT' | 'CLEAR' | 'MECONIUM_STAINED' | 'BLOOD_STAINED' | 'ABSENT';
@@ -66,6 +67,21 @@ export interface LaborEpisodeResponse {
   riskNotes: string | null;
   entryCount: number;
   deliveryRecorded: boolean;
+  /** Labour transfer (provisional rule, 2026-11-12): on a closed episode, when, why and where to. */
+  transferredAt?: string | null;
+  transferReason?: string | null;
+  transferHospitalId?: string | null;
+  transferHospitalName?: string | null;
+  /** On the episode that took over: the episode it continues, and its hospital. */
+  transferredFromEpisodeId?: string | null;
+  transferredFromHospitalName?: string | null;
+}
+
+/** A labour transfer (with a handover) or an arrival without one: the reason is required. */
+export interface LaborTransferRequest {
+  /** The hospital taking her over (transfer with a handover only). */
+  destinationHospitalId?: string;
+  reason: string;
 }
 
 export interface PartographEntryRequest {
@@ -224,6 +240,30 @@ export class LaborService {
   ): Observable<DeliveryRecordResponse> {
     return this.http.post<DeliveryRecordResponse>(
       `${this.base(patientId)}/episodes/${episodeId}/delivery`,
+      req,
+    );
+  }
+
+  /** The episode's own hospital hands the active labour to another hospital, with a handover. */
+  transfer(
+    patientId: string,
+    episodeId: string,
+    req: LaborTransferRequest,
+  ): Observable<LaborEpisodeResponse> {
+    return this.http.post<LaborEpisodeResponse>(
+      `${this.base(patientId)}/episodes/${episodeId}/transfer`,
+      req,
+    );
+  }
+
+  /** She arrived here in labour without a handover from the hospital where this episode is active. */
+  arrivalWithoutHandover(
+    patientId: string,
+    episodeId: string,
+    req: LaborTransferRequest,
+  ): Observable<LaborEpisodeResponse> {
+    return this.http.post<LaborEpisodeResponse>(
+      `${this.base(patientId)}/episodes/${episodeId}/arrival-without-handover`,
       req,
     );
   }

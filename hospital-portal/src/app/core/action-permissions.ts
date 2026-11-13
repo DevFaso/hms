@@ -278,6 +278,15 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'pharmacy.InventoryController#triggerReorderAlerts',
     roles: ['ROLE_STORE_MANAGER', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
   },
+  /** Labour transfer (provisional rule, 2026-11-12): the service also requires the role AT the hospital. */
+  laborTransfer: {
+    endpoint: 'LaborController#transferEpisode',
+    roles: ['ROLE_MIDWIFE', 'ROLE_DOCTOR'],
+  },
+  laborArrivalWithoutHandover: {
+    endpoint: 'LaborController#recordArrivalWithoutHandover',
+    roles: ['ROLE_MIDWIFE', 'ROLE_DOCTOR'],
+  },
 } as const satisfies Record<string, ActionPermission>;
 
 /**
