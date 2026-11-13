@@ -6477,3 +6477,8 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **B's partograph alerts after the transfer:** `ObstetricAlertCurrency` treats a non-active episode as resolved, so B's unacknowledged URGENT partograph alerts stop re-notifying once B's episode closes; A's team gets the transfer notice. Clinical owners to confirm.
 - **Partograph entry racing a transfer:** `addEntry` is not a transition and does not take the patient lock, so an entry charted on B's episode while the transfer commits may land on the closed episode.
 - **V290 skipped on duplicates:** if an environment already holds two active labour episodes for one patient, V290 logs a warning and does not create `uq_labor_episode_patient_active`; close the duplicates, then create the index (a follow-up migration).
+## Standing debt — lab trend units and free-text wrapping (fix/lab-trend-units-i18n)
+
+- **Lab trend deltas across units:** the observations table still shows a delta only between two values recorded in the same unit; a delta between converted values (g/L after mg/dL) shows "—".
+- **Molar-mass table:** only glucose (180.16 g/mol) is listed; any other analyte (creatinine, urea, cholesterol, bilirubin…) needs a sourced molar mass and a clinician's sign-off before mmol/L ↔ mg/dL is merged.
+- **Free-text wrap guard:** `.free-text` is the class to add to any new free-text display; no gate yet finds a note interpolation outside a wrapping class.

@@ -730,17 +730,30 @@ export class PatientDetailComponent implements OnInit {
    */
   readonly documentsScope = computed(() => this.scopedHospitalId());
 
-  /** Mirrors PatientDocumentStaffController.READ_ROLES: the roles that read a
-   *  chart clinically, no lab roles, no front desk or pharmacy (QA D112),
-   *  never ROLE_PATIENT (their reads stay on /me). */
+  /** Mirrors PatientDocumentStaffController.READ_ROLES: the roles that read every
+   *  type of upload, no lab roles, no pharmacy (QA D112), never ROLE_PATIENT
+   *  (their reads stay on /me). */
+  static readonly DOCUMENT_CLINICAL_ROLES = [
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ];
+
+  /** QA D1599: the front desk opens insurance papers only (ACCESS_ROLES minus the above). */
+  static readonly DOCUMENT_INSURANCE_ROLES = ['ROLE_RECEPTIONIST'];
+
   canViewDocuments(): boolean {
     return this.roleContext.hasAnyActiveRole([
-      'ROLE_DOCTOR',
-      'ROLE_NURSE',
-      'ROLE_MIDWIFE',
-      'ROLE_HOSPITAL_ADMIN',
-      'ROLE_SUPER_ADMIN',
+      ...PatientDetailComponent.DOCUMENT_CLINICAL_ROLES,
+      ...PatientDetailComponent.DOCUMENT_INSURANCE_ROLES,
     ]);
+  }
+
+  /** The tab is the insurance-only view unless the active role reads every type. */
+  documentsInsuranceOnly(): boolean {
+    return !this.roleContext.hasAnyActiveRole(PatientDetailComponent.DOCUMENT_CLINICAL_ROLES);
   }
 
   /** Backend reads on /medical-history exclude admins (they may only delete). */

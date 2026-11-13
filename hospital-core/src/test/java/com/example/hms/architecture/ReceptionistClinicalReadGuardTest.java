@@ -106,6 +106,7 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("EncounterResponseDTO#appointmentReason", "the booked visit reason"),
         Map.entry("EncounterResponseDTO#appointmentNotes", "booking notes the desk writes"),
         Map.entry("RecallResponseDTO#reason", "the desk phones the patient about the recall"),
+        Map.entry("PatientDocumentResponseDTO#notes", "QA D1599: the patient's note on an upload, blanked by PatientDocumentServiceImpl for the desk"),
         Map.entry("RecallResponseDTO#notes", "the desk's own recall notes"),
         Map.entry("RecallResponseDTO#closeReason", "the desk closes recalls"),
         Map.entry("WaitlistEntryResponseDTO#reason", "the visit reason of the waitlist entry"),

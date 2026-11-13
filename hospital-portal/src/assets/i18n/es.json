@@ -4066,11 +4066,12 @@
     "EXPECTED_RESULT": "Resultado esperado",
     "CORRECTED_HINT_PATIENT": "El laboratorio corrigió este resultado después de comunicarlo. Este es el valor que cuenta; su equipo médico está informado.",
     "RANGE_APPLIED": "Intervalo aplicado a este paciente",
-    "RANGE_SOURCE": "Fuente",
+    "RANGE_SOURCE": "Fuente (texto original)",
     "UNIT_FROM_TEST": "Unidad del examen: {{unit}}. Un valor en otra unidad puede no ser evaluado.",
     "UNGRADED_RELEASE_TITLE": "Validar un resultado no evaluado",
     "UNGRADED_RELEASE_CONFIRM": "Lo revisé, validar",
-    "ROW_PENDING_RELEASE": "Pendiente de publicación"
+    "ROW_PENDING_RELEASE": "Pendiente de publicación",
+    "RANGE_NOTES_AS_ENTERED": "Nota (texto original)"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -10547,6 +10548,9 @@
     "RETRY": "Reintentar",
     "NO_DOCUMENTS": "El paciente no ha subido ningún documento.",
     "NO_DOCUMENTS_OF_TYPE": "No hay documentos de este tipo.",
+    "INSURANCE_TITLE": "Documentos de seguro",
+    "INSURANCE_HINT": "Documentos de seguro que el paciente añadió desde su portal (tarjeta de seguro, cartas de cobertura). Solo lectura aquí; cada descarga queda registrada en el registro de auditoría.",
+    "NO_INSURANCE_DOCUMENTS": "El paciente no ha subido ningún documento de seguro.",
     "COL_DOCUMENT": "Documento",
     "COL_TYPE": "Tipo",
     "COL_COLLECTED": "Recogido el",
@@ -13350,10 +13354,10 @@
     "UNIT": "Unidad",
     "LOADING": "Cargando historial…",
     "ERROR": "No se pudo cargar el historial. Cierre y vuelva a abrir los detalles para reintentar.",
-    "NOTE": "Los valores numéricos exactos se representan por separado según la unidad. Las fechas están a escala. El historial puede incluir versiones anteriores; las correcciones se indican. No se deduce ninguna interpretación clínica.",
+    "NOTE": "Los valores numéricos exactos se representan en una sola unidad cuando la conversión es exacta (factor decimal entre unidades de masa, o masa molar conocida del analito); si no, por separado según la unidad. Las fechas están a escala. El historial puede incluir versiones anteriores; las correcciones se indican. No se deduce ninguna interpretación clínica.",
     "TIME_AXIS": "Tiempo",
     "CHART_LABEL": "Observaciones históricas; los valores exactos figuran en la tabla de observaciones.",
-    "INSUFFICIENT": "Se necesitan al menos dos observaciones numéricas fechadas en la misma unidad conocida.",
+    "INSUFFICIENT": "Se necesitan al menos dos observaciones numéricas fechadas en la misma unidad conocida o en una convertible.",
     "OBSERVATIONS": "Todas las observaciones",
     "PAGINATION": "Paginación de resultados",
     "RANGE": "{{start}}–{{end}} de {{total}} resultados",
@@ -13362,7 +13366,10 @@
     "PAGE": "Página {{page}} de {{pages}}",
     "NEXT": "Página siguiente",
     "AUDIT_TITLE": "Versiones registradas de los resultados",
-    "CORRECTION_NOTE": "Este historial incluye correcciones. No se pueden identificar las versiones sustituidas. Los puntos muestran solo los valores registrados; no se muestran líneas ni diferencias. Consulte las observaciones y las correcciones antes de interpretar los cambios."
+    "CORRECTION_NOTE": "Este historial incluye correcciones. No se pueden identificar las versiones sustituidas. Los puntos muestran solo los valores registrados; no se muestran líneas ni diferencias. Consulte las observaciones y las correcciones antes de interpretar los cambios.",
+    "CONVERSION_NOTE": "Los valores registrados en otra unidad se convierten a {{unit}} para el gráfico. El valor y la unidad registrados siguen visibles, marcados «convertido».",
+    "CONVERTED_FROM": "convertido, valor registrado: {{value}}",
+    "CONVERTED_TO": "convertido: {{value}}"
   },
   "LAB_RANGE": {
     "TITLE": "Posición del resultado",
