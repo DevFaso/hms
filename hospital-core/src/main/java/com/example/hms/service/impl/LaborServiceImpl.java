@@ -1083,14 +1083,25 @@ public class LaborServiceImpl implements LaborService {
      * accepted only when the delivery says so, with a reason, and never before the episode she came from began
      * (its last partograph entry is the chain bound in {@link #requireDeliveryTimesInOrder}).
      *
+     * <p>Rex on #1140: after a FORMAL handover the receiving episode starts at the handover, before the journey,
+     * and no arrival time is recorded on either path. A birth after that start may still have happened on the
+     * way, and is then declared the same way (mark, reason, audit). Without an arrival time the server cannot
+     * tell such a birth from one after she arrived, so the declaration is required only where the time proves it
+     * (before the episode's start) and offered, never imposed, after it: requiring it would block every birth on
+     * a handed-over episode. The declaration is kept only on an episode that continues another.
+     *
      * @return true when the birth is recorded as before her arrival
      */
     private static boolean requireBornBeforeArrivalStated(LaborEpisode episode, LocalDateTime birthAt,
                                                           DeliveryRecordRequestDTO request) {
-        if (!beforeTakeOver(episode, birthAt)) {
+        if (episode.getTransferredFrom() == null) {
             return false;
         }
-        if (!Boolean.TRUE.equals(request.getBornBeforeArrival())) {
+        boolean declared = Boolean.TRUE.equals(request.getBornBeforeArrival());
+        if (!declared && !beforeTakeOver(episode, birthAt)) {
+            return false;
+        }
+        if (!declared) {
             throw new com.example.hms.exception.FieldBusinessException("birthDateTime", "labor.delivery.beforeTransfer",
                 com.example.hms.utility.DisplayDates.dateTime(
                 com.example.hms.utility.HospitalTime.at(episode.getAdmittedAt(), episode.getHospital())));
@@ -1140,6 +1151,11 @@ public class LaborServiceImpl implements LaborService {
         // episode it continues, so the birth follows the last entry of the chain.
         LocalDateTime lastObservation = null;
         for (UUID chartedEpisodeId : labourChain(episode)) {
+            // Rex on #1140: a birth declared before her arrival is bounded by the episodes she came from only.
+            // What the receiving hospital charted once she was there (an admission observation) comes after it.
+            if (bornBeforeArrival && chartedEpisodeId.equals(episode.getId())) {
+                continue;
+            }
             LocalDateTime last = entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(chartedEpisodeId)
                 .map(LaborPartographEntry::getObservationTime)
                 .orElse(null);

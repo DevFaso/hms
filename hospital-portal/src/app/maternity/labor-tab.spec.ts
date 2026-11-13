@@ -314,6 +314,24 @@ describe('LaborTabComponent', () => {
     );
   });
 
+  it('Rex on #1140: an admission entry here never blocks a birth declared before arrival', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([{ ...episode('e1', 'ACTIVE'), transferredFromEpisodeId: 'eB' }]);
+    component.entries.set([{ observationTime: '2026-11-13T23:00:00' } as PartographEntryResponse]);
+    laborSpy.recordDelivery.and.returnValue(throwError(() => ({ status: 400, error: {} })));
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.deliveryForm.birthDateTime = '2026-11-13T00:30';
+
+    component.submitDelivery();
+    expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
+
+    component.deliveryForm.bornBeforeArrival = true;
+    component.deliveryForm.bornBeforeArrivalReason = 'Née pendant le trajet';
+    component.submitDelivery();
+    expect(laborSpy.recordDelivery).toHaveBeenCalled();
+  });
+
   it('submitDelivery posts and closes the form', () => {
     component.patient.set({ id: 'p1' } as PatientResponse);
     component.episodes.set([episode('e1', 'ACTIVE')]);

@@ -712,7 +712,11 @@ export class LaborTabComponent {
         message: this.translate.instant('LABOR.BORN_BEFORE_ARRIVAL_REASON_REQUIRED'),
       };
     }
-    if (typedBirth && lastObservation && typedBirth < lastObservation) {
+    // Rex on #1140: a birth declared before her arrival is bounded by the episodes she came from (the
+    // server checks them), never by what this hospital charted once she was here.
+    const declaredBeforeArrival =
+      this.bornBeforeArrivalOffered() && !!this.deliveryForm.bornBeforeArrival;
+    if (typedBirth && lastObservation && typedBirth < lastObservation && !declaredBeforeArrival) {
       return {
         id: DELIVERY_BIRTH_TIME_ID,
         message: this.translate.instant('LABOR.BIRTH_BEFORE_LAST_ENTRY'),

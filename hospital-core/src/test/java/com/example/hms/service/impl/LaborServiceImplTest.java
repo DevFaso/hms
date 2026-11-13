@@ -2480,4 +2480,83 @@ class LaborServiceImplTest {
             .hasFieldOrPropertyWithValue("field", "birthDateTime")
             .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.beforePreviousEpisode");
     }
+
+    /* ── Rex on #1140: the formal-handover path, and the receiving hospital's own entries ── */
+
+    /** A formal handover: A's episode starts at the handover, before the journey. */
+    private LaborEpisode handedOverAt(LocalDateTime handedOver) {
+        LaborEpisode previous = arrivedWithoutHandover(handedOver);
+        previous.setStatus(LaborStatus.TRANSFERRED_OUT);
+        return previous;
+    }
+
+    @Test
+    void d1712_aTransitBirthAfterAFormalHandoverIsDeclaredKeptAndAudited() {
+        LocalDateTime handedOver = LocalDateTime.now().minusHours(2);
+        handedOverAt(handedOver);
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId,
+            bornBeforeArrival(handedOver.plusMinutes(30), "Née dans l'ambulance"));
+
+        assertThat(response.isBornBeforeArrival()).isTrue();
+        assertThat(response.getBornBeforeArrivalReason()).isEqualTo("Née dans l'ambulance");
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService, org.mockito.Mockito.atLeastOnce()).logEvent(audit.capture());
+        assertThat(audit.getAllValues()).extracting(com.example.hms.payload.dto.AuditEventRequestDTO::getEventType)
+            .contains(com.example.hms.enums.AuditEventType.LABOR_DELIVERY_BORN_BEFORE_ARRIVAL);
+    }
+
+    @Test
+    void d1712_aDeclaredTransitBirthAfterAFormalHandoverStillNeedsItsReason() {
+        LocalDateTime handedOver = LocalDateTime.now().minusHours(2);
+        handedOverAt(handedOver);
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId,
+                bornBeforeArrival(handedOver.plusMinutes(30), " ")))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "bornBeforeArrivalReason");
+        verify(deliveryRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void d1712_anUndeclaredBirthAfterAFormalHandoverIsAnOrdinaryBirth() {
+        LocalDateTime handedOver = LocalDateTime.now().minusHours(2);
+        handedOverAt(handedOver);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(handedOver.plusMinutes(30));
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.isBornBeforeArrival()).isFalse();
+        assertThat(response.getBornBeforeArrivalReason()).isNull();
+    }
+
+    @Test
+    void d1712_theReceivingHospitalsAdmissionEntryNeverBlocksADeclaredTransitBirth() {
+        LocalDateTime arrived = LocalDateTime.now().minusMinutes(30);
+        arrivedWithoutHandover(arrived);
+        // A's admission observation, after the birth; B charted nothing.
+        lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(any())).thenReturn(Optional.empty());
+        lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(episodeId)).thenReturn(Optional.of(
+            LaborPartographEntry.builder().episode(episode).observationTime(arrived.plusMinutes(5)).build()));
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId,
+            bornBeforeArrival(arrived.minusMinutes(20), "Né en route"));
+
+        assertThat(response.isBornBeforeArrival()).isTrue();
+    }
+
+    @Test
+    void d1712_anUndeclaredBirthStillFollowsTheReceivingHospitalsOwnEntries() {
+        LocalDateTime handedOver = LocalDateTime.now().minusHours(2);
+        handedOverAt(handedOver);
+        chartedAt(handedOver.plusMinutes(40));
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(handedOver.plusMinutes(30));
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.beforeLastPartograph");
+    }
 }
