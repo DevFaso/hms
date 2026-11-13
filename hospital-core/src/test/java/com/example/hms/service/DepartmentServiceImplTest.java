@@ -852,6 +852,7 @@ class DepartmentServiceImplTest {
 
         StaffResponseDTO staffDto = new StaffResponseDTO();
         staffDto.setId(staffId.toString());
+        staffDto.setHospitalId(hospitalId.toString());
 
         // Current head is different from new head
         Staff currentHead = new Staff();
@@ -882,6 +883,7 @@ class DepartmentServiceImplTest {
 
         StaffResponseDTO staffDto = new StaffResponseDTO();
         staffDto.setId(staffId.toString());
+        staffDto.setHospitalId(hospitalId.toString());
 
         // Same head
         department.setHeadOfDepartment(staff);
@@ -1758,5 +1760,24 @@ class DepartmentServiceImplTest {
         departmentService.updateDepartment(deptId, portalPhoneEdit(), Locale.FRENCH);
 
         assertThat(department.getHeadOfDepartment()).isNull();
+    }
+
+    @Test
+    void updateDepartment_headEmailMatchingNoStaffHere_isRefusedOnTheField_R48() {
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        StaffResponseDTO elsewhere = new StaffResponseDTO();
+        elsewhere.setId(UUID.randomUUID().toString());
+        elsewhere.setHospitalId(UUID.randomUUID().toString());
+        when(staffService.getStaffByUserEmail("typo@test.com", Locale.FRENCH)).thenReturn(List.of(elsewhere));
+        DepartmentRequestDTO dto = portalPhoneEdit();
+        dto.setHeadOfDepartmentEmail("typo@test.com");
+
+        assertThatThrownBy(() -> departmentService.updateDepartment(deptId, dto, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(ex -> assertThat(((com.example.hms.exception.FieldBusinessException) ex).getField())
+                .isEqualTo("headOfDepartmentEmail"));
+        assertThat(department.getHeadOfDepartment()).isSameAs(staff);
+        verify(departmentRepository, never()).save(any());
     }
 }

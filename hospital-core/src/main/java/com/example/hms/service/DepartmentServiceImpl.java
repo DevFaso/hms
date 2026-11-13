@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.exception.ConflictException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.DepartmentMapper;
 import com.example.hms.model.Department;
@@ -61,6 +62,8 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class DepartmentServiceImpl implements DepartmentService {
+
+    private static final String FIELD_HEAD_EMAIL = "headOfDepartmentEmail";
 
     private final DepartmentRepository departmentRepository;
     private final DepartmentMapper departmentMapper;
@@ -285,15 +288,18 @@ public class DepartmentServiceImpl implements DepartmentService {
         Staff currentHead = department.getHeadOfDepartment();
         Staff newHeadOfDepartment = null;
         if (dto.getHeadOfDepartmentEmail() != null && !dto.getHeadOfDepartmentEmail().isBlank()) {
-            List<StaffResponseDTO> staffList = staffService.getStaffByUserEmail(dto.getHeadOfDepartmentEmail(), locale);
-            if (!staffList.isEmpty()) {
-                StaffResponseDTO staffDto = staffList.get(0);
-                newHeadOfDepartment = staffService.getStaffEntityById(UUID.fromString(staffDto.getId()), locale);
-            }
+            String targetHospitalId = hospital.getId() == null ? null : hospital.getId().toString();
+            StaffResponseDTO staffDto = staffService.getStaffByUserEmail(dto.getHeadOfDepartmentEmail(), locale)
+                .stream()
+                .filter(s -> s != null && Objects.equals(targetHospitalId, s.getHospitalId()))
+                .findFirst()
+                // R48: an address that matches nobody here is a typo to correct, never silently ignored.
+                .orElseThrow(() -> new FieldBusinessException(FIELD_HEAD_EMAIL, "department.head.emailUnknown"));
+            newHeadOfDepartment = staffService.getStaffEntityById(UUID.fromString(staffDto.getId()), locale);
         }
         // R48: an edit never drops what it does not touch. No head email in the
         // request keeps the head (the portal's form cannot show the current one);
-        // a blank one clears it; an address that matches no staff keeps it.
+        // a blank one clears it.
         // A department moved to another hospital never keeps a head from the old one.
         boolean sameHospital = department.getHospital() != null
             && Objects.equals(department.getHospital().getId(), hospital.getId());
