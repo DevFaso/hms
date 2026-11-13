@@ -1075,7 +1075,7 @@ public class LaborServiceImpl implements LaborService {
      * (its patient record is never removed).
      */
     @Override
-    public DeliveryRecordResponseDTO correctBabyOutcome(UUID patientId, UUID episodeId, int birthOrder, UUID userId,
+    public DeliveryRecordResponseDTO correctBabyOutcome(UUID patientId, UUID episodeId, UUID userId,
             com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO request) {
         if (request == null) {
             throw new BusinessException("maternity.delivery.payloadRequired");
@@ -1088,7 +1088,8 @@ public class LaborServiceImpl implements LaborService {
         DeliveryRecord record = deliveryRecordRepository.findByEpisode_Id(episode.getId())
             .orElseThrow(() -> new ResourceNotFoundException("labor.deliveryRecord.notFoundForEpisode", episodeId));
         com.example.hms.service.maternity.FetalDeathEventService.Correction correction =
-            fetalDeathEvents.correctOutcome(record, birthOrder, request.getOutcome(), request.getReason(), userId);
+            fetalDeathEvents.correctOutcome(record, request.getBirthOrder() == null ? 0 : request.getBirthOrder(),
+                request.getOutcome(), request.getReason(), userId);
         if (!correction.changed()) {
             DeliveryRecordResponseDTO unchanged = laborMapper.toDeliveryResponse(record);
             unchanged.setBabies(babiesOf(record));

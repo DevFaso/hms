@@ -23,6 +23,12 @@ public class BabyOutcomeCorrectionRequestDTO {
 
     private UUID hospitalId;
 
+    /** The baby's order in the delivery: 1 for a single birth. */
+    @NotNull
+    @jakarta.validation.constraints.Min(1)
+    @jakarta.validation.constraints.Max(5)
+    private Integer birthOrder;
+
     @NotNull
     private BabyOutcome outcome;
 

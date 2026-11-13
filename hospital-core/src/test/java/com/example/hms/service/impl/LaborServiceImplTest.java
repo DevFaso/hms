@@ -2675,9 +2675,9 @@ class LaborServiceImplTest {
                     com.example.hms.enums.BabyOutcome.STILLBORN, com.example.hms.enums.BabyOutcome.LIVE, null, null);
             });
         var request = com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder()
-            .hospitalId(hospitalId).outcome(com.example.hms.enums.BabyOutcome.LIVE).reason("Heartbeat").build();
+            .hospitalId(hospitalId).birthOrder(1).outcome(com.example.hms.enums.BabyOutcome.LIVE).reason("Heartbeat").build();
 
-        service.correctBabyOutcome(patientId, episodeId, 1, recorderUserId, request);
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId, request);
 
         verify(fetalDeathEvents).correctOutcome(record, 1, com.example.hms.enums.BabyOutcome.LIVE, "Heartbeat", recorderUserId);
         verify(newbornRegistration).registerLiveBorn(record, recorderUserId);
@@ -2689,9 +2689,9 @@ class LaborServiceImplTest {
         UUID otherHospital = UUID.randomUUID();
         when(episodeRepository.findByIdAndHospital_Id(episodeId, otherHospital)).thenReturn(Optional.empty());
         var request = com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder()
-            .hospitalId(otherHospital).outcome(com.example.hms.enums.BabyOutcome.LIVE).reason("x").build();
+            .hospitalId(otherHospital).birthOrder(1).outcome(com.example.hms.enums.BabyOutcome.LIVE).reason("x").build();
 
-        assertThatThrownBy(() -> service.correctBabyOutcome(patientId, episodeId, 1, recorderUserId, request))
+        assertThatThrownBy(() -> service.correctBabyOutcome(patientId, episodeId, recorderUserId, request))
             .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
         verify(fetalDeathEvents, never()).correctOutcome(any(), org.mockito.ArgumentMatchers.anyInt(), any(), any(), any());
     }

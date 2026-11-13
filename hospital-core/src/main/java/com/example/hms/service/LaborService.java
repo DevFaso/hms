@@ -28,7 +28,7 @@ public interface LaborService {
     DeliveryRecordResponseDTO getDelivery(UUID patientId, UUID episodeId, UUID hospitalId);
 
     /** QA D1714: correct one baby's recorded outcome; the fetal-death event is superseded or created, never deleted. */
-    DeliveryRecordResponseDTO correctBabyOutcome(UUID patientId, UUID episodeId, int birthOrder, UUID userId,
+    DeliveryRecordResponseDTO correctBabyOutcome(UUID patientId, UUID episodeId, UUID userId,
         com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO request);
 
     /**

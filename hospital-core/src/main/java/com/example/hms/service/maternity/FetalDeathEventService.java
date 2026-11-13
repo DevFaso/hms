@@ -92,7 +92,7 @@ public class FetalDeathEventService {
         }
         int babies = Math.max(delivery.getNumberOfInfants(), 1);
         if (birthOrder < 1 || birthOrder > babies) {
-            throw new FieldBusinessException("birthOrder", "labor.delivery.babyOrderRange", babies);
+            throw new FieldBusinessException("birthOrder", "labor.delivery.babyNotFound", birthOrder);
         }
         String why = reason == null ? "" : reason.trim();
         if (why.isEmpty()) {
