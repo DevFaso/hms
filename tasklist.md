@@ -6486,3 +6486,11 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Lab trend deltas across units:** the observations table still shows a delta only between two values recorded in the same unit; a delta between converted values (g/L after mg/dL) shows "—".
 - **Molar-mass table:** only glucose (180.16 g/mol) is listed; any other analyte (creatinine, urea, cholesterol, bilirubin…) needs a sourced molar mass and a clinician's sign-off before mmol/L ↔ mg/dL is merged.
 - **Free-text wrap guard:** `.free-text` is the class to add to any new free-text display; no gate yet finds a note interpolation outside a wrapping class.
+
+## Standing debt — newborn registration from a delivery (feat/d1592-newborn-registration)
+
+- **D1592, desk registration of a baby born today:** the reception form still refuses a birth date of today (`PatientIdentityRules.birthDateProblem`, "must be in the past"); only the delivery path accepts today. Decide whether the desk should too.
+- **D1592, multiple births:** the delivery record carries one sex, weight and Apgar (the first baby's); twins after the first are registered with sex unknown. Per-infant birth facts need their own fields.
+- **D1592, live birth of a multiple birth with a stillborn twin:** the record has one `liveBirth` flag for the whole delivery, so it cannot say "one live, one stillborn"; today every infant counted is registered.
+- **D1592, delivery edit:** there is no edit path for a delivery record; when one is added, it must call `NewbornRegistrationService.registerLiveBorn` (the guard enforces it) so a lowered count is flagged for review, never deleted.
+- **D1592, earlier births:** deliveries recorded before this change registered no baby; there is no backfill.

@@ -304,6 +304,41 @@
             {{ record.notes }}
           </p>
         }
+        @if (record.newbornRegistrationPending) {
+          <p class="risk-badge risk-moderate" data-testid="delivery-newborn-pending">
+            {{ 'LABOR.NEWBORN_REGISTRATION_PENDING' | translate }}
+          </p>
+        }
+        <!-- QA D1592: each live-born baby is its own patient, linked to its chart. -->
+        @if (record.newborns?.length) {
+          <div data-testid="delivery-newborns">
+            <strong>{{ 'LABOR.NEWBORNS' | translate }}{{ 'COMMON.COLON' | translate }}</strong>
+            <ul class="newborn-list">
+              @for (baby of record.newborns; track baby.patientId) {
+                <li>
+                  <a
+                    [routerLink]="['/patients', baby.patientId]"
+                    data-testid="delivery-newborn-link"
+                  >
+                    {{ baby.displayName || ('LABOR.NEWBORN' | translate) }}
+                  </a>
+                  @if (baby.mrn) {
+                    · {{ 'LABOR.NEWBORN_MRN' | translate: { mrn: baby.mrn } }}
+                  }
+                  @if (baby.needsReview) {
+                    <span class="risk-badge risk-moderate">{{
+                      (baby.reviewReason
+                        ? 'LABOR.NEWBORN_REVIEW_' + baby.reviewReason
+                        : 'LABOR.NEWBORN_NEEDS_REVIEW'
+                      ) | translate
+                    }}</span>
+                  }
+                </li>
+              }
+            </ul>
+            <p class="muted">{{ 'LABOR.NEWBORN_NAME_PROVISIONAL' | translate }}</p>
+          </div>
+        }
         @for (alert of record.alerts; track $index) {
           <p>
             <!-- QA D797: a CAUTION (an implausible weight to check) is not shown as urgent. -->

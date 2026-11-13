@@ -3463,6 +3463,13 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V289-d1592-delivery-newborns" author="hms-team" runOnChange="false">
+        <sqlFile path="V289__d1592_delivery_newborns.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
     <changeSet id="V290-labour-transfer-between-hospitals" author="hms-team" runOnChange="false">
         <sqlFile path="V290__labour_transfer_between_hospitals.sql"
                  relativeToChangelogFile="true"

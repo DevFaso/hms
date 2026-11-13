@@ -21,9 +21,20 @@ public interface NewbornAssessmentRepository extends JpaRepository<NewbornAssess
         Pageable pageable
     );
 
-    /** E9 #59d — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    /**
+     * E9 #59d — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}).
+     * QA D1592: on the mother's chart, her deliveries' babies' assessments too
+     * (recorded on each baby's own chart since the baby is a patient).
+     */
+    @Query("""
+        select a from NewbornAssessment a left join a.deliveryRecord d
+        where (a.patient.id = :patientId or d.patient.id = :patientId)
+          and a.hospital.id in :hospitalIds
+        order by a.assessmentTime desc
+    """)
     List<NewbornAssessment> findByPatient_IdAndHospital_IdInOrderByAssessmentTimeDesc(
-        UUID patientId, java.util.Collection<UUID> hospitalIds, Pageable pageable);
+        @Param("patientId") UUID patientId, @Param("hospitalIds") java.util.Collection<UUID> hospitalIds,
+        Pageable pageable);
 
     Optional<NewbornAssessment> findFirstByPatient_IdOrderByAssessmentTimeDesc(UUID patientId);
 
@@ -41,8 +52,8 @@ public interface NewbornAssessmentRepository extends JpaRepository<NewbornAssess
     Optional<NewbornAssessment> findByIdAndPatient_IdAndHospital_Id(UUID id, UUID patientId, UUID hospitalId);
 
     @Query("""
-        select a from NewbornAssessment a
-        where a.patient.id = :patientId
+        select a from NewbornAssessment a left join a.deliveryRecord d
+        where (a.patient.id = :patientId or d.patient.id = :patientId)
           and (:hospitalId is null or a.hospital.id = :hospitalId)
           and (cast(:from as LocalDateTime) is null or a.assessmentTime >= :from)
           and (cast(:to as LocalDateTime) is null or a.assessmentTime <= :to)

@@ -11,10 +11,12 @@ import {
   fieldErrorsResponse,
 } from '../testing/form-refusal-behaviour';
 import {
+  DeliveryRecordResponse,
   LaborService,
   LaborEpisodeResponse,
   PartographEntryResponse,
 } from '../services/labor.service';
+import { provideRouter } from '@angular/router';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -1093,5 +1095,121 @@ describe('LaborTabComponent labour transfer (provisional rule, 2026-11-12)', () 
     expect(labor['ARRIVAL']['ACTION']).toBe('Arrivée sans transmission');
     expect(laborEs['ARRIVAL']['ACTION']).toBe('Llegada sin traspaso');
     expect(Object.keys(labor['TRANSFER']).sort()).toEqual(Object.keys(laborEs['TRANSFER']).sort());
+  });
+});
+
+/* ── QA D1592: a recorded live birth registers each baby as a patient ── */
+describe('LaborTabComponent newborns (QA D1592)', () => {
+  let laborSpy: jasmine.SpyObj<LaborService>;
+  let toastSpy: jasmine.SpyObj<ToastService>;
+
+  const record = (newborns: DeliveryRecordResponse['newborns']): DeliveryRecordResponse => ({
+    id: 'd1',
+    episodeId: 'e1',
+    patientId: 'p1',
+    deliveredByStaffName: null,
+    birthDateTime: '2026-11-12T03:40:00',
+    deliveryMode: 'SPONTANEOUS_VAGINAL',
+    liveBirth: true,
+    numberOfInfants: newborns?.length ?? 0,
+    infantSex: 'FEMALE',
+    birthWeightGrams: 3150,
+    gestationalAgeWeeksAtBirth: 39,
+    apgarOneMinute: 8,
+    apgarFiveMinute: 9,
+    placentaDeliveredAt: null,
+    placentaComplete: null,
+    uterotonicGiven: null,
+    estimatedBloodLossMl: null,
+    perinealTear: null,
+    notes: null,
+    alerts: [],
+    newborns,
+  });
+
+  beforeEach(async () => {
+    laborSpy = jasmine.createSpyObj('LaborService', [
+      'startEpisode',
+      'episodes',
+      'addEntry',
+      'entries',
+      'recordDelivery',
+      'delivery',
+    ]);
+    laborSpy.entries.and.returnValue(of([]));
+    toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info']);
+    const patientSpy = jasmine.createSpyObj('PatientService', ['search', 'lookup']);
+    patientSpy.search.and.returnValue(of([]));
+    patientSpy.lookup.and.returnValue(of([]));
+    await TestBed.configureTestingModule({
+      imports: [LaborTabComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: LaborService, useValue: laborSpy },
+        { provide: ToastService, useValue: toastSpy },
+        { provide: PatientService, useValue: patientSpy },
+      ],
+    }).compileComponents();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+  });
+
+  it('the delivery summary lists each baby with its MRN and a link to its chart', () => {
+    laborSpy.episodes.and.returnValue(
+      of([{ ...episode('e1', 'DELIVERED'), deliveryRecorded: true }]),
+    );
+    laborSpy.delivery.and.returnValue(
+      of(
+        record([
+          {
+            patientId: 'b1',
+            displayName: 'Bébé 1 Traore',
+            mrn: 'MRN-001',
+            birthOrder: 1,
+            needsReview: false,
+          },
+          {
+            patientId: 'b2',
+            displayName: 'Bébé 2 Traore',
+            mrn: 'MRN-002',
+            birthOrder: 2,
+            needsReview: true,
+            reviewReason: 'LIVE_BIRTH_COUNT_LOWERED',
+          },
+        ]),
+      ),
+    );
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const links = Array.from(
+      el.querySelectorAll<HTMLAnchorElement>('[data-testid="delivery-newborn-link"]'),
+    );
+    expect(links.map((a) => a.textContent?.trim())).toEqual(['Bébé 1 Traore', 'Bébé 2 Traore']);
+    expect(links[0].getAttribute('href')).toBe('/patients/b1');
+    const text = (el.querySelector('[data-testid="delivery-newborns"]')?.textContent ?? '').replace(
+      /\s+/g,
+      ' ',
+    );
+    expect(text).toContain('N° de dossier MRN-001');
+    expect(text).toContain('À vérifier : moins de naissances vivantes sont désormais enregistrées');
+    expect(text).toContain('Le nom est provisoire');
+  });
+
+  it('a stillbirth shows no newborn list', () => {
+    laborSpy.episodes.and.returnValue(
+      of([{ ...episode('e1', 'DELIVERED'), deliveryRecorded: true }]),
+    );
+    laborSpy.delivery.and.returnValue(of({ ...record([]), liveBirth: false }));
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="delivery-newborns"]'),
+    ).toBeNull();
   });
 });

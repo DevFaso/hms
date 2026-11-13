@@ -165,6 +165,11 @@ export interface NewbornAssessmentRequest {
    * Delivery. Optional — a newborn may be transferred in already born.
    */
   deliveryRecordId?: string;
+  /**
+   * QA D1592: the registered baby the assessment is for (required for a
+   * multiple birth); the assessment is recorded on that baby's own chart.
+   */
+  newbornPatientId?: string;
   assessmentTime?: string;
   apgarOneMinute?: number;
   apgarFiveMinute?: number;

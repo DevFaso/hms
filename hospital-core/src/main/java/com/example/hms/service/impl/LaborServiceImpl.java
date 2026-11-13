@@ -184,6 +184,8 @@ public class LaborServiceImpl implements LaborService {
     /** Labour transfer (2026-11-12): only those who may admit a labour at a hospital move one there or from there. */
     private final com.example.hms.utility.RoleValidator roleValidator;
     private final jakarta.persistence.EntityManager entityManager;
+    /** QA D1592: every live-born baby of a recorded delivery is registered as its own patient. */
+    private final com.example.hms.service.maternity.NewbornRegistrationService newbornRegistration;
 
     /* ═══════════════════════ Episodes ═══════════════════════ */
 
@@ -953,6 +955,8 @@ public class LaborServiceImpl implements LaborService {
             .estimatedBloodLossMl(request.getEstimatedBloodLossMl())
             .perinealTear(request.getPerinealTear())
             .notes(notes)
+            // QA D1592: set until the babies are registered (after commit).
+            .newbornRegistrationPending(request.getLiveBirth() == null || request.getLiveBirth())
             .build();
 
         evaluateDelivery(record);
@@ -966,7 +970,44 @@ public class LaborServiceImpl implements LaborService {
         closeEarlierPostpartumPlans(episode, birthAt);
         publishUrgentAlerts(saved.getAlerts(), episode, documentedBy,
             com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_DELIVERY, saved.getId());
-        return laborMapper.toDeliveryResponse(saved);
+        DeliveryRecordResponseDTO response = laborMapper.toDeliveryResponse(saved);
+        response.setNewborns(new java.util.ArrayList<>());
+        registerNewbornsAfterCommit(saved, recorderUserId, response);
+        return response;
+    }
+
+    /**
+     * QA D1592: the live-born babies are registered as patients once the
+     * delivery has committed, in their own transaction. A midwife can always
+     * record a birth: a registration that fails never undoes it. The delivery
+     * keeps {@code newbornRegistrationPending} for reception, and the failure
+     * is logged (ids only) and audited.
+     */
+    private void registerNewbornsAfterCommit(DeliveryRecord saved, UUID recorderUserId,
+                                             DeliveryRecordResponseDTO response) {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        registerNewborns(saved, recorderUserId, response);
+                    }
+                });
+        } else {
+            registerNewborns(saved, recorderUserId, response);
+        }
+    }
+
+    private void registerNewborns(DeliveryRecord saved, UUID recorderUserId, DeliveryRecordResponseDTO response) {
+        try {
+            response.setNewborns(newbornRegistration.registerLiveBorn(saved, recorderUserId));
+            response.setNewbornRegistrationPending(false);
+        } catch (RuntimeException ex) {
+            log.warn("Newborns of delivery {} not registered, left pending for reception: {}",
+                saved.getId(), ex.getClass().getSimpleName());
+            newbornRegistration.recordRegistrationFailure(saved, recorderUserId, ex);
+            response.setNewbornRegistrationPending(saved.isLiveBirth());
+        }
     }
 
     /**
@@ -1027,7 +1068,9 @@ public class LaborServiceImpl implements LaborService {
         LaborEpisode episode = loadEpisodeForRead(patientId, episodeId, hospitalId);
         DeliveryRecord record = deliveryRecordRepository.findByEpisode_Id(episode.getId())
             .orElseThrow(() -> new ResourceNotFoundException("labor.deliveryRecord.notFoundForEpisode", episodeId));
-        return laborMapper.toDeliveryResponse(record);
+        DeliveryRecordResponseDTO response = laborMapper.toDeliveryResponse(record);
+        response.setNewborns(newbornRegistration.newbornsOf(record));
+        return response;
     }
 
     /* ═══════════════════════ Alert evaluators ═══════════════════════ */

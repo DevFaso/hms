@@ -712,6 +712,22 @@
             </div>
           </div>
         }
+        @if (newbornsOfAssessmentDelivery().length > 1) {
+          <div class="field">
+            <label for="nb-baby">{{ 'POSTPARTUM.NEWBORN_BABY' | translate }}</label>
+            <!-- QA D1592: a multiple birth names the baby; the row goes on its own chart. -->
+            <select id="nb-baby" [(ngModel)]="assessmentForm.newbornPatientId">
+              <option [ngValue]="undefined">
+                {{ 'POSTPARTUM.NEWBORN_BABY_CHOOSE' | translate }}
+              </option>
+              @for (baby of newbornsOfAssessmentDelivery(); track baby.patientId) {
+                <option [ngValue]="baby.patientId">
+                  {{ baby.displayName || ('LABOR.NEWBORN' | translate) }}
+                </option>
+              }
+            </select>
+          </div>
+        }
         <h3 class="section-heading">{{ 'POSTPARTUM.APGAR' | translate }}</h3>
         <div class="form-row gtpal-row">
           <div class="field">
