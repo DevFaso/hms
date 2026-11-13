@@ -177,7 +177,9 @@ describe('VisitSummarySectionsComponent', () => {
     });
     const result = root.querySelector('.vss-result')?.textContent ?? '';
     expect(result).toContain('référence');
-    expect(result).toContain('0,99');
+    // D1106: the server sends a machine range ("0.7 - 0.99 g/L"); French reads it with a decimal comma.
+    expect(result).toContain('0,7 – 0,99 g/L');
+    expect(result).not.toContain('0.7');
     expect(root.querySelector('.vss-flag')?.textContent?.trim()).toBe('Élevé');
   });
 });
