@@ -120,7 +120,7 @@ class UnsignedNoteFollowUpTest {
         User signer = user("Mariam");
         User blank = user("Ali");
         EncounterNote unsigned = note(author, "Paludisme simple", null);
-        when(notes.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounter.getId())).thenReturn(List.of(
+        when(notes.findForSignatureFollowUp(encounter.getId())).thenReturn(List.of(
             unsigned, note(signer, "Signed", NOW.minusMinutes(5)), note(blank, null, null)));
 
         followUp.visitClosed(encounter);
@@ -141,7 +141,7 @@ class UnsignedNoteFollowUpTest {
     @Test
     void anOpenVisitFilesNothing() {
         encounter.setStatus(EncounterStatus.IN_PROGRESS);
-        when(notes.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounter.getId()))
+        when(notes.findForSignatureFollowUp(encounter.getId()))
             .thenReturn(List.of(note(user("Issa"), "Draft", null)));
 
         followUp.visitClosed(encounter);
@@ -151,7 +151,7 @@ class UnsignedNoteFollowUpTest {
 
     @Test
     void insideATransactionTheItemIsFiledOnlyAfterTheCloseCommits() {
-        when(notes.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounter.getId()))
+        when(notes.findForSignatureFollowUp(encounter.getId()))
             .thenReturn(List.of(note(user("Issa"), "Draft", null)));
         TransactionSynchronizationManager.initSynchronization();
 
@@ -166,7 +166,7 @@ class UnsignedNoteFollowUpTest {
 
     @Test
     void aFailureToFileNeverUndoesTheClose() {
-        when(notes.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounter.getId()))
+        when(notes.findForSignatureFollowUp(encounter.getId()))
             .thenReturn(List.of(note(user("Issa"), "Draft", null)));
         when(inBasket.createItem(any())).thenThrow(new IllegalStateException("store down"));
 
@@ -302,6 +302,39 @@ class UnsignedNoteFollowUpTest {
         assertThatThrownBy(() -> followUp.overdueAtHospital(otherHospital))
             .isInstanceOf(AccessDeniedException.class);
         verify(notes, never()).findUnsignedAtHospitalCreatedBefore(any(), any());
+    }
+
+    @Test
+    void overdueCutoffUses72ElapsedHoursAcrossSpringForward() {
+        ZoneId zone = ZoneId.of("America/New_York");
+        LocalDateTime now = LocalDateTime.of(2026, 3, 10, 12, 0);
+        Clock clock = Clock.fixed(now.atZone(zone).toInstant(), zone);
+        followUp = new UnsignedNoteFollowUp(notes, inBasket, items, roleValidator, transactionManager, clock);
+        UUID adminId = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(adminId);
+        when(roleValidator.isHospitalAdmin(adminId, hospital.getId())).thenReturn(true);
+        when(notes.findUnsignedAtHospitalCreatedBefore(eq(hospital.getId()), any())).thenReturn(List.of());
+
+        followUp.overdueAtHospital(hospital.getId());
+
+        ArgumentCaptor<LocalDateTime> before = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(notes).findUnsignedAtHospitalCreatedBefore(eq(hospital.getId()), before.capture());
+        assertThat(before.getValue()).isEqualTo(LocalDateTime.of(2026, 3, 7, 11, 0));
+    }
+
+    @Test
+    void reminderCutoffUses24ElapsedHoursAcrossFallBack() {
+        ZoneId zone = ZoneId.of("America/New_York");
+        LocalDateTime now = LocalDateTime.of(2026, 11, 1, 12, 0);
+        Clock clock = Clock.fixed(now.atZone(zone).toInstant(), zone);
+        followUp = new UnsignedNoteFollowUp(notes, inBasket, items, roleValidator, transactionManager, clock);
+        when(items.findByReferenceTypeAndTitleKeyAndCreatedAtBefore(any(), any(), any())).thenReturn(List.of());
+
+        followUp.remindOverdue();
+
+        ArgumentCaptor<LocalDateTime> before = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(items).findByReferenceTypeAndTitleKeyAndCreatedAtBefore(any(), any(), before.capture());
+        assertThat(before.getValue()).isEqualTo(LocalDateTime.of(2026, 10, 31, 13, 0));
     }
 
     @Test

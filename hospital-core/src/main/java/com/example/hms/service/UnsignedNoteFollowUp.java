@@ -104,7 +104,9 @@ public class UnsignedNoteFollowUp {
     }
 
     private void fileNotesOf(UUID encounterId) {
-        notes.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId).stream()
+        // Hold each note's write lock until its task commits. Signing flushes the note before deleting tasks,
+        // so either it removes this task afterwards or this read observes the signature and files nothing.
+        notes.findForSignatureFollowUp(encounterId).stream()
             .filter(EncounterNote::awaitsSignature)
             .forEach(this::fileFor);
     }
@@ -152,7 +154,7 @@ public class UnsignedNoteFollowUp {
      */
     @Transactional
     public int remindOverdue() {
-        LocalDateTime before = LocalDateTime.now(clock).minus(REMINDER_AFTER);
+        LocalDateTime before = clock.instant().minus(REMINDER_AFTER).atZone(clock.getZone()).toLocalDateTime();
         int reminded = 0;
         for (InBasketItem item : inBasketItemRepository.findByReferenceTypeAndTitleKeyAndCreatedAtBefore(
                 REFERENCE_TYPE, TITLE_KEY, before)) {
@@ -191,8 +193,10 @@ public class UnsignedNoteFollowUp {
             && (actorId == null || !roleValidator.isHospitalAdmin(actorId, hospitalId))) {
             throw new AccessDeniedException("Only an administrator of this hospital reads its unsigned notes.");
         }
-        LocalDateTime now = LocalDateTime.now(clock);
-        return notes.findUnsignedAtHospitalCreatedBefore(hospitalId, now.minus(ADMIN_OVERDUE)).stream()
+        var nowInstant = clock.instant();
+        LocalDateTime now = nowInstant.atZone(clock.getZone()).toLocalDateTime();
+        LocalDateTime before = nowInstant.minus(ADMIN_OVERDUE).atZone(clock.getZone()).toLocalDateTime();
+        return notes.findUnsignedAtHospitalCreatedBefore(hospitalId, before).stream()
             .filter(EncounterNote::awaitsSignature)
             .map(note -> toOverdue(note, now))
             .toList();

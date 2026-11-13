@@ -871,6 +871,9 @@ public class EncounterServiceImpl implements EncounterService {
         recordNoteHistory(saved.getEncounter(), saved, NOTE_HISTORY_SIGNED, userActor(note.getAuthor()));
         // The "note to sign" item has done its work.
         if (unsignedNotes != null) {
+            // Acquire the note's database write lock before task cleanup. A concurrent close callback
+            // holds the same lock while filing; cleanup must see its committed task, or filing our signature.
+            encounterNoteRepository.flush();
             unsignedNotes.noteSigned(saved.getId());
         }
         return encounterMapper.toEncounterNoteResponseDTO(saved);
