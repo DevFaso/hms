@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Subject, of } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { MySummariesComponent } from './my-summaries.component';
 import { AfterVisitSummary, PatientPortalService } from '../../services/patient-portal.service';
 
@@ -159,6 +159,34 @@ describe('MySummariesComponent', () => {
     fixture.componentInstance.toggle('s1');
     fixture.componentInstance.toggle('s1');
     expect(portal.getVisitSummaryDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a failed detail request when the patient reopens the summary', () => {
+    portal.getAfterVisitSummaries.and.returnValue(of([summary({ encounterId: 'e1' })]));
+    portal.getVisitSummaryDetail.and.returnValues(
+      throwError(() => new Error('Temporary failure')),
+      of({
+        encounterId: 'e1',
+        visitDate: '2026-09-01',
+        providerName: '',
+        departmentName: '',
+        hospitalName: 'CHU Yalgado',
+        dischargeDiagnoses: [],
+        encounterStatus: 'COMPLETED',
+        checkoutTimestamp: '2026-09-01T10:00:00',
+        clinicalPlan: 'Recovered plan',
+      }),
+    );
+    create();
+    fixture.componentInstance.toggle('s1');
+    fixture.componentInstance.toggle('s1');
+    fixture.componentInstance.toggle('s1');
+    fixture.detectChanges();
+
+    expect(portal.getVisitSummaryDetail).toHaveBeenCalledTimes(2);
+    expect(host().querySelector('[data-testid="avs-plan"]')?.textContent).toContain(
+      'Recovered plan',
+    );
   });
 
   it('a summary with no visit keeps its card and reads nothing more', () => {

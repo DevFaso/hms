@@ -149,6 +149,29 @@ class AfterVisitSummarySectionsTest {
     }
 
     @Test
+    void lateArrivalExcludesEarlierReadings() {
+        encounter.setArrivalTimestamp(encounter.getEncounterDate().plusMinutes(30));
+        PatientVitalSign earlier = new PatientVitalSign();
+        earlier.setRecordedAt(encounter.getEncounterDate().plusMinutes(15));
+        earlier.setTemperatureCelsius(38.6);
+        when(vitals.findWithinRange(eq(patientId), eq(hospitalId), any(), any(), any()))
+            .thenAnswer(invocation -> {
+                LocalDateTime from = invocation.getArgument(2);
+                return from.isAfter(earlier.getRecordedAt()) ? List.of() : List.of(earlier);
+            });
+
+        assertThat(fill().getVitalSigns()).isNull();
+    }
+
+    @Test
+    void missingArrivalFallsBackToEncounterDate() {
+        encounter.setArrivalTimestamp(null);
+        fill();
+        verify(vitals).findWithinRange(eq(patientId), eq(hospitalId), eq(encounter.getEncounterDate()),
+            eq(encounter.getCheckoutTimestamp()), any());
+    }
+
+    @Test
     @DisplayName("a lab value shows once released, never before; a voided order is left out")
     void unreleasedLabValuesAreNotShown() {
         LabOrder released = labOrder("NFS", LabOrderStatus.COMPLETED);

@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AfterVisitSummary } from '../../services/encounter.service';
 import { formatMeasure } from '../../shared/i18n/app-locale';
@@ -110,6 +112,29 @@ describe('VisitSummarySectionsComponent', () => {
     }
     expect(hasContentSections({ orderedTests: [], allergies: [] })).toBeFalse();
     expect(hasContentSections(full)).toBeTrue();
+  });
+
+  it('marks corrected results with the shared patient-facing badge', () => {
+    const fixture = TestBed.createComponent(VisitSummarySectionsComponent);
+    fixture.componentRef.setInput('summary', {
+      orderedTests: [
+        {
+          kind: 'LAB',
+          name: 'NFS',
+          status: 'COMPLETED',
+          results: [{ value: '11.2', unit: 'g/dL', corrected: true }],
+        },
+      ],
+    });
+    fixture.detectChanges();
+
+    const badge = fixture.debugElement.query(By.directive(LabCorrectionBadgeComponent))
+      .componentInstance as LabCorrectionBadgeComponent;
+    expect(badge.corrected()).toBeTrue();
+    expect(badge.audience()).toBe('patient');
+    expect(
+      fixture.nativeElement.querySelector('app-lab-correction-badge').textContent.trim(),
+    ).not.toBe('');
   });
 
   it('lists a test whose result is not released by its status only', () => {

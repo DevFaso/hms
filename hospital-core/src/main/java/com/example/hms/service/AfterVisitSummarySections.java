@@ -176,7 +176,8 @@ public class AfterVisitSummarySections {
      * the window holds no observation set.
      */
     private AfterVisitSummaryDTO.VitalSigns vitalSigns(Encounter encounter, UUID patientId, UUID hospitalId) {
-        LocalDateTime from = earliest(encounter.getArrivalTimestamp(), encounter.getEncounterDate());
+        LocalDateTime from = encounter.getArrivalTimestamp() != null
+            ? encounter.getArrivalTimestamp() : encounter.getEncounterDate();
         if (from == null) {
             return null;
         }
@@ -206,13 +207,6 @@ public class AfterVisitSummarySections {
     private static boolean isObservationSet(PatientVitalSign v) {
         return v.getTemperatureCelsius() != null || v.getHeartRateBpm() != null || v.getRespiratoryRateBpm() != null
             || v.getSystolicBpMmHg() != null || v.getDiastolicBpMmHg() != null || v.getSpo2Percent() != null;
-    }
-
-    private static LocalDateTime earliest(LocalDateTime a, LocalDateTime b) {
-        if (a == null) {
-            return b;
-        }
-        return b == null || a.isBefore(b) ? a : b;
     }
 
     /**

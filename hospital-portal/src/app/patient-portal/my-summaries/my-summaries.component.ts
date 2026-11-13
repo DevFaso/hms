@@ -63,7 +63,12 @@ export class MySummariesComponent implements OnInit {
     this.details.update((d) => ({ ...d, [summary.id]: null }));
     this.portal.getVisitSummaryDetail(encounterId).subscribe({
       next: (detail) => this.details.update((d) => ({ ...d, [summary.id]: detail })),
-      error: () => undefined,
+      error: () =>
+        this.details.update((d) => {
+          const retryable = { ...d };
+          delete retryable[summary.id];
+          return retryable;
+        }),
     });
   }
 
