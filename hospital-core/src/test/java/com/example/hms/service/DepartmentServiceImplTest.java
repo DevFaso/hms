@@ -1652,4 +1652,111 @@ class DepartmentServiceImplTest {
             .isInstanceOf(ResourceNotFoundException.class);
         verify(departmentRepository, never()).save(any());
     }
+
+    // ========== R48: an edit never drops what it does not touch ==========
+
+    private com.example.hms.model.DepartmentTranslation translation(String language, String name) {
+        com.example.hms.model.DepartmentTranslation t = new com.example.hms.model.DepartmentTranslation();
+        t.setLanguageCode(language);
+        t.setLanguage(language);
+        t.setName(name);
+        t.setDepartment(department);
+        return t;
+    }
+
+    /** The portal's edit form: name, code, phone, active; no head, no translations, no bed capacity. */
+    private DepartmentRequestDTO portalPhoneEdit() {
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setName("Médecine générale");
+        dto.setHospitalId(hospitalId);
+        dto.setCode("MG");
+        dto.setPhoneNumber("+22625361240");
+        return dto;
+    }
+
+    private void stubEditWithTheRealMapper() {
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(departmentRepository.save(department)).thenReturn(department);
+        when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class)))
+            .thenReturn(new DepartmentResponseDTO());
+        org.mockito.Mockito.doAnswer(invocation -> {
+            new DepartmentMapper().updateDepartmentFromDto(invocation.getArgument(0), invocation.getArgument(1),
+                invocation.getArgument(2), invocation.getArgument(3));
+            return null;
+        }).when(departmentMapper).updateDepartmentFromDto(any(), any(), any(), any());
+    }
+
+    @Test
+    void updateDepartment_phoneEdit_keepsTranslationsHeadAndBeds_R48() {
+        department.setName("Médecine générale");
+        department.setBedCapacity(24);
+        department.getDepartmentTranslations().add(translation("fr", "Médecine générale"));
+        department.getDepartmentTranslations().add(translation("en", "General medicine"));
+        stubEditWithTheRealMapper();
+
+        departmentService.updateDepartment(deptId, portalPhoneEdit(), Locale.FRENCH);
+
+        assertThat(department.getPhoneNumber()).isEqualTo("+22625361240");
+        assertThat(department.getDepartmentTranslations())
+            .extracting(com.example.hms.model.DepartmentTranslation::getLanguageCode,
+                com.example.hms.model.DepartmentTranslation::getName)
+            .containsExactlyInAnyOrder(
+                org.assertj.core.groups.Tuple.tuple("fr", "Médecine générale"),
+                org.assertj.core.groups.Tuple.tuple("en", "General medicine"));
+        assertThat(department.getHeadOfDepartment()).isSameAs(staff);
+        assertThat(department.getBedCapacity()).isEqualTo(24);
+    }
+
+    @Test
+    void updateDepartment_rename_rewritesOnlyTheCallersLanguage_R48() {
+        department.getDepartmentTranslations().add(translation("fr", "Cardiologie"));
+        department.getDepartmentTranslations().add(translation("en", "Cardiology"));
+        stubEditWithTheRealMapper();
+        DepartmentRequestDTO dto = portalPhoneEdit();
+        dto.setName("Cardiologie adulte");
+
+        departmentService.updateDepartment(deptId, dto, Locale.FRENCH);
+
+        assertThat(department.getDepartmentTranslations())
+            .extracting(com.example.hms.model.DepartmentTranslation::getLanguageCode,
+                com.example.hms.model.DepartmentTranslation::getName)
+            .containsExactlyInAnyOrder(
+                org.assertj.core.groups.Tuple.tuple("fr", "Cardiologie adulte"),
+                org.assertj.core.groups.Tuple.tuple("en", "Cardiology"));
+    }
+
+    @Test
+    void updateDepartment_sentTranslationsReplaceThem_andABlankHeadClearsIt_R48() {
+        department.getDepartmentTranslations().add(translation("fr", "Cardiologie"));
+        stubEditWithTheRealMapper();
+        DepartmentRequestDTO dto = portalPhoneEdit();
+        dto.setHeadOfDepartmentEmail("");
+        com.example.hms.payload.dto.DepartmentTranslationRequestDTO es =
+            new com.example.hms.payload.dto.DepartmentTranslationRequestDTO();
+        es.setLanguageCode("es");
+        es.setName("Cardiología");
+        dto.setTranslations(List.of(es));
+
+        departmentService.updateDepartment(deptId, dto, Locale.FRENCH);
+
+        assertThat(department.getDepartmentTranslations())
+            .extracting(com.example.hms.model.DepartmentTranslation::getLanguageCode)
+            .containsExactly("es");
+        assertThat(department.getHeadOfDepartment()).isNull();
+    }
+
+    @Test
+    void updateDepartment_movedToAnotherHospital_dropsTheOldHead_R48() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        other.setName("Other");
+        other.setCode("OT");
+        department.setHospital(other);
+        stubEditWithTheRealMapper();
+
+        departmentService.updateDepartment(deptId, portalPhoneEdit(), Locale.FRENCH);
+
+        assertThat(department.getHeadOfDepartment()).isNull();
+    }
 }

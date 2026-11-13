@@ -282,6 +282,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         dto.setCode(normalizeDepartmentCode(dto.getCode()));
         ensureRenameUniqueness(id, dto, hospital, locale);
 
+        Staff currentHead = department.getHeadOfDepartment();
         Staff newHeadOfDepartment = null;
         if (dto.getHeadOfDepartmentEmail() != null && !dto.getHeadOfDepartmentEmail().isBlank()) {
             List<StaffResponseDTO> staffList = staffService.getStaffByUserEmail(dto.getHeadOfDepartmentEmail(), locale);
@@ -290,9 +291,23 @@ public class DepartmentServiceImpl implements DepartmentService {
                 newHeadOfDepartment = staffService.getStaffEntityById(UUID.fromString(staffDto.getId()), locale);
             }
         }
-        Staff currentHead = department.getHeadOfDepartment();
+        // R48: an edit never drops what it does not touch. No head email in the
+        // request keeps the head (the portal's form cannot show the current one);
+        // a blank one clears it; an address that matches no staff keeps it.
+        // A department moved to another hospital never keeps a head from the old one.
+        boolean sameHospital = department.getHospital() != null
+            && Objects.equals(department.getHospital().getId(), hospital.getId());
+        boolean clearsHead = dto.getHeadOfDepartmentEmail() != null && dto.getHeadOfDepartmentEmail().isBlank();
+        Staff headToKeep = clearsHead || !sameHospital ? null : currentHead;
+        Staff head = newHeadOfDepartment != null ? newHeadOfDepartment : headToKeep;
 
-        departmentMapper.updateDepartmentFromDto(dto, department, hospital, newHeadOfDepartment);
+        departmentMapper.updateDepartmentFromDto(dto, department, hospital, head);
+        if (dto.getTranslations() == null) {
+            // The form edits the name and description as the caller reads them, her
+            // language's translation: write them back there, keep every other language.
+            syncLocaleTranslation(department, locale);
+            ensureLocaleTranslation(department, department.getAssignment(), locale);
+        }
         Department updatedDepartment = departmentRepository.save(department);
 
         if (newHeadOfDepartment != null &&
@@ -766,6 +781,21 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     private String likePattern(String value) {
         return "%" + value.trim().toLowerCase(Locale.ROOT) + "%";
+    }
+
+    private void syncLocaleTranslation(Department department, Locale locale) {
+        List<DepartmentTranslation> translations = department.getDepartmentTranslations();
+        if (translations == null) {
+            return;
+        }
+        String targetLanguage = (locale != null ? locale.getLanguage() : Locale.ENGLISH.getLanguage());
+        for (DepartmentTranslation translation : translations) {
+            if (translation != null
+                    && targetLanguage.equalsIgnoreCase(normalizeLanguageCode(translation.getLanguageCode()))) {
+                translation.setName(department.getName());
+                translation.setDescription(department.getDescription());
+            }
+        }
     }
 
     private void ensureLocaleTranslation(Department department,

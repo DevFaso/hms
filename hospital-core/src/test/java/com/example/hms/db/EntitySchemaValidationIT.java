@@ -6,6 +6,10 @@ import com.example.hms.model.UserMfaEnrollment;
 import com.example.hms.model.pro.ProInstrumentItem;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.metamodel.EntityType;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.metamodel.mapping.JdbcMapping;
+import org.hibernate.persister.entity.EntityPersister;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -16,7 +20,17 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -71,6 +85,13 @@ class EntitySchemaValidationIT {
     @Autowired
     private EntityManagerFactory entityManagerFactory;
 
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    /** A CHECK on one column that only lists allowed values: {@code col = ANY (ARRAY['A', ...])}. */
+    private static final Pattern ALLOWED_LIST = Pattern.compile("=\\s*ANY\\s*\\(", Pattern.CASE_INSENSITIVE);
+    private static final Pattern LITERAL = Pattern.compile("'([^']*)'");
+
     /**
      * Reaching this method IS the assertion: with {@code ddl-auto=validate}
      * Hibernate throws {@code SchemaManagementException} on the first mapped
@@ -85,5 +106,108 @@ class EntitySchemaValidationIT {
         assertThat(mapped)
             .contains(Patient.class, UserMfaEnrollment.class, ProInstrumentItem.class)
             .hasSizeGreaterThan(200);
+    }
+
+    /**
+     * QA D1762, the class: a CHECK constraint written for an enum-like column
+     * drifts when the code gains a value and no migration widens the CHECK.
+     * H2 builds tables from the entities, without those CHECKs, so the first
+     * failure is in production. For every enum attribute stored by name, the
+     * newest CHECK on its column (as Liquibase left it) must allow every
+     * constant of the enum.
+     */
+    @Test
+    void everyEnumColumnCheckAllowsEveryConstant() {
+        Map<String, Set<String>> allowedByColumn = singleColumnAllowedLists();
+        SessionFactoryImplementor sessionFactory = entityManagerFactory.unwrap(SessionFactoryImplementor.class);
+        List<String> drift = new ArrayList<>();
+        int checked = 0;
+        for (EntityType<?> entity : entityManagerFactory.getMetamodel().getEntities()) {
+            EntityPersister persister = sessionFactory.getMappingMetamodel()
+                .getEntityDescriptor(entity.getJavaType());
+            List<String[]> columns = new ArrayList<>();
+            persister.forEachSelectable((index, selectable) -> {
+                JdbcMapping mapping = selectable.getJdbcMapping();
+                Class<?> javaType = mapping.getJavaTypeDescriptor().getJavaTypeClass();
+                if (javaType == null || !javaType.isEnum() || mapping.getValueConverter() != null
+                    || !isCharacter(mapping.getJdbcType().getDdlTypeCode())) {
+                    return;
+                }
+                columns.add(new String[]{selectable.getContainingTableExpression(),
+                    selectable.getSelectionExpression(), javaType.getName()});
+            });
+            for (String[] column : columns) {
+                Set<String> allowed = allowedByColumn.get(key(column[0], column[1]));
+                if (allowed == null) {
+                    continue;
+                }
+                checked++;
+                Set<String> missing = new TreeSet<>();
+                for (Object constant : enumConstants(column[2])) {
+                    String name = ((Enum<?>) constant).name();
+                    if (!allowed.contains(name)) {
+                        missing.add(name);
+                    }
+                }
+                if (!missing.isEmpty()) {
+                    drift.add(column[0] + "." + column[1] + " (" + column[2] + ") rejects " + missing);
+                }
+            }
+        }
+        assertThat(checked).as("enum columns with an allowed-values CHECK").isPositive();
+        assertThat(drift).as("enum values the database CHECK would refuse").isEmpty();
+    }
+
+    private Map<String, Set<String>> singleColumnAllowedLists() {
+        Map<String, Set<String>> result = new HashMap<>();
+        jdbc.query("""
+            SELECT n.nspname, c.relname, a.attname, pg_get_constraintdef(con.oid)
+              FROM pg_constraint con
+              JOIN pg_class c ON c.oid = con.conrelid
+              JOIN pg_namespace n ON n.oid = c.relnamespace
+              JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = con.conkey[1]
+             WHERE con.contype = 'c' AND cardinality(con.conkey) = 1
+            """, rs -> {
+                String def = rs.getString(4);
+                String upper = def.toUpperCase(Locale.ROOT);
+                if (!ALLOWED_LIST.matcher(def).find() || upper.contains("<>") || upper.contains("NOT ")
+                    || upper.contains(" AND ")) {
+                    return;
+                }
+                Set<String> values = new LinkedHashSet<>();
+                Matcher literal = LITERAL.matcher(def);
+                while (literal.find()) {
+                    values.add(literal.group(1));
+                }
+                // Two CHECKs on one column must both pass: keep the intersection.
+                result.merge(key(rs.getString(1) + "." + rs.getString(2), rs.getString(3)), values, (a, b) -> {
+                    Set<String> both = new LinkedHashSet<>(a);
+                    both.retainAll(b);
+                    return both;
+                });
+            });
+        return result;
+    }
+
+    private static String key(String table, String column) {
+        String qualified = table.replace("\"", "").toLowerCase(Locale.ROOT);
+        if (!qualified.contains(".")) {
+            qualified = "public." + qualified;
+        }
+        return qualified + "#" + column.replace("\"", "").toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean isCharacter(int ddlTypeCode) {
+        return ddlTypeCode == Types.VARCHAR || ddlTypeCode == Types.CHAR || ddlTypeCode == Types.LONGVARCHAR
+            || ddlTypeCode == Types.NVARCHAR || ddlTypeCode == Types.NCHAR
+            || ddlTypeCode == org.hibernate.type.SqlTypes.ENUM;
+    }
+
+    private static Object[] enumConstants(String className) {
+        try {
+            return Class.forName(className).getEnumConstants();
+        } catch (ClassNotFoundException ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 }

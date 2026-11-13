@@ -350,7 +350,8 @@ public class LaborServiceImpl implements LaborService {
     }
 
     /** Source of the urgent notices a labour transfer raises (no clinical value behind them to re-measure). */
-    static final String NOTICE_SOURCE_TRANSFER = "LABOR_TRANSFER";
+    static final String NOTICE_SOURCE_TRANSFER =
+        com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_TRANSFER;
     private static final String FIELD_REASON = "reason";
     private static final String FIELD_DESTINATION = "destinationHospitalId";
     private static final String ENTITY_LABOR = "LABOR";

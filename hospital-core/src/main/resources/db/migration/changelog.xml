@@ -3484,4 +3484,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V292-obstetric-alert-escalation-transfer-source" author="hms-team" runOnChange="false">
+        <sqlFile path="V292__obstetric_alert_escalation_transfer_source.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

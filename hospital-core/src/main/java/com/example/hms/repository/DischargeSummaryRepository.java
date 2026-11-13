@@ -19,6 +19,16 @@ import java.util.UUID;
 public interface DischargeSummaryRepository extends JpaRepository<DischargeSummary, UUID> {
 
     /**
+     * QA D1760: {@code dischargeDate} is a day, so several visits closed the
+     * same day came back in no order. Every list is newest first by date and
+     * time, nulls (legacy rows with no time) after the timed ones of the day,
+     * then by creation. DischargeSummaryOrderingGuardTest holds every list
+     * query of this repository to it.
+     */
+    String NEWEST_FIRST = " ORDER BY ds.dischargeDate DESC, ds.dischargeTime DESC NULLS LAST, ds.createdAt DESC";
+
+
+    /**
      * Find discharge summary by encounter
      */
     Optional<DischargeSummary> findByEncounter_Id(UUID encounterId);
@@ -26,12 +36,15 @@ public interface DischargeSummaryRepository extends JpaRepository<DischargeSumma
     /**
      * Find all discharge summaries for a patient
      */
-    List<DischargeSummary> findByPatient_IdOrderByDischargeDateDesc(UUID patientId);
+    @Query("SELECT ds FROM DischargeSummary ds WHERE ds.patient.id = :patientId" + NEWEST_FIRST)
+    List<DischargeSummary> findByPatient_IdOrderByDischargeDateDesc(@Param("patientId") UUID patientId);
 
-    List<DischargeSummary> findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(UUID patientId, UUID hospitalId);
+    @Query("SELECT ds FROM DischargeSummary ds WHERE ds.patient.id = :patientId AND ds.hospital.id = :hospitalId" + NEWEST_FIRST)
+    List<DischargeSummary> findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(@Param("patientId") UUID patientId, @Param("hospitalId") UUID hospitalId);
 
     /** E9 #59e — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
-    List<DischargeSummary> findByPatient_IdAndHospital_IdInOrderByDischargeDateDesc(UUID patientId, java.util.Collection<UUID> hospitalIds);
+    @Query("SELECT ds FROM DischargeSummary ds WHERE ds.patient.id = :patientId AND ds.hospital.id IN :hospitalIds" + NEWEST_FIRST)
+    List<DischargeSummary> findByPatient_IdAndHospital_IdInOrderByDischargeDateDesc(@Param("patientId") UUID patientId, @Param("hospitalIds") java.util.Collection<UUID> hospitalIds);
 
     /**
      * FHIR read path: same rows, with the mapper-walked associations fetched
@@ -39,21 +52,22 @@ public interface DischargeSummaryRepository extends JpaRepository<DischargeSumma
      */
     @org.springframework.data.jpa.repository.EntityGraph(
         attributePaths = {"patient", "encounter", "hospital", "dischargingProvider"})
+    @Query("SELECT ds FROM DischargeSummary ds WHERE ds.patient.id = :patientId AND ds.hospital.id = :hospitalId" + NEWEST_FIRST)
     List<DischargeSummary> findWithAssociationsByPatient_IdAndHospital_IdOrderByDischargeDateDesc(
-            UUID patientId, UUID hospitalId);
+            @Param("patientId") UUID patientId, @Param("hospitalId") UUID hospitalId);
 
     /** E9 #60b — the readable-set sibling, for FHIR {@code $everything}. */
     @org.springframework.data.jpa.repository.EntityGraph(
         attributePaths = {"patient", "encounter", "hospital", "dischargingProvider"})
+    @Query("SELECT ds FROM DischargeSummary ds WHERE ds.patient.id = :patientId AND ds.hospital.id IN :hospitalIds" + NEWEST_FIRST)
     List<DischargeSummary> findWithAssociationsByPatient_IdAndHospital_IdInOrderByDischargeDateDesc(
-            UUID patientId, java.util.Collection<UUID> hospitalIds);
+            @Param("patientId") UUID patientId, @Param("hospitalIds") java.util.Collection<UUID> hospitalIds);
 
     /**
      * Find all discharge summaries for a hospital within a date range
      */
     @Query("SELECT ds FROM DischargeSummary ds WHERE ds.hospital.id = :hospitalId " +
-           "AND ds.dischargeDate BETWEEN :startDate AND :endDate " +
-           "ORDER BY ds.dischargeDate DESC")
+           "AND ds.dischargeDate BETWEEN :startDate AND :endDate" + NEWEST_FIRST)
     List<DischargeSummary> findByHospitalAndDateRange(
         @Param("hospitalId") UUID hospitalId,
         @Param("startDate") LocalDate startDate,
@@ -64,8 +78,7 @@ public interface DischargeSummaryRepository extends JpaRepository<DischargeSumma
      * Find unfinalized discharge summaries for a hospital
      */
     @Query("SELECT ds FROM DischargeSummary ds WHERE ds.hospital.id = :hospitalId " +
-           "AND ds.isFinalized = false " +
-           "ORDER BY ds.dischargeDate DESC")
+           "AND ds.isFinalized = false" + NEWEST_FIRST)
     List<DischargeSummary> findUnfinalizedByHospital(@Param("hospitalId") UUID hospitalId);
 
     /**
@@ -74,16 +87,17 @@ public interface DischargeSummaryRepository extends JpaRepository<DischargeSumma
     @Query("SELECT DISTINCT ds FROM DischargeSummary ds " +
            "JOIN ds.pendingTestResults ptr " +
            "WHERE ds.hospital.id = :hospitalId " +
-           "AND SIZE(ds.pendingTestResults) > 0 " +
-           "ORDER BY ds.dischargeDate DESC")
+           "AND SIZE(ds.pendingTestResults) > 0" + NEWEST_FIRST)
     List<DischargeSummary> findWithPendingTestResults(@Param("hospitalId") UUID hospitalId);
 
     /**
      * Find discharge summaries by discharging provider
      */
-    List<DischargeSummary> findByDischargingProvider_IdOrderByDischargeDateDesc(UUID providerId);
+    @Query("SELECT ds FROM DischargeSummary ds WHERE ds.dischargingProvider.id = :providerId" + NEWEST_FIRST)
+    List<DischargeSummary> findByDischargingProvider_IdOrderByDischargeDateDesc(@Param("providerId") UUID providerId);
 
-    List<DischargeSummary> findByDischargingProvider_IdAndHospital_IdOrderByDischargeDateDesc(UUID providerId, UUID hospitalId);
+    @Query("SELECT ds FROM DischargeSummary ds WHERE ds.dischargingProvider.id = :providerId AND ds.hospital.id = :hospitalId" + NEWEST_FIRST)
+    List<DischargeSummary> findByDischargingProvider_IdAndHospital_IdOrderByDischargeDateDesc(@Param("providerId") UUID providerId, @Param("hospitalId") UUID hospitalId);
 
     /**
      * Check if discharge summary exists for encounter
