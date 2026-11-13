@@ -6479,7 +6479,7 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Destination registration:** B may transfer only to a hospital where she is already registered (B cannot register her at A); otherwise A records the arrival without handover once she is registered there.
 - **Handover read (user decision, 2026-11-12):** a transfer with a handover is B's handover of care, so A reads the transferred episode and its partograph read only even when the sharing rule does not let A read B (only that episode, each read recorded as a cross-hospital reach); an arrival without handover still follows the sharing rule.
 - **B's partograph alerts after the transfer:** `ObstetricAlertCurrency` treats a non-active episode as resolved, so B's unacknowledged URGENT partograph alerts stop re-notifying once B's episode closes; A's team gets the transfer notice. Clinical owners to confirm.
-- **Partograph entry racing a transfer:** `addEntry` is not a transition and does not take the patient lock, so an entry charted on B's episode while the transfer commits may land on the closed episode.
+- **Partograph entry racing a transfer:** `addEntry` now takes the patient lock, refreshes the episode and re-reads its status, so an entry racing a transfer is refused once the transfer commits; the race itself is proven by the service tests only, not yet by a PostgreSQL concurrency test.
 - **V290 skipped on duplicates:** if an environment already holds two active labour episodes for one patient, V290 logs a warning and does not create `uq_labor_episode_patient_active`; close the duplicates, then create the index (a follow-up migration).
 ## Standing debt — lab trend units and free-text wrapping (fix/lab-trend-units-i18n)
 

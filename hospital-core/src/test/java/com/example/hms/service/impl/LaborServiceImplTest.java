@@ -1978,13 +1978,22 @@ class LaborServiceImplTest {
         com.example.hms.model.Organization other = new com.example.hms.model.Organization();
         other.setId(UUID.randomUUID());
         destination.setOrganization(other);
-        transferable(destination);
+        when(hospitalRepository.findClinicalById(destinationId)).thenReturn(Optional.of(destination));
         when(roleValidator.isDoctor(recorderUserId, hospitalId)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.transferEpisode(patientId, episodeId, recorderUserId, transferTo(destinationId)))
-            .isInstanceOf(BusinessException.class)
-            .extracting(e -> ((BusinessException) e).getMessageKey())
-            .isEqualTo("maternity.labor.transfer.notShared");
+        // Rex on #1134: registered there or not, the caller gets the same refusal,
+        // and her registration at the other organisation is never even looked up.
+        for (boolean registeredThere : new boolean[] {true, false}) {
+            com.example.hms.model.PatientHospitalRegistration registration = new com.example.hms.model.PatientHospitalRegistration();
+            lenient().when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, destinationId))
+                .thenReturn(registeredThere ? Optional.of(registration) : Optional.empty());
+            assertThatThrownBy(() -> service.transferEpisode(patientId, episodeId, recorderUserId, transferTo(destinationId)))
+                .as("registered at the destination: %s", registeredThere)
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getMessageKey())
+                .isEqualTo("maternity.labor.transfer.notShared");
+        }
+        verify(registrationRepository, never()).findByPatientIdAndHospitalIdAndActiveTrue(patientId, destinationId);
         verify(episodeRepository, never()).saveAndFlush(any());
         assertThat(episode.getStatus()).isEqualTo(LaborStatus.ACTIVE);
     }
@@ -2234,6 +2243,10 @@ class LaborServiceImplTest {
         assertThat(service.getEpisodes(patientId, hospitalId, 10))
             .extracting(LaborEpisodeResponseDTO::getId)
             .containsExactly(continued.getId(), handed.getId());
+        // Rex on #1134: the handed-over row never takes the list past its limit.
+        assertThat(service.getEpisodes(patientId, hospitalId, 1))
+            .extracting(LaborEpisodeResponseDTO::getId)
+            .containsExactly(continued.getId());
         assertThat(service.getEntries(patientId, handed.getId(), hospitalId)).hasSize(1);
         verify(reachRecorder, org.mockito.Mockito.atLeastOnce()).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
             eq(Map.of(b.getId().toString(), 1L)), eq("Labour episode handed over by transfer read at the receiving hospital"));

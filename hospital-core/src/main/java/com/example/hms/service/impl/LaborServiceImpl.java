@@ -357,9 +357,10 @@ public class LaborServiceImpl implements LaborService {
 
     /**
      * The serialization point of every labour transition (start, transfer,
-     * arrival without handover, delivery): the patient row lock, held until
-     * the transaction commits. Each transition reads the state it decides on
-     * after this call. LaborTransitionLockGuardTest holds every transition to it.
+     * arrival without handover, delivery) and of every partograph entry: the
+     * patient row lock, held until the transaction commits. Each of them
+     * refreshes the episode and reads the state it decides on after this call.
+     * LaborTransitionLockGuardTest holds every transition to it.
      */
     private void lockPatientForLabour(UUID patientId) {
         patientRepository.lockByIdUnscoped(patientId);
@@ -445,10 +446,10 @@ public class LaborServiceImpl implements LaborService {
         Hospital destination = hospitalRepository.findClinicalById(request.getDestinationHospitalId())
             .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException(FIELD_DESTINATION,
                 "maternity.labor.transfer.destinationNotFound"));
-        PatientHospitalRegistration destinationRegistration = registrationRepository
-            .findByPatientIdAndHospitalIdAndActiveTrue(patientId, destination.getId())
-            .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException(FIELD_DESTINATION,
-                "maternity.labor.transfer.notRegisteredAtDestination"));
+        // Rex on #1134: the sharing rule is decided BEFORE her registration at the
+        // destination is looked at. Another organisation the rule does not open
+        // gets one refusal whether she is registered there or not, so the
+        // refusal never tells the caller where else she is a patient.
         if (!sameOrganisation(source.getHospital(), destination)) {
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(callerUserId, patientId, sourceHospitalId);
             if (readable == null || !readable.contains(destination.getId())) {
@@ -456,6 +457,10 @@ public class LaborServiceImpl implements LaborService {
                     "maternity.labor.transfer.notShared");
             }
         }
+        PatientHospitalRegistration destinationRegistration = registrationRepository
+            .findByPatientIdAndHospitalIdAndActiveTrue(patientId, destination.getId())
+            .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException(FIELD_DESTINATION,
+                "maternity.labor.transfer.notRegisteredAtDestination"));
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(source.getPatient());
 
         lockPatientForLabour(patientId);
@@ -793,7 +798,8 @@ public class LaborServiceImpl implements LaborService {
             episodes.sort(java.util.Comparator.comparing(LaborEpisode::getAdmittedAt,
                 java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
         }
-        return episodes
+        // Rex on #1134: the handed-over rows never take the list past its limit.
+        return episodes.stream().limit(effectiveLimit).toList()
             .stream()
             .map(episode -> laborMapper.toEpisodeResponse(
                 episode,
