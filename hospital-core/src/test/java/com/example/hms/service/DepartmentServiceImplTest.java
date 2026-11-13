@@ -1711,6 +1711,30 @@ class DepartmentServiceImplTest {
     }
 
     @Test
+    void updateDepartment_unchangedFrenchSave_keepsBaseNameAndOtherTranslations_D1790() {
+        department.setName("Cardiology base");
+        department.setDescription("Base description");
+        department.getDepartmentTranslations().add(translation("fr", "Cardiologie"));
+        department.getDepartmentTranslations().add(translation("en", "Cardiology"));
+        department.getDepartmentTranslations().add(translation("es", "Cardiologia"));
+        stubEditWithTheRealMapper();
+        DepartmentRequestDTO dto = portalPhoneEdit();
+        dto.setName("Cardiologie");
+
+        departmentService.updateDepartment(deptId, dto, Locale.FRENCH);
+
+        assertThat(department.getName()).isEqualTo("Cardiology base");
+        assertThat(department.getDescription()).isEqualTo("Base description");
+        assertThat(department.getDepartmentTranslations())
+            .extracting(com.example.hms.model.DepartmentTranslation::getLanguageCode,
+                com.example.hms.model.DepartmentTranslation::getName)
+            .containsExactlyInAnyOrder(
+                org.assertj.core.groups.Tuple.tuple("fr", "Cardiologie"),
+                org.assertj.core.groups.Tuple.tuple("en", "Cardiology"),
+                org.assertj.core.groups.Tuple.tuple("es", "Cardiologia"));
+    }
+
+    @Test
     void updateDepartment_rename_rewritesOnlyTheCallersLanguage_R48() {
         department.getDepartmentTranslations().add(translation("fr", "Cardiologie"));
         department.getDepartmentTranslations().add(translation("en", "Cardiology"));

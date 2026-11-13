@@ -307,11 +307,20 @@ public class DepartmentServiceImpl implements DepartmentService {
         Staff headToKeep = clearsHead || !sameHospital ? null : currentHead;
         Staff head = newHeadOfDepartment != null ? newHeadOfDepartment : headToKeep;
 
+        String storedName = department.getName();
+        String storedDescription = department.getDescription();
+        boolean hadLocaleTranslation = dto.getTranslations() == null && hasTranslationFor(department, locale);
         departmentMapper.updateDepartmentFromDto(dto, department, hospital, head);
         if (dto.getTranslations() == null) {
             // The form edits the name and description as the caller reads them, her
             // language's translation: write them back there, keep every other language.
             syncLocaleTranslation(department, locale);
+            if (hadLocaleTranslation) {
+                // D1790: what the form sent is the localized display text, never the stored
+                // base name: a rename updates only the language being edited.
+                department.setName(storedName);
+                department.setDescription(storedDescription);
+            }
             ensureLocaleTranslation(department, department.getAssignment(), locale);
         }
         Department updatedDepartment = departmentRepository.save(department);
@@ -787,6 +796,14 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     private String likePattern(String value) {
         return "%" + value.trim().toLowerCase(Locale.ROOT) + "%";
+    }
+
+    private boolean hasTranslationFor(Department department, Locale locale) {
+        String targetLanguage = (locale != null ? locale.getLanguage() : Locale.ENGLISH.getLanguage());
+        return department.getDepartmentTranslations() != null
+            && department.getDepartmentTranslations().stream()
+                .anyMatch(t -> t != null
+                    && targetLanguage.equalsIgnoreCase(normalizeLanguageCode(t.getLanguageCode())));
     }
 
     private void syncLocaleTranslation(Department department, Locale locale) {
