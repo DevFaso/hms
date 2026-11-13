@@ -2828,9 +2828,9 @@ public class EncounterServiceImpl implements EncounterService {
                             .encounter(encounter)
                             .source(com.example.hms.enums.RecallSource.CHECKOUT)
                             .dueDate(dueDate)
-                            .reason(reason.length() > 500 ? reason.substring(0, 500) : reason)
-                            .notes(followUp.getNotes() != null && followUp.getNotes().length() > 500
-                                    ? followUp.getNotes().substring(0, 500) : followUp.getNotes())
+                            // QA D1670: the request holds both to this column's 500; never cut.
+                            .reason(reason)
+                            .notes(followUp.getNotes())
                             .createdBy(actorUsername)
                             .build());
             return dueDate;
@@ -2906,8 +2906,8 @@ public class EncounterServiceImpl implements EncounterService {
                 .status(com.example.hms.enums.AppointmentStatus.PENDING)
                 // QA D1073: the clinician who checked the patient out booked the follow-up.
                 .createdBy(followUpCreator())
-                .reason(reason.length() > 2048 ? reason.substring(0, 2048) : reason)
-                .notes(notes != null && notes.length() > 2048 ? notes.substring(0, 2048) : notes)
+                .reason(reason)
+                .notes(notes)
                 .build());
         // QA D1139: the published slot is BOOKED by this follow-up, so the
         // patient portal and the desk no longer offer it.
@@ -3032,7 +3032,6 @@ public class EncounterServiceImpl implements EncounterService {
         var followUp = request.getFollowUpAppointment();
         java.time.LocalDate due = checkoutFollowUpDueDate(encounter, followUp);
         String reason = checkoutFollowUpReason(followUp);
-        String purpose = reason.length() > 1000 ? reason.substring(0, 1000) : reason;
         boolean already = summary.getFollowUpAppointments() != null && summary.getFollowUpAppointments().stream()
             .anyMatch(f -> CHECKOUT_FOLLOW_UP_TYPE.equals(f.getAppointmentType()) && due.equals(f.getAppointmentDate()));
         if (already) {
@@ -3043,8 +3042,9 @@ public class EncounterServiceImpl implements EncounterService {
             .appointmentType(CHECKOUT_FOLLOW_UP_TYPE)
             .appointmentDate(due)
             .providerName(encounter.getStaff() != null ? encounter.getStaff().getName() : null)
-            .purpose(purpose)
-            .specialInstructions(notes != null && notes.length() > 1000 ? notes.substring(0, 1000) : notes)
+            // QA D1670: the purpose was cut to 1000 without a word; the request is held to 500.
+            .purpose(reason)
+            .specialInstructions(notes)
             .isConfirmed(false)
             .build());
     }
@@ -3125,9 +3125,9 @@ public class EncounterServiceImpl implements EncounterService {
         // QA D224: the AVS texts the clinician wrote at checkout outlive the request.
         // A synthetic checkout (PUT to COMPLETED) carries none and keeps what is there.
         if (request != null) {
-            keepIfGiven(request.getPrescriptionSummary(), 3000, summary::setPrescriptionSummary);
-            keepIfGiven(request.getReferralSummary(), 3000, summary::setReferralSummary);
-            keepIfGiven(request.getPatientEducationMaterials(), 2000, summary::setPatientEducationProvided);
+            keepIfGiven(request.getPrescriptionSummary(), summary::setPrescriptionSummary);
+            keepIfGiven(request.getReferralSummary(), summary::setReferralSummary);
+            keepIfGiven(request.getPatientEducationMaterials(), summary::setPatientEducationProvided);
             addCheckoutFollowUp(summary, encounter, request);
         }
 
@@ -3405,10 +3405,10 @@ public class EncounterServiceImpl implements EncounterService {
             && java.util.Objects.equals(stay.getHospital().getId(), encounter.getHospital().getId());
     }
 
-    private static void keepIfGiven(String value, int max, java.util.function.Consumer<String> setter) {
+    /** QA D1670 class: the request DTO holds each text to its column, so nothing is cut here. */
+    private static void keepIfGiven(String value, java.util.function.Consumer<String> setter) {
         if (value != null && !value.isBlank()) {
-            String trimmed = value.trim();
-            setter.accept(trimmed.length() <= max ? trimmed : trimmed.substring(0, max));
+            setter.accept(value.trim());
         }
     }
 

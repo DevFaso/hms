@@ -340,6 +340,7 @@ public class GlobalExceptionHandler {
         }
         // QA D1349 (round 30): the values the read already recorded as
         // malformed before it failed for good are named with the failing one.
+        java.util.List<String> notAccepted = RequestBodyProblems.notAccepted();
         java.util.List<String> fields = new java.util.ArrayList<>(RequestBodyProblems.finish());
         String field = resolveJacksonField(ex);
         if (field != null && !fields.contains(field)) {
@@ -354,6 +355,9 @@ public class GlobalExceptionHandler {
         Map<String, String> fieldErrors = new LinkedHashMap<>();
         for (String path : fields) {
             fieldErrors.put(path, invalidFieldReason(path));
+        }
+        for (String path : notAccepted) {
+            fieldErrors.putIfAbsent(path, notAcceptedReason(path));
         }
         return malformedBodyResponse(fieldErrors, java.util.List.of(), request);
     }
@@ -375,6 +379,9 @@ public class GlobalExceptionHandler {
         Map<String, String> fieldErrors = new LinkedHashMap<>();
         for (String path : ex.getMalformedPaths()) {
             fieldErrors.putIfAbsent(path, invalidFieldReason(path));
+        }
+        for (String path : ex.getNotAcceptedPaths()) {
+            fieldErrors.putIfAbsent(path, notAcceptedReason(path));
         }
         java.util.List<String> globalReasons = new java.util.ArrayList<>();
         for (MalformedRequestBodyException.BodyViolation item : ex.getViolations()) {
@@ -459,6 +466,19 @@ public class GlobalExceptionHandler {
      * "relationship", "date", "amount"). The test is now whether the label
      * message exists.
      */
+    /**
+     * QA D1672: a property the request does not take, named by its label: the
+     * change it carried would otherwise have been dropped behind a 200.
+     */
+    private String notAcceptedReason(String field) {
+        String label = labelOrNull(field);
+        if (label == null) {
+            return localized("error.request.fieldNotAcceptedUnlabelled",
+                "This request contains a field that cannot be changed here.");
+        }
+        return localized("error.request.fieldNotAccepted", "\"{0}\" cannot be changed here.", label);
+    }
+
     private String invalidFieldReason(String field) {
         String label = labelOrNull(field);
         if (label == null) {

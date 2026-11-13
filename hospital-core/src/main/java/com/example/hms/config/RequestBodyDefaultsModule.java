@@ -135,6 +135,35 @@ public class RequestBodyDefaultsModule extends SimpleModule {
             return collect(ctxt.getParser(), false, targetType);
         }
 
+        /**
+         * QA D1672: a property a {@code @RejectsUnknownFields} request does not
+         * declare is recorded, so the body is refused naming it instead of the
+         * change being dropped. Any other class keeps Jackson's default.
+         */
+        @Override
+        public boolean handleUnknownProperty(DeserializationContext ctxt, JsonParser p,
+                                             tools.jackson.databind.ValueDeserializer<?> deserializer,
+                                             Object beanOrClass, String propertyName) {
+            Class<?> type = beanOrClass instanceof Class<?> c ? c : beanOrClass == null ? null : beanOrClass.getClass();
+            if (type == null || !type.isAnnotationPresent(com.example.hms.validation.RejectsUnknownFields.class)
+                    || !RequestBodyProblems.collecting()) {
+                return false;
+            }
+            // On a '{' or '[' the parser already stands in the value's own context.
+            JsonToken token = p.currentToken();
+            boolean structure = token == JsonToken.START_OBJECT || token == JsonToken.START_ARRAY;
+            TokenStreamContext context = p.streamReadContext();
+            String path = jsonPath(structure && context != null ? context.getParent() : context);
+            if (path.isEmpty()) {
+                path = propertyName;
+            }
+            if (!RequestBodyProblems.recordNotAccepted(path)) {
+                return false;
+            }
+            p.skipChildren();
+            return true;
+        }
+
         @Override
         public Object handleWeirdNumberValue(DeserializationContext ctxt, Class<?> targetType,
                                              Number valueToConvert, String failureMsg) {
