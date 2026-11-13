@@ -34,10 +34,13 @@ import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { VisitSummarySectionsComponent } from '../../encounters/visit-summary-sections/visit-summary-sections.component';
+
 @Component({
   selector: 'app-checkout-dialog',
   standalone: true,
   imports: [
+    VisitSummarySectionsComponent,
     DateTimePipe,
     SubmitGuardDirective,
     ModalDialogDirective,

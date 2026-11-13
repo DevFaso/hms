@@ -71,7 +71,10 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
         Map.entry(EncounterResponseDTO.class, Set.of("notes", "esiScore", "urgency", "followUpInstructions",
             "dischargeDiagnoses", "extraFields", "note", "noteEntries")),
         Map.entry(AfterVisitSummaryDTO.class, Set.of("chiefComplaint", "dischargeDiagnoses", "prescriptionSummary",
-            "referralSummary", "followUpInstructions", "patientEducationMaterials")),
+            "referralSummary", "followUpInstructions", "patientEducationMaterials",
+            // User decision 2026-11-12: the summary's content sections; the contact numbers stay.
+            "vitalSigns", "orderedTests", "allergies", "currentMedications", "clinicalAssessment", "clinicalPlan",
+            "medicalHistory", "surgicalHistory", "familyHistory", "socialHistory")),
         Map.entry(BedBoardDTO.OccupantDTO.class, Set.of("primaryDiagnosis")),
         Map.entry(TransferOrderResponseDTO.class, Set.of("reason", "notes", "cancellationReason", "isolationOverrideReason")),
         Map.entry(IsolationPrecautionResponseDTO.class, Set.of("reason", "suspectedOrganism", "notes", "discontinuationReason")),
@@ -182,6 +185,16 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
         summary.setReferralSummary(null);
         summary.setFollowUpInstructions(null);
         summary.setPatientEducationMaterials(null);
+        summary.setVitalSigns(null);
+        summary.setOrderedTests(null);
+        summary.setAllergies(null);
+        summary.setCurrentMedications(null);
+        summary.setClinicalAssessment(null);
+        summary.setClinicalPlan(null);
+        summary.setMedicalHistory(null);
+        summary.setSurgicalHistory(null);
+        summary.setFamilyHistory(null);
+        summary.setSocialHistory(null);
     }
 
     private static void shapeBoard(BedBoardDTO board) {

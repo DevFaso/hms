@@ -277,6 +277,66 @@ export interface AfterVisitSummary {
   pendingSignature?: boolean;
   followUpAppointmentId?: string;
   followUpAppointmentDate?: string;
+  /* User decision 2026-11-12: the summary's content sections; each is empty when there is nothing to show. */
+  hospitalPhone?: string | null;
+  departmentPhone?: string | null;
+  vitalSigns?: AvsVitalSigns | null;
+  orderedTests?: AvsOrderedTest[] | null;
+  allergies?: AvsAllergy[] | null;
+  currentMedications?: AvsCurrentMedication[] | null;
+  clinicalAssessment?: string | null;
+  clinicalPlan?: string | null;
+  medicalHistory?: { condition: string; status?: string | null }[] | null;
+  surgicalHistory?: { procedure: string; date?: string | null }[] | null;
+  familyHistory?: { relationship?: string | null; condition: string }[] | null;
+  socialHistory?: {
+    tobaccoUse?: boolean | null;
+    alcoholUse?: boolean | null;
+    occupation?: string | null;
+  } | null;
+}
+
+export interface AvsVitalSigns {
+  recordedAt?: string | null;
+  temperatureCelsius?: number | null;
+  heartRateBpm?: number | null;
+  respiratoryRateBpm?: number | null;
+  systolicBpMmHg?: number | null;
+  diastolicBpMmHg?: number | null;
+  spo2Percent?: number | null;
+  bloodGlucoseMgDl?: number | null;
+  weightKg?: number | null;
+  heightCm?: number | null;
+  painScore?: number | null;
+  flagged: boolean;
+}
+
+export interface AvsTestResult {
+  value?: string | null;
+  unit?: string | null;
+  referenceRange?: string | null;
+  abnormalFlag?: string | null;
+  corrected?: boolean;
+}
+
+export interface AvsOrderedTest {
+  kind: 'LAB' | 'IMAGING';
+  name?: string | null;
+  status?: string | null;
+  results?: AvsTestResult[] | null;
+  impression?: string | null;
+}
+
+export interface AvsAllergy {
+  allergen: string;
+  severity?: string | null;
+  reaction?: string | null;
+}
+
+export interface AvsCurrentMedication {
+  name: string;
+  dosage?: string | null;
+  frequency?: string | null;
 }
 
 export interface EncounterRequest {

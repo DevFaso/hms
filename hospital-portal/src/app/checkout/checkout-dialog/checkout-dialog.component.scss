@@ -189,3 +189,11 @@ textarea.form-control {
     margin-bottom: 0.25rem;
   }
 }
+
+/* 2026-11-12: the summary's content sections below the visit details. */
+.avs-content-sections {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}

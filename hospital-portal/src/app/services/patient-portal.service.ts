@@ -3,6 +3,7 @@ import { currentLocale } from '../shared/i18n/app-locale';
 import { HttpClient, HttpResponse } from '@angular/common/http';
 import { Observable, map, catchError, of, defer } from 'rxjs';
 import { allRows, PageSlice } from '../shared/all-pages';
+import type { AfterVisitSummary as EncounterAfterVisitSummary } from './encounter.service';
 
 /* ── DTOs matching backend PatientPortalController ── */
 
@@ -752,6 +753,8 @@ interface PrescriptionApiResponse {
 
 export interface AfterVisitSummary {
   id: string;
+  /** The visit the summary closed: its content sections are read from it (2026-11-12). */
+  encounterId?: string | null;
   encounterDate: string;
   encounterType: string;
   providerName: string;
@@ -1593,6 +1596,7 @@ export class PatientPortalService {
           const summaries = this.unwrapData(response) ?? [];
           return summaries.map((d) => ({
             id: d.id,
+            encounterId: d.encounterId ?? null,
             encounterDate: d.dischargeDate ?? '',
             encounterType: d.encounterType ?? '',
             providerName: d.dischargingProviderName ?? '',
@@ -1625,6 +1629,15 @@ export class PatientPortalService {
         }),
         catchError(() => of([])),
       );
+  }
+
+  /**
+   * User decision 2026-11-12: the visit's summary sections (vital signs,
+   * tests, allergies, current medicines, assessment and plan, history), read
+   * from the patient's own visit. The server answers only for their own visit.
+   */
+  getVisitSummaryDetail(encounterId: string): Observable<EncounterAfterVisitSummary> {
+    return this.http.get<EncounterAfterVisitSummary>(`/encounters/${encounterId}/avs`);
   }
 
   // ── Record-sharing opt-out (E9 #66) ─────────────────────────────────

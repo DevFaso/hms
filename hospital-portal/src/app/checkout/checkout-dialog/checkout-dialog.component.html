@@ -235,6 +235,11 @@
           }
         </dl>
 
+        <!-- 2026-11-12: the summary's content sections, as the visit-summary dialog shows them. -->
+        <div class="avs-content-sections">
+          <app-visit-summary-sections [summary]="avs()!" />
+        </div>
+
         <footer class="dialog-footer">
           <button type="button" class="btn btn-primary" (click)="close()">
             {{ 'CHECKOUT.DONE' | translate }}

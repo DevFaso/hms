@@ -8,7 +8,8 @@
     "human typed, or that its domain is not yet traced — not a way to make the",
     "build green.",
     "Tracker department options are Department.name free text, traced through PatientTrackerMapper.departmentName; not an enum.",
-    "Result evolution unit options are LabResult.resultUnit / LabResultTrendPointDTO.resultUnit: free-text measurement-unit String fields, not enum codes. Preserve the exact recorded unit for series separation."
+    "Result evolution unit options are LabResult.resultUnit / LabResultTrendPointDTO.resultUnit: free-text measurement-unit String fields, not enum codes. Preserve the exact recorded unit for series separation.",
+    "Visit summary sections (2026-11-12): allergy reaction, prescription frequency and the family-history relationship are free text a clinician typed, as on the chart pages pinned above."
   ],
   "pinned": [
     "src/app/lab/shared/result-evolution.component.ts::<option>u",
@@ -240,7 +241,10 @@
     "src/app/transfusion/transfusion.html::g.correctionReason",
     "src/app/transfusion/transfusion.html::r.reason",
     "src/app/transfusion/transfusion.html::u.source",
-    "src/app/transfusion/transfusion.html::xm.incompatibilityReason"
+    "src/app/transfusion/transfusion.html::xm.incompatibilityReason",
+    "src/app/encounters/visit-summary-sections/visit-summary-sections.component.html::a.reaction",
+    "src/app/encounters/visit-summary-sections/visit-summary-sections.component.html::m.frequency",
+    "src/app/encounters/visit-summary-sections/visit-summary-sections.component.html::h.relationship"
   ],
   "reasons": {
     "src/app/lab/shared/result-evolution.component.ts::<option>u": "LabResultTrendPointDTO.resultUnit is a String mapped from LabResult.resultUnit (varchar 50), falling back to the test unit. LabResultRequestDTO.resultUnit is a size-bounded String entered in lab-results.html input#lr-resultUnit and submitted by LabResultsComponent.submitForm; units are free text, not enum tokens, and must retain their measurement notation.",
