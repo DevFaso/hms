@@ -356,7 +356,11 @@
         reason.
       -->
       <app-hospital-scope-chip [disableUrlSync]="true" [preserveScope]="true" />
-      <app-documents-tab [patientId]="patient()!.id" [hospitalScope]="documentsScope()" />
+      <app-documents-tab
+        [patientId]="patient()!.id"
+        [hospitalScope]="documentsScope()"
+        [insuranceOnly]="documentsInsuranceOnly()"
+      />
     }
 
     <!-- ═══ Advance Directives Tab (P2 #13 — first write surface) ═══ -->

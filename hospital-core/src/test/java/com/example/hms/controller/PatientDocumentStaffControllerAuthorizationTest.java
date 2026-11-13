@@ -22,7 +22,11 @@ class PatientDocumentStaffControllerAuthorizationTest {
 
     /** The quoted role names inside {@code hasAnyAuthority('…','…')}. */
     private static Set<String> grantedRoles() {
-        Matcher matcher = Pattern.compile("'([A-Z_]+)'").matcher(PatientDocumentStaffController.READ_ROLES);
+        return rolesIn(PatientDocumentStaffController.ACCESS_ROLES);
+    }
+
+    private static Set<String> rolesIn(String expression) {
+        Matcher matcher = Pattern.compile("'([A-Z_]+)'").matcher(expression);
         Set<String> roles = new HashSet<>();
         while (matcher.find()) {
             roles.add(matcher.group(1));
@@ -40,10 +44,26 @@ class PatientDocumentStaffControllerAuthorizationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"ROLE_PATIENT", "ROLE_LAB_SCIENTIST", "ROLE_LAB_TECHNICIAN", "ROLE_ACCOUNTANT",
-        "ROLE_RECEPTIONIST", "ROLE_PHARMACIST"}) // QA D112
+        "ROLE_PHARMACIST", "ROLE_BILLING_SPECIALIST"}) // QA D112
     void otherRolesMayNot(String role) {
         Set<String> granted = grantedRoles();
         assertThat(granted).isNotEmpty().doesNotContain(role);
+    }
+
+    /** QA D1599: reception and billing are admitted, and the service narrows them to insurance. */
+    @ParameterizedTest
+    @ValueSource(strings = {"ROLE_RECEPTIONIST"})
+    void frontDeskIsAdmittedButNeverAsAClinicalReader(String role) {
+        assertThat(grantedRoles()).contains(role);
+        assertThat(rolesIn(PatientDocumentStaffController.READ_ROLES)).doesNotContain(role);
+    }
+
+    /** The service's full-access set is exactly the clinical gate: a drift either way is a defect. */
+    @Test
+    void serviceClinicalReadersMirrorTheClinicalGate() {
+        assertThat(com.example.hms.service.impl.PatientDocumentServiceImpl.CLINICAL_READERS)
+            .isEqualTo(rolesIn(PatientDocumentStaffController.READ_ROLES));
+        assertThat(grantedRoles()).containsAll(rolesIn(PatientDocumentStaffController.READ_ROLES));
     }
 
     @Test
@@ -55,7 +75,7 @@ class PatientDocumentStaffControllerAuthorizationTest {
                 .orElseThrow(() -> new NoSuchMethodException(name));
             PreAuthorize gate = method.getAnnotation(PreAuthorize.class);
             assertThat(gate).as(name).isNotNull();
-            assertThat(gate.value()).isEqualTo(PatientDocumentStaffController.READ_ROLES);
+            assertThat(gate.value()).isEqualTo(PatientDocumentStaffController.ACCESS_ROLES);
         }
     }
 }

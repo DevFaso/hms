@@ -4045,11 +4045,12 @@
     "EXPECTED_RESULT": "Expected result",
     "CORRECTED_HINT_PATIENT": "The laboratory corrected this result after first releasing it. This is the value that counts; your care team has been told.",
     "RANGE_APPLIED": "Range applied to this patient",
-    "RANGE_SOURCE": "Source",
+    "RANGE_SOURCE": "Source (as entered)",
     "UNIT_FROM_TEST": "Unit of the test: {{unit}}. A value in another unit may not be graded.",
     "UNGRADED_RELEASE_TITLE": "Release a result that is not graded",
     "UNGRADED_RELEASE_CONFIRM": "I reviewed it, release",
-    "ROW_PENDING_RELEASE": "Pending release"
+    "ROW_PENDING_RELEASE": "Pending release",
+    "RANGE_NOTES_AS_ENTERED": "Note (as entered)"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Abnormal",
@@ -10523,6 +10524,9 @@
     "RETRY": "Retry",
     "NO_DOCUMENTS": "The patient has not uploaded any documents.",
     "NO_DOCUMENTS_OF_TYPE": "No documents of this type.",
+    "INSURANCE_TITLE": "Insurance documents",
+    "INSURANCE_HINT": "Insurance papers the patient added from their portal (insurance card, coverage letters). Read-only here; every download is recorded in the audit log.",
+    "NO_INSURANCE_DOCUMENTS": "The patient has not uploaded any insurance documents.",
     "COL_DOCUMENT": "Document",
     "COL_TYPE": "Type",
     "COL_COLLECTED": "Collected",
@@ -13328,10 +13332,10 @@
     "UNIT": "Unit",
     "LOADING": "Loading result history…",
     "ERROR": "History could not be loaded. Close and reopen the details to retry.",
-    "NOTE": "Exact numeric observations are plotted separately by unit. Dates are spaced to scale. Historical records may include earlier versions; corrected records are marked. No clinical interpretation is inferred.",
+    "NOTE": "Exact numeric observations are plotted in one unit when the conversion is exact (a decimal factor between mass units, or the analyte's known molar mass); otherwise separately by unit. Dates are spaced to scale. Historical records may include earlier versions; corrected records are marked. No clinical interpretation is inferred.",
     "TIME_AXIS": "Time",
     "CHART_LABEL": "Historical observations; exact values are available in the observations table.",
-    "INSUFFICIENT": "At least two dated numeric observations in the same known unit are needed.",
+    "INSUFFICIENT": "At least two dated numeric observations in the same known unit, or a convertible one, are needed.",
     "OBSERVATIONS": "All observations",
     "PAGINATION": "Results pagination",
     "RANGE": "{{start}}–{{end}} of {{total}} results",
@@ -13340,7 +13344,10 @@
     "PAGE": "Page {{page}} of {{pages}}",
     "NEXT": "Next page",
     "AUDIT_TITLE": "Recorded result versions",
-    "CORRECTION_NOTE": "This history includes corrections. Superseded versions cannot be identified in this history. Points show recorded values only; connecting lines and deltas are withheld. Consult the observations and correction records before interpreting changes."
+    "CORRECTION_NOTE": "This history includes corrections. Superseded versions cannot be identified in this history. Points show recorded values only; connecting lines and deltas are withheld. Consult the observations and correction records before interpreting changes.",
+    "CONVERSION_NOTE": "Values recorded in another unit are converted to {{unit}} for the chart. The recorded value and unit stay visible, marked “converted”.",
+    "CONVERTED_FROM": "converted, recorded value: {{value}}",
+    "CONVERTED_TO": "converted: {{value}}"
   },
   "LAB_RANGE": {
     "TITLE": "Result position",
