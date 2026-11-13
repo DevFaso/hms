@@ -337,6 +337,30 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     /**
+     * User decision 2026-11-12: the after-visit summary's content sections.
+     * Setter-injected like {@link #recallService}; null in constructor-built
+     * unit tests, where the summary keeps its original sections.
+     */
+    private AfterVisitSummarySections afterVisitSummarySections;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setAfterVisitSummarySections(AfterVisitSummarySections afterVisitSummarySections) {
+        this.afterVisitSummarySections = afterVisitSummarySections;
+    }
+
+    /**
+     * The summary's content sections, for every reader but the desk: a
+     * receptionist reads none of them (RCPT-CLIN), so they are not even read.
+     */
+    private void fillSummarySections(Encounter encounter,
+                                     com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO avs) {
+        if (afterVisitSummarySections != null
+                && !com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly()) {
+            afterVisitSummarySections.fill(encounter, avs);
+        }
+    }
+
+    /**
      * QA D1126 (round 20): the visit's paid check-in copays, which a close
      * without a consultation must not leave standing. Setter-injected like
      * {@link #recallService}; null in constructor-built unit tests, where no
@@ -2743,6 +2767,7 @@ public class EncounterServiceImpl implements EncounterService {
                 avs.setPrescriptionSummary(medicationsAtDischarge(summary));
             }
         });
+        fillSummarySections(encounter, avs);
         publishCheckedOut(encounter, now);
         return avs;
     }
@@ -3411,6 +3436,7 @@ public class EncounterServiceImpl implements EncounterService {
                 .filter(r -> r.getDueDate() != null)
                 .ifPresent(r -> avs.setFollowUpAppointmentDate(r.getDueDate().toString()));
         }
+        fillSummarySections(encounter, avs);
         return avs;
     }
 

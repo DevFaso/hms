@@ -39,6 +39,7 @@ class ClinicalLabResultReadPathGuardTest {
         "com/example/hms/service/PatientServiceImpl.java",                   // timeline + patient record
         "com/example/hms/service/PatientSnapshotServiceImpl.java",           // staff snapshot
         "com/example/hms/service/impl/PatientLabResultServiceImpl.java",     // portal + staff lab list
+        "com/example/hms/service/AfterVisitSummarySections.java",            // after-visit summary's tests
         "com/example/hms/service/ResultReviewServiceImpl.java",              // doctor's review queue
         "com/example/hms/service/LabResultServiceImpl.java",                 // list, by-id, compare, trend
         "com/example/hms/fhir/provider/ObservationFhirResourceProvider.java",

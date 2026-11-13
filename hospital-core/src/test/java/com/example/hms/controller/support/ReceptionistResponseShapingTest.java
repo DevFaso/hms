@@ -275,6 +275,45 @@ class ReceptionistResponseShapingTest {
         return precaution;
     }
 
+    /** The after-visit summary fields the desk keeps: the visit, the patient, whom to call, the follow-up date. */
+    private static final Set<String> AVS_KEPT = Set.of("encounterId", "appointmentId", "visitDate", "providerName",
+        "departmentName", "hospitalName", "hospitalPhone", "departmentPhone", "patientId", "patientName",
+        "encounterStatus", "appointmentStatus", "checkoutTimestamp", "followUpAppointmentId", "followUpAppointmentDate",
+        // #1138: a status flag ("not finalised"), not clinical content; the desk may see it.
+        "pendingSignature");
+
+    @Test
+    @DisplayName("2026-11-12: every after-visit summary field is kept or removed, and a removed one is empty")
+    void everySummaryFieldIsKeptOrRemoved() {
+        Set<String> removed = ReceptionistResponseShaping.REMOVED.get(AfterVisitSummaryDTO.class);
+        Set<String> unclassified = new java.util.TreeSet<>();
+        for (java.lang.reflect.Field field : AfterVisitSummaryDTO.class.getDeclaredFields()) {
+            if (!java.lang.reflect.Modifier.isStatic(field.getModifiers())
+                    && !AVS_KEPT.contains(field.getName()) && !removed.contains(field.getName())) {
+                unclassified.add(field.getName());
+            }
+        }
+        assertThat(unclassified).as("a new summary field: the desk keeps it (AVS_KEPT) or loses it (REMOVED)").isEmpty();
+
+        signedInAs("ROLE_RECEPTIONIST");
+        AfterVisitSummaryDTO summary = new AfterVisitSummaryDTO();
+        for (String field : removed) {
+            Class<?> type = org.springframework.util.ReflectionUtils.findField(AfterVisitSummaryDTO.class, field).getType();
+            Object value = type == String.class ? "x"
+                : List.class.isAssignableFrom(type) ? List.of("x") : mock(type);
+            ReflectionTestUtils.setField(summary, field, value);
+        }
+        summary.setHospitalPhone("25 30 00 00");
+        summary.setPendingSignature(true);
+        write(summary, "/encounters/1/avs");
+        for (String field : removed) {
+            Object value = ReflectionTestUtils.getField(summary, field);
+            assertThat(value == null || (value instanceof List<?> list && list.isEmpty())).as(field).isTrue();
+        }
+        assertThat(summary.getHospitalPhone()).isEqualTo("25 30 00 00");
+        assertThat(summary.isPendingSignature()).isTrue();
+    }
+
     @Test
     @DisplayName("what the guard is told is removed is what is removed, type by type")
     void theDeclaredListIsTheTruth() {
@@ -316,6 +355,6 @@ class ReceptionistResponseShapingTest {
         if (java.util.Map.class.isAssignableFrom(type)) {
             return Map.of();
         }
-        return org.mockito.Mockito.mock(type);
+        return mock(type);
     }
 }

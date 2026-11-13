@@ -79,6 +79,28 @@ class PatientVitalSignObservationSetQueryTest {
         }
     }
 
+    @Test
+    void avsFindsLatestSetBehindMoreThanTwentyIsolatedMeasurements() {
+        LocalDateTime from = LocalDateTime.of(2026, 11, 1, 8, 0);
+        LocalDateTime to = from.plusHours(2);
+        row(from.minusMinutes(1), v -> v.setTemperatureCelsius(39.0));
+        row(from.plusMinutes(1), v -> v.setHeartRateBpm(80));
+        PatientVitalSign latestSet = row(from.plusMinutes(2), v -> v.setHeartRateBpm(88));
+        for (int i = 0; i < 25; i++) {
+            row(from.plusMinutes(3 + i), v -> v.setBloodGlucoseMgDl(110));
+        }
+        row(to.plusMinutes(1), v -> v.setHeartRateBpm(120));
+        Hospital elsewhere = entityManager.persistAndFlush(Hospital.builder()
+            .name("Elsewhere").code("VS" + suffix()).address("1 Main St").phoneNumber("5550100").build());
+        PatientVitalSign foreign = row(from.plusHours(1), v -> v.setHeartRateBpm(130));
+        foreign.setHospital(elsewhere);
+        entityManager.flush();
+
+        assertThat(repository.findObservationSetsWithinRange(patient.getId(), hospital.getId(), from, to,
+            org.springframework.data.domain.PageRequest.of(0, 1)))
+            .extracting(PatientVitalSign::getId).containsExactly(latestSet.getId());
+    }
+
     private PatientVitalSign row(LocalDateTime at, java.util.function.Consumer<PatientVitalSign> reading) {
         PatientVitalSign v = PatientVitalSign.builder().patient(patient).hospital(hospital).recordedAt(at).build();
         reading.accept(v);

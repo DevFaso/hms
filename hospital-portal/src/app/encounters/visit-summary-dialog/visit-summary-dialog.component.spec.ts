@@ -98,6 +98,42 @@ describe('VisitSummaryDialogComponent', () => {
     expect(root.querySelector('#avs-patient')?.textContent).toContain('VISIT_SUMMARY.NOT_PROVIDED');
   });
 
+  it('2026-11-12: shows the content sections, and a summary with only those is not empty', () => {
+    const fixture = render({
+      encounterId: 'cdx-sections',
+      visitDate: '',
+      providerName: '',
+      departmentName: '',
+      hospitalName: '',
+      dischargeDiagnoses: [],
+      encounterStatus: '',
+      checkoutTimestamp: '',
+      currentMedications: [{ name: 'Cdx medicine' }],
+    });
+    const root: HTMLElement = fixture.nativeElement;
+    expect(root.querySelector('[data-testid="avs-medications"]')?.textContent).toContain(
+      'Cdx medicine',
+    );
+    expect(root.querySelector('.avs-empty')).toBeNull();
+  });
+
+  it('shows contact-only summaries without the empty-summary message', () => {
+    const fixture = render({
+      encounterId: 'contact-only',
+      visitDate: '',
+      providerName: '',
+      departmentName: '',
+      hospitalName: '',
+      dischargeDiagnoses: [],
+      encounterStatus: '',
+      checkoutTimestamp: '',
+      hospitalPhone: '5550100',
+    });
+    const root: HTMLElement = fixture.nativeElement;
+    expect(root.textContent).toContain('5550100');
+    expect(root.querySelector('.avs-empty')).toBeNull();
+  });
+
   it('emits close from both buttons without modifying the summary', () => {
     const fixture = render(summary);
     const close = jasmine.createSpy('close');

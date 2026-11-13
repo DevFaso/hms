@@ -6487,6 +6487,12 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Molar-mass table:** only glucose (180.16 g/mol) is listed; any other analyte (creatinine, urea, cholesterol, bilirubin…) needs a sourced molar mass and a clinician's sign-off before mmol/L ↔ mg/dL is merged.
 - **Free-text wrap guard:** `.free-text` is the class to add to any new free-text display; no gate yet finds a note interpolation outside a wrapping class.
 
+## Standing debt — visit summary content (feat/visit-summary-content)
+
+- **Per-value vital flags:** the summary marks the whole vital-sign set as flagged (VitalSignJudgement's clinicallySignificant); no per-value flag is stored, and marking single values needs a sourced range per value.
+- **Staff visit-summary print:** the staff dialog has no print action (the patient portal's card prints through window.print); add one with a print stylesheet if the desk needs paper copies.
+- **Cross-hospital sections:** medicines, history and vitals are read at the visit's hospital only (allergies follow the patient); showing a shared patient's other-hospital medicines needs the #1103 disclosure audit on this read.
+- **Social history scope:** only tobacco, alcohol and occupation are shown; any other field needs a decision (sexual health, abuse and safety stay on the chart).
 ## Standing debt — unsigned-note workflow (feat/unsigned-note-workflow)
 
 - **Provisional platform rule, not a clinical sign-off:** a visit closes without waiting for the doctor; at close each unsigned note goes to its author's in-basket ("Note à signer"), the visit summary (staff "Résumé de visite" and patient portal) reads "Non finalisé — en attente de signature du praticien" until every note is signed, the item becomes a reminder after 24 h, and the hospital admin sees notes unsigned for more than 72 h (`/unsigned-notes`). The 24 h and 72 h delays and the wording need a named clinical approver before prod.

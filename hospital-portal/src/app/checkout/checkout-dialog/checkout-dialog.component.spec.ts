@@ -262,6 +262,16 @@ x`);
     expect(el.textContent).toContain('Dr Smith');
   });
 
+  it('2026-11-12: the preview shows the plan, which has left the follow-up text', () => {
+    encounterSpy.checkOut.and.returnValue(of({ ...sampleAvs, clinicalPlan: 'Plan-cdx' }));
+    component.followUpInstructions.set('Repos');
+    component.submit();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="avs-plan"]')?.textContent).toContain('Plan-cdx');
+  });
+
   it('should show form when avs is null', () => {
     const el: HTMLElement = fixture.nativeElement;
     const form = el.querySelector('form');
