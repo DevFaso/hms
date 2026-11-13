@@ -316,8 +316,8 @@
       "ERROR": "L’arrivée n’a pas pu être consignée."
     },
     "BABY_OUTCOME": "Bébé {{order}}",
-    "BABY_OUTCOME_LIVE": "Né vivant",
-    "BABY_OUTCOME_STILLBORN": "Mort-né (sans signe de vie)",
+    "BABY_OUTCOME_LIVE": "Né(e) vivant(e)",
+    "BABY_OUTCOME_STILLBORN": "Mort-né(e) (sans signe de vie)",
     "BABY_OUTCOME_UNKNOWN": "Non renseigné",
     "BABY_OUTCOMES": "Issue de chaque bébé",
     "FETAL_DEATH_EVENT_RECORDED": "Mortinaissance enregistrée comme événement de décès fœtal (sans dossier patient) : elle est comptée dans le registre de mortalité."

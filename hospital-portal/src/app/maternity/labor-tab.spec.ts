@@ -1323,8 +1323,8 @@ describe('LaborTabComponent newborns (QA D1592)', () => {
     const outcomes = (
       page.querySelector('[data-testid="delivery-baby-outcomes"]')?.textContent ?? ''
     ).replace(/\s+/g, ' ');
-    expect(outcomes).toContain('Bébé 1 : Né vivant');
-    expect(outcomes).toContain('Bébé 2 : Mort-né (sans signe de vie)');
+    expect(outcomes).toContain('Bébé 1 : Né(e) vivant(e)');
+    expect(outcomes).toContain('Bébé 2 : Mort-né(e) (sans signe de vie)');
     expect(page.querySelector('[data-testid="delivery-fetal-death-event"]')).not.toBeNull();
   });
 });

@@ -316,7 +316,7 @@
       "ERROR": "No se pudo registrar la llegada."
     },
     "BABY_OUTCOME": "Bebé {{order}}",
-    "BABY_OUTCOME_LIVE": "Nacido vivo",
+    "BABY_OUTCOME_LIVE": "Nacido/a vivo/a",
     "BABY_OUTCOME_STILLBORN": "Mortinato (sin signos de vida)",
     "BABY_OUTCOME_UNKNOWN": "No registrado",
     "BABY_OUTCOMES": "Resultado de cada bebé",
