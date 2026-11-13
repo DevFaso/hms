@@ -165,6 +165,22 @@ export interface DeliveryRecordResponse {
   perinealTear: PerinealTear | null;
   notes: string | null;
   alerts: LaborAlert[];
+  /** QA D1592: the babies this delivery registered as patients (empty for a stillbirth). */
+  newborns?: DeliveryNewborn[];
+  /** QA D1592: the babies are not registered yet; reception registers them. */
+  newbornRegistrationPending?: boolean;
+}
+
+/** QA D1592: a baby a recorded delivery registered as its own patient. */
+export interface DeliveryNewborn {
+  patientId: string;
+  displayName: string | null;
+  mrn: string | null;
+  birthOrder: number;
+  /** The live-birth count no longer matches the babies registered: someone must review it. */
+  needsReview: boolean;
+  /** Why: LIVE_BIRTH_COUNT_LOWERED or NO_LONGER_LIVE_BIRTH. */
+  reviewReason?: 'LIVE_BIRTH_COUNT_LOWERED' | 'NO_LONGER_LIVE_BIRTH' | null;
 }
 
 @Injectable({ providedIn: 'root' })

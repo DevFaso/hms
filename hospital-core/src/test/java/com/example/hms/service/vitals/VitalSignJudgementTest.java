@@ -45,8 +45,10 @@ class VitalSignJudgementTest {
     private final NewbornAssessmentRepository assessments = mock(NewbornAssessmentRepository.class);
     private final News2EscalationService news2 = mock(News2EscalationService.class);
     private final NotificationService notifications = mock(NotificationService.class);
+    private final com.example.hms.repository.DeliveryNewbornRepository deliveryNewborns =
+        mock(com.example.hms.repository.DeliveryNewbornRepository.class);
     private final VitalSignJudgement judgement = new VitalSignJudgement(assessments, news2, notifications,
-        com.example.hms.i18n.TestMessageSources.bundles());
+        com.example.hms.i18n.TestMessageSources.bundles(), deliveryNewborns);
 
     @AfterEach
     void resetLocale() {

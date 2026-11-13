@@ -76,7 +76,8 @@ class PatientVitalSignServiceImplTest {
         org.springframework.test.util.ReflectionTestUtils.setField(patientVitalSignService, "vitalSignJudgement", new com.example.hms.service.vitals.VitalSignJudgement(
             org.mockito.Mockito.mock(com.example.hms.repository.NewbornAssessmentRepository.class), news2EscalationService,
             org.mockito.Mockito.mock(com.example.hms.service.NotificationService.class),
-            com.example.hms.i18n.TestMessageSources.bundles()));
+            com.example.hms.i18n.TestMessageSources.bundles(),
+            org.mockito.Mockito.mock(com.example.hms.repository.DeliveryNewbornRepository.class)));
     }
 
     @org.junit.jupiter.api.AfterEach

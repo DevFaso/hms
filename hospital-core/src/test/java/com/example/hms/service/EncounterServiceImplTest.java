@@ -159,7 +159,8 @@ class EncounterServiceImplTest {
         org.springframework.test.util.ReflectionTestUtils.setField(service, "vitalSignJudgement", new com.example.hms.service.vitals.VitalSignJudgement(
             org.mockito.Mockito.mock(com.example.hms.repository.NewbornAssessmentRepository.class), news2EscalationService,
             org.mockito.Mockito.mock(com.example.hms.service.NotificationService.class),
-            com.example.hms.i18n.TestMessageSources.bundles()));
+            com.example.hms.i18n.TestMessageSources.bundles(),
+            org.mockito.Mockito.mock(com.example.hms.repository.DeliveryNewbornRepository.class)));
         com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
         signInAsDoctor();
         // The services ask the one PatientSubjectReadGuard; it is built here over

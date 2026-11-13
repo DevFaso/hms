@@ -276,6 +276,27 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(timeout = 20)
     public UserResponseDTO createUserWithRolesAndHospital(AdminSignupRequest request) {
+        return createAccount(request, null);
+    }
+
+    /**
+     * QA D1592: the account of a baby a recorded delivery registers. The
+     * clinician who recorded the birth may not be a registrar (a doctor), so
+     * the grant is not the caller's: it is PATIENT, at the delivering hospital
+     * only. Everything else is the normal registration (duplicate checks,
+     * generated username, PATIENT assignment). Called by
+     * NewbornRegistrationService only (NewbornRegistrationGuardTest).
+     */
+    @Override
+    @Transactional
+    public UserResponseDTO createNewbornPatientAccount(AdminSignupRequest request, UUID deliveringHospitalId) {
+        java.util.Objects.requireNonNull(deliveringHospitalId, "deliveringHospitalId");
+        request.setRoleNames(new LinkedHashSet<>(Set.of("PATIENT")));
+        request.setHospitalId(deliveringHospitalId);
+        return createAccount(request, UserAccountAccess.Grant.newbornPatientAt(deliveringHospitalId));
+    }
+
+    private UserResponseDTO createAccount(AdminSignupRequest request, UserAccountAccess.Grant presetGrant) {
         log.info("[SERVICE] Starting createUserWithRolesAndHospital for username={}, hospitalId={}, roles={}",
                 request.getUsername(), request.getHospitalId(), request.getRoleNames());
 
@@ -315,7 +336,7 @@ public class UserServiceImpl implements UserService {
         // check either. The hospital half of the check is at step 1.
         final UserAccountAccess.Grant grant;
         try {
-            grant = accountAccess.requireMayGrant(roleNames);
+            grant = presetGrant != null ? presetGrant : accountAccess.requireMayGrant(roleNames);
         } catch (AccessDeniedException denied) {
             throw refusedGrant(roleNames, denied);
         }
