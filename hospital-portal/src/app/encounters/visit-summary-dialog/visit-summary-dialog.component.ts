@@ -38,6 +38,8 @@ export class VisitSummaryDialogComponent {
       s.followUpInstructions ||
       s.patientEducationMaterials ||
       s.followUpAppointmentDate ||
+      s.hospitalPhone ||
+      s.departmentPhone ||
       hasContentSections(s)
     );
   });

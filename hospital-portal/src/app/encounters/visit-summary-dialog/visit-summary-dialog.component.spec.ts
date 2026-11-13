@@ -117,6 +117,23 @@ describe('VisitSummaryDialogComponent', () => {
     expect(root.querySelector('.avs-empty')).toBeNull();
   });
 
+  it('shows contact-only summaries without the empty-summary message', () => {
+    const fixture = render({
+      encounterId: 'contact-only',
+      visitDate: '',
+      providerName: '',
+      departmentName: '',
+      hospitalName: '',
+      dischargeDiagnoses: [],
+      encounterStatus: '',
+      checkoutTimestamp: '',
+      hospitalPhone: '5550100',
+    });
+    const root: HTMLElement = fixture.nativeElement;
+    expect(root.textContent).toContain('5550100');
+    expect(root.querySelector('.avs-empty')).toBeNull();
+  });
+
   it('emits close from both buttons without modifying the summary', () => {
     const fixture = render(summary);
     const close = jasmine.createSpy('close');

@@ -86,8 +86,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AfterVisitSummarySections {
 
-    /** How many rows of the visit's window are looked at to find its last observation set. */
-    private static final int VITALS_WINDOW = 20;
     private static final String LAB = "LAB";
     private static final String IMAGING = "IMAGING";
 
@@ -155,18 +153,23 @@ public class AfterVisitSummarySections {
         String plan = trimToNull(note.getPlan());
         avs.setClinicalPlan(plan);
         if (plan != null) {
-            avs.setFollowUpInstructions(withoutParagraph(avs.getFollowUpInstructions(), plan));
+            avs.setFollowUpInstructions(withoutPlanSuffix(avs.getFollowUpInstructions(), plan));
         }
     }
 
-    /** {@code text} less every paragraph equal to {@code paragraph}; null when nothing is left. */
-    static String withoutParagraph(String text, String paragraph) {
+    /** Remove only the complete plan appended by CheckOutMapper, including multi-paragraph plans. */
+    static String withoutPlanSuffix(String text, String plan) {
         if (text == null) {
             return null;
         }
-        String kept = java.util.Arrays.stream(text.split("\\n\\n"))
-            .filter(part -> !part.trim().equals(paragraph))
-            .collect(Collectors.joining("\n\n"));
+        String kept = text.trim();
+        if (kept.equals(plan)) {
+            return null;
+        }
+        String suffix = "\n\n" + plan;
+        if (kept.endsWith(suffix)) {
+            kept = kept.substring(0, kept.length() - suffix.length());
+        }
         return trimToNull(kept);
     }
 
@@ -181,10 +184,11 @@ public class AfterVisitSummarySections {
         if (from == null) {
             return null;
         }
-        List<PatientVitalSign> rows = vitalSignRepository.findWithinRange(patientId, hospitalId, from,
-            encounter.getCheckoutTimestamp(), PageRequest.of(0, VITALS_WINDOW));
-        PatientVitalSign chosen = rows.stream().filter(AfterVisitSummarySections::isObservationSet).findFirst()
-            .orElse(rows.isEmpty() ? null : rows.get(0));
+        // Filter in the query: recent isolated measurements must not push the last set off a page.
+        PatientVitalSign chosen = vitalSignRepository.findObservationSetsWithinRange(patientId, hospitalId, from,
+                encounter.getCheckoutTimestamp(), PageRequest.of(0, 1)).stream().findFirst()
+            .orElseGet(() -> vitalSignRepository.findWithinRange(patientId, hospitalId, from,
+                encounter.getCheckoutTimestamp(), PageRequest.of(0, 1)).stream().findFirst().orElse(null));
         if (chosen == null) {
             return null;
         }
@@ -202,11 +206,6 @@ public class AfterVisitSummarySections {
             .painScore(chosen.getPainScore())
             .flagged(chosen.isClinicallySignificant())
             .build();
-    }
-
-    private static boolean isObservationSet(PatientVitalSign v) {
-        return v.getTemperatureCelsius() != null || v.getHeartRateBpm() != null || v.getRespiratoryRateBpm() != null
-            || v.getSystolicBpMmHg() != null || v.getDiastolicBpMmHg() != null || v.getSpo2Percent() != null;
     }
 
     /**

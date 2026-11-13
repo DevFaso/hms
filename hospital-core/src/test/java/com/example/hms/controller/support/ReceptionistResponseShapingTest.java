@@ -300,16 +300,18 @@ class ReceptionistResponseShapingTest {
         for (String field : removed) {
             Class<?> type = org.springframework.util.ReflectionUtils.findField(AfterVisitSummaryDTO.class, field).getType();
             Object value = type == String.class ? "x"
-                : List.class.isAssignableFrom(type) ? List.of("x") : org.mockito.Mockito.mock(type);
+                : List.class.isAssignableFrom(type) ? List.of("x") : mock(type);
             ReflectionTestUtils.setField(summary, field, value);
         }
         summary.setHospitalPhone("25 30 00 00");
+        summary.setPendingSignature(true);
         write(summary, "/encounters/1/avs");
         for (String field : removed) {
             Object value = ReflectionTestUtils.getField(summary, field);
             assertThat(value == null || (value instanceof List<?> list && list.isEmpty())).as(field).isTrue();
         }
         assertThat(summary.getHospitalPhone()).isEqualTo("25 30 00 00");
+        assertThat(summary.isPendingSignature()).isTrue();
     }
 
     @Test
@@ -353,6 +355,6 @@ class ReceptionistResponseShapingTest {
         if (java.util.Map.class.isAssignableFrom(type)) {
             return Map.of();
         }
-        return org.mockito.Mockito.mock(type);
+        return mock(type);
     }
 }

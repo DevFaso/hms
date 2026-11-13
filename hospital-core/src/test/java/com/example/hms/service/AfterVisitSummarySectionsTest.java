@@ -61,6 +61,10 @@ import static org.mockito.Mockito.when;
 @DisplayName("User decision 2026-11-12: the after-visit summary's content sections")
 class AfterVisitSummarySectionsTest {
 
+    private static final java.util.regex.Pattern RELATED_PATIENT_TYPE = java.util.regex.Pattern.compile(
+        "proxy|guardian|mother|parent|relationship|link|newborn|relative|kin|household|patientrepository",
+        java.util.regex.Pattern.CASE_INSENSITIVE);
+
     private final PatientVitalSignRepository vitals = mock(PatientVitalSignRepository.class);
     private final LabOrderRepository labOrders = mock(LabOrderRepository.class);
     private final LabResultRepository labResults = mock(LabResultRepository.class);
@@ -131,15 +135,13 @@ class AfterVisitSummarySectionsTest {
     @Test
     @DisplayName("the visit's last observation set, read in the visit's window at its hospital, with its flag")
     void vitalSignsOfTheVisit() {
-        PatientVitalSign weightOnly = new PatientVitalSign();
-        weightOnly.setWeightKg(12.4);
         PatientVitalSign set = new PatientVitalSign();
         set.setTemperatureCelsius(38.6);
         set.setHeartRateBpm(128);
         set.setSpo2Percent(96);
         set.setClinicallySignificant(true);
-        when(vitals.findWithinRange(eq(patientId), eq(hospitalId), eq(encounter.getArrivalTimestamp()),
-            eq(encounter.getCheckoutTimestamp()), any())).thenReturn(List.of(weightOnly, set));
+        when(vitals.findObservationSetsWithinRange(eq(patientId), eq(hospitalId), eq(encounter.getArrivalTimestamp()),
+            eq(encounter.getCheckoutTimestamp()), any())).thenReturn(List.of(set));
 
         AfterVisitSummaryDTO.VitalSignsResponse shown = fill().getVitalSigns();
 
@@ -154,7 +156,7 @@ class AfterVisitSummarySectionsTest {
         PatientVitalSign earlier = new PatientVitalSign();
         earlier.setRecordedAt(encounter.getEncounterDate().plusMinutes(15));
         earlier.setTemperatureCelsius(38.6);
-        when(vitals.findWithinRange(eq(patientId), eq(hospitalId), any(), any(), any()))
+        when(vitals.findObservationSetsWithinRange(eq(patientId), eq(hospitalId), any(), any(), any()))
             .thenAnswer(invocation -> {
                 LocalDateTime from = invocation.getArgument(2);
                 return from.isAfter(earlier.getRecordedAt()) ? List.of() : List.of(earlier);
@@ -169,6 +171,18 @@ class AfterVisitSummarySectionsTest {
         fill();
         verify(vitals).findWithinRange(eq(patientId), eq(hospitalId), eq(encounter.getEncounterDate()),
             eq(encounter.getCheckoutTimestamp()), any());
+    }
+
+    @Test
+    void isolatedMeasurementIsUsedOnlyWhenNoObservationSetExists() {
+        PatientVitalSign glucose = new PatientVitalSign();
+        glucose.setBloodGlucoseMgDl(110);
+        when(vitals.findWithinRange(eq(patientId), eq(hospitalId), eq(encounter.getArrivalTimestamp()),
+            eq(encounter.getCheckoutTimestamp()), any())).thenReturn(List.of(glucose));
+
+        assertThat(fill().getVitalSigns().getBloodGlucoseMgDl()).isEqualTo(110);
+        verify(vitals).findObservationSetsWithinRange(eq(patientId), eq(hospitalId),
+            eq(encounter.getArrivalTimestamp()), eq(encounter.getCheckoutTimestamp()), any());
     }
 
     @Test
@@ -275,6 +289,23 @@ class AfterVisitSummarySectionsTest {
     }
 
     @Test
+    void multiParagraphPlanAppendedByTheMapperIsShownOnlyInItsOwnSection() {
+        EncounterNote signed = new EncounterNote();
+        signed.setPlan("First plan paragraph\n\nSecond plan paragraph");
+        signed.setPatientInstructions("Keep these instructions");
+        signed.setSignedAt(LocalDateTime.now());
+        signed.setCreatedAt(LocalDateTime.now().minusHours(1));
+        encounter.setEncounterNote(signed);
+        AfterVisitSummaryDTO avs = new com.example.hms.mapper.CheckOutMapper()
+            .toAfterVisitSummary(encounter, null, null);
+
+        sections.fill(encounter, avs);
+
+        assertThat(avs.getFollowUpInstructions()).isEqualTo("Keep these instructions");
+        assertThat(avs.getClinicalPlan()).isEqualTo(signed.getPlan());
+    }
+
+    @Test
     @DisplayName("histories: this patient's own, a removed diagnosis and a corrected family entry left out")
     void historiesOfThePatient() {
         PatientProblem asthma = new PatientProblem();
@@ -360,8 +391,7 @@ class AfterVisitSummarySectionsTest {
         List<String> related = new ArrayList<>();
         for (Constructor<?> constructor : constructors) {
             for (Class<?> type : constructor.getParameterTypes()) {
-                if (type.getSimpleName().matches("(?i).*(proxy|guardian|mother|parent|relationship|link|newborn|"
-                        + "relative|kin|household|patientrepository).*")) {
+                if (RELATED_PATIENT_TYPE.matcher(type.getSimpleName()).find()) {
                     related.add(type.getSimpleName());
                 }
             }
@@ -370,12 +400,16 @@ class AfterVisitSummarySectionsTest {
     }
 
     @Test
-    @DisplayName("withoutParagraph drops only the exact paragraph")
-    void withoutParagraph() {
-        assertThat(AfterVisitSummarySections.withoutParagraph("A\n\nB", "B")).isEqualTo("A");
-        assertThat(AfterVisitSummarySections.withoutParagraph("B", "B")).isNull();
-        assertThat(AfterVisitSummarySections.withoutParagraph("AB", "B")).isEqualTo("AB");
-        assertThat(AfterVisitSummarySections.withoutParagraph(null, "B")).isNull();
+    @DisplayName("withoutPlanSuffix drops only the complete appended plan")
+    void withoutPlanSuffix() {
+        assertThat(AfterVisitSummarySections.withoutPlanSuffix("A\n\nB", "B")).isEqualTo("A");
+        assertThat(AfterVisitSummarySections.withoutPlanSuffix("B", "B")).isNull();
+        assertThat(AfterVisitSummarySections.withoutPlanSuffix("AB", "B")).isEqualTo("AB");
+        assertThat(AfterVisitSummarySections.withoutPlanSuffix(null, "B")).isNull();
+        assertThat(AfterVisitSummarySections.withoutPlanSuffix("A\n\nB\n\nC", "B\n\nC")).isEqualTo("A");
+        assertThat(AfterVisitSummarySections.withoutPlanSuffix("B\n\nC", "B\n\nC")).isNull();
+        assertThat(AfterVisitSummarySections.withoutPlanSuffix("B\n\nA", "B")).isEqualTo("B\n\nA");
+        assertThat(AfterVisitSummarySections.withoutPlanSuffix("A\n\nB\n\nC", "B")).isEqualTo("A\n\nB\n\nC");
     }
 
     private static LabOrder labOrder(String name, LabOrderStatus status) {

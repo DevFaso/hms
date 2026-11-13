@@ -79,14 +79,14 @@ export class MySummariesComponent implements OnInit {
       : null;
   }
 
-  /** The follow-up text, less the plan once the plan has its own section (no paragraph twice). */
+  /** Remove the complete plan suffix appended by CheckOutMapper once it has its own section. */
   followUpText(s: AfterVisitSummary): string {
     const plan = this.details()[s.id]?.clinicalPlan?.trim();
     if (!plan || !s.followUpInstructions) return s.followUpInstructions;
-    return s.followUpInstructions
-      .split('\n\n')
-      .filter((part) => part.trim() !== plan)
-      .join('\n\n');
+    const text = s.followUpInstructions.trim();
+    if (text === plan) return '';
+    const suffix = '\n\n' + plan;
+    return text.endsWith(suffix) ? text.slice(0, -suffix.length).trim() : s.followUpInstructions;
   }
 
   printSummary(event: Event): void {

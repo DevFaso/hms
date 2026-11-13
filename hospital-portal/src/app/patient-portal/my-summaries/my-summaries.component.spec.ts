@@ -190,6 +190,45 @@ describe('MySummariesComponent', () => {
     );
   });
 
+  it('removes a complete multi-paragraph plan suffix and preserves earlier matching paragraphs', () => {
+    portal.getAfterVisitSummaries.and.returnValue(of([summary()]));
+    create();
+    fixture.componentInstance.details.set({
+      s1: {
+        encounterId: 'e1',
+        visitDate: '',
+        providerName: '',
+        departmentName: '',
+        hospitalName: '',
+        dischargeDiagnoses: [],
+        encounterStatus: '',
+        checkoutTimestamp: '',
+        clinicalPlan: 'Plan one\n\nPlan two',
+      },
+    });
+    expect(
+      fixture.componentInstance.followUpText(
+        summary({
+          followUpInstructions: 'Instructions\n\nPlan one\n\nPlan two',
+        }),
+      ),
+    ).toBe('Instructions');
+    expect(
+      fixture.componentInstance.followUpText(
+        summary({
+          followUpInstructions: 'Plan one\n\nPlan two',
+        }),
+      ),
+    ).toBe('');
+    expect(
+      fixture.componentInstance.followUpText(
+        summary({
+          followUpInstructions: 'Plan one\n\nPlan two\n\nOther instructions',
+        }),
+      ),
+    ).toBe('Plan one\n\nPlan two\n\nOther instructions');
+  });
+
   it('a summary with no visit keeps its card and reads nothing more', () => {
     portal.getAfterVisitSummaries.and.returnValue(of([summary()]));
     create();
