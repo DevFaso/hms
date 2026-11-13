@@ -118,10 +118,10 @@
               }
 
               <!-- Follow-Up Instructions -->
-              @if (s.followUpInstructions) {
+              @if (followUpText(s)) {
                 <div class="avs-section">
                   <h4>{{ 'PORTAL.SUMMARIES.FOLLOW_UP_INSTRUCTIONS' | translate }}</h4>
-                  <p>{{ s.followUpInstructions }}</p>
+                  <p>{{ followUpText(s) }}</p>
                 </div>
               }
 
@@ -184,6 +184,13 @@
                     {{ 'PORTAL.SUMMARIES.SCHEDULED_FOR' | translate }}
                     {{ s.followUpDate | serverTime | date: 'mediumDate' }}
                   </p>
+                </div>
+              }
+
+              <!-- The visit's content sections (2026-11-12) -->
+              @if (detailOf(s.id); as detail) {
+                <div class="avs-detail-sections" data-testid="avs-detail-sections">
+                  <app-visit-summary-sections [summary]="detail" />
                 </div>
               }
 

@@ -164,6 +164,7 @@
             <p>{{ summary().followUpAppointmentDate | serverTime | date: 'mediumDate' }}</p>
           </section>
         }
+        <app-visit-summary-sections [summary]="summary()" />
       </div>
       @if (!hasSections()) {
         <p class="avs-empty" role="status">{{ 'VISIT_SUMMARY.NO_SECTIONS' | translate }}</p>

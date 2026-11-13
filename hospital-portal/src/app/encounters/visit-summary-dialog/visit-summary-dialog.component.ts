@@ -5,11 +5,22 @@ import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { TranslateModule } from '@ngx-translate/core';
 import { AfterVisitSummary } from '../../services/encounter.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import {
+  VisitSummarySectionsComponent,
+  hasContentSections,
+} from '../visit-summary-sections/visit-summary-sections.component';
 
 @Component({
   selector: 'app-visit-summary-dialog',
   standalone: true,
-  imports: [CommonModule, TranslateModule, ModalDialogDirective, ServerTimePipe, DateTimePipe],
+  imports: [
+    CommonModule,
+    TranslateModule,
+    ModalDialogDirective,
+    ServerTimePipe,
+    DateTimePipe,
+    VisitSummarySectionsComponent,
+  ],
   templateUrl: './visit-summary-dialog.component.html',
   styleUrl: './visit-summary-dialog.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -26,7 +37,8 @@ export class VisitSummaryDialogComponent {
       s.referralSummary ||
       s.followUpInstructions ||
       s.patientEducationMaterials ||
-      s.followUpAppointmentDate
+      s.followUpAppointmentDate ||
+      hasContentSections(s)
     );
   });
 }

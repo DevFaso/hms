@@ -42,6 +42,7 @@ class DoseNumberReaderGuardTest {
         Map.entry("fhir/mapper/MedicationRequestFhirMapper.java",
             "matches the whole text as ONE number: a range stays in the dosage's text"),
         Map.entry("service/AdmissionStayEncounterService.java", "copies the text; its parsing is about something else"),
+        Map.entry("service/AfterVisitSummarySections.java", "copies the text; its parsing is about something else"),
         Map.entry("service/DischargeSummaryServiceImpl.java", "copies the text; its parsing is about something else"),
         Map.entry("service/EncounterServiceImpl.java", "copies the text; its parsing is about something else"),
         Map.entry("service/impl/MedicationHistoryServiceImpl.java", "copies the text; it parses the duration"),

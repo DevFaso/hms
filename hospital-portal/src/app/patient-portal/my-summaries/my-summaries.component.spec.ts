@@ -50,6 +50,7 @@ describe('MySummariesComponent', () => {
   beforeEach(() => {
     portal = jasmine.createSpyObj<PatientPortalService>('PatientPortalService', [
       'getAfterVisitSummaries',
+      'getVisitSummaryDetail',
     ]);
     portal.getAfterVisitSummaries.and.returnValue(of([]));
     TestBed.configureTestingModule({
@@ -119,6 +120,54 @@ describe('MySummariesComponent', () => {
     fixture.detectChanges();
     expect(texts('.avs-section h4')).toContain('Médicaments');
     expect(texts('.avs-med-table tbody td')).toEqual(['med-a', 'dose-a', 'freq-a']);
+  });
+
+  it('2026-11-12: opening a summary reads its visit once and shows the content sections', () => {
+    portal.getAfterVisitSummaries.and.returnValue(
+      of([summary({ encounterId: 'e1', followUpInstructions: 'Boire beaucoup\n\nACT 3 jours' })]),
+    );
+    portal.getVisitSummaryDetail.and.returnValue(
+      of({
+        encounterId: 'e1',
+        visitDate: '2026-09-01',
+        providerName: '',
+        departmentName: '',
+        hospitalName: 'CHU Yalgado',
+        dischargeDiagnoses: [],
+        encounterStatus: 'COMPLETED',
+        checkoutTimestamp: '2026-09-01T10:00:00',
+        allergies: [{ allergen: 'Pénicilline', severity: 'SEVERE' }],
+        clinicalPlan: 'ACT 3 jours',
+      }),
+    );
+    create();
+    fixture.componentInstance.toggle('s1');
+    fixture.detectChanges();
+
+    expect(portal.getVisitSummaryDetail).toHaveBeenCalledOnceWith('e1');
+    expect(host().querySelector('[data-testid="avs-allergies"]')?.textContent).toContain(
+      'Pénicilline',
+    );
+    expect(host().querySelector('[data-testid="avs-plan"]')?.textContent).toContain('ACT 3 jours');
+    // The plan has its own section: the follow-up no longer repeats it.
+    const followUp = Array.from(host().querySelectorAll('.avs-section p')).map(
+      (p) => p.textContent,
+    );
+    expect(followUp).toContain('Boire beaucoup');
+    expect(followUp).not.toContain('Boire beaucoup\n\nACT 3 jours');
+
+    fixture.componentInstance.toggle('s1');
+    fixture.componentInstance.toggle('s1');
+    expect(portal.getVisitSummaryDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it('a summary with no visit keeps its card and reads nothing more', () => {
+    portal.getAfterVisitSummaries.and.returnValue(of([summary()]));
+    create();
+    fixture.componentInstance.toggle('s1');
+    fixture.detectChanges();
+    expect(portal.getVisitSummaryDetail).not.toHaveBeenCalled();
+    expect(host().querySelector('[data-testid="avs-detail-sections"]')).toBeNull();
   });
 
   it('opens and closes from the keyboard', () => {
