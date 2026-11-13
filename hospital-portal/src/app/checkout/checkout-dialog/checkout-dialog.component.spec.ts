@@ -125,7 +125,28 @@ describe('CheckoutDialogComponent', () => {
     expect(component.avs()).toEqual(sampleAvs);
     expect(component.saving()).toBeFalse();
     expect(toastSpy.success).toHaveBeenCalled();
+    // QA D1742: the host hears of it when the summary is closed, not in the same tick.
+    expect(component.checkoutCompleted.emit).not.toHaveBeenCalled();
+  });
+
+  it('QA D1742: after a check-out the summary step shows, takes focus, and Close reports the check-out', async () => {
+    encounterSpy.checkOut.and.returnValue(of(sampleAvs));
+    spyOn(component.checkoutCompleted, 'emit');
+    spyOn(component.dismissed, 'emit');
+    component.followUpInstructions.set('Return in 7 days');
+
+    component.submit();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    const heading = el.querySelector('[data-testid="checkout-avs-title"]');
+    expect(el.querySelector('.avs-preview')).toBeTruthy();
+    expect(document.activeElement).toBe(heading);
+    (el.querySelector('.avs-preview .btn-primary') as HTMLButtonElement).click();
     expect(component.checkoutCompleted.emit).toHaveBeenCalledWith(sampleAvs);
+    expect(component.dismissed.emit).not.toHaveBeenCalled();
   });
 
   it('should show error toast on checkout failure', () => {

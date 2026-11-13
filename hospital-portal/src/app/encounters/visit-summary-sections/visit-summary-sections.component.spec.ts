@@ -57,6 +57,9 @@ describe('VisitSummarySectionsComponent', () => {
         VITALS_FLAGGED: 'Valeurs signalées',
         SEVERITY_SEVERE: 'Sévère',
         FLAG_LOW: 'Bas',
+        FLAG_HIGH: 'Élevé',
+        REFERENCE: 'référence',
+        LAB_AWAITING_RELEASE: 'En attente de validation',
         NO: 'Non',
       },
     });
@@ -144,5 +147,39 @@ describe('VisitSummarySectionsComponent', () => {
     const test = root.querySelector('[data-testid="avs-test"]');
     expect(test?.textContent).toContain('Glycémie');
     expect(test?.querySelector('.vss-result')).toBeNull();
+  });
+
+  it('QA D1743: a resulted test with nothing released reads awaiting validation, not resulted', () => {
+    const root = render({
+      orderedTests: [{ kind: 'LAB', name: 'Glycémie', status: 'AWAITING_RELEASE', results: [] }],
+    });
+    const status = root.querySelector('[data-testid="avs-test-status"]');
+    expect(status?.textContent?.trim()).toBe('En attente de validation');
+  });
+
+  it('QA D1740: a released value shows its grade and the range it was graded against', () => {
+    const root = render({
+      orderedTests: [
+        {
+          kind: 'LAB',
+          name: 'Glycémie à jeun',
+          status: 'RESULTED',
+          results: [
+            {
+              value: '1.32',
+              unit: 'g/L',
+              referenceRange: '0.7 - 0.99 g/L',
+              abnormalFlag: 'ABNORMAL_HIGH',
+            },
+          ],
+        },
+      ],
+    });
+    const result = root.querySelector('.vss-result')?.textContent ?? '';
+    expect(result).toContain('référence');
+    // D1106: the server sends a machine range ("0.7 - 0.99 g/L"); French reads it with a decimal comma.
+    expect(result).toContain('0,7 – 0,99 g/L');
+    expect(result).not.toContain('0.7');
+    expect(root.querySelector('.vss-flag')?.textContent?.trim()).toBe('Élevé');
   });
 });
