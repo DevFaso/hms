@@ -1167,6 +1167,8 @@ export const routes: Routes = [
             'ROLE_PHYSICIAN',
             'ROLE_SURGEON',
             'ROLE_HOSPITAL_ADMIN',
+            // QA D1592: a newborn a delivery could not register waits here for reception.
+            'ROLE_RECEPTIONIST',
             'ROLE_SUPER_ADMIN',
           ],
         },

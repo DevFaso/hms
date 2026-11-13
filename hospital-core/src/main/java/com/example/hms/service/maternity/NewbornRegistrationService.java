@@ -76,6 +76,21 @@ public class NewbornRegistrationService {
     private final PatientProxyRepository patientProxyRepository;
     private final MessageSource messageSource;
     private final AuditEventLogService auditEventLogService;
+    /** QA D1592: reception is told when a baby could not be registered. */
+    private final com.example.hms.service.InBasketService inBasketService;
+    private final com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+
+    /** The in-basket reference type of a delivery whose babies wait for registration. */
+    static final String PENDING_REFERENCE_TYPE = "NEWBORN_REGISTRATION";
+    static final String PENDING_TITLE_KEY = "newborn.registration.pending.title";
+    static final String PENDING_BODY_KEY = "newborn.registration.pending.body";
+    /**
+     * Who registers a patient at the delivering hospital: reception. Not the
+     * hospital administrator: the dispute review is the one in-basket item
+     * an administrator reads (E9 #67, InBasketRecipientGuardTest).
+     */
+    static final java.util.Set<String> PENDING_ROLE_CODES = java.util.Set.of(
+        com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST);
 
     /**
      * Register the live-born babies of a saved delivery that are not yet
@@ -110,6 +125,10 @@ public class NewbornRegistrationService {
         }
         existing.sort(java.util.Comparator.comparingInt(DeliveryNewborn::getBirthOrder));
         // The row was read in this transaction: the change is flushed at its commit.
+        if (delivery.isNewbornRegistrationPending() && delivery.getId() != null) {
+            // The reception item filed when an earlier attempt failed is done.
+            inBasketService.removeAllItemsForReference(delivery.getId(), PENDING_REFERENCE_TYPE);
+        }
         delivery.setNewbornRegistrationPending(false);
         return existing.stream().map(this::toDto).toList();
     }
@@ -120,6 +139,12 @@ public class NewbornRegistrationService {
      * throws.
      */
     public void recordRegistrationFailure(DeliveryRecord delivery, UUID recorderUserId, RuntimeException cause) {
+        try {
+            fileReceptionItems(delivery);
+        } catch (RuntimeException ex) {
+            log.warn("Reception not told of the pending newborns of delivery {}: {}", delivery.getId(),
+                ex.getClass().getSimpleName());
+        }
         try {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .eventType(AuditEventType.PATIENT_CREATE)
@@ -256,6 +281,41 @@ public class NewbornRegistrationService {
         } catch (RuntimeException ex) {
             log.warn("Newborn registration not audited for patient {}: {}", event.getResourceId(),
                 ex.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * QA D1592: one in-basket TASK per receptionist of the
+     * delivering hospital (that hospital only), deduplicated per delivery and
+     * reader by the in-basket itself; removed when the babies are registered.
+     */
+    private void fileReceptionItems(DeliveryRecord delivery) {
+        if (delivery.getId() == null || delivery.getHospital() == null) {
+            return;
+        }
+        UUID hospitalId = delivery.getHospital().getId();
+        Patient mother = delivery.getPatient();
+        String motherName = mother == null ? null : mother.getFullName();
+        Object[] bodyArgs = {motherName};
+        for (com.example.hms.model.User reader
+            : assignmentRepository.findLiveUsersAtHospitalWithRoleCodes(hospitalId, PENDING_ROLE_CODES)) {
+            com.example.hms.payload.dto.clinical.CreateInBasketItemRequest item =
+                new com.example.hms.payload.dto.clinical.CreateInBasketItemRequest();
+            item.setRecipientUserId(reader.getId());
+            item.setHospitalId(hospitalId);
+            item.setItemType(com.example.hms.enums.InBasketItemType.TASK);
+            item.setPriority(com.example.hms.enums.InBasketPriority.URGENT);
+            item.setReferenceId(delivery.getId());
+            item.setReferenceType(PENDING_REFERENCE_TYPE);
+            item.setPatientId(mother == null ? null : mother.getId());
+            item.setPatientName(motherName);
+            item.setTitleKey(PENDING_TITLE_KEY);
+            item.setTitle(messageSource.getMessage(PENDING_TITLE_KEY, null, NotificationLocales.STAFF));
+            item.setBodyKey(PENDING_BODY_KEY);
+            item.setBodyArgs(bodyArgs);
+            item.setBody(messageSource.getMessage(PENDING_BODY_KEY, bodyArgs, NotificationLocales.STAFF));
+            // Each item in its own transaction: the delivery has committed already.
+            inBasketService.createItemInNewTransaction(item);
         }
     }
 

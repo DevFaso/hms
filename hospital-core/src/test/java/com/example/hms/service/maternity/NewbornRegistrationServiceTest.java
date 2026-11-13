@@ -58,8 +58,11 @@ class NewbornRegistrationServiceTest {
     private final AuditEventLogService audit = mock(AuditEventLogService.class);
     private final com.example.hms.repository.DeliveryRecordRepository deliveries =
         mock(com.example.hms.repository.DeliveryRecordRepository.class);
+    private final com.example.hms.service.InBasketService inBasket = mock(com.example.hms.service.InBasketService.class);
+    private final com.example.hms.repository.UserRoleHospitalAssignmentRepository assignments =
+        mock(com.example.hms.repository.UserRoleHospitalAssignmentRepository.class);
     private final NewbornRegistrationService service = new NewbornRegistrationService(links, deliveries, registration,
-        patients, registrations, proxies, TestMessageSources.bundles(), audit);
+        patients, registrations, proxies, TestMessageSources.bundles(), audit, inBasket, assignments);
 
     private final List<DeliveryNewborn> saved = new ArrayList<>();
     private Hospital hospital;
@@ -238,5 +241,49 @@ class NewbornRegistrationServiceTest {
         UUID other = UUID.randomUUID();
         assertThatThrownBy(() -> grant.requireAt(other)).isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> grant.requireAt(null)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("a failed registration files one reception item per receptionist of the delivering hospital")
+    void failureFilesTheReceptionItem() {
+        DeliveryRecord delivery = delivery(true, 1, InfantSex.FEMALE);
+        User receptionist = new User();
+        receptionist.setId(UUID.randomUUID());
+        User admin = new User();
+        admin.setId(UUID.randomUUID());
+        when(assignments.findLiveUsersAtHospitalWithRoleCodes(hospital.getId(), NewbornRegistrationService.PENDING_ROLE_CODES))
+            .thenReturn(List.of(receptionist, admin));
+
+        service.recordRegistrationFailure(delivery, null, new IllegalStateException("boom"));
+
+        ArgumentCaptor<com.example.hms.payload.dto.clinical.CreateInBasketItemRequest> item =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.clinical.CreateInBasketItemRequest.class);
+        verify(inBasket, times(2)).createItemInNewTransaction(item.capture());
+        assertThat(item.getAllValues()).extracting(r -> r.getRecipientUserId())
+            .containsExactly(receptionist.getId(), admin.getId());
+        assertThat(item.getAllValues()).allSatisfy(r -> {
+            assertThat(r.getHospitalId()).isEqualTo(hospital.getId());
+            assertThat(r.getReferenceId()).isEqualTo(delivery.getId());
+            assertThat(r.getReferenceType()).isEqualTo(NewbornRegistrationService.PENDING_REFERENCE_TYPE);
+            assertThat(r.getPatientId()).isEqualTo(mother.getId());
+            assertThat(r.getTitle()).isEqualTo("Nouveau-né à enregistrer");
+            assertThat(r.getBody()).contains("Awa Traore");
+        });
+        assertThat(NewbornRegistrationService.PENDING_ROLE_CODES).containsExactly("ROLE_RECEPTIONIST");
+    }
+
+    @Test
+    @DisplayName("a registration that succeeds clears the reception item; a delivery never pending files nothing")
+    void successClearsTheReceptionItem() {
+        DeliveryRecord delivery = delivery(true, 1, InfantSex.FEMALE);
+
+        service.registerLiveBorn(delivery, null);
+
+        verify(inBasket).removeAllItemsForReference(delivery.getId(), NewbornRegistrationService.PENDING_REFERENCE_TYPE);
+        assertThat(delivery.isNewbornRegistrationPending()).isFalse();
+
+        service.registerLiveBorn(delivery, null);
+        verify(inBasket, times(1)).removeAllItemsForReference(any(), any());
+        verify(inBasket, never()).createItemInNewTransaction(any());
     }
 }
