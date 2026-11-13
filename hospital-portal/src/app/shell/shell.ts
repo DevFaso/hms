@@ -617,6 +617,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
+        icon: 'pending_actions',
+        label: 'Unsigned notes',
+        translationKey: 'NAV.UNSIGNED_NOTES',
+        route: '/unsigned-notes',
+        // Mirrors UnsignedNoteController's @PreAuthorize (provisional platform rule).
+        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+      },
+      {
         icon: 'monitoring',
         label: 'Disease Surveillance',
         translationKey: 'NAV.MORBIDITY',

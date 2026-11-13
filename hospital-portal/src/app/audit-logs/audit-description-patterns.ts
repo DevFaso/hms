@@ -1468,6 +1468,32 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: [],
   },
   {
+    // Labour transfer between hospitals (provisional rule, 2026-11-12).
+    key: 'AUDIT.DESC.LABOR_EPISODE_TRANSFERRED_OUT',
+    re: /^Labour episode transferred to another hospital with a handover$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.LABOR_EPISODE_TRANSFERRED_IN',
+    re: /^Labour episode received from another hospital with a handover$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.LABOR_EPISODE_LEFT_WITHOUT_HANDOVER',
+    re: /^Labour episode closed: she arrived at another hospital without a handover$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.LABOR_EPISODE_HANDOVER_READ',
+    re: /^Labour episode handed over by transfer read at the receiving hospital$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER',
+    re: /^Labour episode opened on arrival from another hospital without a handover$/,
+    params: [],
+  },
+  {
     key: 'AUDIT.DESC.OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND',
     re: /^Obstetric rule skip cleared on an ultrasound order$/,
     params: [],

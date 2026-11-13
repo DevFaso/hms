@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AfterVisitSummary } from '../../services/encounter.service';
 import { VisitSummaryDialogComponent } from './visit-summary-dialog.component';
 
@@ -63,6 +63,22 @@ describe('VisitSummaryDialogComponent', () => {
     expect(root.querySelector('[role="dialog"]')?.getAttribute('aria-labelledby')).toBe(
       'avs-title',
     );
+  });
+
+  // Provisional platform rule: the visit reads "not finalised" while a note waits for its signature.
+  it('shows the not-finalised banner while a note is unsigned, and not once it is signed', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      VISIT_SUMMARY: { PENDING_SIGNATURE: 'Non finalisé — en attente de signature du praticien' },
+    });
+    translate.use('fr');
+    const pending = render({ ...summary, pendingSignature: true });
+    expect(
+      pending.nativeElement.querySelector('[data-testid="avs-pending-signature"]')?.textContent,
+    ).toContain('Non finalisé — en attente de signature du praticien');
+
+    const signed = render({ ...summary, pendingSignature: false });
+    expect(signed.nativeElement.querySelector('[data-testid="avs-pending-signature"]')).toBeNull();
   });
 
   it('does not invent clinical sections when they are absent', () => {

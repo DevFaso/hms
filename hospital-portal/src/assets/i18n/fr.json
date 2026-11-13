@@ -155,7 +155,8 @@
     "ACTIVE_EPISODE": "Travail en cours",
     "FOREIGN": {
       "ORIGIN": "Travail en cours à {{hospital}}, lecture seule ici",
-      "HINT": "Ce travail est suivi par l’hôpital où il a été ouvert. Vous pouvez l’admettre ici pour d’autres soins ; un second épisode de travail ne peut pas être ouvert tant que celui-ci est en cours."
+      "HINT": "Ce travail est suivi par l’hôpital où il a été ouvert. Vous pouvez l’admettre ici pour d’autres soins ; un second épisode de travail ne peut pas être ouvert tant que celui-ci est en cours.",
+      "HINT_ARRIVAL": "Ce travail est suivi par l’hôpital où il a été ouvert. Vous pouvez l’admettre ici pour d’autres soins ; un second épisode de travail ne peut pas être ouvert tant que celui-ci est en cours. Si elle est arrivée ici sans transmission, choisissez « Arrivée sans transmission »."
     },
     "ACTIVE_PHASE_SINCE": "Phase active depuis",
     "ADMITTED": "Admise",
@@ -282,7 +283,33 @@
     "APGAR_ONE": "APGAR à 1 min",
     "APGAR_FIVE": "APGAR à 5 min",
     "BIRTH_BEFORE_LAST_ENTRY": "Heure de naissance : elle ne peut pas précéder une observation déjà portée sur le partogramme.",
-    "PLACENTA_BEFORE_BIRTH": "Délivrance du placenta : elle ne peut pas précéder la naissance."
+    "PLACENTA_BEFORE_BIRTH": "Délivrance du placenta : elle ne peut pas précéder la naissance.",
+    "STATUS_TRANSFERRED_OUT": "Transférée vers un autre hôpital",
+    "STATUS_LEFT_WITHOUT_HANDOVER": "Partie sans transmission",
+    "TRANSFER": {
+      "ACTION": "Transférer",
+      "TITLE": "Transférer son travail vers un autre hôpital",
+      "HINT": "Son épisode de travail ici est clos et l’hôpital choisi reçoit un nouvel épisode qui lui est lié, avec son partogramme d’ici en lecture seule. Son équipe de maternité est alertée. Règle provisoire, en attente d’approbation clinique.",
+      "DESTINATION": "Hôpital d’accueil",
+      "REASON": "Motif",
+      "SUBMIT": "Transférer",
+      "REQUIRED": "Choisissez l’hôpital d’accueil et indiquez le motif.",
+      "REASON_REQUIRED": "Indiquez le motif.",
+      "DONE": "Travail transféré. L’hôpital d’accueil a été alerté.",
+      "ERROR": "Le travail n’a pas pu être transféré.",
+      "CONTINUES": "Suite de son épisode de travail à {{hospital}}",
+      "PREVIOUS_PARTOGRAPH": "Partogramme à {{hospital}} avant le transfert, lecture seule",
+      "CLOSED_TRANSFERRED": "Travail transféré vers {{hospital}}",
+      "CLOSED_LEFT": "Elle est arrivée à {{hospital}} sans transmission ; cet hôpital a repris son travail"
+    },
+    "ARRIVAL": {
+      "ACTION": "Arrivée sans transmission",
+      "TITLE": "Elle est arrivée ici sans transmission",
+      "HINT": "Son épisode de travail à {{hospital}} est clos et un nouvel épisode de travail s’ouvre ici, lié au précédent ; {{hospital}} est alerté. Règle provisoire, en attente d’approbation clinique.",
+      "SUBMIT": "Consigner l’arrivée",
+      "DONE": "Arrivée consignée. Son épisode de travail est ouvert ici et {{hospital}} a été alerté.",
+      "ERROR": "L’arrivée n’a pas pu être consignée."
+    }
   },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Retour aux organisations",
@@ -1893,7 +1920,12 @@
       "ALLERGY_ACKNOWLEDGED": "Allergie reconnue avec un motif",
       "ALLERGY_PASSED_UNDER_REVIEW": "Conflit allergique franchi selon la revue du prescripteur",
       "ALLERGY_REVIEWED_BY_PRESCRIBER": "Conflit allergique revu par le prescripteur",
-      "ALLERGY_REVIEWED_AT_SIGNATURE": "Conflit allergique revu à la signature"
+      "ALLERGY_REVIEWED_AT_SIGNATURE": "Conflit allergique revu à la signature",
+      "LABOR_EPISODE_TRANSFERRED_OUT": "Épisode de travail transféré vers un autre hôpital, avec transmission",
+      "LABOR_EPISODE_TRANSFERRED_IN": "Épisode de travail reçu d’un autre hôpital, avec transmission",
+      "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Épisode de travail clos : elle est arrivée dans un autre hôpital sans transmission",
+      "LABOR_EPISODE_HANDOVER_READ": "Épisode de travail transmis par transfert, consulté par l’hôpital d’accueil",
+      "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Épisode de travail ouvert à son arrivée d’un autre hôpital, sans transmission"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -4429,7 +4461,8 @@
     "PROVIDER_STAFF": "Personnel",
     "PROVIDER_AUDIT": "Journal d'audit",
     "DHIS2": "Export DHIS2",
-    "ADT_INTAKE": "Admissions ADT automatiques"
+    "ADT_INTAKE": "Admissions ADT automatiques",
+    "UNSIGNED_NOTES": "Notes non signées"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -6040,7 +6073,8 @@
       "WOUND_CARE": "Soins des plaies",
       "WARNING_SIGNS": "Signes d'alerte — Quand consulter",
       "PATIENT_EDUCATION": "Éducation thérapeutique du patient",
-      "ADDITIONAL_NOTES": "Notes supplémentaires"
+      "ADDITIONAL_NOTES": "Notes supplémentaires",
+      "PENDING_SIGNATURE": "Non finalisé — en attente de signature du praticien"
     },
     "ENUM": {
       "LAB_ORDER_CHANNEL": {
@@ -6694,7 +6728,10 @@
         "ADMISSION_BED_RELEASED": "Lit d’hospitalisation libéré",
         "MAR_ALLERGY_ACKNOWLEDGED": "Conflit allergique franchi lors d’une administration",
         "DISPENSE_ALLERGY_ACKNOWLEDGED": "Conflit allergique franchi à la pharmacie",
-        "PRESCRIPTION_ALLERGY_REVIEWED": "Conflit allergique revu par un prescripteur"
+        "PRESCRIPTION_ALLERGY_REVIEWED": "Conflit allergique revu par un prescripteur",
+        "LABOR_EPISODE_TRANSFERRED_OUT": "Travail transféré vers un autre hôpital",
+        "LABOR_EPISODE_TRANSFERRED_IN": "Travail reçu d’un autre hôpital",
+        "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Travail parti sans transmission"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -9312,7 +9349,8 @@
     "tasks": "Tâches",
     "title": "Boîte de réception",
     "unreadCount": "Nombre d'éléments non lus",
-    "urgent": "Urgent"
+    "urgent": "Urgent",
+    "openVisitToSign": "Ouvrir la visite pour signer"
   },
   "common": {
     "loading": "Chargement…"
@@ -13298,7 +13336,8 @@
     "PROBLEM_ACTIVE": "Actif",
     "PROBLEM_RECURRENCE": "Récidive",
     "PROBLEM_RESOLVED": "Résolu",
-    "PROBLEM_INACTIVE": "Inactif"
+    "PROBLEM_INACTIVE": "Inactif",
+    "PENDING_SIGNATURE": "Non finalisé — en attente de signature du praticien"
   },
   "PHARMACY_DASH": {
     "WORKSPACE": "Espace pharmacie",
@@ -13440,5 +13479,16 @@
     "SUBMIT": "Enregistrer la revue",
     "RECORDED": "Revue allergique enregistrée.",
     "FAILED": "La revue allergique n'a pas pu être enregistrée."
+  },
+  "UNSIGNED_NOTES": {
+    "TITLE": "Notes non signées depuis plus de 72 heures",
+    "SUBTITLE": "Notes cliniques de cet établissement que leur auteur n’a pas signées 72 heures après les avoir rédigées. Relancez l’auteur : lui seul peut signer.",
+    "EMPTY": "Aucune note n’est restée non signée plus de 72 heures.",
+    "LOAD_ERROR": "La liste des notes non signées n’a pas pu être chargée.",
+    "AUTHOR": "Auteur",
+    "PATIENT": "Patient",
+    "VISIT_DATE": "Date de la visite",
+    "AGE": "Non signée depuis",
+    "AGE_VALUE": "{{days}} j {{hours}} h"
   }
 }

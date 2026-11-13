@@ -45,6 +45,13 @@
             </span>
           </div>
 
+          @if (s.pendingSignature) {
+            <p class="avs-pending-signature" role="status" data-testid="avs-pending-signature">
+              <span class="material-symbols-outlined" aria-hidden="true">pending_actions</span>
+              {{ 'PORTAL.SUMMARIES.PENDING_SIGNATURE' | translate }}
+            </p>
+          }
+
           @if (expandedId() === s.id) {
             <div class="avs-body">
               <!-- Diagnoses -->

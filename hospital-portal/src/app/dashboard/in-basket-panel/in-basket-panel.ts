@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Router } from '@angular/router';
 import { InBasketService, InBasketItem, InBasketSummary } from '../../services/in-basket.service';
 import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
@@ -21,6 +22,12 @@ import { AllergyReviewDialogComponent } from '../../shared/allergy-acknowledgeme
 
 /** Policy 4: the notice of an allergy conflict awaiting the prescriber's review (its reference is the order). */
 export const ALLERGY_REVIEW_REFERENCE = 'PRESCRIPTION_ALLERGY_REVIEW';
+
+/**
+ * Provisional platform rule: a closed visit's note still waiting for its author's signature (its reference is
+ * the note). The item opens the visit, where the author signs; signing removes it.
+ */
+export const NOTE_TO_SIGN_REFERENCE = 'ENCOUNTER_NOTE_SIGNATURE';
 
 const SERVER_TIME = new ServerTimePipe();
 
@@ -37,6 +44,7 @@ export class InBasketPanelComponent {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly router = inject(Router);
 
   /** Only the latest load may write: a response issued under the previous scope is dropped. */
   private loadRequest = 0;
@@ -78,6 +86,14 @@ export class InBasketPanelComponent {
       !!item.referenceId &&
       this.canReviewAllergy()
     );
+  }
+
+  isNoteToSign(item: InBasketItem): boolean {
+    return item.referenceType === NOTE_TO_SIGN_REFERENCE && !!item.encounterId;
+  }
+
+  openVisit(item: InBasketItem): void {
+    this.router.navigate(['/encounters', item.encounterId]);
   }
 
   onAllergyReviewed(): void {

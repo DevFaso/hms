@@ -727,6 +727,27 @@ class DischargeSummaryServiceImplTest {
             verify(dischargeSummaryMapper, never()).toResponseDTO(early);
         }
 
+        /** Provisional platform rule: "not finalised" while a note of the visit is unsigned, normal once signed. */
+        @Test
+        void theSummaryIsNotFinalisedWhileANoteOfItsVisitIsUnsigned() {
+            com.example.hms.model.encounter.EncounterNote draft = com.example.hms.model.encounter.EncounterNote.builder()
+                .encounter(encounter).assessment("Paludisme simple").build();
+            org.mockito.Mockito.lenient().when(encounterRepository.findCompletedWithoutDischargeSummary(patientId))
+                .thenReturn(List.of());
+            when(dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId))
+                .thenReturn(List.of(summary));
+            org.mockito.Mockito.lenient().when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(responseDTO);
+            when(encounterNoteRepository.findByEncounter_IdIn(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(List.of(draft));
+
+            assertThat(service.getDischargeSummariesForPortalPatient(patientId))
+                .singleElement().extracting(DischargeSummaryResponseDTO::isPendingSignature).isEqualTo(true);
+
+            draft.setSignedAt(java.time.LocalDateTime.now());
+            assertThat(service.getDischargeSummariesForPortalPatient(patientId))
+                .singleElement().extracting(DischargeSummaryResponseDTO::isPendingSignature).isEqualTo(false);
+        }
+
         @Test
         @DisplayName("empty patient → counter tagged outcome=empty, no save calls")
         void portalFetch_empty_taggedEmpty() {

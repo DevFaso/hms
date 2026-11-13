@@ -773,6 +773,8 @@ export interface AfterVisitSummary {
   followUpDate: string | null;
   medications: { name: string; dosage: string; frequency: string }[];
   status: string;
+  /** Provisional platform rule: a note of the visit still waits for its author's signature. */
+  pendingSignature?: boolean;
 }
 
 /** Raw shape returned by backend DischargeSummaryResponseDTO */
@@ -805,6 +807,7 @@ interface DischargeSummaryApiResponse {
   }[];
   isFinalized: boolean;
   additionalNotes: string;
+  pendingSignature?: boolean;
 }
 
 /**
@@ -1621,6 +1624,7 @@ export class PatientPortalService {
               frequency: m.frequency ?? '',
             })),
             status: d.isFinalized ? 'FINALIZED' : 'DRAFT',
+            pendingSignature: d.pendingSignature === true,
           }));
         }),
         catchError(() => of([])),

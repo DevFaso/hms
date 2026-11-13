@@ -155,7 +155,8 @@
     "ACTIVE_EPISODE": "Active labor",
     "FOREIGN": {
       "ORIGIN": "Labour in progress at {{hospital}}, read only here",
-      "HINT": "This labour is charted by the hospital where it was started. You can admit her here for other care; a second labour episode cannot be opened while this one is active."
+      "HINT": "This labour is charted by the hospital where it was started. You can admit her here for other care; a second labour episode cannot be opened while this one is active.",
+      "HINT_ARRIVAL": "This labour is followed by the hospital where it was opened. You may admit her here for other care; a second labour episode cannot be opened while this one is in progress. If she arrived here without a handover, choose \"Arrived without handover\"."
     },
     "ACTIVE_PHASE_SINCE": "Active phase since",
     "ADMITTED": "Admitted",
@@ -282,7 +283,33 @@
     "APGAR_ONE": "APGAR at 1 min",
     "APGAR_FIVE": "APGAR at 5 min",
     "BIRTH_BEFORE_LAST_ENTRY": "Time of birth: it cannot be earlier than an observation already charted on the partograph.",
-    "PLACENTA_BEFORE_BIRTH": "Placenta delivered at: the placenta cannot be delivered before the birth."
+    "PLACENTA_BEFORE_BIRTH": "Placenta delivered at: the placenta cannot be delivered before the birth.",
+    "STATUS_TRANSFERRED_OUT": "Transferred to another hospital",
+    "STATUS_LEFT_WITHOUT_HANDOVER": "Left without a handover",
+    "TRANSFER": {
+      "ACTION": "Transfer",
+      "TITLE": "Transfer her labour to another hospital",
+      "HINT": "Her labour episode here closes and the hospital you choose gets a new episode linked to it, with her partograph from here shown read only. Its maternity team is alerted. Provisional rule, pending clinical approval.",
+      "DESTINATION": "Receiving hospital",
+      "REASON": "Reason",
+      "SUBMIT": "Transfer",
+      "REQUIRED": "Choose the receiving hospital and give the reason.",
+      "REASON_REQUIRED": "Give the reason.",
+      "DONE": "Labour transferred. The receiving hospital has been alerted.",
+      "ERROR": "The labour could not be transferred.",
+      "CONTINUES": "Continues her labour episode at {{hospital}}",
+      "PREVIOUS_PARTOGRAPH": "Partograph at {{hospital}} before the transfer, read only",
+      "CLOSED_TRANSFERRED": "Labour transferred to {{hospital}}",
+      "CLOSED_LEFT": "She arrived at {{hospital}} without a handover; that hospital took over her labour"
+    },
+    "ARRIVAL": {
+      "ACTION": "Arrived without handover",
+      "TITLE": "She arrived here without a handover",
+      "HINT": "Her labour episode at {{hospital}} closes and a new labour episode opens here, linked to it; {{hospital}} is alerted. Provisional rule, pending clinical approval.",
+      "SUBMIT": "Record the arrival",
+      "DONE": "Arrival recorded. Her labour episode is open here and {{hospital}} has been alerted.",
+      "ERROR": "The arrival could not be recorded."
+    }
   },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Back to organizations",
@@ -1893,7 +1920,12 @@
       "ALLERGY_ACKNOWLEDGED": "Allergy acknowledged with a reason",
       "ALLERGY_PASSED_UNDER_REVIEW": "Allergy conflict passed under the prescriber's review",
       "ALLERGY_REVIEWED_BY_PRESCRIBER": "Allergy conflict reviewed by the prescriber",
-      "ALLERGY_REVIEWED_AT_SIGNATURE": "Allergy conflict reviewed at signature"
+      "ALLERGY_REVIEWED_AT_SIGNATURE": "Allergy conflict reviewed at signature",
+      "LABOR_EPISODE_TRANSFERRED_OUT": "Labour episode transferred to another hospital with a handover",
+      "LABOR_EPISODE_TRANSFERRED_IN": "Labour episode received from another hospital with a handover",
+      "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Labour episode closed: she arrived at another hospital without a handover",
+      "LABOR_EPISODE_HANDOVER_READ": "Labour episode handed over by transfer read at the receiving hospital",
+      "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Labour episode opened on arrival from another hospital without a handover"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -4429,7 +4461,8 @@
     "PROVIDER_STAFF": "Staff",
     "PROVIDER_AUDIT": "Audit trail",
     "DHIS2": "DHIS2 export",
-    "ADT_INTAKE": "ADT intake"
+    "ADT_INTAKE": "ADT intake",
+    "UNSIGNED_NOTES": "Unsigned notes"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Critical alert",
@@ -6074,7 +6107,8 @@
       "ADDITIONAL_NOTES": "Additional Notes",
       "FOLLOW_UP": "Follow-Up Appointment",
       "SCHEDULED_FOR": "Scheduled for",
-      "PRINT": "Print Summary"
+      "PRINT": "Print Summary",
+      "PENDING_SIGNATURE": "Not finalised — awaiting the clinician’s signature"
     },
     "ENUM": {
       "LAB_ORDER_CHANNEL": {
@@ -6728,7 +6762,10 @@
         "ADMISSION_BED_RELEASED": "Inpatient bed released",
         "MAR_ALLERGY_ACKNOWLEDGED": "Allergy conflict passed at a dose",
         "DISPENSE_ALLERGY_ACKNOWLEDGED": "Allergy conflict passed at the pharmacy",
-        "PRESCRIPTION_ALLERGY_REVIEWED": "Allergy conflict reviewed by a prescriber"
+        "PRESCRIPTION_ALLERGY_REVIEWED": "Allergy conflict reviewed by a prescriber",
+        "LABOR_EPISODE_TRANSFERRED_OUT": "Labour transferred out",
+        "LABOR_EPISODE_TRANSFERRED_IN": "Labour transferred in",
+        "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Labour left without a handover"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -9312,7 +9349,8 @@
     "tasks": "Tasks",
     "title": "In-Basket",
     "unreadCount": "Unread count",
-    "urgent": "Urgent"
+    "urgent": "Urgent",
+    "openVisitToSign": "Open the visit to sign"
   },
   "common": {
     "loading": "Loading…"
@@ -13298,7 +13336,8 @@
     "PROBLEM_ACTIVE": "Active",
     "PROBLEM_RECURRENCE": "Recurrence",
     "PROBLEM_RESOLVED": "Resolved",
-    "PROBLEM_INACTIVE": "Inactive"
+    "PROBLEM_INACTIVE": "Inactive",
+    "PENDING_SIGNATURE": "Not finalised — awaiting the clinician’s signature"
   },
   "PHARMACY_DASH": {
     "WORKSPACE": "Pharmacy workspace",
@@ -13440,5 +13479,16 @@
     "SUBMIT": "Record the review",
     "RECORDED": "Allergy review recorded.",
     "FAILED": "The allergy review could not be recorded."
+  },
+  "UNSIGNED_NOTES": {
+    "TITLE": "Notes unsigned for more than 72 hours",
+    "SUBTITLE": "Clinical notes at this hospital that their author has not signed 72 hours after writing them. Follow up with the author: only they can sign.",
+    "EMPTY": "No note has been left unsigned for more than 72 hours.",
+    "LOAD_ERROR": "The list of unsigned notes could not be loaded.",
+    "AUTHOR": "Author",
+    "PATIENT": "Patient",
+    "VISIT_DATE": "Visit date",
+    "AGE": "Unsigned for",
+    "AGE_VALUE": "{{days}} d {{hours}} h"
   }
 }

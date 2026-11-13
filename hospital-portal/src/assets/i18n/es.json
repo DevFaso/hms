@@ -155,7 +155,8 @@
     "ACTIVE_EPISODE": "Trabajo de parto en curso",
     "FOREIGN": {
       "ORIGIN": "Trabajo de parto en curso en {{hospital}}, solo lectura aquí",
-      "HINT": "Este trabajo de parto lo registra el hospital donde se abrió. Puede ingresarla aquí para otra atención; no se puede abrir un segundo episodio mientras este siga activo."
+      "HINT": "Este trabajo de parto lo registra el hospital donde se abrió. Puede ingresarla aquí para otra atención; no se puede abrir un segundo episodio mientras este siga activo.",
+      "HINT_ARRIVAL": "Este trabajo de parto lo sigue el hospital donde se abrió. Puede admitirla aquí para otra atención; no se puede abrir un segundo episodio de trabajo de parto mientras este siga en curso. Si llegó aquí sin traspaso, elija «Llegada sin traspaso»."
     },
     "ACTIVE_PHASE_SINCE": "Fase activa desde",
     "ADMITTED": "Ingresada",
@@ -282,7 +283,33 @@
     "APGAR_ONE": "APGAR al minuto 1",
     "APGAR_FIVE": "APGAR al minuto 5",
     "BIRTH_BEFORE_LAST_ENTRY": "Hora de nacimiento: no puede ser anterior a una observación ya registrada en el partograma.",
-    "PLACENTA_BEFORE_BIRTH": "Alumbramiento de la placenta: no puede ser anterior al nacimiento."
+    "PLACENTA_BEFORE_BIRTH": "Alumbramiento de la placenta: no puede ser anterior al nacimiento.",
+    "STATUS_TRANSFERRED_OUT": "Trasladada a otro hospital",
+    "STATUS_LEFT_WITHOUT_HANDOVER": "Salió sin traspaso",
+    "TRANSFER": {
+      "ACTION": "Trasladar",
+      "TITLE": "Trasladar su trabajo de parto a otro hospital",
+      "HINT": "Su episodio de trabajo de parto aquí se cierra y el hospital elegido recibe un nuevo episodio vinculado, con su partograma de aquí en solo lectura. Se alerta a su equipo de maternidad. Regla provisional, pendiente de aprobación clínica.",
+      "DESTINATION": "Hospital receptor",
+      "REASON": "Motivo",
+      "SUBMIT": "Trasladar",
+      "REQUIRED": "Elija el hospital receptor e indique el motivo.",
+      "REASON_REQUIRED": "Indique el motivo.",
+      "DONE": "Trabajo de parto trasladado. Se ha alertado al hospital receptor.",
+      "ERROR": "No se pudo trasladar el trabajo de parto.",
+      "CONTINUES": "Continúa su episodio de trabajo de parto en {{hospital}}",
+      "PREVIOUS_PARTOGRAPH": "Partograma en {{hospital}} antes del traslado, solo lectura",
+      "CLOSED_TRANSFERRED": "Trabajo de parto trasladado a {{hospital}}",
+      "CLOSED_LEFT": "Llegó a {{hospital}} sin traspaso; ese hospital asumió su trabajo de parto"
+    },
+    "ARRIVAL": {
+      "ACTION": "Llegada sin traspaso",
+      "TITLE": "Llegó aquí sin traspaso",
+      "HINT": "Su episodio de trabajo de parto en {{hospital}} se cierra y aquí se abre uno nuevo, vinculado; se alerta a {{hospital}}. Regla provisional, pendiente de aprobación clínica.",
+      "SUBMIT": "Registrar la llegada",
+      "DONE": "Llegada registrada. Su episodio de trabajo de parto está abierto aquí y se ha alertado a {{hospital}}.",
+      "ERROR": "No se pudo registrar la llegada."
+    }
   },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Volver a organizaciones",
@@ -1893,7 +1920,12 @@
       "ALLERGY_ACKNOWLEDGED": "Alergia reconocida con un motivo",
       "ALLERGY_PASSED_UNDER_REVIEW": "Conflicto alérgico superado según la revisión del prescriptor",
       "ALLERGY_REVIEWED_BY_PRESCRIBER": "Conflicto alérgico revisado por el prescriptor",
-      "ALLERGY_REVIEWED_AT_SIGNATURE": "Conflicto alérgico revisado en la firma"
+      "ALLERGY_REVIEWED_AT_SIGNATURE": "Conflicto alérgico revisado en la firma",
+      "LABOR_EPISODE_TRANSFERRED_OUT": "Episodio de trabajo de parto trasladado a otro hospital, con traspaso",
+      "LABOR_EPISODE_TRANSFERRED_IN": "Episodio de trabajo de parto recibido de otro hospital, con traspaso",
+      "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Episodio de trabajo de parto cerrado: llegó a otro hospital sin traspaso",
+      "LABOR_EPISODE_HANDOVER_READ": "Episodio de trabajo de parto traspasado por traslado, consultado por el hospital receptor",
+      "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Episodio de trabajo de parto abierto a su llegada de otro hospital, sin traspaso"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -4429,7 +4461,8 @@
     "PROVIDER_STAFF": "Personal",
     "PROVIDER_AUDIT": "Registro de auditoría",
     "DHIS2": "Exportación DHIS2",
-    "ADT_INTAKE": "Ingresos ADT automáticos"
+    "ADT_INTAKE": "Ingresos ADT automáticos",
+    "UNSIGNED_NOTES": "Notas sin firmar"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerta crítica",
@@ -6074,7 +6107,8 @@
       "ADDITIONAL_NOTES": "Notas adicionales",
       "FOLLOW_UP": "Cita de seguimiento",
       "SCHEDULED_FOR": "Programada para",
-      "PRINT": "Imprimir resumen"
+      "PRINT": "Imprimir resumen",
+      "PENDING_SIGNATURE": "No finalizado — pendiente de la firma del profesional"
     },
     "ENUM": {
       "LAB_ORDER_CHANNEL": {
@@ -6728,7 +6762,10 @@
         "ADMISSION_BED_RELEASED": "Cama de hospitalización liberada",
         "MAR_ALLERGY_ACKNOWLEDGED": "Conflicto alérgico superado en una administración",
         "DISPENSE_ALLERGY_ACKNOWLEDGED": "Conflicto alérgico superado en la farmacia",
-        "PRESCRIPTION_ALLERGY_REVIEWED": "Conflicto alérgico revisado por un prescriptor"
+        "PRESCRIPTION_ALLERGY_REVIEWED": "Conflicto alérgico revisado por un prescriptor",
+        "LABOR_EPISODE_TRANSFERRED_OUT": "Trabajo de parto trasladado",
+        "LABOR_EPISODE_TRANSFERRED_IN": "Trabajo de parto recibido",
+        "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Trabajo de parto salido sin traspaso"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -9312,7 +9349,8 @@
     "tasks": "Tareas",
     "title": "Bandeja de entrada",
     "unreadCount": "Número de elementos no leídos",
-    "urgent": "Urgente"
+    "urgent": "Urgente",
+    "openVisitToSign": "Abrir la visita para firmar"
   },
   "common": {
     "loading": "Cargando…"
@@ -13298,7 +13336,8 @@
     "PROBLEM_ACTIVE": "Activo",
     "PROBLEM_RECURRENCE": "Recurrencia",
     "PROBLEM_RESOLVED": "Resuelto",
-    "PROBLEM_INACTIVE": "Inactivo"
+    "PROBLEM_INACTIVE": "Inactivo",
+    "PENDING_SIGNATURE": "No finalizado — pendiente de la firma del profesional"
   },
   "PHARMACY_DASH": {
     "WORKSPACE": "Espacio de farmacia",
@@ -13440,5 +13479,16 @@
     "SUBMIT": "Registrar la revisión",
     "RECORDED": "Revisión alérgica registrada.",
     "FAILED": "No se pudo registrar la revisión alérgica."
+  },
+  "UNSIGNED_NOTES": {
+    "TITLE": "Notas sin firmar desde hace más de 72 horas",
+    "SUBTITLE": "Notas clínicas de este hospital que su autor no ha firmado 72 horas después de redactarlas. Contacte con el autor: solo él puede firmarlas.",
+    "EMPTY": "Ninguna nota lleva más de 72 horas sin firmar.",
+    "LOAD_ERROR": "No se pudo cargar la lista de notas sin firmar.",
+    "AUTHOR": "Autor",
+    "PATIENT": "Paciente",
+    "VISIT_DATE": "Fecha de la visita",
+    "AGE": "Sin firmar desde hace",
+    "AGE_VALUE": "{{days}} d {{hours}} h"
   }
 }

@@ -1,3 +1,18 @@
+/* Provisional platform rule: a note of the visit still waits for its author's signature. */
+.avs-pending-signature {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px 12px;
+  padding: 10px 14px;
+  background: #fff4e0;
+  border: 1px solid #f0c674;
+  border-radius: 10px;
+  color: #6b4500;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
 .avs-list {
   display: flex;
   flex-direction: column;

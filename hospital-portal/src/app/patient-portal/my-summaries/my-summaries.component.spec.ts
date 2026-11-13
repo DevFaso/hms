@@ -70,6 +70,7 @@ describe('MySummariesComponent', () => {
           FOLLOW_UP_INSTRUCTIONS: 'Consignes de suivi',
           MEDICATIONS: 'Médicaments',
           PRINT: 'Imprimer',
+          PENDING_SIGNATURE: 'Non finalisé — en attente de signature du praticien',
         },
       },
     });
@@ -209,5 +210,17 @@ describe('MySummariesComponent', () => {
     header.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
     fixture.detectChanges();
     expect(host().querySelector('.avs-body')).toBeNull();
+  });
+
+  // Provisional platform rule: the patient's summary reads "not finalised" while a note is unsigned.
+  it('shows the not-finalised banner while a note of the visit is unsigned, and not once signed', () => {
+    portal.getAfterVisitSummaries.and.returnValue(
+      of([summary({ id: 'pending', pendingSignature: true }), summary({ id: 'signed' })]),
+    );
+    create();
+
+    expect(texts('[data-testid="avs-pending-signature"]')).toEqual([
+      'pending_actions Non finalisé — en attente de signature du praticien',
+    ]);
   });
 });

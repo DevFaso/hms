@@ -5,6 +5,7 @@ import com.example.hms.payload.dto.clinical.labor.DeliveryRecordRequestDTO;
 import com.example.hms.payload.dto.clinical.labor.DeliveryRecordResponseDTO;
 import com.example.hms.payload.dto.clinical.labor.LaborEpisodeRequestDTO;
 import com.example.hms.payload.dto.clinical.labor.LaborEpisodeResponseDTO;
+import com.example.hms.payload.dto.clinical.labor.LaborTransferRequestDTO;
 import com.example.hms.payload.dto.clinical.labor.PartographEntryRequestDTO;
 import com.example.hms.payload.dto.clinical.labor.PartographEntryResponseDTO;
 import com.example.hms.service.LaborService;
@@ -41,6 +42,9 @@ public class LaborController {
 
     private static final String CLINICAL_ROLES =
         "hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')";
+
+    /** Labour transfer: those who may admit a labour (doctors; midwives, #1102). The service checks the hospital. */
+    private static final String TRANSFER_ROLES = "hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR')";
 
     private static final int DEFAULT_EPISODE_LIMIT = 10;
     private static final int MAX_EPISODE_LIMIT = 50;
@@ -139,6 +143,52 @@ public class LaborController {
         }
         return ResponseEntity.status(HttpStatus.CREATED)
             .body(laborService.recordDelivery(patientId, episodeId, recorderUserId, request));
+    }
+
+    /**
+     * Labour transfer with a handover (provisional rule, 2026-11-12): the
+     * episode's own hospital hands it to another. The service requires a
+     * doctor or a midwife at the episode's hospital.
+     */
+    @PostMapping("/episodes/{episodeId}/transfer")
+    @PreAuthorize(TRANSFER_ROLES)
+    @Operation(summary = "Transfer an active labour to another hospital, with a handover",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<LaborEpisodeResponseDTO> transferEpisode(
+        @PathVariable UUID patientId,
+        @PathVariable UUID episodeId,
+        @Valid @RequestBody LaborTransferRequestDTO request,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID callerUserId = authUtils.resolveUserId(auth).orElse(null);
+        request.setHospitalId(authUtils.resolveHospitalScope(auth, hospitalId, request.getHospitalId(), true));
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(laborService.transferEpisode(patientId, episodeId, callerUserId, request));
+    }
+
+    /**
+     * She arrived here in labour without a handover from the hospital where
+     * {@code episodeId} is active (provisional rule, 2026-11-12). The service
+     * requires a doctor or a midwife at the acting hospital.
+     */
+    @PostMapping("/episodes/{episodeId}/arrival-without-handover")
+    @PreAuthorize(TRANSFER_ROLES)
+    @Operation(summary = "Record her arrival in labour from another hospital without a handover",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<LaborEpisodeResponseDTO> recordArrivalWithoutHandover(
+        @PathVariable UUID patientId,
+        @PathVariable UUID episodeId,
+        @Valid @RequestBody com.example.hms.payload.dto.clinical.labor.LaborArrivalRequestDTO request,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID callerUserId = authUtils.resolveUserId(auth).orElse(null);
+        request.setHospitalId(authUtils.resolveHospitalScope(auth, hospitalId, request.getHospitalId(), true));
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(laborService.recordArrivalWithoutHandover(patientId, episodeId, callerUserId, request));
     }
 
     @GetMapping("/episodes/{episodeId}/delivery")

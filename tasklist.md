@@ -6438,7 +6438,7 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 
 - **D1632 sibling, record attribution (not audit):** `EncounterServiceImpl` (triage vitals recorder), `InvoiceItemServiceImpl.resolveAssignment`, `PatientInsuranceServiceImpl.resolveStaffAssignment`, `ChatMessageServiceImpl`, `DeliveryChargeService`, `EncounterCheckoutChargeListener`, `DepartmentServiceImpl` and `LabResultServiceImpl.resolveActorDisplay` still take `findFirstByUser_IdAndHospital_IdAndActiveTrue`: a multi-role user's record may name the other role's assignment. Move them to `ActingAssignments.resolve` where the role matters.
 - **D1632, Keycloak sessions:** a Keycloak token carries every realm role of a multi-role user, so the acting role is the first in token order, not the one picked; the legacy JWT path carries the picked role only.
-- **D1631 decision (clinical owners):** may hospital A take over a labour started at hospital B (a transfer in labour)? Today A is refused a second active episode and sees B's read only; no transfer is built.
+- **D1631 decision (clinical owners):** decided by the user on 2026-11-12 (provisional, pending clinical approval): A may take over B's labour by transfer; built in feat/labour-transfer (see below).
 ## Standing debt — r44 front desk and discharge (fix/r44-frontdesk-discharge)
 
 - **D1590, patient profile:** `PatientProfileDTO` in `patient-portal.service.ts` declares `insuranceProvider`, `insuranceMemberId` and `insurancePlan`, which the backend profile never fills; the patient never sees the coverage recorded for them.
@@ -6472,6 +6472,15 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **D1672, @RejectsUnknownFields rollout:** only `AdmissionUpdateRequestDTO` refuses unknown properties by name; other update DTOs still skip them silently (Jackson default). Extending it needs each client's update body checked first.
 - **D1672, admission update audit:** a corrected chief complaint (now saved) is not audited as a change, like the notes, acuity and room edits before it.
 
+## Standing debt — labour transfer between hospitals (feat/labour-transfer)
+
+- **Approvals register row** (docs/qa/approvals-register.md is untracked, not in this PR): "Transfert d'un travail en cours entre hôpitaux (avec ou sans transmission) | Responsable d'obstétrique | En attente d'approbation clinique (décision du 2026-11-12)".
+- **Transfer requested by A, confirmed by B:** not built; only B (the episode's hospital) transfers with a handover, and A records an arrival without one.
+- **Destination registration:** B may transfer only to a hospital where she is already registered (B cannot register her at A); otherwise A records the arrival without handover once she is registered there.
+- **Handover read (user decision, 2026-11-12):** a transfer with a handover is B's handover of care, so A reads the transferred episode and its partograph read only even when the sharing rule does not let A read B (only that episode, each read recorded as a cross-hospital reach); an arrival without handover still follows the sharing rule.
+- **B's partograph alerts after the transfer:** `ObstetricAlertCurrency` treats a non-active episode as resolved, so B's unacknowledged URGENT partograph alerts stop re-notifying once B's episode closes; A's team gets the transfer notice. Clinical owners to confirm.
+- **Partograph entry racing a transfer:** `addEntry` now takes the patient lock, refreshes the episode and re-reads its status, so an entry racing a transfer is refused once the transfer commits; the race itself is proven by the service tests only, not yet by a PostgreSQL concurrency test.
+- **V290 skipped on duplicates:** if an environment already holds two active labour episodes for one patient, V290 logs a warning and does not create `uq_labor_episode_patient_active`; close the duplicates, then create the index (a follow-up migration).
 ## Standing debt — lab trend units and free-text wrapping (fix/lab-trend-units-i18n)
 
 - **Lab trend deltas across units:** the observations table still shows a delta only between two values recorded in the same unit; a delta between converted values (g/L after mg/dL) shows "—".
@@ -6484,6 +6493,12 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Staff visit-summary print:** the staff dialog has no print action (the patient portal's card prints through window.print); add one with a print stylesheet if the desk needs paper copies.
 - **Cross-hospital sections:** medicines, history and vitals are read at the visit's hospital only (allergies follow the patient); showing a shared patient's other-hospital medicines needs the #1103 disclosure audit on this read.
 - **Social history scope:** only tobacco, alcohol and occupation are shown; any other field needs a decision (sexual health, abuse and safety stay on the chart).
+## Standing debt — unsigned-note workflow (feat/unsigned-note-workflow)
+
+- **Provisional platform rule, not a clinical sign-off:** a visit closes without waiting for the doctor; at close each unsigned note goes to its author's in-basket ("Note à signer"), the visit summary (staff "Résumé de visite" and patient portal) reads "Non finalisé — en attente de signature du praticien" until every note is signed, the item becomes a reminder after 24 h, and the hospital admin sees notes unsigned for more than 72 h (`/unsigned-notes`). The 24 h and 72 h delays and the wording need a named clinical approver before prod.
+- **Unsigned notes, mobile apps:** the native patient apps do not read `pendingSignature` yet, so they show the summary without the "not finalised" banner.
+- **Unsigned notes, nursing notes:** only encounter notes (SOAP and the other templates) are followed; nursing notes carry their own signing and are not in the workflow.
+- **Unsigned notes, a super-admin author:** a note written by a super-admin is filed in their in-basket, but the sign endpoint does not admit SUPER_ADMIN; decide whether such notes are signable or excluded.
 
 ## Standing debt — newborn registration from a delivery (feat/d1592-newborn-registration)
 

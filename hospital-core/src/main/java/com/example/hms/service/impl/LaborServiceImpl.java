@@ -181,6 +181,9 @@ public class LaborServiceImpl implements LaborService {
     private final com.example.hms.mapper.MaternalHistoryMapper maternalHistoryMapper;
     /** QA D1631: a start refused because she is in labour at another hospital is audited. */
     private final com.example.hms.service.AuditEventLogService auditEventLogService;
+    /** Labour transfer (2026-11-12): only those who may admit a labour at a hospital move one there or from there. */
+    private final com.example.hms.utility.RoleValidator roleValidator;
+    private final jakarta.persistence.EntityManager entityManager;
     /** QA D1592: every live-born baby of a recorded delivery is registered as its own patient. */
     private final com.example.hms.service.maternity.NewbornRegistrationService newbornRegistration;
 
@@ -215,7 +218,7 @@ public class LaborServiceImpl implements LaborService {
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         // Serialize starts across all hospitals, including when no episode exists yet.
         // Access was checked above; retain the patient lock until this transaction commits.
-        patientRepository.lockByIdUnscoped(patientId);
+        lockPatientForLabour(patientId);
         if (episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospital.getId(), LaborStatus.ACTIVE)) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.labor.alreadyActive");
         }
@@ -321,8 +324,329 @@ public class LaborServiceImpl implements LaborService {
         reachRecorder.recordReach(patientId, actingHospitalId, recorderUserId, null,
             CrossHospitalReachRecorder.reachOf(java.util.List.of(other.getId()), actingHospitalId),
             "Cross-hospital active labour disclosed when refusing a second labour episode");
+        // Labour transfer (2026-11-12): whoever may admit a labour here is
+        // offered the no-handover path; anyone else gets the plain refusal.
+        String refusal = mayAdmitLabourAt(recorderUserId, actingHospitalId)
+            ? "maternity.labor.alreadyActiveElsewhereArrivalOffered" : "maternity.labor.alreadyActiveElsewhere";
         throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID,
-            "maternity.labor.alreadyActiveElsewhere", other.getName() != null ? other.getName() : "—");
+            refusal, other.getName() != null ? other.getName() : "—");
+    }
+
+    /* ═══════════════════════ Transfer between hospitals ═══════════════════════ */
+
+    /** The reach a hospital's read of the episode handed over to it records. */
+    private static final String HANDOVER_READ = "Labour episode handed over by transfer read at the receiving hospital";
+
+    /**
+     * B's transfer with a handover (TRANSFERRED_OUT) to this hospital, which
+     * holds the episode that continues it. An arrival without handover
+     * (LEFT_WITHOUT_HANDOVER) is not a handover: it follows the sharing rule.
+     */
+    private boolean isHandedOverTo(LaborEpisode source, UUID hospitalId) {
+        return source != null && source.getId() != null && hospitalId != null
+            && source.getStatus() == LaborStatus.TRANSFERRED_OUT
+            && source.getTransferHospital() != null && hospitalId.equals(source.getTransferHospital().getId())
+            && episodeRepository.existsByTransferredFrom_IdAndHospital_Id(source.getId(), hospitalId);
+    }
+
+    /** Source of the urgent notices a labour transfer raises (no clinical value behind them to re-measure). */
+    static final String NOTICE_SOURCE_TRANSFER = "LABOR_TRANSFER";
+    private static final String FIELD_REASON = "reason";
+    private static final String FIELD_DESTINATION = "destinationHospitalId";
+    private static final String ENTITY_LABOR = "LABOR";
+
+    /**
+     * The serialization point of every labour transition (start, transfer,
+     * arrival without handover, delivery) and of every partograph entry: the
+     * patient row lock, held until the transaction commits. Each of them
+     * refreshes the episode and reads the state it decides on after this call.
+     * LaborTransitionLockGuardTest holds every transition to it.
+     */
+    private void lockPatientForLabour(UUID patientId) {
+        patientRepository.lockByIdUnscoped(patientId);
+    }
+
+    /** The episode's committed status, read after {@link #lockPatientForLabour}. */
+    private LaborStatus committedStatus(LaborEpisode episode) {
+        return episodeRepository.findStatusById(episode.getId())
+            .orElseThrow(() -> new ResourceNotFoundException("labor.episode.notFound", episode.getId()));
+    }
+
+    /**
+     * Who may move a labour into or out of a hospital: those who may already
+     * admit one there. A doctor, physician or surgeon, or a midwife (#1102's
+     * maternity admission), with an active assignment AT that hospital; a role
+     * held at another hospital counts for nothing, and a nurse or a
+     * super-admin holds no such role.
+     */
+    private boolean mayAdmitLabourAt(UUID userId, UUID hospitalId) {
+        if (userId == null || hospitalId == null || roleValidator == null) {
+            return false;
+        }
+        return roleValidator.isDoctor(userId, hospitalId)
+            || roleValidator.isPhysician(userId, hospitalId)
+            || roleValidator.isSurgeon(userId, hospitalId)
+            || roleValidator.isMidwife(userId, hospitalId);
+    }
+
+    /** Refused on the hospital the caller acts at: she holds no role there that may admit a labour. */
+    private void requireMayAdmitLabourAt(UUID userId, UUID hospitalId) {
+        if (!mayAdmitLabourAt(userId, hospitalId)) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.labor.transfer.notPermitted");
+        }
+    }
+
+    /** The acting hospital, which the controller sets from the caller's scope. */
+    private static UUID requireActingHospital(UUID hospitalId) {
+        if (hospitalId == null) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.labor.hospitalRequiredToRecord");
+        }
+        return hospitalId;
+    }
+
+    private static String requireReason(Object request, String typed) {
+        if (request == null) {
+            throw new BusinessException("maternity.labor.payloadRequired");
+        }
+        String reason = typed == null ? "" : typed.trim();
+        if (reason.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_REASON, "maternity.labor.transfer.reasonRequired");
+        }
+        return reason;
+    }
+
+    /**
+     * Labour transfer with a handover (provisional rule, 2026-11-12, pending
+     * clinical approval). The episode's own hospital (B) hands an active
+     * labour to another hospital (A): B's episode closes as TRANSFERRED_OUT
+     * (when, why, where to), A gets a new ACTIVE episode linked to it, which
+     * carries B's admission facts and WHO active-phase anchor (so A's alert and
+     * action lines keep the original clock). A reads B's partograph through
+     * the readable-hospitals rule and records its own entries on its episode.
+     *
+     * <p>Refused unless the caller may admit a labour at B, A is a clinical
+     * hospital where she is registered, and A and B are one organisation or
+     * the shared-patient rule lets the caller at B read A for her.
+     */
+    @Override
+    public LaborEpisodeResponseDTO transferEpisode(UUID patientId, UUID episodeId, UUID callerUserId,
+                                                   com.example.hms.payload.dto.clinical.labor.LaborTransferRequestDTO request) {
+        String reason = requireReason(request, request == null ? null : request.getReason());
+        UUID sourceHospitalId = requireActingHospital(request.getHospitalId());
+        LaborEpisode source = loadEpisode(patientId, episodeId, sourceHospitalId);
+        // QA D401: a write at the acting hospital is for a patient registered there.
+        patientRegistrationGuard.requireRegisteredAt(patientId, sourceHospitalId);
+        requireMayAdmitLabourAt(callerUserId, sourceHospitalId);
+        if (request.getDestinationHospitalId() == null) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_DESTINATION, "maternity.labor.transfer.destinationRequired");
+        }
+        if (request.getDestinationHospitalId().equals(sourceHospitalId)) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_DESTINATION, "maternity.labor.transfer.sameHospital");
+        }
+        Hospital destination = hospitalRepository.findClinicalById(request.getDestinationHospitalId())
+            .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException(FIELD_DESTINATION,
+                "maternity.labor.transfer.destinationNotFound"));
+        // Rex on #1134: the sharing rule is decided BEFORE her registration at the
+        // destination is looked at. Another organisation the rule does not open
+        // gets one refusal whether she is registered there or not, so the
+        // refusal never tells the caller where else she is a patient.
+        if (!sameOrganisation(source.getHospital(), destination)) {
+            Set<UUID> readable = recordAccessPolicy.readableHospitalIds(callerUserId, patientId, sourceHospitalId);
+            if (readable == null || !readable.contains(destination.getId())) {
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_DESTINATION,
+                    "maternity.labor.transfer.notShared");
+            }
+        }
+        PatientHospitalRegistration destinationRegistration = registrationRepository
+            .findByPatientIdAndHospitalIdAndActiveTrue(patientId, destination.getId())
+            .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException(FIELD_DESTINATION,
+                "maternity.labor.transfer.notRegisteredAtDestination"));
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(source.getPatient());
+
+        lockPatientForLabour(patientId);
+        entityManager.refresh(source);
+        requireStillActiveAndAlone(source);
+
+        User caller = resolveUser(callerUserId);
+        LocalDateTime now = LocalDateTime.now();
+        close(source, LaborStatus.TRANSFERRED_OUT, now, reason, destination, caller);
+        LaborEpisode continued = episodeRepository.save(continuation(source, destination, destinationRegistration,
+            null, caller, now));
+
+        auditTransfer(com.example.hms.enums.AuditEventType.LABOR_EPISODE_TRANSFERRED_OUT, source, sourceHospitalId,
+            callerUserId, "Labour episode transferred to another hospital with a handover", destination.getId());
+        auditTransfer(com.example.hms.enums.AuditEventType.LABOR_EPISODE_TRANSFERRED_IN, continued, destination.getId(),
+            callerUserId, "Labour episode received from another hospital with a handover", sourceHospitalId);
+        raiseTransferNotice(continued, destination.getId(), callerUserId, "TRANSFER_IN",
+            messageSource.getMessage("labor.alert.type.TRANSFER_IN", null, NotificationLocales.STAFF),
+            "labor.transfer.notice.in", hospitalName(source.getHospital()));
+        return laborMapper.toEpisodeResponse(continued, 0, false);
+    }
+
+    /**
+     * She arrived at the acting hospital (A) in labour, without a handover
+     * from the hospital (B) where an episode is still active (provisional
+     * rule, 2026-11-12, pending clinical approval). A's clinician records it
+     * with a reason: B's episode closes as LEFT_WITHOUT_HANDOVER, A opens its
+     * own episode linked to it, and B's maternity team gets an urgent notice.
+     *
+     * <p>Refused unless the caller may admit a labour at A, she is registered
+     * at A, and B's episode is one the caller may read at A (the shared-patient
+     * rule that shows it on A's labour tab; never across organisations
+     * otherwise).
+     */
+    @Override
+    public LaborEpisodeResponseDTO recordArrivalWithoutHandover(UUID patientId, UUID sourceEpisodeId, UUID callerUserId,
+                                                                com.example.hms.payload.dto.clinical.labor.LaborArrivalRequestDTO request) {
+        String reason = requireReason(request, request == null ? null : request.getReason());
+        UUID actingHospitalId = requireActingHospital(request.getHospitalId());
+        requireMayAdmitLabourAt(callerUserId, actingHospitalId);
+        Hospital acting = hospitalRepository.findClinicalById(actingHospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", actingHospitalId));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(acting, "hospital.notFound", actingHospitalId);
+        patientRegistrationGuard.requireRegisteredAt(patientId, actingHospitalId);
+        LaborEpisode source = loadEpisodeForRead(patientId, sourceEpisodeId, actingHospitalId);
+        if (source.getHospital() == null || actingHospitalId.equals(source.getHospital().getId())) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.labor.arrival.ownEpisode");
+        }
+        PatientHospitalRegistration registration = registrationRepository
+            .findByPatientIdAndHospitalIdAndActiveTrue(patientId, actingHospitalId).orElse(null);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(source.getPatient());
+
+        lockPatientForLabour(patientId);
+        entityManager.refresh(source);
+        requireStillActiveAndAlone(source);
+
+        User caller = resolveUser(callerUserId);
+        LocalDateTime now = LocalDateTime.now();
+        UUID sourceHospitalId = source.getHospital().getId();
+        close(source, LaborStatus.LEFT_WITHOUT_HANDOVER, now, reason, acting, caller);
+        LaborEpisode continued = episodeRepository.save(continuation(source, acting, registration,
+            callerStaffAt(acting, callerUserId), caller, now));
+
+        auditTransfer(com.example.hms.enums.AuditEventType.LABOR_EPISODE_LEFT_WITHOUT_HANDOVER, source, sourceHospitalId,
+            callerUserId, "Labour episode closed: she arrived at another hospital without a handover", actingHospitalId);
+        auditTransfer(com.example.hms.enums.AuditEventType.LABOR_EPISODE_TRANSFERRED_IN, continued, actingHospitalId,
+            callerUserId, "Labour episode opened on arrival from another hospital without a handover", sourceHospitalId);
+        raiseTransferNotice(source, sourceHospitalId, callerUserId, "LEFT_WITHOUT_HANDOVER",
+            messageSource.getMessage("labor.alert.type.LEFT_WITHOUT_HANDOVER", null, NotificationLocales.STAFF),
+            "labor.transfer.notice.leftWithoutHandover", hospitalName(acting));
+        return laborMapper.toEpisodeResponse(continued, 0, false);
+    }
+
+    /**
+     * After the patient lock: the source is still active (a transfer, an
+     * arrival or a delivery that committed first wins, and this one is
+     * refused), and no other active episode exists for her anywhere, so
+     * closing it and opening one leaves exactly one.
+     */
+    private void requireStillActiveAndAlone(LaborEpisode source) {
+        if (committedStatus(source) != LaborStatus.ACTIVE) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.labor.transfer.notActive");
+        }
+        if (episodeRepository.existsByPatient_IdAndStatusAndIdNot(source.getPatient().getId(), LaborStatus.ACTIVE, source.getId())) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.labor.alreadyActive");
+        }
+    }
+
+    /**
+     * Closes the source and writes it at once: Hibernate inserts before it
+     * updates, and the database's one-active-labour index (V290) must see the
+     * source closed before the continuation is inserted.
+     */
+    private void close(LaborEpisode source, LaborStatus status, LocalDateTime at, String reason,
+                       Hospital takenOverBy, User by) {
+        source.setStatus(status);
+        source.setTransferredAt(at);
+        source.setTransferReason(reason);
+        source.setTransferHospital(takenOverBy);
+        source.setTransferredBy(by);
+        episodeRepository.saveAndFlush(source);
+    }
+
+    /** The receiving hospital's episode: the source's admission facts, active, linked to it. */
+    private static LaborEpisode continuation(LaborEpisode source, Hospital hospital, PatientHospitalRegistration registration,
+                                             Staff admittedBy, User documentedBy, LocalDateTime admittedAt) {
+        return LaborEpisode.builder()
+            .patient(source.getPatient())
+            .hospital(hospital)
+            .registration(registration)
+            .maternalHistory(source.getMaternalHistory())
+            .admittedByStaff(admittedBy)
+            .documentedBy(documentedBy)
+            .laborOnsetAt(source.getLaborOnsetAt())
+            .admittedAt(admittedAt)
+            .membraneStatus(source.getMembraneStatus())
+            .membraneRuptureAt(source.getMembraneRuptureAt())
+            .gestationalAgeWeeks(source.getGestationalAgeWeeks())
+            .gravida(source.getGravida())
+            .para(source.getPara())
+            .activePhaseStartAt(source.getActivePhaseStartAt())
+            .status(LaborStatus.ACTIVE)
+            .transferredFrom(source)
+            .build();
+    }
+
+    private static boolean sameOrganisation(Hospital a, Hospital b) {
+        if (a == null || b == null || a.getOrganization() == null || b.getOrganization() == null) {
+            return false;
+        }
+        UUID first = a.getOrganization().getId();
+        return first != null && first.equals(b.getOrganization().getId());
+    }
+
+    private static String hospitalName(Hospital hospital) {
+        return hospital != null && hospital.getName() != null ? hospital.getName() : "—";
+    }
+
+    /**
+     * Both sides of a transfer are audited once it commits (ids and plain
+     * values only: the callback runs with no persistence context), so a
+     * transfer that rolled back leaves no SUCCESS row behind.
+     */
+    private void auditTransfer(com.example.hms.enums.AuditEventType type, LaborEpisode episode, UUID hospitalId,
+                               UUID userId, String description, UUID counterpartHospitalId) {
+        com.example.hms.payload.dto.AuditEventRequestDTO event = com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+            .eventType(type)
+            .status(com.example.hms.enums.AuditStatus.SUCCESS)
+            .entityType(ENTITY_LABOR)
+            .resourceId(episode.getId() == null ? null : episode.getId().toString())
+            .patientId(episode.getPatient() == null ? null : episode.getPatient().getId())
+            .userId(userId)
+            .hospitalId(hospitalId)
+            .eventDescription(description)
+            .details(java.util.Map.of("counterpartHospitalId", String.valueOf(counterpartHospitalId)))
+            .build();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(event);
+            } catch (RuntimeException auditFailure) {
+                log.warn("[LABOR] Could not audit a labour transfer: {}", auditFailure.getClass().getSimpleName());
+            }
+        });
+    }
+
+    /**
+     * The urgent notice of a transfer: the receiving hospital's maternity
+     * team (with a handover), or the hospital she left (without one). It rides
+     * the obstetric escalation chain (on call first, else every doctor and
+     * midwife there, re-notified until acknowledged), after the commit.
+     */
+    private void raiseTransferNotice(LaborEpisode episode, UUID hospitalId, UUID callerUserId, String noticeType,
+                                     String typeLabel, String messageKey, String otherHospitalName) {
+        if (obstetricAlertEscalation == null || episode.getPatient() == null) {
+            return;
+        }
+        // The worker renders each reader's notice from the type (labor.alert.type.<noticeType>)
+        // and the message key; the staff-locale copies title the in-basket item.
+        java.util.Locale locale = NotificationLocales.STAFF;
+        String patientName = episode.getPatient().getFullName();
+        String text = messageSource.getMessage(messageKey, new Object[]{otherHospitalName}, locale);
+        String notification = messageSource.getMessage("labor.alert.notification",
+            new Object[]{typeLabel, patientName, text}, locale);
+        obstetricAlertEscalation.raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
+            hospitalId, episode.getPatient().getId(), patientName, NOTICE_SOURCE_TRANSFER, episode.getId(),
+            noticeType, typeLabel, text, callerUserId, notification, messageKey, List.of(otherHospitalName)));
     }
 
     /**
@@ -450,12 +774,32 @@ public class LaborServiceImpl implements LaborService {
         // foreign episode surfaced is accounted.
         UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-        List<LaborEpisode> episodes = episodeRepository
-            .findByPatient_IdAndHospital_IdInOrderByAdmittedAtDesc(patientId, readable, PageRequest.of(0, effectiveLimit));
+        List<LaborEpisode> episodes = new java.util.ArrayList<>(episodeRepository
+            .findByPatient_IdAndHospital_IdInOrderByAdmittedAtDesc(patientId, readable, PageRequest.of(0, effectiveLimit)));
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(episodes.stream().map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList(), hospitalId),
             "Cross-hospital labour episode read on the treatment relationship");
-        return episodes
+        // Labour transfer (user decision, 2026-11-12): a labour B handed over is
+        // B's handover of care. The receiving hospital sees that one episode
+        // whatever the sharing rule says, and nothing else of B's.
+        List<LaborEpisode> handedOver = episodes.stream()
+            .filter(e -> e.getHospital() != null && hospitalId.equals(e.getHospital().getId()))
+            .map(LaborEpisode::getTransferredFrom)
+            .filter(source -> isHandedOverTo(source, hospitalId))
+            .filter(source -> episodes.stream().noneMatch(e -> e.getId().equals(source.getId())))
+            .distinct()
+            .toList();
+        if (!handedOver.isEmpty()) {
+            reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(handedOver.stream()
+                    .map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList(), hospitalId),
+                HANDOVER_READ);
+            episodes.addAll(handedOver);
+            episodes.sort(java.util.Comparator.comparing(LaborEpisode::getAdmittedAt,
+                java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
+        }
+        // Rex on #1134: the handed-over rows never take the list past its limit.
+        return episodes.stream().limit(effectiveLimit).toList()
             .stream()
             .map(episode -> laborMapper.toEpisodeResponse(
                 episode,
@@ -473,7 +817,11 @@ public class LaborServiceImpl implements LaborService {
             throw new BusinessException("maternity.partograph.payloadRequired");
         }
         LaborEpisode episode = loadEpisode(patientId, episodeId, request.getHospitalId());
-        if (episode.getStatus() != LaborStatus.ACTIVE) {
+        // An observation may set the active-phase anchor and write the episode.
+        // Serialize it with transfers/delivery and discard the pre-lock snapshot.
+        lockPatientForLabour(patientId);
+        entityManager.refresh(episode);
+        if (committedStatus(episode) != LaborStatus.ACTIVE || episode.getStatus() != LaborStatus.ACTIVE) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.partograph.laborNotActive");
         }
 
@@ -572,6 +920,14 @@ public class LaborServiceImpl implements LaborService {
         if (episode.getStatus() != LaborStatus.ACTIVE) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.delivery.laborNotActive");
         }
+        // Labour transfer (2026-11-12): a delivery is a transition too. Under the
+        // patient lock, a transfer or an arrival elsewhere that committed first
+        // closed this episode, and the birth belongs on the episode that took over.
+        lockPatientForLabour(patientId);
+        entityManager.refresh(episode);
+        if (committedStatus(episode) != LaborStatus.ACTIVE) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.delivery.laborNotActive");
+        }
         if (deliveryRecordRepository.existsByEpisode_Id(episode.getId())) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.delivery.alreadyRecorded");
         }
@@ -667,14 +1023,43 @@ public class LaborServiceImpl implements LaborService {
      * up to the birth), and the placenta is delivered after the birth, never
      * before it. Each refusal names its field.
      */
+    /**
+     * The episodes one labour was charted on: this one, then each episode it
+     * continues by a transfer (TRANSFERRED_OUT) or an arrival without handover
+     * (LEFT_WITHOUT_HANDOVER), oldest last. Bounded, and a link seen twice ends it.
+     */
+    private static List<UUID> labourChain(LaborEpisode episode) {
+        List<UUID> chain = new java.util.ArrayList<>();
+        java.util.Set<UUID> seen = new java.util.HashSet<>();
+        LaborEpisode current = episode;
+        while (current != null && current.getId() != null && seen.add(current.getId()) && chain.size() < MAX_TRANSFER_CHAIN) {
+            chain.add(current.getId());
+            LaborEpisode previous = current.getTransferredFrom();
+            current = previous != null && (previous.getStatus() == LaborStatus.TRANSFERRED_OUT
+                || previous.getStatus() == LaborStatus.LEFT_WITHOUT_HANDOVER) ? previous : null;
+        }
+        return chain;
+    }
+
+    /** More hand-overs than this in one labour is a data error; the chain read stops there. */
+    private static final int MAX_TRANSFER_CHAIN = 20;
+
     private void requireDeliveryTimesInOrder(LaborEpisode episode, LocalDateTime birthAt,
                                              LocalDateTime placentaDeliveredAt) {
         if (episode.getLaborOnsetAt() != null && birthAt.isBefore(episode.getLaborOnsetAt())) {
             throw new com.example.hms.exception.FieldBusinessException("birthDateTime", "labor.delivery.beforeOnset");
         }
-        LocalDateTime lastObservation = entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(episode.getId())
-            .map(LaborPartographEntry::getObservationTime)
-            .orElse(null);
+        // Rex on #1134: after a transfer the labour's partograph spans every
+        // episode it continues, so the birth follows the last entry of the chain.
+        LocalDateTime lastObservation = null;
+        for (UUID chartedEpisodeId : labourChain(episode)) {
+            LocalDateTime last = entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(chartedEpisodeId)
+                .map(LaborPartographEntry::getObservationTime)
+                .orElse(null);
+            if (last != null && (lastObservation == null || last.isAfter(lastObservation))) {
+                lastObservation = last;
+            }
+        }
         if (lastObservation != null && birthAt.isBefore(lastObservation)) {
             throw new com.example.hms.exception.FieldBusinessException("birthDateTime",
                 "labor.delivery.beforeLastPartograph");
@@ -940,10 +1325,23 @@ public class LaborServiceImpl implements LaborService {
         Objects.requireNonNull(patientId, PATIENT_ID_REQUIRED);
         UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-        LaborEpisode episode = episodeRepository.findById(episodeId)
+        LaborEpisode found = episodeRepository.findById(episodeId)
             .filter(e -> e.getPatient() != null && patientId.equals(e.getPatient().getId()))
-            .filter(e -> e.getHospital() != null && readable != null && readable.contains(e.getHospital().getId()))
             .orElseThrow(() -> new ResourceNotFoundException("labor.episode.notFound", episodeId));
+        if (found.getHospital() == null || readable == null || !readable.contains(found.getHospital().getId())) {
+            // Labour transfer (user decision, 2026-11-12): the episode B handed to
+            // this hospital, and only that one, stays readable here.
+            if (!isHandedOverTo(found, hospitalId)) {
+                throw new ResourceNotFoundException("labor.episode.notFound", episodeId);
+            }
+            reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(
+                    java.util.Collections.singletonList(CrossHospitalReachRecorder.hospitalIdOf(found.getHospital())),
+                    hospitalId),
+                HANDOVER_READ);
+            return found;
+        }
+        LaborEpisode episode = found;
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(
                 java.util.Collections.singletonList(CrossHospitalReachRecorder.hospitalIdOf(episode.getHospital())),

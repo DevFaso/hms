@@ -120,6 +120,17 @@ public class MortalityServiceImpl implements MortalityService {
         this.stayEncounters = stayEncounters;
     }
 
+    /**
+     * Provisional platform rule (unsigned-note workflow): a closed visit's unsigned notes go to their authors'
+     * in-basket (UnsignedNoteHookGuardTest). Setter-injected; null in hand-built unit tests.
+     */
+    private com.example.hms.service.UnsignedNoteFollowUp unsignedNotes;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setUnsignedNotes(com.example.hms.service.UnsignedNoteFollowUp unsignedNotes) {
+        this.unsignedNotes = unsignedNotes;
+    }
+
     /** QA D1516: files the review of what a voided death closed, after commit; absent in hand-built tests. */
     private OrderReviewAfterCommit notices;
 
@@ -680,6 +691,9 @@ public class MortalityServiceImpl implements MortalityService {
             }
             if (deathRecord.getEncounterId() == null) {
                 deathRecord.setEncounterId(encounter.getId());
+            }
+            if (unsignedNotes != null) {
+                unsignedNotes.visitClosed(encounter);
             }
             closedIds.add(String.valueOf(encounter.getId()));
             closed++;
