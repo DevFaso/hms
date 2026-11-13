@@ -136,6 +136,11 @@ public class UltrasoundMapper {
         if (dto.getSpecialInstructions() != null) {
             order.setSpecialInstructions(dto.getSpecialInstructions());
         }
+        // QA D1672 class (r44 sweep): the edit dialog offers the scan count and the
+        // update validated it, then dropped it behind a success.
+        if (dto.getScanCountForPregnancy() != null) {
+            order.setScanCountForPregnancy(dto.getScanCountForPregnancy());
+        }
     }
 
     /**

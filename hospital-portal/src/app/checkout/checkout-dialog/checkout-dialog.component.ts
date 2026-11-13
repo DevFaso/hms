@@ -119,7 +119,28 @@ export class CheckoutDialogComponent {
     if (!this.dischargeDiagnosesText().trim() && !this.followUpInstructions().trim()) {
       return this.translate.instant('CHECKOUT.SUMMARY_REQUIRED');
     }
+    // QA D1671: the summary stores the lines joined by "; ", in a column of
+    // DIAGNOSES_MAX (the server's CheckOutRequestDTO.DIAGNOSES_MAX).
+    if (this.joinedDiagnosesLength() > CheckoutDialogComponent.DIAGNOSES_MAX) {
+      return this.translate.instant('CHECKOUT.DIAGNOSES_TOO_LONG', {
+        max: CheckoutDialogComponent.DIAGNOSES_MAX,
+      });
+    }
     return null;
+  }
+
+  /** The discharge diagnosis the server stores: the non-blank lines joined by "; ". */
+  private static readonly DIAGNOSES_MAX = 5000;
+
+  private joinedDiagnosesLength(): number {
+    return this.diagnosisLines().join('; ').length;
+  }
+
+  private diagnosisLines(): string[] {
+    return this.dischargeDiagnosesText()
+      .split('\n')
+      .map((d) => d.trim())
+      .filter((d) => d.length > 0);
   }
 
   submit(): void {
@@ -127,10 +148,7 @@ export class CheckoutDialogComponent {
 
     this.saving.set(true);
 
-    const diagnoses = this.dischargeDiagnosesText()
-      .split('\n')
-      .map((d) => d.trim())
-      .filter((d) => d.length > 0);
+    const diagnoses = this.diagnosisLines();
 
     const request: CheckOutRequest = {
       followUpInstructions: this.followUpInstructions() || undefined,

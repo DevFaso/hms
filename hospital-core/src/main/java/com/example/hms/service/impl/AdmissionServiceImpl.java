@@ -270,6 +270,8 @@ public class AdmissionServiceImpl implements AdmissionService {
         if (request.getAcuityLevel() != null) admission.setAcuityLevel(request.getAcuityLevel());
         if (request.getExpectedDischargeDateTime() != null) admission.setExpectedDischargeDateTime(request.getExpectedDischargeDateTime());
         if (request.getAdmissionNotes() != null) admission.setAdmissionNotes(request.getAdmissionNotes());
+        // QA D1672: the corrected complaint was dropped behind a 200.
+        if (request.getChiefComplaint() != null) admission.setChiefComplaint(request.getChiefComplaint().strip());
         if (request.getMetadata() != null) admission.setMetadata(request.getMetadata());
 
         if (request.getSecondaryDiagnosesToAdd() != null) {
@@ -303,7 +305,7 @@ public class AdmissionServiceImpl implements AdmissionService {
             && request.getDepartmentId() == null && request.getRoomBed() == null
             && request.getAcuityLevel() == null && request.getExpectedDischargeDateTime() == null
             && request.getAdmissionNotes() == null && request.getAttendingPhysicianId() == null
-            && request.getConsultingPhysiciansToAdd() == null && request.getMetadata() == null;
+            && request.getChiefComplaint() == null && request.getMetadata() == null;
     }
 
     /**

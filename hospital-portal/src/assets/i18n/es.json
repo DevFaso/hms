@@ -1266,6 +1266,7 @@
   },
   "ADMISSIONS": {
     "ROOM_BED_HELD_HINT": "La habitación sigue a la cama de esta estancia. Para trasladar al paciente, asigne otra cama o solicite un traslado.",
+    "SET_AT_ADMISSION_HINT": "El paciente, el establecimiento, el clínico que admite, el tipo y la hora de admisión constituyen el registro de la admisión: no se modifican una vez admitido el paciente.",
     "ACUITY": "Gravedad",
     "ACUITY_CRITICAL": "Crítica",
     "ACUITY_LEVEL": "Nivel de gravedad",
@@ -9255,7 +9256,8 @@
     "INSTRUCTIONS_PLACEHOLDER": "p. ej. Volver a la clínica si los síntomas empeoran",
     "EDUCATION_PLACEHOLDER": "p. ej. Folleto de manejo de medicamentos",
     "FOLLOWUP_REASON_PLACEHOLDER": "p. ej. Control en 2 semanas",
-    "SUMMARY_REQUIRED": "Introduzca un diagnóstico de alta o instrucciones para el paciente: el resumen de la visita no puede estar vacío."
+    "SUMMARY_REQUIRED": "Introduzca un diagnóstico de alta o instrucciones para el paciente: el resumen de la visita no puede estar vacío.",
+    "DIAGNOSES_TOO_LONG": "Los diagnósticos de alta no deben superar los {{max}} caracteres en total (cada salto de línea cuenta como dos)."
   },
   "inBasket": {
     "acknowledge": "Acusar recibo",

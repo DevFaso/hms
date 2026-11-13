@@ -538,6 +538,28 @@ describe('AdmissionsComponent', () => {
       expect(toast.success).toHaveBeenCalledWith('ADMISSIONS.UPDATED');
     });
 
+    // QA D1672: the edit sent the whole form; the update took none of the
+    // complaint, type, time or clinician and kept them behind a 200.
+    it('sends only what the update takes, with the corrected complaint (QA D1672)', () => {
+      departmentLookup.getActiveDepartments.and.returnValue(of([]));
+      component.openEdit(adm({ admissionType: 'EMERGENCY', admittingProviderId: 's1' }));
+      component.form.chiefComplaint = 'Complainte corrigée';
+      admissionService.update.and.returnValue(of(adm()));
+      component.submitForm();
+      const body = admissionService.update.calls.mostRecent().args[1] as Record<string, unknown>;
+      const taken = [
+        'departmentId',
+        'roomBed',
+        'acuityLevel',
+        'expectedDischargeDateTime',
+        'admissionNotes',
+        'chiefComplaint',
+        'attendingPhysicianId',
+      ];
+      expect(Object.keys(body).filter((k) => !taken.includes(k))).toEqual([]);
+      expect(body['chiefComplaint']).toBe('Complainte corrigée');
+    });
+
     it('deletes, and reports a failed delete', () => {
       component.confirmDelete(adm());
       expect(component.showDeleteConfirm()).toBeTrue();
@@ -939,6 +961,33 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
 
   // QA D622: the admission time is stored as UTC wall clock; the row must show
   // the user's local date of that instant, not the bare string read as local.
+  it('QA D1672: the edit shows what records the admission read-only, and says why', async () => {
+    const fixture = mount(['ROLE_DOCTOR']);
+    fixture.componentInstance.openEdit({
+      id: 'a1',
+      hospitalId: 'h1',
+      patientId: 'p1',
+      patientName: 'Awa Traore',
+      status: 'ACTIVE',
+      chiefComplaint: 'Fever',
+      admissionType: 'ELECTIVE',
+      admissionDateTime: '2026-10-18T10:00:00',
+    } as AdmissionResponse);
+    fixture.detectChanges();
+    // ngModel applies [disabled] once its promise settles.
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('#adm-set-at-admission')).withContext('the why').not.toBeNull();
+    expect(el.querySelector('.chip-clear')).withContext('the patient is not changed').toBeNull();
+    for (const id of ['adm-providerId', 'adm-type']) {
+      const select = el.querySelector<HTMLSelectElement>('#' + id)!;
+      expect(select.disabled).withContext(id).toBeTrue();
+    }
+    expect(el.querySelector<HTMLInputElement>('#adm-dateTime')!.readOnly).toBeTrue();
+    expect(el.querySelector<HTMLTextAreaElement>('#adm-complaint')!.readOnly).toBeFalse();
+  });
+
   it('shows the admission date in the user zone (D622)', () => {
     const el = render(['ROLE_DOCTOR'], 'ACTIVE', '2026-10-23T02:30:00');
     const expected = formatDate(new Date(Date.UTC(2026, 9, 23, 2, 30)), 'mediumDate', 'en-US');

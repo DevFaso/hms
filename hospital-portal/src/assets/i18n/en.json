@@ -1266,6 +1266,7 @@
   },
   "ADMISSIONS": {
     "ROOM_BED_HELD_HINT": "The room follows the bed this stay holds. To move the patient, assign another bed or request a transfer.",
+    "SET_AT_ADMISSION_HINT": "The patient, hospital, admitting clinician, admission type and admission time record the admission itself, so they cannot be changed once the patient is admitted.",
     "ACUITY": "Acuity",
     "ACUITY_CRITICAL": "Critical",
     "ACUITY_LEVEL": "Acuity Level",
@@ -9255,7 +9256,8 @@
     "INSTRUCTIONS_PLACEHOLDER": "e.g. Return to clinic if symptoms worsen",
     "EDUCATION_PLACEHOLDER": "e.g. Medication management handout",
     "FOLLOWUP_REASON_PLACEHOLDER": "e.g. Recheck in 2 weeks",
-    "SUMMARY_REQUIRED": "Enter a discharge diagnosis or instructions for the patient: the after-visit summary cannot be empty."
+    "SUMMARY_REQUIRED": "Enter a discharge diagnosis or instructions for the patient: the after-visit summary cannot be empty.",
+    "DIAGNOSES_TOO_LONG": "The discharge diagnoses must not exceed {{max}} characters in all (each line break counts as two)."
   },
   "inBasket": {
     "acknowledge": "Acknowledge",

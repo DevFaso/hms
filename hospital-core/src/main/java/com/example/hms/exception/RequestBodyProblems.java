@@ -58,6 +58,25 @@ public final class RequestBodyProblems {
         return true;
     }
 
+    /**
+     * QA D1672: records a property a {@code @RejectsUnknownFields} request does
+     * not take; false when no request body is being read.
+     */
+    public static boolean recordNotAccepted(String path) {
+        Collector collector = current();
+        if (collector == null) {
+            return false;
+        }
+        collector.notAccepted.add(path);
+        return true;
+    }
+
+    /** The properties recorded as not taken so far, in reading order (read before {@link #finish()}). */
+    public static List<String> notAccepted() {
+        Collector collector = current();
+        return collector == null ? List.of() : new ArrayList<>(collector.notAccepted);
+    }
+
     /** Closes the collector and returns the malformed paths in the order they were read. */
     public static List<String> finish() {
         RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
@@ -80,5 +99,6 @@ public final class RequestBodyProblems {
     /** The paths of one body, each once, in reading order. */
     private static final class Collector {
         private final Set<String> paths = new LinkedHashSet<>();
+        private final Set<String> notAccepted = new LinkedHashSet<>();
     }
 }

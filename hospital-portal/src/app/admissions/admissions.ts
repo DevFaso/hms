@@ -18,6 +18,7 @@ import {
   AdmissionService,
   AdmissionResponse,
   AdmissionRequest,
+  AdmissionUpdateRequest,
   AdmissionType,
   AdmissionStatus,
   AcuityLevel,
@@ -695,6 +696,7 @@ export class AdmissionsComponent implements OnInit {
   openEdit(a: AdmissionResponse): void {
     // QA D1428: the room of a stay that holds a bed is that bed; it moves by assignment or transfer.
     this.editingHoldsBed.set(!!a.bedId);
+    this.editingHadDepartment.set(!!a.departmentId);
     this.form = {
       patientId: a.patientId ?? '',
       hospitalId: a.hospitalId ?? '',
@@ -737,7 +739,7 @@ export class AdmissionsComponent implements OnInit {
         : this.form.admissionDateTime,
     };
     const op = this.editing()
-      ? this.admissionService.update(this.editingId()!, payload)
+      ? this.admissionService.update(this.editingId()!, this.updatePayload())
       : this.admissionService.create(payload);
     op.subscribe({
       next: () => {
@@ -764,6 +766,29 @@ export class AdmissionsComponent implements OnInit {
 
   /** QA D1428: the stay being edited holds a structured bed. */
   readonly editingHoldsBed = signal(false);
+
+  /**
+   * QA D1672: the update keeps the stay's department when none is sent, so a
+   * stay that has one is moved to another, never back to "any department".
+   */
+  readonly editingHadDepartment = signal(false);
+
+  /**
+   * QA D1672: the edit sent the whole admission form; the update took none of
+   * the complaint, type, time or clinician, answered 200 and kept the old
+   * values behind "Admission updated". It now sends only what the update
+   * takes (the server refuses anything else by name); the patient, hospital,
+   * type, time and admitting clinician are read-only in the dialog.
+   */
+  private updatePayload(): AdmissionUpdateRequest {
+    return {
+      departmentId: this.form.departmentId || undefined,
+      roomBed: this.form.roomBed,
+      acuityLevel: this.form.acuityLevel,
+      admissionNotes: this.form.admissionNotes,
+      chiefComplaint: this.form.chiefComplaint,
+    };
+  }
 
   /**
    * QA D603: only a stay still in progress can be cancelled. A discharged,
