@@ -130,6 +130,31 @@ body {
   line-height: 1.5;
 }
 
+/* QA r44: a long unbroken string typed into a note ("NNNN…", a pasted code or
+   URL) pushed out of its panel. Inherited by every element: a word breaks only
+   when it would otherwise overflow its line, so normal text is unchanged. */
+body {
+  overflow-wrap: break-word;
+}
+
+/* Free text shown as entered (notes, sources, reasons). "anywhere" also lowers
+   the box's minimum width, so it wraps inside a flex or grid cell too, where
+   break-word alone still overflows. Add .free-text to any new free-text display. */
+.free-text,
+.notes-content,
+.detail-notes,
+.range-notes,
+.saved-note,
+.notes-cell,
+.doc-notes,
+.note-history-item,
+.personal-notes,
+.study-notes,
+.vital-notes {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
 a {
   color: inherit;
 }

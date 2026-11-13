@@ -755,6 +755,37 @@ describe('LabResultsComponent', () => {
       expect(cell.textContent.trim()).toBe('Critical');
     });
 
+    it('labels a range note and source as text shown as entered, never translated (QA r44)', () => {
+      fixture.detectChanges();
+      flushInit();
+      component.selectedResult.set(
+        mockResult({
+          referenceRanges: [
+            {
+              minValue: 0.7,
+              maxValue: 1.1,
+              unit: 'g/L',
+              gender: 'ALL',
+              ageMin: null,
+              ageMax: null,
+              notes: 'Neonatal normal interval not supplied: set it locally.',
+              source: 'User 2026-10-29 (WHO/ADA fasting glucose)',
+            },
+          ],
+        }) as never,
+      );
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      const notes = host.querySelector('[data-testid="range-notes"]')!;
+      const source = host.querySelector('[data-testid="range-source"]')!;
+      expect(notes.textContent).toContain('LAB_RESULTS.RANGE_NOTES_AS_ENTERED');
+      expect(notes.textContent).toContain('Neonatal normal interval not supplied: set it locally.');
+      expect(source.textContent).toContain('LAB_RESULTS.RANGE_SOURCE');
+      expect(source.textContent).toContain('User 2026-10-29 (WHO/ADA fasting glucose)');
+      expect(notes.classList).toContain('free-text');
+      expect(source.classList).toContain('free-text');
+    });
+
     it('leaves a normal result with a plain acknowledge', () => {
       spyOn(component, 'canAcknowledge').and.returnValue(true);
       fixture.detectChanges();

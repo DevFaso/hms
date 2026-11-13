@@ -4036,11 +4036,12 @@
     "EXPECTED_RESULT": "Résultat attendu",
     "CORRECTED_HINT_PATIENT": "Le laboratoire a corrigé ce résultat après l’avoir communiqué. C’est cette valeur qui compte ; votre équipe soignante en est informée.",
     "RANGE_APPLIED": "Intervalle appliqué à ce patient",
-    "RANGE_SOURCE": "Source",
+    "RANGE_SOURCE": "Source (texte d’origine)",
     "UNIT_FROM_TEST": "Unité de l'examen : {{unit}}. Une valeur dans une autre unité risque de ne pas être évaluée.",
     "UNGRADED_RELEASE_TITLE": "Valider un résultat non évalué",
     "UNGRADED_RELEASE_CONFIRM": "Je l'ai vérifié, valider",
-    "ROW_PENDING_RELEASE": "En attente de publication"
+    "ROW_PENDING_RELEASE": "En attente de publication",
+    "RANGE_NOTES_AS_ENTERED": "Note (texte d’origine)"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -13320,10 +13321,10 @@
     "UNIT": "Unité",
     "LOADING": "Chargement de l’historique…",
     "ERROR": "Impossible de charger l’historique. Fermez puis rouvrez les détails pour réessayer.",
-    "NOTE": "Les valeurs numériques exactes sont tracées séparément par unité. Les dates sont espacées à l’échelle. L’historique peut inclure des versions antérieures ; les corrections sont signalées. Aucune interprétation clinique n’est déduite.",
+    "NOTE": "Les valeurs numériques exactes sont tracées dans une seule unité lorsque la conversion est exacte (facteur décimal entre unités de masse, ou masse molaire connue de l’analyte) ; sinon, séparément par unité. Les dates sont espacées à l’échelle. L’historique peut inclure des versions antérieures ; les corrections sont signalées. Aucune interprétation clinique n’est déduite.",
     "TIME_AXIS": "Temps",
     "CHART_LABEL": "Observations historiques ; les valeurs exactes figurent dans le tableau des observations.",
-    "INSUFFICIENT": "Au moins deux observations numériques datées dans la même unité connue sont nécessaires.",
+    "INSUFFICIENT": "Au moins deux observations numériques datées, dans une même unité connue ou convertible, sont nécessaires.",
     "OBSERVATIONS": "Toutes les observations",
     "PAGINATION": "Pagination des résultats",
     "RANGE": "{{start}}–{{end}} sur {{total}} résultats",
@@ -13332,7 +13333,10 @@
     "PAGE": "Page {{page}} sur {{pages}}",
     "NEXT": "Page suivante",
     "AUDIT_TITLE": "Versions enregistrées des résultats",
-    "CORRECTION_NOTE": "Cet historique contient des corrections. Les versions remplacées ne peuvent pas y être identifiées. Les points montrent uniquement les valeurs enregistrées ; les lignes et variations ne sont pas affichées. Consultez les observations et les corrections avant d’interpréter les changements."
+    "CORRECTION_NOTE": "Cet historique contient des corrections. Les versions remplacées ne peuvent pas y être identifiées. Les points montrent uniquement les valeurs enregistrées ; les lignes et variations ne sont pas affichées. Consultez les observations et les corrections avant d’interpréter les changements.",
+    "CONVERSION_NOTE": "Des valeurs saisies dans une autre unité sont converties en {{unit}} pour le graphique. La valeur et l’unité saisies restent affichées, marquées « converti ».",
+    "CONVERTED_FROM": "converti, valeur saisie : {{value}}",
+    "CONVERTED_TO": "converti : {{value}}"
   },
   "LAB_RANGE": {
     "TITLE": "Position du résultat",

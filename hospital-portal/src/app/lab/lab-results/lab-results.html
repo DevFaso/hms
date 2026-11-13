@@ -517,7 +517,9 @@
           <app-result-evolution
             [resultId]="r.id"
             [history]="detailHistory()"
-            [preferredUnit]="r.resultUnit || ''"
+            [preferredUnit]="r.gradedReferenceRange?.unit || r.resultUnit || ''"
+            [testName]="r.labTestName"
+            [testCode]="r.labTestCode"
             [loading]="detailHistoryLoading()"
             [failed]="detailHistoryError()"
           />
@@ -550,11 +552,16 @@
                         {{ formatReferenceRangeAge(rr) }}</span
                       >
                     </div>
+                    <!-- Free text stored as entered (any language): labelled, never translated. -->
                     @if (rr.notes) {
-                      <div class="range-notes">{{ rr.notes }}</div>
+                      <div class="range-notes free-text" data-testid="range-notes">
+                        {{ 'LAB_RESULTS.RANGE_NOTES_AS_ENTERED' | translate
+                        }}{{ 'COMMON.COLON' | translate }}
+                        {{ rr.notes }}
+                      </div>
                     }
                     @if (rr.source) {
-                      <div class="range-notes">
+                      <div class="range-notes free-text" data-testid="range-source">
                         {{ 'LAB_RESULTS.RANGE_SOURCE' | translate }}{{ 'COMMON.COLON' | translate }}
                         {{ rr.source }}
                       </div>
