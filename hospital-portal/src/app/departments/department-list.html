@@ -39,7 +39,7 @@
           </div>
           <div class="dept-info">
             <h4>{{ dept.name }}</h4>
-            <span class="dept-code">{{ dept.code }}</span>
+            <span class="dept-code">{{ dept.departmentCode }}</span>
             @if (dept.description) {
               <p class="dept-desc">{{ dept.description }}</p>
             }
@@ -129,10 +129,10 @@
             <div class="form-row">
               <div class="field">
                 <label for="dHospital">{{ 'ENCOUNTERS.HOSPITAL' | translate }} *</label>
-                @if (hospitalLocked) {
+                @if (hospitalLocked || editing()) {
                   <div class="locked-field">
                     <span class="material-symbols-outlined locked-icon">business</span>
-                    {{ lockedHospitalName }}
+                    {{ editing()?.hospitalName || lockedHospitalName }}
                   </div>
                   <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
                 } @else {
@@ -228,6 +228,37 @@
                 }
               </div>
             </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="dBeds">{{ 'DEPARTMENTS.BED_CAPACITY' | translate }}</label>
+                <input
+                  id="dBeds"
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputmode="numeric"
+                  [(ngModel)]="form.bedCapacity"
+                  name="bedCapacity"
+                />
+              </div>
+            </div>
+
+            <fieldset class="field name-languages">
+              <legend>{{ 'DEPARTMENTS.NAMES_PER_LANGUAGE' | translate }}</legend>
+              <span class="field-hint">{{
+                'DEPARTMENTS.NAMES_PER_LANGUAGE_HINT' | translate
+              }}</span>
+              @for (lang of nameLanguages; track lang.code) {
+                <label [for]="'dName-' + lang.code">{{ lang.labelKey | translate }}</label>
+                <input
+                  [id]="'dName-' + lang.code"
+                  type="text"
+                  [(ngModel)]="langNames[lang.code]"
+                  [name]="'name-' + lang.code"
+                />
+              }
+            </fieldset>
 
             <div class="field">
               <label for="dDesc">{{ 'DEPARTMENTS.DESCRIPTION' | translate }}</label>

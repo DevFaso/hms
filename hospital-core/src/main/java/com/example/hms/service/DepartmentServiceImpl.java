@@ -281,6 +281,11 @@ public class DepartmentServiceImpl implements DepartmentService {
         validateDepartmentRequest(dto);
 
         Hospital hospital = resolveHospital(dto);
+        // D1790: a department belongs to one hospital for good; a move is refused on the field.
+        if (department.getHospital() != null
+                && !Objects.equals(department.getHospital().getId(), hospital.getId())) {
+            throw new FieldBusinessException("hospitalId", "department.hospital.immutable");
+        }
         dto.setHospitalName(hospital.getName());
         dto.setCode(normalizeDepartmentCode(dto.getCode()));
         ensureRenameUniqueness(id, dto, hospital, locale);
@@ -307,12 +312,21 @@ public class DepartmentServiceImpl implements DepartmentService {
         Staff headToKeep = clearsHead || !sameHospital ? null : currentHead;
         Staff head = newHeadOfDepartment != null ? newHeadOfDepartment : headToKeep;
 
+        String storedName = department.getName();
+        String storedDescription = department.getDescription();
+        boolean hadLocaleTranslation = hasTranslationFor(department, locale);
         departmentMapper.updateDepartmentFromDto(dto, department, hospital, head);
         if (dto.getTranslations() == null) {
             // The form edits the name and description as the caller reads them, her
             // language's translation: write them back there, keep every other language.
             syncLocaleTranslation(department, locale);
             ensureLocaleTranslation(department, department.getAssignment(), locale);
+        }
+        if (hadLocaleTranslation) {
+            // D1790: what the form sent is the localized display text, never the stored
+            // base name: a rename updates only the language being edited.
+            department.setName(storedName);
+            department.setDescription(storedDescription);
         }
         Department updatedDepartment = departmentRepository.save(department);
 
@@ -787,6 +801,14 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     private String likePattern(String value) {
         return "%" + value.trim().toLowerCase(Locale.ROOT) + "%";
+    }
+
+    private boolean hasTranslationFor(Department department, Locale locale) {
+        String targetLanguage = (locale != null ? locale.getLanguage() : Locale.ENGLISH.getLanguage());
+        return department.getDepartmentTranslations() != null
+            && department.getDepartmentTranslations().stream()
+                .anyMatch(t -> t != null
+                    && targetLanguage.equalsIgnoreCase(normalizeLanguageCode(t.getLanguageCode())));
     }
 
     private void syncLocaleTranslation(Department department, Locale locale) {

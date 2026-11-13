@@ -13,21 +13,36 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 import { missingRequiredMessage } from '../shared/required-fields';
+import { storedLang } from '../shared/i18n/app-locale';
 
-interface Department {
+/** The backend's DepartmentResponseDTO (guarded by scripts/check-department-dto.test.mjs). */
+export interface Department {
   id: string;
   name: string;
-  code: string;
+  departmentCode: string;
   description?: string;
-  headOfDepartment?: string;
-  headOfDepartmentEmail?: string;
+  headOfDepartmentName?: string;
   phoneNumber?: string;
   email?: string;
   staffCount?: number;
+  bedCount?: number;
   active: boolean;
   hospitalId?: string;
   hospitalName?: string;
+  translations?: string[];
+  translationEntries?: DepartmentTranslation[];
 }
+
+export interface DepartmentTranslation {
+  id?: string;
+  departmentId?: string;
+  languageCode: string;
+  name: string;
+  description?: string | null;
+}
+
+/** The languages the edit form shows a name for. */
+export const DEPARTMENT_NAME_LANGUAGES = ['fr', 'en', 'es'] as const;
 
 interface DepartmentRequest {
   hospitalId: string;
@@ -38,6 +53,8 @@ interface DepartmentRequest {
   email?: string;
   active: boolean;
   headOfDepartmentEmail?: string;
+  bedCapacity?: number | null;
+  translations?: DepartmentTranslation[];
 }
 
 @Component({
@@ -80,6 +97,13 @@ export class DepartmentListComponent implements OnInit {
   editing = signal<Department | null>(null);
   saving = signal(false);
   form: DepartmentRequest = this.emptyForm();
+  /** One name per language (FR / EN / ES). Blank keeps the stored value. */
+  readonly nameLanguages = [
+    { code: 'fr', labelKey: 'DEPARTMENTS.NAME_IN_FR' },
+    { code: 'en', labelKey: 'DEPARTMENTS.NAME_IN_EN' },
+    { code: 'es', labelKey: 'DEPARTMENTS.NAME_IN_ES' },
+  ];
+  langNames: Record<string, string> = this.emptyLangNames();
 
   /** Receptionist gets read-only access — no create/edit/delete */
   canManage = !this.roleContext.isReceptionist();
@@ -184,7 +208,7 @@ export class DepartmentListComponent implements OnInit {
       this.departments().filter(
         (d) =>
           d.name.toLowerCase().includes(term) ||
-          d.code.toLowerCase().includes(term) ||
+          (d.departmentCode ?? '').toLowerCase().includes(term) ||
           (d.description?.toLowerCase().includes(term) ?? false),
       ),
     );
@@ -193,6 +217,7 @@ export class DepartmentListComponent implements OnInit {
   // ---------- Create ----------
   openCreate(): void {
     this.form = this.emptyForm();
+    this.langNames = this.emptyLangNames();
     // Re-apply the locked hospital for non-super-admin users
     const h = this.hospitals();
     if (this.hospitalLocked && h.length === 1) {
@@ -213,16 +238,22 @@ export class DepartmentListComponent implements OnInit {
     this.form = {
       hospitalId: dept.hospitalId ?? '',
       name: dept.name,
-      code: dept.code,
+      code: dept.departmentCode ?? '',
       description: dept.description ?? '',
       phoneNumber: dept.phoneNumber ?? '',
       email: dept.email ?? '',
       active: dept.active,
-      headOfDepartmentEmail: dept.headOfDepartmentEmail ?? '',
+      headOfDepartmentEmail: '',
+      bedCapacity: dept.bedCount ?? null,
     };
+    this.langNames = this.emptyLangNames();
+    for (const t of dept.translationEntries ?? []) {
+      const lang = t.languageCode?.toLowerCase();
+      if (lang && lang in this.langNames) this.langNames[lang] = t.name ?? '';
+    }
     // Pre-load staff for the existing hospital so the dropdown is populated
     if (dept.hospitalId) {
-      this.loadStaffForHospital(dept.hospitalId);
+      this.loadStaffForHospital(dept.hospitalId, dept.id);
     }
     this.showModal.set(true);
   }
@@ -236,14 +267,28 @@ export class DepartmentListComponent implements OnInit {
     }
   }
 
-  private loadStaffForHospital(hospitalId: string): void {
+  private loadStaffForHospital(hospitalId: string, departmentId?: string): void {
+    const form = this.form;
     this.staffLoading.set(true);
     this.staffService.list(hospitalId).subscribe({
       next: (staff) => {
-        this.staffForHospital.set(staff.filter((s) => s.active));
+        if (this.form !== form || form.hospitalId !== hospitalId) return;
+        const active = staff.filter((s) => s.active);
+        this.staffForHospital.set(active);
+        // StaffMapper identifies the actual head by staff ID within the department.
+        // A name match can select a different person when the head is inactive.
+        if (departmentId) {
+          const matches = active.filter(
+            (s) => s.departmentId === departmentId && s.headOfDepartment,
+          );
+          if (matches.length === 1) {
+            this.form.headOfDepartmentEmail = matches[0].email;
+          }
+        }
         this.staffLoading.set(false);
       },
       error: () => {
+        if (this.form !== form || form.hospitalId !== hospitalId) return;
         this.staffForHospital.set([]);
         this.staffLoading.set(false);
       },
@@ -281,6 +326,12 @@ export class DepartmentListComponent implements OnInit {
     if (!payload.phoneNumber) delete payload.phoneNumber;
     if (!payload.email) delete payload.email;
     if (!payload.headOfDepartmentEmail) delete payload.headOfDepartmentEmail;
+    if (payload.bedCapacity === null || (payload.bedCapacity as unknown) === '') {
+      delete payload.bedCapacity;
+    }
+    const translations = this.buildTranslations(this.editing());
+    if (translations) payload.translations = translations;
+    else delete payload.translations;
 
     const existing = this.editing();
     const request$ = existing
@@ -347,6 +398,48 @@ export class DepartmentListComponent implements OnInit {
   }
 
   // ---------- Helpers ----------
+  private emptyLangNames(): Record<string, string> {
+    return { fr: '', en: '', es: '' };
+  }
+
+  /**
+   * The full translation list the update replaces. A blank language keeps the
+   * stored value; a language the form does not show (not FR/EN/ES) is passed
+   * through; the editor's own language follows the main name when only that
+   * was changed. Null when there is nothing to send (keeps what is stored).
+   */
+  private buildTranslations(dept: Department | null): DepartmentTranslation[] | null {
+    const stored = dept?.translationEntries ?? [];
+    const own = storedLang();
+    const out: DepartmentTranslation[] = [];
+    for (const t of stored) {
+      const lang = t.languageCode?.toLowerCase();
+      if (!(DEPARTMENT_NAME_LANGUAGES as readonly string[]).includes(lang)) {
+        out.push({ languageCode: t.languageCode, name: t.name, description: t.description });
+      }
+    }
+    for (const lang of DEPARTMENT_NAME_LANGUAGES) {
+      const prev = stored.find((t) => t.languageCode?.toLowerCase() === lang);
+      const typed = (this.langNames[lang] ?? '').trim();
+      let name = typed || prev?.name || '';
+      let description = prev?.description;
+      if (lang === own) {
+        // Match Accept-Language, including when the API displayed a fallback
+        // translation. Main-field edits must survive the full-list replacement.
+        const mainNameChanged = dept && this.form.name !== dept.name;
+        const descriptionChanged = dept && this.form.description !== (dept.description ?? '');
+        if (!prev) description = this.form.description ?? '';
+        if (mainNameChanged && (!typed || typed === prev?.name)) name = this.form.name;
+        if (descriptionChanged) {
+          description = this.form.description ?? '';
+          if (!name) name = this.form.name;
+        }
+      }
+      if (name) out.push({ languageCode: lang, name, description });
+    }
+    return out.length > 0 ? out : null;
+  }
+
   private emptyForm(): DepartmentRequest {
     return {
       hospitalId: '',
@@ -357,6 +450,7 @@ export class DepartmentListComponent implements OnInit {
       email: '',
       active: true,
       headOfDepartmentEmail: '',
+      bedCapacity: null,
     };
   }
 }
