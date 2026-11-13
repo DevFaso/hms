@@ -2245,10 +2245,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             Hospital hospital = appointment.getHospital();
             String patientName = patient.getFullName();
             String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
-            String appointmentDate = appointment.getAppointmentDate().toString();
             String appointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();
 
             Locale mailLocale = patientLocaleResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
+            // QA D1710 class: the day in the patient's own way of writing it, never the ISO text.
+            String appointmentDate = com.example.hms.utility.DisplayDates.date(appointment.getAppointmentDate(), mailLocale);
             emailService.sendAppointmentCancelledEmail(
                     patient.getEmail(), patientName, hospital.getName(), staffName,
                     appointmentDate, appointmentTime,
@@ -2267,12 +2268,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             Hospital hospital = appointment.getHospital();
             String patientName = patient.getFullName();
             String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
-            String newAppointmentDate = appointment.getAppointmentDate().toString();
             String newAppointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();
             String rescheduleLink = frontendBaseUrl + appointmentLinks.getReschedulePath() + appointment.getId();
             String cancelLink = frontendBaseUrl + appointmentLinks.getCancelPath() + appointment.getId();
 
             Locale mailLocale = patientLocaleResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
+            String newAppointmentDate = com.example.hms.utility.DisplayDates.date(appointment.getAppointmentDate(),
+                mailLocale);
             emailService.sendAppointmentRescheduledEmail(
                     patient.getEmail(), patientName, hospital.getName(), staffName,
                     newAppointmentDate, newAppointmentTime,

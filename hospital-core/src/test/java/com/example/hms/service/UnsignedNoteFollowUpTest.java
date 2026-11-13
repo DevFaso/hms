@@ -138,6 +138,36 @@ class UnsignedNoteFollowUpTest {
         assertThat(item.getTitle()).isEqualTo("Note à signer : Awa Kaboré");
     }
 
+    /**
+     * QA D1710 (round 46): the visit's day is stored as a date and written the reader's way when the item is read;
+     * it was the ISO "2026-11-11" in every language.
+     */
+    @Test
+    void d1710_theVisitDayIsWrittenTheReadersWay() {
+        User author = user("Issa");
+        when(notes.findForSignatureFollowUp(encounter.getId())).thenReturn(List.of(note(author, "Paludisme", null)));
+
+        followUp.visitClosed(encounter);
+
+        ArgumentCaptor<CreateInBasketItemRequest> filed = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
+        verify(inBasket).createItem(filed.capture());
+        CreateInBasketItemRequest item = filed.getValue();
+        assertThat(item.getBody()).contains("du 11 nov. 2026").doesNotContain("2026-11-11");
+        var localizer = new com.example.hms.service.i18n.NotificationLocalizer(
+            com.example.hms.i18n.TestMessageSources.bundles());
+        var stored = com.example.hms.service.i18n.NotificationLocalizer.storable(item.getBodyArgs());
+        assertThat(localizer.render(item.getBodyKey(), stored, java.util.Locale.FRENCH))
+            .contains("Awa Kaboré du 11 nov. 2026").doesNotContain("2026-11-11");
+        assertThat(localizer.render(item.getBodyKey(), stored, java.util.Locale.ENGLISH))
+            .contains("on Nov 11, 2026").doesNotContain("2026-11-11");
+        assertThat(localizer.render(item.getBodyKey(), stored, java.util.Locale.forLanguageTag("es")))
+            .contains("del 11 nov 2026").doesNotContain("2026-11-11");
+        // A day handed raw to the store is kept as a date too, never its ISO text.
+        assertThat(localizer.render(item.getBodyKey(), com.example.hms.service.i18n.NotificationLocalizer.storable(
+            new Object[] {"Awa", java.time.LocalDate.of(2026, 11, 13)}), java.util.Locale.FRENCH))
+            .contains("du 13 nov. 2026");
+    }
+
     @Test
     void anOpenVisitFilesNothing() {
         encounter.setStatus(EncounterStatus.IN_PROGRESS);

@@ -88,4 +88,14 @@ public class UserRoleHospitalAssignmentRequestDTO {
     @JsonIgnore
     @Schema(hidden = true)
     private boolean welcomeMailCarriesCode;
+
+    /**
+     * #1136 follow-up (QA r46): an account created on account creation for someone who can take no invitation -
+     * the newborn a recorded delivery registers has no phone, no e-mail and nobody to activate it. No activation
+     * message goes out and no registrar or hospital "new registration" SMS: reception sees the baby through the
+     * in-basket and the patient list. Internal only, never read from a request body.
+     */
+    @JsonIgnore
+    @Schema(hidden = true)
+    private boolean noInvitation;
 }

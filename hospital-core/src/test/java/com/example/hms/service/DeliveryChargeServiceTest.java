@@ -133,7 +133,8 @@ class DeliveryChargeServiceTest {
 
             BillingInvoice invoice = service.chargeDelivery(delivery, recorderId).orElseThrow();
 
-            assertThat(invoice.getNotes()).contains("Accouchement (voie basse)").contains("2026-10-23")
+            assertThat(invoice.getNotes()).contains("Accouchement (voie basse)").contains("23 oct. 2026")
+                .as("QA D1710 class: the day written the French way, never ISO").doesNotContain("2026-10-23")
                 .doesNotContain("Missing translation");
             assertThat(invoice.getInvoiceItems().iterator().next().getItemDescription())
                 .isEqualTo("Accouchement (voie basse)");

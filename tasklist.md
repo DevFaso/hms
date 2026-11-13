@@ -6501,3 +6501,9 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **D1592, live birth of a multiple birth with a stillborn twin:** the record has one `liveBirth` flag for the whole delivery, so it cannot say "one live, one stillborn"; today every infant counted is registered.
 - **D1592, delivery edit:** there is no edit path for a delivery record; when one is added, it must call `NewbornRegistrationService.registerLiveBorn` (the guard enforces it) so a lowered count is flagged for review, never deleted.
 - **D1592, earlier births:** deliveries recorded before this change registered no baby; there is no backfill.
+
+## Standing debt — r46 lows (fix/r46-lows)
+- **D1714, stillbirths in the mortality register (decision pending):** the register counts death records only; a delivery recorded with `liveBirth:false` (outcome STILLBIRTH) never reaches "Mortinaissances" or the perinatal figure, and since #1136 no stillborn gets a patient a death could be recorded against. Options in the r46 hand-back; no rule chosen.
+- **D1710 sibling, appointment e-mail times:** the confirmation, reschedule and status e-mails now write the day the patient's way, but the time is still `LocalTime.toString()` ("09:00 - 09:30"), 24-hour in English too.
+- **#1136 sibling, a newborn's own patient SMS:** a baby's record carries the mother's phone, so any later patient SMS about the baby (a dispense, a reminder) goes to her number. Intended as the carer's channel, but never decided.
+- **D1712 provisional rule:** an entry or birth before her arrival on a continued (transferred) episode is refused outright; the clinical owners may prefer "accept with a reason".

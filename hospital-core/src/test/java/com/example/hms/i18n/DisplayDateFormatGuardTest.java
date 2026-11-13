@@ -66,7 +66,23 @@ class DisplayDateFormatGuardTest {
 
     private static final Pattern MESSAGE_CALL = Pattern.compile(
         "(?:new\\s+(?:[a-z]\\w*+\\.)*+\\w*Exception|MessageUtil\\.resolve\\w*|messageSource\\.getMessage"
-            + "|getLocalizedMessage|NotificationText\\.of)\\s*+\\(");
+            + "|getLocalizedMessage|NotificationText\\.of|createNotification)\\s*+\\(");
+    /**
+     * QA D1710 (round 46): the stored arguments of an in-basket item, every one of them read by a person; the
+     * first argument is not a key here, so none is skipped.
+     */
+    private static final Pattern ARGS_CALL = Pattern.compile("\\.(?:set)?(?:[Bb]ody|[Tt]itle)Args\\s*+\\(");
+    /**
+     * QA D1710: a day turned into its ISO text ({@code getEncounterDate().toLocalDate().toString()},
+     * {@code String.valueOf(a.getAppointmentDate())}), which a helper then hands to a notice, an in-basket item
+     * or an e-mail as a plain String the scans above cannot tell from a name.
+     */
+    private static final Pattern DATE_AS_ISO_TEXT = Pattern.compile(
+        "\\.(?:get\\w*(?:Date|DateTime|At|On)\\(\\)(?:\\.toLocalDate\\(\\))?|toLocalDate\\(\\))\\.toString\\(\\)"
+            // A timestamp's String.valueOf is a machine key (a signature payload, a change key), not a day.
+            + "|String\\.valueOf\\(\\s*+(?:\\w++\\.)++get\\w*(?:Date|On)\\(\\)\\s*+\\)");
+    /** A wire value: a DTO field or a JSON entry, ISO by the API's contract, read by code, not by a person. */
+    private static final Pattern WIRE_VALUE = Pattern.compile("\\.set\\w++\\s*+\\(|\\.put\\s*+\\(");
     private static final Pattern DATE_GETTER = Pattern.compile(
         "\\.(?:get\\w*(?:Date|At|On|Time)|toLocalDate|toLocalTime)\\(\\)");
     private static final Pattern DATE_DECLARATION = Pattern.compile(
@@ -80,7 +96,8 @@ class DisplayDateFormatGuardTest {
     private static final Set<String> DATE_TYPES = Set.of(
         "LocalDate", "LocalDateTime", "LocalTime", "Instant", "OffsetDateTime", "ZonedDateTime");
     private static final Pattern JDK_DATE_TIME = Pattern.compile("ofLocalizedDateTime\\(");
-    private static final Pattern WRAPPED =Pattern.compile("DisplayDates\\.\\w++\\s*+\\(");
+    private static final Pattern WRAPPED = Pattern.compile(
+        "(?:DisplayDates\\.\\w++|NotificationLocalizer\\.date)\\s*+\\(");
 
     @Test
     @DisplayName("no display pattern fixes the order of the day and the month")
@@ -141,6 +158,41 @@ class DisplayDateFormatGuardTest {
         assertThat(rawDates("A.java", "throw new FieldBusinessException(F, KEY,\n"
             + "    DisplayDates.dateTime(HospitalTime.at(lastGiven.get(), hospital)));")).isEmpty();
         assertThat(rawDates("A.java", "throw new BusinessException(\"x\", rx.getId());")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("QA D1710: no notice, in-basket item or e-mail is handed the ISO text of a day")
+    void noIsoDayInANotice() throws IOException {
+        List<String> found = new ArrayList<>();
+        for (Map.Entry<String, String> file : mainSources().entrySet()) {
+            found.addAll(isoDayTexts(file.getKey(), file.getValue()));
+        }
+        assertThat(found)
+            .as("Store NotificationLocalizer.date(day) (written the reader's way when read) or pass"
+                + " DisplayDates.date(day, locale), never the day's ISO text (QA D1710)")
+            .isEmpty();
+    }
+
+    @Test
+    @DisplayName("QA D1710: the scans catch the round-46 shapes and pass the fixed ones")
+    void scansCatchTheD1710Shapes() {
+        assertThat(isoDayTexts("com/example/hms/service/A.java",
+            "return e.getEncounterDate() != null ? e.getEncounterDate().toLocalDate().toString() : \"\";"))
+            .hasSize(1);
+        assertThat(isoDayTexts("com/example/hms/service/A.java",
+            "String.valueOf(appointment.getAppointmentDate()),")).hasSize(1);
+        assertThat(isoDayTexts("com/example/hms/service/A.java",
+            "String appointmentDate = appointment.getAppointmentDate().toString();")).hasSize(1);
+        assertThat(isoDayTexts("com/example/hms/service/A.java",
+            "dto.setLastEncounterDate(e.getEncounterDate().toString());")).isEmpty();
+        assertThat(isoDayTexts("com/example/hms/payload/dto/A.java",
+            "row.getCreatedAt() != null ? row.getCreatedAt().toString() : null,")).isEmpty();
+        assertThat(rawDates("A.java", "LocalDate day = x;\n"
+            + ".bodyArgs(new Object[] {patientName, day})")).hasSize(1);
+        assertThat(rawDates("A.java", "notificationService.createNotification(\"k\",\n"
+            + "    new Object[]{a.getAppointmentDate(), b}, user, \"T\");")).hasSize(1);
+        assertThat(rawDates("A.java", "LocalDate day = x;\n"
+            + ".bodyArgs(new Object[] {patientName, NotificationLocalizer.date(day)})")).isEmpty();
     }
 
     @Test
@@ -208,16 +260,40 @@ class DisplayDateFormatGuardTest {
             }
         }
         List<String> out = new ArrayList<>();
-        Matcher call = MESSAGE_CALL.matcher(source);
+        scanCalls(file, source, dateNames, MESSAGE_CALL, 1, out);
+        scanCalls(file, source, dateNames, ARGS_CALL, 0, out);
+        return out;
+    }
+
+    private static void scanCalls(String file, String source, Set<String> dateNames, Pattern calls, int skipped,
+                                  List<String> out) {
+        Matcher call = calls.matcher(source);
         while (call.find()) {
             List<String> args = SourceArguments.split(source, call.end());
-            for (String arg : args.subList(Math.min(1, args.size()), args.size())) {
+            for (String arg : args.subList(Math.min(skipped, args.size()), args.size())) {
                 for (String value : SourceArguments.arrayElements(arg)) {
                     String bare = unwrapped(value);
                     if (isRawDate(bare, dateNames)) {
                         out.add(file + ":" + line(source, call.start()) + " " + value.replaceAll("\\s+", " "));
                     }
                 }
+            }
+        }
+    }
+
+    /** QA D1710: the ISO text of a day outside a wire value (a DTO field, a JSON entry, an API record). */
+    private static List<String> isoDayTexts(String file, String source) {
+        List<String> out = new ArrayList<>();
+        if (file.startsWith("com/example/hms/payload/") || file.startsWith("com/example/hms/mapper/")) {
+            return out;
+        }
+        Matcher m = DATE_AS_ISO_TEXT.matcher(source);
+        while (m.find()) {
+            int lineStart = source.lastIndexOf('\n', m.start()) + 1;
+            int lineEnd = source.indexOf('\n', m.end());
+            String text = source.substring(lineStart, lineEnd < 0 ? source.length() : lineEnd);
+            if (!WIRE_VALUE.matcher(text).find()) {
+                out.add(file + ":" + line(source, m.start()) + " " + text.trim());
             }
         }
         return out;

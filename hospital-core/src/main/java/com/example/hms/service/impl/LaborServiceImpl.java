@@ -545,7 +545,10 @@ public class LaborServiceImpl implements LaborService {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.labor.transfer.notActive");
         }
         if (episodeRepository.existsByPatient_IdAndStatusAndIdNot(source.getPatient().getId(), LaborStatus.ACTIVE, source.getId())) {
-            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.labor.alreadyActive");
+            // QA D1713 (round 46): the other active episode may be at either hospital, or at one the caller may
+            // not see, so the refusal names no hospital ("in this hospital" was wrong for the sending one).
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID,
+                "maternity.labor.transfer.otherActive");
         }
     }
 
@@ -838,6 +841,7 @@ public class LaborServiceImpl implements LaborService {
                 && request.getObservationTime().isBefore(episode.getLaborOnsetAt())) {
             throw new com.example.hms.exception.FieldBusinessException("observationTime", "maternity.partograph.beforeOnset");
         }
+        requireAfterTakeOver(episode, request.getObservationTime(), "observationTime", "maternity.partograph.beforeTransfer");
         // QA D1151 class (round 21): a partograph entry charts an observation.
         com.example.hms.service.support.ClinicalContent.requireAny(FETAL_HEART_RATE_FIELD, "maternity.partograph.findingsRequired",
             request.getFetalHeartRateBpm(), request.getLiquorColour(), request.getMouldingDegree(),
@@ -1044,11 +1048,29 @@ public class LaborServiceImpl implements LaborService {
     /** More hand-overs than this in one labour is a data error; the chain read stops there. */
     private static final int MAX_TRANSFER_CHAIN = 20;
 
+    /**
+     * QA D1712 (round 46, provisional rule pending the clinical owners): an episode that continues a labour from
+     * another hospital ({@code transferredFrom}) holds what happened from her arrival ({@code admittedAt}, the
+     * transfer time) on. Before it she was in the other hospital's custody, so an entry timed earlier would sit
+     * among that hospital's entries, out of order. Every write that times something on the episode is refused
+     * before her arrival, on the field it came in.
+     */
+    static void requireAfterTakeOver(LaborEpisode episode, LocalDateTime at, String field, String messageKey) {
+        if (at == null || episode.getTransferredFrom() == null || episode.getAdmittedAt() == null
+                || !at.isBefore(episode.getAdmittedAt())) {
+            return;
+        }
+        throw new com.example.hms.exception.FieldBusinessException(field, messageKey,
+            com.example.hms.utility.DisplayDates.dateTime(
+                com.example.hms.utility.HospitalTime.at(episode.getAdmittedAt(), episode.getHospital())));
+    }
+
     private void requireDeliveryTimesInOrder(LaborEpisode episode, LocalDateTime birthAt,
                                              LocalDateTime placentaDeliveredAt) {
         if (episode.getLaborOnsetAt() != null && birthAt.isBefore(episode.getLaborOnsetAt())) {
             throw new com.example.hms.exception.FieldBusinessException("birthDateTime", "labor.delivery.beforeOnset");
         }
+        requireAfterTakeOver(episode, birthAt, "birthDateTime", "labor.delivery.beforeTransfer");
         // Rex on #1134: after a transfer the labour's partograph spans every
         // episode it continues, so the birth follows the last entry of the chain.
         LocalDateTime lastObservation = null;

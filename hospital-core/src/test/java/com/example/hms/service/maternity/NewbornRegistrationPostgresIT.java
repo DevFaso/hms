@@ -87,6 +87,11 @@ class NewbornRegistrationPostgresIT {
     @Autowired private DeliveryNewbornRepository deliveryNewbornRepository;
     @Autowired private PatientHospitalRegistrationRepository registrationRepository;
     @Autowired private PatientProxyRepository proxyRepository;
+    /** #1136 follow-up (QA r46): every birth texted the registrar and the hospital; nothing may go out now. */
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.example.hms.service.SmsService smsService;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.example.hms.service.EmailService emailService;
 
     private Hospital hospital;
     private Patient mother;
@@ -124,6 +129,7 @@ class NewbornRegistrationPostgresIT {
     @AfterEach
     void tearDown() {
         HospitalContextHolder.clear();
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }
 
     private DeliveryRecord delivery(boolean liveBirth, int infants) {
@@ -191,5 +197,36 @@ class NewbornRegistrationPostgresIT {
         List<DeliveryNewbornDTO> babies = tx.execute(s -> service.registerLiveBorn(delivery, null));
         assertThat(babies).isEmpty();
         assertThat(deliveryNewbornRepository.findByDeliveryRecord_IdOrderByBirthOrderAsc(delivery.getId())).isEmpty();
+    }
+
+    /**
+     * #1136 follow-up (QA r46): each baby's PATIENT assignment sent the registrar's and the hospital's
+     * "new registration" SMS, so every birth texted staff phones on prod. The baby has no phone and no e-mail:
+     * no activation message and no FYI. Reception sees the baby through the in-basket and the patient list.
+     */
+    @Test
+    @DisplayName("registering a newborn sends no SMS and no e-mail, to the family or to staff")
+    void registeringANewbornSendsNothing() {
+        String tag = UUID.randomUUID().toString().replace("-", "").substring(0, 6);
+        User midwife = new User();
+        midwife.setUsername("sage.femme." + tag);
+        midwife.setPasswordHash("x");
+        midwife.setFirstName("Sali");
+        midwife.setLastName("Ouedraogo");
+        midwife.setPhoneNumber("+2266" + (1_000_000 + Math.abs(tag.hashCode() % 8_999_999)));
+        User registrar = userRepository.saveAndFlush(midwife);
+        // The recorder is the registrar the FYI used to text, with a phone of her own; the hospital has one too.
+        ActingScopeTestSupport.actingAt(registrar.getId(), hospital.getId());
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                registrar, null, List.of()));
+        DeliveryRecord delivery = delivery(true, 2);
+
+        List<DeliveryNewbornDTO> babies = tx.execute(s -> service.registerLiveBorn(delivery, registrar.getId()));
+
+        assertThat(babies).hasSize(2);
+        org.mockito.Mockito.verify(smsService, org.mockito.Mockito.never())
+            .send(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verifyNoInteractions(emailService);
     }
 }

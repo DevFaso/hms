@@ -1057,4 +1057,43 @@ class DischargeSummaryServiceImplTest {
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
+
+    /**
+     * QA D1711 (round 46): every staff read answers {@code pendingSignature} as the patient list and the visit
+     * summary do. It was false on every staff path, so an API client read an unsigned visit as finalised.
+     */
+    @Test void d1711_everyStaffReadSaysTheVisitWaitsForASignature() {
+        com.example.hms.model.encounter.EncounterNote draft = com.example.hms.model.encounter.EncounterNote.builder()
+            .encounter(encounter).assessment("Paludisme simple").build();
+        when(encounterNoteRepository.findByEncounter_IdIn(org.mockito.ArgumentMatchers.anyCollection()))
+            .thenReturn(List.of(draft));
+        when(dischargeSummaryMapper.toResponseDTO(summary))
+            .thenAnswer(inv -> DischargeSummaryResponseDTO.builder().id(summaryId).build());
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        when(dischargeSummaryRepository.findByEncounter_Id(encounterId)).thenReturn(Optional.of(summary));
+        when(dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId)).thenReturn(List.of(summary));
+        LocalDate start = LocalDate.now().minusDays(30);
+        LocalDate end = LocalDate.now();
+        when(dischargeSummaryRepository.findByHospitalAndDateRange(hospitalId, start, end)).thenReturn(List.of(summary));
+        when(dischargeSummaryRepository.findUnfinalizedByHospital(hospitalId)).thenReturn(List.of(summary));
+        when(dischargeSummaryRepository.findWithPendingTestResults(hospitalId)).thenReturn(List.of(summary));
+        when(dischargeSummaryRepository.findByDischargingProvider_IdOrderByDischargeDateDesc(staffId))
+            .thenReturn(List.of(summary));
+
+        List<DischargeSummaryResponseDTO> read = new java.util.ArrayList<>();
+        read.add(service.getDischargeSummaryById(summaryId, Locale.FRENCH));
+        read.add(service.getDischargeSummaryByEncounter(encounterId, Locale.FRENCH));
+        read.addAll(service.getDischargeSummariesByPatient(patientId, Locale.FRENCH));
+        read.addAll(service.getDischargeSummariesByHospitalAndDateRange(hospitalId, start, end, Locale.FRENCH));
+        read.addAll(service.getUnfinalizedDischargeSummaries(hospitalId, Locale.FRENCH));
+        read.addAll(service.getDischargeSummariesWithPendingResults(hospitalId, Locale.FRENCH));
+        read.addAll(service.getDischargeSummariesByProvider(staffId, Locale.FRENCH));
+
+        assertThat(read).hasSize(7).allMatch(DischargeSummaryResponseDTO::isPendingSignature);
+
+        draft.setSignedAt(java.time.LocalDateTime.now());
+        assertThat(service.getDischargeSummaryById(summaryId, Locale.FRENCH).isPendingSignature()).isFalse();
+        assertThat(service.getDischargeSummariesByPatient(patientId, Locale.FRENCH))
+            .noneMatch(DischargeSummaryResponseDTO::isPendingSignature);
+    }
 }
