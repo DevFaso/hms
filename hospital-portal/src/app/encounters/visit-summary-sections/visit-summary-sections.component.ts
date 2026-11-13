@@ -7,6 +7,7 @@ import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 import { LabRangePipe, LabValuePipe } from '../../shared/pipes/lab-value.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
 
 /** The content sections of a summary (user decision 2026-11-12), as the backend sends them. */
 type ContentSections = Pick<
@@ -85,6 +86,7 @@ const PROBLEM_STATUS_KEYS: Record<string, string> = {
     LabRangePipe,
     ServerTimePipe,
     DateTimePipe,
+    LabCorrectionBadgeComponent,
   ],
   templateUrl: './visit-summary-sections.component.html',
   styleUrl: './visit-summary-sections.component.scss',

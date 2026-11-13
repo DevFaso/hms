@@ -125,9 +125,7 @@
               @if (flagKey(r); as key) {
                 <span class="vss-flag">{{ key | translate }}</span>
               }
-              @if (r.corrected) {
-                <span class="vss-muted">{{ 'VISIT_SUMMARY.CORRECTED' | translate }}</span>
-              }
+              <app-lab-correction-badge [corrected]="r.corrected" audience="patient" />
             </span>
           }
         </li>
