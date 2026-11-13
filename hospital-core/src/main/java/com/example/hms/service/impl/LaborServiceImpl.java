@@ -183,6 +183,7 @@ public class LaborServiceImpl implements LaborService {
     private final com.example.hms.service.AuditEventLogService auditEventLogService;
     /** Labour transfer (2026-11-12): only those who may admit a labour at a hospital move one there or from there. */
     private final com.example.hms.utility.RoleValidator roleValidator;
+    private final jakarta.persistence.EntityManager entityManager;
 
     /* ═══════════════════════ Episodes ═══════════════════════ */
 
@@ -456,6 +457,7 @@ public class LaborServiceImpl implements LaborService {
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(source.getPatient());
 
         lockPatientForLabour(patientId);
+        entityManager.refresh(source);
         requireStillActiveAndAlone(source);
 
         User caller = resolveUser(callerUserId);
@@ -505,6 +507,7 @@ public class LaborServiceImpl implements LaborService {
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(source.getPatient());
 
         lockPatientForLabour(patientId);
+        entityManager.refresh(source);
         requireStillActiveAndAlone(source);
 
         User caller = resolveUser(callerUserId);
@@ -806,7 +809,11 @@ public class LaborServiceImpl implements LaborService {
             throw new BusinessException("maternity.partograph.payloadRequired");
         }
         LaborEpisode episode = loadEpisode(patientId, episodeId, request.getHospitalId());
-        if (episode.getStatus() != LaborStatus.ACTIVE) {
+        // An observation may set the active-phase anchor and write the episode.
+        // Serialize it with transfers/delivery and discard the pre-lock snapshot.
+        lockPatientForLabour(patientId);
+        entityManager.refresh(episode);
+        if (committedStatus(episode) != LaborStatus.ACTIVE || episode.getStatus() != LaborStatus.ACTIVE) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.partograph.laborNotActive");
         }
 
@@ -909,6 +916,7 @@ public class LaborServiceImpl implements LaborService {
         // patient lock, a transfer or an arrival elsewhere that committed first
         // closed this episode, and the birth belongs on the episode that took over.
         lockPatientForLabour(patientId);
+        entityManager.refresh(episode);
         if (committedStatus(episode) != LaborStatus.ACTIVE) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.delivery.laborNotActive");
         }

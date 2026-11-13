@@ -81,6 +81,7 @@ class LaborServiceImplTest {
     @Mock private com.example.hms.service.DeliveryChargeService deliveryChargeService;
     @Mock private com.example.hms.service.AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock private jakarta.persistence.EntityManager entityManager;
 
     private LaborServiceImpl service;
 
@@ -102,7 +103,7 @@ class LaborServiceImplTest {
             notificationService, new LaborMapper(), recordAccessPolicy, reachRecorder,
             TestMessageSources.bundles(), postpartumCarePlanRepository, deliveryChargeService,
             obstetricAlertEscalation, new com.example.hms.mapper.MaternalHistoryMapper(), auditEventLogService,
-            roleValidator);
+            roleValidator, entityManager);
 
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -159,6 +160,42 @@ class LaborServiceImplTest {
         request.setObservationTime(LocalDateTime.now());
         request.setFetalHeartRateBpm(140); // QA D1151: an entry charts an observation
         return request;
+    }
+
+    @Test
+    void partographLosingATransferRaceCannotWriteTheClosedEpisode() {
+        when(episodeRepository.findStatusById(episodeId)).thenReturn(Optional.of(LaborStatus.TRANSFERRED_OUT));
+        PartographEntryRequestDTO request = entryRequest();
+        request.setCervicalDilationCm(4);
+
+        assertThatThrownBy(() -> service.addEntry(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("maternity.partograph.laborNotActive");
+
+        var ordered = org.mockito.Mockito.inOrder(patientRepository, entityManager, episodeRepository);
+        ordered.verify(patientRepository).lockByIdUnscoped(patientId);
+        ordered.verify(entityManager).refresh(episode);
+        ordered.verify(episodeRepository).findStatusById(episodeId);
+        verify(episodeRepository, never()).save(any());
+        verify(entryRepository, never()).save(any());
+    }
+
+    @Test
+    void transferCopiesTheAnchorCommittedWhileWaitingForThePatientLock() {
+        UUID destinationId = UUID.randomUUID();
+        transferable(destinationInSameOrganisation(destinationId));
+        when(roleValidator.isMidwife(recorderUserId, hospitalId)).thenReturn(true);
+        LocalDateTime anchor = LocalDateTime.now().minusHours(2);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            episode.setActivePhaseStartAt(anchor);
+            return null;
+        }).when(entityManager).refresh(episode);
+
+        service.transferEpisode(patientId, episodeId, recorderUserId, transferTo(destinationId));
+
+        ArgumentCaptor<LaborEpisode> saved = ArgumentCaptor.forClass(LaborEpisode.class);
+        verify(episodeRepository).save(saved.capture());
+        assertThat(saved.getValue().getActivePhaseStartAt()).isEqualTo(anchor);
     }
 
     /* ── Episodes ─────────────────────────────────────────────────────── */

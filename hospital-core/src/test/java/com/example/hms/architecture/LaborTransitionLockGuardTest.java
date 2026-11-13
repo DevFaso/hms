@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * One woman, one active labour (QA D1631; labour transfer, 2026-11-12). Every
  * labour transition — a start, a transfer with a handover, an arrival without
- * one, a delivery — is decided under the patient row lock, on state read after
+ * one, a delivery, or a partograph write of the active-phase anchor — is decided under the patient row lock, on state read after
  * the lock, so two transitions racing for one woman cannot leave two active
  * episodes (or a delivered episode next to the one that took over from it).
  *
@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>only LaborServiceImpl builds a labour episode, sets its status, or
  *       writes through LaborEpisodeRepository;</li>
  *   <li>in LaborServiceImpl, every public method that builds an episode or sets
- *       a status (directly or through the class's own helpers, expanded in
+ *       a status or saves an episode (directly or through the class's own helpers, expanded in
  *       place) takes the patient lock first, then reads the episode state it
  *       decides on, then makes the transition.</li>
  * </ul>
@@ -45,7 +45,7 @@ class LaborTransitionLockGuardTest {
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
     private static final String SERVICE = "service/impl/LaborServiceImpl.java";
 
-    private static final Pattern TRANSITION = Pattern.compile("LaborEpisode\\.builder\\(\\)|\\.setStatus\\(LaborStatus\\.");
+    private static final Pattern TRANSITION = Pattern.compile("LaborEpisode\\.builder\\(\\)|\\.setStatus\\(LaborStatus\\.|episodeRepository\\.save\\w*\\(");
     private static final Pattern LOCK = Pattern.compile("patientRepository\\.lockByIdUnscoped\\(");
     /** A read of the committed episode state the transition decides on. */
     private static final Pattern STATE_READ = Pattern.compile(
@@ -77,7 +77,7 @@ class LaborTransitionLockGuardTest {
         List<String> transitions = new ArrayList<>();
         List<String> offenders = unlockedTransitions(source, transitions);
         assertThat(transitions).as("the scan must see the transitions it is about")
-            .contains("startEpisode", "transferEpisode", "recordArrivalWithoutHandover", "recordDelivery");
+            .contains("startEpisode", "transferEpisode", "recordArrivalWithoutHandover", "recordDelivery", "addEntry");
         assertThat(offenders).as("lock the patient, read the state, then transition (one active labour)").isEmpty();
     }
 
