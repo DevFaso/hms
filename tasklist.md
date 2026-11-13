@@ -6471,3 +6471,9 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **D1672 sweep, opposite class (edit wipes data):** an edit dialog that does not send a field the server writes as null clears it: treatment plans (goals and the medication, lifestyle and referral plans, `TreatmentPlanMapper.applyRequest`), imaging orders (contrast, sedation, scheduling, `ImagingOrderMapper:82-102`), staff `endDate` (`StaffMapper:147`), organization description (`OrganizationMapper.updateEntity`).
 - **D1672, @RejectsUnknownFields rollout:** only `AdmissionUpdateRequestDTO` refuses unknown properties by name; other update DTOs still skip them silently (Jackson default). Extending it needs each client's update body checked first.
 - **D1672, admission update audit:** a corrected chief complaint (now saved) is not audited as a change, like the notes, acuity and room edits before it.
+
+## Standing debt — lab trend units and free-text wrapping (fix/lab-trend-units-i18n)
+
+- **Lab trend deltas across units:** the observations table still shows a delta only between two values recorded in the same unit; a delta between converted values (g/L after mg/dL) shows "—".
+- **Molar-mass table:** only glucose (180.16 g/mol) is listed; any other analyte (creatinine, urea, cholesterol, bilirubin…) needs a sourced molar mass and a clinician's sign-off before mmol/L ↔ mg/dL is merged.
+- **Free-text wrap guard:** `.free-text` is the class to add to any new free-text display; no gate yet finds a note interpolation outside a wrapping class.

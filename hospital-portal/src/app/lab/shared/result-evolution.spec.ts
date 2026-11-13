@@ -20,8 +20,35 @@ describe('result evolution', () => {
       ],
       'g/L',
     );
-    expect(points.map((p) => p.value)).toEqual([0.9, 1.2]);
+    // 120 mg/dL is 1.2 g/L exactly: it joins the series, marked converted, its stored value kept.
+    expect(points.map((p) => p.value)).toEqual([0.9, 1.2, 1.2]);
     expect(points[0].corrected).toBeTrue();
+    const converted = points.find((p) => p.converted)!;
+    expect(converted.resultValue).toBe('120');
+    expect(converted.originalUnit).toBe('mg/dL');
+  });
+  it('merges glucose in g/L, mg/dL and mmol/L into one series in the display unit', () => {
+    const points = evolutionSeries(
+      [
+        point('0.99', 'g/L', '2026-11-01T09:00:00Z'),
+        point('110', 'mg/dL', '2026-11-02T09:00:00Z'),
+        point('5,5', 'mmol/L', '2026-11-03T09:00:00Z'),
+      ],
+      'g/L',
+      'GLUCOSE',
+    );
+    expect(points.map((p) => p.value)).toEqual([0.99, 1.1, 0.9909]);
+    expect(points.map((p) => p.converted)).toEqual([false, true, true]);
+    expect(points.map((p) => p.originalUnit)).toEqual(['g/L', 'mg/dL', 'mmol/L']);
+  });
+  it('keeps a molar unit apart when the analyte has no listed molar mass', () => {
+    const history = [
+      point('80', 'µmol/L', '2026-11-01T09:00:00Z'),
+      point('9', 'mg/L', '2026-11-02T09:00:00Z'),
+      point('0.09', 'mmol/L', '2026-11-03T09:00:00Z'),
+    ];
+    expect(evolutionSeries(history, 'µmol/L').map((p) => p.value)).toEqual([80, 90]);
+    expect(evolutionSeries(history, 'mg/L').map((p) => p.value)).toEqual([9]);
   });
   it('does not assume a unit for undocumented measurements', () => {
     expect(evolutionSeries([point('2', '')], '')).toEqual([]);
