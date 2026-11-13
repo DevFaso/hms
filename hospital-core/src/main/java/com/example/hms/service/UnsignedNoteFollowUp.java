@@ -194,11 +194,11 @@ public class UnsignedNoteFollowUp {
         LocalDateTime now = LocalDateTime.now(clock);
         return notes.findUnsignedAtHospitalCreatedBefore(hospitalId, now.minus(ADMIN_OVERDUE)).stream()
             .filter(EncounterNote::awaitsSignature)
-            .map(note -> toOverdue(note, now, clock.getZone()))
+            .map(note -> toOverdue(note, now))
             .toList();
     }
 
-    private static UnsignedNoteOverdueDTO toOverdue(EncounterNote note, LocalDateTime now, java.time.ZoneId zone) {
+    private UnsignedNoteOverdueDTO toOverdue(EncounterNote note, LocalDateTime now) {
         Encounter encounter = note.getEncounter();
         Patient patient = note.getPatient() != null ? note.getPatient() : encounter.getPatient();
         String author = note.getAuthorName();
@@ -208,8 +208,8 @@ public class UnsignedNoteFollowUp {
         return new UnsignedNoteOverdueDTO(note.getId(), encounter.getId(), author,
             patient != null ? patient.getFullName() : null,
             encounter.getEncounterDate(), note.getCreatedAt(),
-            note.getCreatedAt() != null
-                ? Duration.between(note.getCreatedAt().atZone(zone), now.atZone(zone)).toHours() : 0L);
+            note.getCreatedAt() != null ? Duration.between(note.getCreatedAt().atZone(clock.getZone()),
+                now.atZone(clock.getZone())).toHours() : 0L);
     }
 
     private static String visitDay(Encounter encounter) {
