@@ -224,7 +224,7 @@ export class DepartmentListComponent implements OnInit {
     };
     // Pre-load staff for the existing hospital so the dropdown is populated
     if (dept.hospitalId) {
-      this.loadStaffForHospital(dept.hospitalId, dept.headOfDepartmentName);
+      this.loadStaffForHospital(dept.hospitalId, dept.id);
     }
     this.showModal.set(true);
   }
@@ -238,17 +238,20 @@ export class DepartmentListComponent implements OnInit {
     }
   }
 
-  private loadStaffForHospital(hospitalId: string, headName?: string): void {
+  private loadStaffForHospital(hospitalId: string, departmentId?: string): void {
+    const form = this.form;
     this.staffLoading.set(true);
     this.staffService.list(hospitalId).subscribe({
       next: (staff) => {
+        if (this.form !== form || form.hospitalId !== hospitalId) return;
         const active = staff.filter((s) => s.active);
         this.staffForHospital.set(active);
-        // The API names the head but gives no e-mail: preselect the one active
-        // staff member with that name (none when the name is ambiguous).
-        const wanted = headName?.trim().toLowerCase();
-        if (wanted) {
-          const matches = active.filter((s) => s.name?.trim().toLowerCase() === wanted);
+        // StaffMapper identifies the actual head by staff ID within the department.
+        // A name match can select a different person when the head is inactive.
+        if (departmentId) {
+          const matches = active.filter(
+            (s) => s.departmentId === departmentId && s.headOfDepartment,
+          );
           if (matches.length === 1) {
             this.form.headOfDepartmentEmail = matches[0].email;
           }
@@ -256,6 +259,7 @@ export class DepartmentListComponent implements OnInit {
         this.staffLoading.set(false);
       },
       error: () => {
+        if (this.form !== form || form.hospitalId !== hospitalId) return;
         this.staffForHospital.set([]);
         this.staffLoading.set(false);
       },

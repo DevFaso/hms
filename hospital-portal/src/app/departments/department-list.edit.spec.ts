@@ -1,14 +1,14 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
 import { DepartmentListComponent } from './department-list';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { roleContextStub } from '../testing/role-context.stub';
 import { HospitalService } from '../services/hospital.service';
-import { StaffService } from '../services/staff.service';
+import { StaffService, StaffResponse } from '../services/staff.service';
 import { ProfileService } from '../services/profile.service';
 
 /**
@@ -36,7 +36,14 @@ describe('DepartmentListComponent — edit form (D1790)', () => {
     translations: [],
   };
   const staff = [
-    { id: 's-1', name: 'Awa Traore', email: 'awa@h.bf', active: true },
+    {
+      id: 's-1',
+      name: 'Awa Traore',
+      email: 'awa@h.bf',
+      active: true,
+      departmentId: 'd-1',
+      headOfDepartment: true,
+    },
     { id: 's-2', name: 'Boukary Sawadogo', email: 'bou@h.bf', active: true },
   ];
 
@@ -105,5 +112,39 @@ describe('DepartmentListComponent — edit form (D1790)', () => {
     cmp.searchTerm = 'card-r49';
     cmp.applyFilter();
     expect(cmp.filtered().length).toBe(1);
+  });
+
+  it('does not replace an unavailable head with an active namesake on save', () => {
+    const cmp = fixture.componentInstance;
+    // The only active namesake heads d-1, not this department.
+    cmp.openEdit({ ...apiDept, id: 'd-2' });
+    expect(cmp.form.headOfDepartmentEmail).toBe('');
+    cmp.submitForm();
+    const put = http.expectOne('/departments/d-2');
+    expect(put.request.body.headOfDepartmentEmail).toBeUndefined();
+    put.flush({});
+    http.expectOne('/departments').flush({ content: [apiDept] });
+  });
+
+  it('preselects the identified head even when names are duplicated', () => {
+    spyOn(TestBed.inject(StaffService), 'list').and.returnValue(
+      of([
+        ...staff,
+        { ...staff[0], id: 's-3', email: 'other@h.bf', headOfDepartment: false },
+      ] as StaffResponse[]),
+    );
+    fixture.componentInstance.openEdit(apiDept);
+    expect(fixture.componentInstance.form.headOfDepartmentEmail).toBe('awa@h.bf');
+  });
+
+  it('ignores a delayed head lookup from a previously opened department', () => {
+    const delayed = new Subject<StaffResponse[]>();
+    spyOn(TestBed.inject(StaffService), 'list').and.returnValues(delayed, of([]));
+    const cmp = fixture.componentInstance;
+    cmp.openEdit(apiDept);
+    cmp.openEdit({ ...apiDept, id: 'd-2' });
+    delayed.next(staff as StaffResponse[]);
+    expect(cmp.form.headOfDepartmentEmail).toBe('');
+    expect(cmp.staffForHospital()).toEqual([]);
   });
 });
