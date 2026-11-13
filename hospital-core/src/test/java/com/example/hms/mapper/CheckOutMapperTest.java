@@ -145,6 +145,32 @@ class CheckOutMapperTest {
             assertThat(avs.getFollowUpInstructions()).isEqualTo("Fluids, review in 7 days");
         }
 
+        /** Provisional platform rule: "not finalised" while a note waits for its signature, normal once signed. */
+        @Test
+        void theSummaryIsNotFinalisedWhileANoteIsUnsignedAndNormalOnceSigned() {
+            Encounter encounter = buildEncounter();
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setAssessment("Acute bronchitis");
+            encounter.setEncounterNote(note);
+
+            assertThat(mapper.toAfterVisitSummary(encounter, CheckOutRequestDTO.builder().build(), null)
+                .isPendingSignature()).isTrue();
+
+            note.setSignedAt(java.time.LocalDateTime.of(2025, 7, 1, 11, 0));
+            assertThat(mapper.toAfterVisitSummary(encounter, CheckOutRequestDTO.builder().build(), null)
+                .isPendingSignature()).isFalse();
+        }
+
+        @Test
+        void aBlankUnsignedRowNeverHoldsTheSummaryNotFinalised() {
+            // D1151: a blank row cannot be signed, so it must not hold the visit open for ever.
+            Encounter encounter = buildEncounter();
+            encounter.setEncounterNote(new com.example.hms.model.encounter.EncounterNote());
+
+            assertThat(mapper.toAfterVisitSummary(encounter, CheckOutRequestDTO.builder().build(), null)
+                .isPendingSignature()).isFalse();
+        }
+
         @Test
         void checkoutTextWinsAndTheNoteAddsInstructionsAndPlan() {
             Encounter encounter = buildEncounter();

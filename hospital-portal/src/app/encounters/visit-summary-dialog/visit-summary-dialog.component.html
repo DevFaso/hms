@@ -44,6 +44,12 @@
       role="region"
       [attr.aria-label]="'ENCOUNTERS.AVS_TITLE' | translate"
     >
+      @if (summary().pendingSignature) {
+        <p class="avs-pending-signature" role="status" data-testid="avs-pending-signature">
+          <span class="material-symbols-outlined" aria-hidden="true">pending_actions</span>
+          {{ 'VISIT_SUMMARY.PENDING_SIGNATURE' | translate }}
+        </p>
+      }
       <section class="avs-identity">
         <span class="avs-patient-icon material-symbols-outlined" aria-hidden="true">person</span>
         <div>

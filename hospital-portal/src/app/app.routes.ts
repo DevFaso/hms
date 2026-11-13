@@ -1028,6 +1028,19 @@ export const routes: Routes = [
         loadComponent: () => import('./reports/reports').then((m) => m.ReportsComponent),
       },
 
+      // Provisional platform rule: notes unsigned for more than 72 hours at the
+      // acting hospital. Mirrors UnsignedNoteController's @PreAuthorize.
+      {
+        path: 'unsigned-notes',
+        canActivate: [RoleGuard],
+        data: {
+          requiresHospitalScope: true,
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./unsigned-notes/unsigned-notes-page').then((m) => m.UnsignedNotesPageComponent),
+      },
+
       // Disease surveillance — top diagnoses per month. Mirrors
       // MorbidityDashboardController's @PreAuthorize exactly. The BACKEND
       // decides scope from the caller's authorities (own hospital vs

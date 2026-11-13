@@ -291,6 +291,15 @@ public class Encounter extends BaseEntity {
         return latest;
     }
 
+    /**
+     * Provisional platform rule (unsigned-note workflow): while any note entry of the visit waits for
+     * its author's signature, the visit's summary is shown as not finalised.
+     */
+    public boolean hasNoteAwaitingSignature() {
+        return encounterNotes != null && encounterNotes.stream()
+            .anyMatch(entry -> entry != null && entry.awaitsSignature());
+    }
+
     /** True when {@code a} was created strictly before {@code b}; an unsaved entry is the newest. */
     private static boolean createdBefore(EncounterNote a, EncounterNote b) {
         if (a.getCreatedAt() == null) {

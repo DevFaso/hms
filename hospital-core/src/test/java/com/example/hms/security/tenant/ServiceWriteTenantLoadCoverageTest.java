@@ -167,6 +167,7 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("RecordAccessPolicyImpl.unlessRestricted#findByIdUnscoped", "the access policy itself decides reach"),
         entry("RecordSharingOptOutServiceImpl.requirePatient#findByIdUnscoped", PATIENT),
         entry("ReferralExpiryPersistence.tryExpire#findById", SYSTEM),
+        entry("UnsignedNoteFollowUp.remindOverdue#findById", SYSTEM + " (the note the reminder row names; the reminder stays at that row's hospital, for its author)"),
         entry("SignableReportLocator.owningHospitalId#findById", "resolves the owning hospital FOR the caller's check"),
         entry("StaffSchedulingServiceImpl.findStaff#findById", ACTOR),
         entry("StaffServiceImpl.findStaffOrThrow#findById", CALLER_CHECKS + " (requireHospitalScope)"),

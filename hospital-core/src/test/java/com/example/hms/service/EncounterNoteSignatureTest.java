@@ -48,6 +48,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -172,6 +174,33 @@ class EncounterNoteSignatureTest {
         assertThat(note.getSignedByName()).isEqualTo("Issa Ouédraogo");
         assertThat(note.getSignatureAlgorithm()).isEqualTo("SHA-256");
         assertThat(note.getSignatureValue()).hasSize(64).matches("[0-9a-f]+");
+    }
+
+    /** Provisional platform rule: signing removes the author's "note to sign" item. */
+    @Test
+    void signingClearsTheNoteToSignItem() {
+        UnsignedNoteFollowUp followUp = mock(UnsignedNoteFollowUp.class);
+        service.setUnsignedNotes(followUp);
+
+        service.signEncounterNote(encounterId, LOCALE);
+
+        var order = inOrder(encounterNoteRepository, followUp);
+        order.verify(encounterNoteRepository).flush();
+        order.verify(followUp).noteSigned(note.getId());
+    }
+
+    @Test
+    void aRefusedSignatureLeavesTheItem() {
+        UnsignedNoteFollowUp followUp = mock(UnsignedNoteFollowUp.class);
+        service.setUnsignedNotes(followUp);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        UUID noteId = note.getId();
+
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, noteId, LOCALE))
+            .isInstanceOf(AccessDeniedException.class);
+
+        verify(followUp, never()).noteSigned(any());
     }
 
     @Test

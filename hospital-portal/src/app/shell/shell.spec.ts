@@ -1728,6 +1728,7 @@ describe('ShellComponent — route-level hospital scope gate', () => {
         'roi',
         'slot-admin',
         'transfusions',
+        'unsigned-notes',
         'webhooks',
         // The release worklist is one laboratory's queue: getPendingRelease
         // refuses a scopeless read outright rather than guessing a hospital,

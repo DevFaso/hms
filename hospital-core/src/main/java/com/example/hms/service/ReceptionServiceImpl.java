@@ -1042,6 +1042,18 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     // ── MVP 11: Encounter status update (flow board drag-and-drop) ────────────
 
+    /**
+     * Provisional platform rule (unsigned-note workflow): a closed visit's unsigned notes go to their authors'
+     * in-basket (UnsignedNoteHookGuardTest). Setter-injected; null in hand-built unit tests.
+     */
+    private com.example.hms.service.UnsignedNoteFollowUp unsignedNotes;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setUnsignedNotes(com.example.hms.service.UnsignedNoteFollowUp unsignedNotes) {
+        this.unsignedNotes = unsignedNotes;
+    }
+
+
     @Override
     @Transactional
     public void updateEncounterStatus(UUID encounterId, EncounterStatus status, UUID hospitalId, String callerUsername) {
@@ -1086,6 +1098,10 @@ public class ReceptionServiceImpl implements ReceptionService {
         } else {
             encounter.setStatus(status);
             encounterRepo.save(encounter);
+            // The rules above send every close elsewhere; should one ever pass here, its notes are still followed.
+            if (unsignedNotes != null) {
+                unsignedNotes.visitClosed(encounter);
+            }
         }
 
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()

@@ -44,6 +44,11 @@ public class AfterVisitSummaryDTO {
     private String encounterStatus;
     private String appointmentStatus;
     private LocalDateTime checkoutTimestamp;
+    /**
+     * Provisional platform rule: a note of the visit still waits for its author's signature, so the summary is
+     * shown "not finalised". It returns to normal once every note is signed.
+     */
+    private boolean pendingSignature;
 
     /* --- Follow-up --- */
     private UUID followUpAppointmentId;

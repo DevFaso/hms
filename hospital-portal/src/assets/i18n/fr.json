@@ -4461,7 +4461,8 @@
     "PROVIDER_STAFF": "Personnel",
     "PROVIDER_AUDIT": "Journal d'audit",
     "DHIS2": "Export DHIS2",
-    "ADT_INTAKE": "Admissions ADT automatiques"
+    "ADT_INTAKE": "Admissions ADT automatiques",
+    "UNSIGNED_NOTES": "Notes non signées"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -6072,7 +6073,8 @@
       "WOUND_CARE": "Soins des plaies",
       "WARNING_SIGNS": "Signes d'alerte — Quand consulter",
       "PATIENT_EDUCATION": "Éducation thérapeutique du patient",
-      "ADDITIONAL_NOTES": "Notes supplémentaires"
+      "ADDITIONAL_NOTES": "Notes supplémentaires",
+      "PENDING_SIGNATURE": "Non finalisé — en attente de signature du praticien"
     },
     "ENUM": {
       "LAB_ORDER_CHANNEL": {
@@ -9347,7 +9349,8 @@
     "tasks": "Tâches",
     "title": "Boîte de réception",
     "unreadCount": "Nombre d'éléments non lus",
-    "urgent": "Urgent"
+    "urgent": "Urgent",
+    "openVisitToSign": "Ouvrir la visite pour signer"
   },
   "common": {
     "loading": "Chargement…"
@@ -13290,7 +13293,8 @@
     "NOT_PROVIDED": "Non renseigné",
     "PROVIDER": "Professionnel de santé",
     "DEPARTMENT": "Service",
-    "NO_SECTIONS": "Aucune section supplémentaire n’a été transmise dans ce résumé de visite."
+    "NO_SECTIONS": "Aucune section supplémentaire n’a été transmise dans ce résumé de visite.",
+    "PENDING_SIGNATURE": "Non finalisé — en attente de signature du praticien"
   },
   "PHARMACY_DASH": {
     "WORKSPACE": "Espace pharmacie",
@@ -13432,5 +13436,16 @@
     "SUBMIT": "Enregistrer la revue",
     "RECORDED": "Revue allergique enregistrée.",
     "FAILED": "La revue allergique n'a pas pu être enregistrée."
+  },
+  "UNSIGNED_NOTES": {
+    "TITLE": "Notes non signées depuis plus de 72 heures",
+    "SUBTITLE": "Notes cliniques de cet établissement que leur auteur n’a pas signées 72 heures après les avoir rédigées. Relancez l’auteur : lui seul peut signer.",
+    "EMPTY": "Aucune note n’est restée non signée plus de 72 heures.",
+    "LOAD_ERROR": "La liste des notes non signées n’a pas pu être chargée.",
+    "AUTHOR": "Auteur",
+    "PATIENT": "Patient",
+    "VISIT_DATE": "Date de la visite",
+    "AGE": "Non signée depuis",
+    "AGE_VALUE": "{{days}} j {{hours}} h"
   }
 }

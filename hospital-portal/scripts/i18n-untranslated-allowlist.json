@@ -458,6 +458,7 @@
     "ULTRASOUND.FINDING_URGENT": "Urgent",
     "ULTRASOUND.OBSERVATIONS": "Observations",
     "ULTRASOUND.WORKLIST_ANOMALIES": "Anomalies",
+    "UNSIGNED_NOTES.PATIENT": "Patient",
     "USERS.TOTAL": "Total",
     "WEBHOOKS.DESCRIPTION": "Description",
     "WEBHOOKS.EVENT_PING": "Ping",

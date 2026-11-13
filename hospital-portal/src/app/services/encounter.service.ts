@@ -273,6 +273,8 @@ export interface AfterVisitSummary {
   encounterStatus: string;
   appointmentStatus?: string;
   checkoutTimestamp: string;
+  /** Provisional platform rule: a note of the visit still waits for its author's signature. */
+  pendingSignature?: boolean;
   followUpAppointmentId?: string;
   followUpAppointmentDate?: string;
 }
