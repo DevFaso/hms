@@ -158,6 +158,9 @@ export interface DeliveryRecordRequest {
   perinealTear?: PerinealTear;
   notes?: string;
   recentDeliveryOverrideReason?: string;
+  /** QA r46 (provisional): born before her arrival here, on an episode continued from another hospital. */
+  bornBeforeArrival?: boolean;
+  bornBeforeArrivalReason?: string;
 }
 
 export interface DeliveryRecordResponse {

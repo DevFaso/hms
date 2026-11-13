@@ -3477,4 +3477,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V291-delivery-born-before-arrival" author="hms-team" runOnChange="false">
+        <sqlFile path="V291__delivery_born_before_arrival.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

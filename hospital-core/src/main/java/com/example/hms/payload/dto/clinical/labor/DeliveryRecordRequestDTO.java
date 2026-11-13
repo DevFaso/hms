@@ -69,4 +69,14 @@ public class DeliveryRecordRequestDTO {
      */
     @jakarta.validation.constraints.Size(max = 500)
     private String recentDeliveryOverrideReason;
+
+    /**
+     * QA r46 (D1712 follow-up, provisional rule pending clinical sign-off): on an episode that continues a labour
+     * from another hospital, the baby was born before she arrived (in transit). Only then may the birth time be
+     * earlier than the episode's start; {@link #bornBeforeArrivalReason} is then required.
+     */
+    private Boolean bornBeforeArrival;
+
+    @jakarta.validation.constraints.Size(max = 500)
+    private String bornBeforeArrivalReason;
 }

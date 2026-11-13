@@ -1484,6 +1484,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: [],
   },
   {
+    // QA r46 (provisional): a birth recorded as before her arrival from another hospital.
+    key: 'AUDIT.DESC.LABOR_DELIVERY_BORN_BEFORE_ARRIVAL',
+    re: /^Birth recorded as before her arrival from another hospital$/,
+    params: [],
+  },
+  {
     key: 'AUDIT.DESC.LABOR_EPISODE_HANDOVER_READ',
     re: /^Labour episode handed over by transfer read at the receiving hospital$/,
     params: [],

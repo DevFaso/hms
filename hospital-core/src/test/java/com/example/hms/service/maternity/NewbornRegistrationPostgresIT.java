@@ -202,7 +202,8 @@ class NewbornRegistrationPostgresIT {
     /**
      * #1136 follow-up (QA r46): each baby's PATIENT assignment sent the registrar's and the hospital's
      * "new registration" SMS, so every birth texted staff phones on prod. The baby has no phone and no e-mail:
-     * no activation message and no FYI. Reception sees the baby through the in-basket and the patient list.
+     * no activation message and no FYI. Reception finds the baby in the patient list (an in-basket item is filed
+     * only when a registration fails).
      */
     @Test
     @DisplayName("registering a newborn sends no SMS and no e-mail, to the family or to staff")

@@ -933,6 +933,36 @@
             {{ 'LABOR.RECENT_DELIVERY_OVERRIDE_HINT' | translate }}
           </p>
         </div>
+        @if (bornBeforeArrivalOffered()) {
+          <div class="field checkbox-field">
+            <label>
+              <input
+                type="checkbox"
+                data-testid="labor-delivery-bba"
+                aria-describedby="dl-bba-hint"
+                [(ngModel)]="deliveryForm.bornBeforeArrival"
+              />
+              {{ 'LABOR.BORN_BEFORE_ARRIVAL' | translate }}
+            </label>
+            <p id="dl-bba-hint" class="muted">
+              {{ 'LABOR.BORN_BEFORE_ARRIVAL_HINT' | translate }}
+            </p>
+          </div>
+          @if (deliveryForm.bornBeforeArrival) {
+            <div class="field">
+              <label for="dl-bba-reason"
+                >{{ 'LABOR.BORN_BEFORE_ARRIVAL_REASON' | translate }} *</label
+              >
+              <textarea
+                id="dl-bba-reason"
+                required
+                rows="2"
+                maxlength="500"
+                [(ngModel)]="deliveryForm.bornBeforeArrivalReason"
+              ></textarea>
+            </div>
+          }
+        }
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelDelivery()" [disabled]="saving()">

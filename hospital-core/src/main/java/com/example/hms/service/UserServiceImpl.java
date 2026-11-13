@@ -294,8 +294,8 @@ public class UserServiceImpl implements UserService {
         request.setRoleNames(new LinkedHashSet<>(Set.of("PATIENT")));
         request.setHospitalId(deliveringHospitalId);
         // #1136 follow-up (QA r46): the baby has no phone and no e-mail, so no activation message, and no
-        // registrar or hospital "new registration" SMS: every birth texted staff. Reception sees the baby
-        // through the in-basket and the patient list.
+        // registrar or hospital "new registration" SMS: every birth texted staff. Reception finds the baby in
+        // the patient list; the in-basket is told only when a registration fails.
         return createAccount(request, UserAccountAccess.Grant.newbornPatientAt(deliveringHospitalId), false);
     }
 

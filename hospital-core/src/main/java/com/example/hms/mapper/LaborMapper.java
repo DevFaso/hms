@@ -133,6 +133,8 @@ public class LaborMapper {
             .estimatedBloodLossMl(record.getEstimatedBloodLossMl())
             .perinealTear(record.getPerinealTear() != null ? record.getPerinealTear().name() : null)
             .notes(record.getNotes())
+            .bornBeforeArrival(record.isBornBeforeArrival())
+            .bornBeforeArrivalReason(record.getBornBeforeArrivalReason())
             .alerts(mapAlerts(record.getAlerts(), code -> LaborAlertArgs.ofDelivery(code, record)))
             .newbornRegistrationPending(record.isNewbornRegistrationPending())
             .build();
