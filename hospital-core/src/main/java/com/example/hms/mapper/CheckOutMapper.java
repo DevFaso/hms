@@ -77,6 +77,8 @@ public class CheckOutMapper {
 
         AfterVisitSummaryDTO summary = builder.build();
         fillFromSignedNote(summary, encounter.getLatestSignedEncounterNote());
+        // Provisional platform rule: "not finalised" while a note of the visit waits for its signature.
+        summary.setPendingSignature(encounter.hasNoteAwaitingSignature());
         return summary;
     }
 

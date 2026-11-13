@@ -4418,7 +4418,8 @@
     "PROVIDER_STAFF": "Staff",
     "PROVIDER_AUDIT": "Audit trail",
     "DHIS2": "DHIS2 export",
-    "ADT_INTAKE": "ADT intake"
+    "ADT_INTAKE": "ADT intake",
+    "UNSIGNED_NOTES": "Unsigned notes"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Critical alert",
@@ -6063,7 +6064,8 @@
       "ADDITIONAL_NOTES": "Additional Notes",
       "FOLLOW_UP": "Follow-Up Appointment",
       "SCHEDULED_FOR": "Scheduled for",
-      "PRINT": "Print Summary"
+      "PRINT": "Print Summary",
+      "PENDING_SIGNATURE": "Not finalised — awaiting the clinician’s signature"
     },
     "ENUM": {
       "LAB_ORDER_CHANNEL": {
@@ -9300,7 +9302,8 @@
     "tasks": "Tasks",
     "title": "In-Basket",
     "unreadCount": "Unread count",
-    "urgent": "Urgent"
+    "urgent": "Urgent",
+    "openVisitToSign": "Open the visit to sign"
   },
   "common": {
     "loading": "Loading…"
@@ -13241,7 +13244,8 @@
     "NOT_PROVIDED": "Not provided",
     "PROVIDER": "Clinician",
     "DEPARTMENT": "Department",
-    "NO_SECTIONS": "No additional visit-summary sections were returned."
+    "NO_SECTIONS": "No additional visit-summary sections were returned.",
+    "PENDING_SIGNATURE": "Not finalised — awaiting the clinician’s signature"
   },
   "PHARMACY_DASH": {
     "WORKSPACE": "Pharmacy workspace",
@@ -13383,5 +13387,16 @@
     "SUBMIT": "Record the review",
     "RECORDED": "Allergy review recorded.",
     "FAILED": "The allergy review could not be recorded."
+  },
+  "UNSIGNED_NOTES": {
+    "TITLE": "Notes unsigned for more than 72 hours",
+    "SUBTITLE": "Clinical notes at this hospital that their author has not signed 72 hours after writing them. Follow up with the author: only they can sign.",
+    "EMPTY": "No note has been left unsigned for more than 72 hours.",
+    "LOAD_ERROR": "The list of unsigned notes could not be loaded.",
+    "AUTHOR": "Author",
+    "PATIENT": "Patient",
+    "VISIT_DATE": "Visit date",
+    "AGE": "Unsigned for",
+    "AGE_VALUE": "{{days}} d {{hours}} h"
   }
 }

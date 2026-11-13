@@ -84,6 +84,9 @@ class InBasketRecipientGuardTest {
         "CurrentAllergyRecheck.java", union(
             rolesOf(constant(TransfusionController.class, "PRESCRIBER")),
             rolesOf(constant(TransfusionController.class, "BEDSIDE"))),
+        // Provisional platform rule: a closed visit's unsigned note, for its author only, who wrote it as one
+        // of the roles the note endpoint admits.
+        "UnsignedNoteFollowUp.java", noteAuthors(),
         // The store itself: every sender above reaches it through createItem.
         "InBasketServiceImpl.java", Set.of());
 
@@ -167,6 +170,15 @@ class InBasketRecipientGuardTest {
     private static boolean admits(Set<String> admitted, String role) {
         return admitted.contains(role)
             || (admitted.contains("DOCTOR") && RoleExpansion.expand(List.of("ROLE_" + role)).contains("ROLE_DOCTOR"));
+    }
+
+    private static Set<String> noteAuthors() {
+        for (Method method : com.example.hms.controller.EncounterController.class.getDeclaredMethods()) {
+            if ("upsertEncounterNote".equals(method.getName())) {
+                return rolesOf(method.getAnnotation(PreAuthorize.class).value());
+            }
+        }
+        throw new IllegalStateException("EncounterController#upsertEncounterNote is gone");
     }
 
     private static Set<String> labOrderers() {

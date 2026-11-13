@@ -6477,3 +6477,10 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Lab trend deltas across units:** the observations table still shows a delta only between two values recorded in the same unit; a delta between converted values (g/L after mg/dL) shows "—".
 - **Molar-mass table:** only glucose (180.16 g/mol) is listed; any other analyte (creatinine, urea, cholesterol, bilirubin…) needs a sourced molar mass and a clinician's sign-off before mmol/L ↔ mg/dL is merged.
 - **Free-text wrap guard:** `.free-text` is the class to add to any new free-text display; no gate yet finds a note interpolation outside a wrapping class.
+
+## Standing debt — unsigned-note workflow (feat/unsigned-note-workflow)
+
+- **Provisional platform rule, not a clinical sign-off:** a visit closes without waiting for the doctor; at close each unsigned note goes to its author's in-basket ("Note à signer"), the visit summary (staff "Résumé de visite" and patient portal) reads "Non finalisé — en attente de signature du praticien" until every note is signed, the item becomes a reminder after 24 h, and the hospital admin sees notes unsigned for more than 72 h (`/unsigned-notes`). The 24 h and 72 h delays and the wording need a named clinical approver before prod.
+- **Unsigned notes, mobile apps:** the native patient apps do not read `pendingSignature` yet, so they show the summary without the "not finalised" banner.
+- **Unsigned notes, nursing notes:** only encounter notes (SOAP and the other templates) are followed; nursing notes carry their own signing and are not in the workflow.
+- **Unsigned notes, a super-admin author:** a note written by a super-admin is filed in their in-basket, but the sign endpoint does not admit SUPER_ADMIN; decide whether such notes are signable or excluded.

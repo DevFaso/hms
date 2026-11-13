@@ -4418,7 +4418,8 @@
     "PROVIDER_STAFF": "Personal",
     "PROVIDER_AUDIT": "Registro de auditoría",
     "DHIS2": "Exportación DHIS2",
-    "ADT_INTAKE": "Ingresos ADT automáticos"
+    "ADT_INTAKE": "Ingresos ADT automáticos",
+    "UNSIGNED_NOTES": "Notas sin firmar"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerta crítica",
@@ -6063,7 +6064,8 @@
       "ADDITIONAL_NOTES": "Notas adicionales",
       "FOLLOW_UP": "Cita de seguimiento",
       "SCHEDULED_FOR": "Programada para",
-      "PRINT": "Imprimir resumen"
+      "PRINT": "Imprimir resumen",
+      "PENDING_SIGNATURE": "No finalizado — pendiente de la firma del profesional"
     },
     "ENUM": {
       "LAB_ORDER_CHANNEL": {
@@ -9300,7 +9302,8 @@
     "tasks": "Tareas",
     "title": "Bandeja de entrada",
     "unreadCount": "Número de elementos no leídos",
-    "urgent": "Urgente"
+    "urgent": "Urgente",
+    "openVisitToSign": "Abrir la visita para firmar"
   },
   "common": {
     "loading": "Cargando…"
@@ -13241,7 +13244,8 @@
     "NOT_PROVIDED": "No facilitado",
     "PROVIDER": "Profesional sanitario",
     "DEPARTMENT": "Servicio",
-    "NO_SECTIONS": "No se recibieron secciones adicionales en este resumen de la visita."
+    "NO_SECTIONS": "No se recibieron secciones adicionales en este resumen de la visita.",
+    "PENDING_SIGNATURE": "No finalizado — pendiente de la firma del profesional"
   },
   "PHARMACY_DASH": {
     "WORKSPACE": "Espacio de farmacia",
@@ -13383,5 +13387,16 @@
     "SUBMIT": "Registrar la revisión",
     "RECORDED": "Revisión alérgica registrada.",
     "FAILED": "No se pudo registrar la revisión alérgica."
+  },
+  "UNSIGNED_NOTES": {
+    "TITLE": "Notas sin firmar desde hace más de 72 horas",
+    "SUBTITLE": "Notas clínicas de este hospital que su autor no ha firmado 72 horas después de redactarlas. Contacte con el autor: solo él puede firmarlas.",
+    "EMPTY": "Ninguna nota lleva más de 72 horas sin firmar.",
+    "LOAD_ERROR": "No se pudo cargar la lista de notas sin firmar.",
+    "AUTHOR": "Autor",
+    "PATIENT": "Paciente",
+    "VISIT_DATE": "Fecha de la visita",
+    "AGE": "Sin firmar desde hace",
+    "AGE_VALUE": "{{days}} d {{hours}} h"
   }
 }

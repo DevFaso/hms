@@ -46,6 +46,17 @@ public class EncounterAutoCompletionService {
     /** QA D972: a closed stay and the visit that led to it are handed to billing like a checkout. */
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
+    /**
+     * Provisional platform rule (unsigned-note workflow): a closed visit's unsigned notes go to their authors'
+     * in-basket (UnsignedNoteHookGuardTest). Setter-injected; null in hand-built unit tests.
+     */
+    private com.example.hms.service.UnsignedNoteFollowUp unsignedNotes;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setUnsignedNotes(com.example.hms.service.UnsignedNoteFollowUp unsignedNotes) {
+        this.unsignedNotes = unsignedNotes;
+    }
+
     @Transactional
     public void completeAdmissionEncounters(UUID admissionId) {
         if (admissionId == null) {
@@ -70,6 +81,9 @@ public class EncounterAutoCompletionService {
                     previousStatuses.get(i), EncounterStatus.COMPLETED.name());
             emitAudit(active.get(i), previousStatuses.get(i), admissionId);
             publishCompleted(active.get(i), now);
+            if (unsignedNotes != null) {
+                unsignedNotes.visitClosed(active.get(i));
+            }
         }
         log.info("Completed {} encounter(s) of admission {} on discharge", active.size(), admissionId);
     }
@@ -95,6 +109,9 @@ public class EncounterAutoCompletionService {
             encounterRepository.save(enc);
             trackerEventPublisher.publishStatusTransition(enc, previous, EncounterStatus.CANCELLED.name());
             emitAudit(enc, previous, "Encounter cancelled with admission " + admissionId);
+            if (unsignedNotes != null) {
+                unsignedNotes.visitClosed(enc);
+            }
         }
     }
 
@@ -146,6 +163,9 @@ public class EncounterAutoCompletionService {
             emitAudit(open.get(i), previousStatuses.get(i),
                 "Encounter completed on admission " + admission.getId());
             publishCompleted(open.get(i), open.get(i).getCheckoutTimestamp());
+            if (unsignedNotes != null) {
+                unsignedNotes.visitClosed(open.get(i));
+            }
         }
     }
 

@@ -567,8 +567,17 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                 .filter(r -> !isPrescriptionAnchor(r.getEncounter()))
                 .filter(DischargeSummaryServiceImpl::publishedToPatient)
                 .toList();
+        // Provisional platform rule: a visit with a note still waiting for its author's
+        // signature is shown "not finalised" to the patient. One read for the whole list.
+        java.util.Set<UUID> pendingSignature = encountersAwaitingSignature(rows);
         List<DischargeSummaryResponseDTO> result = rows.stream()
-                .map(dischargeSummaryMapper::toResponseDTO)
+                .map(row -> {
+                    DischargeSummaryResponseDTO dto = dischargeSummaryMapper.toResponseDTO(row);
+                    if (dto != null && row.getEncounter() != null) {
+                        dto.setPendingSignature(pendingSignature.contains(row.getEncounter().getId()));
+                    }
+                    return dto;
+                })
                 .toList();
 
         long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
@@ -880,6 +889,23 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         if (treating.getUser() != null && isPhysician(treating.getUser().getId(), hospitalId)) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_ENCOUNTER_ID, "dischargeSummary.encounter.notTreatingClinician");
         }
+    }
+
+    /** The visits of {@code rows} with a note still waiting for its author's signature. */
+    private java.util.Set<UUID> encountersAwaitingSignature(List<DischargeSummary> rows) {
+        java.util.Set<UUID> ids = rows.stream()
+                .map(DischargeSummary::getEncounter)
+                .filter(java.util.Objects::nonNull)
+                .map(Encounter::getId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        if (ids.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return encounterNoteRepository.findByEncounter_IdIn(ids).stream()
+                .filter(com.example.hms.model.encounter.EncounterNote::awaitsSignature)
+                .map(note -> note.getEncounter().getId())
+                .collect(java.util.stream.Collectors.toSet());
     }
 
     /**

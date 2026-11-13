@@ -319,6 +319,18 @@ public class EncounterServiceImpl implements EncounterService {
      */
     private com.example.hms.service.scheduling.PatientRecallService recallService;
 
+    /**
+     * Provisional platform rule (unsigned-note workflow): a closed visit's notes still waiting for a signature go
+     * to their authors' in-basket. Every close path calls it (UnsignedNoteHookGuardTest). Setter-injected like
+     * {@link #recallService}; null in constructor-built unit tests.
+     */
+    private UnsignedNoteFollowUp unsignedNotes;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setUnsignedNotes(UnsignedNoteFollowUp unsignedNotes) {
+        this.unsignedNotes = unsignedNotes;
+    }
+
     @org.springframework.beans.factory.annotation.Autowired
     void setRecallService(com.example.hms.service.scheduling.PatientRecallService recallService) {
         this.recallService = recallService;
@@ -593,6 +605,9 @@ public class EncounterServiceImpl implements EncounterService {
             // or the notification above failed (they are best effort).
             publishCheckedOutOnCompletion(saved);
         }
+        if (unsignedNotes != null) {
+            unsignedNotes.visitClosed(saved);
+        }
 
         recordHistory(saved, "UPDATED", resolveHistoryActor(request.getUpdatedBy(), ctx.staff()), previousValues);
 
@@ -618,6 +633,10 @@ public class EncounterServiceImpl implements EncounterService {
         // QA D1151 class: an empty note here would lock the real one out for good (D513).
         requireNoteContent(upsertEncounterNoteInternal(closed, resolveSessionNoteAuthor(closed, note.getAuthorStaffId(),
             note.getAuthorUserId(), note.getAuthorName(), locale), note, locale, request.getUpdatedBy(), closed.getStatus(), false));
+        // A note written after the close waits for its signature like one written before it.
+        if (unsignedNotes != null) {
+            unsignedNotes.visitClosed(closed);
+        }
         return encounterMapper.toEncounterResponseDTO(closed);
     }
 
@@ -696,6 +715,10 @@ public class EncounterServiceImpl implements EncounterService {
         // note as saved (an edit sends only the sections it changes); thrown
         // inside the transaction, so nothing is written.
         requireNoteContent(note);
+        // A note written on a closed visit (late documentation) goes to its author's in-basket too.
+        if (unsignedNotes != null) {
+            unsignedNotes.visitClosed(encounter);
+        }
         // QA D513: updatedAt is stamped at flush; the response was mapped
         // before it and reported the previous edit's time.
         encounterNoteRepository.flush();
@@ -846,6 +869,10 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterNote saved = encounterNoteRepository.save(note);
         // QA D751: the same actor format as every other history row, never a raw id.
         recordNoteHistory(saved.getEncounter(), saved, NOTE_HISTORY_SIGNED, userActor(note.getAuthor()));
+        // The "note to sign" item has done its work.
+        if (unsignedNotes != null) {
+            unsignedNotes.noteSigned(saved.getId());
+        }
         return encounterMapper.toEncounterNoteResponseDTO(saved);
     }
 
@@ -2667,6 +2694,10 @@ public class EncounterServiceImpl implements EncounterService {
         trackerEventPublisher.publishStatusTransition(encounter,
                 previousStatus != null ? previousStatus.name() : null,
                 EncounterStatus.COMPLETED.name());
+        // The desk never waits for the doctor: an unsigned note goes to its author's in-basket.
+        if (unsignedNotes != null) {
+            unsignedNotes.visitClosed(encounter);
+        }
         upsertDischargeSummaryForCheckout(encounter, request, now);
         notifyPatientAfterVisitSummary(encounter);
 
@@ -2776,6 +2807,9 @@ public class EncounterServiceImpl implements EncounterService {
         encounter.setExtraFields(extra);
         Encounter saved = encounterRepository.save(encounter);
         voidUnpaidCopays(saved.getId(), request.getReason().trim(), now);
+        if (unsignedNotes != null) {
+            unsignedNotes.visitClosed(saved);
+        }
         trackerEventPublisher.publishStatusTransition(saved,
             previous != null ? previous.name() : null, closedAs.name());
 

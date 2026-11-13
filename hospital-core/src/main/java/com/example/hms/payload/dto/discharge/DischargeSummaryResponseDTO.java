@@ -29,6 +29,11 @@ public class DischargeSummaryResponseDTO {
     private String patientMrn;
 
     private UUID encounterId;
+    /**
+     * Provisional platform rule: a note of the visit still waits for its author's signature, so the patient's
+     * summary is shown "not finalised" until every note is signed.
+     */
+    private boolean pendingSignature;
     private String encounterType;
 
     private UUID hospitalId;

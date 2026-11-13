@@ -174,6 +174,31 @@ class EncounterNoteSignatureTest {
         assertThat(note.getSignatureValue()).hasSize(64).matches("[0-9a-f]+");
     }
 
+    /** Provisional platform rule: signing removes the author's "note to sign" item. */
+    @Test
+    void signingClearsTheNoteToSignItem() {
+        UnsignedNoteFollowUp followUp = org.mockito.Mockito.mock(UnsignedNoteFollowUp.class);
+        service.setUnsignedNotes(followUp);
+
+        service.signEncounterNote(encounterId, LOCALE);
+
+        verify(followUp).noteSigned(note.getId());
+    }
+
+    @Test
+    void aRefusedSignatureLeavesTheItem() {
+        UnsignedNoteFollowUp followUp = org.mockito.Mockito.mock(UnsignedNoteFollowUp.class);
+        service.setUnsignedNotes(followUp);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        UUID noteId = note.getId();
+
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, noteId, LOCALE))
+            .isInstanceOf(AccessDeniedException.class);
+
+        verify(followUp, never()).noteSigned(any());
+    }
+
     @Test
     void d751_theSignedHistoryRowNamesTheSignerLikeEveryOtherRow() {
         authorUser.setEmail("doctor@example.test");
