@@ -38,6 +38,7 @@
           }}</label>
           <textarea
             id="checkout-diagnoses"
+            maxlength="5000"
             class="form-control"
             rows="3"
             [ngModel]="dischargeDiagnosesText()"
@@ -83,6 +84,7 @@
           }}</label>
           <textarea
             id="checkout-instructions"
+            maxlength="3000"
             class="form-control"
             rows="3"
             [ngModel]="followUpInstructions()"
@@ -113,6 +115,7 @@
           }}</label>
           <input
             id="checkout-fu-reason"
+            maxlength="500"
             class="form-control"
             type="text"
             [ngModel]="followUpReason()"

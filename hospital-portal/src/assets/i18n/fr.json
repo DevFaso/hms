@@ -1266,6 +1266,7 @@
   },
   "ADMISSIONS": {
     "ROOM_BED_HELD_HINT": "La chambre suit le lit occupé par ce séjour. Pour déplacer le patient, attribuez un autre lit ou demandez un transfert.",
+    "SET_AT_ADMISSION_HINT": "Le patient, l’établissement, le clinicien admettant, le type et l’heure d’admission constituent l’enregistrement de l’admission : ils ne se modifient plus une fois le patient admis.",
     "ACUITY": "Gravité",
     "ACUITY_CRITICAL": "Critique",
     "ACUITY_LEVEL": "Niveau de gravité",
@@ -9256,7 +9257,8 @@
     "INSTRUCTIONS_PLACEHOLDER": "ex. Revenir à la clinique si les symptômes s'aggravent",
     "EDUCATION_PLACEHOLDER": "ex. Fiche de gestion des médicaments",
     "FOLLOWUP_REASON_PLACEHOLDER": "ex. Contrôle dans 2 semaines",
-    "SUMMARY_REQUIRED": "Saisissez un diagnostic de sortie ou des consignes pour le patient : le résumé de visite ne peut pas être vide."
+    "SUMMARY_REQUIRED": "Saisissez un diagnostic de sortie ou des consignes pour le patient : le résumé de visite ne peut pas être vide.",
+    "DIAGNOSES_TOO_LONG": "Les diagnostics de sortie ne doivent pas dépasser {{max}} caractères au total (chaque retour à la ligne compte pour deux)."
   },
   "inBasket": {
     "acknowledge": "Accuser réception",

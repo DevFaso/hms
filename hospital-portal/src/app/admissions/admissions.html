@@ -523,6 +523,12 @@
         </button>
       </div>
       <div class="modal-body">
+        @if (editing()) {
+          <!-- QA D1672: what the update cannot change is read-only, and says why. -->
+          <p class="no-beds-hint" id="adm-set-at-admission">
+            {{ 'ADMISSIONS.SET_AT_ADMISSION_HINT' | translate }}
+          </p>
+        }
         <div class="form-row">
           <div class="field">
             <label for="adm-patientSearch">{{ 'PATIENTS.PATIENT_NAME' | translate }} *</label>
@@ -535,15 +541,17 @@
                     {{ ' ' }}<span class="chip-sub">{{ sub }}</span>
                   }
                 </div>
-                <button
-                  [attr.aria-label]="'COMMON.CHANGE_PATIENT' | translate"
-                  type="button"
-                  class="chip-clear"
-                  (click)="clearPatient()"
-                  [title]="'COMMON.CHANGE_PATIENT' | translate"
-                >
-                  <span class="material-symbols-outlined" aria-hidden="true">close</span>
-                </button>
+                @if (!editing()) {
+                  <button
+                    [attr.aria-label]="'COMMON.CHANGE_PATIENT' | translate"
+                    type="button"
+                    class="chip-clear"
+                    (click)="clearPatient()"
+                    [title]="'COMMON.CHANGE_PATIENT' | translate"
+                  >
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                  </button>
+                }
               </div>
             } @else {
               <div class="patient-picker-wrap">
@@ -604,6 +612,7 @@
             } @else {
               <select
                 id="adm-hospitalId"
+                [disabled]="editing()"
                 [value]="form.hospitalId"
                 (change)="onHospitalChange($any($event.target).value)"
                 required
@@ -624,7 +633,12 @@
           <div class="field">
             <!-- QA D1634: a midwife admitting is not a "Médecin"; the label is neutral then. -->
             <label for="adm-providerId">{{ admittingProviderKeys().label | translate }} *</label>
-            <select id="adm-providerId" [(ngModel)]="form.admittingProviderId" required>
+            <select
+              id="adm-providerId"
+              [(ngModel)]="form.admittingProviderId"
+              [disabled]="editing()"
+              required
+            >
               <option value="">{{ admittingProviderKeys().select | translate }}</option>
               @for (s of staffMembers(); track s.id) {
                 <option [value]="s.id">{{ s.name }}</option>
@@ -649,7 +663,7 @@
         <div class="form-row">
           <div class="field">
             <label for="adm-type">{{ 'ADMISSIONS.ADMISSION_TYPE' | translate }} *</label>
-            <select id="adm-type" [(ngModel)]="form.admissionType" required>
+            <select id="adm-type" [(ngModel)]="form.admissionType" [disabled]="editing()" required>
               @for (t of formAdmissionTypes(); track t) {
                 <option [value]="t">{{ t | enumLabel: 'admissionType' }}</option>
               }
@@ -671,13 +685,14 @@
               id="adm-dateTime"
               type="datetime-local"
               [(ngModel)]="form.admissionDateTime"
+              [readonly]="editing()"
               required
             />
           </div>
           <div class="field">
             <label for="adm-deptId">{{ 'STAFF.DEPARTMENT' | translate }}</label>
             <select id="adm-deptId" [(ngModel)]="form.departmentId">
-              <option value="">
+              <option value="" [disabled]="editing() && editingHadDepartment()">
                 {{
                   form.hospitalId
                     ? ('ADMISSIONS.ANY_DEPARTMENT' | translate)

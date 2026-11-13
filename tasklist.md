@@ -6464,9 +6464,13 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 
 - **D1651, shared-patient coverage:** a hospital now sees only its own insurance rows and legacy untagged ones; whether a treating hospital (RecordAccessPolicy treatment relationship) should also see another hospital's coverage, read-only, is a policy decision for the user.
 - **D1651, eligibility history:** an eligibility check already recorded against another hospital's insurance row (before this fix) still shows that row on the check; no migration rewrites them.
-- **D1652, checkout follow-up text:** the checkout's follow-up instructions are merged with the signed note and silently cut to 3000 characters on the discharge summary (`CheckOutMapper.STORED_FOLLOW_UP_MAX`); the merged length is not refused or announced.
-- **D1652, checkout diagnoses:** the checkout's diagnosis list is joined into the 5000-character summary diagnosis with no size check on the list.
-- **D1652, silent truncation helper:** `EncounterServiceImpl.keepIfGiven` still truncates any caller past the column; the checkout dialog now refuses first, other callers (the synthetic checkout) do not.
+- **D1670/D1671, checkout follow-up text (still open):** the typed instructions now fit (3000), but `CheckOutMapper.followUpWithSignedNote` still cuts the typed text plus the signed note's instructions and plan to 3000 on the discharge summary without a word.
+- **D1670, checkout follow-up date:** an unparseable `followUpAppointment.preferredDate` silently becomes "two weeks out" (`checkoutFollowUpDueDate`); the dialog's date picker cannot send one, an API caller can.
+- **D1672 sweep, emptied field kept:** clearing a field in an edit dialog is dropped behind a success where the portal omits blanks or the server skips nulls: problem-list onset date (`patient-chart.component.ts:818` / `PatientServiceImpl:1959`), hospital "no organization" (`hospital-list.ts:211` / `HospitalServiceImpl:244`), user phone (`user-list.ts:546` / `UserServiceImpl:1773`), MTM review follow-up date (`MtmReviewServiceImpl:162`), education resource duration (`EducationResourceMapper.updateEntityFromDTO`), ultrasound gestational age / scheduled date (`UltrasoundMapper.updateOrderFromRequest`).
+- **D1672 sweep, problem-list edit:** a status or chronic change is refused because the dialog never sends the `changeReason` the server requires (a loud 400, not a silent drop).
+- **D1672 sweep, opposite class (edit wipes data):** an edit dialog that does not send a field the server writes as null clears it: treatment plans (goals and the medication, lifestyle and referral plans, `TreatmentPlanMapper.applyRequest`), imaging orders (contrast, sedation, scheduling, `ImagingOrderMapper:82-102`), staff `endDate` (`StaffMapper:147`), organization description (`OrganizationMapper.updateEntity`).
+- **D1672, @RejectsUnknownFields rollout:** only `AdmissionUpdateRequestDTO` refuses unknown properties by name; other update DTOs still skip them silently (Jackson default). Extending it needs each client's update body checked first.
+- **D1672, admission update audit:** a corrected chief complaint (now saved) is not audited as a change, like the notes, acuity and room edits before it.
 
 ## Standing debt — lab trend units and free-text wrapping (fix/lab-trend-units-i18n)
 

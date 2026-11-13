@@ -148,6 +148,20 @@ describe('CheckoutDialogComponent', () => {
     expect(encounterSpy.checkOut).not.toHaveBeenCalled();
   });
 
+  // QA D1671: the lines are stored joined by "; " in a 5000-character column.
+  it('QA D1671: diagnoses longer than the stored 5000 in all are not sent, and say so', () => {
+    const line = 'x'.repeat(2499);
+    component.dischargeDiagnosesText.set(`${line}
+${line}`);
+    expect(component.checkoutBlockReason()).toBeNull();
+    component.dischargeDiagnosesText.set(`${line}
+${line}
+x`);
+    expect(component.checkoutBlockReason()).toBe('CHECKOUT.DIAGNOSES_TOO_LONG');
+    component.submit();
+    expect(encounterSpy.checkOut).not.toHaveBeenCalled();
+  });
+
   it('QA D1246: either a diagnosis or instructions is enough', () => {
     encounterSpy.checkOut.and.returnValue(of(sampleAvs));
     component.followUpInstructions.set('');

@@ -353,6 +353,23 @@ class AdmissionServiceImplTest {
         assertThatThrownBy(() -> service.getAdmission(admissionId)).isInstanceOf(ResourceNotFoundException.class);
     }
 
+    /** QA D1672: the corrected chief complaint is saved, not dropped behind a 200. */
+    @Test
+    void updateAdmission_savesTheChiefComplaint() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setChiefComplaint("Surveillance");
+        AdmissionUpdateRequestDTO request = new AdmissionUpdateRequestDTO();
+        request.setChiefComplaint("  Complainte corrigée ");
+
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(admissionRepository.save(admission)).thenReturn(admission);
+        when(admissionMapper.toResponseDTO(admission)).thenReturn(new AdmissionResponseDTO());
+
+        service.updateAdmission(admissionId, request);
+        assertThat(admission.getChiefComplaint()).isEqualTo("Complainte corrigée");
+    }
+
     @Test
     void updateAdmission_success() {
         Admission admission = new Admission();
