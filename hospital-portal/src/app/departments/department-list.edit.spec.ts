@@ -10,6 +10,7 @@ import { roleContextStub } from '../testing/role-context.stub';
 import { HospitalService } from '../services/hospital.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ProfileService } from '../services/profile.service';
+import { resetStoredLangForTests } from '../shared/i18n/app-locale';
 
 /**
  * D1790: the API's DepartmentResponseDTO sends `departmentCode` and only the
@@ -89,7 +90,19 @@ describe('DepartmentListComponent — edit form (D1790)', () => {
     fixture.detectChanges();
   }
 
-  beforeEach(() => setup(false));
+  let previousLang: string | null;
+  beforeEach(() => {
+    previousLang = localStorage.getItem('lang');
+    localStorage.setItem('lang', 'fr');
+    resetStoredLangForTests();
+    setup(false);
+  });
+
+  afterEach(() => {
+    if (previousLang === null) localStorage.removeItem('lang');
+    else localStorage.setItem('lang', previousLang);
+    resetStoredLangForTests();
+  });
 
   it('opens prefilled from an API-shaped response and saves the same code', () => {
     const cmp = fixture.componentInstance;
@@ -197,5 +210,61 @@ describe('DepartmentListComponent — edit form (D1790)', () => {
     const host = fixture.nativeElement as HTMLElement;
     expect(host.querySelector('#dHospital')).toBeNull();
     expect(host.querySelector('.locked-field')?.textContent).toContain('Hopital A');
+  });
+
+  it('clears the current-language description while preserving the other languages', () => {
+    const cmp = fixture.componentInstance;
+    cmp.openEdit(apiDept);
+    cmp.form.description = '';
+    cmp.submitForm();
+    const put = http.expectOne('/departments/d-1');
+    expect(
+      put.request.body.translations.find((t: { languageCode: string }) => t.languageCode === 'fr')
+        .description,
+    ).toBe('');
+    expect(
+      put.request.body.translations.find((t: { languageCode: string }) => t.languageCode === 'en')
+        .description,
+    ).toBe('Heart care');
+    put.flush({});
+    http.expectOne('/departments').flush({ content: [apiDept] });
+  });
+
+  it('saves a main-name edit in the HTTP language when only a fallback translation exists', () => {
+    const cmp = fixture.componentInstance;
+    cmp.openEdit({
+      ...apiDept,
+      name: 'Cardiology',
+      description: 'Heart care',
+      translationEntries: [apiDept.translationEntries[1]],
+    });
+    cmp.form.name = 'Cardiologie adulte';
+    cmp.submitForm();
+    const put = http.expectOne('/departments/d-1');
+    expect(put.request.body.translations).toEqual([
+      { languageCode: 'fr', name: 'Cardiologie adulte', description: 'Heart care' },
+      { languageCode: 'en', name: 'Cardiology', description: 'Heart care' },
+    ]);
+    put.flush({});
+    http.expectOne('/departments').flush({ content: [apiDept] });
+  });
+
+  it('saves a description edit in the HTTP language without changing the fallback', () => {
+    const cmp = fixture.componentInstance;
+    cmp.openEdit({
+      ...apiDept,
+      name: 'Cardiology',
+      description: 'Heart care',
+      translationEntries: [apiDept.translationEntries[1]],
+    });
+    cmp.form.description = 'Soins adultes';
+    cmp.submitForm();
+    const put = http.expectOne('/departments/d-1');
+    expect(put.request.body.translations).toEqual([
+      { languageCode: 'fr', name: 'Cardiology', description: 'Soins adultes' },
+      { languageCode: 'en', name: 'Cardiology', description: 'Heart care' },
+    ]);
+    put.flush({});
+    http.expectOne('/departments').flush({ content: [apiDept] });
   });
 });

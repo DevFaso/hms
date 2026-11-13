@@ -13,6 +13,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 import { missingRequiredMessage } from '../shared/required-fields';
+import { storedLang } from '../shared/i18n/app-locale';
 
 /** The backend's DepartmentResponseDTO (guarded by scripts/check-department-dto.test.mjs). */
 export interface Department {
@@ -409,7 +410,7 @@ export class DepartmentListComponent implements OnInit {
    */
   private buildTranslations(dept: Department | null): DepartmentTranslation[] | null {
     const stored = dept?.translationEntries ?? [];
-    const own = (this.translate.currentLang ?? '').slice(0, 2).toLowerCase();
+    const own = storedLang();
     const out: DepartmentTranslation[] = [];
     for (const t of stored) {
       const lang = t.languageCode?.toLowerCase();
@@ -422,9 +423,17 @@ export class DepartmentListComponent implements OnInit {
       const typed = (this.langNames[lang] ?? '').trim();
       let name = typed || prev?.name || '';
       let description = prev?.description;
-      if (prev && lang === own) {
-        description = this.form.description || prev.description;
-        if (typed === prev.name && dept && this.form.name !== dept.name) name = this.form.name;
+      if (lang === own) {
+        // Match Accept-Language, including when the API displayed a fallback
+        // translation. Main-field edits must survive the full-list replacement.
+        const mainNameChanged = dept && this.form.name !== dept.name;
+        const descriptionChanged = dept && this.form.description !== (dept.description ?? '');
+        if (!prev) description = this.form.description ?? '';
+        if (mainNameChanged && (!typed || typed === prev?.name)) name = this.form.name;
+        if (descriptionChanged) {
+          description = this.form.description ?? '';
+          if (!name) name = this.form.name;
+        }
       }
       if (name) out.push({ languageCode: lang, name, description });
     }
