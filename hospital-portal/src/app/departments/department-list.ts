@@ -14,19 +14,21 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 import { missingRequiredMessage } from '../shared/required-fields';
 
-interface Department {
+/** The backend's DepartmentResponseDTO (guarded by scripts/check-department-dto.test.mjs). */
+export interface Department {
   id: string;
   name: string;
-  code: string;
+  departmentCode: string;
   description?: string;
-  headOfDepartment?: string;
-  headOfDepartmentEmail?: string;
+  headOfDepartmentName?: string;
   phoneNumber?: string;
   email?: string;
   staffCount?: number;
+  bedCount?: number;
   active: boolean;
   hospitalId?: string;
   hospitalName?: string;
+  translations?: string[];
 }
 
 interface DepartmentRequest {
@@ -184,7 +186,7 @@ export class DepartmentListComponent implements OnInit {
       this.departments().filter(
         (d) =>
           d.name.toLowerCase().includes(term) ||
-          d.code.toLowerCase().includes(term) ||
+          (d.departmentCode ?? '').toLowerCase().includes(term) ||
           (d.description?.toLowerCase().includes(term) ?? false),
       ),
     );
@@ -213,16 +215,16 @@ export class DepartmentListComponent implements OnInit {
     this.form = {
       hospitalId: dept.hospitalId ?? '',
       name: dept.name,
-      code: dept.code,
+      code: dept.departmentCode ?? '',
       description: dept.description ?? '',
       phoneNumber: dept.phoneNumber ?? '',
       email: dept.email ?? '',
       active: dept.active,
-      headOfDepartmentEmail: dept.headOfDepartmentEmail ?? '',
+      headOfDepartmentEmail: '',
     };
     // Pre-load staff for the existing hospital so the dropdown is populated
     if (dept.hospitalId) {
-      this.loadStaffForHospital(dept.hospitalId);
+      this.loadStaffForHospital(dept.hospitalId, dept.headOfDepartmentName);
     }
     this.showModal.set(true);
   }
@@ -236,11 +238,21 @@ export class DepartmentListComponent implements OnInit {
     }
   }
 
-  private loadStaffForHospital(hospitalId: string): void {
+  private loadStaffForHospital(hospitalId: string, headName?: string): void {
     this.staffLoading.set(true);
     this.staffService.list(hospitalId).subscribe({
       next: (staff) => {
-        this.staffForHospital.set(staff.filter((s) => s.active));
+        const active = staff.filter((s) => s.active);
+        this.staffForHospital.set(active);
+        // The API names the head but gives no e-mail: preselect the one active
+        // staff member with that name (none when the name is ambiguous).
+        const wanted = headName?.trim().toLowerCase();
+        if (wanted) {
+          const matches = active.filter((s) => s.name?.trim().toLowerCase() === wanted);
+          if (matches.length === 1) {
+            this.form.headOfDepartmentEmail = matches[0].email;
+          }
+        }
         this.staffLoading.set(false);
       },
       error: () => {
