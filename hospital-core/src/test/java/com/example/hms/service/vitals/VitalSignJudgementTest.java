@@ -231,4 +231,67 @@ class VitalSignJudgementTest {
         assertThat(urgent.getMessage()).isNotBlank().isNotEqualTo("newborn-heart-rate").contains("160");
         assertThat(judgement.alerts(judgement.judge(set(bornDaysAgo(400)).heartRateBpm(80).build()))).isEmpty();
     }
+
+    /* ── Polish 2026-11-13: per-value flags for the after-visit summary ── */
+
+    private static Patient adult() {
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        patient.setDateOfBirth(LocalDate.of(1970, 3, 15));
+        return patient;
+    }
+
+    @Test
+    @DisplayName("polish: 142/88 is judged by no rule, so it carries no flag; 210 and SpO2 86 do")
+    void valueFlagsFollowTheAdultLimits() {
+        Patient p = adult();
+        assertThat(VitalSignJudgement.valueFlags(set(p).systolicBpMmHg(142).diastolicBpMmHg(88).heartRateBpm(72)
+            .weightKg(70.0).heightCm(165.0).build(), p.getDateOfBirth())).isEmpty();
+        assertThat(VitalSignJudgement.valueFlags(set(p).systolicBpMmHg(210).diastolicBpMmHg(88).spo2Percent(86)
+            .temperatureCelsius(34.5).build(), p.getDateOfBirth()))
+            .containsEntry("systolicBpMmHg", "HIGH")
+            .containsEntry("spo2Percent", "LOW")
+            .containsEntry("temperatureCelsius", "LOW")
+            .doesNotContainKey("diastolicBpMmHg");
+    }
+
+    @Test
+    @DisplayName("polish: a newborn's values are flagged by the newborn rules, never by a reference notice alone")
+    void valueFlagsFollowTheNewbornRules() {
+        Patient baby = bornDaysAgo(4);
+        assertThat(VitalSignJudgement.valueFlags(set(baby).heartRateBpm(80).build(), baby.getDateOfBirth()))
+            .containsEntry("heartRateBpm", "ABNORMAL");
+        assertThat(VitalSignJudgement.valueFlags(set(baby).heartRateBpm(115).build(), baby.getDateOfBirth()))
+            .isEmpty();
+    }
+
+    /**
+     * Guard: the per-value flags never disagree with the judgement of the set.
+     * A value is flagged only when the same rules mark the set significant, and
+     * a set marked significant by a per-value rule has a flagged value (a NEWS2
+     * total alone flags the set, not a value).
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "4, 80, 36.8, 40, 97", "4, 140, 35.0, 45, 97", "4, 140, 36.8, 70, 88", "4, 115, 36.8, 45, 97",
+        "20000, 30, 36.8, 16, 97", "20000, 72, 41.0, 16, 97", "20000, 72, 36.8, 35, 97",
+        "20000, 72, 36.8, 16, 85", "20000, 72, 36.8, 16, 97"})
+    @DisplayName("guard: a value is flagged exactly when the rules that judge the set flag it")
+    void valueFlagsAgreeWithTheJudgement(int ageDays, int heartRate, double temperature, int respiratory,
+                                         int spo2) {
+        Patient p = bornDaysAgo(ageDays);
+        PatientVitalSign vital = set(p).heartRateBpm(heartRate).temperatureCelsius(temperature)
+            .respiratoryRateBpm(respiratory).spo2Percent(spo2).build();
+        java.util.Map<String, String> flags = VitalSignJudgement.valueFlags(vital, p.getDateOfBirth());
+        VitalSignJudgement.Judgement j = judgement.judge(vital);
+        if (j.newborn()) {
+            assertThat(!flags.isEmpty()).as("flags %s", flags).isEqualTo(j.newbornSignificant());
+        } else if (!(com.example.hms.utility.NewsScoreCalculator.applies(vital)
+                && com.example.hms.utility.NewsScoreCalculator.score(vital).total() >= 5)) {
+            assertThat(!flags.isEmpty()).as("flags %s", flags).isEqualTo(vital.isClinicallySignificant());
+        }
+        if (!flags.isEmpty()) {
+            assertThat(vital.isClinicallySignificant()).isTrue();
+        }
+    }
 }

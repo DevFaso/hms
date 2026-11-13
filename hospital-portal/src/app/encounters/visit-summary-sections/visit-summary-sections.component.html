@@ -1,289 +1,523 @@
-@if (hasContact()) {
-  <section class="vss-section vss-section--contact" data-testid="avs-contact">
-    <h3>
-      <span class="material-symbols-outlined" aria-hidden="true">call</span>
-      {{ 'VISIT_SUMMARY.CONTACT' | translate }}
-    </h3>
-    <dl class="vss-pairs">
-      @if (summary().hospitalPhone) {
-        <div>
-          <dt>{{ summary().hospitalName || ('ENCOUNTERS.HOSPITAL' | translate) }}</dt>
-          <dd>
-            <a [href]="'tel:' + summary().hospitalPhone">{{ summary().hospitalPhone }}</a>
-          </dd>
-        </div>
-      }
-      @if (summary().departmentPhone) {
-        <div>
-          <dt>{{ summary().departmentName || ('VISIT_SUMMARY.DEPARTMENT' | translate) }}</dt>
-          <dd>
-            <a [href]="'tel:' + summary().departmentPhone">{{ summary().departmentPhone }}</a>
-          </dd>
-        </div>
-      }
-    </dl>
-  </section>
-}
-
-@if (summary().vitalSigns; as v) {
-  <section class="vss-section" data-testid="avs-vitals">
-    <h3>
-      <span class="material-symbols-outlined" aria-hidden="true">vital_signs</span>
-      {{ 'VISIT_SUMMARY.VITALS' | translate }}
-      @if (v.flagged) {
-        <span class="vss-flag" data-testid="avs-vitals-flagged">{{
-          'VISIT_SUMMARY.VITALS_FLAGGED' | translate
-        }}</span>
-      }
-    </h3>
-    @if (v.recordedAt) {
-      <p class="vss-muted">
-        {{ 'VISIT_SUMMARY.RECORDED_AT' | translate }} {{ v.recordedAt | serverTime | dateTime }}
+<div class="vss-doc">
+  @if (hasIdentity()) {
+    <section class="vss-identity" data-testid="avs-identity">
+      <p class="vss-identity-who">
+        <span class="material-symbols-outlined" aria-hidden="true">person</span>
+        <strong id="avs-patient" data-testid="avs-patient-name">{{
+          summary().patientName || ('VISIT_SUMMARY.NOT_PROVIDED' | translate)
+        }}</strong>
+        @if (summary().patientDateOfBirth) {
+          <span data-testid="avs-dob"
+            >{{ 'VISIT_SUMMARY.BORN_ON' | translate }}
+            {{ summary().patientDateOfBirth | date: 'mediumDate' : 'UTC' }}
+            @if (age(); as a) {
+              ({{ a.key | translate: { n: a.n } }})
+            }
+          </span>
+        }
+        @if (summary().patientMrn) {
+          <span data-testid="avs-mrn"
+            >{{ 'VISIT_SUMMARY.MRN' | translate }}{{ 'COMMON.COLON' | translate }}
+            {{ summary().patientMrn }}</span
+          >
+        }
       </p>
-    }
-    <dl class="vss-pairs">
-      @if (present(v.temperatureCelsius)) {
-        <div>
-          <dt>{{ 'VISIT_SUMMARY.TEMPERATURE' | translate }}</dt>
-          <dd>{{ v.temperatureCelsius | measure: '°C' }}</dd>
-        </div>
-      }
-      @if (present(v.systolicBpMmHg) || present(v.diastolicBpMmHg)) {
-        <div>
-          <dt>{{ 'VISIT_SUMMARY.BLOOD_PRESSURE' | translate }}</dt>
-          <dd>{{ v.systolicBpMmHg ?? '—' }}/{{ v.diastolicBpMmHg ?? '—' }} mmHg</dd>
-        </div>
-      }
-      @if (present(v.heartRateBpm)) {
-        <div>
-          <dt>{{ 'VISIT_SUMMARY.HEART_RATE' | translate }}</dt>
-          <dd>{{ v.heartRateBpm | measure: '/min' }}</dd>
-        </div>
-      }
-      @if (present(v.respiratoryRateBpm)) {
-        <div>
-          <dt>{{ 'VISIT_SUMMARY.RESPIRATORY_RATE' | translate }}</dt>
-          <dd>{{ v.respiratoryRateBpm | measure: '/min' }}</dd>
-        </div>
-      }
-      @if (present(v.spo2Percent)) {
-        <div>
-          <dt>{{ 'VISIT_SUMMARY.SPO2' | translate }}</dt>
-          <dd>{{ v.spo2Percent | measure: '%' }}</dd>
-        </div>
-      }
-      @if (present(v.bloodGlucoseMgDl)) {
-        <div>
-          <dt>{{ 'VISIT_SUMMARY.GLUCOSE' | translate }}</dt>
-          <dd>{{ v.bloodGlucoseMgDl | measure: 'mg/dL' }}</dd>
-        </div>
-      }
-      @if (present(v.weightKg)) {
-        <div>
-          <dt>{{ 'VISIT_SUMMARY.WEIGHT' | translate }}</dt>
-          <dd>{{ v.weightKg | measure: 'kg' }}</dd>
-        </div>
-      }
-      @if (present(v.heightCm)) {
-        <div>
-          <dt>{{ 'VISIT_SUMMARY.HEIGHT' | translate }}</dt>
-          <dd>{{ v.heightCm | measure: 'cm' }}</dd>
-        </div>
-      }
-      @if (present(v.painScore)) {
-        <div>
-          <dt>{{ 'VISIT_SUMMARY.PAIN' | translate }}</dt>
-          <dd>{{ v.painScore }}/10</dd>
-        </div>
-      }
-    </dl>
-  </section>
-}
-
-@if (labTests().length || imagingTests().length) {
-  <section class="vss-section vss-section--wide" data-testid="avs-tests">
-    <h3>
-      <span class="material-symbols-outlined" aria-hidden="true">biotech</span>
-      {{ 'VISIT_SUMMARY.TESTS' | translate }}
-    </h3>
-    <ul class="vss-list">
-      @for (test of labTests(); track $index) {
-        <li data-testid="avs-test">
-          <span class="vss-item-title">{{
-            test.name || ('VISIT_SUMMARY.NOT_PROVIDED' | translate)
-          }}</span>
-          <!-- QA D1743: a resulted order with nothing released reads "awaiting validation". -->
-          <span class="vss-status" data-testid="avs-test-status">{{
-            test.status === 'AWAITING_RELEASE'
-              ? ('VISIT_SUMMARY.LAB_AWAITING_RELEASE' | translate)
-              : (test.status | enumLabel: 'labOrderStatus')
-          }}</span>
-          @for (r of test.results ?? []; track $index) {
-            <span class="vss-result">
-              {{ r.value | labValue: r.unit }}
-              @if (r.referenceRange) {
-                <span class="vss-muted"
-                  >({{ 'VISIT_SUMMARY.REFERENCE' | translate }}
-                  {{ r.referenceRange | labRange }})</span
-                >
-              }
-              @if (flagKey(r); as key) {
-                <span class="vss-flag">{{ key | translate }}</span>
-              }
-              <app-lab-correction-badge [corrected]="r.corrected" audience="patient" />
-            </span>
-          }
-        </li>
-      }
-      @for (test of imagingTests(); track $index) {
-        <li data-testid="avs-test">
-          <span class="vss-item-title">{{
-            test.name || ('VISIT_SUMMARY.NOT_PROVIDED' | translate)
-          }}</span>
-          <span class="vss-status">{{ test.status | enumLabel: 'imagingOrderStatus' }}</span>
-          @if (test.impression) {
-            <span class="vss-result vss-pre">{{ test.impression }}</span>
-          }
-        </li>
-      }
-    </ul>
-    <p class="vss-muted">{{ 'VISIT_SUMMARY.TESTS_RELEASE_NOTE' | translate }}</p>
-  </section>
-}
-
-@if (summary().allergies?.length) {
-  <section class="vss-section" data-testid="avs-allergies">
-    <h3>
-      <span class="material-symbols-outlined" aria-hidden="true">warning</span>
-      {{ 'VISIT_SUMMARY.ALLERGIES' | translate }}
-    </h3>
-    <ul class="vss-list">
-      @for (a of summary().allergies ?? []; track $index) {
-        <li>
-          <span class="vss-item-title">{{ a.allergen }}</span>
-          @if (severityKey(a.severity); as key) {
-            <span class="vss-flag">{{ key | translate }}</span>
-          }
-          @if (a.reaction) {
-            <span class="vss-muted">{{ a.reaction }}</span>
-          }
-        </li>
-      }
-    </ul>
-  </section>
-}
-
-@if (summary().currentMedications?.length) {
-  <section class="vss-section" data-testid="avs-medications">
-    <h3>
-      <span class="material-symbols-outlined" aria-hidden="true">medication</span>
-      {{ 'VISIT_SUMMARY.CURRENT_MEDICATIONS' | translate }}
-    </h3>
-    <ul class="vss-list">
-      @for (m of summary().currentMedications ?? []; track $index) {
-        <li>
-          <span class="vss-item-title">{{ m.name }}</span>
-          @if (m.dosage) {
-            <span class="vss-muted">{{ m.dosage }}</span>
-          }
-          @if (m.frequency) {
-            <span class="vss-muted">{{ m.frequency }}</span>
-          }
-        </li>
-      }
-    </ul>
-  </section>
-}
-
-@if (summary().clinicalAssessment) {
-  <section class="vss-section vss-section--wide" data-testid="avs-assessment">
-    <h3>
-      <span class="material-symbols-outlined" aria-hidden="true">clinical_notes</span>
-      {{ 'VISIT_SUMMARY.ASSESSMENT' | translate }}
-    </h3>
-    <p class="vss-muted">{{ 'VISIT_SUMMARY.AS_ENTERED' | translate }}</p>
-    <p class="vss-pre">{{ summary().clinicalAssessment }}</p>
-  </section>
-}
-
-@if (summary().clinicalPlan) {
-  <section class="vss-section vss-section--wide" data-testid="avs-plan">
-    <h3>
-      <span class="material-symbols-outlined" aria-hidden="true">checklist</span>
-      {{ 'VISIT_SUMMARY.PLAN' | translate }}
-    </h3>
-    <p class="vss-muted">{{ 'VISIT_SUMMARY.AS_ENTERED' | translate }}</p>
-    <p class="vss-pre">{{ summary().clinicalPlan }}</p>
-  </section>
-}
-
-@if (hasHistory()) {
-  <section class="vss-section vss-section--wide" data-testid="avs-history">
-    <h3>
-      <span class="material-symbols-outlined" aria-hidden="true">history</span>
-      {{ 'VISIT_SUMMARY.HISTORY' | translate }}
-    </h3>
-    @if (summary().medicalHistory?.length) {
-      <h4>{{ 'VISIT_SUMMARY.MEDICAL_HISTORY' | translate }}</h4>
-      <ul class="vss-list" data-testid="avs-history-medical">
-        @for (h of summary().medicalHistory ?? []; track $index) {
-          <li>
-            <span class="vss-item-title">{{ h.condition }}</span>
-            @if (problemStatusKey(h.status); as key) {
-              <span class="vss-muted">{{ key | translate }}</span>
-            }
-          </li>
-        }
-      </ul>
-    }
-    @if (summary().surgicalHistory?.length) {
-      <h4>{{ 'VISIT_SUMMARY.SURGICAL_HISTORY' | translate }}</h4>
-      <ul class="vss-list" data-testid="avs-history-surgical">
-        @for (h of summary().surgicalHistory ?? []; track $index) {
-          <li>
-            <span class="vss-item-title">{{ h.procedure }}</span>
-            @if (h.date) {
-              <span class="vss-muted">{{ h.date | serverTime | date: 'mediumDate' }}</span>
-            }
-          </li>
-        }
-      </ul>
-    }
-    @if (summary().familyHistory?.length) {
-      <h4>{{ 'VISIT_SUMMARY.FAMILY_HISTORY' | translate }}</h4>
-      <ul class="vss-list" data-testid="avs-history-family">
-        @for (h of summary().familyHistory ?? []; track $index) {
-          <li>
-            <span class="vss-item-title">{{ h.condition }}</span>
-            @if (h.relationship) {
-              <span class="vss-muted">{{ h.relationship }}</span>
-            }
-          </li>
-        }
-      </ul>
-    }
-    @if (summary().socialHistory; as social) {
-      <h4>{{ 'VISIT_SUMMARY.SOCIAL_HISTORY' | translate }}</h4>
-      <dl class="vss-pairs" data-testid="avs-history-social">
-        @if (yesNoKey(social.tobaccoUse); as key) {
+      <dl class="vss-identity-visit">
+        @if (summary().visitDate) {
           <div>
-            <dt>{{ 'VISIT_SUMMARY.TOBACCO' | translate }}</dt>
-            <dd>{{ key | translate }}</dd>
+            <dt>{{ 'ENCOUNTERS.DATE' | translate }}</dt>
+            <dd>{{ summary().visitDate | serverTime | dateTime }}</dd>
           </div>
         }
-        @if (yesNoKey(social.alcoholUse); as key) {
+        @if (summary().providerName) {
           <div>
-            <dt>{{ 'VISIT_SUMMARY.ALCOHOL' | translate }}</dt>
-            <dd>{{ key | translate }}</dd>
+            <dt>{{ 'VISIT_SUMMARY.PROVIDER' | translate }}</dt>
+            <dd>{{ summary().providerName }}</dd>
           </div>
         }
-        @if (social.occupation) {
+        @if (summary().departmentName) {
           <div>
-            <dt>{{ 'VISIT_SUMMARY.OCCUPATION' | translate }}</dt>
-            <dd>{{ social.occupation }}</dd>
+            <dt>{{ 'VISIT_SUMMARY.DEPARTMENT' | translate }}</dt>
+            <dd>{{ summary().departmentName }}</dd>
+          </div>
+        }
+        @if (summary().hospitalName) {
+          <div>
+            <dt>{{ 'ENCOUNTERS.HOSPITAL' | translate }}</dt>
+            <dd>{{ summary().hospitalName }}</dd>
           </div>
         }
       </dl>
-    }
-  </section>
-}
+      @if (signed()) {
+        <p class="vss-signature" data-testid="avs-signature">
+          <span class="material-symbols-outlined" aria-hidden="true">verified</span>
+          @if (summary().signedByName) {
+            {{
+              'VISIT_SUMMARY.SIGNED_BY'
+                | translate
+                  : {
+                      name: summary().signedByName,
+                      date: summary().signedAt | serverTime | dateTime,
+                    }
+            }}
+          } @else {
+            {{
+              'VISIT_SUMMARY.SIGNED_ON'
+                | translate: { date: summary().signedAt | serverTime | dateTime }
+            }}
+          }
+        </p>
+      }
+    </section>
+  }
+
+  @if (summary().chiefComplaint) {
+    <section class="vss-section vss-section--complaint" data-testid="avs-complaint">
+      <h3>
+        <span class="material-symbols-outlined" aria-hidden="true">clinical_notes</span>
+        {{ 'ENCOUNTERS.CHIEF_COMPLAINT' | translate }}
+      </h3>
+      <p class="vss-pre">{{ summary().chiefComplaint }}</p>
+    </section>
+  }
+
+  @if (summary().vitalSigns; as v) {
+    <section class="vss-section" data-testid="avs-vitals">
+      <h3>
+        <span class="material-symbols-outlined" aria-hidden="true">vital_signs</span>
+        {{ 'VISIT_SUMMARY.VITALS' | translate }}
+        @if (v.flagged) {
+          <span class="vss-flag" data-testid="avs-vitals-flagged">{{
+            'VISIT_SUMMARY.VITALS_FLAGGED' | translate
+          }}</span>
+        }
+      </h3>
+      @if (v.recordedAt) {
+        <p class="vss-muted">
+          {{ 'VISIT_SUMMARY.RECORDED_AT' | translate }} {{ v.recordedAt | serverTime | dateTime }}
+        </p>
+      }
+      <dl class="vss-pairs">
+        @if (present(v.systolicBpMmHg) || present(v.diastolicBpMmHg)) {
+          <div data-testid="avs-vital-bp">
+            <dt>{{ 'VISIT_SUMMARY.BLOOD_PRESSURE' | translate }}</dt>
+            <dd>
+              {{ v.systolicBpMmHg ?? '—' }}/{{ v.diastolicBpMmHg ?? '—' }} mmHg
+              @if (pressureFlagKey(); as key) {
+                <span class="vss-flag" data-testid="avs-vital-flag">{{ key | translate }}</span>
+              }
+            </dd>
+          </div>
+        }
+        @if (present(v.heartRateBpm)) {
+          <div data-testid="avs-vital-hr">
+            <dt>{{ 'VISIT_SUMMARY.HEART_RATE' | translate }}</dt>
+            <dd>
+              {{ v.heartRateBpm | measure: '/min' }}
+              @if (vitalFlagKey('heartRateBpm'); as key) {
+                <span class="vss-flag" data-testid="avs-vital-flag">{{ key | translate }}</span>
+              }
+            </dd>
+          </div>
+        }
+        @if (present(v.temperatureCelsius)) {
+          <div data-testid="avs-vital-temperature">
+            <dt>{{ 'VISIT_SUMMARY.TEMPERATURE' | translate }}</dt>
+            <dd>
+              {{ v.temperatureCelsius | measure: '°C' }}
+              @if (vitalFlagKey('temperatureCelsius'); as key) {
+                <span class="vss-flag" data-testid="avs-vital-flag">{{ key | translate }}</span>
+              }
+            </dd>
+          </div>
+        }
+        @if (present(v.respiratoryRateBpm)) {
+          <div data-testid="avs-vital-rr">
+            <dt>{{ 'VISIT_SUMMARY.RESPIRATORY_RATE' | translate }}</dt>
+            <dd>
+              {{ v.respiratoryRateBpm | measure: '/min' }}
+              @if (vitalFlagKey('respiratoryRateBpm'); as key) {
+                <span class="vss-flag" data-testid="avs-vital-flag">{{ key | translate }}</span>
+              }
+            </dd>
+          </div>
+        }
+        @if (present(v.spo2Percent)) {
+          <div data-testid="avs-vital-spo2">
+            <dt>{{ 'VISIT_SUMMARY.SPO2' | translate }}</dt>
+            <dd>
+              {{ v.spo2Percent | measure: '%' }}
+              @if (vitalFlagKey('spo2Percent'); as key) {
+                <span class="vss-flag" data-testid="avs-vital-flag">{{ key | translate }}</span>
+              }
+            </dd>
+          </div>
+        }
+        @if (present(v.bloodGlucoseMgDl)) {
+          <div data-testid="avs-vital-glucose">
+            <dt>{{ 'VISIT_SUMMARY.GLUCOSE' | translate }}</dt>
+            <dd>
+              {{ v.bloodGlucoseMgDl | measure: 'mg/dL' }}
+              @if (vitalFlagKey('bloodGlucoseMgDl'); as key) {
+                <span class="vss-flag" data-testid="avs-vital-flag">{{ key | translate }}</span>
+              }
+            </dd>
+          </div>
+        }
+        @if (present(v.weightKg)) {
+          <div>
+            <dt>{{ 'VISIT_SUMMARY.WEIGHT' | translate }}</dt>
+            <dd>{{ v.weightKg | measure: 'kg' }}</dd>
+          </div>
+        }
+        @if (present(v.heightCm)) {
+          <div data-testid="avs-vital-height">
+            <dt>{{ 'VISIT_SUMMARY.HEIGHT' | translate }}</dt>
+            <dd>{{ v.heightCm | measure: 'cm' }}</dd>
+          </div>
+        }
+        @if (present(v.bmi)) {
+          <div data-testid="avs-vital-bmi">
+            <dt>{{ 'VISIT_SUMMARY.BMI' | translate }}</dt>
+            <dd>{{ v.bmi | measure: 'kg/m²' }}</dd>
+          </div>
+        }
+        @if (present(v.painScore)) {
+          <div>
+            <dt>{{ 'VISIT_SUMMARY.PAIN' | translate }}</dt>
+            <dd>{{ v.painScore }}/10</dd>
+          </div>
+        }
+      </dl>
+    </section>
+  }
+
+  @if (summary().clinicalAssessment) {
+    <section class="vss-section" data-testid="avs-assessment">
+      <h3>
+        <span class="material-symbols-outlined" aria-hidden="true">clinical_notes</span>
+        {{ 'VISIT_SUMMARY.ASSESSMENT' | translate }}
+      </h3>
+      <p class="vss-pre">{{ summary().clinicalAssessment }}</p>
+      @if (asEnteredOn() === 'assessment') {
+        <p class="vss-muted vss-caption" data-testid="avs-as-entered">
+          {{ 'VISIT_SUMMARY.AS_ENTERED' | translate }}
+        </p>
+      }
+    </section>
+  }
+
+  @if (summary().dischargeDiagnoses?.length) {
+    <section class="vss-section" data-testid="avs-diagnoses">
+      <h3>
+        <span class="material-symbols-outlined" aria-hidden="true">diagnosis</span>
+        {{
+          (summary().inpatientStay ? 'ENCOUNTERS.AVS_DIAGNOSES' : 'VISIT_SUMMARY.DIAGNOSES')
+            | translate
+        }}
+      </h3>
+      <ul class="vss-bullets">
+        @for (diagnosis of summary().dischargeDiagnoses ?? []; track $index) {
+          <li>{{ diagnosis }}</li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (hasAdvice()) {
+    <section class="vss-section vss-section--advice" data-testid="avs-advice">
+      <h3>
+        <span class="material-symbols-outlined" aria-hidden="true">checklist</span>
+        {{ 'VISIT_SUMMARY.PLAN' | translate }}
+      </h3>
+      @if (summary().clinicalPlan) {
+        <div data-testid="avs-plan">
+          <p class="vss-pre">{{ summary().clinicalPlan }}</p>
+          @if (asEnteredOn() === 'plan') {
+            <p class="vss-muted vss-caption" data-testid="avs-as-entered">
+              {{ 'VISIT_SUMMARY.AS_ENTERED' | translate }}
+            </p>
+          }
+        </div>
+      }
+      @if (summary().followUpInstructions) {
+        <div data-testid="avs-follow-up">
+          <h4>{{ 'ENCOUNTERS.AVS_FOLLOW_UP' | translate }}</h4>
+          <p class="vss-pre">{{ summary().followUpInstructions }}</p>
+        </div>
+      }
+      @if (summary().patientEducationMaterials) {
+        <div data-testid="avs-education">
+          <h4>{{ 'ENCOUNTERS.AVS_EDUCATION' | translate }}</h4>
+          <p class="vss-pre">{{ summary().patientEducationMaterials }}</p>
+        </div>
+      }
+      @if (summary().referralSummary) {
+        <div data-testid="avs-referrals">
+          <h4>{{ 'ENCOUNTERS.AVS_REFERRALS' | translate }}</h4>
+          <p class="vss-pre">{{ summary().referralSummary }}</p>
+        </div>
+      }
+    </section>
+  }
+
+  @if (summary().prescriptionSummary || summary().currentMedications?.length) {
+    <section class="vss-section" data-testid="avs-medications">
+      <h3>
+        <span class="material-symbols-outlined" aria-hidden="true">medication</span>
+        {{ 'VISIT_SUMMARY.CURRENT_MEDICATIONS' | translate }}
+      </h3>
+      @if (summary().prescriptionSummary) {
+        <div data-testid="avs-prescriptions">
+          <h4>{{ 'ENCOUNTERS.AVS_PRESCRIPTIONS' | translate }}</h4>
+          <p class="vss-pre">{{ summary().prescriptionSummary }}</p>
+        </div>
+      }
+      @if (medicationGroups().length) {
+        <ul class="vss-list">
+          @for (group of medicationGroups(); track $index) {
+            <li class="vss-med" data-testid="avs-med-group">
+              <span class="vss-item-title">{{ group.names.join(' / ') }}</span>
+              @if (group.lines.length > 1) {
+                <p class="vss-warning" role="note" data-testid="avs-med-duplicate">
+                  <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+                  {{ duplicateWarningKey() | translate }}
+                </p>
+              }
+              <ul class="vss-med-lines">
+                @for (m of group.lines; track $index) {
+                  <li data-testid="avs-med-line">
+                    @if (group.names.length > 1) {
+                      <span>{{ m.name }}</span>
+                    }
+                    @if (doseOf(m); as dose) {
+                      <span>{{ dose }}</span>
+                    }
+                    @if (m.frequency) {
+                      <span>{{ m.frequency }}</span>
+                    }
+                    @if (m.startDate) {
+                      <span class="vss-muted">{{
+                        'VISIT_SUMMARY.SINCE'
+                          | translate: { date: m.startDate | date: 'mediumDate' : 'UTC' }
+                      }}</span>
+                    }
+                    @if (m.prescriberName) {
+                      <span class="vss-muted">{{
+                        'VISIT_SUMMARY.PRESCRIBED_BY' | translate: { name: m.prescriberName }
+                      }}</span>
+                    }
+                  </li>
+                }
+              </ul>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  }
+
+  @if (labTests().length || imagingTests().length) {
+    <section class="vss-section" data-testid="avs-tests">
+      <h3>
+        <span class="material-symbols-outlined" aria-hidden="true">biotech</span>
+        {{ 'VISIT_SUMMARY.TESTS' | translate }}
+      </h3>
+      <ul class="vss-list">
+        @for (test of labTests(); track $index) {
+          <li data-testid="avs-test">
+            <span class="vss-item-title">{{
+              test.name || ('VISIT_SUMMARY.NOT_PROVIDED' | translate)
+            }}</span>
+            <!-- QA D1743: a resulted order with nothing released reads "awaiting validation". -->
+            <span class="vss-status" data-testid="avs-test-status">{{
+              test.status === 'AWAITING_RELEASE'
+                ? ('VISIT_SUMMARY.LAB_AWAITING_RELEASE' | translate)
+                : (test.status | enumLabel: 'labOrderStatus')
+            }}</span>
+            @for (r of test.results ?? []; track $index) {
+              <span class="vss-result">
+                {{ r.value | labValue: r.unit }}
+                @if (r.referenceRange) {
+                  <span class="vss-muted"
+                    >({{ 'VISIT_SUMMARY.REFERENCE' | translate }}
+                    {{ r.referenceRange | labRange }})</span
+                  >
+                }
+                @if (flagKey(r); as key) {
+                  <span class="vss-flag">{{ key | translate }}</span>
+                }
+                <app-lab-correction-badge [corrected]="r.corrected" audience="patient" />
+              </span>
+            }
+          </li>
+        }
+        @for (test of imagingTests(); track $index) {
+          <li data-testid="avs-test">
+            <span class="vss-item-title">{{
+              test.name || ('VISIT_SUMMARY.NOT_PROVIDED' | translate)
+            }}</span>
+            <span class="vss-status">{{ test.status | enumLabel: 'imagingOrderStatus' }}</span>
+            @if (test.impression) {
+              <span class="vss-result vss-pre">{{ test.impression }}</span>
+            }
+          </li>
+        }
+      </ul>
+      <p class="vss-muted">{{ 'VISIT_SUMMARY.TESTS_RELEASE_NOTE' | translate }}</p>
+    </section>
+  }
+
+  @if (summary().allergies?.length) {
+    <section class="vss-section" data-testid="avs-allergies">
+      <h3>
+        <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+        {{ 'VISIT_SUMMARY.ALLERGIES' | translate }}
+      </h3>
+      <ul class="vss-list">
+        @for (a of summary().allergies ?? []; track $index) {
+          <li data-testid="avs-allergy">
+            <span class="vss-item-title">{{ a.allergen }}</span>
+            @if (severityKey(a.severity); as key) {
+              <span class="vss-flag">{{ key | translate }}</span>
+            }
+            @if (a.reaction) {
+              <span class="vss-muted">{{ a.reaction }}</span>
+            } @else {
+              <span class="vss-muted" data-testid="avs-allergy-unspecified">{{
+                'VISIT_SUMMARY.REACTION_UNSPECIFIED' | translate
+              }}</span>
+            }
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (hasHistory()) {
+    <section class="vss-section" data-testid="avs-history">
+      <h3>
+        <span class="material-symbols-outlined" aria-hidden="true">history</span>
+        {{ 'VISIT_SUMMARY.HISTORY' | translate }}
+      </h3>
+      @if (summary().medicalHistory?.length) {
+        <h4>{{ 'VISIT_SUMMARY.MEDICAL_HISTORY' | translate }}</h4>
+        <ul class="vss-list" data-testid="avs-history-medical">
+          @for (h of summary().medicalHistory ?? []; track $index) {
+            <li>
+              <span class="vss-item-title">{{ h.condition }}</span>
+              @if (problemStatusKey(h.status); as key) {
+                <span class="vss-muted">{{ key | translate }}</span>
+              }
+            </li>
+          }
+        </ul>
+      }
+      @if (summary().surgicalHistory?.length) {
+        <h4>{{ 'VISIT_SUMMARY.SURGICAL_HISTORY' | translate }}</h4>
+        <ul class="vss-list" data-testid="avs-history-surgical">
+          @for (h of summary().surgicalHistory ?? []; track $index) {
+            <li>
+              <span class="vss-item-title">{{ h.procedure }}</span>
+              @if (h.date) {
+                <span class="vss-muted">{{ h.date | serverTime | date: 'mediumDate' }}</span>
+              }
+            </li>
+          }
+        </ul>
+      }
+      @if (summary().familyHistory?.length) {
+        <h4>{{ 'VISIT_SUMMARY.FAMILY_HISTORY' | translate }}</h4>
+        <ul class="vss-list" data-testid="avs-history-family">
+          @for (h of summary().familyHistory ?? []; track $index) {
+            <li>
+              <span class="vss-item-title">{{ h.condition }}</span>
+              @if (h.relationship) {
+                <span class="vss-muted">{{ h.relationship }}</span>
+              }
+            </li>
+          }
+        </ul>
+      }
+      @if (summary().socialHistory; as social) {
+        <h4>{{ 'VISIT_SUMMARY.SOCIAL_HISTORY' | translate }}</h4>
+        <dl class="vss-pairs" data-testid="avs-history-social">
+          @if (yesNoKey(social.tobaccoUse); as key) {
+            <div>
+              <dt>{{ 'VISIT_SUMMARY.TOBACCO' | translate }}</dt>
+              <dd>{{ key | translate }}</dd>
+            </div>
+          }
+          @if (yesNoKey(social.alcoholUse); as key) {
+            <div>
+              <dt>{{ 'VISIT_SUMMARY.ALCOHOL' | translate }}</dt>
+              <dd>{{ key | translate }}</dd>
+            </div>
+          }
+          @if (social.occupation) {
+            <div>
+              <dt>{{ 'VISIT_SUMMARY.OCCUPATION' | translate }}</dt>
+              <dd>{{ social.occupation }}</dd>
+            </div>
+          }
+        </dl>
+      }
+    </section>
+  }
+
+  @if (summary().followUpAppointmentDate) {
+    <section class="vss-section" data-testid="avs-appointment">
+      <h3>
+        <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+        {{ 'ENCOUNTERS.AVS_FOLLOW_UP_APPT' | translate }}
+      </h3>
+      <dl class="vss-pairs">
+        <div>
+          <dt>{{ 'ENCOUNTERS.DATE' | translate }}</dt>
+          <dd data-testid="avs-appointment-date">
+            {{ summary().followUpAppointmentDate | serverTime | date: 'mediumDate' }}
+          </dd>
+        </div>
+        @if (summary().followUpAppointmentTime) {
+          <div>
+            <dt>{{ 'VISIT_SUMMARY.TIME' | translate }}</dt>
+            <dd data-testid="avs-appointment-time">{{ summary().followUpAppointmentTime }}</dd>
+          </div>
+        }
+        @if (summary().followUpDepartmentName) {
+          <div>
+            <dt>{{ 'VISIT_SUMMARY.DEPARTMENT' | translate }}</dt>
+            <dd data-testid="avs-appointment-service">{{ summary().followUpDepartmentName }}</dd>
+          </div>
+        }
+        @if (summary().followUpClinicianName) {
+          <div>
+            <dt>{{ 'VISIT_SUMMARY.PROVIDER' | translate }}</dt>
+            <dd data-testid="avs-appointment-clinician">{{ summary().followUpClinicianName }}</dd>
+          </div>
+        }
+      </dl>
+    </section>
+  }
+
+  @if (hasContact()) {
+    <section class="vss-contact" data-testid="avs-contact">
+      <h3>
+        <span class="material-symbols-outlined" aria-hidden="true">call</span>
+        {{ 'VISIT_SUMMARY.CONTACT' | translate }}
+      </h3>
+      @if (summary().hospitalPhone) {
+        <span class="vss-contact-item">
+          {{ summary().hospitalName || ('ENCOUNTERS.HOSPITAL' | translate) }}
+          <a [href]="'tel:' + summary().hospitalPhone">{{ summary().hospitalPhone }}</a>
+        </span>
+      }
+      @if (summary().departmentPhone) {
+        <span class="vss-contact-item">
+          {{ summary().departmentName || ('VISIT_SUMMARY.DEPARTMENT' | translate) }}
+          <a [href]="'tel:' + summary().departmentPhone">{{ summary().departmentPhone }}</a>
+        </span>
+      }
+    </section>
+  }
+</div>
