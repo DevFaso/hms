@@ -142,6 +142,7 @@ class NewbornRegistrationPostgresIT {
             .liveBirth(liveBirth)
             .numberOfInfants(infants)
             .infantSex(InfantSex.FEMALE)
+            .newbornRegistrationPending(liveBirth)
             .build());
     }
 
@@ -157,6 +158,8 @@ class NewbornRegistrationPostgresIT {
         assertThat(again).extracting(DeliveryNewbornDTO::getPatientId)
             .containsExactlyElementsOf(babies.stream().map(DeliveryNewbornDTO::getPatientId).toList());
         assertThat(babies).allSatisfy(baby -> assertThat(baby.getMrn()).isNotBlank());
+        assertThat(deliveryRecordRepository.findById(delivery.getId()).orElseThrow().isNewbornRegistrationPending())
+            .as("the pending flag is cleared once the babies are registered").isFalse();
         tx.executeWithoutResult(s -> {
             List<DeliveryNewborn> links = deliveryNewbornRepository.findByDeliveryRecord_IdOrderByBirthOrderAsc(delivery.getId());
             assertThat(links).hasSize(2);

@@ -111,6 +111,15 @@ public class DeliveryRecord extends BaseEntity {
     @Builder.Default
     private boolean liveBirth = true;
 
+    /**
+     * QA D1592: true while the live-born babies of this delivery are not
+     * registered as patients (the registration runs after the delivery
+     * commits; a failure leaves it set for reception). V289.
+     */
+    @Column(name = "newborn_registration_pending", nullable = false)
+    @Builder.Default
+    private boolean newbornRegistrationPending = false;
+
     @Column(name = "number_of_infants", nullable = false)
     @Builder.Default
     private int numberOfInfants = 1;

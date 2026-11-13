@@ -252,6 +252,11 @@
             {{ record.notes }}
           </p>
         }
+        @if (record.newbornRegistrationPending) {
+          <p class="risk-badge risk-moderate" data-testid="delivery-newborn-pending">
+            {{ 'LABOR.NEWBORN_REGISTRATION_PENDING' | translate }}
+          </p>
+        }
         <!-- QA D1592: each live-born baby is its own patient, linked to its chart. -->
         @if (record.newborns?.length) {
           <div data-testid="delivery-newborns">

@@ -41,4 +41,7 @@ public class DeliveryRecordResponseDTO {
 
     /** QA D1592: the babies this delivery registered as patients (empty for a stillbirth). */
     private List<DeliveryNewbornDTO> newborns;
+
+    /** QA D1592: the babies are not registered yet (registration failed or still to run): reception registers them. */
+    private boolean newbornRegistrationPending;
 }

@@ -605,6 +605,8 @@ public class LaborServiceImpl implements LaborService {
             .estimatedBloodLossMl(request.getEstimatedBloodLossMl())
             .perinealTear(request.getPerinealTear())
             .notes(notes)
+            // QA D1592: set until the babies are registered (after commit).
+            .newbornRegistrationPending(request.getLiveBirth() == null || request.getLiveBirth())
             .build();
 
         evaluateDelivery(record);
@@ -614,16 +616,48 @@ public class LaborServiceImpl implements LaborService {
         episodeRepository.save(episode);
 
         DeliveryRecord saved = deliveryRecordRepository.save(record);
-        // QA D1592: in the delivery's transaction - a birth and its babies are one fact.
-        List<com.example.hms.payload.dto.clinical.labor.DeliveryNewbornDTO> newborns =
-            newbornRegistration.registerLiveBorn(saved, recorderUserId);
         chargeDelivery(saved, recorderUserId);
         closeEarlierPostpartumPlans(episode, birthAt);
         publishUrgentAlerts(saved.getAlerts(), episode, documentedBy,
             com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_DELIVERY, saved.getId());
         DeliveryRecordResponseDTO response = laborMapper.toDeliveryResponse(saved);
-        response.setNewborns(newborns);
+        response.setNewborns(new java.util.ArrayList<>());
+        registerNewbornsAfterCommit(saved, recorderUserId, response);
         return response;
+    }
+
+    /**
+     * QA D1592: the live-born babies are registered as patients once the
+     * delivery has committed, in their own transaction. A midwife can always
+     * record a birth: a registration that fails never undoes it. The delivery
+     * keeps {@code newbornRegistrationPending} for reception, and the failure
+     * is logged (ids only) and audited.
+     */
+    private void registerNewbornsAfterCommit(DeliveryRecord saved, UUID recorderUserId,
+                                             DeliveryRecordResponseDTO response) {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        registerNewborns(saved, recorderUserId, response);
+                    }
+                });
+        } else {
+            registerNewborns(saved, recorderUserId, response);
+        }
+    }
+
+    private void registerNewborns(DeliveryRecord saved, UUID recorderUserId, DeliveryRecordResponseDTO response) {
+        try {
+            response.setNewborns(newbornRegistration.registerLiveBorn(saved, recorderUserId));
+            response.setNewbornRegistrationPending(false);
+        } catch (RuntimeException ex) {
+            log.warn("Newborns of delivery {} not registered, left pending for reception: {}",
+                saved.getId(), ex.getClass().getSimpleName());
+            newbornRegistration.recordRegistrationFailure(saved, recorderUserId, ex);
+            response.setNewbornRegistrationPending(saved.isLiveBirth());
+        }
     }
 
     /**

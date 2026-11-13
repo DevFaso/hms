@@ -41,7 +41,10 @@ class NewbornRegistrationGuardTest {
     private static final Pattern METHOD = Pattern.compile(
         "\\n    (?:private|public|protected|static)[^;{=(]*+\\(((?:[^;{()\"]|\"[^\";{]*+\"|\\((?:[^;{()\"]|\"[^\";{]*+\")*+\\))*+)\\)\\s*+(?:throws [\\w., ]++)?+\\{");
     private static final Pattern REPO_FIELD = Pattern.compile("DeliveryRecordRepository\\s++(\\w++)\\s*+[;=,)]");
-    private static final Pattern REGISTER = Pattern.compile("\\bnewbornRegistration\\.registerLiveBorn\\(");
+    /** The direct call, or the after-commit helper that makes it in its own transaction. */
+    private static final Pattern REGISTER =
+        Pattern.compile("\\bnewbornRegistration\\.registerLiveBorn\\(|\\bregisterNewbornsAfterCommit\\(");
+    private static final Path LABOR = MAIN.resolve("service/impl/LaborServiceImpl.java");
 
     /** Call -> the only class allowed to make it. */
     private static final Map<Pattern, String> ONLY_CALLER = Map.of(
@@ -81,6 +84,18 @@ class NewbornRegistrationGuardTest {
         assertThat(strayCallers)
             .as("the newborn registration bypass is called from outside its one owner" + SourceScan.MANDATE)
             .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a failed registration never undoes the birth: it runs after commit, isolated, and leaves the flag")
+    void theRegistrationIsIsolatedFromTheDelivery() throws IOException {
+        String labor = SourceScan.stripComments(Files.readString(LABOR, StandardCharsets.UTF_8));
+        assertThat(labor).contains("public void afterCommit()")
+            .containsPattern("try \\{\\s*+response\\.setNewborns\\(newbornRegistration\\.registerLiveBorn\\(")
+            .contains("newbornRegistration.recordRegistrationFailure(");
+        String service = SourceScan.stripComments(Files.readString(
+            MAIN.resolve("service/maternity/NewbornRegistrationService.java"), StandardCharsets.UTF_8));
+        assertThat(service).contains("Propagation.REQUIRES_NEW");
     }
 
     @Test

@@ -80,7 +80,7 @@ class HospitalRepositoryCallerCoverageTest {
         entry("AuthBootstrapServiceImpl.resolveCurrentSession#findById", LABEL + " (the caller's own primary facility)"),
         entry("MorbidityAnalyticsServiceImpl.hospitalView#findById", LABEL),
         entry("PatientPortalServiceImpl.toProfileDTO#findById", LABEL + " (a hospital on the patient's own record)"),
-        entry("UserServiceImpl.createUserWithRolesAndHospital#findById", LABEL + " (the activation message)"),
+        entry("UserServiceImpl.createAccount#findById", LABEL + " (the activation message)"),
         entry("UserServiceImpl.normalizePhone#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
         // QA D942: a patient's numbers are stored in E.164 for the hospital's country.
         entry("PatientServiceImpl.countryFor#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),

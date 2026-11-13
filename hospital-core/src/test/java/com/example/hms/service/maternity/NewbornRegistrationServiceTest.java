@@ -56,8 +56,10 @@ class NewbornRegistrationServiceTest {
     private final PatientHospitalRegistrationRepository registrations = mock(PatientHospitalRegistrationRepository.class);
     private final PatientProxyRepository proxies = mock(PatientProxyRepository.class);
     private final AuditEventLogService audit = mock(AuditEventLogService.class);
-    private final NewbornRegistrationService service = new NewbornRegistrationService(links, registration, patients,
-        registrations, proxies, TestMessageSources.bundles(), audit);
+    private final com.example.hms.repository.DeliveryRecordRepository deliveries =
+        mock(com.example.hms.repository.DeliveryRecordRepository.class);
+    private final NewbornRegistrationService service = new NewbornRegistrationService(links, deliveries, registration,
+        patients, registrations, proxies, TestMessageSources.bundles(), audit);
 
     private final List<DeliveryNewborn> saved = new ArrayList<>();
     private Hospital hospital;
@@ -110,6 +112,7 @@ class NewbornRegistrationServiceTest {
             .liveBirth(liveBirth)
             .numberOfInfants(infants)
             .infantSex(sex)
+            .newbornRegistrationPending(liveBirth)
             .build();
         record.setId(UUID.randomUUID());
         return record;
@@ -140,6 +143,7 @@ class NewbornRegistrationServiceTest {
 
         assertThat(babies).hasSize(1);
         assertThat(babies.get(0).getBirthOrder()).isEqualTo(1);
+        assertThat(delivery.isNewbornRegistrationPending()).as("the pending flag is cleared").isFalse();
         assertThat(saved).singleElement().satisfies(link -> {
             assertThat(link.getMotherPatient()).isSameAs(mother);
             assertThat(link.getHospital()).isSameAs(hospital);

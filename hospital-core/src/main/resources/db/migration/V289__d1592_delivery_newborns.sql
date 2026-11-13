@@ -8,6 +8,13 @@
 -- A row is never deleted: when a live-birth count later disagrees with the
 -- babies already registered, the extra rows are flagged for review
 -- (needs_review) and a person decides. The patient record is never removed.
+-- A live birth whose babies are not (yet) registered is marked on the
+-- delivery: the registration runs after the delivery commits, in its own
+-- transaction, so a failure never undoes the birth; the flag stays until it
+-- succeeds, for reception.
+ALTER TABLE clinical.delivery_records
+    ADD COLUMN IF NOT EXISTS newborn_registration_pending BOOLEAN NOT NULL DEFAULT false;
+
 CREATE TABLE IF NOT EXISTS clinical.delivery_newborns (
     id                  UUID          NOT NULL DEFAULT gen_random_uuid(),
     delivery_record_id  UUID          NOT NULL,

@@ -555,6 +555,9 @@ export class LaborTabComponent {
         next: (delivery) => {
           this.toast.success(this.translate.instant('LABOR.DELIVERY_SAVED'));
           // QA D1592: the babies the birth registered are named with their MRN.
+          if (delivery.newbornRegistrationPending) {
+            this.toast.error(this.translate.instant('LABOR.NEWBORN_REGISTRATION_PENDING'));
+          }
           const babies = delivery.newborns ?? [];
           if (babies.length > 0) {
             this.toast.success(

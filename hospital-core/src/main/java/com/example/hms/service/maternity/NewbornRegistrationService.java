@@ -69,6 +69,7 @@ public class NewbornRegistrationService {
     private static final String ENTITY_PATIENT = "PATIENT";
 
     private final DeliveryNewbornRepository deliveryNewbornRepository;
+    private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
     private final PatientAccountRegistrationService patientAccountRegistrationService;
     private final PatientRepository patientRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
@@ -82,8 +83,11 @@ public class NewbornRegistrationService {
      *
      * @return every baby registered for this delivery, in birth order
      */
-    @Transactional
-    public List<DeliveryNewbornDTO> registerLiveBorn(DeliveryRecord delivery, UUID recorderUserId) {
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public List<DeliveryNewbornDTO> registerLiveBorn(DeliveryRecord recorded, UUID recorderUserId) {
+        // Its own transaction, after the delivery committed: the committed row.
+        DeliveryRecord delivery = recorded.getId() == null ? recorded
+            : deliveryRecordRepository.findById(recorded.getId()).orElse(recorded);
         List<DeliveryNewborn> existing = new ArrayList<>(
             deliveryNewbornRepository.findByDeliveryRecord_IdOrderByBirthOrderAsc(delivery.getId()));
         int expected = delivery.isLiveBirth() ? Math.max(delivery.getNumberOfInfants(), 0) : 0;
@@ -105,7 +109,33 @@ public class NewbornRegistrationService {
             }
         }
         existing.sort(java.util.Comparator.comparingInt(DeliveryNewborn::getBirthOrder));
+        // The row was read in this transaction: the change is flushed at its commit.
+        delivery.setNewbornRegistrationPending(false);
         return existing.stream().map(this::toDto).toList();
+    }
+
+    /**
+     * QA D1592: a registration that failed is audited (ids and the error
+     * class only); the delivery keeps its pending flag for reception. Never
+     * throws.
+     */
+    public void recordRegistrationFailure(DeliveryRecord delivery, UUID recorderUserId, RuntimeException cause) {
+        try {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .eventType(AuditEventType.PATIENT_CREATE)
+                .status(AuditStatus.FAILURE)
+                .entityType("DELIVERY_RECORD")
+                .resourceId(delivery.getId() == null ? null : delivery.getId().toString())
+                .hospitalId(delivery.getHospital() == null ? null : delivery.getHospital().getId())
+                .userId(recorderUserId)
+                .userName(HospitalContextHolder.getContextOrEmpty().getPrincipalUsername())
+                .eventDescription("Newborn registration pending after a recorded delivery")
+                .details(Map.of("error", cause == null ? "unknown" : cause.getClass().getSimpleName()))
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("Newborn registration failure not audited for delivery {}: {}", delivery.getId(),
+                ex.getClass().getSimpleName());
+        }
     }
 
     /** The babies a delivery registered, in birth order (read side of the delivery record). */

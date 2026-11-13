@@ -226,6 +226,7 @@
     "NEWBORN_MRN": "N.º de historia {{mrn}}",
     "NEWBORN_NAME_PROVISIONAL": "El nombre es provisional: recepción puede cambiarlo en la historia del bebé.",
     "NEWBORN_NEEDS_REVIEW": "Por revisar",
+    "NEWBORN_REGISTRATION_PENDING": "El bebé aún no está registrado como paciente: recepción debe registrarlo y vincularlo a la madre.",
     "NEWBORN_REVIEW_LIVE_BIRTH_COUNT_LOWERED": "Por revisar: ahora constan menos nacidos vivos",
     "NEWBORN_REVIEW_NO_LONGER_LIVE_BIRTH": "Por revisar: el parto ya no consta como nacido vivo",
     "NEW_ENTRY": "Nuevo registro",
@@ -1615,6 +1616,7 @@
     "WRITE_ENTITY_UNKNOWN": "registro",
     "DESC": {
       "NEWBORN_REGISTERED_FROM_DELIVERY": "Recién nacido registrado a partir de un parto",
+      "NEWBORN_REGISTRATION_PENDING": "Registro del recién nacido pendiente tras un parto",
       "PARTNER_DISPENSE_OF_HELD_RX": "{{what}} confirmó la entrega de la receta {{rx}}, suspendida para revisión; la suspensión se mantiene. Una persona debe comprobarlo con el paciente y el socio.",
       "PARTNER_OFFER_RECALLED": "Oferta al socio retirada: la receta {{rx}} está suspendida para revisión",
       "ORDER_REVIEW_DOSE_BEFORE_HOLD": "Dosis registrada como dada antes de la suspensión: {{type}} {{order}} a las {{at}}, impugnación {{dispute}}, por {{actor}}",
@@ -7106,6 +7108,7 @@
         "GENERAL": "General"
       },
       "AUDIT_ENTITY_TYPE": {
+        "DELIVERY_RECORD": "Registro del parto",
         "ORDER_REVIEW_HOLD": "Retención para revisión de orden",
         "DEATH_DISPUTE": "Impugnación de fallecimiento",
         "DEATH_RECORD": "Registro de fallecimiento",

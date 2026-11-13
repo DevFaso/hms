@@ -696,6 +696,29 @@ class LaborServiceImplTest {
         assertThat(response.getNewborns()).containsExactly(baby);
     }
 
+    /**
+     * QA D1592: a midwife can always record a birth. The baby's registration
+     * failing never undoes the delivery: it is saved, the response says the
+     * registration is pending, and the failure is recorded for reception.
+     */
+    @Test
+    void recordDeliveryKeepsTheBirthWhenTheNewbornRegistrationFails() {
+        when(newbornRegistration.registerLiveBorn(any(DeliveryRecord.class), org.mockito.ArgumentMatchers.any()))
+            .thenThrow(new com.example.hms.exception.ResourceNotFoundException("role.notFound", "ROLE_PATIENT"));
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        ArgumentCaptor<DeliveryRecord> saved = ArgumentCaptor.forClass(DeliveryRecord.class);
+        verify(deliveryRecordRepository).save(saved.capture());
+        assertThat(saved.getValue().isNewbornRegistrationPending()).isTrue();
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
+        assertThat(response.isNewbornRegistrationPending()).isTrue();
+        assertThat(response.getNewborns()).isEmpty();
+        verify(newbornRegistration).recordRegistrationFailure(
+            org.mockito.ArgumentMatchers.argThat(d -> d == saved.getValue()), org.mockito.ArgumentMatchers.eq(recorderUserId),
+            any(com.example.hms.exception.ResourceNotFoundException.class));
+    }
+
     /** QA D1592: reading the delivery back lists the babies it registered. */
     @Test
     void getDeliveryListsTheRegisteredBabies() {

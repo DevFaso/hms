@@ -167,6 +167,8 @@ export interface DeliveryRecordResponse {
   alerts: LaborAlert[];
   /** QA D1592: the babies this delivery registered as patients (empty for a stillbirth). */
   newborns?: DeliveryNewborn[];
+  /** QA D1592: the babies are not registered yet; reception registers them. */
+  newbornRegistrationPending?: boolean;
 }
 
 /** QA D1592: a baby a recorded delivery registered as its own patient. */
