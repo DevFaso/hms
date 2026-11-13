@@ -63,6 +63,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 /** Actual scope producer, read-predicate builder and admission service guards; all repositories are stubs. */
@@ -79,6 +81,10 @@ class OrganisationIsolationCompositionTest {
     private BedAssignmentService beds;
     private BillingInvoiceRepository invoices;
     private AdmissionServiceImpl service;
+    private RecordAccessPolicy recordAccessPolicy;
+    private CrossHospitalReachRecorder reachRecorder;
+    private SensitivityClassifier sensitivityClassifier;
+    private BreakGlassGate breakGlassGate;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -92,12 +98,16 @@ class OrganisationIsolationCompositionTest {
         stayEncounters = mock(AdmissionStayEncounterService.class);
         beds = mock(BedAssignmentService.class);
         invoices = mock(BillingInvoiceRepository.class);
+        recordAccessPolicy = mock(RecordAccessPolicy.class);
+        reachRecorder = mock(CrossHospitalReachRecorder.class);
+        sensitivityClassifier = mock(SensitivityClassifier.class);
+        breakGlassGate = mock(BreakGlassGate.class);
         service = new AdmissionServiceImpl(repository, mock(AdmissionOrderSetRepository.class),
             mock(PatientRepository.class), mock(HospitalRepository.class), mock(StaffRepository.class),
             mock(DepartmentRepository.class), mock(PatientHospitalRegistrationRepository.class),
             mock(EncounterAutoCompletionService.class), stayEncounters, beds, mapper,
-            new RoleValidator(assignmentRepository, resolver), mock(RecordAccessPolicy.class),
-            mock(CrossHospitalReachRecorder.class), mock(SensitivityClassifier.class), mock(BreakGlassGate.class), invoices);
+            new RoleValidator(assignmentRepository, resolver), recordAccessPolicy,
+            reachRecorder, sensitivityClassifier, breakGlassGate, invoices);
         for (String name : List.of("A", "B")) {
             Organization organization = new Organization();
             organization.setId(UUID.randomUUID());
@@ -138,7 +148,9 @@ class OrganisationIsolationCompositionTest {
         assertThatThrownBy(() -> service.cancelAdmission(foreign.getId(), "cdx negative isolation probe"))
             .isInstanceOf(ResourceNotFoundException.class);
         assertThat(foreign.getStatus()).isEqualTo(AdmissionStatus.ACTIVE);
-        verify(repository, never()).save(any(Admission.class));
+        verify(repository, times(2)).findById(foreign.getId());
+        verifyNoMoreInteractions(repository);
+        verifyNoInteractions(recordAccessPolicy, reachRecorder, sensitivityClassifier, breakGlassGate);
         verifyNoInteractions(mapper, stayEncounters, beds, invoices);
     }
 

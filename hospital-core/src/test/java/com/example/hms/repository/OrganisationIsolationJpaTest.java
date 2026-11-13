@@ -182,6 +182,7 @@ class OrganisationIsolationJpaTest {
         Fixture own = fixtures.get(index);
         actAt(own);
         assertThat(patients.findById(own.patient())).isPresent();
+        assertThat(patients.existsById(own.patient())).isTrue();
         assertThat(patients.findAll()).extracting(Patient::getId).containsExactly(own.patient());
         assertThat(patients.findAll(PageRequest.of(0, 1)).getTotalElements()).isEqualTo(1);
         assertThat(patients.searchPatientsExtended(null, "%cdx%", null, null, null, own.hospital(), true,

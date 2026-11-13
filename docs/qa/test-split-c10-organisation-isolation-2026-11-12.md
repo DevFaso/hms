@@ -18,7 +18,7 @@ No production code, shared records, live endpoint, credentials, Railway setting,
 
 ## Verification
 
-Commands ran in `C:/dev/hms-qa-c1`. Logs are retained locally under `C:/Users/tiego/.codex/companions/memory/hms/test-split-2026-11-12/`.
+Original author commands ran in an isolated checkout. The named logs are local evidence, not committed artifacts; this PR's CI provides shared verification.
 
 | Command                                                                                                                                                                                                                                                                       | Exit | Result / log                                                                                       |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | -------------------------------------------------------------------------------------------------- |
@@ -36,7 +36,7 @@ The initial composition suite mocks Criteria API objects and repositories. The f
 
 ## Approved in-memory follow-up — 12 November 2026
 
-`OrganisationIsolationJpaTest` uses a real Spring Data JPA slice, the production tenant repository configuration, assignment repository/accessor, scope resolver, role validator and admission repository/service. Its datasource URL is asserted to begin with `jdbc:h2:mem:`. The slice creates a disposable embedded database and transactionally rolls back each case.
+`OrganisationIsolationJpaTest` uses a real Spring Data JPA slice, the production tenant repository configuration, assignment repository/accessor, scope resolver, role validator and admission repository. The admission service is instantiated directly: this proves service logic inside the test transaction, not its Spring proxy, method security or cross-request rollback behavior. Its datasource URL is asserted to begin with `jdbc:h2:mem:`. The slice creates a disposable embedded database and transactionally rolls back each case.
 
 Fixtures contain two organizations, three hospitals (including a sibling of A that the A caller is not assigned to), and separate fake `cdx-` users, role assignments, patients, registrations and active admissions. All three hospital callers exercise four paths, for 12 cases:
 
@@ -64,3 +64,7 @@ Final rerun after the fixture correction:
 ```
 
 Final log: `c10-inmemory-final-tests.log`. Portal `npm.cmd run lint` and `npm.cmd run format:check` exited 0 (`c10-inmemory-lint.log`, `c10-inmemory-format.log`). Report Prettier check and `git diff --check` exited 0. No Java formatter/linter is configured; Java compilation and the final selected JUnit run passed.
+
+Review follow-up: the composition negatives now verify that record-access, break-glass, sensitivity and reach collaborators are untouched and that the repository receives only the two expected reads, excluding every alternative write method. Own-patient existence has an explicit positive control. `ResourceNotFoundException` extends `RuntimeException` directly, not `BusinessException`, so the refused-scope assertion cannot pass on ordinary not-found. The Criteria mock is a targeted branch test, supplemented by the H2 paged/search tests, not interchangeable isolation coverage. The H2 JSON-array fixture workaround remains a limitation requiring a mapping/domain follow-up; it is not PostgreSQL mapping evidence.
+
+Fresh broader verification after these corrections: `./gradlew.bat --no-daemon --offline :hospital-core:test -PtestForks=1 --tests "*OrganisationIsolationJpaTest" --tests "*OrganisationIsolationCompositionTest" --tests "*PatientRepositoryTenantScopeTest" --tests "*TenantIsolationTest" --tests "*OrganizationReadScopeIT" --tests "*ServiceWriteTenantLoadCoverageTest" --tests "*ActingScopeCoverageTest"` exited 0: all 60 selected cases plus four prerequisite observability checks passed, zero failures/errors. Only disposable H2 was used. This supersedes the earlier unverified broader run, without claiming production or complete isolation verification.
