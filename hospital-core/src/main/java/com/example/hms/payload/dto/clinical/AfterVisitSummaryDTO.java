@@ -119,7 +119,7 @@ public class AfterVisitSummaryDTO {
         /** LAB or IMAGING. */
         private String kind;
         private String name;
-        /** The order's status code (LabOrderStatus or ImagingOrderStatus). */
+        /** The order's status code (LabOrderStatus or ImagingOrderStatus), or AWAITING_RELEASE for a resulted lab order with no released value (QA D1743). */
         private String status;
         /** Released results only; empty while none is released. */
         private List<TestResult> results;

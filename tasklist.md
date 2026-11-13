@@ -6507,3 +6507,6 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **D1592, live birth of a multiple birth with a stillborn twin:** the record has one `liveBirth` flag for the whole delivery, so it cannot say "one live, one stillborn"; today every infant counted is registered.
 - **D1592, delivery edit:** there is no edit path for a delivery record; when one is added, it must call `NewbornRegistrationService.registerLiveBorn` (the guard enforces it) so a lowered count is flagged for review, never deleted.
 - **D1592, earlier births:** deliveries recorded before this change registered no baby; there is no backfill.
+
+- **D1740 sweep (r47), raw lab grade outside the lab pages.** `PatientSnapshotServiceImpl.labResultFlag` (the chart's patient-snapshot drawer) copies the row's recorded `abnormalFlag` (and `abnormalDirection`), so a value graded HIGH only by the test definition's ranges reads "to review"/normal there; it should read `LabResultMapper.severityFlagOf` as `ChartReviewServiceImpl.gradedFlag` does.
+- **D1740 sweep (r47), FHIR Observation.** `ObservationFhirMapper` sends a lab value with no `interpretation` and no `referenceRange`; a FHIR client (or a future patient app) gets an abnormal value unmarked. Map them from `LabResultMapper` / `PatientLabResultGrade`.

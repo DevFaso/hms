@@ -112,7 +112,12 @@
           <span class="vss-item-title">{{
             test.name || ('VISIT_SUMMARY.NOT_PROVIDED' | translate)
           }}</span>
-          <span class="vss-status">{{ test.status | enumLabel: 'labOrderStatus' }}</span>
+          <!-- QA D1743: a resulted order with nothing released reads "awaiting validation". -->
+          <span class="vss-status" data-testid="avs-test-status">{{
+            test.status === 'AWAITING_RELEASE'
+              ? ('VISIT_SUMMARY.LAB_AWAITING_RELEASE' | translate)
+              : (test.status | enumLabel: 'labOrderStatus')
+          }}</span>
           @for (r of test.results ?? []; track $index) {
             <span class="vss-result">
               {{ r.value | labValue: r.unit }}

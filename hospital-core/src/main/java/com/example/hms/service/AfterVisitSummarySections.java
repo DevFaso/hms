@@ -16,6 +16,7 @@ import com.example.hms.model.PatientVitalSign;
 import com.example.hms.model.Prescription;
 import com.example.hms.mapper.LabResultMapper;
 import com.example.hms.model.encounter.EncounterNote;
+import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.FamilyHistoryRepository;
@@ -31,6 +32,7 @@ import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.SocialHistoryRepository;
 import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.service.lab.LabResultCorrections;
+import com.example.hms.service.lab.PatientLabResultGrade;
 import com.example.hms.service.support.PrescriptionIssuance;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -73,9 +75,10 @@ import java.util.stream.Collectors;
  *   <li><strong>Signed text only.</strong> The assessment and the plan come
  *       from the latest signed note, as the rest of the summary does; an
  *       unsigned draft adds nothing.</li>
- *   <li><strong>Not for the desk.</strong> The caller skips this class for a
- *       receptionist, and {@code ReceptionistResponseShaping} removes every
- *       clinical field of it besides.</li>
+ *   <li><strong>Not for the desk.</strong> A receptionist gets the contact
+ *       numbers only ({@code deskReader}); no clinical section is even read,
+ *       and {@code ReceptionistResponseShaping} removes every clinical field of
+ *       it besides.</li>
  * </ul>
  *
  * <p>No read here is wrapped in a catch: the summary is built inside the
@@ -88,6 +91,14 @@ public class AfterVisitSummarySections {
 
     private static final String LAB = "LAB";
     private static final String IMAGING = "IMAGING";
+    /**
+     * QA D1743: a lab order the laboratory has resulted whose value is not
+     * released yet. Its own status ("Résultats rendus") told the patient a
+     * result was back with nothing beside it.
+     */
+    public static final String LAB_AWAITING_RELEASE = "AWAITING_RELEASE";
+    private static final Set<LabOrderStatus> RESULTED_STATUSES =
+        Set.of(LabOrderStatus.RESULTED, LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED);
 
     private final PatientVitalSignRepository vitalSignRepository;
     private final LabOrderRepository labOrderRepository;
@@ -101,10 +112,19 @@ public class AfterVisitSummarySections {
     private final PatientSurgicalHistoryRepository surgicalHistoryRepository;
     private final FamilyHistoryRepository familyHistoryRepository;
     private final SocialHistoryRepository socialHistoryRepository;
+    private final LabResultMapper labResultMapper;
 
-    /** Fills the content sections of {@code avs} from {@code encounter}, its patient and its hospital. */
-    public void fill(Encounter encounter, AfterVisitSummaryDTO avs) {
+    /**
+     * Fills the content sections of {@code avs} from {@code encounter}, its
+     * patient and its hospital. A {@code deskReader} (a receptionist) gets the
+     * contact numbers alone: they are reception-safe, and the desk gives them
+     * out (QA D1741: skipping the whole fill for the desk dropped them too).
+     */
+    public void fill(Encounter encounter, AfterVisitSummaryDTO avs, boolean deskReader) {
         fillContact(encounter, avs);
+        if (deskReader) {
+            return;
+        }
         fillNote(encounter.getLatestSignedEncounterNote(), avs);
         // The encounter's own patient and hospital: never a related patient's id (see the class comment).
         UUID patientId = encounter.getPatient() != null ? encounter.getPatient().getId() : null;
@@ -210,7 +230,10 @@ public class AfterVisitSummarySections {
 
     /**
      * The visit's lab orders, a voided one left out (it was entered in error,
-     * and its reason is internal). A value only once released.
+     * and its reason is internal). A value only once released, graded and
+     * ranged as the patient's lab results grade it ({@link PatientLabResultGrade},
+     * QA D1740): the row's own flag and range are null when the grade comes
+     * from the test definition's ranges.
      */
     private List<AfterVisitSummaryDTO.OrderedTest> labTests(UUID encounterId) {
         List<LabOrder> orders = labOrderRepository.findByEncounter_Id(encounterId).stream()
@@ -229,20 +252,35 @@ public class AfterVisitSummarySections {
             .map(order -> AfterVisitSummaryDTO.OrderedTest.builder()
                 .kind(LAB)
                 .name(order.getLabTestDefinition() != null ? order.getLabTestDefinition().getName() : null)
-                .status(order.getStatus() != null ? order.getStatus().name() : null)
+                .status(labStatusOf(order, released.containsKey(order.getId())))
                 .results(released.getOrDefault(order.getId(), List.of()).stream()
-                    .map(r -> AfterVisitSummaryDTO.TestResult.builder()
-                        .value(r.getResultValue())
-                        // QA D1095: the test definition's unit when none was typed.
-                        .unit(LabResultMapper.unitOf(r))
-                        .referenceRange(r.getReferenceRange())
-                        .abnormalFlag(r.getAbnormalFlag() != null ? r.getAbnormalFlag().name() : null)
-                        // QA D1016: a released correction says so.
-                        .corrected(LabResultCorrections.isCorrection(r))
-                        .build())
+                    .map(this::labResult)
                     .toList())
                 .build())
             .toList();
+    }
+
+    /** QA D1743: a resulted order with nothing released yet reads "awaiting release", not "resulted". */
+    static String labStatusOf(LabOrder order, boolean hasReleasedValue) {
+        if (order.getStatus() == null) {
+            return null;
+        }
+        return !hasReleasedValue && RESULTED_STATUSES.contains(order.getStatus())
+            ? LAB_AWAITING_RELEASE : order.getStatus().name();
+    }
+
+    private AfterVisitSummaryDTO.TestResult labResult(LabResult r) {
+        LabResultResponseDTO mapped = labResultMapper.toResponseDTO(r);
+        return AfterVisitSummaryDTO.TestResult.builder()
+            .value(r.getResultValue())
+            // QA D1095: the test definition's unit when none was typed.
+            .unit(LabResultMapper.unitOf(r))
+            .referenceRange(PatientLabResultGrade.referenceTextOf(mapped.getGradedReferenceRange(),
+                r.getLabOrder().getLabTestDefinition()))
+            .abnormalFlag(PatientLabResultGrade.gradeOf(r, r.getResultValue(), mapped))
+            // QA D1016: a released correction says so.
+            .corrected(LabResultCorrections.isCorrection(r))
+            .build();
     }
 
     /** The visit's imaging orders, a draft left out; the impression only once the report is signed. */

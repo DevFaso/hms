@@ -16,6 +16,8 @@ import com.example.hms.model.ImagingReport;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.LabTestDefinition;
+import com.example.hms.model.LabTestReferenceRange;
+import com.example.hms.mapper.LabResultMapper;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientAllergy;
 import com.example.hms.model.PatientFamilyHistory;
@@ -56,6 +58,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @DisplayName("User decision 2026-11-12: the after-visit summary's content sections")
@@ -77,9 +80,11 @@ class AfterVisitSummarySectionsTest {
     private final PatientSurgicalHistoryRepository surgeries = mock(PatientSurgicalHistoryRepository.class);
     private final FamilyHistoryRepository families = mock(FamilyHistoryRepository.class);
     private final SocialHistoryRepository socials = mock(SocialHistoryRepository.class);
+    private final LabResultMapper labResultMapper = new LabResultMapper();
 
     private final AfterVisitSummarySections sections = new AfterVisitSummarySections(vitals, labOrders, labResults,
-        imagingOrders, imagingReports, allergies, prescriptions, admissions, problems, surgeries, families, socials);
+        imagingOrders, imagingReports, allergies, prescriptions, admissions, problems, surgeries, families, socials,
+        labResultMapper);
 
     private final UUID hospitalId = UUID.randomUUID();
     private final UUID patientId = UUID.randomUUID();
@@ -109,8 +114,99 @@ class AfterVisitSummarySectionsTest {
     private AfterVisitSummaryDTO fill() {
         AfterVisitSummaryDTO avs = new AfterVisitSummaryDTO();
         avs.setDischargeDiagnoses(List.of());
-        sections.fill(encounter, avs);
+        sections.fill(encounter, avs, false);
         return avs;
+    }
+
+    @Test
+    @DisplayName("QA D1741: the desk keeps the contact numbers, and no clinical section is read for it")
+    void theDeskKeepsTheContactNumbersOnly() {
+        AfterVisitSummaryDTO avs = new AfterVisitSummaryDTO();
+        sections.fill(encounter, avs, true);
+
+        assertThat(avs.getHospitalPhone()).isEqualTo("25 30 66 43");
+        assertThat(avs.getDepartmentPhone()).isEqualTo("25 30 66 50");
+        assertThat(avs.getOrderedTests()).isNull();
+        assertThat(avs.getAllergies()).isNull();
+        verifyNoInteractions(vitals, labOrders, labResults, imagingOrders, imagingReports, allergies, prescriptions,
+            admissions, problems, surgeries, families, socials);
+    }
+
+    @Test
+    @DisplayName("QA D1740: a released value carries the grade and the range the lab-results page shows")
+    void aReleasedValueCarriesItsGradeAndRange() {
+        LabOrder order = labOrder("Glycémie à jeun", LabOrderStatus.RESULTED);
+        order.getLabTestDefinition().setUnit("g/L");
+        order.getLabTestDefinition().setReferenceRanges(new ArrayList<>(List.of(
+            LabTestReferenceRange.builder().minValue(0.7).maxValue(0.99).unit("g/L").build())));
+        when(labOrders.findByEncounter_Id(encounter.getId())).thenReturn(List.of(order));
+        LabResult gly = labResult(order, "1.32", true);
+        gly.setResultUnit("g/L");
+        when(labResults.findByLabOrder_IdIn(anyCollection())).thenReturn(List.of(gly));
+
+        AfterVisitSummaryDTO.OrderedTest test = fill().getOrderedTests().get(0);
+
+        assertThat(test.getStatus()).isEqualTo("RESULTED");
+        assertThat(test.getResults()).singleElement().satisfies(r -> {
+            assertThat(r.getAbnormalFlag()).isEqualTo("ABNORMAL_HIGH");
+            assertThat(r.getReferenceRange()).isEqualTo("0.7 - 0.99 g/L");
+        });
+    }
+
+    /** The mapper's severity, in the summary's vocabulary; a value no range grades is not flagged. */
+    private static final java.util.Map<String, String> MAPPER_TO_SUMMARY = java.util.Map.of(
+        "HIGH", "ABNORMAL_HIGH", "LOW", "ABNORMAL_LOW", "NORMAL", "NORMAL", "CRITICAL", "CRITICAL",
+        "ABNORMAL", "ABNORMAL");
+
+    /**
+     * QA D1740 guard: for the same row, the summary's flag and range are the
+     * ones {@link LabResultMapper} grades on the lab-results page, across the
+     * grades (high, low, normal, critical, a positive answer, units that differ).
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "1.32, g/L", "0.5, g/L", "0.8, g/L", "9.9, g/L", "0.1, g/L", "7.2, mmol/L", "Positif, ''"})
+    @DisplayName("guard: the summary's flag and range equal the mapper's for the same result")
+    void theSummaryGradesAsTheMapperDoes(String value, String unit) {
+        LabOrder order = labOrder("Glycémie à jeun", LabOrderStatus.COMPLETED);
+        order.getLabTestDefinition().setReferenceRanges(new ArrayList<>(List.of(LabTestReferenceRange.builder()
+            .minValue(0.7).maxValue(0.99).criticalLow(0.3).criticalHigh(5.0).unit("g/L").build())));
+        when(labOrders.findByEncounter_Id(encounter.getId())).thenReturn(List.of(order));
+        LabResult row = labResult(order, value, true);
+        row.setResultUnit(unit.isEmpty() ? null : unit);
+        when(labResults.findByLabOrder_IdIn(anyCollection())).thenReturn(List.of(row));
+
+        AfterVisitSummaryDTO.TestResult shown = fill().getOrderedTests().get(0).getResults().get(0);
+
+        com.example.hms.payload.dto.LabResultResponseDTO page = labResultMapper.toResponseDTO(row);
+        assertThat(shown.getAbnormalFlag()).as("flag of " + value + " " + unit)
+            .isEqualTo(MAPPER_TO_SUMMARY.get(page.getSeverityFlag()));
+        com.example.hms.payload.dto.LabResultReferenceRangeDTO graded = page.getGradedReferenceRange();
+        if (graded == null) {
+            assertThat(shown.getReferenceRange()).isNull();
+        } else {
+            assertThat(shown.getReferenceRange()).startsWith(
+                new java.text.DecimalFormat("0.##", java.text.DecimalFormatSymbols.getInstance(java.util.Locale.ROOT))
+                    .format(graded.getMinValue()) + " - ");
+        }
+    }
+
+    @Test
+    @DisplayName("QA D1743: a resulted order with nothing released reads awaiting release, never resulted")
+    void aResultedOrderWithNothingReleasedReadsAwaitingRelease() {
+        LabOrder resulted = labOrder("Glycémie à jeun", LabOrderStatus.RESULTED);
+        LabOrder verified = labOrder("NFS", LabOrderStatus.VERIFIED);
+        LabOrder running = labOrder("CRP", LabOrderStatus.IN_PROGRESS);
+        when(labOrders.findByEncounter_Id(encounter.getId())).thenReturn(List.of(resulted, verified, running));
+        when(labResults.findByLabOrder_IdIn(anyCollection())).thenReturn(List.of(
+            labResult(resulted, "SECRET-1.32", false), labResult(verified, "12.1", true)));
+
+        List<AfterVisitSummaryDTO.OrderedTest> tests = fill().getOrderedTests();
+
+        assertThat(tests).extracting(AfterVisitSummaryDTO.OrderedTest::getStatus)
+            .containsExactly(AfterVisitSummarySections.LAB_AWAITING_RELEASE, "VERIFIED", "IN_PROGRESS");
+        assertThat(tests.get(0).getResults()).isEmpty();
+        assertThat(tests.toString()).doesNotContain("SECRET");
     }
 
     @Test
@@ -280,7 +376,7 @@ class AfterVisitSummarySectionsTest {
         avs.setDischargeDiagnoses(List.of("Paludisme simple"));
         avs.setFollowUpInstructions("Boire beaucoup\n\nACT 3 jours, revoir si fièvre");
 
-        sections.fill(encounter, avs);
+        sections.fill(encounter, avs, false);
 
         assertThat(avs.getClinicalAssessment()).as("already the diagnosis: not repeated").isNull();
         assertThat(avs.getClinicalPlan()).isEqualTo("ACT 3 jours, revoir si fièvre");
@@ -299,7 +395,7 @@ class AfterVisitSummarySectionsTest {
         AfterVisitSummaryDTO avs = new com.example.hms.mapper.CheckOutMapper()
             .toAfterVisitSummary(encounter, null, null);
 
-        sections.fill(encounter, avs);
+        sections.fill(encounter, avs, false);
 
         assertThat(avs.getFollowUpInstructions()).isEqualTo("Keep these instructions");
         assertThat(avs.getClinicalPlan()).isEqualTo(signed.getPlan());

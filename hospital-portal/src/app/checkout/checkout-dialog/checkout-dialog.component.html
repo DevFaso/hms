@@ -159,7 +159,9 @@
     } @else {
       <!-- AVS Preview -->
       <div class="dialog-body avs-preview">
-        <h3 class="avs-title">{{ 'CHECKOUT.AVS_TITLE' | translate }}</h3>
+        <h3 class="avs-title" #avsHeading tabindex="-1" data-testid="checkout-avs-title">
+          {{ 'CHECKOUT.AVS_TITLE' | translate }}
+        </h3>
 
         <dl class="avs-details">
           <div>
