@@ -84,6 +84,9 @@ class InBasketRecipientGuardTest {
         "CurrentAllergyRecheck.java", union(
             rolesOf(constant(TransfusionController.class, "PRESCRIBER")),
             rolesOf(constant(TransfusionController.class, "BEDSIDE"))),
+        // QA D1592: a baby a delivery could not register, for the delivering hospital's reception.
+        "NewbornRegistrationService.java", codes(setConstant(
+            com.example.hms.service.maternity.NewbornRegistrationService.class, "PENDING_ROLE_CODES")),
         // The store itself: every sender above reaches it through createItem.
         "InBasketServiceImpl.java", Set.of());
 

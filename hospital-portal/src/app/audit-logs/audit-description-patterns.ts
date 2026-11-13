@@ -1402,6 +1402,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['unit', 'request'],
   },
   {
+    key: 'AUDIT.DESC.NEWBORN_REGISTRATION_PENDING',
+    re: /^Newborn registration pending after a recorded delivery$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.NEWBORN_REGISTERED_FROM_DELIVERY',
+    re: /^Newborn registered from a recorded delivery$/,
+    params: [],
+  },
+  {
     key: 'AUDIT.DESC.APPOINTMENT_OVERBOOKED',
     re: /^Appointment overbooked outside the published slots$/,
     params: [],

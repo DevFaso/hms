@@ -45,6 +45,13 @@ public class NewbornAssessmentRequestDTO {
      */
     private UUID deliveryRecordId;
 
+    /**
+     * QA D1592: which registered baby of the delivery this assessment is for,
+     * when it is recorded from the mother's chart. Required for a multiple
+     * birth; a single birth's one baby is taken when it is left out.
+     */
+    private UUID newbornPatientId;
+
     @com.example.hms.validation.NotInClinicalFuture
 
     private LocalDateTime assessmentTime;

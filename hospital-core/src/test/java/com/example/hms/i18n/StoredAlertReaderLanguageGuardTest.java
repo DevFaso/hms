@@ -60,6 +60,8 @@ class StoredAlertReaderLanguageGuardTest {
         Map.entry("service/ImagingCriticalNotificationService.java", "an SMS: the recipient's phone has no session"),
         Map.entry("service/impl/LaborServiceImpl.java", ALERT + "; the override note joins what the user typed"),
         Map.entry("service/impl/NewbornAssessmentServiceImpl.java", ALERT),
+        Map.entry("service/maternity/NewbornRegistrationService.java", STORED_RECORD
+            + ": the baby's provisional name and contact relationship (QA D1592), which the desk edits"),
         Map.entry("service/impl/PostpartumCareServiceImpl.java", ALERT + "; the escalation reason is never returned"),
         Map.entry("service/impl/PatientPortalServiceImpl.java", "the refill e-mail to staff; the bell is keyed (D665)"),
         Map.entry("service/impl/TransfusionServiceImpl.java", NOTICE),
