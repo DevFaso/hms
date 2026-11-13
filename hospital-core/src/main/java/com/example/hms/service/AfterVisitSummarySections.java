@@ -175,7 +175,7 @@ public class AfterVisitSummarySections {
      * at the visit's hospital. A weight or a pain score alone is taken only when
      * the window holds no observation set.
      */
-    private AfterVisitSummaryDTO.VitalSigns vitalSigns(Encounter encounter, UUID patientId, UUID hospitalId) {
+    private AfterVisitSummaryDTO.VitalSignsResponse vitalSigns(Encounter encounter, UUID patientId, UUID hospitalId) {
         LocalDateTime from = encounter.getArrivalTimestamp() != null
             ? encounter.getArrivalTimestamp() : encounter.getEncounterDate();
         if (from == null) {
@@ -188,7 +188,7 @@ public class AfterVisitSummarySections {
         if (chosen == null) {
             return null;
         }
-        return AfterVisitSummaryDTO.VitalSigns.builder()
+        return AfterVisitSummaryDTO.VitalSignsResponse.builder()
             .recordedAt(chosen.getRecordedAt())
             .temperatureCelsius(chosen.getTemperatureCelsius())
             .heartRateBpm(chosen.getHeartRateBpm())

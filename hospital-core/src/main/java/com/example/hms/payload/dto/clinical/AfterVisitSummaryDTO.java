@@ -61,7 +61,7 @@ public class AfterVisitSummaryDTO {
     private String departmentPhone;
 
     /** The last vital-sign set recorded during the visit, at the visit's hospital. */
-    private VitalSigns vitalSigns;
+    private VitalSignsResponse vitalSigns;
 
     /** The labs and imaging ordered during the visit, each with its status; a result only once released. */
     private List<OrderedTest> orderedTests;
@@ -86,7 +86,11 @@ public class AfterVisitSummaryDTO {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class VitalSigns {
+    /**
+     * A reading carried out to the reader only, never bound from a request: named a Response so
+     * BloodPressurePairGuardTest (QA D1424) treats it as read-only, as it does every response DTO.
+     */
+    public static class VitalSignsResponse {
         private LocalDateTime recordedAt;
         private Double temperatureCelsius;
         private Integer heartRateBpm;

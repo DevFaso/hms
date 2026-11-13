@@ -141,7 +141,7 @@ class AfterVisitSummarySectionsTest {
         when(vitals.findWithinRange(eq(patientId), eq(hospitalId), eq(encounter.getArrivalTimestamp()),
             eq(encounter.getCheckoutTimestamp()), any())).thenReturn(List.of(weightOnly, set));
 
-        AfterVisitSummaryDTO.VitalSigns shown = fill().getVitalSigns();
+        AfterVisitSummaryDTO.VitalSignsResponse shown = fill().getVitalSigns();
 
         assertThat(shown.getTemperatureCelsius()).isEqualTo(38.6);
         assertThat(shown.getHeartRateBpm()).isEqualTo(128);
