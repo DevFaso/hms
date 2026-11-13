@@ -2540,6 +2540,8 @@ class LaborServiceImplTest {
         lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(any())).thenReturn(Optional.empty());
         lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(episodeId)).thenReturn(Optional.of(
             LaborPartographEntry.builder().episode(episode).observationTime(arrived.plusMinutes(5)).build()));
+        lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeAsc(episodeId)).thenReturn(Optional.of(
+            LaborPartographEntry.builder().episode(episode).observationTime(arrived.plusMinutes(5)).build()));
 
         var response = service.recordDelivery(patientId, episodeId, recorderUserId,
             bornBeforeArrival(arrived.minusMinutes(20), "Né en route"));
@@ -2558,5 +2560,22 @@ class LaborServiceImplTest {
         assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
             .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.beforeLastPartograph");
+    }
+
+    /** Rex on #1140: observed here in labour before the birth means she had arrived; the declaration is refused. */
+    @Test
+    void d1712_anObservationHereBeforeTheBirthRefusesTheDeclaration() {
+        LocalDateTime handedOver = LocalDateTime.now().minusHours(2);
+        handedOverAt(handedOver);
+        lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(any())).thenReturn(Optional.empty());
+        lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeAsc(episodeId)).thenReturn(Optional.of(
+            LaborPartographEntry.builder().episode(episode).observationTime(handedOver.plusMinutes(10)).build()));
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId,
+                bornBeforeArrival(handedOver.plusMinutes(30), "Née dans l'ambulance")))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "bornBeforeArrival")
+            .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.bornBeforeArrivalAfterObservation");
+        verify(deliveryRecordRepository, never()).save(any());
     }
 }

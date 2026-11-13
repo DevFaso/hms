@@ -259,6 +259,7 @@
     "BORN_BEFORE_ARRIVAL_REASON": "Reason born before arrival",
     "BORN_BEFORE_ARRIVAL_HINT": "Only when the baby was born before she arrived here (in transit): the birth time may then be earlier than this episode's start.",
     "BORN_BEFORE_ARRIVAL_REASON_REQUIRED": "Give the reason the baby was born before her arrival.",
+    "BORN_BEFORE_ARRIVAL_AFTER_OBSERVATION": "She was already observed here in labour before this birth time: the birth was not before her arrival.",
     "SAVE_DELIVERY": "Save Delivery Record",
     "SAVE_ENTRY": "Save Entry",
     "SEX_FEMALE": "Female",

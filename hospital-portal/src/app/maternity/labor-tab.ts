@@ -140,6 +140,7 @@ const DELIVERY_FIELD_IDS: Readonly<Record<string, string>> = {
   estimatedBloodLossMl: 'dl-ebl',
   recentDeliveryOverrideReason: 'dl-override',
   bornBeforeArrivalReason: 'dl-bba-reason',
+  bornBeforeArrival: 'dl-bba',
 };
 
 /**
@@ -716,6 +717,20 @@ export class LaborTabComponent {
     // server checks them), never by what this hospital charted once she was here.
     const declaredBeforeArrival =
       this.bornBeforeArrivalOffered() && !!this.deliveryForm.bornBeforeArrival;
+    // Rex on #1140: observed here in labour before the birth means she had arrived; the server refuses the same.
+    const firstObservation = this.entries()
+      .map((entry) => fromServerDateTime(entry.observationTime))
+      .filter((when): when is Date => when !== null)
+      .reduce<Date | null>(
+        (earliest, when) => (!earliest || when < earliest ? when : earliest),
+        null,
+      );
+    if (declaredBeforeArrival && firstObservation && birth >= firstObservation) {
+      return {
+        id: DELIVERY_FIELD_IDS['bornBeforeArrival'],
+        message: this.translate.instant('LABOR.BORN_BEFORE_ARRIVAL_AFTER_OBSERVATION'),
+      };
+    }
     if (typedBirth && lastObservation && typedBirth < lastObservation && !declaredBeforeArrival) {
       return {
         id: DELIVERY_BIRTH_TIME_ID,

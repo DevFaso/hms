@@ -332,6 +332,22 @@ describe('LaborTabComponent', () => {
     expect(laborSpy.recordDelivery).toHaveBeenCalled();
   });
 
+  it('Rex on #1140: an observation here before the birth refuses the declaration', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([{ ...episode('e1', 'ACTIVE'), transferredFromEpisodeId: 'eB' }]);
+    component.entries.set([{ observationTime: '2026-11-12T00:00:00' } as PartographEntryResponse]);
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.deliveryForm.birthDateTime = '2026-11-13T12:00';
+    component.deliveryForm.bornBeforeArrival = true;
+    component.deliveryForm.bornBeforeArrivalReason = 'Née pendant le trajet';
+
+    component.submitDelivery();
+
+    expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalled();
+  });
+
   it('submitDelivery posts and closes the form', () => {
     component.patient.set({ id: 'p1' } as PatientResponse);
     component.episodes.set([episode('e1', 'ACTIVE')]);

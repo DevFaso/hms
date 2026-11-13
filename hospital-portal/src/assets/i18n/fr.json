@@ -259,6 +259,7 @@
     "BORN_BEFORE_ARRIVAL_REASON": "Motif de la naissance avant l'arrivée",
     "BORN_BEFORE_ARRIVAL_HINT": "Seulement si la naissance a eu lieu avant son arrivée ici (pendant le trajet) : l'heure de naissance peut alors précéder le début de cet épisode.",
     "BORN_BEFORE_ARRIVAL_REASON_REQUIRED": "Indiquez pourquoi la naissance a eu lieu avant son arrivée.",
+    "BORN_BEFORE_ARRIVAL_AFTER_OBSERVATION": "Elle a déjà été observée ici en travail avant cette heure de naissance : la naissance n'a pas eu lieu avant son arrivée.",
     "SAVE_DELIVERY": "Enregistrer le compte rendu",
     "SAVE_ENTRY": "Enregistrer l'entrée",
     "SEX_FEMALE": "Féminin",

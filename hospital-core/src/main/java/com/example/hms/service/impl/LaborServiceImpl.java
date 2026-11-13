@@ -1118,6 +1118,19 @@ public class LaborServiceImpl implements LaborService {
         return true;
     }
 
+    /** Rex on #1140: a birth declared before her arrival precedes the receiving episode's first observation. */
+    private void requireBirthBeforeFirstObservationHere(LaborEpisode episode, LocalDateTime birthAt) {
+        LocalDateTime first = entryRepository.findFirstByEpisode_IdOrderByObservationTimeAsc(episode.getId())
+            .map(LaborPartographEntry::getObservationTime)
+            .orElse(null);
+        if (first != null && !birthAt.isBefore(first)) {
+            throw new com.example.hms.exception.FieldBusinessException("bornBeforeArrival",
+                "labor.delivery.bornBeforeArrivalAfterObservation",
+                com.example.hms.utility.DisplayDates.dateTime(
+                    com.example.hms.utility.HospitalTime.at(first, episode.getHospital())));
+        }
+    }
+
     /** QA r46: a birth recorded before her arrival is audited once the delivery commits (ids only). */
     private void auditBornBeforeArrival(DeliveryRecord saved, LaborEpisode episode, UUID userId) {
         UUID hospitalId = episode.getHospital() == null ? null : episode.getHospital().getId();
@@ -1151,9 +1164,12 @@ public class LaborServiceImpl implements LaborService {
         // episode it continues, so the birth follows the last entry of the chain.
         LocalDateTime lastObservation = null;
         for (UUID chartedEpisodeId : labourChain(episode)) {
-            // Rex on #1140: a birth declared before her arrival is bounded by the episodes she came from only.
-            // What the receiving hospital charted once she was there (an admission observation) comes after it.
+            // Rex on #1140: a birth declared before her arrival is bounded by the episodes she came from. What
+            // the receiving hospital charted once she was there (an admission observation) comes after it; an
+            // observation here BEFORE the birth means she was already here in labour, so the declaration is
+            // refused (provisional rule, tasklist.md).
             if (bornBeforeArrival && chartedEpisodeId.equals(episode.getId())) {
+                requireBirthBeforeFirstObservationHere(episode, birthAt);
                 continue;
             }
             LocalDateTime last = entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(chartedEpisodeId)
