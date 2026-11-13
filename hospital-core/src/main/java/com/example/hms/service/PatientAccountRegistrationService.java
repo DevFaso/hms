@@ -71,4 +71,25 @@ public class PatientAccountRegistrationService {
         user.setPatientId(created.getId());
         return user;
     }
+
+    /**
+     * QA D1592: the patient record of a baby a recorded delivery registers,
+     * through the same two steps as a desk registration: the PATIENT account
+     * (at the delivering hospital, UserService.createNewbornPatientAccount),
+     * then the record, its hospital registration and MRN
+     * (PatientService.createNewbornPatient). One transaction with the delivery.
+     * Called by NewbornRegistrationService only (NewbornRegistrationGuardTest).
+     */
+    @Transactional
+    public PatientResponseDTO registerNewborn(AdminSignupRequest account, PatientRequestDTO patient,
+                                              UUID deliveringHospitalId, Locale locale) {
+        UserResponseDTO user = userService.createNewbornPatientAccount(account, deliveringHospitalId);
+        if (patientRepository.findByUserId(user.getId()).isPresent()) {
+            throw new PatientAlreadyRegisteredException(
+                MessageUtil.resolveOrRaw("patient.registration.existingRecord"));
+        }
+        patient.setUserId(user.getId());
+        patient.setHospitalId(deliveringHospitalId);
+        return patientService.createNewbornPatient(patient, locale);
+    }
 }

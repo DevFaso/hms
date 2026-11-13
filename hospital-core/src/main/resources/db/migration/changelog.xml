@@ -3463,4 +3463,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V289-d1592-delivery-newborns" author="hms-team" runOnChange="false">
+        <sqlFile path="V289__d1592_delivery_newborns.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

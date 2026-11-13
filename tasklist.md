@@ -6484,3 +6484,11 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Unsigned notes, mobile apps:** the native patient apps do not read `pendingSignature` yet, so they show the summary without the "not finalised" banner.
 - **Unsigned notes, nursing notes:** only encounter notes (SOAP and the other templates) are followed; nursing notes carry their own signing and are not in the workflow.
 - **Unsigned notes, a super-admin author:** a note written by a super-admin is filed in their in-basket, but the sign endpoint does not admit SUPER_ADMIN; decide whether such notes are signable or excluded.
+
+## Standing debt — newborn registration from a delivery (feat/d1592-newborn-registration)
+
+- **D1592, desk registration of a baby born today:** the reception form still refuses a birth date of today (`PatientIdentityRules.birthDateProblem`, "must be in the past"); only the delivery path accepts today. Decide whether the desk should too.
+- **D1592, multiple births:** the delivery record carries one sex, weight and Apgar (the first baby's); twins after the first are registered with sex unknown. Per-infant birth facts need their own fields.
+- **D1592, live birth of a multiple birth with a stillborn twin:** the record has one `liveBirth` flag for the whole delivery, so it cannot say "one live, one stillborn"; today every infant counted is registered.
+- **D1592, delivery edit:** there is no edit path for a delivery record; when one is added, it must call `NewbornRegistrationService.registerLiveBorn` (the guard enforces it) so a lowered count is flagged for review, never deleted.
+- **D1592, earlier births:** deliveries recorded before this change registered no baby; there is no backfill.

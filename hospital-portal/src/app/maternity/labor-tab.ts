@@ -7,6 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -174,6 +175,7 @@ const DELIVERY_IDS = [
     TranslateModule,
     PatientPickerComponent,
     PartographChartComponent,
+    RouterLink,
   ],
   templateUrl: './labor-tab.html',
   styleUrl: './maternity.scss',
@@ -552,6 +554,19 @@ export class LaborTabComponent {
       .subscribe({
         next: (delivery) => {
           this.toast.success(this.translate.instant('LABOR.DELIVERY_SAVED'));
+          // QA D1592: the babies the birth registered are named with their MRN.
+          if (delivery.newbornRegistrationPending) {
+            this.toast.error(this.translate.instant('LABOR.NEWBORN_REGISTRATION_PENDING'));
+          }
+          const babies = delivery.newborns ?? [];
+          if (babies.length > 0) {
+            this.toast.success(
+              this.translate.instant('LABOR.NEWBORNS_REGISTERED', {
+                count: babies.length,
+                names: babies.map((b) => `${b.displayName ?? '—'} (${b.mrn ?? '—'})`).join(', '),
+              }),
+            );
+          }
           for (const alert of delivery.alerts ?? []) {
             if (alert.severity === 'URGENT') {
               this.toast.error(alert.message);

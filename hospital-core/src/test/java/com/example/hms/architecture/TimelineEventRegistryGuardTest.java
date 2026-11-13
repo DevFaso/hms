@@ -132,6 +132,7 @@ class TimelineEventRegistryGuardTest {
         Map.entry("PatientTreatmentConsent", "consent administration, not care"),
         Map.entry("PatientRecordSharingOptOut", "a privacy preference"),
         Map.entry("PatientProxy", "a family-access grant, not care"),
+        Map.entry("DeliveryNewborn", "links a baby to the delivery that registered it (QA D1592); the birth is the DELIVERY event"),
         Map.entry("PatientPrimaryCare", "an administrative assignment"),
         Map.entry("PanelAssignment", "an administrative assignment"),
         Map.entry("PatientHospitalRegistration", "registration at a hospital, not care"),

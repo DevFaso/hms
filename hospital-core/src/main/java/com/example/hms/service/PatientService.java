@@ -39,6 +39,13 @@ public interface PatientService {
 
     PatientResponseDTO createPatient(PatientRequestDTO patientRequestDTO, Locale locale);
 
+    /**
+     * QA D1592: the record of a baby a recorded delivery registers, judged by
+     * the identity rules like a desk registration. Called by
+     * PatientAccountRegistrationService.registerNewborn only.
+     */
+    PatientResponseDTO createNewbornPatient(PatientRequestDTO patientRequestDTO, Locale locale);
+
     PatientResponseDTO updatePatient(UUID id, PatientRequestDTO patientRequestDTO, Locale locale);
 
     /** E8 #54 — restrict or lift the restriction on a chart; the administrator's act, audited by convention. */

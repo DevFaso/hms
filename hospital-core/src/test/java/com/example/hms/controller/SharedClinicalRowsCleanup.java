@@ -58,6 +58,8 @@ final class SharedClinicalRowsCleanup {
         // QA D605: labour charts pin the patient, the hospital and the staff.
         context.getBean(com.example.hms.repository.ObstetricAlertEscalationRepository.class).deleteAllInBatch();
         context.getBean(com.example.hms.repository.LaborPartographEntryRepository.class).deleteAll();
+        // QA D1592: a recorded live birth registers its babies, linked to the delivery.
+        context.getBean(com.example.hms.repository.DeliveryNewbornRepository.class).deleteAllInBatch();
         context.getBean(com.example.hms.repository.DeliveryRecordRepository.class).deleteAll();
         context.getBean(com.example.hms.repository.LaborEpisodeRepository.class).deleteAll();
         // QA D796: an unbooked labour opens the pregnancy record (maternal

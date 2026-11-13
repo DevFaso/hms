@@ -67,6 +67,8 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final HospitalRepository hospitalRepository;
     private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
+    /** QA D1592: the babies a delivery registered as patients. */
+    private final com.example.hms.repository.DeliveryNewbornRepository deliveryNewbornRepository;
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
@@ -123,10 +125,10 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         boolean recordedOnNewbornChart = isNeonate(patient);
         if (!recordedOnNewbornChart) {
-            // QA D161 (D103 family): a newborn cannot yet be registered as its own
-            // patient (D163), so the maternity screen records the assessment on the
-            // MOTHER's chart. On a chart that is not a neonate's, the patient is the
+            // QA D161 (D103 family): the maternity screen records the assessment from
+            // the MOTHER's chart. On a chart that is not a neonate's, the patient is the
             // mother and the obstetric rule applies, as for every other maternity record.
+            // Since D1592 the baby a delivery registered gets the row (below).
             ObstetricEligibility.requireObstetricEligible(patient);
         }
 
@@ -146,6 +148,23 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         com.example.hms.model.labor.DeliveryRecord deliveryRecord =
             resolveDeliveryRecord(request.getDeliveryRecordId(), hospital,
                 recordedOnNewbornChart ? null : patient);
+        if (recordedOnNewbornChart && deliveryRecord == null) {
+            // QA D1592: a baby registered from a delivery here is linked to it.
+            deliveryRecord = registeredDeliveryOf(patient, hospital);
+        }
+        if (!recordedOnNewbornChart) {
+            // QA D1592: from the mother's chart, an assessment of a baby the
+            // delivery registered is recorded on that baby's own chart.
+            Patient baby = registeredNewbornOf(deliveryRecord, request.getNewbornPatientId());
+            if (baby != null) {
+                patient = baby;
+                recordedOnNewbornChart = true;
+                patientRegistrationGuard.requireRegisteredAt(baby.getId(), hospital.getId());
+                registration = registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(baby.getId(), hospital.getId())
+                    .orElse(null);
+                com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(baby, request.getAssessmentTime(), "assessmentTime");
+            }
+        }
 
         NewbornAssessment assessment =
             buildAssessment(patient, hospital, registration, staff, documentedBy, request);
@@ -499,6 +518,41 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             throw new com.example.hms.exception.FieldBusinessException("deliveryRecordId", "newborn.delivery.otherMother");
         }
         return delivery;
+    }
+
+    /** QA D1592: the delivery a baby was registered from, at this hospital; null when none. */
+    private com.example.hms.model.labor.DeliveryRecord registeredDeliveryOf(Patient baby, Hospital hospital) {
+        return deliveryNewbornRepository.findByNewbornPatient_Id(baby.getId())
+            .filter(link -> hospital != null && link.getHospital() != null
+                && hospital.getId().equals(link.getHospital().getId()))
+            .map(com.example.hms.model.labor.DeliveryNewborn::getDeliveryRecord)
+            .orElse(null);
+    }
+
+    /**
+     * QA D1592: the registered baby of {@code delivery} an assessment from the
+     * mother's chart is for. Null when the delivery registered no baby (one
+     * recorded before D1592, or a stillbirth) and no baby was named. A named
+     * baby must be one of this delivery's; a multiple birth must name one.
+     */
+    private Patient registeredNewbornOf(com.example.hms.model.labor.DeliveryRecord delivery, UUID newbornPatientId) {
+        List<com.example.hms.model.labor.DeliveryNewborn> babies = delivery == null ? List.of()
+            : deliveryNewbornRepository.findByDeliveryRecord_IdOrderByBirthOrderAsc(delivery.getId());
+        if (newbornPatientId != null) {
+            return babies.stream()
+                .map(com.example.hms.model.labor.DeliveryNewborn::getNewbornPatient)
+                .filter(baby -> newbornPatientId.equals(baby.getId()))
+                .findFirst()
+                .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException(
+                    "newbornPatientId", "maternity.newborn.notThisDelivery"));
+        }
+        if (babies.isEmpty()) {
+            return null;
+        }
+        if (babies.size() > 1) {
+            throw new com.example.hms.exception.FieldBusinessException("newbornPatientId", "maternity.newborn.whichBaby");
+        }
+        return babies.get(0).getNewbornPatient();
     }
 
     /** Neonatal period: the first 28 days of life (WHO). */

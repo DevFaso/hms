@@ -68,6 +68,8 @@ class NewbornAssessmentServiceImplTest {
     @Mock
     private com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
     @Mock
+    private com.example.hms.repository.DeliveryNewbornRepository deliveryNewbornRepository;
+    @Mock
     private StaffRepository staffRepository;
     @Mock
     private UserRepository userRepository;
@@ -95,6 +97,7 @@ class NewbornAssessmentServiceImplTest {
             registrationRepository,
             hospitalRepository,
             deliveryRecordRepository,
+            deliveryNewbornRepository,
             staffRepository,
             userRepository,
             notificationService,
@@ -702,5 +705,97 @@ class NewbornAssessmentServiceImplTest {
         onTheMothersChart(1);
         previousReading(deliveryRecordAt(hospitalId), 170);
         assertTrue(codesOf(heartRate165()).contains("newborn-heart-rate"));
+    }
+
+    /* ── QA D1592: the baby a delivery registered is assessed on its own chart ── */
+
+    private Patient registeredBaby(com.example.hms.model.labor.DeliveryRecord delivery, int order) {
+        Patient baby = new Patient();
+        baby.setId(UUID.randomUUID());
+        baby.setFirstName("Bébé");
+        baby.setLastName("Traore");
+        baby.setDateOfBirth(delivery.getBirthDateTime().toLocalDate());
+        com.example.hms.model.labor.DeliveryNewborn link = com.example.hms.model.labor.DeliveryNewborn.builder()
+            .deliveryRecord(delivery).newbornPatient(baby).motherPatient(patient).hospital(hospital)
+            .birthOrder(order).build();
+        lenient().when(deliveryNewbornRepository.findByNewbornPatient_Id(baby.getId())).thenReturn(Optional.of(link));
+        return baby;
+    }
+
+    private void babiesOf(com.example.hms.model.labor.DeliveryRecord delivery, Patient... babies) {
+        java.util.List<com.example.hms.model.labor.DeliveryNewborn> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < babies.length; i++) {
+            rows.add(com.example.hms.model.labor.DeliveryNewborn.builder().deliveryRecord(delivery)
+                .newbornPatient(babies[i]).motherPatient(patient).hospital(hospital).birthOrder(i + 1).build());
+        }
+        when(deliveryNewbornRepository.findByDeliveryRecord_IdOrderByBirthOrderAsc(delivery.getId())).thenReturn(rows);
+    }
+
+    @Test
+    void d1592_fromTheMothersChartASingletonsAssessmentIsRecordedOnTheBabysChart() {
+        com.example.hms.model.labor.DeliveryRecord delivery = onTheMothersChart(1);
+        Patient baby = registeredBaby(delivery, 1);
+        babiesOf(delivery, baby);
+
+        service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).apgarOneMinute(8).apgarFiveMinute(9).build(), recorderId);
+
+        ArgumentCaptor<NewbornAssessment> saved = ArgumentCaptor.forClass(NewbornAssessment.class);
+        verify(assessmentRepository).save(saved.capture());
+        assertEquals(baby, saved.getValue().getPatient());
+        assertEquals(delivery, saved.getValue().getDeliveryRecord());
+        verify(patientRegistrationGuard).requireRegisteredAt(baby.getId(), hospitalId);
+    }
+
+    @Test
+    void d1592_twinsMustNameTheBaby() {
+        com.example.hms.model.labor.DeliveryRecord delivery = onTheMothersChart(2);
+        babiesOf(delivery, registeredBaby(delivery, 1), registeredBaby(delivery, 2));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.recordAssessment(patientId,
+            NewbornAssessmentRequestDTO.builder().hospitalId(hospitalId).apgarOneMinute(8).build(), recorderId));
+
+        assertEquals("maternity.newborn.whichBaby", ex.getMessageKey());
+        verify(assessmentRepository, never()).save(any());
+    }
+
+    @Test
+    void d1592_twinsNamedBabyGetsTheRow() {
+        com.example.hms.model.labor.DeliveryRecord delivery = onTheMothersChart(2);
+        Patient second = registeredBaby(delivery, 2);
+        babiesOf(delivery, registeredBaby(delivery, 1), second);
+
+        service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder().hospitalId(hospitalId)
+            .newbornPatientId(second.getId()).apgarOneMinute(8).build(), recorderId);
+
+        ArgumentCaptor<NewbornAssessment> saved = ArgumentCaptor.forClass(NewbornAssessment.class);
+        verify(assessmentRepository).save(saved.capture());
+        assertEquals(second, saved.getValue().getPatient());
+    }
+
+    @Test
+    void d1592_aBabyOfAnotherDeliveryIsRefused() {
+        com.example.hms.model.labor.DeliveryRecord delivery = onTheMothersChart(1);
+        babiesOf(delivery, registeredBaby(delivery, 1));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.recordAssessment(patientId,
+            NewbornAssessmentRequestDTO.builder().hospitalId(hospitalId).newbornPatientId(UUID.randomUUID())
+                .apgarOneMinute(8).build(), recorderId));
+
+        assertEquals("maternity.newborn.notThisDelivery", ex.getMessageKey());
+    }
+
+    @Test
+    void d1592_onTheBabysOwnChartTheDeliveryItWasRegisteredFromIsLinked() {
+        com.example.hms.model.labor.DeliveryRecord delivery = deliveryRecordAt(hospitalId);
+        delivery.setBirthDateTime(java.time.LocalDateTime.now().minusHours(5));
+        com.example.hms.model.labor.DeliveryNewborn link = com.example.hms.model.labor.DeliveryNewborn.builder()
+            .deliveryRecord(delivery).newbornPatient(patient).hospital(hospital).birthOrder(1).build();
+        when(deliveryNewbornRepository.findByNewbornPatient_Id(patientId)).thenReturn(Optional.of(link));
+
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).apgarOneMinute(8).build(), recorderId);
+
+        assertEquals(delivery.getId(), response.getDeliveryRecordId());
     }
 }

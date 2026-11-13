@@ -52,43 +52,46 @@ class InBasketRecipientGuardTest {
     private static final Pattern QUOTED_ROLE = Pattern.compile("'(?:ROLE_)?([A-Z_]+)'");
 
     /** Every class that files an item, by file name, and whom. */
-    private static final Map<String, Set<String>> RECIPIENTS = Map.of(
+    private static final Map<String, Set<String>> RECIPIENTS = Map.ofEntries(
         // The requester, who ordered it; the nurse who ran the bag; the lab directors; the authoriser.
-        "TransfusionServiceImpl.java", union(
+        Map.entry("TransfusionServiceImpl.java", union(
             rolesOf(constant(TransfusionController.class, "PRESCRIBER")),
             rolesOf(constant(TransfusionController.class, "BEDSIDE")),
             codes(setConstant(TransfusionServiceImpl.class, "LAB_DIRECTOR_ROLE_CODES")),
-            codes(EmergencyReleasePolicy.INCOMPATIBLE_AUTHORISER_ROLE_CODES)),
+            codes(EmergencyReleasePolicy.INCOMPATIBLE_AUTHORISER_ROLE_CODES))),
         // The clinician who ordered the test.
-        "LabResultServiceImpl.java", labOrderers(),
-        "LabSpecimenRejectionNotifier.java", labOrderers(),
+        Map.entry("LabResultServiceImpl.java", labOrderers()),
+        Map.entry("LabSpecimenRejectionNotifier.java", labOrderers()),
         // The obstetric team, then the ward.
-        "ObstetricAlertEscalationWorker.java", union(
+        Map.entry("ObstetricAlertEscalationWorker.java", union(
             codes(setConstant(ObstetricAlertEscalationWorker.class, "FIRST_NOTICE_ROLES")),
-            codes(setConstant(ObstetricAlertEscalationWorker.class, "REMINDER_ROLES"))),
+            codes(setConstant(ObstetricAlertEscalationWorker.class, "REMINDER_ROLES")))),
         // The urgent dispute of a death: the administrators of both hospitals, who decide it.
-        "DeathDisputeServiceImpl.java", codes(setConstant(com.example.hms.service.impl.DeathDisputeServiceImpl.class, "ADMIN_ROLE_CODES")),
+        Map.entry("DeathDisputeServiceImpl.java", codes(setConstant(com.example.hms.service.impl.DeathDisputeServiceImpl.class, "ADMIN_ROLE_CODES"))),
         // The treating clinicians of a running treatment, who assess it.
         // A held order's prescriber, who may have drafted it as a nurse or a midwife, and with nobody known the
         // hospital's doctors.
-        "OrderReviewAfterCommit.java", union(
+        Map.entry("OrderReviewAfterCommit.java", union(
             rolesOf(constant(TransfusionController.class, "PRESCRIBER")),
             rolesOf(constant(TransfusionController.class, "BEDSIDE")),
-            codes(setConstant(com.example.hms.service.impl.OrderReviewAfterCommit.class, "FALLBACK_ROLE_CODES"))),
+            codes(setConstant(com.example.hms.service.impl.OrderReviewAfterCommit.class, "FALLBACK_ROLE_CODES")))),
         // The review after an urgent dose exception (CR-01): the pharmacy, else a physician.
-        "PrescriptionServiceImpl.java", union(
+        Map.entry("PrescriptionServiceImpl.java", union(
             codes(setConstant(com.example.hms.service.PrescriptionServiceImpl.class, "URGENT_REVIEW_PHARMACY_ROLES")),
-            codes(setConstant(com.example.hms.service.PrescriptionServiceImpl.class, "URGENT_REVIEW_PHYSICIAN_ROLES"))),
+            codes(setConstant(com.example.hms.service.PrescriptionServiceImpl.class, "URGENT_REVIEW_PHYSICIAN_ROLES")))),
         // Policy 4: an allergy conflict held at the eMAR or the pharmacy, for the order's prescriber, its
         // signer and the encounter's clinician (who may be a nurse or a midwife).
-        "CurrentAllergyRecheck.java", union(
+        Map.entry("CurrentAllergyRecheck.java", union(
             rolesOf(constant(TransfusionController.class, "PRESCRIBER")),
-            rolesOf(constant(TransfusionController.class, "BEDSIDE"))),
+            rolesOf(constant(TransfusionController.class, "BEDSIDE")))),
         // Provisional platform rule: a closed visit's unsigned note, for its author only, who wrote it as one
         // of the roles the note endpoint admits.
-        "UnsignedNoteFollowUp.java", noteAuthors(),
+        Map.entry("UnsignedNoteFollowUp.java", noteAuthors()),
+        // QA D1592: a baby a delivery could not register, for the delivering hospital's reception.
+        Map.entry("NewbornRegistrationService.java", codes(setConstant(
+            com.example.hms.service.maternity.NewbornRegistrationService.class, "PENDING_ROLE_CODES"))),
         // The store itself: every sender above reaches it through createItem.
-        "InBasketServiceImpl.java", Set.of());
+        Map.entry("InBasketServiceImpl.java", Set.of()));
 
     /** The exception to E9 #67 stays one exception: no other sender files an item for a hospital administrator. */
     @Test

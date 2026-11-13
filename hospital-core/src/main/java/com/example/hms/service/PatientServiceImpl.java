@@ -911,6 +911,24 @@ public class PatientServiceImpl implements PatientService {
         }
     }
 
+    /**
+     * QA D1592: no role check here - the clinician who recorded the birth may
+     * not be a registrar; the delivery path (LaborServiceImpl.recordDelivery,
+     * at the acting hospital) is the authorization. The identity rules apply.
+     */
+    @Override
+    @Transactional
+    public PatientResponseDTO createNewbornPatient(PatientRequestDTO dto, Locale locale) {
+        requirePossibleNamesAndPlace(dto, null);
+        // The birth date is the delivery's, already refused in the future
+        // (NotInClinicalFuture); a baby born today is born today, so the
+        // desk rule "before today" (PatientIdentityRules) does not apply.
+        if (dto.getDateOfBirth() == null || dto.getDateOfBirth().isAfter(LocalDate.now())) {
+            throw new FieldBusinessException("dateOfBirth", "patient.dateOfBirth.notPast");
+        }
+        return createPatient(dto, locale);
+    }
+
     @Override
     @Transactional
     @PreAuthorize("hasAnyRole('RECEPTIONIST','HOSPITAL_ADMIN')")
@@ -978,6 +996,12 @@ public class PatientServiceImpl implements PatientService {
 
     /** QA D1403 + D1414: judged before anything is written; a stored value sent back is not a change. */
     private static void requirePossibleIdentity(PatientRequestDTO dto, Patient stored) {
+        requirePossibleNamesAndPlace(dto, stored);
+        PatientIdentityRules.requirePossibleBirthDate(dto.getDateOfBirth(), stored == null ? null : stored.getDateOfBirth());
+    }
+
+    /** The name, contact and city half of {@link #requirePossibleIdentity}. */
+    private static void requirePossibleNamesAndPlace(PatientRequestDTO dto, Patient stored) {
         boolean create = stored == null;
         PatientIdentityRules.requireNameWithLetters(FIELD_FIRST_NAME, dto.getFirstName(), create ? null : stored.getFirstName());
         PatientIdentityRules.requireNameWithLetters(FIELD_LAST_NAME, dto.getLastName(), create ? null : stored.getLastName());
@@ -986,7 +1010,6 @@ public class PatientServiceImpl implements PatientService {
         PatientIdentityRules.requireNameWithLetters("emergencyContactName", dto.getEmergencyContactName(),
             create ? null : stored.getEmergencyContactName());
         PatientIdentityRules.requirePlaceWithLetters("city", dto.getCity(), create ? null : stored.getCity());
-        PatientIdentityRules.requirePossibleBirthDate(dto.getDateOfBirth(), create ? null : stored.getDateOfBirth());
     }
 
     private void ensurePatientRegistration(Patient patient, Hospital hospital) {
