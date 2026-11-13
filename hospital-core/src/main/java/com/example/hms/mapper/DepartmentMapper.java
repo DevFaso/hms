@@ -44,6 +44,7 @@ public class DepartmentMapper {
         applyLocalizedContent(department, dto, locale);
 
         dto.setTranslations(extractTranslationNames(department));
+        dto.setTranslationEntries(mapTranslations(department.getDepartmentTranslations()));
         dto.setStaffCount(department.getStaffMembers() != null ? department.getStaffMembers().size() : 0);
         dto.setBedCount(department.getBedCapacity() != null ? department.getBedCapacity() : 0);
 

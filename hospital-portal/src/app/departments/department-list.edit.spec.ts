@@ -32,8 +32,13 @@ describe('DepartmentListComponent — edit form (D1790)', () => {
     email: '',
     active: true,
     staffCount: 1,
-    bedCount: 0,
-    translations: [],
+    bedCount: 12,
+    translations: ['Cardiologie', 'Cardiology'],
+    translationEntries: [
+      { languageCode: 'fr', name: 'Cardiologie', description: 'Soins du coeur' },
+      { languageCode: 'en', name: 'Cardiology', description: 'Heart care' },
+      { languageCode: 'pt', name: 'Cardiologia', description: null },
+    ],
   };
   const staff = [
     {
@@ -47,7 +52,7 @@ describe('DepartmentListComponent — edit form (D1790)', () => {
     { id: 's-2', name: 'Boukary Sawadogo', email: 'bou@h.bf', active: true },
   ];
 
-  beforeEach(() => {
+  function setup(superAdmin: boolean): void {
     TestBed.configureTestingModule({
       imports: [DepartmentListComponent, TranslateModule.forRoot()],
       providers: [
@@ -56,7 +61,7 @@ describe('DepartmentListComponent — edit form (D1790)', () => {
         {
           provide: RoleContextService,
           useValue: roleContextStub({
-            superAdmin: false,
+            superAdmin,
             hospitalId: 'h-1',
             roles: ['ROLE_HOSPITAL_ADMIN'],
           }),
@@ -82,7 +87,9 @@ describe('DepartmentListComponent — edit form (D1790)', () => {
     fixture.detectChanges();
     http.expectOne('/departments').flush({ content: [apiDept] });
     fixture.detectChanges();
-  });
+  }
+
+  beforeEach(() => setup(false));
 
   it('opens prefilled from an API-shaped response and saves the same code', () => {
     const cmp = fixture.componentInstance;
@@ -146,5 +153,49 @@ describe('DepartmentListComponent — edit form (D1790)', () => {
     delayed.next(staff as StaffResponse[]);
     expect(cmp.form.headOfDepartmentEmail).toBe('');
     expect(cmp.staffForHospital()).toEqual([]);
+  });
+
+  it('shows bed capacity and a name per language, and an unchanged save keeps every translation', () => {
+    const cmp = fixture.componentInstance;
+    cmp.openEdit(cmp.departments()[0]);
+    expect(cmp.form.bedCapacity).toBe(12);
+    expect(cmp.langNames).toEqual({ fr: 'Cardiologie', en: 'Cardiology', es: '' });
+
+    cmp.submitForm();
+    const put = http.expectOne('/departments/d-1');
+    expect(put.request.body.bedCapacity).toBe(12);
+    expect(put.request.body.translations).toEqual([
+      { languageCode: 'pt', name: 'Cardiologia', description: null },
+      { languageCode: 'fr', name: 'Cardiologie', description: 'Soins du coeur' },
+      { languageCode: 'en', name: 'Cardiology', description: 'Heart care' },
+    ]);
+    put.flush({});
+    http.expectOne('/departments').flush({ content: [apiDept] });
+  });
+
+  it('keeps a stored name when its field is blanked, and adds a typed one', () => {
+    const cmp = fixture.componentInstance;
+    cmp.openEdit(cmp.departments()[0]);
+    cmp.langNames['en'] = '  ';
+    cmp.langNames['es'] = 'Cardiologia';
+    cmp.submitForm();
+    const put = http.expectOne('/departments/d-1');
+    const sent = put.request.body.translations as { languageCode: string; name: string }[];
+    expect(sent.find((t) => t.languageCode === 'en')?.name).toBe('Cardiology');
+    expect(sent.find((t) => t.languageCode === 'es')?.name).toBe('Cardiologia');
+    put.flush({});
+    http.expectOne('/departments').flush({ content: [apiDept] });
+  });
+
+  it('shows the hospital read-only while editing, even for a super-admin', () => {
+    TestBed.resetTestingModule();
+    setup(true);
+    const cmp = fixture.componentInstance;
+    cmp.showModal.set(true);
+    cmp.openEdit(cmp.departments()[0]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('#dHospital')).toBeNull();
+    expect(host.querySelector('.locked-field')?.textContent).toContain('Hopital A');
   });
 });

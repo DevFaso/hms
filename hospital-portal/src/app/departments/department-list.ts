@@ -29,7 +29,19 @@ export interface Department {
   hospitalId?: string;
   hospitalName?: string;
   translations?: string[];
+  translationEntries?: DepartmentTranslation[];
 }
+
+export interface DepartmentTranslation {
+  id?: string;
+  departmentId?: string;
+  languageCode: string;
+  name: string;
+  description?: string | null;
+}
+
+/** The languages the edit form shows a name for. */
+export const DEPARTMENT_NAME_LANGUAGES = ['fr', 'en', 'es'] as const;
 
 interface DepartmentRequest {
   hospitalId: string;
@@ -40,6 +52,8 @@ interface DepartmentRequest {
   email?: string;
   active: boolean;
   headOfDepartmentEmail?: string;
+  bedCapacity?: number | null;
+  translations?: DepartmentTranslation[];
 }
 
 @Component({
@@ -82,6 +96,13 @@ export class DepartmentListComponent implements OnInit {
   editing = signal<Department | null>(null);
   saving = signal(false);
   form: DepartmentRequest = this.emptyForm();
+  /** One name per language (FR / EN / ES). Blank keeps the stored value. */
+  readonly nameLanguages = [
+    { code: 'fr', labelKey: 'DEPARTMENTS.NAME_IN_FR' },
+    { code: 'en', labelKey: 'DEPARTMENTS.NAME_IN_EN' },
+    { code: 'es', labelKey: 'DEPARTMENTS.NAME_IN_ES' },
+  ];
+  langNames: Record<string, string> = this.emptyLangNames();
 
   /** Receptionist gets read-only access — no create/edit/delete */
   canManage = !this.roleContext.isReceptionist();
@@ -195,6 +216,7 @@ export class DepartmentListComponent implements OnInit {
   // ---------- Create ----------
   openCreate(): void {
     this.form = this.emptyForm();
+    this.langNames = this.emptyLangNames();
     // Re-apply the locked hospital for non-super-admin users
     const h = this.hospitals();
     if (this.hospitalLocked && h.length === 1) {
@@ -221,7 +243,13 @@ export class DepartmentListComponent implements OnInit {
       email: dept.email ?? '',
       active: dept.active,
       headOfDepartmentEmail: '',
+      bedCapacity: dept.bedCount ?? null,
     };
+    this.langNames = this.emptyLangNames();
+    for (const t of dept.translationEntries ?? []) {
+      const lang = t.languageCode?.toLowerCase();
+      if (lang && lang in this.langNames) this.langNames[lang] = t.name ?? '';
+    }
     // Pre-load staff for the existing hospital so the dropdown is populated
     if (dept.hospitalId) {
       this.loadStaffForHospital(dept.hospitalId, dept.id);
@@ -297,6 +325,12 @@ export class DepartmentListComponent implements OnInit {
     if (!payload.phoneNumber) delete payload.phoneNumber;
     if (!payload.email) delete payload.email;
     if (!payload.headOfDepartmentEmail) delete payload.headOfDepartmentEmail;
+    if (payload.bedCapacity === null || (payload.bedCapacity as unknown) === '') {
+      delete payload.bedCapacity;
+    }
+    const translations = this.buildTranslations(this.editing());
+    if (translations) payload.translations = translations;
+    else delete payload.translations;
 
     const existing = this.editing();
     const request$ = existing
@@ -363,6 +397,40 @@ export class DepartmentListComponent implements OnInit {
   }
 
   // ---------- Helpers ----------
+  private emptyLangNames(): Record<string, string> {
+    return { fr: '', en: '', es: '' };
+  }
+
+  /**
+   * The full translation list the update replaces. A blank language keeps the
+   * stored value; a language the form does not show (not FR/EN/ES) is passed
+   * through; the editor's own language follows the main name when only that
+   * was changed. Null when there is nothing to send (keeps what is stored).
+   */
+  private buildTranslations(dept: Department | null): DepartmentTranslation[] | null {
+    const stored = dept?.translationEntries ?? [];
+    const own = (this.translate.currentLang ?? '').slice(0, 2).toLowerCase();
+    const out: DepartmentTranslation[] = [];
+    for (const t of stored) {
+      const lang = t.languageCode?.toLowerCase();
+      if (!(DEPARTMENT_NAME_LANGUAGES as readonly string[]).includes(lang)) {
+        out.push({ languageCode: t.languageCode, name: t.name, description: t.description });
+      }
+    }
+    for (const lang of DEPARTMENT_NAME_LANGUAGES) {
+      const prev = stored.find((t) => t.languageCode?.toLowerCase() === lang);
+      const typed = (this.langNames[lang] ?? '').trim();
+      let name = typed || prev?.name || '';
+      let description = prev?.description;
+      if (prev && lang === own) {
+        description = this.form.description || prev.description;
+        if (typed === prev.name && dept && this.form.name !== dept.name) name = this.form.name;
+      }
+      if (name) out.push({ languageCode: lang, name, description });
+    }
+    return out.length > 0 ? out : null;
+  }
+
   private emptyForm(): DepartmentRequest {
     return {
       hospitalId: '',
@@ -373,6 +441,7 @@ export class DepartmentListComponent implements OnInit {
       email: '',
       active: true,
       headOfDepartmentEmail: '',
+      bedCapacity: null,
     };
   }
 }

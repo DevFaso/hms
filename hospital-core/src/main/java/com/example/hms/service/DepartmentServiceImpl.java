@@ -281,6 +281,11 @@ public class DepartmentServiceImpl implements DepartmentService {
         validateDepartmentRequest(dto);
 
         Hospital hospital = resolveHospital(dto);
+        // D1790: a department belongs to one hospital for good; a move is refused on the field.
+        if (department.getHospital() != null
+                && !Objects.equals(department.getHospital().getId(), hospital.getId())) {
+            throw new FieldBusinessException("hospitalId", "department.hospital.immutable");
+        }
         dto.setHospitalName(hospital.getName());
         dto.setCode(normalizeDepartmentCode(dto.getCode()));
         ensureRenameUniqueness(id, dto, hospital, locale);
@@ -309,19 +314,19 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         String storedName = department.getName();
         String storedDescription = department.getDescription();
-        boolean hadLocaleTranslation = dto.getTranslations() == null && hasTranslationFor(department, locale);
+        boolean hadLocaleTranslation = hasTranslationFor(department, locale);
         departmentMapper.updateDepartmentFromDto(dto, department, hospital, head);
         if (dto.getTranslations() == null) {
             // The form edits the name and description as the caller reads them, her
             // language's translation: write them back there, keep every other language.
             syncLocaleTranslation(department, locale);
-            if (hadLocaleTranslation) {
-                // D1790: what the form sent is the localized display text, never the stored
-                // base name: a rename updates only the language being edited.
-                department.setName(storedName);
-                department.setDescription(storedDescription);
-            }
             ensureLocaleTranslation(department, department.getAssignment(), locale);
+        }
+        if (hadLocaleTranslation) {
+            // D1790: what the form sent is the localized display text, never the stored
+            // base name: a rename updates only the language being edited.
+            department.setName(storedName);
+            department.setDescription(storedDescription);
         }
         Department updatedDepartment = departmentRepository.save(department);
 

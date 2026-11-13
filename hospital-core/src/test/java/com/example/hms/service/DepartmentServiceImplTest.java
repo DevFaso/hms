@@ -1773,17 +1773,43 @@ class DepartmentServiceImplTest {
     }
 
     @Test
-    void updateDepartment_movedToAnotherHospital_dropsTheOldHead_R48() {
+    void updateDepartment_movedToAnotherHospital_isRefusedOnTheHospitalField_D1790() {
         Hospital other = new Hospital();
         other.setId(UUID.randomUUID());
         other.setName("Other");
         other.setCode("OT");
         department.setHospital(other);
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        assertThatThrownBy(() -> departmentService.updateDepartment(deptId, portalPhoneEdit(), Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("hospitalId");
+                assertThat(e.getMessage()).contains("department.hospital.immutable");
+            });
+        assertThat(department.getHospital()).isSameAs(other);
+        assertThat(department.getHeadOfDepartment()).isSameAs(staff);
+    }
+
+    @Test
+    void updateDepartment_translationsSent_stillKeepBaseNameOfTheCallersLanguage_D1790() {
+        department.setName("Cardiology base");
+        department.getDepartmentTranslations().add(translation("fr", "Cardiologie"));
         stubEditWithTheRealMapper();
+        DepartmentRequestDTO dto = portalPhoneEdit();
+        dto.setName("Cardiologie adulte");
+        com.example.hms.payload.dto.DepartmentTranslationRequestDTO fr =
+            new com.example.hms.payload.dto.DepartmentTranslationRequestDTO();
+        fr.setLanguageCode("fr");
+        fr.setName("Cardiologie adulte");
+        dto.setTranslations(List.of(fr));
 
-        departmentService.updateDepartment(deptId, portalPhoneEdit(), Locale.FRENCH);
+        departmentService.updateDepartment(deptId, dto, Locale.FRENCH);
 
-        assertThat(department.getHeadOfDepartment()).isNull();
+        assertThat(department.getName()).isEqualTo("Cardiology base");
+        assertThat(department.getDepartmentTranslations())
+            .extracting(com.example.hms.model.DepartmentTranslation::getName)
+            .containsExactly("Cardiologie adulte");
     }
 
     @Test
