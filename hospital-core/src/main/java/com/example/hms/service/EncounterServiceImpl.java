@@ -349,14 +349,15 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     /**
-     * The summary's content sections, for every reader but the desk: a
-     * receptionist reads none of them (RCPT-CLIN), so they are not even read.
+     * The summary's content sections. A receptionist reads none of the
+     * clinical ones (RCPT-CLIN), so they are not even read, but keeps the
+     * contact numbers (QA D1741).
      */
     private void fillSummarySections(Encounter encounter,
                                      com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO avs) {
-        if (afterVisitSummarySections != null
-                && !com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly()) {
-            afterVisitSummarySections.fill(encounter, avs);
+        if (afterVisitSummarySections != null) {
+            afterVisitSummarySections.fill(encounter, avs,
+                com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly());
         }
     }
 

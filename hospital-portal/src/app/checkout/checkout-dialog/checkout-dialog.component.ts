@@ -1,6 +1,10 @@
 import {
   Component,
+  ElementRef,
   EventEmitter,
+  Injector,
+  afterNextRender,
+  viewChild,
   Input,
   Output,
   inject,
@@ -81,6 +85,9 @@ export class CheckoutDialogComponent {
   private readonly prescriptionService = inject(PrescriptionService);
   private readonly referralService = inject(ReferralService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
+  /** The summary step's heading: focus lands on it when the form gives way (QA D1742, D1004). */
+  private readonly avsHeading = viewChild<ElementRef<HTMLElement>>('avsHeading');
 
   /** Roles all three reads admit (diagnoses, prescriptions, referrals by patient). */
   private static readonly PREFILL_ROLES = ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'];
@@ -171,12 +178,18 @@ export class CheckoutDialogComponent {
 
     this.encounterService.checkOut(this.encounter.id, request).subscribe({
       next: (summary) => {
+        // QA D1742: the dialog now shows the summary; the host hears of the
+        // check-out when the reader closes it (close()), not in this tick,
+        // which closed the dialog before anyone saw the summary.
         this.avs.set(summary);
         this.saving.set(false);
         this.toast.success(
           this.translate.instant('checkout.success') || 'Patient checked out successfully',
         );
-        this.checkoutCompleted.emit(summary);
+        // QA D1004: the submit button that had focus is gone with the form.
+        afterNextRender(() => this.avsHeading()?.nativeElement.focus(), {
+          injector: this.injector,
+        });
       },
       error: (err: unknown) => {
         this.saving.set(false);
@@ -189,8 +202,14 @@ export class CheckoutDialogComponent {
     });
   }
 
+  /** Closing after a check-out (Done, ×, Escape, the backdrop) reports it; before, it is a cancel. */
   close(): void {
-    this.dismissed.emit();
+    const summary = this.avs();
+    if (summary) {
+      this.checkoutCompleted.emit(summary);
+    } else {
+      this.dismissed.emit();
+    }
   }
 
   private prefill(enc: EncounterResponse): void {
