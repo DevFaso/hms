@@ -331,6 +331,21 @@ public class LaborServiceImpl implements LaborService {
 
     /* ═══════════════════════ Transfer between hospitals ═══════════════════════ */
 
+    /** The reach a hospital's read of the episode handed over to it records. */
+    private static final String HANDOVER_READ = "Labour episode handed over by transfer read at the receiving hospital";
+
+    /**
+     * B's transfer with a handover (TRANSFERRED_OUT) to this hospital, which
+     * holds the episode that continues it. An arrival without handover
+     * (LEFT_WITHOUT_HANDOVER) is not a handover: it follows the sharing rule.
+     */
+    private boolean isHandedOverTo(LaborEpisode source, UUID hospitalId) {
+        return source != null && source.getId() != null && hospitalId != null
+            && source.getStatus() == LaborStatus.TRANSFERRED_OUT
+            && source.getTransferHospital() != null && hospitalId.equals(source.getTransferHospital().getId())
+            && episodeRepository.existsByTransferredFrom_IdAndHospital_Id(source.getId(), hospitalId);
+    }
+
     /** Source of the urgent notices a labour transfer raises (no clinical value behind them to re-measure). */
     static final String NOTICE_SOURCE_TRANSFER = "LABOR_TRANSFER";
     private static final String FIELD_REASON = "reason";
@@ -749,11 +764,30 @@ public class LaborServiceImpl implements LaborService {
         // foreign episode surfaced is accounted.
         UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-        List<LaborEpisode> episodes = episodeRepository
-            .findByPatient_IdAndHospital_IdInOrderByAdmittedAtDesc(patientId, readable, PageRequest.of(0, effectiveLimit));
+        List<LaborEpisode> episodes = new java.util.ArrayList<>(episodeRepository
+            .findByPatient_IdAndHospital_IdInOrderByAdmittedAtDesc(patientId, readable, PageRequest.of(0, effectiveLimit)));
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(episodes.stream().map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList(), hospitalId),
             "Cross-hospital labour episode read on the treatment relationship");
+        // Labour transfer (user decision, 2026-11-12): a labour B handed over is
+        // B's handover of care. The receiving hospital sees that one episode
+        // whatever the sharing rule says, and nothing else of B's.
+        List<LaborEpisode> handedOver = episodes.stream()
+            .filter(e -> e.getHospital() != null && hospitalId.equals(e.getHospital().getId()))
+            .map(LaborEpisode::getTransferredFrom)
+            .filter(source -> isHandedOverTo(source, hospitalId))
+            .filter(source -> episodes.stream().noneMatch(e -> e.getId().equals(source.getId())))
+            .distinct()
+            .toList();
+        if (!handedOver.isEmpty()) {
+            reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(handedOver.stream()
+                    .map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList(), hospitalId),
+                HANDOVER_READ);
+            episodes.addAll(handedOver);
+            episodes.sort(java.util.Comparator.comparing(LaborEpisode::getAdmittedAt,
+                java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
+        }
         return episodes
             .stream()
             .map(episode -> laborMapper.toEpisodeResponse(
@@ -1205,10 +1239,23 @@ public class LaborServiceImpl implements LaborService {
         Objects.requireNonNull(patientId, PATIENT_ID_REQUIRED);
         UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-        LaborEpisode episode = episodeRepository.findById(episodeId)
+        LaborEpisode found = episodeRepository.findById(episodeId)
             .filter(e -> e.getPatient() != null && patientId.equals(e.getPatient().getId()))
-            .filter(e -> e.getHospital() != null && readable != null && readable.contains(e.getHospital().getId()))
             .orElseThrow(() -> new ResourceNotFoundException("labor.episode.notFound", episodeId));
+        if (found.getHospital() == null || readable == null || !readable.contains(found.getHospital().getId())) {
+            // Labour transfer (user decision, 2026-11-12): the episode B handed to
+            // this hospital, and only that one, stays readable here.
+            if (!isHandedOverTo(found, hospitalId)) {
+                throw new ResourceNotFoundException("labor.episode.notFound", episodeId);
+            }
+            reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(
+                    java.util.Collections.singletonList(CrossHospitalReachRecorder.hospitalIdOf(found.getHospital())),
+                    hospitalId),
+                HANDOVER_READ);
+            return found;
+        }
+        LaborEpisode episode = found;
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(
                 java.util.Collections.singletonList(CrossHospitalReachRecorder.hospitalIdOf(episode.getHospital())),

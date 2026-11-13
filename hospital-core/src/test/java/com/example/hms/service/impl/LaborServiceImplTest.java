@@ -2103,4 +2103,54 @@ class LaborServiceImplTest {
         verify(patientRepository).lockByIdUnscoped(patientId);
         verify(deliveryRecordRepository, never()).save(any());
     }
+
+    /**
+     * User decision (2026-11-12): a transfer with a handover is B's handover of
+     * care. Within one organisation and with no general read of B, A still sees
+     * the transferred episode and its partograph, read only, and nothing else of B's.
+     */
+    @Test
+    void theReceivingHospitalReadsTheHandedOverEpisodeAndNothingElseOfTheSender() {
+        Hospital b = new Hospital();
+        b.setId(UUID.randomUUID());
+        b.setName("Hôpital B");
+        LaborEpisode handed = LaborEpisode.builder().patient(patient).hospital(b).status(LaborStatus.TRANSFERRED_OUT)
+            .transferHospital(hospital).admittedAt(LocalDateTime.now().minusHours(8)).build();
+        handed.setId(UUID.randomUUID());
+        LaborEpisode earlierAtB = LaborEpisode.builder().patient(patient).hospital(b).status(LaborStatus.DELIVERED)
+            .admittedAt(LocalDateTime.now().minusYears(2)).build();
+        earlierAtB.setId(UUID.randomUUID());
+        LaborEpisode leftB = LaborEpisode.builder().patient(patient).hospital(b).status(LaborStatus.LEFT_WITHOUT_HANDOVER)
+            .transferHospital(hospital).admittedAt(LocalDateTime.now().minusYears(1)).build();
+        leftB.setId(UUID.randomUUID());
+        LaborEpisode continued = LaborEpisode.builder().patient(patient).hospital(hospital).status(LaborStatus.ACTIVE)
+            .transferredFrom(handed).admittedAt(LocalDateTime.now().minusHours(1)).build();
+        continued.setId(UUID.randomUUID());
+        // A reads only itself (the default readable set): no general read of B.
+        when(episodeRepository.findByPatient_IdAndHospital_IdInOrderByAdmittedAtDesc(eq(patientId), eq(Set.of(hospitalId)), any()))
+            .thenReturn(List.of(continued));
+        lenient().when(episodeRepository.existsByTransferredFrom_IdAndHospital_Id(handed.getId(), hospitalId)).thenReturn(true);
+        lenient().when(episodeRepository.existsByTransferredFrom_IdAndHospital_Id(leftB.getId(), hospitalId)).thenReturn(true);
+        for (LaborEpisode e : List.of(handed, earlierAtB, leftB)) {
+            lenient().when(episodeRepository.findById(e.getId())).thenReturn(Optional.of(e));
+        }
+        when(entryRepository.findByEpisode_IdOrderByObservationTimeAsc(handed.getId()))
+            .thenReturn(List.of(LaborPartographEntry.builder().episode(handed).patient(patient).hospital(b)
+                .observationTime(LocalDateTime.now().minusHours(3)).fetalHeartRateBpm(140).build()));
+
+        assertThat(service.getEpisodes(patientId, hospitalId, 10))
+            .extracting(LaborEpisodeResponseDTO::getId)
+            .containsExactly(continued.getId(), handed.getId());
+        assertThat(service.getEntries(patientId, handed.getId(), hospitalId)).hasSize(1);
+        verify(reachRecorder, org.mockito.Mockito.atLeastOnce()).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(b.getId().toString(), 1L)), eq("Labour episode handed over by transfer read at the receiving hospital"));
+
+        // Nothing else of B's: an earlier episode, nor one closed by an arrival without handover.
+        assertThatThrownBy(() -> service.getEntries(patientId, earlierAtB.getId(), hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.getEntries(patientId, leftB.getId(), hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.getDelivery(patientId, earlierAtB.getId(), hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
 }

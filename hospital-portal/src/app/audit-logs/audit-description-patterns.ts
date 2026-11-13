@@ -1474,6 +1474,11 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: [],
   },
   {
+    key: 'AUDIT.DESC.LABOR_EPISODE_HANDOVER_READ',
+    re: /^Labour episode handed over by transfer read at the receiving hospital$/,
+    params: [],
+  },
+  {
     key: 'AUDIT.DESC.LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER',
     re: /^Labour episode opened on arrival from another hospital without a handover$/,
     params: [],

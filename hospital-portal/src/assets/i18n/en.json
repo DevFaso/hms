@@ -1906,6 +1906,7 @@
       "LABOR_EPISODE_TRANSFERRED_OUT": "Labour episode transferred to another hospital with a handover",
       "LABOR_EPISODE_TRANSFERRED_IN": "Labour episode received from another hospital with a handover",
       "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Labour episode closed: she arrived at another hospital without a handover",
+      "LABOR_EPISODE_HANDOVER_READ": "Labour episode handed over by transfer read at the receiving hospital",
       "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Labour episode opened on arrival from another hospital without a handover",
       "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Obstetric rule skip cleared on an ultrasound order",
       "ALLERGY_ACKNOWLEDGED": "Allergy acknowledged with a reason",

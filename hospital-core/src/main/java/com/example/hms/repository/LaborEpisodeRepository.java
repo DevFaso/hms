@@ -40,6 +40,9 @@ public interface LaborEpisodeRepository extends JpaRepository<LaborEpisode, UUID
     @org.springframework.data.jpa.repository.Query("SELECT e.status FROM LaborEpisode e WHERE e.id = :id")
     Optional<LaborStatus> findStatusById(@org.springframework.data.repository.query.Param("id") UUID id);
 
+    /** Labour transfer: this hospital holds the episode that continues {@code sourceId}. */
+    boolean existsByTransferredFrom_IdAndHospital_Id(UUID sourceId, UUID hospitalId);
+
     /** One woman, one active labour: another active episode than this one, at any hospital. */
     boolean existsByPatient_IdAndStatusAndIdNot(UUID patientId, LaborStatus status, UUID episodeId);
 

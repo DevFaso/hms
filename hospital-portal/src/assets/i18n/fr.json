@@ -1906,6 +1906,7 @@
       "LABOR_EPISODE_TRANSFERRED_OUT": "Épisode de travail transféré vers un autre hôpital, avec transmission",
       "LABOR_EPISODE_TRANSFERRED_IN": "Épisode de travail reçu d’un autre hôpital, avec transmission",
       "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Épisode de travail clos : elle est arrivée dans un autre hôpital sans transmission",
+      "LABOR_EPISODE_HANDOVER_READ": "Épisode de travail transmis par transfert, consulté par l’hôpital d’accueil",
       "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Épisode de travail ouvert à son arrivée d’un autre hôpital, sans transmission",
       "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Exception à la règle obstétricale levée sur une échographie",
       "ALLERGY_ACKNOWLEDGED": "Allergie reconnue avec un motif",
