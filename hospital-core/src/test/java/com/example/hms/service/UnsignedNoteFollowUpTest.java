@@ -275,6 +275,23 @@ class UnsignedNoteFollowUpTest {
     }
 
     @Test
+    void ageCountsElapsedHoursAcrossDaylightSavingChange() {
+        ZoneId zone = ZoneId.of("America/New_York");
+        LocalDateTime now = LocalDateTime.of(2026, 11, 2, 12, 0);
+        Clock clock = Clock.fixed(now.atZone(zone).toInstant(), zone);
+        followUp = new UnsignedNoteFollowUp(notes, inBasket, items, roleValidator, transactionManager, clock);
+        UUID adminId = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(adminId);
+        when(roleValidator.isHospitalAdmin(adminId, hospital.getId())).thenReturn(true);
+        EncounterNote old = note(user("Issa"), "Draft", null);
+        old.setCreatedAt(now.minusDays(3));
+        when(notes.findUnsignedAtHospitalCreatedBefore(eq(hospital.getId()), any())).thenReturn(List.of(old));
+
+        assertThat(followUp.overdueAtHospital(hospital.getId())).singleElement()
+            .satisfies(row -> assertThat(row.ageHours()).isEqualTo(73));
+    }
+
+    @Test
     void anAdministratorOfAnotherHospitalIsRefused() {
         UUID adminId = UUID.randomUUID();
         UUID otherHospital = UUID.randomUUID();

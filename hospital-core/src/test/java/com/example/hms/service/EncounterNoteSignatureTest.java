@@ -48,6 +48,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -177,7 +178,7 @@ class EncounterNoteSignatureTest {
     /** Provisional platform rule: signing removes the author's "note to sign" item. */
     @Test
     void signingClearsTheNoteToSignItem() {
-        UnsignedNoteFollowUp followUp = org.mockito.Mockito.mock(UnsignedNoteFollowUp.class);
+        UnsignedNoteFollowUp followUp = mock(UnsignedNoteFollowUp.class);
         service.setUnsignedNotes(followUp);
 
         service.signEncounterNote(encounterId, LOCALE);
@@ -187,7 +188,7 @@ class EncounterNoteSignatureTest {
 
     @Test
     void aRefusedSignatureLeavesTheItem() {
-        UnsignedNoteFollowUp followUp = org.mockito.Mockito.mock(UnsignedNoteFollowUp.class);
+        UnsignedNoteFollowUp followUp = mock(UnsignedNoteFollowUp.class);
         service.setUnsignedNotes(followUp);
         when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
 

@@ -198,7 +198,7 @@ public class UnsignedNoteFollowUp {
             .toList();
     }
 
-    private static UnsignedNoteOverdueDTO toOverdue(EncounterNote note, LocalDateTime now) {
+    private UnsignedNoteOverdueDTO toOverdue(EncounterNote note, LocalDateTime now) {
         Encounter encounter = note.getEncounter();
         Patient patient = note.getPatient() != null ? note.getPatient() : encounter.getPatient();
         String author = note.getAuthorName();
@@ -208,7 +208,8 @@ public class UnsignedNoteFollowUp {
         return new UnsignedNoteOverdueDTO(note.getId(), encounter.getId(), author,
             patient != null ? patient.getFullName() : null,
             encounter.getEncounterDate(), note.getCreatedAt(),
-            note.getCreatedAt() != null ? Duration.between(note.getCreatedAt(), now).toHours() : 0L);
+            note.getCreatedAt() != null ? Duration.between(note.getCreatedAt().atZone(clock.getZone()),
+                now.atZone(clock.getZone())).toHours() : 0L);
     }
 
     private static String visitDay(Encounter encounter) {
