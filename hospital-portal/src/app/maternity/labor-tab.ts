@@ -25,6 +25,7 @@ import {
   InfantSex,
   PerinealTear,
   LaborTransferRequest,
+  BabyOutcome,
 } from '../services/labor.service';
 import { HospitalService, HospitalDirectoryEntry } from '../services/hospital.service';
 import { actionRoles } from '../core/action-permissions';
@@ -134,6 +135,9 @@ const DELIVERY_BIRTH_TIME_ID = 'dl-time';
 const DELIVERY_PLACENTA_TIME_ID = 'dl-placenta-time';
 const DELIVERY_FIELD_IDS: Readonly<Record<string, string>> = {
   numberOfInfants: 'dl-infants',
+  // QA D1714: a refusal of the babies' outcomes marks the first baby's outcome.
+  babies: 'dl-baby-1',
+  liveBirth: 'dl-baby-1',
   birthWeightGrams: 'dl-weight',
   apgarOneMinute: 'dl-apgar1',
   apgarFiveMinute: 'dl-apgar5',
@@ -297,7 +301,10 @@ export class LaborTabComponent {
   entryFormOpen = signal(false);
   entryForm: PartographEntryRequest = {};
   deliveryFormOpen = signal(false);
-  deliveryForm: Partial<DeliveryRecordRequest> = { liveBirth: true, numberOfInfants: 1 };
+  deliveryForm: Partial<DeliveryRecordRequest> = { numberOfInfants: 1 };
+  /** QA D1714: one outcome per baby, LIVE or STILLBORN, so mixed twins can be recorded. */
+  babyOutcomes: BabyOutcome[] = ['LIVE'];
+  readonly babyOutcomeChoices: readonly BabyOutcome[] = ['LIVE', 'STILLBORN'];
 
   readonly membraneStatuses: MembraneStatus[] = [
     'INTACT',
@@ -610,8 +617,38 @@ export class LaborTabComponent {
   /* ── Delivery ──────────────────────────────────────────── */
 
   openDeliveryForm(): void {
-    this.deliveryForm = { liveBirth: true, numberOfInfants: 1 };
+    this.deliveryForm = { numberOfInfants: 1 };
+    this.babyOutcomes = ['LIVE'];
     this.deliveryFormOpen.set(true);
+  }
+
+  /** QA D1714: the birth orders the form asks an outcome for (1 to the number of infants, at most 5). */
+  babyOrders(): number[] {
+    const count = Math.min(
+      Math.max(Math.trunc(Number(this.deliveryForm.numberOfInfants) || 1), 1),
+      5,
+    );
+    return Array.from({ length: count }, (_, i) => i + 1);
+  }
+
+  /** QA D1714: the outcome of each baby, in birth order; a baby not yet set is live. */
+  deliveryBabies(): { birthOrder: number; outcome: BabyOutcome }[] {
+    return this.babyOrders().map((order) => ({
+      birthOrder: order,
+      outcome: this.babyOutcomes[order - 1] ?? 'LIVE',
+    }));
+  }
+
+  setBabyOutcome(order: number, outcome: BabyOutcome): void {
+    const next = [...this.babyOutcomes];
+    for (let i = next.length; i < order; i++) next.push('LIVE');
+    next[order - 1] = outcome;
+    this.babyOutcomes = next;
+  }
+
+  /** QA D1714: a stillborn baby of this delivery has its fetal-death event (counted on the mortality register). */
+  hasFetalDeathEvent(record: DeliveryRecordResponse): boolean {
+    return (record.babies ?? []).some((baby) => !!baby.fetalDeathEventId);
   }
 
   cancelDelivery(): void {
@@ -641,10 +678,15 @@ export class LaborTabComponent {
       .recordDelivery(
         patient.id,
         episode.id,
-        withServerDateTimes(this.deliveryForm as DeliveryRecordRequest, [
-          'birthDateTime',
-          'placentaDeliveredAt',
-        ]),
+        withServerDateTimes(
+          {
+            ...(this.deliveryForm as DeliveryRecordRequest),
+            liveBirth: undefined,
+            numberOfInfants: this.babyOrders().length,
+            babies: this.deliveryBabies(),
+          },
+          ['birthDateTime', 'placentaDeliveredAt'],
+        ),
       )
       .subscribe({
         next: (delivery) => {

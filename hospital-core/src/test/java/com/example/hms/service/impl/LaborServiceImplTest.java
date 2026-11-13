@@ -83,6 +83,7 @@ class LaborServiceImplTest {
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
     @Mock private jakarta.persistence.EntityManager entityManager;
     @Mock private com.example.hms.service.maternity.NewbornRegistrationService newbornRegistration;
+    @Mock private com.example.hms.service.maternity.FetalDeathEventService fetalDeathEvents;
 
     private LaborServiceImpl service;
 
@@ -104,7 +105,7 @@ class LaborServiceImplTest {
             notificationService, new LaborMapper(), recordAccessPolicy, reachRecorder,
             TestMessageSources.bundles(), postpartumCarePlanRepository, deliveryChargeService,
             obstetricAlertEscalation, new com.example.hms.mapper.MaternalHistoryMapper(), auditEventLogService,
-            roleValidator, entityManager, newbornRegistration);
+            roleValidator, entityManager, newbornRegistration, fetalDeathEvents);
 
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -2577,5 +2578,121 @@ class LaborServiceImplTest {
             .hasFieldOrPropertyWithValue("field", "bornBeforeArrival")
             .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.bornBeforeArrivalAfterObservation");
         verify(deliveryRecordRepository, never()).save(any());
+    }
+
+    /* ── QA D1714: one outcome per baby, and the fetal-death event ──── */
+
+    private static com.example.hms.payload.dto.clinical.labor.DeliveryBabyDTO baby(
+            com.example.hms.enums.BabyOutcome outcome) {
+        return com.example.hms.payload.dto.clinical.labor.DeliveryBabyDTO.builder().outcome(outcome).build();
+    }
+
+    @Test
+    void recordDeliveryOfASingleStillbirthCreatesItsFetalDeathEvent() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setLiveBirth(false);
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        ArgumentCaptor<DeliveryRecord> saved = ArgumentCaptor.forClass(DeliveryRecord.class);
+        verify(deliveryRecordRepository).save(saved.capture());
+        assertThat(saved.getValue().stillbornOrders()).containsExactly(1);
+        assertThat(saved.getValue().isLiveBirth()).isFalse();
+        assertThat(saved.getValue().isNewbornRegistrationPending()).isFalse();
+        verify(fetalDeathEvents).recordOutcomes(saved.getValue(), recorderUserId);
+        assertThat(episode.getOutcome()).isEqualTo(LaborOutcome.STILLBIRTH);
+    }
+
+    @Test
+    void recordDeliveryOfMixedTwinsKeepsEachBabysOutcome() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBabies(List.of(baby(com.example.hms.enums.BabyOutcome.LIVE),
+            baby(com.example.hms.enums.BabyOutcome.STILLBORN)));
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        ArgumentCaptor<DeliveryRecord> saved = ArgumentCaptor.forClass(DeliveryRecord.class);
+        verify(deliveryRecordRepository).save(saved.capture());
+        DeliveryRecord record = saved.getValue();
+        assertThat(record.getNumberOfInfants()).isEqualTo(2);
+        assertThat(record.isLiveBirth()).as("a live twin keeps the delivery a live birth").isTrue();
+        assertThat(record.liveOrders()).containsExactly(1);
+        assertThat(record.stillbornOrders()).containsExactly(2);
+        assertThat(record.isNewbornRegistrationPending()).isTrue();
+        assertThat(record.getAlerts()).as("a stillborn twin still raises the stillbirth alert")
+            .anySatisfy(alert -> assertThat(alert.getCode()).isEqualTo("labor-stillbirth"));
+        verify(fetalDeathEvents).recordOutcomes(record, recorderUserId);
+        verify(newbornRegistration).registerLiveBorn(record, recorderUserId);
+        assertThat(response.getBabies()).extracting(com.example.hms.payload.dto.clinical.labor.DeliveryBabyDTO::getOutcome)
+            .containsExactly(com.example.hms.enums.BabyOutcome.LIVE, com.example.hms.enums.BabyOutcome.STILLBORN);
+    }
+
+    @Test
+    void aNotLiveFlagOverSeveralBabiesAsksForEachOutcomeRatherThanGuessing() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setLiveBirth(false);
+        request.setNumberOfInfants(2);
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("babies"));
+        verify(deliveryRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void theBabiesMustAgreeWithTheCountAndTheFlag() {
+        DeliveryRecordRequestDTO count = deliveryRequest();
+        count.setNumberOfInfants(3);
+        count.setBabies(List.of(baby(com.example.hms.enums.BabyOutcome.LIVE),
+            baby(com.example.hms.enums.BabyOutcome.LIVE)));
+        assertThatThrownBy(() -> LaborServiceImpl.resolveBabyOutcomes(count))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("numberOfInfants"));
+
+        DeliveryRecordRequestDTO flag = deliveryRequest();
+        flag.setLiveBirth(false);
+        flag.setBabies(List.of(baby(com.example.hms.enums.BabyOutcome.LIVE)));
+        assertThatThrownBy(() -> LaborServiceImpl.resolveBabyOutcomes(flag))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("liveBirth"));
+    }
+
+    @Test
+    void correctingABabysOutcomeGoesThroughTheFetalDeathServiceAndReRunsTheRegistration() {
+        DeliveryRecord record = DeliveryRecord.builder().episode(episode).patient(patient).hospital(hospital)
+            .birthDateTime(java.time.LocalDateTime.now()).deliveryMode(DeliveryMode.SPONTANEOUS_VAGINAL)
+            .numberOfInfants(1).build();
+        record.setId(UUID.randomUUID());
+        record.putBabyOutcome(1, com.example.hms.enums.BabyOutcome.STILLBORN);
+        episode.setStatus(LaborStatus.DELIVERED);
+        when(episodeRepository.findStatusById(episodeId)).thenReturn(Optional.of(LaborStatus.DELIVERED));
+        when(deliveryRecordRepository.findByEpisode_Id(episodeId)).thenReturn(Optional.of(record));
+        when(deliveryRecordRepository.save(any(DeliveryRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(fetalDeathEvents.correctOutcome(record, 1, com.example.hms.enums.BabyOutcome.LIVE, "Heartbeat", recorderUserId))
+            .thenAnswer(inv -> {
+                record.putBabyOutcome(1, com.example.hms.enums.BabyOutcome.LIVE);
+                return new com.example.hms.service.maternity.FetalDeathEventService.Correction(true,
+                    com.example.hms.enums.BabyOutcome.STILLBORN, com.example.hms.enums.BabyOutcome.LIVE, null, null);
+            });
+        var request = com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder()
+            .hospitalId(hospitalId).outcome(com.example.hms.enums.BabyOutcome.LIVE).reason("Heartbeat").build();
+
+        service.correctBabyOutcome(patientId, episodeId, 1, recorderUserId, request);
+
+        verify(fetalDeathEvents).correctOutcome(record, 1, com.example.hms.enums.BabyOutcome.LIVE, "Heartbeat", recorderUserId);
+        verify(newbornRegistration).registerLiveBorn(record, recorderUserId);
+        assertThat(episode.getOutcome()).isNotEqualTo(LaborOutcome.STILLBIRTH);
+    }
+
+    @Test
+    void anotherHospitalCannotCorrectABabysOutcome() {
+        UUID otherHospital = UUID.randomUUID();
+        when(episodeRepository.findByIdAndHospital_Id(episodeId, otherHospital)).thenReturn(Optional.empty());
+        var request = com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder()
+            .hospitalId(otherHospital).outcome(com.example.hms.enums.BabyOutcome.LIVE).reason("x").build();
+
+        assertThatThrownBy(() -> service.correctBabyOutcome(patientId, episodeId, 1, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(fetalDeathEvents, never()).correctOutcome(any(), org.mockito.ArgumentMatchers.anyInt(), any(), any(), any());
     }
 }

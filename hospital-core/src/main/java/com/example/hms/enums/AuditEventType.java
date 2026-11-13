@@ -266,6 +266,12 @@ public enum AuditEventType {
     LABOR_EPISODE_LEFT_WITHOUT_HANDOVER,
     /** QA r46 (provisional): a birth recorded as before her arrival, earlier than the receiving episode's start. */
     LABOR_DELIVERY_BORN_BEFORE_ARRIVAL,
+    /** QA D1714: a fetal-death event created for a stillborn baby of a delivery (no patient account). */
+    FETAL_DEATH_EVENT_RECORDED,
+    /** QA D1714: a fetal-death event superseded by a correction of the baby's outcome (never deleted). */
+    FETAL_DEATH_EVENT_SUPERSEDED,
+    /** QA D1714: a baby's recorded outcome corrected (live to stillborn or back), with the reason. */
+    DELIVERY_BABY_OUTCOME_CORRECTED,
 
     OTHER
 }

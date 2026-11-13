@@ -186,6 +186,8 @@ public class LaborServiceImpl implements LaborService {
     private final jakarta.persistence.EntityManager entityManager;
     /** QA D1592: every live-born baby of a recorded delivery is registered as its own patient. */
     private final com.example.hms.service.maternity.NewbornRegistrationService newbornRegistration;
+    /** QA D1714: every stillborn baby of a recorded delivery creates a fetal-death event (no patient account). */
+    private final com.example.hms.service.maternity.FetalDeathEventService fetalDeathEvents;
 
     /* ═══════════════════════ Episodes ═══════════════════════ */
 
@@ -937,6 +939,9 @@ public class LaborServiceImpl implements LaborService {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.delivery.alreadyRecorded");
         }
 
+        java.util.SortedMap<Integer, com.example.hms.enums.BabyOutcome> outcomes = resolveBabyOutcomes(request);
+        boolean anyLive = outcomes.containsValue(com.example.hms.enums.BabyOutcome.LIVE);
+
         LocalDateTime birthAt = request.getBirthDateTime() != null ? request.getBirthDateTime() : LocalDateTime.now();
         boolean bornBeforeArrival = requireDeliveryTimesInOrder(episode, birthAt, request.getPlacentaDeliveredAt(),
             request);
@@ -953,8 +958,8 @@ public class LaborServiceImpl implements LaborService {
             .birthDateTime(birthAt)
             .birthTimeStated(request.getBirthDateTime() != null)
             .deliveryMode(request.getDeliveryMode())
-            .liveBirth(request.getLiveBirth() == null || request.getLiveBirth())
-            .numberOfInfants(request.getNumberOfInfants() != null ? request.getNumberOfInfants() : 1)
+            .liveBirth(anyLive)
+            .numberOfInfants(outcomes.size())
             .infantSex(request.getInfantSex())
             .birthWeightGrams(request.getBirthWeightGrams())
             .gestationalAgeWeeksAtBirth(request.getGestationalAgeWeeksAtBirth() != null
@@ -970,8 +975,9 @@ public class LaborServiceImpl implements LaborService {
             .bornBeforeArrival(bornBeforeArrival)
             .bornBeforeArrivalReason(bornBeforeArrival ? request.getBornBeforeArrivalReason().trim() : null)
             // QA D1592: set until the babies are registered (after commit).
-            .newbornRegistrationPending(request.getLiveBirth() == null || request.getLiveBirth())
+            .newbornRegistrationPending(anyLive)
             .build();
+        outcomes.forEach(record::putBabyOutcome);
 
         evaluateDelivery(record);
 
@@ -980,6 +986,8 @@ public class LaborServiceImpl implements LaborService {
         episodeRepository.save(episode);
 
         DeliveryRecord saved = deliveryRecordRepository.save(record);
+        // QA D1714: each stillborn baby creates its fetal-death event, in this transaction.
+        fetalDeathEvents.recordOutcomes(saved, recorderUserId);
         if (bornBeforeArrival) {
             auditBornBeforeArrival(saved, episode, recorderUserId);
         }
@@ -988,8 +996,116 @@ public class LaborServiceImpl implements LaborService {
         publishUrgentAlerts(saved.getAlerts(), episode, documentedBy,
             com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_DELIVERY, saved.getId());
         DeliveryRecordResponseDTO response = laborMapper.toDeliveryResponse(saved);
+        response.setBabies(babiesOf(saved));
+        response.setFetalDeathEvents(fetalDeathEvents.eventDtosOf(saved));
         response.setNewborns(new java.util.ArrayList<>());
         registerNewbornsAfterCommit(saved, recorderUserId, response);
+        return response;
+    }
+
+    /**
+     * QA D1714 (user decision 2026-11-13): one outcome per baby, in birth order. The per-baby list is the form;
+     * without it the single flag answers for one baby, or for several babies only when they were all live: a
+     * "not live" flag over several babies cannot say which, so the outcomes are asked for rather than guessed.
+     */
+    static java.util.SortedMap<Integer, com.example.hms.enums.BabyOutcome> resolveBabyOutcomes(
+            DeliveryRecordRequestDTO request) {
+        java.util.SortedMap<Integer, com.example.hms.enums.BabyOutcome> outcomes = new java.util.TreeMap<>();
+        java.util.List<com.example.hms.payload.dto.clinical.labor.DeliveryBabyDTO> babies = request.getBabies();
+        if (babies == null || babies.isEmpty()) {
+            int count = request.getNumberOfInfants() != null ? request.getNumberOfInfants() : 1;
+            boolean live = request.getLiveBirth() == null || request.getLiveBirth();
+            if (!live && count > 1) {
+                throw new com.example.hms.exception.FieldBusinessException("babies",
+                    "labor.delivery.babyOutcomesRequired");
+            }
+            for (int order = 1; order <= count; order++) {
+                outcomes.put(order, live ? com.example.hms.enums.BabyOutcome.LIVE
+                    : com.example.hms.enums.BabyOutcome.STILLBORN);
+            }
+            return outcomes;
+        }
+        for (int i = 0; i < babies.size(); i++) {
+            com.example.hms.payload.dto.clinical.labor.DeliveryBabyDTO baby = babies.get(i);
+            if (baby == null || baby.getOutcome() == null) {
+                throw new com.example.hms.exception.FieldBusinessException("babies",
+                    "labor.delivery.babyOutcomeRequired");
+            }
+            int order = baby.getBirthOrder() != null ? baby.getBirthOrder() : i + 1;
+            if (order < 1 || order > babies.size() || outcomes.putIfAbsent(order, baby.getOutcome()) != null) {
+                throw new com.example.hms.exception.FieldBusinessException("babies",
+                    "labor.delivery.babyOrderRange", babies.size());
+            }
+        }
+        if (request.getNumberOfInfants() != null && request.getNumberOfInfants() != babies.size()) {
+            throw new com.example.hms.exception.FieldBusinessException("numberOfInfants",
+                "labor.delivery.babiesCountMismatch", babies.size());
+        }
+        if (request.getLiveBirth() != null
+            && request.getLiveBirth() != outcomes.containsValue(com.example.hms.enums.BabyOutcome.LIVE)) {
+            throw new com.example.hms.exception.FieldBusinessException("liveBirth",
+                "labor.delivery.liveBirthDisagreesWithBabies");
+        }
+        return outcomes;
+    }
+
+    /** QA D1714: each baby's outcome, with the live fetal-death event of a stillborn one. */
+    private java.util.List<com.example.hms.payload.dto.clinical.labor.DeliveryBabyDTO> babiesOf(DeliveryRecord record) {
+        java.util.Map<Integer, UUID> liveEvents = new java.util.HashMap<>();
+        for (com.example.hms.model.labor.FetalDeathEvent event : fetalDeathEvents.eventsOf(record)) {
+            if (!event.isSuperseded()) {
+                liveEvents.put(event.getBirthOrder(), event.getId());
+            }
+        }
+        java.util.List<com.example.hms.payload.dto.clinical.labor.DeliveryBabyDTO> out = new java.util.ArrayList<>();
+        for (int order = 1; order <= Math.max(record.getNumberOfInfants(), 1); order++) {
+            out.add(com.example.hms.payload.dto.clinical.labor.DeliveryBabyDTO.builder()
+                .birthOrder(order)
+                .outcome(record.outcomeOf(order))
+                .fetalDeathEventId(liveEvents.get(order))
+                .build());
+        }
+        return out;
+    }
+
+    /**
+     * QA D1714: correct one baby's recorded outcome, at the episode's hospital. Nothing is deleted: the fetal-death
+     * event is superseded (stillborn to live) or created (live to stillborn) with the reason, and audited. The
+     * newborn registration then runs again: a baby now live is registered, one now stillborn is flagged for review
+     * (its patient record is never removed).
+     */
+    @Override
+    public DeliveryRecordResponseDTO correctBabyOutcome(UUID patientId, UUID episodeId, int birthOrder, UUID userId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO request) {
+        if (request == null) {
+            throw new BusinessException("maternity.delivery.payloadRequired");
+        }
+        LaborEpisode episode = loadEpisode(patientId, episodeId, request.getHospitalId());
+        lockPatientForLabour(patientId);
+        if (committedStatus(episode) != LaborStatus.DELIVERED) {
+            throw new ResourceNotFoundException("labor.deliveryRecord.notFoundForEpisode", episodeId);
+        }
+        DeliveryRecord record = deliveryRecordRepository.findByEpisode_Id(episode.getId())
+            .orElseThrow(() -> new ResourceNotFoundException("labor.deliveryRecord.notFoundForEpisode", episodeId));
+        com.example.hms.service.maternity.FetalDeathEventService.Correction correction =
+            fetalDeathEvents.correctOutcome(record, birthOrder, request.getOutcome(), request.getReason(), userId);
+        if (!correction.changed()) {
+            DeliveryRecordResponseDTO unchanged = laborMapper.toDeliveryResponse(record);
+            unchanged.setBabies(babiesOf(record));
+            unchanged.setFetalDeathEvents(fetalDeathEvents.eventDtosOf(record));
+            unchanged.setNewborns(newbornRegistration.newbornsOf(record));
+            return unchanged;
+        }
+        record.setNewbornRegistrationPending(record.isLiveBirth());
+        addStillbirthAlertOnce(record);
+        DeliveryRecord saved = deliveryRecordRepository.save(record);
+        episode.setOutcome(deriveOutcome(saved));
+        episodeRepository.save(episode);
+        DeliveryRecordResponseDTO response = laborMapper.toDeliveryResponse(saved);
+        response.setBabies(babiesOf(saved));
+        response.setFetalDeathEvents(fetalDeathEvents.eventDtosOf(saved));
+        response.setNewborns(newbornRegistration.newbornsOf(saved));
+        registerNewbornsAfterCommit(saved, userId, response);
         return response;
     }
 
@@ -1225,6 +1341,8 @@ public class LaborServiceImpl implements LaborService {
         DeliveryRecord record = deliveryRecordRepository.findByEpisode_Id(episode.getId())
             .orElseThrow(() -> new ResourceNotFoundException("labor.deliveryRecord.notFoundForEpisode", episodeId));
         DeliveryRecordResponseDTO response = laborMapper.toDeliveryResponse(record);
+        response.setBabies(babiesOf(record));
+        response.setFetalDeathEvents(fetalDeathEvents.eventDtosOf(record));
         response.setNewborns(newbornRegistration.newbornsOf(record));
         return response;
     }
@@ -1377,12 +1495,19 @@ public class LaborServiceImpl implements LaborService {
                 alertText("labor-apgar-low", apgar5),
                 "apgarFiveMinute", new Object[]{apgar5});
         }
-        if (!record.isLiveBirth()) {
-            record.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.URGENT,
-                "labor-stillbirth",
-                alertText("labor-stillbirth"),
-                "liveBirth", new Object[]{});
+        addStillbirthAlertOnce(record);
+    }
+
+    /** QA D1714: any stillborn baby raises the stillbirth alert, mixed twins included; once per delivery. */
+    private void addStillbirthAlertOnce(DeliveryRecord record) {
+        if (record.stillbornOrders().length == 0
+            || record.getAlerts().stream().anyMatch(alert -> "labor-stillbirth".equals(alert.getCode()))) {
+            return;
         }
+        record.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.URGENT,
+            "labor-stillbirth",
+            alertText("labor-stillbirth"),
+            "liveBirth", new Object[]{});
     }
 
     /**

@@ -54,6 +54,7 @@ class PartialUniqueReleaseFlushGuardTest {
     /** Table of each partial unique index -> the entity that writes it. */
     private static final Map<String, String> ENTITY_OF_TABLE = Map.ofEntries(
         Map.entry("death_records", "DeathRecord"),
+        Map.entry("fetal_death_events", "FetalDeathEvent"),
         Map.entry("death_disputes", "DeathDispute"),
         Map.entry("order_review_holds", "OrderReviewHold"),
         Map.entry("patient_blood_groups", "PatientBloodGroup"),

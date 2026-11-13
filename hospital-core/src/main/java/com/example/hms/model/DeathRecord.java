@@ -149,6 +149,13 @@ public class DeathRecord extends BaseEntity {
     @Column(name = "gestational_age_weeks")
     private Integer gestationalAgeWeeks;
 
+    /**
+     * QA D1714 (V293): the fetal-death event this stillbirth death record declares. The register counts that
+     * stillbirth once, through the event, while the event is not superseded.
+     */
+    @Column(name = "fetal_death_event_id")
+    private java.util.UUID fetalDeathEventId;
+
     /** Written when the perinatal classification is judged. A row from before that stays UNKNOWN. */
     @Enumerated(EnumType.STRING)
     @Column(name = "perinatal_age_basis", nullable = false, length = 20)

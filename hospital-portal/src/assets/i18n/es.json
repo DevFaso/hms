@@ -314,7 +314,13 @@
       "SUBMIT": "Registrar la llegada",
       "DONE": "Llegada registrada. Su episodio de trabajo de parto está abierto aquí y se ha alertado a {{hospital}}.",
       "ERROR": "No se pudo registrar la llegada."
-    }
+    },
+    "BABY_OUTCOME": "Bebé {{order}}",
+    "BABY_OUTCOME_LIVE": "Nacido vivo",
+    "BABY_OUTCOME_STILLBORN": "Mortinato (sin signos de vida)",
+    "BABY_OUTCOME_UNKNOWN": "No registrado",
+    "BABY_OUTCOMES": "Resultado de cada bebé",
+    "FETAL_DEATH_EVENT_RECORDED": "Mortinato registrado como evento de muerte fetal (sin historia clínica): se cuenta en el registro de mortalidad."
   },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Volver a organizaciones",
@@ -1931,7 +1937,10 @@
       "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Episodio de trabajo de parto cerrado: llegó a otro hospital sin traspaso",
       "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Nacimiento registrado antes de su llegada desde otro hospital",
       "LABOR_EPISODE_HANDOVER_READ": "Episodio de trabajo de parto traspasado por traslado, consultado por el hospital receptor",
-      "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Episodio de trabajo de parto abierto a su llegada de otro hospital, sin traspaso"
+      "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Episodio de trabajo de parto abierto a su llegada de otro hospital, sin traspaso",
+      "FETAL_DEATH_EVENT_RECORDED": "Evento de muerte fetal registrado para un bebé mortinato",
+      "FETAL_DEATH_EVENT_SUPERSEDED": "Evento de muerte fetal sustituido tras corregir el resultado del bebé",
+      "DELIVERY_BABY_OUTCOME_CORRECTED": "Resultado de un bebé corregido en un registro de parto"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -6772,7 +6781,10 @@
         "LABOR_EPISODE_TRANSFERRED_OUT": "Trabajo de parto trasladado",
         "LABOR_EPISODE_TRANSFERRED_IN": "Trabajo de parto recibido",
         "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Trabajo de parto salido sin traspaso",
-        "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Nacimiento antes de la llegada"
+        "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Nacimiento antes de la llegada",
+        "FETAL_DEATH_EVENT_RECORDED": "Muerte fetal registrada",
+        "FETAL_DEATH_EVENT_SUPERSEDED": "Muerte fetal sustituida",
+        "DELIVERY_BABY_OUTCOME_CORRECTED": "Resultado del bebé corregido"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -7297,7 +7309,8 @@
         "ULTRASOUND": "Ecografía",
         "VISIT_TYPE": "Tipo de visita",
         "WARD": "Planta",
-        "WEBHOOK": "Webhook de socio"
+        "WEBHOOK": "Webhook de socio",
+        "FETAL_DEATH_EVENT": "Evento de muerte fetal"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
@@ -12424,12 +12437,12 @@
     "TIMING_DURING_LABOUR_OR_DELIVERY": "Durante el parto",
     "TIMING_WITHIN_42_DAYS_POSTPARTUM": "Dentro de los 42 días posparto",
     "TIMING_LATE_MATERNAL": "42 días a un año (materna tardía)",
-    "PERINATAL_DEFINITION": "OMS: mortinatos y muertes en los días 0 a 6, desde las 22 semanas de gestación",
+    "PERINATAL_DEFINITION": "OMS (provisional): mortinatos a las {{weeks}} semanas completas o más y muertes neonatales precoces (días 0 a 6)",
     "EARLY_NEONATAL_DEATHS": "Neonatal precoz, días 0 a 6",
     "LATE_NEONATAL_DEATHS": "Muertes neonatales tardías",
     "LATE_NEONATAL_NOTE": "días 7 a 27: se notifican aparte, fuera del total perinatal",
-    "PERINATAL_ELIGIBILITY_UNKNOWN_COUNT": "en el total perinatal según la clasificación del clínico, sin confirmar: falta o no se puede decidir la gestación, el estado al nacer o la edad.",
-    "PERINATAL_BELOW_GESTATION_COUNT": "con una gestación inferior a 22 semanas: contados como mortinatos o neonatal precoz arriba, pero fuera del total perinatal.",
+    "PERINATAL_ELIGIBILITY_UNKNOWN_COUNT": "muertes neonatales precoces en el total perinatal según la clasificación del clínico, sin confirmar: falta o no se puede decidir la gestación, el estado al nacer o la edad.",
+    "PERINATAL_BELOW_GESTATION_COUNT": "muertes neonatales precoces con una gestación inferior a 22 semanas: contadas arriba, pero fuera del total perinatal.",
     "BIRTH_STATUS": "Estado al nacer",
     "BIRTH_STATUS_UNKNOWN": "Desconocido",
     "BIRTH_STATUS_LIVE_BIRTH": "Nacimiento con vida",
@@ -12455,7 +12468,27 @@
       "STAY_LINE": "ingreso el {{admitted}}, cerrada el {{closed}}",
       "VISITS": "Visitas que cerró:",
       "APPOINTMENTS": "Citas que canceló:"
-    }
+    },
+    "DEATHS_AFTER_LIVE_BIRTH_NOTE": "Defunciones tras un nacimiento vivo; los mortinatos se cuentan en su propia sección más abajo",
+    "STILLBIRTH_SECTION": "Mortinatos",
+    "STILLBIRTH_SECTION_HINT": "Mortinatos registrados en el parto (eventos de muerte fetal, sin historia clínica) y defunciones registradas como mortinatos. Cada uno se cuenta una sola vez. Los umbrales son provisionales, pendientes de aprobación por el responsable de obstetricia y la autoridad de codificación.",
+    "STILLBIRTHS_RECORDED": "Mortinatos registrados",
+    "STILLBIRTHS_RECORDED_DEFINITION": "Todos los mortinatos registrados, sea cual sea la gestación",
+    "STILLBIRTHS_WHO": "Mortinatos (OMS)",
+    "STILLBIRTHS_WHO_DEFINITION": "Indicador OMS: sin signos de vida a las {{weeks}} semanas completas o más (provisional)",
+    "STILLBIRTHS_ICD": "Muertes fetales (CIE)",
+    "STILLBIRTHS_ICD_DEFINITION": "Nivel CIE: desde las {{weeks}} semanas completas (provisional)",
+    "CLASSIFICATION_INCOMPLETE": "Clasificación incompleta",
+    "CLASSIFICATION_INCOMPLETE_DEFINITION": "Gestación no registrada: se cuenta aquí, en ninguna estadística hasta conocerla",
+    "STILLBIRTH_MOTHER": "Madre",
+    "STILLBIRTH_DATE": "Fecha y hora",
+    "STILLBIRTH_GESTATION": "Gestación",
+    "GESTATION_WEEKS": "{{weeks}} semanas",
+    "STILLBIRTH_SOURCE": "Origen",
+    "STILLBIRTH_SOURCE_DELIVERY": "Registro del parto",
+    "STILLBIRTH_SOURCE_DELIVERY_HISTORICAL": "Registro del parto (anterior al resultado por bebé)",
+    "STILLBIRTH_SOURCE_DEATH_RECORD": "Certificado de defunción",
+    "STILLBIRTH_DECLARED": "También declarado por un certificado de defunción (contado una vez)"
   },
   "BED_BOARD": {
     "TITLE": "Tablero de camas",

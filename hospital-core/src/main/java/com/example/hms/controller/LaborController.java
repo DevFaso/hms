@@ -191,6 +191,28 @@ public class LaborController {
             .body(laborService.recordArrivalWithoutHandover(patientId, episodeId, callerUserId, request));
     }
 
+    /**
+     * QA D1714: correct one baby's recorded outcome (stillborn to live, or live to stillborn), with a reason. The
+     * fetal-death event is superseded or created, never deleted, and the change is audited.
+     */
+    @org.springframework.web.bind.annotation.PutMapping("/episodes/{episodeId}/delivery/babies/{birthOrder}/outcome")
+    @PreAuthorize(CLINICAL_ROLES)
+    @Operation(summary = "Correct one baby's recorded outcome on a delivery record",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<DeliveryRecordResponseDTO> correctBabyOutcome(
+        @PathVariable UUID patientId,
+        @PathVariable UUID episodeId,
+        @PathVariable int birthOrder,
+        @Valid @RequestBody com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO request,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID userId = authUtils.resolveUserId(auth).orElse(null);
+        request.setHospitalId(authUtils.resolveHospitalScope(auth, hospitalId, request.getHospitalId(), true));
+        return ResponseEntity.ok(laborService.correctBabyOutcome(patientId, episodeId, birthOrder, userId, request));
+    }
+
     @GetMapping("/episodes/{episodeId}/delivery")
     @PreAuthorize(CLINICAL_ROLES)
     @Operation(summary = "Fetch an episode's delivery record",

@@ -22,6 +22,7 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
 import com.example.hms.model.labor.DeliveryRecord;
+import com.example.hms.model.labor.FetalDeathEvent;
 import com.example.hms.model.neonatal.NewbornAssessment;
 import com.example.hms.model.scheduling.PatientRecall;
 import com.example.hms.payload.dto.mortality.DeathClosureSummaryDTO;
@@ -29,6 +30,7 @@ import com.example.hms.payload.dto.mortality.DeathRecordAmendmentDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordRequestDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordResponseDTO;
+import com.example.hms.payload.dto.mortality.FetalDeathEventDTO;
 import com.example.hms.payload.dto.mortality.MortalityRegisterDTO;
 import com.example.hms.payload.dto.mortality.RecordDeathResponseDTO;
 import com.example.hms.repository.AdmissionRepository;
@@ -42,6 +44,7 @@ import com.example.hms.repository.scheduling.PatientRecallRepository;
 import com.example.hms.service.MortalityService;
 import com.example.hms.service.support.DeathClassificationRules;
 import com.example.hms.service.support.PatientChartAccess;
+import com.example.hms.service.support.StillbirthClassification;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -164,6 +167,10 @@ public class MortalityServiceImpl implements MortalityService {
     private final com.example.hms.repository.NewbornAssessmentRepository newbornAssessmentRepository;
     /** QA D972: a visit a death closes is handed to billing like a checkout (null in hand-built tests). */
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
+    /** QA D1714: stillbirths recorded at delivery, without a patient account. */
+    private final com.example.hms.repository.FetalDeathEventRepository fetalDeathEventRepository;
+    /** QA D1714: the way from a registered baby to its delivery, to link a stillbirth death record to its event. */
+    private final com.example.hms.repository.DeliveryNewbornRepository deliveryNewbornRepository;
 
     @Override
     public RecordDeathResponseDTO recordDeath(DeathRecordRequestDTO request) {
@@ -207,6 +214,7 @@ public class MortalityServiceImpl implements MortalityService {
             .birthStatus(birth.status())
             .gestationalAgeWeeks(birth.gestationWeeks())
             .perinatalAgeBasis(birth.ageBasis())
+            .fetalDeathEventId(linkedFetalDeathEvent(patient, hospitalId, request))
             .autopsyRequested(Boolean.TRUE.equals(request.getAutopsyRequested()))
             .certifiedBy(resolveCertifier(request.getCertifiedByStaffId(), hospitalId))
             .certifiedAt(request.getCertifiedByStaffId() != null ? LocalDateTime.now(clock) : null)
@@ -578,13 +586,19 @@ public class MortalityServiceImpl implements MortalityService {
             .filter(d -> Boolean.TRUE.equals(d.getMaternalDeath())
                 && d.getMaternalDeathTiming() == MaternalDeathTiming.LATE_MATERNAL)
             .count();
-        // CR-07: read off the record's own definition. A late neonatal death is reported, but not in this figure.
-        int perinatal = (int) all.stream().filter(DeathRecord::isInWhoPerinatalNumerator).count();
+        // QA D1714: the stillbirths, from the fetal-death events and the death records no event holds, each counted
+        // once. Perinatal = the WHO stillbirths plus the early neonatal deaths (days 0-6), read off each death
+        // record's own definition (CR-07). A late neonatal death is reported, but not in this figure.
+        Stillbirths stillbirths = stillbirthsOf(hospitalId, start, end, all);
+        int perinatal = stillbirths.who() + (int) all.stream()
+            .filter(d -> ofPerinatalType(d) == PerinatalDeathType.EARLY_NEONATAL)
+            .filter(DeathRecord::isInWhoPerinatalNumerator)
+            .count();
         int eligibilityUnknown = (int) all.stream()
-            .filter(d -> d.getPerinatalEligibility() == PerinatalReportingEligibility.UNKNOWN).count();
+            .filter(d -> ofPerinatalType(d) == PerinatalDeathType.EARLY_NEONATAL
+                && d.getPerinatalEligibility() == PerinatalReportingEligibility.UNKNOWN).count();
         int belowGestation = (int) all.stream()
-            .filter(d -> ofPerinatalType(d) != null && ofPerinatalType(d).inWhoPerinatalPeriod()
-                && d.isBelowWhoPerinatalGestation())
+            .filter(d -> ofPerinatalType(d) == PerinatalDeathType.EARLY_NEONATAL && d.isBelowWhoPerinatalGestation())
             .count();
 
         // A disputed death stays listed and counted until its outcome, flagged, with the count shown.
@@ -596,12 +610,20 @@ public class MortalityServiceImpl implements MortalityService {
             .from(from)
             .to(to)
             .totalDeaths(all.size())
+            .deathsAfterLiveBirth((int) all.stream()
+                .filter(d -> ofPerinatalType(d) != PerinatalDeathType.STILLBIRTH).count())
             .maternalDeaths(maternal)
             .lateMaternalDeaths(lateMaternal)
             .perinatalDeaths(perinatal)
             .perinatalEligibilityUnknown(eligibilityUnknown)
             .perinatalBelowGestation(belowGestation)
-            .stillbirths(countOfType(all, PerinatalDeathType.STILLBIRTH))
+            .stillbirths(stillbirths.rows().size())
+            .stillbirthsWho(stillbirths.who())
+            .stillbirthsIcd(stillbirths.icd())
+            .stillbirthsClassificationIncomplete(stillbirths.incomplete())
+            .whoStillbirthMinWeeks(StillbirthClassification.WHO_STILLBIRTH_MIN_COMPLETED_WEEKS)
+            .icdFetalDeathMinWeeks(StillbirthClassification.ICD_FETAL_DEATH_MIN_COMPLETED_WEEKS)
+            .stillbirthRows(stillbirths.rows())
             .earlyNeonatalDeaths(countOfType(all, PerinatalDeathType.EARLY_NEONATAL))
             .lateNeonatalDeaths(countOfType(all, PerinatalDeathType.LATE_NEONATAL))
             .deaths(all.stream().map(death -> {
@@ -612,6 +634,100 @@ public class MortalityServiceImpl implements MortalityService {
             .enteredInError(deathRecordRepository.findEnteredInError(hospitalId, start, end).stream()
                 .map(mapper::toDto).toList())
             .build();
+    }
+
+    // ── Stillbirths (QA D1714) ──────────────────────────────────────────
+
+    /** The stillbirths of a period and their named classifications. */
+    private record Stillbirths(List<FetalDeathEventDTO> rows, int who, int icd, int incomplete) {
+    }
+
+    /**
+     * QA D1714 (user decision 2026-11-13): the fetal-death events of the period, plus the stillbirth death records no
+     * live event holds. A death record that declares an event is counted once, through the event. Each row is
+     * classified by StillbirthClassification; a missing gestation is counted as incomplete, never dropped.
+     */
+    private Stillbirths stillbirthsOf(UUID hospitalId, LocalDateTime start, LocalDateTime end, List<DeathRecord> deaths) {
+        List<DeathRecord> declared = deaths.stream()
+            .filter(d -> ofPerinatalType(d) == PerinatalDeathType.STILLBIRTH)
+            .toList();
+        java.util.Map<UUID, UUID> declarationOfEvent = new java.util.HashMap<>();
+        declared.stream().filter(d -> d.getFetalDeathEventId() != null)
+            .forEach(d -> declarationOfEvent.putIfAbsent(d.getFetalDeathEventId(), d.getId()));
+        List<FetalDeathEventDTO> rows = new java.util.ArrayList<>();
+        for (FetalDeathEvent event : fetalDeathEventRepository.findRegister(hospitalId, start, end)) {
+            StillbirthClassification.Result result =
+                StillbirthClassification.classify(event.getGestationalAgeWeeks(), event.isNoSignsOfLife());
+            Patient mother = event.getMotherPatient();
+            rows.add(FetalDeathEventDTO.builder()
+                .id(event.getId())
+                .deliveryRecordId(event.getDeliveryRecord() == null ? null : event.getDeliveryRecord().getId())
+                .motherPatientId(mother == null ? null : mother.getId())
+                .motherName(mother == null ? null : mother.getFullName())
+                .birthOrder(event.getBirthOrder())
+                .occurredAt(event.getOccurredAt())
+                .gestationalAgeWeeks(event.getGestationalAgeWeeks())
+                .noSignsOfLife(event.isNoSignsOfLife())
+                .source(event.getSource())
+                .recordedByName(event.getRecordedBy() == null ? null : event.getRecordedBy().getUsername())
+                .whoStillbirth(result.whoStillbirth())
+                .icdFetalDeath(result.icdFetalDeath())
+                .classificationIncomplete(result.incomplete())
+                .declaredByDeathRecordId(declarationOfEvent.get(event.getId()))
+                .build());
+        }
+        List<UUID> linked = declared.stream().map(DeathRecord::getFetalDeathEventId).filter(Objects::nonNull).toList();
+        Set<UUID> heldByAnEvent = linked.isEmpty() ? Set.of()
+            : new java.util.HashSet<>(fetalDeathEventRepository.findLiveIdsAmong(linked));
+        for (DeathRecord death : declared) {
+            if (death.getFetalDeathEventId() != null && heldByAnEvent.contains(death.getFetalDeathEventId())) {
+                continue;
+            }
+            StillbirthClassification.Result result = StillbirthClassification.classify(death.getGestationalAgeWeeks(), true);
+            Patient patient = death.getPatient();
+            rows.add(FetalDeathEventDTO.builder()
+                .deathRecordId(death.getId())
+                .motherName(patient == null ? null : patient.getFullName())
+                .occurredAt(death.getDiedAt())
+                .gestationalAgeWeeks(death.getGestationalAgeWeeks())
+                .noSignsOfLife(true)
+                .whoStillbirth(result.whoStillbirth())
+                .icdFetalDeath(result.icdFetalDeath())
+                .classificationIncomplete(result.incomplete())
+                .build());
+        }
+        return new Stillbirths(rows,
+            (int) rows.stream().filter(FetalDeathEventDTO::isWhoStillbirth).count(),
+            (int) rows.stream().filter(FetalDeathEventDTO::isIcdFetalDeath).count(),
+            (int) rows.stream().filter(FetalDeathEventDTO::isClassificationIncomplete).count());
+    }
+
+    /**
+     * QA D1714: the fetal-death event a stillbirth death record declares, so the register counts it once. Named on
+     * the request, it must be a live event of the acting hospital. Otherwise a baby registered from a delivery links
+     * to its own live event, if it has one. Only a stillbirth classification links.
+     */
+    private UUID linkedFetalDeathEvent(Patient patient, UUID hospitalId, DeathRecordRequestDTO request) {
+        if (!Boolean.TRUE.equals(request.getPerinatalDeath()) || request.getPerinatalType() != PerinatalDeathType.STILLBIRTH) {
+            if (request.getFetalDeathEventId() != null) {
+                throw new com.example.hms.exception.FieldBusinessException("fetalDeathEventId",
+                    "mortality.fetalDeathEvent.stillbirthOnly");
+            }
+            return null;
+        }
+        if (request.getFetalDeathEventId() != null) {
+            FetalDeathEvent event = fetalDeathEventRepository.findByIdAndHospital_Id(request.getFetalDeathEventId(), hospitalId)
+                .filter(found -> !found.isSuperseded())
+                .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException("fetalDeathEventId",
+                    "mortality.fetalDeathEvent.notFound"));
+            return event.getId();
+        }
+        return deliveryNewbornRepository.findByNewbornPatient_Id(patient.getId())
+            .filter(link -> link.getHospital() != null && hospitalId.equals(link.getHospital().getId()))
+            .flatMap(link -> fetalDeathEventRepository.findFirstByDeliveryRecord_IdAndBirthOrderAndSupersededAtIsNull(
+                link.getDeliveryRecord().getId(), link.getBirthOrder()))
+            .map(FetalDeathEvent::getId)
+            .orElse(null);
     }
 
     // ── The cascade ─────────────────────────────────────────────────────
