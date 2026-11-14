@@ -631,6 +631,22 @@ describe('LabComponent — performing laboratory', () => {
       expect(component.saving()).toBeFalse();
     });
 
+    it('places no order from a preview reply that arrives after leaving the page', async () => {
+      // Rex on #1150: the preview's subscription ends with the component.
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<(typeof earlier)[]>();
+      labService.checkDuplicates.and.returnValue(reply);
+
+      component.openCreate();
+      component.submitForm();
+      fixture.destroy();
+      reply.next([]);
+      reply.error(new Error('late'));
+
+      expect(reply.observed).toBeFalse();
+      expect(labService.createOrder).not.toHaveBeenCalled();
+    });
+
     it('ignores the reply of an older check once a newer one was asked', async () => {
       await setup(['ROLE_DOCTOR'], []);
       const first = new Subject<(typeof earlier)[]>();

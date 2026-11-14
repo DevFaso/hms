@@ -7,7 +7,9 @@ import {
   OnInit,
   signal,
   ChangeDetectionStrategy,
+  DestroyRef,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
@@ -98,6 +100,8 @@ export class LabComponent implements OnInit {
   /** QA D227: a readable order code, not the raw id. */
   readonly shortOrderCode = shortOrderCode;
   private readonly labService = inject(LabService);
+  /** Rex on #1150: the order flow's requests end with the page (no order placed after leaving it). */
+  private readonly destroyRef = inject(DestroyRef);
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
   private readonly activatedRoute = inject(ActivatedRoute);
@@ -808,6 +812,7 @@ export class LabComponent implements OnInit {
         this.form.labTestDefinitionId,
         this.form.hospitalId || undefined,
       )
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (matches) => {
           if (!current()) return;
@@ -858,7 +863,7 @@ export class LabComponent implements OnInit {
     const op = this.editing()
       ? this.labService.updateOrder(this.editingId()!, payload)
       : this.labService.createOrder(payload);
-    op.subscribe({
+    op.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.toast.success(
           this.translate.instant(this.editing() ? 'LAB.TOAST.UPDATED' : 'LAB.TOAST.CREATED'),

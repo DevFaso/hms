@@ -94,7 +94,8 @@ public class LabOrderController {
     @Operation(summary = "Preview potential duplicate lab orders before submission",
                description = "Active orders (not yet resulted, cancelled or voided) of the same test for the same "
                    + "patient at the same hospital within the duplicate window. Ordering anyway is allowed: send "
-                   + "duplicateAcknowledged=true on the create request to record the acknowledgement.")
+                   + "the ids returned here as acknowledgedDuplicateOrderIds on the create request; it is recorded "
+                   + "as acknowledged only when they cover every duplicate found when the order is placed.")
     @ApiResponse(responseCode = "200", description = "Possible duplicates (possibly none)")
     public ResponseEntity<ApiResponseWrapper<java.util.List<com.example.hms.payload.dto.LabOrderDuplicateMatchDTO>>> previewDuplicates(
         @RequestParam UUID patientId,
