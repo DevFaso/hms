@@ -80,7 +80,7 @@ public class PatientViewCdsService implements CdsHookService {
     }
 
     @Override
-    public CdsHookResponse evaluate(CdsHookRequest request) {
+    public CdsHookResponse evaluate(CdsHookRequest request, UUID callerHospitalId) {
         UUID patientId = CdsHookContext.requirePatientId(request);
         if (patientId == null) return CdsHookResponse.empty();
 

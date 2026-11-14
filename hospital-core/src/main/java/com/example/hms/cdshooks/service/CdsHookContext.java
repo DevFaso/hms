@@ -19,6 +19,22 @@ public final class CdsHookContext {
     private CdsHookContext() {}
 
     /**
+     * The hospital a hook reads the patient's orders, vitals and catalogue at:
+     * the caller's (QA D1920 class: a patient shared with another hospital
+     * must not surface that hospital's prescriptions as duplicates or
+     * interactions). The patient's first hospital only when there is no
+     * caller scope, which the controller allows only for a super-admin in
+     * global view. The one place a hook may read {@code Patient#getHospitalId}
+     * (CdsHookCallerScopeGuardTest).
+     */
+    public static UUID hospitalScope(UUID callerHospitalId, com.example.hms.model.Patient patient) {
+        if (callerHospitalId != null) {
+            return callerHospitalId;
+        }
+        return patient != null ? patient.getHospitalId() : null;
+    }
+
+    /**
      * Resolves {@code context.patientId} to a UUID. Returns {@code null} when
      * the request does not carry one (e.g. a discovery probe). Safe across
      * raw String, FHIR reference ({@code Patient/{id}}) and UUID forms.
