@@ -59,6 +59,34 @@ public class ImagingReportMapper {
                 .replace("{accessionNumber}", accession != null ? accession : "");
     }
 
+    /** QA D1923: the report's patient is its order's. */
+    private static com.example.hms.model.Patient patientOf(ImagingReport report) {
+        return report.getImagingOrder() != null ? report.getImagingOrder().getPatient() : null;
+    }
+
+    /**
+     * QA D1923: the patient's MRN at the report's hospital (else the order's).
+     * A registration row whose hospital is gone leaves the MRN out rather than
+     * failing the read, as the order mapper does.
+     */
+    private static String patientMrnOf(ImagingReport report) {
+        com.example.hms.model.Patient patient = patientOf(report);
+        if (patient == null) {
+            return null;
+        }
+        com.example.hms.model.Hospital hospital = report.getHospital() != null ? report.getHospital()
+            : report.getImagingOrder().getHospital();
+        if (hospital == null || hospital.getId() == null) {
+            return null;
+        }
+        try {
+            return patient.getMrnForHospital(hospital.getId());
+        } catch (jakarta.persistence.EntityNotFoundException
+                 | org.springframework.orm.jpa.JpaObjectRetrievalFailureException ex) {
+            return null;
+        }
+    }
+
     public ImagingReportResponseDTO toResponseDTO(ImagingReport report) {
         if (report == null) {
             return null;
@@ -67,6 +95,9 @@ public class ImagingReportMapper {
         return ImagingReportResponseDTO.builder()
             .id(report.getId())
             .imagingOrderId(report.getImagingOrder() != null ? report.getImagingOrder().getId() : null)
+            .patientId(patientOf(report) != null ? patientOf(report).getId() : null)
+            .patientDisplayName(patientOf(report) != null ? patientOf(report).getFullName() : null)
+            .patientMrn(patientMrnOf(report))
             .hospitalId(report.getHospital() != null ? report.getHospital().getId() : null)
             .organizationId(report.getOrganization() != null ? report.getOrganization().getId() : null)
             .departmentId(report.getDepartment() != null ? report.getDepartment().getId() : null)

@@ -411,8 +411,11 @@
                     @if (i.bodyRegion) {
                       <span class="chart-review__muted">· {{ i.bodyRegion }}</span>
                     }
-                    @if (i.laterality) {
-                      <span class="chart-review__muted"
+                    <!-- QA D1926 (r53): not shown when marked not applicable, as on Imagerie. -->
+                    @if (lateralityApplies(i.laterality)) {
+                      <span
+                        class="chart-review__muted"
+                        data-testid="chart-review-imaging-laterality"
                         >· {{ i.laterality | enumLabel: 'imagingLaterality' }}</span
                       >
                     }
@@ -427,14 +430,19 @@
                         {{ i.orderedAt | serverTime | dateTime }}</span
                       >
                     }
-                    @if (i.scheduledFor) {
-                      <span>
+                    <!-- QA D1926 (r53): with its time when one was set, as on Imagerie. -->
+                    @if (scheduledAt(i); as sched) {
+                      <span data-testid="chart-review-imaging-scheduled">
                         · {{ 'CHART_REVIEW.SCHEDULED' | translate }}{{ 'COMMON.COLON' | translate }}
-                        {{ i.scheduledFor | serverTime | date: 'mediumDate' }}</span
+                        {{
+                          i.scheduledTime ? (sched | dateTime) : (sched | date: 'mediumDate')
+                        }}</span
                       >
                     }
                     @if (i.priority) {
-                      <span> · {{ i.priority | enumLabel: 'taskPriority' }}</span>
+                      <span data-testid="chart-review-imaging-priority">
+                        · {{ i.priority | enumLabel: 'imagingOrderPriority' }}</span
+                      >
                     }
                   </p>
                   @if (i.clinicalQuestion) {
@@ -446,17 +454,36 @@
                       {{ i.clinicalQuestion }}
                     </p>
                   }
-                  @if (i.reportImpression) {
-                    <p class="chart-review__card-body">
+                  <!-- QA D1924 (r53): the signed conclusion, then each addendum, labelled. -->
+                  @for (r of imagingReports(i); track r.id) {
+                    <p class="chart-review__card-body" data-testid="chart-review-imaging-report">
                       <strong
-                        >{{ 'CHART_REVIEW.IMPRESSION' | translate }}
-                        @if (i.reportStatus) {
-                          ({{ i.reportStatus | enumLabel: 'imagingReportStatus' }})
+                        >{{
+                          (r.reportStatus === 'ADDENDUM'
+                            ? 'CHART_REVIEW.ADDENDUM'
+                            : 'CHART_REVIEW.IMPRESSION'
+                          ) | translate
+                        }}
+                        @if (r.reportStatus && r.reportStatus !== 'ADDENDUM') {
+                          ({{ r.reportStatus | enumLabel: 'imagingReportStatus' }})
                         }
-                        :
+                        @if (r.signedAt || r.createdAt) {
+                          · {{ r.signedAt || r.createdAt | serverTime | dateTime }}
+                        }
+                        {{ 'COMMON.COLON' | translate }}
                       </strong>
-                      {{ i.reportImpression }}
+                      {{ r.impression || '—' }}
                     </p>
+                  }
+                  @if (canOpenImaging && imagingReports(i).length > 0) {
+                    <button
+                      type="button"
+                      class="chart-review__link"
+                      data-testid="chart-review-imaging-open"
+                      (click)="openImagingOrder(i.id)"
+                    >
+                      {{ 'CHART_REVIEW.OPEN_IMAGING_REPORT' | translate }}
+                    </button>
                   }
                 </li>
               }

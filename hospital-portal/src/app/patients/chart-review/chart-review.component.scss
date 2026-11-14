@@ -412,3 +412,21 @@ $timeline-marker-col: 1rem;
     transform: rotate(360deg);
   }
 }
+
+/* QA D1924 (r53): opens the study's order and every version of its report on Imagerie. */
+.chart-review__link {
+  margin-top: 0.25rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--primary, #1d4ed8);
+  font: inherit;
+  font-size: 0.875rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.chart-review__link:focus-visible {
+  outline: 2px solid var(--primary, #1d4ed8);
+  outline-offset: 2px;
+}

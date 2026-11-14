@@ -52,6 +52,7 @@ describe('ImagingComponent', () => {
     imagingSpy = jasmine.createSpyObj('ImagingService', [
       'getAllOrders',
       'createOrder',
+      'checkDuplicates',
       'updateOrder',
       'updateOrderStatus',
       'getReportsForOrder',
@@ -63,6 +64,8 @@ describe('ImagingComponent', () => {
       'updateReport',
       'signReport',
     ]);
+    // QA D1921 (r53): a new order asks for its duplicates first; none here.
+    imagingSpy.checkDuplicates.and.returnValue(of([]));
     imagingSpy.getAllOrders.and.returnValue(
       of([
         mockOrder(),
