@@ -153,6 +153,10 @@ public class AfterVisitSummarySections {
      * Polish 2026-11-13: the follow-up booked from this visit. The check-out knows its id; a later
      * read finds the patient's live appointment at the visit's hospital on the follow-up day,
      * booked at or after the check-out. Nothing is shown when no such booking exists.
+     *
+     * <p>Rex P2 on #1145: only live bookings are candidates, so a cancelled or missed one never
+     * hides a live one booked after it. When several live bookings remain, the earliest start on
+     * that day is shown (the nearest one the patient has to come to).
      */
     private void fillFollowUpAppointment(Encounter encounter, AfterVisitSummaryDTO avs) {
         UUID patientId = encounter.getPatient() != null ? encounter.getPatient().getId() : null;
@@ -162,7 +166,9 @@ public class AfterVisitSummarySections {
         }
         com.example.hms.model.Appointment booked = null;
         if (avs.getFollowUpAppointmentId() != null) {
-            booked = appointmentRepository.findById(avs.getFollowUpAppointmentId()).orElse(null);
+            booked = appointmentRepository.findById(avs.getFollowUpAppointmentId())
+                .filter(AfterVisitSummarySections::live)
+                .orElse(null);
         } else {
             java.time.LocalDate day = followUpDay(avs.getFollowUpAppointmentDate());
             LocalDateTime checkout = encounter.getCheckoutTimestamp();
@@ -170,13 +176,15 @@ public class AfterVisitSummarySections {
                 booked = appointmentRepository.findByPatient_IdAndHospital_IdAndAppointmentDateBetween(
                         patientId, hospitalId, day, day).stream()
                     .filter(a -> a.getCreatedAt() != null && !a.getCreatedAt().isBefore(checkout))
-                    .findFirst().orElse(null);
+                    .filter(AfterVisitSummarySections::live)
+                    .min(java.util.Comparator.comparing(com.example.hms.model.Appointment::getStartTime,
+                        java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
+                    .orElse(null);
             }
         }
-        // Only the visit's own patient at the visit's own hospital, and only a booking still live.
+        // Only the visit's own patient at the visit's own hospital.
         if (booked == null || booked.getPatient() == null || !patientId.equals(booked.getPatient().getId())
-                || booked.getHospital() == null || !hospitalId.equals(booked.getHospital().getId())
-                || (booked.getStatus() != null && !booked.getStatus().holdsSlot())) {
+                || booked.getHospital() == null || !hospitalId.equals(booked.getHospital().getId())) {
             return;
         }
         if (booked.getAppointmentDate() != null) {
@@ -189,6 +197,11 @@ public class AfterVisitSummarySections {
         avs.setFollowUpDepartmentName(
             booked.getDepartment() != null ? trimToNull(booked.getDepartment().getName()) : null);
         avs.setFollowUpClinicianName(staffName(booked.getStaff()));
+    }
+
+    /** A booking that still holds its slot: not cancelled, not a no-show. */
+    private static boolean live(com.example.hms.model.Appointment appointment) {
+        return com.example.hms.enums.AppointmentStatus.holdsSlot(appointment.getStatus());
     }
 
     private static java.time.LocalDate followUpDay(String value) {

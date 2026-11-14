@@ -458,4 +458,36 @@ describe('VisitSummarySectionsComponent', () => {
     expect(appt.textContent).toContain('Dr Sawadogo');
     expect(renderAs(visit).querySelector('[data-testid="avs-appointment-time"]')).toBeNull();
   });
+
+  /* ── Rex P2s on #1145 ── */
+
+  it('hides a dose only when the name carries that whole strength', () => {
+    const shown = (name: string, dosage: string) => {
+      const root = renderAs({ ...visit, currentMedications: [{ name, dosage, drugKey: 'd' }] });
+      return root.querySelector('[data-testid="avs-med-line"]')?.textContent ?? '';
+    };
+    expect(shown('Paracétamol 250 mg', '50 mg')).toContain('50 mg');
+    expect(shown('Haldol 0,5 mg', '5 mg')).toContain('5 mg');
+    expect(shown('Amoxicilline 125 mg/5 ml', '125 mg')).toContain('125 mg');
+    expect(shown('Paracétamol 500mg', '500 mg')).not.toContain('500');
+    expect(shown('Haldol 0,5 mg', '0.5 mg')).not.toContain('0.5');
+  });
+
+  it('counts the age on the calendar: a second birthday is 2 years, not 23 months', () => {
+    useFrench();
+    TestBed.inject(TranslateService).setTranslation(
+      'fr',
+      { VISIT_SUMMARY: { AGE_MONTHS: '{{n}} mois', AGE_DAYS: '{{n}} jours' } },
+      true,
+    );
+    const age = (born: string, at: string) =>
+      renderAs({ patientName: 'X', patientDateOfBirth: born, visitDate: at })
+        .querySelector('[data-testid="avs-dob"]')
+        ?.textContent?.replace(/\s+/g, ' ');
+    expect(age('2024-03-01', '2026-03-01T09:00:00')).toContain('(2 ans)');
+    expect(age('2024-03-01', '2026-02-28T09:00:00')).toContain('(23 mois)');
+    expect(age('2026-01-15', '2026-02-15T09:00:00')).toContain('(1 mois)');
+    expect(age('2026-01-31', '2026-02-28T09:00:00')).toContain('(28 jours)');
+    expect(age('1970-11-12', '2026-11-12T09:00:00')).toContain('(56 ans)');
+  });
 });

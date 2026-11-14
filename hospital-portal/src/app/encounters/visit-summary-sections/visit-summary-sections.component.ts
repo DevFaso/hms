@@ -12,7 +12,6 @@ import { LabRangePipe, LabValuePipe } from '../../shared/pipes/lab-value.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
-import { completedMonths, completedYearsAndMonths } from '../../shared/completed-age';
 
 /** The content sections of a summary (user decision 2026-11-12), as the backend sends them. */
 type ContentSections = Pick<
@@ -106,21 +105,55 @@ const PROBLEM_STATUS_KEYS: Record<string, string> = {
 
 const DAY_MS = 86_400_000;
 
-/** "1980-05-02" or "1980-05-02T…" as the epoch day it names, with no time-zone shift. */
-function calendarDay(value: string | null | undefined): number | null {
+/** A calendar day, read from "1980-05-02" or "1980-05-02T…" with no time-zone shift. */
+interface CalendarDay {
+  y: number;
+  m: number;
+  d: number;
+}
+
+function calendarDay(value: string | null | undefined): CalendarDay | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value ?? '');
-  return match ? Date.UTC(+match[1], +match[2] - 1, +match[3]) / DAY_MS : null;
+  return match ? { y: +match[1], m: +match[2], d: +match[3] } : null;
 }
 
-/** The reader's today, as an epoch day. */
-function today(): number {
+/** The reader's today. */
+function today(): CalendarDay {
   const now = new Date();
-  return Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / DAY_MS;
+  return { y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() };
 }
 
-/** Text as a reader compares it: case, accents and spaces ignored. */
-function folded(value: string): string {
-  return value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, '');
+function epochDay(day: CalendarDay): number {
+  return Date.UTC(day.y, day.m - 1, day.d) / DAY_MS;
+}
+
+/**
+ * Completed calendar months from `born` to `at` (Rex P2 on #1145): counted on
+ * the calendar, so a child is 24 months old on her second birthday, never 23
+ * as average month lengths gave.
+ */
+function completedCalendarMonths(born: CalendarDay, at: CalendarDay): number {
+  return (at.y - born.y) * 12 + (at.m - born.m) - (at.d < born.d ? 1 : 0);
+}
+
+/**
+ * Text as a reader compares strengths: accents and case ignored, a decimal
+ * comma read as a point, and no space between a number and its unit
+ * ("0,5 mg" and "0.5mg" are the same).
+ */
+function strengthText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/(\d),(\d)/g, '$1.$2')
+    .replace(/(\d)\s+(?=[^\d\s])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -243,11 +276,10 @@ export class VisitSummarySectionsComponent {
     const born = calendarDay(s.patientDateOfBirth);
     if (born === null) return null;
     const at = calendarDay(s.visitDate) ?? today();
-    if (at < born) return null;
-    const days = at - born;
-    const { years } = completedYearsAndMonths(days);
-    if (years >= 2) return { key: 'VISIT_SUMMARY.AGE_YEARS', n: years };
-    const months = completedMonths(days);
+    const days = epochDay(at) - epochDay(born);
+    if (days < 0) return null;
+    const months = completedCalendarMonths(born, at);
+    if (months >= 24) return { key: 'VISIT_SUMMARY.AGE_YEARS', n: Math.floor(months / 12) };
     if (months >= 1) return { key: 'VISIT_SUMMARY.AGE_MONTHS', n: months };
     return { key: 'VISIT_SUMMARY.AGE_DAYS', n: days };
   });
@@ -272,7 +304,15 @@ export class VisitSummarySectionsComponent {
   doseOf(m: AvsCurrentMedication): string | null {
     const dose = m.dosage?.trim();
     if (!dose) return null;
-    return folded(m.name).includes(folded(dose)) ? null : dose;
+    // Rex P2 on #1145: the dose must be a whole strength of the name, never part of one:
+    // "50 mg" is not in "250 mg", "5 mg" not in "0,5 mg", and a concentration's
+    // numerator ("125 mg" of "125 mg/5 ml") is not the dose either, so it stays shown.
+    const name = strengthText(m.name);
+    const wanted = new RegExp(
+      `(?:^|[^\\d.])${escapeRegExp(strengthText(dose))}(?![\\d.\\p{L}/])`,
+      'u',
+    );
+    return wanted.test(name) ? null : dose;
   }
 
   severityKey(severity: string | null | undefined): string | null {

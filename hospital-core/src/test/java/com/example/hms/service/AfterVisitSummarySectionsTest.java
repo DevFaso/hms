@@ -623,6 +623,43 @@ class AfterVisitSummarySectionsTest {
         assertThat(avs.getFollowUpAppointmentTime()).isEqualTo("09:30");
     }
 
+    @Test
+    @DisplayName("Rex P2 #1145: a cancelled booking never hides a live one; the earliest live start is shown")
+    void aCancelledBookingNeverHidesALiveOne() {
+        com.example.hms.model.Appointment cancelled = followUp(patientId, hospitalId,
+            com.example.hms.enums.AppointmentStatus.CANCELLED);
+        cancelled.setStartTime(java.time.LocalTime.of(8, 0));
+        com.example.hms.model.Appointment later = followUp(patientId, hospitalId,
+            com.example.hms.enums.AppointmentStatus.SCHEDULED);
+        later.setStartTime(java.time.LocalTime.of(11, 0));
+        com.example.hms.model.Appointment nearest = followUp(patientId, hospitalId,
+            com.example.hms.enums.AppointmentStatus.PENDING);
+        nearest.setStartTime(java.time.LocalTime.of(9, 30));
+        when(appointments.findByPatient_IdAndHospital_IdAndAppointmentDateBetween(patientId, hospitalId,
+            LocalDate.of(2026, 12, 10), LocalDate.of(2026, 12, 10))).thenReturn(List.of(cancelled, later, nearest));
+        AfterVisitSummaryDTO avs = new AfterVisitSummaryDTO();
+        avs.setFollowUpAppointmentDate("2026-12-10");
+
+        sections.fill(encounter, avs, true);
+
+        assertThat(avs.getFollowUpAppointmentTime()).isEqualTo("09:30");
+    }
+
+    @Test
+    @DisplayName("Rex P2 #1145: a booking cancelled since the check-out shows no time, service or clinician")
+    void aCancelledBookingByIdShowsNothing() {
+        com.example.hms.model.Appointment cancelled = followUp(patientId, hospitalId,
+            com.example.hms.enums.AppointmentStatus.CANCELLED);
+        when(appointments.findById(cancelled.getId())).thenReturn(java.util.Optional.of(cancelled));
+        AfterVisitSummaryDTO avs = new AfterVisitSummaryDTO();
+        avs.setFollowUpAppointmentId(cancelled.getId());
+
+        sections.fill(encounter, avs, true);
+
+        assertThat(avs.getFollowUpAppointmentTime()).isNull();
+        assertThat(avs.getFollowUpClinicianName()).isNull();
+    }
+
     private com.example.hms.model.Appointment followUp(UUID patient, UUID hospital,
                                                        com.example.hms.enums.AppointmentStatus status) {
         Patient p = new Patient();
