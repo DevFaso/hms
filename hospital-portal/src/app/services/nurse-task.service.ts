@@ -269,6 +269,8 @@ export interface NurseVitalCaptureResponse {
   clinicallySignificant?: boolean;
   /** The newborn warnings on the set; empty for anyone 28 days old or more. */
   newbornAlerts?: NewbornVitalAlert[];
+  /** QA D1890: the severe-blood-pressure-after-birth warning on the set; empty when none. */
+  postpartumAlerts?: NewbornVitalAlert[];
 }
 
 export interface NurseVitalCaptureRequest {

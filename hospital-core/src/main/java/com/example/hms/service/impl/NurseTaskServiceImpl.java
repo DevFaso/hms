@@ -2331,6 +2331,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .vitalSignId(vital.getId())
             .clinicallySignificant(clinicallySig)
             .newbornAlerts(vitalSignJudgement.alerts(judgement))
+            .postpartumAlerts(vitalSignJudgement.postpartumAlerts(judgement))
             .build();
     }
 

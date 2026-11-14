@@ -15,4 +15,13 @@ class PregnancyHypertensionThresholdsTest {
         assertThat(PregnancyHypertensionProtocolRule.SEVERE_HTN_SYSTOLIC).isEqualTo(LaborServiceImpl.SEVERE_HTN_SYSTOLIC);
         assertThat(PregnancyHypertensionProtocolRule.SEVERE_HTN_DIASTOLIC).isEqualTo(LaborServiceImpl.SEVERE_HTN_DIASTOLIC);
     }
+
+    /** QA D1890: severe after birth is the same severe range as in labour and pregnancy. */
+    @Test
+    void thePostpartumRuleUsesTheSameSevereRange() {
+        assertThat(com.example.hms.service.maternity.PostpartumSevereHypertension.SEVERE_SYSTOLIC)
+            .isEqualTo(LaborServiceImpl.SEVERE_HTN_SYSTOLIC);
+        assertThat(com.example.hms.service.maternity.PostpartumSevereHypertension.SEVERE_DIASTOLIC)
+            .isEqualTo(LaborServiceImpl.SEVERE_HTN_DIASTOLIC);
+    }
 }

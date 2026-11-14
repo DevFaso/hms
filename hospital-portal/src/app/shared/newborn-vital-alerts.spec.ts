@@ -1,5 +1,6 @@
 import {
   announceNewbornWarning,
+  announcePostpartumWarning,
   NEWBORN_WARNING_MS,
   NewbornVitalAlert,
   newbornVitalWarning,
@@ -54,5 +55,39 @@ describe('newborn vital alerts', () => {
     ]);
     expect(announceNewbornWarning(undefined, toast, translate)).toBeFalse();
     expect(pushes.length).toBe(1);
+  });
+});
+
+/** QA D1890: a mother's severe blood pressure after birth; the rule is the server's, never the portal's. */
+describe('postpartum vital alerts', () => {
+  const translate = { instant: (key: string) => `[${key}]` };
+
+  it('says nothing when the set raised nothing', () => {
+    const toast = { push: jasmine.createSpy('push') };
+    expect(announcePostpartumWarning(undefined, toast, translate)).toBeFalse();
+    expect(announcePostpartumWarning([], toast, translate)).toBeFalse();
+    expect(toast.push).not.toHaveBeenCalled();
+  });
+
+  it('shows one long-lived urgent toast with the postpartum heading and the warning', () => {
+    const toast = { push: jasmine.createSpy('push') };
+    const shown = announcePostpartumWarning(
+      [
+        {
+          code: 'postpartum-severe-hypertension',
+          severity: 'URGENT',
+          type: 'HYPERTENSION',
+          message: 'Avis obstétrical urgent requis.',
+        },
+      ],
+      toast,
+      translate,
+    );
+    expect(shown).toBeTrue();
+    expect(toast.push).toHaveBeenCalledOnceWith(
+      'error',
+      '[VITAL_LIMITS.POSTPARTUM_WARNING_URGENT] Avis obstétrical urgent requis.',
+      NEWBORN_WARNING_MS,
+    );
   });
 });
