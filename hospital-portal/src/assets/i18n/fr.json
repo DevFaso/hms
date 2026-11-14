@@ -3681,14 +3681,6 @@
     "REPORT_SAVE_ERROR": "Le compte rendu n'a pas pu être enregistré",
     "REPORT_SIGNED": "Compte rendu signé",
     "REPORT_SIGN_ERROR": "Le compte rendu n'a pas pu être signé",
-    "REPORT_STATUS_ADDENDUM": "Addendum",
-    "REPORT_STATUS_AMENDED": "Modifié",
-    "REPORT_STATUS_CANCELLED": "Annulé",
-    "REPORT_STATUS_CORRECTED": "Corrigé",
-    "REPORT_STATUS_DRAFT": "Brouillon",
-    "REPORT_STATUS_ERROR": "Erreur",
-    "REPORT_STATUS_FINAL": "Définitif",
-    "REPORT_STATUS_PRELIMINARY": "Préliminaire",
     "REPORT_TITLE": "Titre du compte rendu",
     "REPORT_UPDATED": "Compte rendu mis à jour",
     "REPORT_VERSION": "Version",
@@ -3736,7 +3728,14 @@
     "VOID_HINT": "Annule un compte rendu non signé. Un compte rendu signé doit être remplacé par une version corrigée.",
     "VOID_REASON_REQUIRED": "Un motif est obligatoire pour annuler un compte rendu",
     "VOID_REPORT": "Annuler le compte rendu",
-    "X_RAY": "Radiographie"
+    "X_RAY": "Radiographie",
+    "COMPLETED_ORDERS": "Terminées",
+    "START_STUDY": "Démarrer l'examen",
+    "COMPLETE_STUDY": "Terminer l'examen",
+    "STUDY_STARTED": "Examen démarré",
+    "STUDY_COMPLETED": "Examen terminé",
+    "STUDY_STATUS_ERROR": "Le statut de l'examen n'a pas pu être mis à jour",
+    "COMPLETE_STUDY_CONFIRM": "Marquer cet examen comme terminé ? Un examen terminé ne peut pas être rouvert."
   },
   "LAB": {
     "DUPLICATE": {
@@ -6548,13 +6547,13 @@
         "SCHEDULED": "Planifié"
       },
       "IMAGING_REPORT_STATUS": {
-        "ADDENDUM": "Complément",
-        "AMENDED": "Amendé",
+        "ADDENDUM": "Addendum",
+        "AMENDED": "Modifié",
         "CANCELLED": "Annulé",
         "CORRECTED": "Corrigé",
         "DRAFT": "Brouillon",
         "ERROR": "Erreur",
-        "FINAL": "Final",
+        "FINAL": "Définitif",
         "PRELIMINARY": "Préliminaire"
       },
       "TREATMENT_PLAN_STATUS": {

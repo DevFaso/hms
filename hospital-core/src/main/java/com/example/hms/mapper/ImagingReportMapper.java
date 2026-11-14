@@ -157,15 +157,11 @@ public class ImagingReportMapper {
         if (request.getReportNumber() != null) {
             report.setReportNumber(request.getReportNumber());
         }
-        report.setStudyInstanceUid(request.getStudyInstanceUid());
-        report.setSeriesInstanceUid(request.getSeriesInstanceUid());
+        // The authoring form's fields are its to replace, so a blank one clears.
         report.setAccessionNumber(request.getAccessionNumber());
-        report.setPacsViewerUrl(request.getPacsViewerUrl());
         report.setModality(request.getModality());
         report.setBodyRegion(request.getBodyRegion());
         report.setReportTitle(request.getReportTitle());
-        report.setPerformedAt(request.getPerformedAt());
-        report.setCompletedAt(request.getCompletedAt());
         report.setTechnique(request.getTechnique());
         report.setFindings(request.getFindings());
         report.setImpression(request.getImpression());
@@ -173,11 +169,42 @@ public class ImagingReportMapper {
         report.setComparisonStudies(request.getComparisonStudies());
         report.setContrastAdministered(request.getContrastAdministered());
         report.setContrastDetails(request.getContrastDetails());
-        report.setRadiationDoseMgy(request.getRadiationDoseMgy());
-        report.setExternalSystemName(request.getExternalSystemName());
-        report.setExternalReportId(request.getExternalReportId());
+        applyPresentAcquisitionFields(report, request);
         synchronizeMeasurements(report, request.getMeasurements());
         synchronizeAttachments(report, request.getAttachments());
+    }
+
+    /**
+     * QA D1822 class (r51): the study's acquisition and source fields (DICOM
+     * UIDs, PACS link, performed and completed times, dose, the external
+     * system's ids) are on no authoring form, so a revision of the draft
+     * erased them. Absent keeps the stored value; a value sent is applied.
+     */
+    private static void applyPresentAcquisitionFields(ImagingReport report, ImagingReportUpsertRequestDTO request) {
+        if (request.getStudyInstanceUid() != null) {
+            report.setStudyInstanceUid(request.getStudyInstanceUid());
+        }
+        if (request.getSeriesInstanceUid() != null) {
+            report.setSeriesInstanceUid(request.getSeriesInstanceUid());
+        }
+        if (request.getPacsViewerUrl() != null) {
+            report.setPacsViewerUrl(request.getPacsViewerUrl());
+        }
+        if (request.getPerformedAt() != null) {
+            report.setPerformedAt(request.getPerformedAt());
+        }
+        if (request.getCompletedAt() != null) {
+            report.setCompletedAt(request.getCompletedAt());
+        }
+        if (request.getRadiationDoseMgy() != null) {
+            report.setRadiationDoseMgy(request.getRadiationDoseMgy());
+        }
+        if (request.getExternalSystemName() != null) {
+            report.setExternalSystemName(request.getExternalSystemName());
+        }
+        if (request.getExternalReportId() != null) {
+            report.setExternalReportId(request.getExternalReportId());
+        }
     }
 
     public void synchronizeMeasurements(ImagingReport report, List<ImagingReportMeasurementRequestDTO> measurementRequests) {

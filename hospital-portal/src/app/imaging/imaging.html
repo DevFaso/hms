@@ -68,7 +68,7 @@
         >
         <span class="card-info">
           <span class="card-value">{{ completedOrderCount() }}</span
-          ><span class="card-label">{{ 'IMAGING.COMPLETED' | translate }}</span>
+          ><span class="card-label">{{ 'IMAGING.COMPLETED_ORDERS' | translate }}</span>
         </span>
       </button>
       <button
@@ -258,9 +258,37 @@
                         <span class="material-symbols-outlined">description</span>
                       </button>
                     }
+                    <!-- QA D1821: the study is started, then completed, from the list. -->
+                    @if (canStartStudy(o)) {
+                      <button
+                        type="button"
+                        class="action-link"
+                        [attr.data-testid]="'imaging-start-' + o.id"
+                        [disabled]="!!studyStatusSavingId()"
+                        (click)="startStudy(o)"
+                        [title]="'IMAGING.START_STUDY' | translate"
+                        [attr.aria-label]="'IMAGING.START_STUDY' | translate"
+                      >
+                        <span class="material-symbols-outlined">play_arrow</span>
+                      </button>
+                    }
+                    @if (canCompleteStudy(o)) {
+                      <button
+                        type="button"
+                        class="action-link"
+                        [attr.data-testid]="'imaging-complete-' + o.id"
+                        [disabled]="!!studyStatusSavingId()"
+                        (click)="completeStudy(o)"
+                        [title]="'IMAGING.COMPLETE_STUDY' | translate"
+                        [attr.aria-label]="'IMAGING.COMPLETE_STUDY' | translate"
+                      >
+                        <span class="material-symbols-outlined">task_alt</span>
+                      </button>
+                    }
                     @if (canAuthorForOrder(o)) {
                       <button
                         class="action-link"
+                        [attr.data-testid]="'imaging-author-' + o.id"
                         (click)="openAuthorReport(o, o.status === 'RESULTS_AVAILABLE')"
                         [title]="'IMAGING.AUTHOR_REPORT' | translate"
                         [attr.aria-label]="'IMAGING.AUTHOR_REPORT' | translate"
@@ -311,7 +339,7 @@
             (click)="setReportStatusFilter(st)"
             [attr.aria-pressed]="reportStatusFilter() === st"
           >
-            {{ 'IMAGING.REPORT_STATUS_' + st | translate }}
+            {{ st | enumLabel: 'imagingReportStatus' }}
           </button>
         }
       </div>
@@ -382,7 +410,7 @@
                 <td>{{ r.createdAt ? (r.createdAt | serverTime | date: 'mediumDate') : '—' }}</td>
                 <td>
                   <span class="status-badge {{ getReportStatusClass(r.reportStatus) }}">{{
-                    'IMAGING.REPORT_STATUS_' + r.reportStatus | translate
+                    r.reportStatus | enumLabel: 'imagingReportStatus'
                   }}</span>
                   @if (isCriticalUnacked(r)) {
                     {{ ' '
@@ -543,7 +571,7 @@
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="field-value"
                 ><span class="status-badge {{ getReportStatusClass(rep.reportStatus) }}">{{
-                  'IMAGING.REPORT_STATUS_' + rep.reportStatus | translate
+                  rep.reportStatus | enumLabel: 'imagingReportStatus'
                 }}</span></span
               >
             </div>
@@ -625,7 +653,7 @@
                 @for (h of rep.statusHistory; track h.id) {
                   <li>
                     {{ h.changedAt | serverTime | dateTime }} —
-                    {{ 'IMAGING.REPORT_STATUS_' + h.status | translate }}
+                    {{ h.status | enumLabel: 'imagingReportStatus' }}
                     {{ h.changedByName ? '(' + h.changedByName + ')' : '' }}
                     <!-- r44: an event the server wrote is translated; a typed reason shows as typed. -->
                     @if (h.eventCode) {
@@ -673,7 +701,7 @@
           <label for="report-status">{{ 'COMMON.STATUS' | translate }}</label>
           <select id="report-status" [(ngModel)]="statusForm.status">
             @for (st of voidStatuses; track st) {
-              <option [value]="st">{{ 'IMAGING.REPORT_STATUS_' + st | translate }}</option>
+              <option [value]="st">{{ st | enumLabel: 'imagingReportStatus' }}</option>
             }
           </select>
         </div>
@@ -741,7 +769,7 @@
             <label for="rep-status">{{ 'COMMON.STATUS' | translate }}</label>
             <select id="rep-status" [(ngModel)]="reportForm.reportStatus">
               @for (st of authorableStatuses; track st) {
-                <option [value]="st">{{ 'IMAGING.REPORT_STATUS_' + st | translate }}</option>
+                <option [value]="st">{{ st | enumLabel: 'imagingReportStatus' }}</option>
               }
             </select>
           </div>
@@ -934,6 +962,46 @@
             <div class="detail-notes">
               <span class="field-label">{{ 'IMAGING.CLINICAL_QUESTION' | translate }}</span>
               <p>{{ ord.clinicalQuestion }}</p>
+            </div>
+          }
+          <!-- QA D1821: start, complete, then write the report, from the request drawer too. -->
+          @if (canStartStudy(ord) || canCompleteStudy(ord) || canAuthorForOrder(ord)) {
+            <div class="detail-actions" data-testid="imaging-drawer-actions">
+              @if (canStartStudy(ord)) {
+                <button
+                  type="button"
+                  class="btn-primary"
+                  data-testid="imaging-drawer-start"
+                  [disabled]="!!studyStatusSavingId()"
+                  (click)="startStudy(ord)"
+                >
+                  <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span>
+                  {{ 'IMAGING.START_STUDY' | translate }}
+                </button>
+              }
+              @if (canCompleteStudy(ord)) {
+                <button
+                  type="button"
+                  class="btn-primary"
+                  data-testid="imaging-drawer-complete"
+                  [disabled]="!!studyStatusSavingId()"
+                  (click)="completeStudy(ord)"
+                >
+                  <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
+                  {{ 'IMAGING.COMPLETE_STUDY' | translate }}
+                </button>
+              }
+              @if (canAuthorForOrder(ord)) {
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  data-testid="imaging-drawer-author"
+                  (click)="authorFromDrawer(ord)"
+                >
+                  <span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
+                  {{ 'IMAGING.AUTHOR_REPORT' | translate }}
+                </button>
+              }
             </div>
           }
 

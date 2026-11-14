@@ -99,6 +99,9 @@ export const IMAGING_ORDER_TAB_STATUSES: Readonly<
   cancelled: ['CANCELLED'],
 };
 
+/** QA D1821: the order statuses a study is started from (placed, not yet performed). */
+export const STARTABLE_ORDER_STATUSES: readonly ImagingOrderStatus[] = ['ORDERED', 'SCHEDULED'];
+
 /** The new-order form: each request field's element id (QA D1156). */
 const ORDER_FIELD_IDS: Readonly<Record<string, string>> = {
   patientId: 'img-patientSearch',
@@ -298,6 +301,77 @@ export class ImagingComponent implements OnInit {
       isOrderCancellable(o.status) &&
       this.authorship.isAuthor({ authorUserId: o.authorUserId ?? o.orderingProviderUserId })
     );
+  }
+
+  /**
+   * QA D1821 (r51): the portal could neither start nor complete a study, so
+   * a new order could not be reported from the UI. Both go through PUT
+   * /imaging/orders/{id}/status, so they are offered to its roles
+   * (imagingOrderStatus), no others. A placed order (ordered or scheduled)
+   * is started; a study in progress is completed. A draft or an order
+   * awaiting authorisation is not started from here, and a study is not
+   * completed before it is started.
+   */
+  canStartStudy(o: ImagingOrderResponse): boolean {
+    return this.canCancelOrder() && STARTABLE_ORDER_STATUSES.includes(o.status);
+  }
+
+  canCompleteStudy(o: ImagingOrderResponse): boolean {
+    return this.canCancelOrder() && o.status === 'IN_PROGRESS';
+  }
+
+  /** The order whose status write is in flight; its buttons stay disabled until it answers. */
+  readonly studyStatusSavingId = signal<string | null>(null);
+
+  startStudy(o: ImagingOrderResponse): void {
+    this.writeStudyStatus(o, 'IN_PROGRESS', 'IMAGING.STUDY_STARTED');
+  }
+
+  /** Completing closes the study for good (a resulted order is not reopened), so it asks first. */
+  async completeStudy(o: ImagingOrderResponse): Promise<void> {
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'IMAGING.COMPLETE_STUDY_CONFIRM',
+        confirmKey: 'IMAGING.COMPLETE_STUDY',
+      }))
+    )
+      return;
+    this.writeStudyStatus(o, 'COMPLETED', 'IMAGING.STUDY_COMPLETED');
+  }
+
+  /**
+   * The status alone travels: the server keeps the schedule, the location,
+   * the notes and the pre-authorisation it is not sent (QA D1822).
+   */
+  private writeStudyStatus(
+    o: ImagingOrderResponse,
+    status: Extract<ImagingOrderStatus, 'IN_PROGRESS' | 'COMPLETED'>,
+    doneKey: string,
+  ): void {
+    if (this.studyStatusSavingId()) return;
+    this.studyStatusSavingId.set(o.id);
+    this.imagingService.updateOrderStatus(o.id, { status }).subscribe({
+      next: (updated) => {
+        this.studyStatusSavingId.set(null);
+        this.toast.success(this.translate.instant(doneKey));
+        if (this.selectedOrder()?.id === o.id) {
+          this.selectedOrder.set(updated ?? { ...o, status });
+        }
+        this.load();
+      },
+      error: (err: unknown) => {
+        this.studyStatusSavingId.set(null);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('IMAGING.STUDY_STATUS_ERROR'),
+        );
+      },
+    });
+  }
+
+  /** From the request drawer: the authoring form opens over the list, the drawer closes. */
+  authorFromDrawer(o: ImagingOrderResponse): void {
+    this.closeDetail();
+    this.openAuthorReport(o, o.status === 'RESULTS_AVAILABLE');
   }
 
   /** RADIOLOGIST joins DOCTOR here — the endpoint has admitted the role since item 26. */
@@ -799,7 +873,8 @@ export class ImagingComponent implements OnInit {
       impression: report.impression ?? '',
       recommendations: report.recommendations ?? '',
       contrastAdministered: !!report.contrastAdministered,
-      contrastDetails: '',
+      // QA D1822 class: a revision sent the details blank and erased them.
+      contrastDetails: report.contrastDetails ?? '',
       criticalFinding: report.criticalFinding,
       reportStatus: this.authorableStatusOf(report.reportStatus),
     };
