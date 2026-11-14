@@ -295,6 +295,11 @@
     background: var(--primary-tint);
     color: var(--primary-deep);
   }
+  /* Entered, not validated: never the finished green. */
+  &.status-awaiting {
+    background: #ffedd5;
+    color: #9a3412;
+  }
 }
 
 // ── Detail Slide-Out Panel ──
@@ -664,6 +669,90 @@
     background: #991b1b;
     color: #ffffff;
   }
+
+  /* ROUTINE: the same badge, neutral, so every row reads the same way. */
+  &.priority-routine {
+    background: #f3f4f6;
+    color: #4b5563;
+    font-weight: 600;
+  }
+}
+
+/* A badge in a drawer field sizes to its text; the column layout stretched it full width. */
+.detail-field .fit-content {
+  align-self: flex-start;
+  width: fit-content;
+  margin-left: 0;
+}
+
+/* The drawer's result: as the lab-results page grades and draws it. */
+.detail-result {
+  .result-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .result-link {
+    margin-left: auto;
+    font-size: 0.8rem;
+  }
+
+  .awaiting-validation {
+    font-weight: 600;
+    color: #9a3412;
+  }
+}
+
+.severity-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: #f3f4f6;
+  color: #4b5563;
+
+  &.severity-critical {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+  &.severity-high {
+    background: #fef3c7;
+    color: #92400e;
+  }
+  &.severity-normal {
+    background: #d1fae5;
+    color: #065f46;
+  }
+}
+
+.lab-timeline {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0 0 0 0.75rem;
+  border-left: 2px solid #e5e7eb;
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+    font-size: 0.85rem;
+  }
+
+  .timeline-step {
+    font-weight: 600;
+    min-width: 8rem;
+  }
+}
+
+.detail-secondary {
+  margin-top: 1.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e5e7eb;
 }
 
 @include diagnostics.workspace;

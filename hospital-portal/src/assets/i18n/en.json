@@ -3861,7 +3861,44 @@
       "REJECTED_ON_ORDER": "Specimen rejected by the laboratory: a new sample is needed",
       "TITLE": "Reject the specimen"
     },
-    "SPECIMEN_ORDER_CLOSED": "This order already has a result or is cancelled: it takes no new specimen. A repeat test is a new order."
+    "SPECIMEN_ORDER_CLOSED": "This order already has a result or is cancelled: it takes no new specimen. A repeat test is a new order.",
+    "PRESCRIBER": "Prescriber",
+    "MRN": "MRN",
+    "VIEW_FULL_RESULT": "View full result",
+    "TURNAROUND": "Turnaround time",
+    "TAT_MINUTES": "{{minutes}} min",
+    "TAT_HOURS_MINUTES": "{{hours}} h {{minutes}} min",
+    "TAT_DAYS_HOURS": "{{days}} d {{hours}} h",
+    "AGE_DAY": "{{count}} day",
+    "AGE_DAYS": "{{count}} days",
+    "AGE_MONTH": "{{count}} month",
+    "AGE_MONTHS": "{{count}} months",
+    "AGE_YEARS": "{{count}} years",
+    "STATE": {
+      "TO_COLLECT": "Awaiting collection",
+      "COLLECTED": "Collected",
+      "IN_ANALYSIS": "In analysis",
+      "AWAITING_VALIDATION": "Awaiting validation",
+      "COMPLETED": "Completed",
+      "CANCELLED": "Cancelled",
+      "ENTERED_IN_ERROR": "Entered in error"
+    },
+    "STATE_GROUP": {
+      "OPEN": "In progress",
+      "OPEN_HINT": "Requests awaiting collection, in analysis or awaiting validation",
+      "COMPLETED": "Completed",
+      "COMPLETED_HINT": "Requests whose results are all validated",
+      "CANCELLED": "Cancelled"
+    },
+    "TIMELINE": {
+      "TITLE": "Specimen and timeline",
+      "ORDERED": "Ordered",
+      "COLLECTED": "Collected",
+      "RECEIVED": "Received at the laboratory",
+      "RESULTED": "Result entered",
+      "VALIDATED": "Validated"
+    },
+    "LINKED_ORDER_NOT_FOUND": "This lab request was not found, or you cannot see it from this hospital."
   },
   "LAB_STAFF": {
     "TITLE": "Lab Staff Management",
@@ -6473,7 +6510,7 @@
         "ORDERED": "Ordered",
         "PENDING": "Pending",
         "RECEIVED": "Received",
-        "RESULTED": "Resulted",
+        "RESULTED": "Awaiting validation",
         "VERIFIED": "Verified",
         "ENTERED_IN_ERROR": "Entered in error"
       },

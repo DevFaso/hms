@@ -1,7 +1,7 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { signal } from '@angular/core';
 import {
@@ -1656,5 +1656,45 @@ describe('LabResultsComponent — rendered delete gate and order picker', () => 
         data: { content: [], totalElements: 0, totalPages: 1, number: 0 },
         success: true,
       });
+  });
+});
+
+/** The lab requests drawer links a validated value to `/lab-results?resultId=…`. */
+describe('LabResultsComponent — deep link to one result', () => {
+  let fixture: ComponentFixture<LabResultsComponent>;
+  let component: LabResultsComponent;
+  let httpMock: HttpTestingController;
+
+  function create(query: Record<string, string>): void {
+    TestBed.configureTestingModule({
+      imports: [LabResultsComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap(query) } },
+        },
+      ],
+    });
+    fixture = TestBed.createComponent(LabResultsComponent);
+    component = fixture.componentInstance;
+    httpMock = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+  }
+
+  afterEach(() => httpMock.match(() => true));
+
+  it('opens the named result on arrival', () => {
+    create({ resultId: 'result-1' });
+    httpMock.expectOne('/lab-results/result-1').flush(mockResult());
+    expect(component.selectedResult()?.id).toBe('result-1');
+  });
+
+  it('opens nothing without the parameter', () => {
+    create({});
+    expect(httpMock.match('/lab-results/result-1').length).toBe(0);
+    expect(component.selectedResult()).toBeNull();
   });
 });

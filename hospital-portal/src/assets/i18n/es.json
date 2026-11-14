@@ -3861,7 +3861,44 @@
       "REJECTED_ON_ORDER": "Muestra rechazada por el laboratorio: se necesita una nueva toma",
       "TITLE": "Rechazar la muestra"
     },
-    "SPECIMEN_ORDER_CLOSED": "Esta solicitud ya tiene un resultado o está anulada: no admite una nueva muestra. Una repetición es una nueva solicitud."
+    "SPECIMEN_ORDER_CLOSED": "Esta solicitud ya tiene un resultado o está anulada: no admite una nueva muestra. Una repetición es una nueva solicitud.",
+    "PRESCRIBER": "Prescriptor",
+    "MRN": "N.º de historia",
+    "VIEW_FULL_RESULT": "Ver el resultado completo",
+    "TURNAROUND": "Tiempo de respuesta",
+    "TAT_MINUTES": "{{minutes}} min",
+    "TAT_HOURS_MINUTES": "{{hours}} h {{minutes}} min",
+    "TAT_DAYS_HOURS": "{{days}} d {{hours}} h",
+    "AGE_DAY": "{{count}} día",
+    "AGE_DAYS": "{{count}} días",
+    "AGE_MONTH": "{{count}} mes",
+    "AGE_MONTHS": "{{count}} meses",
+    "AGE_YEARS": "{{count}} años",
+    "STATE": {
+      "TO_COLLECT": "Pendiente de extracción",
+      "COLLECTED": "Extraída",
+      "IN_ANALYSIS": "En análisis",
+      "AWAITING_VALIDATION": "Pendiente de validación",
+      "COMPLETED": "Completada",
+      "CANCELLED": "Cancelada",
+      "ENTERED_IN_ERROR": "Registrada por error"
+    },
+    "STATE_GROUP": {
+      "OPEN": "En curso",
+      "OPEN_HINT": "Solicitudes pendientes de extracción, en análisis o pendientes de validación",
+      "COMPLETED": "Completadas",
+      "COMPLETED_HINT": "Solicitudes con todos los resultados validados",
+      "CANCELLED": "Canceladas"
+    },
+    "TIMELINE": {
+      "TITLE": "Muestra y seguimiento",
+      "ORDERED": "Solicitada",
+      "COLLECTED": "Extraída",
+      "RECEIVED": "Recibida en el laboratorio",
+      "RESULTED": "Resultado registrado",
+      "VALIDATED": "Validada"
+    },
+    "LINKED_ORDER_NOT_FOUND": "No se encontró esta solicitud de laboratorio, o no puede verla desde este hospital."
   },
   "LAB_STAFF": {
     "TITLE": "Gestión de personal de laboratorio",
@@ -6473,7 +6510,7 @@
         "ORDERED": "Solicitado",
         "PENDING": "Pendiente",
         "RECEIVED": "Recibido",
-        "RESULTED": "Con resultados",
+        "RESULTED": "Pendiente de validación",
         "VERIFIED": "Verificado",
         "ENTERED_IN_ERROR": "Registrado por error"
       },
