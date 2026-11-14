@@ -40,7 +40,7 @@ public class ImagingOrderController {
 	private final com.example.hms.controller.support.RecordsWithheldHeaders recordsWithheld;
 
 	@PostMapping("/orders")
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+	@PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
 	@Operation(summary = "Create a new imaging order")
 	public ResponseEntity<ImagingOrderResponseDTO> createOrder(
 		@Valid @RequestBody ImagingOrderRequestDTO request,
@@ -52,7 +52,7 @@ public class ImagingOrderController {
 	}
 
 	@PutMapping("/orders/{orderId}")
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+	@PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
 	@Operation(summary = "Update imaging order details")
 	public ResponseEntity<ImagingOrderResponseDTO> updateOrder(
 		@PathVariable UUID orderId,
@@ -65,7 +65,7 @@ public class ImagingOrderController {
 	}
 
 	@PutMapping("/orders/{orderId}/status")
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','RADIOLOGIST')")
+	@PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','RADIOLOGIST')")
 	@Operation(summary = "Update imaging order status, scheduling, or cancellation details")
 	public ResponseEntity<ImagingOrderResponseDTO> updateStatus(
 		@PathVariable UUID orderId,
@@ -76,7 +76,7 @@ public class ImagingOrderController {
 	}
 
 	@PostMapping("/orders/{orderId}/signature")
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR')")
+	@PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
 	@Operation(summary = "Attach ordering provider signature/attestation")
 	public ResponseEntity<ImagingOrderResponseDTO> captureSignature(
 		@PathVariable UUID orderId,
@@ -89,7 +89,7 @@ public class ImagingOrderController {
 	}
 
 	@GetMapping("/orders/{orderId}")
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST')")
 	@Operation(summary = "Retrieve imaging order by ID")
 	public ResponseEntity<ImagingOrderResponseDTO> getOrder(@PathVariable UUID orderId) {
 		ImagingOrderResponseDTO responseDTO = imagingOrderService.getOrder(orderId);
@@ -97,7 +97,7 @@ public class ImagingOrderController {
 	}
 
 	@GetMapping("/orders/patient/{patientId}")
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
 	@Operation(summary = "List imaging orders for a patient")
 	public ResponseEntity<List<ImagingOrderResponseDTO>> getOrdersByPatient(
 		@PathVariable UUID patientId,
@@ -110,8 +110,13 @@ public class ImagingOrderController {
 			com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull())).body(results);
 	}
 
+	/**
+	 * QA D1841: the radiologist's worklist (dashboard counts and the /imaging page) — the
+	 * service scopes it to the caller's active hospital. The same readers as every other
+	 * imaging order read ({@code ImagingReadRoleGuardTest}).
+	 */
 	@GetMapping("/orders")
-	@PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST')")
 	@Operation(summary = "List all imaging orders")
 	public ResponseEntity<List<ImagingOrderResponseDTO>> getAllOrders(
 		@RequestParam(required = false) ImagingOrderStatus status
@@ -121,7 +126,7 @@ public class ImagingOrderController {
 	}
 
 	@GetMapping("/orders/hospital/{hospitalId}")
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN','RADIOLOGIST','DOCTOR','NURSE','MIDWIFE')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST')")
 	@Operation(summary = "List imaging orders for a hospital")
 	public ResponseEntity<List<ImagingOrderResponseDTO>> getOrdersByHospital(
 		@PathVariable UUID hospitalId,
@@ -132,7 +137,7 @@ public class ImagingOrderController {
 	}
 
 	@GetMapping("/orders/patient/{patientId}/duplicates")
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+	@PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
 	@Operation(summary = "Preview potential duplicate imaging orders before submission",
 		description = "The patient's non-cancelled orders of the same modality (and region) at the caller's hospital "
 			+ "only, within lookbackDays (default 30, capped at 90). A patient not registered at that hospital "

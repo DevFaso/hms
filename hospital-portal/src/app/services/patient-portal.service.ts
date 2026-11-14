@@ -695,9 +695,12 @@ export interface VisitClinicianEntry {
   visitDate: string | null;
 }
 
-/** GET /me/patient/care-team — CareTeamDTO { primaryCare, primaryCareHistory, visitClinicians }. */
+/** GET /me/patient/care-team — CareTeamDTO { primaryCare, primaryCares, primaryCareHistory, visitClinicians }. */
 export interface CareTeamDTO {
+  /** The newest current link (one of `primaryCares`), kept for older clients. */
   primaryCare: PrimaryCareEntry | null;
+  /** Every current link, one per hospital that registers the patient, newest first (QA D1850). */
+  primaryCares?: PrimaryCareEntry[];
   /** Newest first; includes the current link. */
   primaryCareHistory: PrimaryCareEntry[];
   /** Newest visit first, one entry per clinician. */
@@ -1514,6 +1517,8 @@ export class PatientPortalService {
     return this.http.get<ApiWrapper<CareTeamDTO>>(`${this.base}/care-team`).pipe(
       map((r) => ({
         primaryCare: r.data?.primaryCare ?? null,
+        // An older server sends only `primaryCare`.
+        primaryCares: r.data?.primaryCares ?? (r.data?.primaryCare ? [r.data.primaryCare] : []),
         primaryCareHistory: r.data?.primaryCareHistory ?? [],
         visitClinicians: r.data?.visitClinicians ?? [],
       })),
@@ -1530,6 +1535,7 @@ export class PatientPortalService {
       map((r) => {
         const team = r.data;
         const entries = [
+          ...(team?.primaryCares ?? []),
           ...(team?.primaryCare ? [team.primaryCare] : []),
           ...(team?.primaryCareHistory ?? []),
         ];

@@ -182,7 +182,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
         UUID actingHospitalId = ctx.pinnedHospitalId();
         if (actingHospitalId == null) {
-            return birthPlanRepository.findActiveBirthPlanByPatientId(patientId)
+            return birthPlanRepository.findFirstByPatient_IdAndWithdrawnAtIsNullOrderByCreatedAtDesc(patientId)
                 .map(birthPlanMapper::toResponseDTO)
                 .orElse(null);
         }

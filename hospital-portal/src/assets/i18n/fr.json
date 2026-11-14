@@ -3101,6 +3101,7 @@
     "NO_ACTIVATION_CHANNEL": "Aucun message d'activation n'est parvenu à ce compte — il reste inactif tant que le code de confirmation n'est pas transmis.",
     "SMS_FAILED": "Le SMS d'activation n'a pas pu être envoyé.",
     "SMS_NOT_CONFIGURED": "L'envoi de SMS est désactivé sur ce serveur — aucun SMS d'activation n'a été envoyé.",
+    "SMS_RECIPIENT_NOT_ALLOWED": "Le SMS d'activation n'a pas été envoyé : cet environnement n'envoie de SMS qu'aux numéros de test autorisés, et ce numéro n'en fait pas partie. Remettez le code en main propre ou ajoutez le numéro à la liste de test.",
     "WELCOME_EMAIL_FAILED": "L'e-mail de bienvenue contenant les identifiants n'a pas pu être envoyé."
   },
   "DEPARTMENTS": {
@@ -3579,6 +3580,10 @@
     "ZIP_CODE": "Code postal"
   },
   "IMAGING": {
+    "RESULTS_PARTIAL_FAILURE": "Les comptes rendus de ces hôpitaux n'ont pas pu être chargés, la liste est donc incomplète : {{hospitals}}.",
+    "ADMIN_READ_ONLY": "Consultation seule : demandes d'imagerie et comptes rendus validés. La prescription, l'interprétation et la signature reviennent à l'équipe clinique.",
+    "ALL_HOSPITALS": "Tous les hôpitaux",
+    "HOSPITAL_FILTER": "Hôpital",
     "ACCESSION": "Numéro d'accession",
     "ACK_CRITICAL": "Confirmer le résultat critique",
     "ACTIVE_ORDERS": "Demandes actives",

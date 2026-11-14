@@ -51,6 +51,11 @@ public class NotificationDeliveryStatusDTO {
     public static final String OUTCOME_NOT_CONFIGURED = "NOT_CONFIGURED";
     /** The mock SMS channel accepted the message but no phone receives it. */
     public static final String OUTCOME_MOCKED = "MOCKED";
+    /**
+     * QA D1842: SMS only. This environment's SMS_RECIPIENT_ALLOWLIST (dev, uat)
+     * does not list the number, so nothing was sent; the transport is fine.
+     */
+    public static final String OUTCOME_RECIPIENT_NOT_ALLOWED = "RECIPIENT_NOT_ALLOWED";
     /** The account has no address/number for this channel — informational. */
     public static final String OUTCOME_NO_CONTACT = "NO_CONTACT";
 

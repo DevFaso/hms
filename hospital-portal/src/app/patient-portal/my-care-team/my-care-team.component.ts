@@ -19,7 +19,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
  * The patient's care team, as GET /me/patient/care-team defines it: the
- * current primary care provider and the earlier ones, with dates. The page
+ * current primary care providers (one per hospital) and the earlier ones, with dates. The page
  * used to read a `members` array the endpoint never sends, so it always
  * rendered its empty state.
  */
@@ -39,12 +39,17 @@ export class MyCareTeamComponent implements OnInit {
   /** QA D1212: the server's reason the read failed (a 4xx), when it gave one. */
   failureReason = signal<string | null>(null);
 
-  readonly current = computed(() => this.team()?.primaryCare ?? null);
-  /** Earlier links only: the history also carries the current one. */
+  /** Every current primary-care provider, one per hospital (QA D1850). */
+  readonly currents = computed<PrimaryCareEntry[]>(() => {
+    const team = this.team();
+    // An older server sends only `primaryCare`.
+    return team?.primaryCares ?? (team?.primaryCare ? [team.primaryCare] : []);
+  });
+  /** Earlier links only: the history also carries the current ones. */
   readonly previous = computed<PrimaryCareEntry[]>(() => {
-    const current = this.current();
+    const currentIds = new Set(this.currents().map((c) => c.id));
     return (this.team()?.primaryCareHistory ?? []).filter(
-      (e) => !e.current && e.id !== current?.id,
+      (e) => !e.current && !currentIds.has(e.id),
     );
   });
   /** The clinicians of the patient's visits still open (QA D115). */
@@ -52,7 +57,10 @@ export class MyCareTeamComponent implements OnInit {
     () => this.team()?.visitClinicians ?? [],
   );
   readonly empty = computed(
-    () => !this.current() && this.previous().length === 0 && this.visitClinicians().length === 0,
+    () =>
+      this.currents().length === 0 &&
+      this.previous().length === 0 &&
+      this.visitClinicians().length === 0,
   );
 
   ngOnInit(): void {

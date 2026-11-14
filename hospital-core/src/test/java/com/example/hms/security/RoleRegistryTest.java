@@ -42,7 +42,8 @@ class RoleRegistryTest {
 
     private static final String PRE_AUTHORIZE = "@PreAuthorize(";
     private static final Pattern QUOTED = Pattern.compile("'([A-Z_]+)'");
-    private static final Pattern ROLE_CALL = Pattern.compile("has(?:Any)?Role\\(([^)]*)\\)");
+    /** holdsOwnRole: ClinicalActor's gate (user decision 2026-11-14), a role list of the caller's own. */
+    private static final Pattern ROLE_CALL = Pattern.compile("(?:has(?:Any)?Role|holdsOwnRole)\\(([^)]*)\\)");
     private static final Pattern ROLE_LITERAL = Pattern.compile("'(ROLE_[A-Z_]+)'");
     private static final Pattern JAVA_ROLE_LITERAL = Pattern.compile("\"(ROLE_[A-Z_]+)\"");
     private static final Pattern ROLES_INSERT =

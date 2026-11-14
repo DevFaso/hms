@@ -348,6 +348,11 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         if (!reportInScope(report) && !releasedToCallerAsItsPatient(report)) {
             throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
         }
+        // User decision 2026-11-14: an administrator reads released reports only;
+        // a draft or a preliminary read answers as a missing id.
+        if (adminReader() && !report.isReleasedToPatient()) {
+            throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
+        }
         return imagingReportMapper.toResponseDTO(report);
     }
 
@@ -372,6 +377,14 @@ public class ImagingReportServiceImpl implements ImagingReportService {
                 throw new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, imagingOrderId);
             }
         }
+        if (!asPatient && adminReader()) {
+            // An administrator reads the newest RELEASED version; work in progress is not theirs.
+            return imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId).stream()
+                .filter(ImagingReport::isReleasedToPatient)
+                .findFirst()
+                .map(imagingReportMapper::toResponseDTO)
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId));
+        }
         ImagingReport report = imagingReportRepository.findFirstByImagingOrder_IdAndLatestVersionIsTrue(imagingOrderId)
             .orElseGet(() -> imagingReportRepository.findTopByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId)
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId)));
@@ -387,7 +400,9 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     @Transactional(readOnly = true)
     public List<ImagingReportResponseDTO> getReportsForOrder(UUID imagingOrderId) {
         loadOrderScoped(imagingOrderId);
+        boolean releasedOnly = adminReader();
         return imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId).stream()
+            .filter(report -> !releasedOnly || report.isReleasedToPatient())
             .map(imagingReportMapper::toResponseDTO)
             .toList();
     }
@@ -400,6 +415,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
         return imagingReportRepository
             .findByHospital_IdAndReportStatusOrderByPerformedAtDesc(requireReadableHospital(hospitalId), status).stream()
+            .filter(releasedFilter())
             .map(imagingReportMapper::toResponseDTO)
             .toList();
     }
@@ -412,8 +428,26 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
         return imagingReportRepository
             .findByHospital_IdAndModalityOrderByPerformedAtDesc(requireReadableHospital(hospitalId), modality).stream()
+            .filter(releasedFilter())
             .map(imagingReportMapper::toResponseDTO)
             .toList();
+    }
+
+    // ── Administrative readers (user decision 2026-11-14) ───────────────
+
+    /**
+     * The caller reads imaging as an administrator only (super-admin, hospital
+     * admin, admin, with no clinical imaging role of their own): released
+     * reports only — signed, not cancelled or in error — never a draft or a
+     * preliminary read.
+     */
+    boolean adminReader() {
+        return com.example.hms.security.ClinicalActor.isAdministrativeImagingReader();
+    }
+
+    private java.util.function.Predicate<ImagingReport> releasedFilter() {
+        boolean releasedOnly = adminReader();
+        return report -> !releasedOnly || report.isReleasedToPatient();
     }
 
     // ── Tenancy ──────────────────────────────────────────────────────────

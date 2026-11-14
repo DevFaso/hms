@@ -123,7 +123,7 @@ public class IkoddiGatewayImpl implements IkoddiGateway {
         String identity = toIkoddiIdentity(identityE164);
         if (!allowlist.permits("+" + identity)) {
             allowlist.logRefused("IKODDI", "+" + identity);
-            throw new IllegalStateException(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
+            throw new SmsRecipientNotAllowedException();
         }
         try {
             IkoddiOtpResponse response = restClient
@@ -182,7 +182,7 @@ public class IkoddiGatewayImpl implements IkoddiGateway {
             }
         }
         if (recipients.isEmpty()) {
-            throw new IllegalStateException(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
+            throw new SmsRecipientNotAllowedException();
         }
         boolean allSent = refused == 0;
         Map<String, Object> body = new LinkedHashMap<>();

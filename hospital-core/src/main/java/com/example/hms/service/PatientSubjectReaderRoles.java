@@ -56,6 +56,9 @@ public final class PatientSubjectReaderRoles {
      */
     public static final Set<String> IMAGING_ORDERS_BY_PATIENT = Set.of(
         SecurityConstants.ROLE_SUPER_ADMIN,
+        // User decision 2026-11-14: the admin roles read imaging (released reports only).
+        SecurityConstants.ROLE_HOSPITAL_ADMIN,
+        SecurityConstants.ROLE_ADMIN,
         SecurityConstants.ROLE_DOCTOR,
         SecurityConstants.ROLE_NURSE,
         SecurityConstants.ROLE_MIDWIFE,
@@ -69,6 +72,9 @@ public final class PatientSubjectReaderRoles {
      */
     public static final Set<String> IMAGING_REPORT_READS = Set.of(
         SecurityConstants.ROLE_SUPER_ADMIN,
+        // User decision 2026-11-14: the admin roles read imaging (released reports only).
+        SecurityConstants.ROLE_HOSPITAL_ADMIN,
+        SecurityConstants.ROLE_ADMIN,
         SecurityConstants.ROLE_DOCTOR,
         SecurityConstants.ROLE_NURSE,
         SecurityConstants.ROLE_MIDWIFE,

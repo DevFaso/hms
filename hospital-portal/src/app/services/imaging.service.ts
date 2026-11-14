@@ -1,3 +1,4 @@
+import { allHospitalsRequestOptions } from '../core/request-scope';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
@@ -247,10 +248,17 @@ export class ImagingService {
     });
   }
 
-  getAllOrders(params?: { status?: string }): Observable<ImagingOrderResponse[]> {
+  /** `allHospitals`: a super-admin's « Tous les hôpitaux » read, sent without the chip's hospital. */
+  getAllOrders(
+    params?: { status?: string },
+    opts?: { allHospitals?: boolean },
+  ): Observable<ImagingOrderResponse[]> {
     let httpParams = new HttpParams();
     if (params?.status) httpParams = httpParams.set('status', params.status);
-    return this.http.get<ImagingOrderResponse[]>(`${this.baseUrl}/orders`, { params: httpParams });
+    return this.http.get<ImagingOrderResponse[]>(`${this.baseUrl}/orders`, {
+      params: httpParams,
+      ...(opts?.allHospitals ? allHospitalsRequestOptions() : {}),
+    });
   }
 
   signOrder(orderId: string, signature: Record<string, unknown>): Observable<ImagingOrderResponse> {
