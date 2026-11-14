@@ -59,13 +59,13 @@ public class OrderSignRulesCdsService implements CdsHookService {
     }
 
     @Override
-    public CdsHookResponse evaluate(CdsHookRequest request) {
+    public CdsHookResponse evaluate(CdsHookRequest request, UUID callerHospitalId) {
         UUID patientId = CdsHookContext.requirePatientId(request);
         if (patientId == null) return CdsHookResponse.empty();
         Patient patient = patientRepository.findByIdUnscoped(patientId).orElse(null);
         if (patient == null) return CdsHookResponse.empty();
 
-        UUID hospitalId = patient.getHospitalId();
+        UUID hospitalId = CdsHookContext.hospitalScope(callerHospitalId, patient);
         List<CdsCard> cards = CdsHookContext.medicationDrafts(request).stream()
             .filter(draft -> "MedicationRequest".equals(draft.get("resourceType")))
             .map(ProposedMedication::fromDraft)

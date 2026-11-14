@@ -255,6 +255,81 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
         assertThat(reload(orderAtA).getPatient().getId()).isEqualTo(patient.getId());
     }
 
+    @Test
+    @DisplayName("QA D1920: the duplicate preview lists only the caller's hospital's orders")
+    void duplicatePreviewNeverListsAnotherHospitalsOrder() throws Exception {
+        // patient has an X-ray at A and one at A2: A's doctor sees only A's.
+        MvcResult result = mockMvc.perform(get(API + "/imaging/orders/patient/{id}/duplicates", patient.getId())
+                .param("modality", "XRAY")
+                .param("lookbackDays", "365")
+                .with(acting(doctorA, hospitalA)))
+            .andExpect(status().isOk())
+            .andReturn();
+        String body = result.getResponse().getContentAsString();
+        assertThat(body).contains(orderAtA.getId().toString())
+            .doesNotContain(orderAtA2.getId().toString());
+
+        // Naming the sibling hospital is refused (the hospital-scope gate's
+        // 403 before the service's own 404), and lists nothing.
+        String named = mockMvc.perform(get(API + "/imaging/orders/patient/{id}/duplicates", patient.getId())
+                .param("modality", "XRAY")
+                .param("hospitalId", hospitalA2.getId().toString())
+                .with(acting(doctorA, hospitalA)))
+            .andExpect(status().is4xxClientError())
+            .andReturn().getResponse().getContentAsString();
+        assertThat(named).doesNotContain(orderAtA2.getId().toString());
+    }
+
+    @Test
+    @DisplayName("QA D1920: a patient not registered at the caller's hospital answers as an unknown patient")
+    void duplicatePreviewForAForeignPatientAnswersLikeMissing() throws Exception {
+        UUID missingPatient = UUID.randomUUID();
+        MvcResult sibling = mockMvc.perform(get(API + "/imaging/orders/patient/{id}/duplicates", siblingOnlyPatient.getId())
+                .param("modality", "XRAY")
+                .with(acting(doctorA, hospitalA)))
+            .andExpect(status().isNotFound())
+            .andReturn();
+        MvcResult absent = mockMvc.perform(get(API + "/imaging/orders/patient/{id}/duplicates", missingPatient)
+                .param("modality", "XRAY")
+                .with(acting(doctorA, hospitalA)))
+            .andExpect(status().isNotFound())
+            .andReturn();
+        assertThat(message(sibling).replace(siblingOnlyPatient.getId().toString(), "<id>"))
+            .isEqualTo(message(absent).replace(missingPatient.toString(), "<id>"));
+    }
+
+    @Test
+    @DisplayName("QA D1920: the look-back is capped at 90 days whatever the caller asks")
+    void duplicatePreviewLookbackIsCapped() throws Exception {
+        ImagingOrder old = saveOrder(hospitalA);
+        old.setOrderedAt(LocalDateTime.now().minusDays(200));
+        imagingOrderRepository.save(old);
+
+        String body = mockMvc.perform(get(API + "/imaging/orders/patient/{id}/duplicates", patient.getId())
+                .param("modality", "XRAY")
+                .param("lookbackDays", "3650")
+                .with(acting(doctorA, hospitalA)))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        assertThat(body).contains(orderAtA.getId().toString())
+            .doesNotContain(old.getId().toString());
+    }
+
+    @Test
+    @DisplayName("QA D1920: a new order's duplicate matches are its own hospital's orders only")
+    void createdOrderIsNotMatchedAgainstAnotherHospital() throws Exception {
+        ImagingOrderRequestDTO request = updateRequest(hospitalA.getId(), "Chest PA");
+        request.setPatientId(patient.getId());
+        String body = mockMvc.perform(post(API + "/imaging/orders")
+                .with(acting(doctorA, hospitalA))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+        assertThat(body).contains(orderAtA.getId().toString())
+            .doesNotContain(orderAtA2.getId().toString());
+    }
+
     private MockHttpServletRequestBuilder orderFor(boolean create, UUID patientId) throws Exception {
         ImagingOrderRequestDTO request = updateRequest(hospitalA.getId(), "Chest PA");
         request.setPatientId(patientId);

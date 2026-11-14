@@ -138,14 +138,19 @@ public class ImagingOrderController {
 
 	@GetMapping("/orders/patient/{patientId}/duplicates")
 	@PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
-	@Operation(summary = "Preview potential duplicate imaging orders before submission")
+	@Operation(summary = "Preview potential duplicate imaging orders before submission",
+		description = "The patient's non-cancelled orders of the same modality (and region) at the caller's hospital "
+			+ "only, within lookbackDays (default 30, capped at 90). A patient not registered at that hospital "
+			+ "answers 404. hospitalId is read only for a super-admin in global view.")
 	public ResponseEntity<List<ImagingOrderDuplicateMatchDTO>> getDuplicatePreview(
 		@PathVariable UUID patientId,
 		@RequestParam ImagingModality modality,
 		@RequestParam(required = false) String bodyRegion,
-		@RequestParam(required = false, defaultValue = "30") Integer lookbackDays
+		@RequestParam(required = false, defaultValue = "30") Integer lookbackDays,
+		@RequestParam(required = false) UUID hospitalId
 	) {
-		List<ImagingOrderDuplicateMatchDTO> duplicates = imagingOrderService.previewDuplicates(patientId, modality, bodyRegion, lookbackDays);
+		// QA D1920: scoped to the caller's hospital, the window capped server-side.
+		List<ImagingOrderDuplicateMatchDTO> duplicates = imagingOrderService.previewDuplicates(patientId, hospitalId, modality, bodyRegion, lookbackDays);
 		return ResponseEntity.ok(duplicates);
 	}
 }

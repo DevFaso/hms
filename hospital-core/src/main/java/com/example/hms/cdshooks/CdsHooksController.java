@@ -98,23 +98,23 @@ public class CdsHooksController {
             && !request.hook().equals(service.descriptor().hook())) {
             return ResponseEntity.badRequest().build();
         }
-        if (!callerMayReadContextPatient(request, auth)) {
+        // A missing or unparseable patient id: every service answers no cards
+        // for it anyway, and deciding it here means a future one cannot forget.
+        UUID patientId = CdsHookContext.requirePatientId(request);
+        if (patientId == null) {
             return ResponseEntity.ok(CdsHookResponse.empty());
         }
-        return ResponseEntity.ok(service.evaluate(request));
-    }
-
-    /**
-     * True only when {@code context.patientId} names a patient the caller may
-     * read at their resolved hospital. A missing or unparseable id is false:
-     * every service answers no cards for it anyway, and deciding it here means
-     * a future service cannot forget to.
-     */
-    private boolean callerMayReadContextPatient(CdsHookRequest request, Authentication auth) {
-        UUID patientId = CdsHookContext.requirePatientId(request);
-        if (patientId == null) return false;
         authUtils.requireAuth(auth);
         UUID hospitalId = authUtils.resolveHospitalScope(auth, null, false);
+        if (!callerMayReadContextPatient(patientId, hospitalId)) {
+            return ResponseEntity.ok(CdsHookResponse.empty());
+        }
+        // QA D1920 class: the rules read the patient's orders at THIS hospital.
+        return ResponseEntity.ok(service.evaluate(request, hospitalId));
+    }
+
+    /** True only when the patient is one the caller may read at their resolved hospital. */
+    private boolean callerMayReadContextPatient(UUID patientId, UUID hospitalId) {
         try {
             patientChartAccess.require(patientId, hospitalId);
             return true;
