@@ -31,6 +31,17 @@ public class AfterVisitSummaryDTO {
     /* --- Patient --- */
     private UUID patientId;
     private String patientName;
+    /** Polish 2026-11-13: the identity band. Identity data the desk reads anyway, never clinical. */
+    private java.time.LocalDate patientDateOfBirth;
+    /** The patient's MRN at the visit's hospital; null when not registered there. */
+    private String patientMrn;
+
+    /** A stay (an admission behind the encounter): its diagnoses read "at discharge". */
+    private boolean inpatientStay;
+
+    /** Who signed the latest signed note of the visit, and when; null while none is signed. */
+    private String signedByName;
+    private LocalDateTime signedAt;
 
     /* --- Clinical summary --- */
     private String chiefComplaint;
@@ -53,6 +64,10 @@ public class AfterVisitSummaryDTO {
     /* --- Follow-up --- */
     private UUID followUpAppointmentId;
     private String followUpAppointmentDate;
+    /** The booked follow-up's time ("HH:mm"), service and clinician; null when not booked or unknown. */
+    private String followUpAppointmentTime;
+    private String followUpDepartmentName;
+    private String followUpClinicianName;
 
     /*
      * --- Visit summary content (user decision 2026-11-12) ---
@@ -107,6 +122,14 @@ public class AfterVisitSummaryDTO {
         private Double weightKg;
         private Double heightCm;
         private Integer painScore;
+        /** Weight over height squared, one decimal: only when both were recorded. No threshold is applied to it. */
+        private Double bmi;
+        /**
+         * Polish 2026-11-13: each value the existing vital-sign rules judge out of range
+         * ({@code VitalSignJudgement.valueFlags}), keyed by this class's field name: LOW, HIGH,
+         * or ABNORMAL (a newborn finding with no direction). A value no rule judges has no entry.
+         */
+        private java.util.Map<String, String> valueFlags;
         /** The set was judged clinically significant when it was recorded (VitalSignJudgement). */
         private boolean flagged;
     }
@@ -160,6 +183,15 @@ public class AfterVisitSummaryDTO {
         private String name;
         private String dosage;
         private String frequency;
+        /** The day the order was signed (else written). */
+        private java.time.LocalDate startDate;
+        private String prescriberName;
+        /**
+         * The drug's identity: the catalogue item, else the normalised name without its strength.
+         * Two active lines with the same key are the same drug (user decision 2026-11-13, option a):
+         * the summary shows them as one group with a warning. No dose total is computed here.
+         */
+        private String drugKey;
     }
 
     @Data

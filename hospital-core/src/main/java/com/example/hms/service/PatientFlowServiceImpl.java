@@ -33,6 +33,7 @@ public class PatientFlowServiceImpl implements PatientFlowService {
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
     private final AdmissionRepository admissionRepository;
+    private final java.time.Clock clock;
 
     /** Column order for the flow board (10 lanes matching frontend). */
     private static final List<String> FLOW_COLUMNS = List.of(
@@ -144,7 +145,7 @@ public class PatientFlowServiceImpl implements PatientFlowService {
         LocalDateTime from = enc.getArrivalTimestamp() != null ? enc.getArrivalTimestamp()
             : laterOf(enc.getEncounterDate(), enc.getCreatedAt());
         if (from == null) return 0;
-        return Math.max(ElapsedTime.minutesBetween(from, LocalDateTime.now(java.time.ZoneId.systemDefault())), 0);
+        return Math.max(ElapsedTime.minutesBetween(from, LocalDateTime.now(clock)), 0);
     }
 
     private static LocalDateTime laterOf(LocalDateTime a, LocalDateTime b) {
@@ -155,7 +156,7 @@ public class PatientFlowServiceImpl implements PatientFlowService {
 
     private long computeAdmissionElapsedMinutes(Admission adm) {
         if (adm.getAdmissionDateTime() == null) return 0;
-        return Math.max(ElapsedTime.minutesBetween(adm.getAdmissionDateTime(), LocalDateTime.now()), 0);
+        return Math.max(ElapsedTime.minutesBetween(adm.getAdmissionDateTime(), LocalDateTime.now(clock)), 0);
     }
 
     private String deriveEncounterUrgency(Encounter enc, long elapsedMinutes) {

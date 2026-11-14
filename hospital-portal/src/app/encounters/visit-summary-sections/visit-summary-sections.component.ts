@@ -1,7 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
-import { AfterVisitSummary, AvsTestResult } from '../../services/encounter.service';
+import {
+  AfterVisitSummary,
+  AvsCurrentMedication,
+  AvsTestResult,
+} from '../../services/encounter.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 import { LabRangePipe, LabValuePipe } from '../../shared/pipes/lab-value.pipe';
@@ -45,6 +49,32 @@ export function hasContentSections(s: Partial<ContentSections> | null | undefine
   );
 }
 
+/** Whether the whole document has any section at all, the contact band included. */
+export function hasDocumentSections(s: Partial<AfterVisitSummary> | null | undefined): boolean {
+  if (!s) return false;
+  return !!(
+    s.chiefComplaint ||
+    s.dischargeDiagnoses?.length ||
+    s.prescriptionSummary ||
+    s.referralSummary ||
+    s.followUpInstructions ||
+    s.patientEducationMaterials ||
+    s.followUpAppointmentDate ||
+    s.hospitalPhone ||
+    s.departmentPhone ||
+    hasContentSections(s)
+  );
+}
+
+/** Who reads the document: the duplicate-medicine warning is phrased for each. */
+export type VisitSummaryAudience = 'staff' | 'patient';
+
+/** One drug of "Traitements en cours", with every active order of it. */
+export interface MedicationGroup {
+  names: string[];
+  lines: AvsCurrentMedication[];
+}
+
 const SEVERITY_KEYS: Record<string, string> = {
   MILD: 'VISIT_SUMMARY.SEVERITY_MILD',
   MODERATE: 'VISIT_SUMMARY.SEVERITY_MODERATE',
@@ -59,6 +89,13 @@ const FLAG_KEYS: Record<string, string> = {
   CRITICAL: 'VISIT_SUMMARY.FLAG_CRITICAL',
 };
 
+/** The vital-sign rules' verdicts (VitalSignJudgement.valueFlags on the server). */
+const VITAL_FLAG_KEYS: Record<string, string> = {
+  LOW: 'VISIT_SUMMARY.FLAG_LOW',
+  HIGH: 'VISIT_SUMMARY.FLAG_HIGH',
+  ABNORMAL: 'VISIT_SUMMARY.FLAG_ABNORMAL',
+};
+
 const PROBLEM_STATUS_KEYS: Record<string, string> = {
   ACTIVE: 'VISIT_SUMMARY.PROBLEM_ACTIVE',
   RECURRENCE: 'VISIT_SUMMARY.PROBLEM_RECURRENCE',
@@ -66,13 +103,68 @@ const PROBLEM_STATUS_KEYS: Record<string, string> = {
   INACTIVE: 'VISIT_SUMMARY.PROBLEM_INACTIVE',
 };
 
+const DAY_MS = 86_400_000;
+
+/** A calendar day, read from "1980-05-02" or "1980-05-02T…" with no time-zone shift. */
+interface CalendarDay {
+  y: number;
+  m: number;
+  d: number;
+}
+
+function calendarDay(value: string | null | undefined): CalendarDay | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value ?? '');
+  return match ? { y: +match[1], m: +match[2], d: +match[3] } : null;
+}
+
+/** The reader's today. */
+function today(): CalendarDay {
+  const now = new Date();
+  return { y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() };
+}
+
+function epochDay(day: CalendarDay): number {
+  return Date.UTC(day.y, day.m - 1, day.d) / DAY_MS;
+}
+
 /**
- * User decision 2026-11-12: the after-visit summary's content sections —
- * whom to call, the visit's vital signs, the tests ordered (a result only
- * once released), the allergies, the medicines in force, the clinician's
- * assessment and plan, and the patient's recorded history. Each section is
- * hidden when it has nothing; the backend decides what may be shown (the desk
- * receives none of it). Shared by the staff dialog and the patient portal.
+ * Completed calendar months from `born` to `at` (Rex P2 on #1145): counted on
+ * the calendar, so a child is 24 months old on her second birthday, never 23
+ * as average month lengths gave.
+ */
+function completedCalendarMonths(born: CalendarDay, at: CalendarDay): number {
+  return (at.y - born.y) * 12 + (at.m - born.m) - (at.d < born.d ? 1 : 0);
+}
+
+/**
+ * Text as a reader compares strengths: accents and case ignored, a decimal
+ * comma read as a point, and no space between a number and its unit
+ * ("0,5 mg" and "0.5mg" are the same).
+ */
+function strengthText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/(\d),(\d)/g, '$1.$2')
+    .replace(/(\d)\s+(?=[^\d\s])/g, '$1')
+    .replace(/\s*\/\s*/g, '/')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * The after-visit summary ("Résumé de visite") as one document, shared by the
+ * staff dialog, the checkout preview and the patient portal (#1139/#1141).
+ * Order (user review 2026-11-13): identity band, signature, motif, vital
+ * signs, assessment, diagnosis(es), plan and advice, current medicines, tests
+ * ordered, allergies, history, follow-up appointment, whom to contact. Each
+ * section is hidden when it has nothing; the backend decides what may be
+ * shown (the desk receives no clinical field).
  */
 @Component({
   selector: 'app-visit-summary-sections',
@@ -93,7 +185,9 @@ const PROBLEM_STATUS_KEYS: Record<string, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class VisitSummarySectionsComponent {
-  readonly summary = input.required<Partial<ContentSections>>();
+  readonly summary = input.required<Partial<AfterVisitSummary>>();
+  /** Staff or patient: only the duplicate-medicine warning's wording differs. */
+  readonly audience = input<VisitSummaryAudience>('staff');
 
   readonly hasContact = computed(() => {
     const s = this.summary();
@@ -117,9 +211,110 @@ export class VisitSummarySectionsComponent {
     );
   });
 
+  /** The identity band: one compact line of who, when and where (the name shown once). */
+  readonly hasIdentity = computed(() => {
+    const s = this.summary();
+    return !!(
+      s.patientName ||
+      s.patientDateOfBirth ||
+      s.patientMrn ||
+      s.visitDate ||
+      s.providerName ||
+      s.departmentName ||
+      s.hospitalName
+    );
+  });
+
+  /** The signature line: a signed note, and no note of the visit still waiting for one. */
+  readonly signed = computed(() => {
+    const s = this.summary();
+    return !s.pendingSignature && !!s.signedAt;
+  });
+
+  /** One "as entered" caption for the clinician's text, on the first of A and P shown. */
+  readonly asEnteredOn = computed<'assessment' | 'plan' | null>(() => {
+    const s = this.summary();
+    if (s.clinicalAssessment) return 'assessment';
+    return s.clinicalPlan ? 'plan' : null;
+  });
+
+  readonly hasAdvice = computed(() => {
+    const s = this.summary();
+    return !!(
+      s.clinicalPlan ||
+      s.followUpInstructions ||
+      s.patientEducationMaterials ||
+      s.referralSummary
+    );
+  });
+
+  /**
+   * User decision 2026-11-13 (option a): the active lines of one drug (the
+   * server's drugKey: the catalogue item, else the normalised name) are shown
+   * once, each order under it. A line with no key is a drug of its own.
+   */
+  readonly medicationGroups = computed<MedicationGroup[]>(() => {
+    const groups = new Map<string, MedicationGroup>();
+    (this.summary().currentMedications ?? []).forEach((m, i) => {
+      const key = m.drugKey || `line-${i}`;
+      const group = groups.get(key) ?? { names: [], lines: [] };
+      if (!group.names.includes(m.name)) group.names.push(m.name);
+      group.lines.push(m);
+      groups.set(key, group);
+    });
+    return [...groups.values()];
+  });
+
+  readonly duplicateWarningKey = computed(() =>
+    this.audience() === 'patient'
+      ? 'VISIT_SUMMARY.DUPLICATE_MEDICINE_PATIENT'
+      : 'VISIT_SUMMARY.DUPLICATE_MEDICINE_STAFF',
+  );
+
+  /** Age at the visit (else today), in completed units (QA D1087): years from 2, else months, else days. */
+  readonly age = computed<{ key: string; n: number } | null>(() => {
+    const s = this.summary();
+    const born = calendarDay(s.patientDateOfBirth);
+    if (born === null) return null;
+    const at = calendarDay(s.visitDate) ?? today();
+    const days = epochDay(at) - epochDay(born);
+    if (days < 0) return null;
+    const months = completedCalendarMonths(born, at);
+    if (months >= 24) return { key: 'VISIT_SUMMARY.AGE_YEARS', n: Math.floor(months / 12) };
+    if (months >= 1) return { key: 'VISIT_SUMMARY.AGE_MONTHS', n: months };
+    return { key: 'VISIT_SUMMARY.AGE_DAYS', n: days };
+  });
+
   /** A measure was recorded (zero included). */
   present(value: number | null | undefined): boolean {
     return value !== null && value !== undefined;
+  }
+
+  /** The rules' verdict on one vital value; null when no rule judged it. */
+  vitalFlagKey(field: string): string | null {
+    const flag = this.summary().vitalSigns?.valueFlags?.[field];
+    return flag ? (VITAL_FLAG_KEYS[flag] ?? null) : null;
+  }
+
+  /** The pressure is flagged when either of its numbers is. */
+  pressureFlagKey(): string | null {
+    return this.vitalFlagKey('systolicBpMmHg') ?? this.vitalFlagKey('diastolicBpMmHg');
+  }
+
+  /** The dose, unless the drug's name already carries it ("Paracétamol 500 mg" + "500 mg"). */
+  doseOf(m: AvsCurrentMedication): string | null {
+    const dose = m.dosage?.trim();
+    if (!dose) return null;
+    // Rex P2 on #1145: the dose must be a whole strength of the name, never part of one:
+    // "50 mg" is not in "250 mg", "5 mg" not in "0,5 mg", and a concentration's
+    // numerator or denominator ("125 mg" or "5 ml" of "125 mg / 5 ml") is not
+    // the dose either, so it stays shown, regardless of spacing around the slash.
+    const name = strengthText(m.name);
+    const wanted = new RegExp(
+      `(?:^|[^\\d./])${escapeRegExp(strengthText(dose))}(?![\\d.\\p{L}/])`,
+      'u',
+    );
+    return wanted.test(name) ? null : dose;
   }
 
   severityKey(severity: string | null | undefined): string | null {

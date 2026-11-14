@@ -6536,3 +6536,6 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Proposal, role separation:** separate who may order, interpret and sign an imaging study, so the reader and the signer are distinct roles where the hospital wants it.
 - **Laterality "not recorded" (decision):** an order with no laterality cannot be told apart from one where laterality does not apply (thorax); the drawer now hides NOT_APPLICABLE and reads "Non renseignée" for a blank. Making the order form default a midline region to NOT_APPLICABLE needs a body-region vocabulary.
 - **Numeric short dates elsewhere (D1575 class):** about 115 `date: 'short'` sites remain outside the imaging screens; the imaging guard (`scripts/lib/imaging-screens.test.mjs`) covers imaging only.
+## Standing debt — AVS polish (feat/avs-polish)
+- **Checkout preview has no print button:** the staff dialog and "Mes résumés" print the shared summary document (print-only.ts); the checkout dialog's preview shows the same document but cannot print it yet.
+- **Follow-up booking found by day on a later read:** a checkout passes the booked appointment's id; a later read of the summary finds the patient's live appointment at the visit's hospital on the follow-up day booked after the checkout, since the appointment keeps no link to the visit. A source-encounter column would make it exact.
