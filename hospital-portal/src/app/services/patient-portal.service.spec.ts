@@ -285,11 +285,9 @@ describe('PatientPortalService care team', () => {
     const atB = { id: 'pb', hospitalId: 'h-b', doctorUserId: 'ub', current: true };
     let received: { primaryCares?: unknown[] } | undefined;
     service.getMyCareTeam().subscribe((t) => (received = t));
-    httpMock
-      .expectOne('/me/patient/care-team')
-      .flush({
-        data: { primaryCare: atA, primaryCares: [atA, atB], primaryCareHistory: [atA, atB] },
-      });
+    httpMock.expectOne('/me/patient/care-team').flush({
+      data: { primaryCare: atA, primaryCares: [atA, atB], primaryCareHistory: [atA, atB] },
+    });
     expect(received?.primaryCares).toEqual([atA, atB]);
   });
 
