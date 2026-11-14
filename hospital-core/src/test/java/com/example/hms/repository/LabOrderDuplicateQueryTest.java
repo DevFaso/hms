@@ -45,6 +45,7 @@ class LabOrderDuplicateQueryTest {
     @Autowired private RoleRepository roleRepository;
     @Autowired private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Autowired private StaffRepository staffRepository;
+    @Autowired private jakarta.persistence.EntityManager entityManager;
 
     private final AtomicInteger sequence = new AtomicInteger();
 
@@ -130,6 +131,27 @@ class LabOrderDuplicateQueryTest {
             LocalDateTime.now().minus(LabOrderDuplicateCheck.WINDOW), UUID.randomUUID()))
             .extracting(LabOrder::getId).containsExactly(earlier.getId());
         assertThat(find(glucose, earlier.getId())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a stored code that differs only in case or spaces still matches (both sides normalised)")
+    void codesAreComparedNormalisedOnBothSides() {
+        // Rex on #1150: the caller's code was trimmed and upper-cased, the
+        // stored one was not, so a legacy row " glu-x " missed "GLU-X".
+        LabOrder earlier = order(patient, glucose, atA, LabOrderStatus.ORDERED, 1);
+        String code = glucose.getTestCode();
+        entityManager.createQuery("UPDATE LabTestDefinition d SET d.testCode = :code WHERE d.id = :id")
+            .setParameter("code", "  " + code.toLowerCase(java.util.Locale.ROOT) + " ")
+            .setParameter("id", glucose.getId())
+            .executeUpdate();
+        entityManager.clear();
+        LabTestDefinition otherVersion = labTestDefinitionRepository.save(LabTestDefinition.builder()
+            .testCode(code).name("Fasting glucose v3").unit("mmol/L").build());
+
+        assertThat(labOrderRepository.findActiveSameTestSince(patient.getId(), hospitalA.getId(),
+            otherVersion.getId(), code, LabOrderDuplicateCheck.ACTIVE,
+            LocalDateTime.now().minus(LabOrderDuplicateCheck.WINDOW), UUID.randomUUID()))
+            .extracting(LabOrder::getId).containsExactly(earlier.getId());
     }
 
     private List<LabOrder> find(LabTestDefinition test, UUID exclude) {

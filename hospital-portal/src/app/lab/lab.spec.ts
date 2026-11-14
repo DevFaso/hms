@@ -545,7 +545,7 @@ describe('LabComponent — performing laboratory', () => {
 
       component.orderAnyway();
       expect(labService.createOrder).toHaveBeenCalledOnceWith(
-        jasmine.objectContaining({ duplicateAcknowledged: true }),
+        jasmine.objectContaining({ acknowledgedDuplicateOrderIds: ['o-earlier'] }),
       );
       expect(component.duplicateMatches()).toEqual([]);
     });
@@ -557,7 +557,7 @@ describe('LabComponent — performing laboratory', () => {
       component.submitForm();
 
       const payload = labService.createOrder.calls.mostRecent().args[0];
-      expect('duplicateAcknowledged' in payload).toBeFalse();
+      expect('acknowledgedDuplicateOrderIds' in payload).toBeFalse();
     });
 
     it('never blocks the order when the check itself fails', async () => {
@@ -568,6 +568,71 @@ describe('LabComponent — performing laboratory', () => {
       component.submitForm();
 
       expect(labService.createOrder).toHaveBeenCalledTimes(1);
+    });
+
+    // Rex on #1150: a late preview reply never places an order.
+    it('ignores a preview reply that arrives after the form was closed', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<(typeof earlier)[]>();
+      labService.checkDuplicates.and.returnValue(reply);
+
+      component.openCreate();
+      component.submitForm();
+      component.closeModal();
+      reply.next([]);
+
+      expect(labService.createOrder).not.toHaveBeenCalled();
+      expect(component.saving()).toBeFalse();
+    });
+
+    it('ignores a preview reply about a patient or test no longer on the form', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<(typeof earlier)[]>();
+      labService.checkDuplicates.and.returnValue(reply);
+
+      component.openCreate();
+      component.form.labTestDefinitionId = 'def-glu';
+      component.submitForm();
+      component.form.labTestDefinitionId = 'def-hgb';
+      reply.next([]);
+
+      expect(labService.createOrder).not.toHaveBeenCalled();
+      expect(component.duplicateMatches()).toEqual([]);
+      expect(component.saving()).toBeFalse();
+    });
+
+    it('ignores the reply of an older check once a newer one was asked', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const first = new Subject<(typeof earlier)[]>();
+      const second = new Subject<(typeof earlier)[]>();
+      labService.checkDuplicates.and.returnValues(first, second);
+
+      component.openCreate();
+      component.submitForm();
+      component.submitForm();
+      first.next([]);
+      expect(labService.createOrder).not.toHaveBeenCalled();
+
+      second.next([earlier]);
+      expect(component.duplicateMatches()).toEqual([earlier]);
+      expect(labService.createOrder).not.toHaveBeenCalled();
+    });
+
+    it('asks again instead of acknowledging a warning about another test', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.checkDuplicates.and.returnValue(of([earlier]));
+
+      component.openCreate();
+      component.form.labTestDefinitionId = 'def-glu';
+      component.submitForm();
+      component.form.labTestDefinitionId = 'def-hgb';
+      labService.checkDuplicates.and.returnValue(of([]));
+      component.orderAnyway();
+
+      expect(labService.checkDuplicates).toHaveBeenCalledTimes(2);
+      const payload = labService.createOrder.calls.mostRecent().args[0];
+      expect(payload.labTestDefinitionId).toBe('def-hgb');
+      expect('acknowledgedDuplicateOrderIds' in payload).toBeFalse();
     });
 
     it('goes back to the form without ordering', async () => {

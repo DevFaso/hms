@@ -307,8 +307,12 @@ export interface LabOrderRequest {
    * there. The order form always sends it explicitly.
    */
   performingHospitalId?: string | null;
-  /** The orderer saw the duplicate-order warning and chose "Order anyway"; recorded on the order. */
-  duplicateAcknowledged?: boolean;
+  /**
+   * The earlier orders (ids from the duplicate-order warning) the orderer saw
+   * before choosing "Order anyway"; the server records the acknowledgement
+   * only when they cover every duplicate it finds.
+   */
+  acknowledgedDuplicateOrderIds?: string[];
 }
 
 /**

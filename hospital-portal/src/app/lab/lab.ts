@@ -160,6 +160,14 @@ export class LabComponent implements OnInit {
    * clinician may still order anyway (recorded on the order).
    */
   duplicateMatches = signal<LabOrderDuplicateMatch[]>([]);
+  /**
+   * Rex on #1150: the preview is asynchronous. Each check, close, reopen or
+   * dismissal advances this counter, and a reply from an older check is
+   * ignored, so a late reply never places an order or shows a stale warning.
+   */
+  private duplicateCheckSeq = 0;
+  /** The patient, hospital and test the shown warning is about. */
+  private duplicateWarningKey: string | null = null;
 
   // QA D820: void (entered in error)
   voidingOrder = signal<LabOrderResponse | null>(null);
@@ -483,7 +491,7 @@ export class LabComponent implements OnInit {
 
   openCreate(): void {
     this.form = this.emptyForm();
-    this.duplicateMatches.set([]);
+    this.clearDuplicateWarning();
     this.editing.set(false);
     this.editingId.set(null);
     this.selectedPatient.set(null);
@@ -530,6 +538,19 @@ export class LabComponent implements OnInit {
 
   closeModal(): void {
     this.showModal.set(false);
+    // A preview still in flight is abandoned with the form (its reply is ignored).
+    this.saving.set(false);
+    this.clearDuplicateWarning();
+  }
+
+  /** What a duplicate is judged on: this patient, this hospital, this test. */
+  private duplicateKey(): string {
+    return [this.form.patientId, this.form.hospitalId, this.form.labTestDefinitionId].join('|');
+  }
+
+  private clearDuplicateWarning(): void {
+    this.duplicateCheckSeq++;
+    this.duplicateWarningKey = null;
     this.duplicateMatches.set([]);
   }
 
@@ -540,9 +561,21 @@ export class LabComponent implements OnInit {
    */
   submitForm(): void {
     if (this.editing()) {
-      this.saveOrder(false);
+      this.saveOrder(null);
       return;
     }
+    this.clearDuplicateWarning();
+    const seq = this.duplicateCheckSeq;
+    const key = this.duplicateKey();
+    // A reply counts only for the check that is still current, on the form it was asked about.
+    const current = (): boolean => {
+      if (seq !== this.duplicateCheckSeq) return false;
+      if (!this.showModal() || key !== this.duplicateKey()) {
+        this.saving.set(false);
+        return false;
+      }
+      return true;
+    };
     this.saving.set(true);
     this.labService
       .checkDuplicates(
@@ -552,28 +585,41 @@ export class LabComponent implements OnInit {
       )
       .subscribe({
         next: (matches) => {
+          if (!current()) return;
           if (matches.length > 0) {
+            this.duplicateWarningKey = key;
             this.duplicateMatches.set(matches);
             this.saving.set(false);
             return;
           }
-          this.saveOrder(false);
+          this.saveOrder(null);
         },
-        error: () => this.saveOrder(false),
+        error: () => {
+          if (current()) this.saveOrder(null);
+        },
       });
   }
 
-  /** "Order anyway": the warning was read; the acknowledgement goes with the order. */
+  /**
+   * "Order anyway": the order carries the ids of the earlier orders the
+   * clinician was shown. If the form changed since the warning, it is asked
+   * again instead of acknowledging a warning about something else.
+   */
   orderAnyway(): void {
-    this.saveOrder(true);
+    const shown = this.duplicateMatches();
+    if (shown.length === 0 || this.duplicateWarningKey !== this.duplicateKey()) {
+      this.submitForm();
+      return;
+    }
+    this.saveOrder(shown.map((d) => d.orderId));
   }
 
   /** Back to the form without ordering. */
   dismissDuplicateWarning(): void {
-    this.duplicateMatches.set([]);
+    this.clearDuplicateWarning();
   }
 
-  private saveOrder(duplicateAcknowledged: boolean): void {
+  private saveOrder(acknowledgedDuplicateOrderIds: string[] | null): void {
     this.saving.set(true);
     // The select is always sent, and "" is an explicit null rather than an
     // absent field: absent tells the API to leave the routing as it is, so
@@ -582,7 +628,7 @@ export class LabComponent implements OnInit {
     const payload: LabOrderRequest = {
       ...this.form,
       performingHospitalId: this.form.performingHospitalId || null,
-      ...(duplicateAcknowledged ? { duplicateAcknowledged: true } : {}),
+      ...(acknowledgedDuplicateOrderIds ? { acknowledgedDuplicateOrderIds } : {}),
     };
     const op = this.editing()
       ? this.labService.updateOrder(this.editingId()!, payload)

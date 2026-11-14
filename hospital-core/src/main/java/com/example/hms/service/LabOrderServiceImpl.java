@@ -121,7 +121,12 @@ public class LabOrderServiceImpl implements LabOrderService {
         // B1: the performing laboratory learns about the order (after commit, best-effort).
         routingNotifier.notifyPerformingLab(saved);
         LabOrderResponseDTO response = labOrderMapper.toLabOrderResponseDTO(saved);
-        duplicateCheck.report(saved, duplicates, Boolean.TRUE.equals(request.getDuplicateAcknowledged()),
+        // The acknowledgement names the earlier orders the orderer was shown;
+        // it counts only when it covers every duplicate found now, so a stale
+        // warning (another order placed since) is recorded as unacknowledged.
+        duplicateCheck.report(saved, duplicates,
+            com.example.hms.service.lab.LabOrderDuplicateCheck.acknowledges(
+                request.getAcknowledgedDuplicateOrderIds(), duplicates),
             response, callerUserId());
         return response;
     }
@@ -405,11 +410,6 @@ public class LabOrderServiceImpl implements LabOrderService {
         requireOrderableHere(testDefinition, hospital, base);
 
         UserRoleHospitalAssignment assignment = resolveOrderingAssignment(base, request.getAssignmentId(), staff, hospital);
-
-        if (isNew && labOrderRepository.existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(
-            patient.getId(), testDefinition.getId(), request.getOrderDatetime())) {
-            throw new BusinessException("lab.order.duplicate");
-        }
 
         LabOrder labOrder = (base != null) ? base : new LabOrder();
 

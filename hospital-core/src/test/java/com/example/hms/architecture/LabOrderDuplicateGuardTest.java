@@ -65,4 +65,27 @@ class LabOrderDuplicateGuardTest {
         assertThat(unchecked).as("a lab order is placed without the duplicate check "
             + "(LabOrderDuplicateCheck.find + report)" + SourceScan.MANDATE).isEmpty();
     }
+
+    /**
+     * Rex on #1150: the product rule is warn, never block. The old exact-timestamp
+     * check refused a second order ("lab.order.duplicate"); no main code refuses a
+     * lab order as a duplicate, by that key or by an exists-query on the order time.
+     */
+    @Test
+    void noPathRefusesALabOrderAsADuplicate() throws IOException {
+        Pattern refusal = Pattern.compile(
+            "\"lab\\.order\\.duplicate\"|existsByPatient_IdAndLabTestDefinition_Id\\w*+OrderDatetime");
+        List<String> blocking = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            for (Path f : files.filter(p -> p.toString().endsWith(".java")).toList()) {
+                String src = SourceScan.stripComments(Files.readString(f, StandardCharsets.UTF_8));
+                Matcher m = refusal.matcher(src);
+                while (m.find()) {
+                    blocking.add(MAIN.relativize(f) + ":" + SourceScan.lineOf(src, m.start()));
+                }
+            }
+        }
+        assertThat(blocking).as("a lab order refused as a duplicate: warn (LabOrderDuplicateCheck), never block"
+            + SourceScan.MANDATE).isEmpty();
+    }
 }

@@ -19,8 +19,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -54,8 +54,9 @@ class LabOrderDuplicateCheckTest {
 
         LabOrder fresh = order(null);
         fresh.getLabTestDefinition().setTestCode(" glu-f ");
-        LocalDateTime before = LocalDateTime.now();
+        LocalDateTime before = LocalDateTime.now(ZoneId.systemDefault());
         assertThat(check.find(fresh)).containsExactly(earlier);
+        LocalDateTime after = LocalDateTime.now(ZoneId.systemDefault());
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<LabOrderStatus>> statuses = ArgumentCaptor.forClass(Collection.class);
@@ -64,8 +65,8 @@ class LabOrderDuplicateCheckTest {
             eq("GLU-F"), statuses.capture(), since.capture(), any());
         assertThat(statuses.getValue()).containsExactlyInAnyOrder(LabOrderStatus.ORDERED, LabOrderStatus.PENDING,
             LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED, LabOrderStatus.IN_PROGRESS);
-        assertThat(Duration.between(since.getValue(), before)).isBetween(Duration.ofHours(24).minusMinutes(1),
-            Duration.ofHours(24).plusMinutes(1));
+        // The cutoff is 24 h before the call, on the server's clock.
+        assertThat(since.getValue()).isBetween(before.minusHours(24), after.minusHours(24));
     }
 
     @Test
@@ -126,6 +127,44 @@ class LabOrderDuplicateCheckTest {
 
         assertThat(check.find(incomplete)).isEmpty();
         verify(labOrderRepository, never()).findActiveSameTestSince(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void anAcknowledgementCountsOnlyWhenItCoversEveryDuplicateFoundNow() {
+        // Rex on #1150: a stale warning must not acknowledge a duplicate it never showed.
+        LabOrder shown = order(UUID.randomUUID());
+        LabOrder placedSince = order(UUID.randomUUID());
+
+        assertThat(LabOrderDuplicateCheck.acknowledges(List.of(shown.getId()), List.of(shown))).isTrue();
+        assertThat(LabOrderDuplicateCheck.acknowledges(List.of(shown.getId(), placedSince.getId()),
+            List.of(placedSince, shown))).isTrue();
+        assertThat(LabOrderDuplicateCheck.acknowledges(List.of(shown.getId()), List.of(placedSince, shown))).isFalse();
+        assertThat(LabOrderDuplicateCheck.acknowledges(List.of(UUID.randomUUID()), List.of(shown))).isFalse();
+        assertThat(LabOrderDuplicateCheck.acknowledges(List.of(), List.of(shown))).isFalse();
+        assertThat(LabOrderDuplicateCheck.acknowledges(null, List.of(shown))).isFalse();
+        assertThat(LabOrderDuplicateCheck.acknowledges(List.of(shown.getId()), List.of())).isFalse();
+    }
+
+    @Test
+    void aSavedOrderWithoutAnIdIsFlaggedButNotAudited() {
+        LabOrderResponseDTO response = LabOrderResponseDTO.builder().build();
+
+        check.report(order(null), List.of(order(UUID.randomUUID())), false, response, null);
+
+        assertThat(response.getDuplicateOfRecentOrder()).isTrue();
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void anOrderNamingItsTestOnlyByIdStillAsks() {
+        LabOrder byId = order(null);
+        byId.setLabTestDefinition(null);
+        byId.setLabTestDefinitionId(definitionId);
+
+        check.find(byId);
+
+        verify(labOrderRepository).findActiveSameTestSince(eq(patientId), eq(hospitalId), eq(definitionId),
+            eq(""), any(), any(), any());
     }
 
     private LabOrder order(UUID id) {

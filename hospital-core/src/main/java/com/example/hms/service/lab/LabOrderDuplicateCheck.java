@@ -17,9 +17,12 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -93,9 +96,24 @@ public class LabOrderDuplicateCheck {
         }
         String code = testCode != null ? testCode.trim().toUpperCase(java.util.Locale.ROOT) : "";
         List<LabOrder> matches = labOrderRepository.findActiveSameTestSince(
-            patientId, hospitalId, definitionId, code, ACTIVE, LocalDateTime.now().minus(WINDOW),
+            patientId, hospitalId, definitionId, code, ACTIVE, LocalDateTime.now(ZoneId.systemDefault()).minus(WINDOW),
             excludeOrderId != null ? excludeOrderId : NO_ORDER);
         return matches != null ? matches : List.of();
+    }
+
+    /**
+     * Whether the orderer acknowledged THESE duplicates: the ids they were
+     * shown cover every match found now. A warning about other orders (a
+     * stale one, or none) does not acknowledge a duplicate it never showed.
+     * {@link LabOrder#getOrderDatetime()} and every window here are the
+     * server's local time, as the entity defaults them.
+     */
+    public static boolean acknowledges(Collection<UUID> acknowledgedIds, List<LabOrder> matches) {
+        if (acknowledgedIds == null || acknowledgedIds.isEmpty() || matches == null || matches.isEmpty()) {
+            return false;
+        }
+        Set<UUID> seen = new HashSet<>(acknowledgedIds);
+        return matches.stream().allMatch(match -> match.getId() != null && seen.contains(match.getId()));
     }
 
     /**

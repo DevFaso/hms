@@ -2,7 +2,6 @@ package com.example.hms.repository;
 
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.model.LabOrder;
-import jakarta.validation.constraints.NotNull;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -125,7 +124,8 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     /**
      * The duplicate-order check: this patient's orders AT this hospital for
      * the same test (by definition id, or by test code so a new version of
-     * the test still matches), in one of the given statuses, placed since the
+     * the test still matches; both sides trimmed and upper-cased, the caller
+     * passes the code normalised), in one of the given statuses, placed since the
      * cutoff. Newest first. {@code excludeOrderId} keeps an order from
      * matching itself (pass a random id when there is none).
      */
@@ -136,7 +136,7 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
           AND o.status IN :statuses
           AND o.orderDatetime >= :since
           AND o.id <> :excludeOrderId
-          AND (o.labTestDefinitionId = :definitionId OR d.testCode = :testCode)
+          AND (o.labTestDefinitionId = :definitionId OR UPPER(TRIM(d.testCode)) = :testCode)
         ORDER BY o.orderDatetime DESC
     """)
     List<LabOrder> findActiveSameTestSince(@Param("patientId") UUID patientId,
@@ -147,7 +147,6 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
                                            @Param("since") LocalDateTime since,
                                            @Param("excludeOrderId") UUID excludeOrderId);
 
-    boolean existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(UUID id, UUID id1, @NotNull LocalDateTime orderDatetime);
 
     /** The orders placed during one visit (its after-visit summary lists them). */
     List<LabOrder> findByEncounter_Id(UUID encounterId);
