@@ -42,8 +42,15 @@ public interface ImagingOrderRepository extends JpaRepository<ImagingOrder, UUID
 
     List<ImagingOrder> findAllByOrderByOrderedAtDesc();
 
+    /**
+     * The duplicate-order check: this patient's orders AT this hospital (QA
+     * D1920: another hospital's orders are never a duplicate the caller may
+     * see), same modality and region, not cancelled, placed since the cutoff.
+     * {@code hospitalId} is required; the caller bounds the window.
+     */
     @Query("SELECT o FROM ImagingOrder o " +
         "WHERE o.patient.id = :patientId " +
+        "AND o.hospital.id = :hospitalId " +
         "AND o.modality = :modality " +
         "AND (:bodyRegion IS NULL OR LOWER(o.bodyRegion) = LOWER(CAST(:bodyRegion AS string))) " +
         "AND o.status <> com.example.hms.enums.ImagingOrderStatus.CANCELLED " +
@@ -51,6 +58,7 @@ public interface ImagingOrderRepository extends JpaRepository<ImagingOrder, UUID
         "ORDER BY o.orderedAt DESC")
     List<ImagingOrder> findPotentialDuplicates(
         @Param("patientId") UUID patientId,
+        @Param("hospitalId") UUID hospitalId,
         @Param("modality") ImagingModality modality,
         @Param("bodyRegion") String bodyRegion,
         @Param("orderedAfter") LocalDateTime orderedAfter

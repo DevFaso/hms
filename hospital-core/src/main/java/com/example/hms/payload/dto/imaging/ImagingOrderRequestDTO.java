@@ -138,7 +138,7 @@ public class ImagingOrderRequestDTO {
     @Schema(description = "Persist order as draft instead of submitting")
     private Boolean saveAsDraft;
 
-    @Schema(description = "Lookback window (days) for duplicate check; defaults to 30")
+    @Schema(description = "Lookback window (days) for duplicate check; defaults to 30, capped at 90 (QA D1920)")
     private Integer duplicateLookbackDays;
 
     @Size(max = 1000)

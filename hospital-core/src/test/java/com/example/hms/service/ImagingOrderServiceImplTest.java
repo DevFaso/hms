@@ -122,6 +122,9 @@ class ImagingOrderServiceImplTest {
         // mirrors the in-tx behaviour (REQUIRED propagation joins
         // the outer tx, so the call resolves to the same instance).
         imagingOrderService.setSelf(imagingOrderService);
+        // QA D1920: the duplicate check reads a patient registered where it looks.
+        org.mockito.Mockito.lenient()
+            .when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
     }
 
     /** QA D972 (round 18): an imaging order written with no visit joins the open visit, so checkout bills it. */
@@ -215,7 +218,7 @@ class ImagingOrderServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(imagingOrderMapper.toEntity(request, patient, hospital)).thenReturn(order);
-        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(ImagingModality.CT), eq(BODY_REGION_CHEST), any(LocalDateTime.class)))
+        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(hospitalId), eq(ImagingModality.CT), eq(BODY_REGION_CHEST), any(LocalDateTime.class)))
             .thenReturn(duplicates);
         when(imagingOrderRepository.save(order)).thenReturn(order);
         when(imagingOrderMapper.toResponseDTO(order, duplicates)).thenReturn(responseDTO);
@@ -290,14 +293,14 @@ class ImagingOrderServiceImplTest {
             .orderId(existing.getId())
             .build();
 
-        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(ImagingModality.MRI), anyString(), any(LocalDateTime.class)))
+        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(hospitalId), eq(ImagingModality.MRI), anyString(), any(LocalDateTime.class)))
             .thenReturn(matches);
         when(imagingOrderMapper.toDuplicateMatchDTO(existing)).thenReturn(duplicateDTO);
 
-        List<ImagingOrderDuplicateMatchDTO> result = imagingOrderService.previewDuplicates(patientId, ImagingModality.MRI, "  Chest  ", 14);
+        List<ImagingOrderDuplicateMatchDTO> result = imagingOrderService.previewDuplicates(patientId, hospitalId, ImagingModality.MRI, "  Chest  ", 14);
 
         ArgumentCaptor<String> bodyRegionCaptor = ArgumentCaptor.forClass(String.class);
-        verify(imagingOrderRepository).findPotentialDuplicates(eq(patientId), eq(ImagingModality.MRI), bodyRegionCaptor.capture(), any(LocalDateTime.class));
+        verify(imagingOrderRepository).findPotentialDuplicates(eq(patientId), eq(hospitalId), eq(ImagingModality.MRI), bodyRegionCaptor.capture(), any(LocalDateTime.class));
 
         assertThat(bodyRegionCaptor.getValue()).isEqualTo(BODY_REGION_CHEST);
         assertThat(result).containsExactly(duplicateDTO);
@@ -325,7 +328,7 @@ class ImagingOrderServiceImplTest {
 
         when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
         doNothing().when(imagingOrderMapper).updateEntityFromRequest(order, request);
-        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(ImagingModality.XRAY), isNull(), any(LocalDateTime.class)))
+        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(hospitalId), eq(ImagingModality.XRAY), isNull(), any(LocalDateTime.class)))
             .thenReturn(Collections.emptyList());
         when(imagingOrderRepository.save(order)).thenReturn(order);
         when(imagingOrderMapper.toResponseDTO(order, Collections.emptyList())).thenReturn(responseDTO);
@@ -356,7 +359,7 @@ class ImagingOrderServiceImplTest {
 
         when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
         doNothing().when(imagingOrderMapper).updateEntityFromRequest(order, request);
-        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(ImagingModality.XRAY), isNull(), any(LocalDateTime.class)))
+        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(hospitalId), eq(ImagingModality.XRAY), isNull(), any(LocalDateTime.class)))
             .thenReturn(List.of(order));
         when(imagingOrderRepository.save(order)).thenReturn(order);
         when(imagingOrderMapper.toResponseDTO(order, Collections.emptyList())).thenReturn(responseDTO);
@@ -574,14 +577,14 @@ class ImagingOrderServiceImplTest {
 
     @Test
     void previewDuplicatesReturnsEmptyWhenPatientIdNull() {
-        List<ImagingOrderDuplicateMatchDTO> result = imagingOrderService.previewDuplicates(null, ImagingModality.CT, "Chest", 30);
+        List<ImagingOrderDuplicateMatchDTO> result = imagingOrderService.previewDuplicates(null, hospitalId, ImagingModality.CT, "Chest", 30);
 
         assertThat(result).isEmpty();
     }
 
     @Test
     void previewDuplicatesReturnsEmptyWhenModalityNull() {
-        List<ImagingOrderDuplicateMatchDTO> result = imagingOrderService.previewDuplicates(patientId, null, "Chest", 30);
+        List<ImagingOrderDuplicateMatchDTO> result = imagingOrderService.previewDuplicates(patientId, hospitalId, null, "Chest", 30);
 
         assertThat(result).isEmpty();
     }
@@ -633,7 +636,7 @@ class ImagingOrderServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(imagingOrderMapper.toEntity(request, patient, hospital)).thenReturn(order);
-        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class)))
+        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(hospitalId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class)))
             .thenReturn(Collections.emptyList());
         when(imagingOrderRepository.save(order)).thenReturn(order);
         when(imagingOrderMapper.toResponseDTO(order, Collections.emptyList())).thenReturn(responseDTO);
@@ -751,24 +754,90 @@ class ImagingOrderServiceImplTest {
 
     @Test
     void normalizeBodyRegionReturnsNullForNull() {
-        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class)))
+        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(hospitalId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class)))
             .thenReturn(Collections.emptyList());
 
-        List<ImagingOrderDuplicateMatchDTO> result = imagingOrderService.previewDuplicates(patientId, ImagingModality.CT, null, 30);
+        List<ImagingOrderDuplicateMatchDTO> result = imagingOrderService.previewDuplicates(patientId, hospitalId, ImagingModality.CT, null, 30);
 
         assertThat(result).isEmpty();
-        verify(imagingOrderRepository).findPotentialDuplicates(eq(patientId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class));
+        verify(imagingOrderRepository).findPotentialDuplicates(eq(patientId), eq(hospitalId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class));
     }
 
     @Test
     void normalizeBodyRegionReturnsNullForEmptyString() {
-        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class)))
+        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(hospitalId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class)))
             .thenReturn(Collections.emptyList());
 
-        List<ImagingOrderDuplicateMatchDTO> result = imagingOrderService.previewDuplicates(patientId, ImagingModality.CT, "", 30);
+        List<ImagingOrderDuplicateMatchDTO> result = imagingOrderService.previewDuplicates(patientId, hospitalId, ImagingModality.CT, "", 30);
 
         assertThat(result).isEmpty();
-        verify(imagingOrderRepository).findPotentialDuplicates(eq(patientId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class));
+        verify(imagingOrderRepository).findPotentialDuplicates(eq(patientId), eq(hospitalId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class));
+    }
+
+    // ── QA D1920: the duplicate preview is the caller's hospital, bounded ──
+
+    @Test
+    void previewDuplicatesReadsOnlyTheCallersHospital_D1920() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(hospitalId), eq(ImagingModality.XRAY), isNull(), any(LocalDateTime.class)))
+            .thenReturn(Collections.emptyList());
+
+        imagingOrderService.previewDuplicates(patientId, null, ImagingModality.XRAY, null, 30);
+
+        verify(imagingOrderRepository).findPotentialDuplicates(eq(patientId), eq(hospitalId), eq(ImagingModality.XRAY), isNull(), any(LocalDateTime.class));
+    }
+
+    @Test
+    void previewDuplicatesForAPatientNotRegisteredHereAnswersLikeMissing_D1920() {
+        UUID foreignPatient = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.existsByPatientIdAndHospitalId(foreignPatient, hospitalId)).thenReturn(false);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                imagingOrderService.previewDuplicates(foreignPatient, null, ImagingModality.XRAY, null, 30))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(imagingOrderRepository, never()).findPotentialDuplicates(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void previewDuplicatesNamingAnotherHospitalAnswersLikeMissing_D1920() {
+        UUID otherHospital = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                imagingOrderService.previewDuplicates(patientId, otherHospital, ImagingModality.XRAY, null, 30))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(imagingOrderRepository, never()).findPotentialDuplicates(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void previewDuplicatesInGlobalViewWithNoHospitalListsNothing_D1920() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+        assertThat(imagingOrderService.previewDuplicates(patientId, null, ImagingModality.XRAY, null, 30)).isEmpty();
+        verify(imagingOrderRepository, never()).findPotentialDuplicates(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void previewDuplicatesLookbackIsCappedServerSide_D1920() {
+        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(hospitalId), eq(ImagingModality.XRAY), isNull(), any(LocalDateTime.class)))
+            .thenReturn(Collections.emptyList());
+
+        LocalDateTime before = LocalDateTime.now();
+        imagingOrderService.previewDuplicates(patientId, hospitalId, ImagingModality.XRAY, null, 3650);
+
+        ArgumentCaptor<LocalDateTime> since = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(imagingOrderRepository).findPotentialDuplicates(eq(patientId), eq(hospitalId), eq(ImagingModality.XRAY), isNull(), since.capture());
+        assertThat(since.getValue()).isAfterOrEqualTo(before.minusDays(90).minusMinutes(1));
+    }
+
+    @Test
+    void duplicateWindowKeepsTheDefaultAndCapsTheRest_D1920() {
+        assertThat(ImagingOrderServiceImpl.duplicateWindowDays(null)).isEqualTo(30);
+        assertThat(ImagingOrderServiceImpl.duplicateWindowDays(0)).isEqualTo(30);
+        assertThat(ImagingOrderServiceImpl.duplicateWindowDays(-5)).isEqualTo(30);
+        assertThat(ImagingOrderServiceImpl.duplicateWindowDays(14)).isEqualTo(14);
+        assertThat(ImagingOrderServiceImpl.duplicateWindowDays(365)).isEqualTo(90);
     }
 
     // ── Tenant isolation tests ──

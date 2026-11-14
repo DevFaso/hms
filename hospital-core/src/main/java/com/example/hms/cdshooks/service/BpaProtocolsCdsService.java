@@ -79,13 +79,13 @@ public class BpaProtocolsCdsService implements CdsHookService {
      */
     @Override
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public CdsHookResponse evaluate(CdsHookRequest request) {
+    public CdsHookResponse evaluate(CdsHookRequest request, UUID callerHospitalId) {
         UUID patientId = CdsHookContext.requirePatientId(request);
         if (patientId == null) return CdsHookResponse.empty();
         Patient patient = patientRepository.findByIdUnscoped(patientId).orElse(null);
         if (patient == null) return CdsHookResponse.empty();
 
-        UUID hospitalId = patient.getHospitalId();
+        UUID hospitalId = CdsHookContext.hospitalScope(callerHospitalId, patient);
         List<CdsCard> cards = ruleEngine.evaluateForPatient(patient, hospitalId);
         // QA D1238: read again only when an acknowledged card needs it.
         AtomicReference<BpaRuleContext> context = new AtomicReference<>();

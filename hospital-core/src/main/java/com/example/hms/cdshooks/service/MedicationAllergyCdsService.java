@@ -103,7 +103,7 @@ public class MedicationAllergyCdsService implements CdsHookService {
     }
 
     @Override
-    public CdsHookResponse evaluate(CdsHookRequest request) {
+    public CdsHookResponse evaluate(CdsHookRequest request, UUID callerHospitalId) {
         UUID patientId = CdsHookContext.requirePatientId(request);
         if (patientId == null) return CdsHookResponse.empty();
 
@@ -133,12 +133,12 @@ public class MedicationAllergyCdsService implements CdsHookService {
             // prescription's stop (name, INN class, cited brand, catalogue
             // item's generic and ATC), and the safety net for a name that
             // resolves to no active ingredient while a class allergy is on file.
-            UUID hospitalId = patient != null ? patient.getHospitalId() : null;
+            UUID hospitalId = CdsHookContext.hospitalScope(callerHospitalId, patient);
             cards.addAll(allergyCards(medText, proposed.code(), hospitalId, allergies));
 
             // 2. Drug-drug interaction cards — added in v1.0 row 3.
             if (patient != null) {
-                cards.addAll(evaluateDrugDrugInteractions(patient, draft));
+                cards.addAll(evaluateDrugDrugInteractions(patient, hospitalId, draft));
             }
         }
         return CdsHookResponse.of(cards);
@@ -317,12 +317,12 @@ public class MedicationAllergyCdsService implements CdsHookService {
      * RxNorm-crosswalk fallback in a single place, so this service does
      * not need to duplicate any of that work.
      */
-    private List<CdsCard> evaluateDrugDrugInteractions(Patient patient, Map<String, Object> draft) {
+    private List<CdsCard> evaluateDrugDrugInteractions(Patient patient, java.util.UUID hospitalId, Map<String, Object> draft) {
         ProposedMedication proposed = MedicationDraftExtractor.extract(draft);
         if (proposed.name() == null && proposed.code() == null) return List.of();
         CdsRuleContext context = ruleEngine.buildContext(
             patient,
-            patient.getHospitalId(),
+            hospitalId,
             proposed.name(),
             proposed.code(),
             proposed.dose(),
