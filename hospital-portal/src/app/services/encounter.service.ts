@@ -192,6 +192,8 @@ export interface TriageSubmissionResponse {
   vitalSignId: string;
   /** QA D1564: the newborn warnings on the triage set; empty for anyone 28 days old or more. */
   newbornAlerts?: NewbornVitalAlert[];
+  /** QA D1890: the severe-blood-pressure-after-birth warning on the triage set; empty when none. */
+  postpartumAlerts?: NewbornVitalAlert[];
 }
 
 export interface MedicationReconciliationEntry {

@@ -31,4 +31,7 @@ public class TriageSubmissionResponseDTO {
 
     /** QA D1564: the newborn warnings on the triage set; empty for anyone 28 days old or more. */
     private java.util.List<NewbornVitalAlertDTO> newbornAlerts;
+
+    /** QA D1890 (provisional): the severe-blood-pressure-after-birth warning on this set; empty when none. */
+    private java.util.List<NewbornVitalAlertDTO> postpartumAlerts;
 }

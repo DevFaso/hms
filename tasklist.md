@@ -6585,6 +6585,11 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Entity unique constraint `(patient_id, hospital_id, is_current)` on `PatientPrimaryCare`:** it also allows only one ENDED link per patient and hospital; the database never got it (V1 has no such constraint), but H2 tests build it from the entity, and any migration that adds it would break a third reassignment. Should be a partial unique index `WHERE is_current`.
 - **Imaging duplicate look-back cap (D1920, provisional product default):** the duplicate preview and the create/edit duplicate check now read at most 90 days (default 30 kept). Not a clinical rule; revisit with the radiology approvers if a longer window is wanted.
 - **CDS hooks other chart reads (D1920 class, not changed):** the patient-view summary and the allergy check read allergies and problems patient-wide (`findByPatient_Id`), across hospitals, by design today; confirm that policy with the shared-patient rules.
+
+## Standing debt — postpartum severe hypertension (feat/postpartum-severe-bp-alert-r53, D1890)
+- **Vitals alert DTO name:** `NewbornVitalAlertDTO` now also carries the postpartum warning (`postpartumAlerts`); rename it to a neutral `VitalAlertDTO` (backend + portal `NewbornVitalAlert`) in a style-only PR.
+- **Vitals-path warning has no reminder escalation:** the nurse-station/triage/API warning notifies the recorder and physicians once; only the postpartum observation path raises the obstetric escalation with reminders. Decide with the obstetric lead whether a vitals-path reading should escalate too.
+- **Patient vitals API caller does not show the warning:** `PatientVitalSignResponseDTO.postpartumAlerts` is returned but no portal screen reads it yet (same as `newbornAlerts`).
 ## Standing debt — unsigned content in patient reads (fix/patient-portal-unsigned-note-r53)
 - **Immunizations entered in error reach the patient:** `getImmunizationsForPatientPortal` lists every row, `ENTERED_IN_ERROR` included (a voided record, not a draft); filter it as the voided lab result is filtered.
 - **Patient apps do not say "not finalised":** the server no longer sends an unsigned note to the apps; they show no assessment and do not read the new `notePendingSignature` flag yet (Android/iOS parity).

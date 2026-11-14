@@ -1,5 +1,8 @@
 import { refusalReason } from '../../shared/refusal-reason';
-import { announceNewbornWarning } from '../../shared/newborn-vital-alerts';
+import {
+  announceNewbornWarning,
+  announcePostpartumWarning,
+} from '../../shared/newborn-vital-alerts';
 import {
   Component,
   EventEmitter,
@@ -335,6 +338,8 @@ export class TriageFormComponent {
         this.toast.success(this.translate.instant('TRIAGE.COMPLETED'));
         // QA D1564: a newborn's triage set is judged against the newborn bands; saved, and warned.
         announceNewbornWarning(response?.newbornAlerts, this.toast, this.translate);
+        // QA D1890: a mother's severe pressure after birth; saved, and warned (URGENT).
+        announcePostpartumWarning(response?.postpartumAlerts, this.toast, this.translate);
         this.triageCompleted.emit(response);
       },
       error: (err) => {

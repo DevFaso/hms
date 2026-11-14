@@ -97,7 +97,7 @@ import { offersHeadCircumference } from '../shared/patient-measures';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
-import { announceNewbornWarning } from '../shared/newborn-vital-alerts';
+import { announceNewbornWarning, announcePostpartumWarning } from '../shared/newborn-vital-alerts';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { MarDoseHistoryComponent } from './mar-dose-history/mar-dose-history.component';
 import { earlyDoseDialogKeys, earlyDoseRefusal } from './early-dose';
@@ -985,6 +985,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         );
         // QA D1564: a newborn's set is judged against the newborn bands; saved, and warned.
         announceNewbornWarning(response?.newbornAlerts, this.toast, this.translate);
+        // QA D1890: a mother's severe pressure after birth; saved, and warned (URGENT).
+        announcePostpartumWarning(response?.postpartumAlerts, this.toast, this.translate);
         this.vitalsCapturing.set(false);
         this.closeVitalsDialog();
         this.loadAll();

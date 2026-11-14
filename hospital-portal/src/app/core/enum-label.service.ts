@@ -984,6 +984,7 @@ export class EnumLabelService implements OnDestroy {
       EDUCATION: 'Education',
       FOLLOW_UP: 'Follow-Up',
       HEMORRHAGE: 'Hemorrhage',
+      HYPERTENSION: 'Severe hypertension',
       INFECTION: 'Infection',
       PAIN: 'Pain',
       PSYCHOSOCIAL: 'Psychosocial',

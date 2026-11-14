@@ -218,6 +218,43 @@ class PostpartumCareServiceImplTest {
         assertFalse(savedObservation.isHemorrhageProtocolActivated(), "An alert must not attest the protocol");
     }
 
+    /**
+     * QA D1890 (provisional, 2026-11-14): systolic >= 160 OR diastolic >= 110 mmHg after birth is an
+     * URGENT obstetric-review warning; the observation is saved either way.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}/{1} -> alert {2}")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "162,112,true", "164,114,true", "160,80,true", "120,110,true", "159,109,false", "200,,true", ",115,true"
+    })
+    void severeBloodPressureAfterBirthIsAnUrgentWarningThatNeverBlocksTheSave_D1890(
+        Integer systolic, Integer diastolic, boolean alerts) {
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.empty());
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(5))
+            .systolicBpMmHg(systolic)
+            .diastolicBpMmHg(diastolic)
+            .build();
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId, request, recorderId);
+
+        verify(observationRepository).save(any(PostpartumObservation.class));
+        java.util.List<com.example.hms.payload.dto.clinical.postpartum.PostpartumAlertDTO> severe = response.getAlerts().stream()
+            .filter(alert -> "postpartum-severe-hypertension".equals(alert.getCode()))
+            .toList();
+        assertEquals(alerts ? 1 : 0, severe.size());
+        if (alerts) {
+            assertEquals(PostpartumAlertType.HYPERTENSION, severe.get(0).getType());
+            assertEquals(PostpartumAlertSeverity.URGENT, severe.get(0).getSeverity());
+            assertTrue(severe.get(0).getMessage().contains("avis obstétrical urgent"), severe.get(0).getMessage());
+            verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
+                com.example.hms.service.maternity.PostpartumSevereHypertension.MESSAGE_KEY.equals(a.alertMessageKey())));
+        } else {
+            verify(obstetricAlertEscalation, never()).raiseAfterCommit(any());
+        }
+    }
+
     @Test
     void recordObservationReusesExistingPlanAndSchedulesImmediateFollowUp() {
         PostpartumCarePlan existingPlan = PostpartumCarePlan.builder()
