@@ -5,7 +5,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { ImagingComponent } from './imaging';
 import {
@@ -100,6 +100,7 @@ describe('ImagingComponent — r51 study workflow and labels', () => {
       'getReportsByHospital',
       'getLatestReportByOrder',
       'createReport',
+      'updateReport',
       'signReport',
     ]);
     imaging.getAllOrders.and.callFake(() => of(orders));
@@ -166,6 +167,8 @@ describe('ImagingComponent — r51 study workflow and labels', () => {
     for (const role of ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST', 'ROLE_SUPER_ADMIN']) {
       it(`${role}: start on an ordered or scheduled order, complete only once in progress`, () => {
         setUp({ role, orders: ALL_STATUSES.map((status) => order({ id: status, status })) });
+        expect(component.activeTab()).toBe('all');
+        expect(fixture.nativeElement.querySelectorAll('tbody tr').length).toBe(ALL_STATUSES.length);
         for (const status of ALL_STATUSES) {
           expect(q(`[data-testid="imaging-start-${status}"]`) !== null)
             .withContext(`start on ${status}`)
@@ -277,6 +280,58 @@ describe('ImagingComponent — r51 study workflow and labels', () => {
       expect(toast.error).toHaveBeenCalled();
       expect(component.studyStatusSavingId()).toBeNull();
     });
+
+    for (const outcome of ['success', 'error'] as const) {
+      it(`disables every row during a status write and enables them after ${outcome}`, () => {
+        setUp({
+          role: 'ROLE_DOCTOR',
+          orders: [order(), order({ id: 'o2', status: 'IN_PROGRESS' })],
+        });
+        const pending = new Subject<ImagingOrderResponse>();
+        imaging.updateOrderStatus.and.returnValue(pending);
+        q('[data-testid="imaging-start-o1"]')!.click();
+        fixture.detectChanges();
+
+        const start = q('[data-testid="imaging-start-o1"]') as HTMLButtonElement;
+        const complete = q('[data-testid="imaging-complete-o2"]') as HTMLButtonElement;
+        expect(start.disabled).toBeTrue();
+        expect(complete.disabled).toBeTrue();
+        complete.click();
+        expect(imaging.updateOrderStatus).toHaveBeenCalledTimes(1);
+
+        if (outcome === 'success') {
+          pending.next(order({ status: 'IN_PROGRESS' }));
+          pending.complete();
+        } else {
+          pending.error({ status: 403 });
+        }
+        fixture.detectChanges();
+        expect((q('[data-testid="imaging-start-o1"]') as HTMLButtonElement).disabled).toBeFalse();
+        expect(
+          (q('[data-testid="imaging-complete-o2"]') as HTMLButtonElement).disabled,
+        ).toBeFalse();
+      });
+    }
+
+    it('preserves contrast details, accession and comparison when revising a report', () => {
+      setUp({ role: 'ROLE_DOCTOR', orders: [order({ status: 'IN_PROGRESS' })] });
+      const existing = report({
+        contrastDetails: 'Iohexol 50 ml',
+        accessionNumber: 'ACC-42',
+        comparisonStudies: 'Prior chest study',
+      });
+      component.openEditReport(existing);
+      imaging.updateReport.and.returnValue(of(existing));
+      component.submitReport();
+      expect(imaging.updateReport).toHaveBeenCalledWith(
+        'r1',
+        jasmine.objectContaining({
+          contrastDetails: 'Iohexol 50 ml',
+          accessionNumber: 'ACC-42',
+          comparisonStudies: 'Prior chest study',
+        }),
+      );
+    });
   });
 
   describe('D1820, D1823, D1826: the words', () => {
@@ -305,11 +360,11 @@ describe('ImagingComponent — r51 study workflow and labels', () => {
       expect(en.IMAGING.COMPLETED_ORDERS).toBe('Completed');
     });
 
-    it('D1823: ES "Ordenado el" before a date, EN "Completed at"', () => {
+    it('D1823: ES "Solicitado el" before a date, EN "Completed at"', () => {
       setUp({ role: 'ROLE_DOCTOR', orders: [order()], lang: 'es' });
       component.viewDetail(orders[0]);
       fixture.detectChanges();
-      expect((fixture.nativeElement as HTMLElement).textContent).toContain('Ordenado el');
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain('Solicitado el');
       expect(es.IMAGING.ORDERED_AT).not.toContain('a las');
       expect(en.IMAGING.COMPLETED_AT).toBe('Completed at');
     });
