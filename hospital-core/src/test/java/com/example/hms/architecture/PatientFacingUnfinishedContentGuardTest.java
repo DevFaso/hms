@@ -41,8 +41,12 @@ class PatientFacingUnfinishedContentGuardTest {
     private static final Path ROOT = Path.of("src/main/java/com/example/hms");
 
     /** A patient-facing read method's declaration. */
-    private static final Pattern PORTAL_READ = Pattern.compile(
-        "(?:public|static|private|protected)[^;=(){}]*?\\s(\\w*(?:ForPortalPatient|ForPatientPortal)\\w*|toPatientPortal\\w*)\\s*\\(");
+    private static final Pattern IDENTIFIER_CALL = Pattern.compile("\\b(\\w++)\\s*+\\(");
+
+    private static boolean isPortalReadName(String name) {
+        return name.contains("ForPortalPatient") || name.contains("ForPatientPortal")
+            || name.startsWith("toPatientPortal");
+    }
 
     /** A reader of a visit's note entries. */
     private static final Pattern NOTE_READER = Pattern.compile(
@@ -123,8 +127,11 @@ class PatientFacingUnfinishedContentGuardTest {
                 continue;
             }
             String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
-            Matcher m = PORTAL_READ.matcher(code);
+            Matcher m = IDENTIFIER_CALL.matcher(code);
             while (m.find()) {
+                if (!isPortalReadName(m.group(1))) {
+                    continue;
+                }
                 String body = SourceScan.methodBody(code, m.group(1));
                 if (body == null) {
                     continue;

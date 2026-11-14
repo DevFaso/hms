@@ -477,8 +477,7 @@ class TreatmentPlanServiceImplTest {
         when(treatmentPlanMapper.toResponseDTO(plan)).thenReturn(responseDTO);
 
         assertThat(service.listForPortalPatient(patientId, pageable).getContent()).hasSize(1);
-        org.mockito.Mockito.verify(treatmentPlanRepository, org.mockito.Mockito.never())
-            .findAllByPatientId(any(), any());
+        verify(treatmentPlanRepository, never()).findAllByPatientId(any(), any());
     }
 
     // ---- listByHospital ----
