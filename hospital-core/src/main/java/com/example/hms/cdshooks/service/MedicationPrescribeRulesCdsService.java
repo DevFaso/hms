@@ -90,13 +90,13 @@ public class MedicationPrescribeRulesCdsService implements CdsHookService {
     }
 
     @Override
-    public CdsHookResponse evaluate(CdsHookRequest request) {
+    public CdsHookResponse evaluate(CdsHookRequest request, UUID callerHospitalId) {
         UUID patientId = CdsHookContext.requirePatientId(request);
         if (patientId == null) return CdsHookResponse.empty();
         Patient patient = patientRepository.findByIdUnscoped(patientId).orElse(null);
         if (patient == null) return CdsHookResponse.empty();
 
-        UUID hospitalId = patient.getHospitalId();
+        UUID hospitalId = CdsHookContext.hospitalScope(callerHospitalId, patient);
 
         List<CdsCard> cards = new ArrayList<>();
         for (Map<String, Object> draft : CdsHookContext.medicationDrafts(request)) {

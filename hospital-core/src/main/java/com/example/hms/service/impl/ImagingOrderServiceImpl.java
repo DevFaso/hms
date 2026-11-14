@@ -47,6 +47,12 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         List.of(ImagingOrderStatus.COMPLETED, ImagingOrderStatus.RESULTS_AVAILABLE);
 
     private static final int DEFAULT_DUPLICATE_LOOKBACK_DAYS = 30;
+    /**
+     * QA D1920: the longest window a duplicate check reads, whatever the
+     * caller asks for. A product bound, not a clinical rule: a duplicate is a
+     * recent order, and the check is not a way to page through history.
+     */
+    public static final int MAX_DUPLICATE_LOOKBACK_DAYS = 90;
 
     /**
      * Self-reference for proxy-routed internal calls
@@ -98,7 +104,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         imagingOrder.setOrderingProviderUserId(orderingUser != null ? orderingUser.getId() : null);
         imagingOrder.setOrderingProviderName(orderingUser != null ? displayName(orderingUser) : null);
 
-        List<ImagingOrder> duplicateMatches = loadDuplicateMatches(patient.getId(), request.getModality(), request.getBodyRegion(), request.getDuplicateLookbackDays());
+        List<ImagingOrder> duplicateMatches = loadDuplicateMatches(patient.getId(), hospital.getId(), request.getModality(), request.getBodyRegion(), request.getDuplicateLookbackDays());
         if (!duplicateMatches.isEmpty()) {
             imagingOrder.setDuplicateOfRecentOrder(true);
             imagingOrder.setDuplicateReferenceOrderId(duplicateMatches.get(0).getId());
@@ -191,6 +197,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         // QA D970 (sibling): the order being edited is not a duplicate of itself.
         List<ImagingOrder> duplicateMatches = loadDuplicateMatches(
             order.getPatient() != null ? order.getPatient().getId() : null,
+            order.getHospital() != null ? order.getHospital().getId() : null,
             order.getModality(),
             order.getBodyRegion(),
             request.getDuplicateLookbackDays()
@@ -553,11 +560,30 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ImagingOrderDuplicateMatchDTO> previewDuplicates(UUID patientId, ImagingModality modality, String bodyRegion, Integer lookbackDays) {
+    public List<ImagingOrderDuplicateMatchDTO> previewDuplicates(UUID patientId, UUID hospitalId, ImagingModality modality, String bodyRegion, Integer lookbackDays) {
         if (patientId == null || modality == null) {
             return Collections.emptyList();
         }
-        List<ImagingOrder> matches = loadDuplicateMatches(patientId, modality, bodyRegion, lookbackDays);
+        // QA D1920: the orders the new one would duplicate are those at the
+        // hospital it would be placed at -- the caller's own when pinned (a
+        // different hospital named is answered as a missing one), the named
+        // one for a super-admin in global view, who names none: no list.
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID targetHospitalId;
+        if (activeHospitalId != null) {
+            requireActingHospital(hospitalId != null ? hospitalId : activeHospitalId);
+            targetHospitalId = activeHospitalId;
+        } else if (hospitalId != null) {
+            targetHospitalId = hospitalId;
+        } else {
+            return Collections.emptyList();
+        }
+        // ...and only for a patient registered there, answered as unknown
+        // otherwise, as createOrder refuses to place the order.
+        if (!registrationRepository.existsByPatientIdAndHospitalId(patientId, targetHospitalId)) {
+            throw new ResourceNotFoundException("patient.notFound", patientId);
+        }
+        List<ImagingOrder> matches = loadDuplicateMatches(patientId, targetHospitalId, modality, bodyRegion, lookbackDays);
         return matches.stream()
             .map(imagingOrderMapper::toDuplicateMatchDTO)
             .toList();
@@ -615,14 +641,26 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         }
     }
 
-    private List<ImagingOrder> loadDuplicateMatches(UUID patientId, ImagingModality modality, String bodyRegion, Integer lookbackDays) {
-        if (patientId == null || modality == null) {
+    /**
+     * This patient's possible duplicates at {@code hospitalId} only (QA D1920),
+     * inside the requested window clamped to {@link #MAX_DUPLICATE_LOOKBACK_DAYS}.
+     * No hospital, no matches: an order without one duplicates nothing.
+     */
+    private List<ImagingOrder> loadDuplicateMatches(UUID patientId, UUID hospitalId, ImagingModality modality, String bodyRegion, Integer lookbackDays) {
+        if (patientId == null || hospitalId == null || modality == null) {
             return Collections.emptyList();
         }
-        int window = (lookbackDays == null || lookbackDays <= 0) ? DEFAULT_DUPLICATE_LOOKBACK_DAYS : lookbackDays;
-        LocalDateTime orderedAfter = LocalDateTime.now().minusDays(window);
+        LocalDateTime orderedAfter = LocalDateTime.now().minusDays(duplicateWindowDays(lookbackDays));
         String normalizedBodyRegion = normalizeBodyRegion(bodyRegion);
-        return imagingOrderRepository.findPotentialDuplicates(patientId, modality, normalizedBodyRegion, orderedAfter);
+        return imagingOrderRepository.findPotentialDuplicates(patientId, hospitalId, modality, normalizedBodyRegion, orderedAfter);
+    }
+
+    /** The window in days: the default when none or a non-positive one is asked, never above the cap. */
+    public static int duplicateWindowDays(Integer lookbackDays) {
+        if (lookbackDays == null || lookbackDays <= 0) {
+            return DEFAULT_DUPLICATE_LOOKBACK_DAYS;
+        }
+        return Math.min(lookbackDays, MAX_DUPLICATE_LOOKBACK_DAYS);
     }
 
     private String normalizeBodyRegion(String bodyRegion) {
