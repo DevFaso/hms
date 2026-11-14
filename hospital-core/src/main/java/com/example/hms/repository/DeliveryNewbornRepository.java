@@ -16,4 +16,7 @@ public interface DeliveryNewbornRepository extends JpaRepository<DeliveryNewborn
 
     /** The delivery a baby was registered from, if any. */
     Optional<DeliveryNewborn> findByNewbornPatient_Id(UUID newbornPatientId);
+
+    /** QA D1714: the delivery and birth order of these registered babies (the register's stillbirth identity). */
+    List<DeliveryNewborn> findByNewbornPatient_IdIn(java.util.Collection<UUID> newbornPatientIds);
 }

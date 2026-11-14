@@ -1490,6 +1490,22 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: [],
   },
   {
+    // QA D1714: a stillborn baby's fetal-death event, and a corrected baby outcome.
+    key: 'AUDIT.DESC.FETAL_DEATH_EVENT_RECORDED',
+    re: /^Fetal-death event recorded for a stillborn baby$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.FETAL_DEATH_EVENT_SUPERSEDED',
+    re: /^Fetal-death event superseded by a corrected baby outcome$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.DELIVERY_BABY_OUTCOME_CORRECTED',
+    re: /^Baby outcome corrected on a delivery record$/,
+    params: [],
+  },
+  {
     key: 'AUDIT.DESC.LABOR_EPISODE_HANDOVER_READ',
     re: /^Labour episode handed over by transfer read at the receiving hospital$/,
     params: [],

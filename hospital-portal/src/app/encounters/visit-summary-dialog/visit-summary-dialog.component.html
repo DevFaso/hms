@@ -5,6 +5,7 @@
   tabindex="-1"
 >
   <section
+    #dialog
     class="avs-dialog"
     role="dialog"
     aria-modal="true"
@@ -24,13 +25,10 @@
       <div class="avs-heading">
         <span class="avs-eyebrow">{{ 'VISIT_SUMMARY.EYEBROW' | translate }}</span>
         <h2 id="avs-title">{{ 'ENCOUNTERS.AVS_TITLE' | translate }}</h2>
-        @if (summary().patientName) {
-          <p class="avs-header-patient">{{ summary().patientName }}</p>
-        }
       </div>
       <button
         type="button"
-        class="avs-close"
+        class="avs-close no-print"
         (click)="closed.emit()"
         [attr.aria-label]="'COMMON.CLOSE' | translate"
         data-testid="avs-close"
@@ -50,139 +48,25 @@
           {{ 'VISIT_SUMMARY.PENDING_SIGNATURE' | translate }}
         </p>
       }
-      <section class="avs-identity">
-        <span class="avs-patient-icon material-symbols-outlined" aria-hidden="true">person</span>
-        <div>
-          <span class="avs-label">{{ 'VISIT_SUMMARY.PATIENT' | translate }}</span>
-          <h3 id="avs-patient">
-            {{ summary().patientName || ('VISIT_SUMMARY.NOT_PROVIDED' | translate) }}
-          </h3>
-          <p class="avs-readonly">{{ 'VISIT_SUMMARY.READ_ONLY' | translate }}</p>
-        </div>
-      </section>
-      <dl class="avs-metadata">
-        <div>
-          <dt>
-            <span class="material-symbols-outlined" aria-hidden="true">event</span>
-            {{ 'ENCOUNTERS.DATE' | translate }}
-          </dt>
-          <dd>
-            {{
-              summary().visitDate
-                ? (summary().visitDate | serverTime | dateTime)
-                : ('VISIT_SUMMARY.NOT_PROVIDED' | translate)
-            }}
-          </dd>
-        </div>
-        <div>
-          <dt>
-            <span class="material-symbols-outlined" aria-hidden="true">stethoscope</span>
-            {{ 'VISIT_SUMMARY.PROVIDER' | translate }}
-          </dt>
-          <dd>{{ summary().providerName || ('VISIT_SUMMARY.NOT_PROVIDED' | translate) }}</dd>
-        </div>
-        <div>
-          <dt>
-            <span class="material-symbols-outlined" aria-hidden="true">domain</span>
-            {{ 'VISIT_SUMMARY.DEPARTMENT' | translate }}
-          </dt>
-          <dd>{{ summary().departmentName || ('VISIT_SUMMARY.NOT_PROVIDED' | translate) }}</dd>
-        </div>
-        <div>
-          <dt>
-            <span class="material-symbols-outlined" aria-hidden="true">local_hospital</span>
-            {{ 'ENCOUNTERS.HOSPITAL' | translate }}
-          </dt>
-          <dd>{{ summary().hospitalName || ('VISIT_SUMMARY.NOT_PROVIDED' | translate) }}</dd>
-        </div>
-      </dl>
-      <div class="avs-sections">
-        @if (summary().chiefComplaint) {
-          <section
-            class="avs-section avs-section--wide avs-section--complaint"
-            data-testid="avs-complaint"
-          >
-            <h3>
-              <span class="material-symbols-outlined" aria-hidden="true">clinical_notes</span>
-              {{ 'ENCOUNTERS.CHIEF_COMPLAINT' | translate }}
-            </h3>
-            <p>{{ summary().chiefComplaint }}</p>
-          </section>
-        }
-        @if (summary().dischargeDiagnoses.length) {
-          <section class="avs-section" data-testid="avs-diagnoses">
-            <h3>
-              <span class="material-symbols-outlined" aria-hidden="true">diagnosis</span>
-              {{ 'ENCOUNTERS.AVS_DIAGNOSES' | translate }}
-            </h3>
-            <ul>
-              @for (diagnosis of summary().dischargeDiagnoses; track $index) {
-                <li>{{ diagnosis }}</li>
-              }
-            </ul>
-          </section>
-        }
-        @if (summary().prescriptionSummary) {
-          <section class="avs-section" data-testid="avs-prescriptions">
-            <h3>
-              <span class="material-symbols-outlined" aria-hidden="true">medication</span>
-              {{ 'ENCOUNTERS.AVS_PRESCRIPTIONS' | translate }}
-            </h3>
-            <p>{{ summary().prescriptionSummary }}</p>
-          </section>
-        }
-        @if (summary().referralSummary) {
-          <section class="avs-section avs-section--wide" data-testid="avs-referrals">
-            <h3>
-              <span class="material-symbols-outlined" aria-hidden="true">forward_to_inbox</span>
-              {{ 'ENCOUNTERS.AVS_REFERRALS' | translate }}
-            </h3>
-            <p>{{ summary().referralSummary }}</p>
-          </section>
-        }
-        @if (summary().followUpInstructions) {
-          <section
-            class="avs-section avs-section--wide avs-section--follow-up"
-            data-testid="avs-follow-up"
-          >
-            <h3>
-              <span class="material-symbols-outlined" aria-hidden="true">assignment</span>
-              {{ 'ENCOUNTERS.AVS_FOLLOW_UP' | translate }}
-            </h3>
-            <p>{{ summary().followUpInstructions }}</p>
-          </section>
-        }
-        @if (summary().patientEducationMaterials) {
-          <section class="avs-section avs-section--wide" data-testid="avs-education">
-            <h3>
-              <span class="material-symbols-outlined" aria-hidden="true">auto_stories</span>
-              {{ 'ENCOUNTERS.AVS_EDUCATION' | translate }}
-            </h3>
-            <p>{{ summary().patientEducationMaterials }}</p>
-          </section>
-        }
-        @if (summary().followUpAppointmentDate) {
-          <section class="avs-section avs-section--wide" data-testid="avs-appointment">
-            <h3>
-              <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
-              {{ 'ENCOUNTERS.AVS_FOLLOW_UP_APPT' | translate }}
-            </h3>
-            <p>{{ summary().followUpAppointmentDate | serverTime | date: 'mediumDate' }}</p>
-          </section>
-        }
-        <app-visit-summary-sections [summary]="summary()" />
-      </div>
+      <app-visit-summary-sections [summary]="summary()" audience="staff" />
       @if (!hasSections()) {
         <p class="avs-empty" role="status">{{ 'VISIT_SUMMARY.NO_SECTIONS' | translate }}</p>
       }
     </div>
     <footer class="avs-footer">
-      <span
+      <span data-testid="avs-read-only"
         ><span class="material-symbols-outlined" aria-hidden="true">article</span>
         {{ 'VISIT_SUMMARY.READ_ONLY' | translate }}</span
-      ><button type="button" class="avs-done" (click)="closed.emit()" data-testid="avs-done">
-        {{ 'COMMON.CLOSE' | translate }}
-      </button>
+      >
+      <span class="avs-actions no-print">
+        <button type="button" class="avs-print" (click)="print()" data-testid="avs-print">
+          <span class="material-symbols-outlined" aria-hidden="true">print</span>
+          {{ 'VISIT_SUMMARY.PRINT' | translate }}
+        </button>
+        <button type="button" class="avs-done" (click)="closed.emit()" data-testid="avs-done">
+          {{ 'COMMON.CLOSE' | translate }}
+        </button>
+      </span>
     </footer>
   </section>
 </div>

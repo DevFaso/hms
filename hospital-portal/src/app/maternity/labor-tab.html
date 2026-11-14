@@ -323,6 +323,23 @@
             {{ 'LABOR.NEWBORN_REGISTRATION_PENDING' | translate }}
           </p>
         }
+        <!-- QA D1714: each baby's outcome; a stillborn baby has a fetal-death event, no patient record. -->
+        @if (record.babies && record.babies.length > 1) {
+          <p data-testid="delivery-baby-outcomes">
+            <strong>{{ 'LABOR.BABY_OUTCOMES' | translate }}{{ 'COMMON.COLON' | translate }}</strong>
+            @for (baby of record.babies; track baby.birthOrder; let last = $last) {
+              {{ 'LABOR.BABY_OUTCOME' | translate: { order: baby.birthOrder }
+              }}{{ 'COMMON.COLON' | translate }}
+              {{ 'LABOR.BABY_OUTCOME_' + (baby.outcome ?? 'UNKNOWN') | translate
+              }}{{ last ? '' : ' · ' }}
+            }
+          </p>
+        }
+        @if (hasFetalDeathEvent(record)) {
+          <p class="saved-note" data-testid="delivery-fetal-death-event">
+            {{ 'LABOR.FETAL_DEATH_EVENT_RECORDED' | translate }}
+          </p>
+        }
         <!-- QA D1592: each live-born baby is its own patient, linked to its chart. -->
         @if (record.newborns?.length) {
           <div data-testid="delivery-newborns">
@@ -820,12 +837,6 @@
           </div>
         </div>
         <div class="form-row gtpal-row">
-          <div class="field checkbox-field">
-            <label>
-              <input type="checkbox" [(ngModel)]="deliveryForm.liveBirth" />
-              {{ 'LABOR.LIVE_BIRTH' | translate }}
-            </label>
-          </div>
           <div class="field">
             <label for="dl-infants">{{ 'LABOR.NUMBER_OF_INFANTS' | translate }}</label>
             <input
@@ -836,6 +847,26 @@
               [(ngModel)]="deliveryForm.numberOfInfants"
             />
           </div>
+          <!-- QA D1714: one outcome per baby; a stillborn baby creates a fetal-death event, not a patient. -->
+          @for (baby of deliveryBabies(); track baby.birthOrder) {
+            <div class="field">
+              <label [for]="'dl-baby-' + baby.birthOrder">{{
+                'LABOR.BABY_OUTCOME' | translate: { order: baby.birthOrder }
+              }}</label>
+              <select
+                [id]="'dl-baby-' + baby.birthOrder"
+                [attr.data-testid]="'delivery-baby-outcome-' + baby.birthOrder"
+                [ngModel]="baby.outcome"
+                (ngModelChange)="setBabyOutcome(baby.birthOrder, $event)"
+              >
+                @for (choice of babyOutcomeChoices; track choice) {
+                  <option [ngValue]="choice">
+                    {{ 'LABOR.BABY_OUTCOME_' + choice | translate }}
+                  </option>
+                }
+              </select>
+            </div>
+          }
           <div class="field">
             <label for="dl-sex">{{ 'LABOR.INFANT_SEX' | translate }}</label>
             <select id="dl-sex" [(ngModel)]="deliveryForm.infantSex">

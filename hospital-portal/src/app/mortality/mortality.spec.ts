@@ -479,6 +479,64 @@ describe('MortalityComponent', () => {
     expect(text('register-eligibility-unknown')).toContain('MORTALITY.ELIGIBILITY_UNKNOWN');
   });
 
+  it('QA D1714: stillbirths are their own section, each figure naming its definition', () => {
+    mortalitySpy.getRegister.and.returnValue(
+      of(
+        mockRegister({
+          totalDeaths: 2,
+          deathsAfterLiveBirth: 1,
+          stillbirths: 3,
+          stillbirthsWho: 1,
+          stillbirthsIcd: 2,
+          stillbirthsClassificationIncomplete: 1,
+          whoStillbirthMinWeeks: 28,
+          icdFetalDeathMinWeeks: 22,
+          stillbirthRows: [
+            {
+              id: 'e1',
+              deathRecordId: null,
+              deliveryRecordId: 'dr1',
+              motherPatientId: 'm1',
+              motherName: 'Rose Démo',
+              birthOrder: 1,
+              occurredAt: '2026-08-13T04:00:00',
+              gestationalAgeWeeks: null,
+              noSignsOfLife: true,
+              source: 'DELIVERY',
+              recordedByName: null,
+              whoStillbirth: false,
+              icdFetalDeath: false,
+              classificationIncomplete: true,
+            },
+          ],
+          deaths: [
+            mockDeath(),
+            mockDeath({ id: 'sb', perinatalDeath: true, perinatalType: 'STILLBIRTH' }),
+          ],
+        }),
+      ),
+    );
+    const fixture = TestBed.createComponent(MortalityComponent);
+    fixture.detectChanges();
+    const page: HTMLElement = fixture.nativeElement;
+    const text = (id: string) => page.querySelector(`[data-testid="${id}"]`)?.textContent ?? '';
+
+    expect(text('stillbirth-section')).toContain('MORTALITY.STILLBIRTH_SECTION');
+    expect(text('stillbirths-recorded')).toContain('3');
+    expect(text('stillbirths-recorded')).toContain('MORTALITY.STILLBIRTHS_RECORDED_DEFINITION');
+    expect(text('stillbirths-who')).toContain('MORTALITY.STILLBIRTHS_WHO_DEFINITION');
+    expect(text('stillbirths-icd')).toContain('MORTALITY.STILLBIRTHS_ICD_DEFINITION');
+    expect(text('stillbirths-incomplete')).toContain('1');
+    expect(text('stillbirths-incomplete')).toContain(
+      'MORTALITY.CLASSIFICATION_INCOMPLETE_DEFINITION',
+    );
+    expect(text('stillbirth-incomplete')).toContain('MORTALITY.CLASSIFICATION_INCOMPLETE');
+    expect(text('deaths-after-live-birth')).toContain('1');
+    // The stillbirth death record is not listed among the deaths after a live birth.
+    expect(component).toBeTruthy();
+    expect(fixture.componentInstance.deathsAfterLiveBirth().map((d) => d.id)).toEqual(['d1']);
+  });
+
   it('reports a rejected recording rather than pretending it worked', async () => {
     spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     mortalitySpy.recordDeath.and.returnValue(throwError(() => new Error('409')));

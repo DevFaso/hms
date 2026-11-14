@@ -264,6 +264,14 @@ export interface AfterVisitSummary {
   hospitalName: string;
   patientId?: string;
   patientName?: string;
+  /** Polish 2026-11-13: the identity band. */
+  patientDateOfBirth?: string | null;
+  patientMrn?: string | null;
+  /** A stay: its diagnoses read "at discharge"; an outpatient visit's do not. */
+  inpatientStay?: boolean;
+  /** Who signed the latest signed note, and when; absent while none is signed. */
+  signedByName?: string | null;
+  signedAt?: string | null;
   chiefComplaint?: string;
   dischargeDiagnoses: string[];
   prescriptionSummary?: string;
@@ -277,6 +285,10 @@ export interface AfterVisitSummary {
   pendingSignature?: boolean;
   followUpAppointmentId?: string;
   followUpAppointmentDate?: string;
+  /** The booked follow-up's time ("HH:mm"), service and clinician, when known. */
+  followUpAppointmentTime?: string | null;
+  followUpDepartmentName?: string | null;
+  followUpClinicianName?: string | null;
   /* User decision 2026-11-12: the summary's content sections; each is empty when there is nothing to show. */
   hospitalPhone?: string | null;
   departmentPhone?: string | null;
@@ -308,6 +320,10 @@ export interface AvsVitalSigns {
   weightKg?: number | null;
   heightCm?: number | null;
   painScore?: number | null;
+  /** Only when weight and height were both recorded; no threshold is applied to it. */
+  bmi?: number | null;
+  /** Per value, what the existing vital-sign rules judged: LOW, HIGH or ABNORMAL; absent = no rule fired. */
+  valueFlags?: Record<string, 'LOW' | 'HIGH' | 'ABNORMAL'> | null;
   flagged: boolean;
 }
 
@@ -337,6 +353,10 @@ export interface AvsCurrentMedication {
   name: string;
   dosage?: string | null;
   frequency?: string | null;
+  startDate?: string | null;
+  prescriberName?: string | null;
+  /** Lines sharing a key are the same drug (catalogue item, else normalised name). */
+  drugKey?: string | null;
 }
 
 export interface EncounterRequest {

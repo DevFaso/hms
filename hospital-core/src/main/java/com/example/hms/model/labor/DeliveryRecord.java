@@ -173,6 +173,77 @@ public class DeliveryRecord extends BaseEntity {
     @Column(name = "born_before_arrival_reason", length = 500)
     private String bornBeforeArrivalReason;
 
+    /* ── Per-baby outcome (QA D1714, V293) ───────────────────────────────── */
+
+    /**
+     * QA D1714 (user decision 2026-11-13): the outcome of each baby, by birth order (1..{@link #numberOfInfants}).
+     * Empty on a delivery recorded before V293: its single {@link #liveBirth} flag then answers, see
+     * {@link #outcomeOf}. {@link #liveBirth} is kept true while at least one baby is live.
+     */
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(
+        name = "delivery_record_baby_outcomes",
+        schema = "clinical",
+        joinColumns = @JoinColumn(name = "delivery_record_id",
+            foreignKey = @ForeignKey(name = "fk_delivery_baby_outcome_record")))
+    @jakarta.persistence.MapKeyColumn(name = "birth_order")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "outcome", nullable = false, length = 20)
+    @Builder.Default
+    private java.util.Map<Integer, com.example.hms.enums.BabyOutcome> babyOutcomes = new java.util.HashMap<>();
+
+    public java.util.Map<Integer, com.example.hms.enums.BabyOutcome> getBabyOutcomes() {
+        return babyOutcomes == null ? java.util.Map.of() : java.util.Collections.unmodifiableMap(babyOutcomes);
+    }
+
+    /** Replace one baby's outcome (recording or a correction); {@link #liveBirth} follows. */
+    public void putBabyOutcome(int birthOrder, com.example.hms.enums.BabyOutcome outcome) {
+        if (babyOutcomes == null) {
+            babyOutcomes = new java.util.HashMap<>();
+        }
+        babyOutcomes.put(birthOrder, outcome);
+        liveBirth = liveOrders().length > 0;
+    }
+
+    /**
+     * The outcome of the baby of this birth order. A delivery recorded per baby answers from its rows. One recorded
+     * before (no rows) answers from its single flag: live, every baby is live; not live, the first baby is stillborn
+     * and any later one is unknown (null): the flag cannot say, and nothing is guessed.
+     */
+    public com.example.hms.enums.BabyOutcome outcomeOf(int birthOrder) {
+        if (birthOrder < 1 || birthOrder > Math.max(numberOfInfants, 1)) {
+            return null;
+        }
+        if (babyOutcomes != null && !babyOutcomes.isEmpty()) {
+            return babyOutcomes.get(birthOrder);
+        }
+        if (liveBirth) {
+            return com.example.hms.enums.BabyOutcome.LIVE;
+        }
+        return birthOrder == 1 ? com.example.hms.enums.BabyOutcome.STILLBORN : null;
+    }
+
+    /** The birth orders of the live-born babies, ascending. */
+    public int[] liveOrders() {
+        return ordersWith(com.example.hms.enums.BabyOutcome.LIVE);
+    }
+
+    /** The birth orders of the stillborn babies, ascending. */
+    public int[] stillbornOrders() {
+        return ordersWith(com.example.hms.enums.BabyOutcome.STILLBORN);
+    }
+
+    private int[] ordersWith(com.example.hms.enums.BabyOutcome outcome) {
+        if (babyOutcomes != null && !babyOutcomes.isEmpty()) {
+            return babyOutcomes.entrySet().stream()
+                .filter(e -> e.getValue() == outcome && e.getKey() != null && e.getKey() >= 1
+                    && e.getKey() <= Math.max(numberOfInfants, 1))
+                .mapToInt(java.util.Map.Entry::getKey).sorted().toArray();
+        }
+        return java.util.stream.IntStream.rangeClosed(1, Math.max(numberOfInfants, 1))
+            .filter(order -> outcomeOf(order) == outcome).toArray();
+    }
+
     /* ── Alerts ────────────────────────────────────────────────────────── */
 
     @ElementCollection(fetch = FetchType.LAZY)

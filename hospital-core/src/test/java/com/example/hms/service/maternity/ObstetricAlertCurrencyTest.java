@@ -43,12 +43,14 @@ class ObstetricAlertCurrencyTest {
     @Mock private LaborPartographEntryRepository partographRepository;
     @Mock private NewbornAssessmentRepository newbornRepository;
     @Mock private PostpartumObservationRepository postpartumRepository;
+    @Mock private com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
 
     private ObstetricAlertCurrency currency;
 
     @BeforeEach
     void setUp() {
-        currency = new ObstetricAlertCurrency(partographRepository, newbornRepository, postpartumRepository);
+        currency = new ObstetricAlertCurrency(partographRepository, newbornRepository, postpartumRepository,
+            deliveryRecordRepository);
     }
 
     private static ObstetricAlertEscalation row(String sourceType, UUID sourceId, String alertType) {
@@ -305,5 +307,35 @@ class ObstetricAlertCurrencyTest {
         assertThat(currency.noLongerUrgent(r)).isFalse();
         source.setUterineAtonySuspected(true);
         assertThat(currency.noLongerUrgent(r)).as("a checkbox cannot be re-measured").isFalse();
+    }
+
+    // ── Rex on #1144: the stillbirth alert closes when a correction leaves no stillborn baby ──
+
+    private ObstetricAlertEscalation stillbirthRow(UUID deliveryId) {
+        ObstetricAlertEscalation r = row(ObstetricAlertEscalationService.SOURCE_DELIVERY, deliveryId, "GENERAL");
+        r.setAlertMessageKey("labor.alert.msg." + ObstetricAlertCurrency.STILLBIRTH_ALERT);
+        return r;
+    }
+
+    @Test
+    void theStillbirthAlertClosesOnceEveryBabyIsCorrectedToLive() {
+        com.example.hms.model.labor.DeliveryRecord delivery = com.example.hms.model.labor.DeliveryRecord.builder()
+            .numberOfInfants(1).build();
+        delivery.putBabyOutcome(1, com.example.hms.enums.BabyOutcome.LIVE);
+        UUID id = UUID.randomUUID();
+        when(deliveryRecordRepository.findById(id)).thenReturn(Optional.of(delivery));
+
+        assertThat(currency.noLongerUrgent(stillbirthRow(id))).isTrue();
+    }
+
+    @Test
+    void theStillbirthAlertStandsWhileABabyIsStillborn() {
+        com.example.hms.model.labor.DeliveryRecord delivery = com.example.hms.model.labor.DeliveryRecord.builder()
+            .numberOfInfants(1).build();
+        delivery.putBabyOutcome(1, com.example.hms.enums.BabyOutcome.STILLBORN);
+        UUID id = UUID.randomUUID();
+        when(deliveryRecordRepository.findById(id)).thenReturn(Optional.of(delivery));
+
+        assertThat(currency.noLongerUrgent(stillbirthRow(id))).isFalse();
     }
 }

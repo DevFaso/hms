@@ -124,20 +124,58 @@ export interface RecordDeathResponse {
   closure: DeathClosureSummary;
 }
 
+/**
+ * QA D1714: a stillbirth on the register, from a fetal-death event recorded at delivery (no patient
+ * account) or from a stillbirth death record no event holds. Each named classification has its flag.
+ */
+export interface StillbirthRow {
+  id: string | null;
+  deathRecordId: string | null;
+  declaredByDeathRecordId?: string | null;
+  deliveryRecordId: string | null;
+  motherPatientId: string | null;
+  motherName: string | null;
+  /** On a death-record row: the stillborn baby's own record, never shown as the mother. */
+  patientId?: string | null;
+  patientName?: string | null;
+  birthOrder: number | null;
+  occurredAt: string;
+  gestationalAgeWeeks: number | null;
+  noSignsOfLife: boolean;
+  source: 'DELIVERY' | 'DELIVERY_HISTORICAL' | null;
+  recordedByName: string | null;
+  whoStillbirth: boolean;
+  icdFetalDeath: boolean;
+  classificationIncomplete: boolean;
+}
+
 export interface MortalityRegister {
   from: string;
   to: string;
   totalDeaths: number;
+  /** QA D1714: the death records that are not stillbirths. */
+  deathsAfterLiveBirth?: number;
   /** WHO definition — late maternal deaths are counted separately. */
   maternalDeaths: number;
   lateMaternalDeaths: number;
-  /** WHO definition (provisional): stillbirths and days 0-6, without a known gestation under 22 weeks. */
+  /** QA D1714 (provisional): WHO stillbirths plus early neonatal deaths (days 0-6). */
   perinatalDeaths: number;
-  /** Of perinatalDeaths: counted on the clinician's classification, with a fact it rests on missing. */
+  /** Of perinatalDeaths: early neonatal deaths counted on the clinician's classification, a fact missing. */
   perinatalEligibilityUnknown: number;
-  /** Known gestation under 22 weeks: not in perinatalDeaths. */
+  /** Early neonatal deaths with a known gestation under the ICD level: not in perinatalDeaths. */
   perinatalBelowGestation: number;
+  /** QA D1714: every stillbirth recorded, whatever the gestation. */
   stillbirths: number;
+  /** Of stillbirths: the WHO stillbirth indicator. */
+  stillbirthsWho?: number;
+  /** Of stillbirths: the broader ICD level. */
+  stillbirthsIcd?: number;
+  /** Of stillbirths: no gestation recorded, classification incomplete. */
+  stillbirthsClassificationIncomplete?: number;
+  /** The thresholds the figures use (provisional, set on the server). */
+  whoStillbirthMinWeeks?: number;
+  icdFetalDeathMinWeeks?: number;
+  stillbirthRows?: StillbirthRow[];
   earlyNeonatalDeaths: number;
   /** Days 7-27: past the perinatal period, in no perinatal figure. */
   lateNeonatalDeaths: number;

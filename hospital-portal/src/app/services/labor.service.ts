@@ -139,6 +139,20 @@ export interface PartographEntryResponse {
   hoursSinceActivePhaseStart: number | null;
 }
 
+/** QA D1714: the outcome of one baby of a delivery. */
+export type BabyOutcome = 'LIVE' | 'STILLBORN';
+
+/**
+ * QA D1714: one baby of a delivery. A stillborn baby is not registered as a patient: it creates a
+ * fetal-death event, named in a response. The outcome is null only for a later baby of a delivery
+ * recorded before per-baby outcomes with a single "not live" flag.
+ */
+export interface DeliveryBaby {
+  birthOrder?: number;
+  outcome: BabyOutcome | null;
+  fetalDeathEventId?: string | null;
+}
+
 export interface DeliveryRecordRequest {
   hospitalId?: string;
   deliveredByStaffId?: string;
@@ -146,6 +160,8 @@ export interface DeliveryRecordRequest {
   deliveryMode: DeliveryMode;
   liveBirth?: boolean;
   numberOfInfants?: number;
+  /** QA D1714: the outcome of each baby, in birth order (mixed twins). */
+  babies?: DeliveryBaby[];
   infantSex?: InfantSex;
   birthWeightGrams?: number;
   gestationalAgeWeeksAtBirth?: number;
@@ -187,6 +203,17 @@ export interface DeliveryRecordResponse {
   bornBeforeArrival?: boolean;
   bornBeforeArrivalReason?: string | null;
   alerts: LaborAlert[];
+  /** QA D1714: each baby's outcome, in birth order, with a stillborn baby's fetal-death event. */
+  babies?: DeliveryBaby[];
+  /** QA D1714: every fetal-death event of the delivery, superseded ones with who, when and why. */
+  fetalDeathEvents?: {
+    id: string;
+    birthOrder: number;
+    creationReason?: string | null;
+    supersededAt?: string | null;
+    supersededByName?: string | null;
+    supersedeReason?: string | null;
+  }[];
   /** QA D1592: the babies this delivery registered as patients (empty for a stillbirth). */
   newborns?: DeliveryNewborn[];
   /** QA D1592: the babies are not registered yet; reception registers them. */

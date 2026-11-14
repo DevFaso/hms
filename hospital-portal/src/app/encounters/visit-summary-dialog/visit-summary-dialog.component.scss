@@ -95,131 +95,6 @@
   font-weight: 600;
   line-height: 1.5;
 }
-.avs-identity {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 22px;
-  padding: 20px;
-  background: #eaf5f1;
-  border: 1px solid #c9e5dc;
-  border-radius: 14px;
-  h3 {
-    margin: 5px 0;
-    font-size: clamp(19px, 3vw, 23px);
-    color: #123b3a;
-    line-height: 1.4;
-    overflow-wrap: anywhere;
-    letter-spacing: -0.02em;
-  }
-}
-.avs-patient-icon {
-  background: white;
-  padding: 12px;
-  border: 1px solid #d0e8df;
-  color: #087269;
-  border-radius: 50%;
-  font-size: 28px;
-}
-.avs-label {
-  color: #42645f;
-  font-size: 11px;
-  font-weight: 650;
-}
-.avs-readonly {
-  color: #42645f;
-  font-size: 12px;
-  line-height: 1.7;
-  margin: 0;
-}
-.avs-metadata {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px 24px;
-  margin: 0 0 24px;
-  padding: 0 3px;
-  > div {
-    min-width: 0;
-  }
-  dt {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 11px;
-    font-weight: 650;
-    color: #52667b;
-    margin-bottom: 7px;
-    .material-symbols-outlined {
-      font-size: 17px;
-      color: #087269;
-    }
-  }
-  dd {
-    margin: 0;
-    font-size: 13px;
-    line-height: 1.7;
-    color: #173348;
-    overflow-wrap: anywhere;
-  }
-}
-.avs-sections {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-.avs-section {
-  min-width: 0;
-  background: #fff;
-  border: 1px solid #dce6ef;
-  border-radius: 12px;
-  padding: 18px 20px;
-  h3 {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    margin: 0 0 13px;
-    color: #173348;
-    font-size: 14px;
-    line-height: 1.6;
-    .material-symbols-outlined {
-      color: #087269;
-      font-size: 21px;
-      flex-shrink: 0;
-    }
-  }
-  p,
-  li {
-    margin: 0;
-    line-height: 1.85;
-    font-size: 14px;
-    color: #294b60;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-  }
-  ul {
-    padding-left: 20px;
-    margin: 0;
-    li + li {
-      margin-top: 8px;
-    }
-    li::marker {
-      color: #087269;
-    }
-  }
-  &--wide {
-    grid-column: 1 / -1;
-  }
-  &--complaint {
-    border-left: 3px solid #087269;
-  }
-  &--follow-up {
-    background: #f1faf6;
-    border-color: #c9e5dc;
-  }
-  &:only-child {
-    grid-column: 1 / -1;
-  }
-}
 .avs-empty {
   color: #52667b;
   line-height: 1.8;
@@ -231,6 +106,7 @@
 }
 .avs-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
@@ -248,6 +124,32 @@
     .material-symbols-outlined {
       font-size: 18px;
     }
+  }
+}
+.avs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.avs-print {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  color: #0b7061;
+  border: 1px solid #0b7061;
+  padding: 10px 18px;
+  min-height: 42px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+  &:hover {
+    background: #edf5f7;
   }
 }
 .avs-done {
@@ -287,24 +189,6 @@ button:focus-visible {
   .avs-body {
     padding: 18px;
   }
-  .avs-identity {
-    padding: 16px;
-    gap: 12px;
-  }
-  .avs-patient-icon {
-    font-size: 22px;
-    padding: 9px;
-  }
-  .avs-metadata {
-    grid-template-columns: 1fr;
-    gap: 14px;
-  }
-  .avs-sections {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .avs-section {
-    padding: 16px;
-  }
   .avs-footer {
     padding: 14px 18px;
   }
@@ -327,10 +211,39 @@ button:focus-visible {
   }
 }
 
-.avs-header-patient {
-  margin: 7px 0 0;
-  font-size: 13px;
-  color: #52667b;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
+/* Polish 2026-11-13: printed alone (print-only.ts), as a flat document. */
+@media print {
+  .avs-backdrop {
+    position: static;
+    display: block;
+    padding: 0;
+    background: none;
+    backdrop-filter: none;
+  }
+  .avs-dialog {
+    display: block;
+    width: auto;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+    background: #fff;
+  }
+  .avs-header {
+    padding: 0 0 12px;
+  }
+  .avs-document-icon,
+  .avs-close,
+  .avs-actions {
+    display: none !important;
+  }
+  .avs-body {
+    padding: 12px 0 0;
+    overflow: visible;
+  }
+  .avs-footer {
+    padding: 12px 0 0;
+    border-top: 1px solid #999;
+  }
 }

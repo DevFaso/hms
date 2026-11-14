@@ -33,8 +33,9 @@ import java.util.Optional;
  *   <li>Postpartum: the care plan is closed, or a later observation of the
  *       plan re-measured the values behind the alert and raised no URGENT
  *       alert of the same type.</li>
- *   <li>Delivery: nothing later supersedes a delivery record, so it stands
- *       until acknowledged or the cap.</li>
+ *   <li>Delivery: it stands until acknowledged or the cap, except the
+ *       stillbirth alert of a delivery whose babies were all corrected to
+ *       live (QA D1714, Rex on #1144).</li>
  * </ul>
  * QA D658 (High, patient safety): a later record that did not measure a
  * value says nothing about it. Only the newest later record that re-measured
@@ -51,6 +52,13 @@ public class ObstetricAlertCurrency {
     private final LaborPartographEntryRepository partographEntryRepository;
     private final NewbornAssessmentRepository newbornAssessmentRepository;
     private final PostpartumObservationRepository postpartumObservationRepository;
+    /** The delivery's stillbirth alert code; its escalation closes once no baby of the delivery is stillborn. */
+    public static final String STILLBIRTH_ALERT = "labor-stillbirth";
+    /** The key the escalation row stores for that alert's sentence (labor.alert.msg.&lt;code&gt;). */
+    static final String STILLBIRTH_ALERT_MESSAGE_KEY = "labor.alert.msg.labor-stillbirth";
+
+    /** Rex on #1144: a corrected baby outcome can withdraw a delivery's stillbirth alert. */
+    private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
 
     /** @return true when the alert no longer warrants a reminder */
     public boolean noLongerUrgent(ObstetricAlertEscalation row) {
@@ -61,6 +69,7 @@ public class ObstetricAlertCurrency {
             case ObstetricAlertEscalationService.SOURCE_PARTOGRAPH -> partographResolved(row);
             case ObstetricAlertEscalationService.SOURCE_NEWBORN -> newbornResolved(row);
             case ObstetricAlertEscalationService.SOURCE_POSTPARTUM -> postpartumResolved(row);
+            case ObstetricAlertEscalationService.SOURCE_DELIVERY -> deliveryResolved(row);
             default -> false;
         };
     }
@@ -88,6 +97,21 @@ public class ObstetricAlertCurrency {
             .findFirst()
             .map(later -> later.getAlerts().stream().noneMatch(a -> a.getSeverity() == LaborAlertSeverity.URGENT
                 && a.getType() != null && a.getType().name().equals(type)))
+            .orElse(false);
+    }
+
+    /**
+     * Rex on #1144: the stillbirth alert of a delivery whose babies were all corrected to live no longer stands (the
+     * correction withdrew it from the record). Every other delivery alert stands until acknowledged or the cap.
+     */
+    private boolean deliveryResolved(ObstetricAlertEscalation row) {
+        if (!STILLBIRTH_ALERT_MESSAGE_KEY.equals(row.getAlertMessageKey())) {
+            return false;
+        }
+        return deliveryRecordRepository.findById(row.getSourceId())
+            .map(delivery -> delivery.stillbornOrders().length == 0
+                && delivery.getAlerts().stream().noneMatch(a -> STILLBIRTH_ALERT
+                    .equals(a.getCode())))
             .orElse(false);
     }
 
