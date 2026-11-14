@@ -22,7 +22,7 @@ dependencies {
     // Boot 4 runs Liquibase only through its starter (liquibase-core alone is inert).
     implementation 'org.springframework.boot:spring-boot-starter-liquibase'
     // Distributed scheduler locks: one instance runs a sweep, the others skip it.
-    implementation 'net.javacrumbs.shedlock:shedlock-spring:7.10.1'
+    implementation 'net.javacrumbs.shedlock:shedlock-spring:7.11.0'
     implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:7.10.1'
 
     // Kafka
