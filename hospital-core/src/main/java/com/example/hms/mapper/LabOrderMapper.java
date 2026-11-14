@@ -1,15 +1,11 @@
 package com.example.hms.mapper;
 
-import com.example.hms.enums.LabOrderChannel;
-import com.example.hms.enums.LabOrderStatus;
-import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
-import com.example.hms.model.UserRoleHospitalAssignment;
-import com.example.hms.payload.dto.LabOrderRequestDTO;
+import com.example.hms.payload.dto.LabOrderDuplicateMatchDTO;
 import com.example.hms.payload.dto.LabOrderResponseDTO;
 import com.example.hms.persistence.JpaProxyUtils;
 import jakarta.persistence.EntityNotFoundException;
@@ -113,44 +109,27 @@ public class LabOrderMapper {
     }
 
 
-    public LabOrder toLabOrder(
-            LabOrderRequestDTO dto,
-            Patient patient,
-            Staff staff,
-            Encounter encounter,
-            LabTestDefinition labTestDefinition,
-            UserRoleHospitalAssignment assignment,
-            Hospital hospital) {
-
-        if (dto == null) return null;
-
-        return LabOrder.builder()
-                .patient(patient)
-                .orderingStaff(staff)
-                .encounter(encounter)
-                .labTestDefinition(labTestDefinition)
-                .orderDatetime(dto.getOrderDatetime())
-                .status(LabOrderStatus.valueOf(dto.getStatus().toUpperCase()))
-                .notes(dto.getNotes())
-            .clinicalIndication(dto.getClinicalIndication())
-            .medicalNecessityNote(dto.getMedicalNecessityNote())
-                .primaryDiagnosisCode(dto.getPrimaryDiagnosisCode())
-                .additionalDiagnosisCodes(dto.getAdditionalDiagnosisCodes())
-                .priority(dto.getPriority() != null && !dto.getPriority().isBlank() ? dto.getPriority().trim().toUpperCase(java.util.Locale.ROOT) : "ROUTINE")
-                .orderChannel(dto.getOrderChannel() != null ? LabOrderChannel.fromCode(dto.getOrderChannel()) : LabOrderChannel.ELECTRONIC)
-                .orderChannelOther(dto.getOrderChannelOther())
-                .documentationSharedWithLab(Boolean.TRUE.equals(dto.getDocumentationSharedWithLab()))
-                .documentationReference(dto.getDocumentationReference())
-                .orderingProviderNpi(dto.getOrderingProviderNpi())
-                .signedAt(dto.getSignedAt())
-                .standingOrder(Boolean.TRUE.equals(dto.getStandingOrder()))
-                .standingOrderExpiresAt(dto.getStandingOrderExpiresAt())
-                .standingOrderLastReviewedAt(dto.getStandingOrderLastReviewedAt())
-                .standingOrderReviewIntervalDays(dto.getStandingOrderReviewIntervalDays())
-                .standingOrderReviewNotes(dto.getStandingOrderReviewNotes())
-                .assignment(assignment)
-                .hospital(hospital)
-                .build();
+    /**
+     * The duplicate-order warning's summary of an earlier order (the imaging
+     * order's shape). A new order is built only by
+     * {@code LabOrderServiceImpl.buildLabOrder}, which checks for duplicates.
+     */
+    public LabOrderDuplicateMatchDTO toDuplicateMatchDTO(LabOrder order) {
+        if (order == null) {
+            return null;
+        }
+        LabTestDefinition definition = JpaProxyUtils.safeInit(
+            order.getLabTestDefinition(), OWNER, order.getId(), "labTestDefinition");
+        return LabOrderDuplicateMatchDTO.builder()
+            .orderId(order.getId())
+            .labOrderCode(orderCodeOf(order))
+            .labTestName(definition != null ? definition.getName()
+                : com.example.hms.utility.MessageUtil.resolveOrRaw(DELETED_TEST_LABEL))
+            .labTestCode(definition != null ? definition.getTestCode() : null)
+            .priority(order.getPriority())
+            .status(order.getStatus() != null ? order.getStatus().name() : null)
+            .orderDatetime(order.getOrderDatetime())
+            .build();
     }
 
     /**

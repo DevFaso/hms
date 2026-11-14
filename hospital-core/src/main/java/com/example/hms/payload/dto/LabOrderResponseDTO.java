@@ -72,6 +72,18 @@ public class LabOrderResponseDTO {
     private LocalDateTime standingOrderReviewDueAt;
     private Integer standingOrderReviewIntervalDays;
     private String standingOrderReviewNotes;
+    /**
+     * The duplicate-order warning (shape of the imaging order's): set on the
+     * create response when the same patient already had an active order of
+     * the same test at this hospital within {@code LabOrderDuplicateCheck.WINDOW}.
+     * The order is placed either way; a warning never blocks.
+     */
+    private Boolean duplicateOfRecentOrder;
+    private java.util.UUID duplicateReferenceOrderId;
+    @Builder.Default
+    private List<LabOrderDuplicateMatchDTO> duplicateMatches = new ArrayList<>();
+    /** Whether the orderer acknowledged the warning ("Order anyway") before placing it. */
+    private Boolean duplicateAcknowledged;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -47,6 +47,11 @@ export interface LabOrderResponse {
   cancellationReason?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** On a create response: an active order of the same test was found (warned, never blocked). */
+  duplicateOfRecentOrder?: boolean | null;
+  duplicateMatches?: LabOrderDuplicateMatch[] | null;
+  /** Whether the order carried an acknowledgement covering every duplicate found. */
+  duplicateAcknowledged?: boolean | null;
 }
 
 export interface LabResultResponse {
@@ -324,6 +329,26 @@ export interface LabOrderRequest {
    * there. The order form always sends it explicitly.
    */
   performingHospitalId?: string | null;
+  /**
+   * The earlier orders (ids from the duplicate-order warning) the orderer saw
+   * before choosing "Order anyway"; the server records the acknowledgement
+   * only when they cover every duplicate it finds.
+   */
+  acknowledgedDuplicateOrderIds?: string[];
+}
+
+/**
+ * An active order of the same test for the same patient at this hospital,
+ * placed recently (GET /lab-orders/duplicates): the new order may duplicate it.
+ */
+export interface LabOrderDuplicateMatch {
+  orderId: string;
+  labOrderCode?: string;
+  labTestName?: string;
+  labTestCode?: string;
+  priority?: string;
+  status?: string;
+  orderDatetime?: string;
 }
 
 /** A laboratory a clinician may route an order to (GET /lab-orders/performing-labs). */
@@ -578,6 +603,22 @@ export class LabService {
   listPerformingLabs(): Observable<PerformingLab[]> {
     return this.http
       .get<ApiWrapper<PerformingLab[]>>('/lab-orders/performing-labs')
+      .pipe(map((res) => res?.data ?? []));
+  }
+
+  /**
+   * The duplicate-order warning before submitting. Empty when there is none;
+   * a failed check is treated as none (the warning never blocks an order).
+   */
+  checkDuplicates(
+    patientId: string,
+    labTestDefinitionId: string,
+    hospitalId?: string,
+  ): Observable<LabOrderDuplicateMatch[]> {
+    const params: Record<string, string> = { patientId, labTestDefinitionId };
+    if (hospitalId) params['hospitalId'] = hospitalId;
+    return this.http
+      .get<ApiWrapper<LabOrderDuplicateMatch[]>>('/lab-orders/duplicates', { params })
       .pipe(map((res) => res?.data ?? []));
   }
 

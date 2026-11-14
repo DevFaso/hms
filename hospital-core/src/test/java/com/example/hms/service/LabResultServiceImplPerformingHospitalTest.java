@@ -72,6 +72,8 @@ class LabResultServiceImplPerformingHospitalTest {
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
 
+    @Mock private com.example.hms.service.lab.LabOrderDuplicateCheck labOrderDuplicateCheck;
+
     @InjectMocks
     private LabResultServiceImpl service;
 

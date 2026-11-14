@@ -106,6 +106,7 @@ public class LabResultServiceImpl implements LabResultService {
     private static final UUID NO_HOSPITAL = new UUID(0L, 0L);
     private final com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
     private final AuditEventLogService auditEventLogService;
+    private final com.example.hms.service.lab.LabOrderDuplicateCheck labOrderDuplicateCheck;
     /** QA D178: a released result lands in the ordering clinician's in-basket. */
     private final InBasketService inBasketService;
     /** QA D938 / D931: the patient's and the clinician's notice of a release or a correction. */
@@ -2073,7 +2074,13 @@ public class LabResultServiceImpl implements LabResultService {
             .documentationSharedWithLab(parent.isDocumentationSharedWithLab())
             .documentationReference(parent.getDocumentationReference())
             .build();
+        // The duplicate warning, as on every new order: a reflex order of a
+        // test the patient already has active here is still placed (a rule,
+        // not a person, ordered it; nobody to warn), and is recorded as an
+        // unacknowledged duplicate on its audit trail.
+        List<LabOrder> duplicates = labOrderDuplicateCheck.find(child);
         LabOrder saved = labOrderRepository.save(child);
+        labOrderDuplicateCheck.report(saved, duplicates, false, null, null);
         // B1: the child inherits the parent's performing laboratory, so it
         // lands on another hospital's worklist — silently, until now. A
         // reflex order is still an order arriving at that laboratory, and it

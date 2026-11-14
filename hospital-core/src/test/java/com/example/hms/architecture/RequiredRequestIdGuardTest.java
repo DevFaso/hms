@@ -599,8 +599,6 @@ class RequiredRequestIdGuardTest {
 
     /** Duplicate-shaped keys that do not refuse a value the user typed, each with why. Shrinks only. */
     private static final Map<String, String> NOT_A_TYPED_VALUE = Map.ofEntries(
-        Map.entry("lab.order.duplicate",
-            "the same test for the same patient at the same minute: the order as a whole, not a field"),
         Map.entry("slot.justTaken",
             "the slot was booked by someone else meanwhile: a state of the slot, not a typed value"),
         Map.entry("provider.licence.duplicate",
@@ -1419,9 +1417,7 @@ class RequiredRequestIdGuardTest {
                 + " (the round-29 rule reads COSIGN_REQUIRED the same way)"),
         Map.entry("ControlledSubstanceGuard#requireDispensable:PrescriptionId:prescription.safeguard.PEDIATRIC_DOSE_REVIEW.dispense",
             "a safeguard the prescription still awaits (2FA, co-signature, paediatric review): a state of the order"
-                + " (the round-29 rule reads COSIGN_REQUIRED the same way)"),
-        Map.entry("LabOrderServiceImpl#buildLabOrder:OrderDatetime:lab.order.duplicate",
-            "the same test for the same patient at the same minute: the order as a whole (the D1301 rule excuses the same key)"));
+                + " (the round-29 rule reads COSIGN_REQUIRED the same way)"));
 
     /**
      * QA D1369 (round 31): {@code BirthPlanRequestDTO.introduction} was

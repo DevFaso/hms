@@ -6555,3 +6555,9 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 ## Questions for the obstetric lead (r50, #1144 follow-ups)
 - **D1802, stillborn to live correction vs a stillbirth death certificate:** should a correction of a baby from stillborn to live be refused, or only warned, while a death record still declares that baby's stillbirth, and which record wins in the register (decision needed; no code changed)?
 - **Neonatal alerts on stillborn babies:** should the Apgar-critical "neonatal resuscitation" and preterm "neonatal team" URGENT alerts still fire, and escalate to the nurse, when every baby of the delivery is stillborn (decision needed; no code changed)?
+
+## Standing debt — lab-order duplicate warning (fix/lab-order-duplicate-warning)
+- **Provisional product default, not a clinical rule:** a new lab order warns when the same patient has an ACTIVE order (ORDERED, PENDING, COLLECTED, RECEIVED, IN_PROGRESS) of the same test (definition id or test code) at the same hospital placed in the last 24 h (`LabOrderDuplicateCheck.WINDOW`, `ACTIVE`). It warns, never blocks. Confirm the window and the status set with the lab and clinical owners; the portal text says "24 hours" too.
+- **Acknowledgement lives on the audit trail, not a column:** "Order anyway" is recorded as `LAB_ORDER_DUPLICATE_PLACED` (acknowledged or not) on the order's audit trail; the order row has no flag, so a later GET does not show it was a duplicate. A `duplicate_acknowledged` / `duplicate_reference_order_id` pair on `lab.lab_orders` (a migration) would put it on the order itself, as imaging has.
+- **Duplicate warning, other entry points:** an order set (`OrderSetItemDispatcher`) and a reflex order are checked and recorded server-side, but the order-set apply screen shows no warning before applying; an edit that changes the test is not re-checked.
+- **Panels (D1618):** a panel and its member tests do not match each other; revisit when panels exist.
