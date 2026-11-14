@@ -87,6 +87,22 @@ public class LabResultReleaseNotifier {
     }
 
     /**
+     * QA D1912 (round 53): a voided order's results leave every patient view,
+     * but the "new result available" notifications stayed, so the patient
+     * looked for a result that no longer exists. They are withdrawn with the
+     * result, in the void's transaction; nothing new is written, so no
+     * clinical detail is sent. A patient with no portal account is a no-op.
+     */
+    public void patientResultsWithdrawn(LabOrder order, java.util.Collection<UUID> resultIds) {
+        Patient patient = order != null ? order.getPatient() : null;
+        User portalUser = patient != null ? patient.getUser() : null;
+        if (portalUser == null || resultIds == null || resultIds.isEmpty()) {
+            return;
+        }
+        notificationService.withdrawForSubjects(portalUser.getUsername(), NOTIFICATION_TYPE, resultIds);
+    }
+
+    /**
      * Tell the ordering clinician that {@code correction}, now released,
      * replaces {@code superseded}. Call it inside the release transaction.
      */

@@ -186,4 +186,25 @@ class LabResultReleaseNotifierTest {
         assertThat(localizer.render("lab.result.correction.notification", stored, java.util.Locale.ENGLISH))
             .contains("10.4 g/dL").contains("6.5 g/dL");
     }
+
+    @Test
+    @DisplayName("QA D1912 — a voided order withdraws the patient's own LAB_RESULT notifications, writing nothing new")
+    void d1912_aVoidWithdrawsThePatientsNotifications() {
+        LabResult result = released("1.45", "g/L");
+
+        notifier.patientResultsWithdrawn(order, List.of(result.getId()));
+
+        verify(notificationService).withdrawForSubjects("awa.patient", "LAB_RESULT", List.of(result.getId()));
+        verify(notificationService, never()).createNotification(anyString(), any(), anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("QA D1912 — no portal account, nothing to withdraw")
+    void d1912_noPortalAccountIsANoOp() {
+        order.getPatient().setUser(null);
+
+        notifier.patientResultsWithdrawn(order, List.of(UUID.randomUUID()));
+
+        verifyNoInteractions(notificationService);
+    }
 }

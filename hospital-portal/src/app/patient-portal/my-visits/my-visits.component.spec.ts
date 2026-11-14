@@ -26,6 +26,7 @@ describe('MyVisitsComponent', () => {
       department: 'Cardiologie',
       chiefComplaint: '',
       diagnosisSummary: '',
+      notePendingSignature: false,
       status: '',
       notes: '',
       hospitalName: 'CHU Yalgado',
@@ -62,6 +63,8 @@ describe('MyVisitsComponent', () => {
           DEPARTMENT: 'Service',
           CHIEF_COMPLAINT: 'Motif',
           HOSPITAL_NAME_LABEL: 'Établissement',
+          ASSESSMENT: 'Évaluation du médecin',
+          PENDING_SIGNATURE: 'Non finalisé — en attente de signature du praticien',
         },
       },
     });
@@ -104,6 +107,16 @@ describe('MyVisitsComponent', () => {
     (host().querySelector('.portal-list-item') as HTMLElement).click();
     fixture.detectChanges();
     expect(host().querySelector('.detail-panel')).toBeNull();
+  });
+
+  it('QA D1910: a visit whose note awaits signature reads "not finalised", never a draft', () => {
+    create([visit({ notePendingSignature: true })]);
+    (host().querySelector('.portal-list-item') as HTMLElement).click();
+    fixture.detectChanges();
+    expect(texts('.detail-panel .dl')).toContain('Évaluation du médecin');
+    expect(texts('.detail-panel .dv')).toContain(
+      'Non finalisé — en attente de signature du praticien',
+    );
   });
 
   it('opens from the keyboard', () => {

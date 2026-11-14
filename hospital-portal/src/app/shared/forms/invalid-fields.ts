@@ -109,6 +109,7 @@ export function refuseFields(
       }
       msg.textContent = reason;
       others.push(msgId);
+      clearWhenFilled(root, el);
     } else {
       el.removeAttribute('aria-invalid');
       msg?.remove();
@@ -117,6 +118,48 @@ export function refuseFields(
     else el.removeAttribute('aria-describedby');
   }
   return focusFirstInvalid(root, ids);
+}
+
+/** The fields that already clear their own mark (one listener pair each). */
+const clearing = new WeakSet<HTMLElement>();
+
+/** Whether a form control holds no value (an unticked box, a blank text, an unchosen option). */
+function isBlankControl(el: HTMLElement): boolean {
+  if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
+    return !el.checked;
+  }
+  if (
+    el instanceof HTMLInputElement ||
+    el instanceof HTMLSelectElement ||
+    el instanceof HTMLTextAreaElement
+  ) {
+    return el.value.trim() === '';
+  }
+  return false;
+}
+
+/**
+ * QA D1913 (round 53): a refused field kept its "Ce champ est obligatoire."
+ * once it was filled, until the next submit. The mark now leaves as soon as
+ * the reader gives the field a value; the next submit checks it again. A
+ * field the reader empties again keeps no mark until then either.
+ */
+function clearWhenFilled(root: ParentNode, el: HTMLElement): void {
+  if (clearing.has(el)) return;
+  clearing.add(el);
+  const clear = (): void => {
+    if (el.getAttribute('aria-invalid') !== 'true' || isBlankControl(el)) return;
+    const msgId = invalidMessageId(el.id);
+    el.removeAttribute('aria-invalid');
+    root.querySelector<HTMLElement>(`#${CSS.escape(msgId)}`)?.remove();
+    const others = (el.getAttribute('aria-describedby') ?? '')
+      .split(/\s+/)
+      .filter((t) => t !== '' && t !== msgId);
+    if (others.length > 0) el.setAttribute('aria-describedby', others.join(' '));
+    else el.removeAttribute('aria-describedby');
+  };
+  el.addEventListener('input', clear);
+  el.addEventListener('change', clear);
 }
 
 /** A refused field and the reason shown under it (already translated). */

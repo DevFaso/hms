@@ -26,6 +26,14 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
     @Query("UPDATE Notification n SET n.read = true WHERE n.subjectId = :subjectId AND n.type IN :types AND n.read = false")
     int markReadForSubject(@Param("subjectId") java.util.UUID subjectId,
                            @Param("types") java.util.Collection<String> types);
+
+    /** QA D1912: removes one recipient's notifications of {@code type} about any of {@code subjectIds}. */
+    @Modifying
+    @Query("DELETE FROM Notification n WHERE n.recipientUsername = :username AND n.type = :type"
+        + " AND n.subjectId IN :subjectIds")
+    int deleteForRecipientAndSubjects(@Param("username") String username, @Param("type") String type,
+                                      @Param("subjectIds") java.util.Collection<java.util.UUID> subjectIds);
+
     List<Notification> findByRecipientUsernameAndReadOrderByCreatedAtDesc(String recipientUsername, boolean read);
 
     List<Notification> findByRecipientUsernameAndMessageContainingIgnoreCaseOrderByCreatedAtDesc(String recipientUsername, String search);

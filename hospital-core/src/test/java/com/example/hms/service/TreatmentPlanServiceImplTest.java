@@ -467,6 +467,20 @@ class TreatmentPlanServiceImplTest {
         assertThat(result.getContent()).hasSize(1);
     }
 
+    @Test
+    void d1910_thePatientReadsApprovedPlansOnly() {
+        // QA D1910 class (round 53): the patient read the author's draft and in-review plans.
+        Pageable pageable = PageRequest.of(0, 10);
+        when(treatmentPlanRepository.findAllByPatientIdAndStatusIn(patientId,
+                java.util.EnumSet.of(com.example.hms.enums.TreatmentPlanStatus.APPROVED), pageable))
+            .thenReturn(new PageImpl<>(List.of(plan)));
+        when(treatmentPlanMapper.toResponseDTO(plan)).thenReturn(responseDTO);
+
+        assertThat(service.listForPortalPatient(patientId, pageable).getContent()).hasSize(1);
+        org.mockito.Mockito.verify(treatmentPlanRepository, org.mockito.Mockito.never())
+            .findAllByPatientId(any(), any());
+    }
+
     // ---- listByHospital ----
 
     @Test
