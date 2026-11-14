@@ -674,6 +674,25 @@ class ImagingOrderServiceImplTest {
         assertThat(order.getCancelledAt()).isNull();
     }
 
+    /** r44: the study's completion is recorded when the order is marked done, and only then. */
+    @Test
+    void updateOrderStatusToCompletedRecordsTheCompletionTime_r44() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setStatus(ImagingOrderStatus.IN_PROGRESS);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+        when(imagingOrderMapper.toResponseDTO(order)).thenReturn(ImagingOrderResponseDTO.builder().id(orderId).build());
+
+        imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.SCHEDULED).build());
+        assertThat(order.getCompletedAt()).isNull();
+
+        imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.COMPLETED).build());
+        assertThat(order.getCompletedAt()).isNotNull().isEqualTo(order.getStatusUpdatedAt());
+    }
+
     /** QA D1098 (round 19): a resulted order is closed to a cancel and to a step back. */
     @Test
     void updateOrderStatus_refusesToCancelOrResetAResultedOrder_D1098() {

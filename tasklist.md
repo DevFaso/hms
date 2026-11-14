@@ -6528,6 +6528,14 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Visit summary cards show the day only (D1760 sibling):** "Mes résumés" and the staff lists now come newest first, but a card shows "NOV. 13" with no time, so two same-day visits still look alike.
 - **D1762 sweep, CHECK constraints on enum-like columns:** every single-column allowed-values CHECK on an enum column now allows every constant (EntitySchemaValidationIT.everyEnumColumnCheckAllowsEveryConstant, on Postgres); no other drift found. `obstetric_alert_escalations.source_type` is the only such CHECK on a String column, guarded by ObstetricAlertEscalationSourceTypeGuardTest. Multi-column or negated CHECKs are not read by the guard.
 
+## Standing debt and proposals — imaging screens (fix/imaging-ui)
+- **Proposal, image viewer link (DICOMweb):** open the study from the report through a DICOMweb/OHIF viewer (the report already carries `studyInstanceUid` and `pacsViewerUrl`, but no viewer is configured).
+- **Proposal, comparison with prior studies:** list the patient's earlier studies of the same region and modality next to the report, so the reader can compare.
+- **Proposal, technique, contrast and dose fields:** show and capture technique, contrast agent and radiation dose (`radiationDoseMgy`) as structured fields on the report drawer.
+- **Proposal, acknowledgement by the ordering clinician:** let the ordering clinician mark a signed result as read (today only a critical finding is acknowledged).
+- **Proposal, role separation:** separate who may order, interpret and sign an imaging study, so the reader and the signer are distinct roles where the hospital wants it.
+- **Laterality "not recorded" (decision):** an order with no laterality cannot be told apart from one where laterality does not apply (thorax); the drawer now hides NOT_APPLICABLE and reads "Non renseignée" for a blank. Making the order form default a midline region to NOT_APPLICABLE needs a body-region vocabulary.
+- **Numeric short dates elsewhere (D1575 class):** about 115 `date: 'short'` sites remain outside the imaging screens; the imaging guard (`scripts/lib/imaging-screens.test.mjs`) covers imaging only.
 ## Standing debt — lab requests UI (fix/lab-requests-ui)
 - **Several tests in one order or a panel (D1618, no lab panels):** each lab order holds one test, so a CBC plus a glucose ordered together read as two unrelated rows; grouping them under one request (or a panel definition) is not built.
 - **Specimen barcode printing:** the specimen label PDF (`GET /lab-specimens/{id}/label.pdf`) prints only a QR of `barcodeValue`; a linear barcode for analyser and reception scanners, and a scan-in that reads it back, are not built.

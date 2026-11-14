@@ -246,6 +246,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         com.example.hms.model.User actor = actorId == null ? null : userRepository.findById(actorId).orElse(null);
         order.setStatusUpdatedAt(LocalDateTime.now());
         order.setStatusUpdatedBy(actorId);
+        if (RESULTED_STATES.contains(request.getStatus())) {
+            // r44: the order drawer's "Completed at" was never filled.
+            order.markCompletedAt(order.getStatusUpdatedAt());
+        }
 
         if (cancelling) {
             order.setCancellationReason(cancellationReason);
