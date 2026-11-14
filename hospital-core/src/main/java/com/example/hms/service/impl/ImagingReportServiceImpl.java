@@ -2,6 +2,7 @@ package com.example.hms.service.impl;
 
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.enums.ImagingOrderStatus;
+import com.example.hms.enums.ImagingReportHistoryEvent;
 import com.example.hms.enums.ImagingReportStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.FieldBusinessException;
@@ -139,7 +140,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         report.setUpdatedBy(actor);
 
         ImagingReport saved = imagingReportRepository.save(report);
-        appendStatusHistory(saved, saved.getReportStatus(), "Report authored", currentStaff(hospital), null);
+        appendStatusHistory(saved, saved.getReportStatus(), ImagingReportHistoryEvent.AUTHORED.storedText(), currentStaff(hospital), null);
         saved = imagingReportRepository.save(saved);
         // Item 27: raising the flag is what calls someone. Best-effort by
         // contract — a notification failure must not roll back the report.
@@ -253,12 +254,12 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         report.setSignatureValue(computeSignatureDigest(canonicalSignaturePayload(report, signedAt)));
         report.setUpdatedBy(roleValidator.getCurrentUserId());
 
-        appendStatusHistory(report, ImagingReportStatus.FINAL, "Report signed", signer, null);
+        appendStatusHistory(report, ImagingReportStatus.FINAL, ImagingReportHistoryEvent.SIGNED.storedText(), signer, null);
 
         // Close the loop for the ordering clinician: a signed read is what
         // makes results available. Without this the order sits at COMPLETED
         // forever and the requester has no signal that the read landed.
-        promoteOrderToResultsAvailable(report.getImagingOrder());
+        promoteOrderToResultsAvailable(report.getImagingOrder(), report);
 
         ImagingReport saved = imagingReportRepository.save(report);
         // Backstop for the case that matters most: a critical finding flagged
@@ -289,7 +290,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         report.setCriticalResultAcknowledgedAt(LocalDateTime.now());
         report.setUpdatedBy(roleValidator.getCurrentUserId());
 
-        appendStatusHistory(report, report.getReportStatus(), "Critical finding acknowledged", acknowledger, null);
+        appendStatusHistory(report, report.getReportStatus(), ImagingReportHistoryEvent.CRITICAL_ACKNOWLEDGED.storedText(), acknowledger, null);
 
         return imagingReportMapper.toResponseDTO(imagingReportRepository.save(report));
     }
@@ -563,19 +564,40 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
     }
 
-    private void promoteOrderToResultsAvailable(ImagingOrder order) {
+    private void promoteOrderToResultsAvailable(ImagingOrder order, ImagingReport signedReport) {
         if (order == null) {
             return;
         }
         ImagingOrderStatus status = order.getStatus();
+        if (status == ImagingOrderStatus.CANCELLED) {
+            return;
+        }
+        // r44: a signed read means the study is done. The order's completion
+        // time is the study's own (completed, else performed) when the report
+        // records it, else the signature; one already recorded is kept.
+        boolean completionRecorded = order.getCompletedAt() == null;
+        order.markCompletedAt(firstNonNull(signedReport.getCompletedAt(),
+            signedReport.getPerformedAt(), signedReport.getSignedAt()));
         // Never walk a terminal order backwards into an active state.
-        if (status == ImagingOrderStatus.CANCELLED || status == ImagingOrderStatus.RESULTS_AVAILABLE) {
+        if (status == ImagingOrderStatus.RESULTS_AVAILABLE) {
+            if (completionRecorded) {
+                imagingOrderRepository.save(order);
+            }
             return;
         }
         order.setStatus(ImagingOrderStatus.RESULTS_AVAILABLE);
         order.setStatusUpdatedAt(LocalDateTime.now());
         order.setStatusUpdatedBy(roleValidator.getCurrentUserId());
         imagingOrderRepository.save(order);
+    }
+
+    private static LocalDateTime firstNonNull(LocalDateTime... candidates) {
+        for (LocalDateTime candidate : candidates) {
+            if (candidate != null) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private Organization resolveOrganization(Hospital hospital) {

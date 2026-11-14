@@ -47,4 +47,18 @@ public interface ObstetricAlertEscalationRepository extends JpaRepository<Obstet
 
     /** Whether this alert of this record was ever escalated, open or closed (a correction never replays it). */
     boolean existsBySourceTypeAndSourceIdAndAlertMessageKey(String sourceType, UUID sourceId, String alertMessageKey);
+
+    /**
+     * QA D1801: the escalations of one source and alert sentence that nobody has acknowledged or closed, so a
+     * re-raised alert can replace them instead of escalating beside them.
+     */
+    @Query("""
+        SELECT e FROM ObstetricAlertEscalation e
+        WHERE e.hospitalId = :hospitalId AND e.sourceType = :sourceType AND e.sourceId = :sourceId
+          AND e.alertMessageKey = :messageKey AND e.acknowledgedAt IS NULL
+        """)
+    List<ObstetricAlertEscalation> findOpenBySourceAndMessageKey(@Param("hospitalId") UUID hospitalId,
+                                                                 @Param("sourceType") String sourceType,
+                                                                 @Param("sourceId") UUID sourceId,
+                                                                 @Param("messageKey") String messageKey);
 }

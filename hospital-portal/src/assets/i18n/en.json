@@ -3586,8 +3586,10 @@
     "BODY_REGION": "Body Region",
     "BODY_REGION_PLACEHOLDER": "e.g. Chest",
     "CANCELLED": "Cancelled",
+    "CANCELLED_ORDERS": "Cancelled",
     "CANCELLING": "Cancelling...",
     "CANCEL_ORDER": "Cancel Order",
+    "CLEAR_DATES": "Clear dates",
     "CLINICAL_QUESTION": "Clinical Question",
     "CLOSE_DETAIL": "Close detail",
     "COMPARISON": "Comparison studies",
@@ -3607,6 +3609,8 @@
     "CRITICAL_ONLY": "Critical only",
     "CRITICAL_UNACKED": "Critical result — acknowledgement required",
     "CT_SCAN": "CT Scan",
+    "DATE_FROM": "Ordered from",
+    "DATE_TO": "Ordered until",
     "EDIT_ORDER": "Edit Order",
     "EDIT_REPORT": "Edit report",
     "FINDINGS": "Findings",
@@ -3621,6 +3625,7 @@
     "LATERALITY_LEFT": "Left",
     "LATERALITY_MIDLINE": "Midline",
     "LATERALITY_NOT_APPLICABLE": "N/A",
+    "LATERALITY_NOT_RECORDED": "Not recorded",
     "LATERALITY_RIGHT": "Right",
     "LOADING": "Loading imaging orders...",
     "MEASUREMENT": "Measurement",
@@ -3691,7 +3696,7 @@
     "SCHEDULED": "Scheduled",
     "SEARCH": "Search imaging...",
     "SEARCH_PATIENT_PLACEHOLDER": "Search patient...",
-    "SEARCH_PLACEHOLDER": "Search...",
+    "SEARCH_PLACEHOLDER": "Search patient, MRN or study…",
     "SELECT_HOSPITAL": "Select hospital",
     "SELECT_MODALITY": "Select modality",
     "SELECT_PRIORITY": "Select priority",
@@ -3699,8 +3704,10 @@
     "SHOW_ALL": "Show All",
     "SHOW_CANCELLED": "Show Cancelled",
     "SHOW_COMPLETED": "Show Completed",
+    "SIGNATURE_FINGERPRINT": "Signature fingerprint",
+    "SIGNATURE_FINGERPRINT_HINT": "Technical proof that the signed text has not changed since signing.",
     "SIGNED_BY": "Signed by",
-    "SIGNED_LOCKED": "Signed and locked. Digest",
+    "SIGNED_LOCKED": "Signed and locked",
     "SIGNED_UNVERIFIABLE": "signed outside this system — no digest on record",
     "SIGN_CONFIRM": "Signing is final and closes this report to edits. Corrections must be filed as a new version. Continue?",
     "SIGN_REPORT": "Sign",
@@ -3864,7 +3871,44 @@
       "REJECTED_ON_ORDER": "Specimen rejected by the laboratory: a new sample is needed",
       "TITLE": "Reject the specimen"
     },
-    "SPECIMEN_ORDER_CLOSED": "This order already has a result or is cancelled: it takes no new specimen. A repeat test is a new order."
+    "SPECIMEN_ORDER_CLOSED": "This order already has a result or is cancelled: it takes no new specimen. A repeat test is a new order.",
+    "PRESCRIBER": "Prescriber",
+    "MRN": "MRN",
+    "VIEW_FULL_RESULT": "View full result",
+    "TURNAROUND": "Turnaround time",
+    "TAT_MINUTES": "{{minutes}} min",
+    "TAT_HOURS_MINUTES": "{{hours}} h {{minutes}} min",
+    "TAT_DAYS_HOURS": "{{days}} d {{hours}} h",
+    "AGE_DAY": "{{count}} day",
+    "AGE_DAYS": "{{count}} days",
+    "AGE_MONTH": "{{count}} month",
+    "AGE_MONTHS": "{{count}} months",
+    "AGE_YEARS": "{{count}} years",
+    "STATE": {
+      "TO_COLLECT": "Awaiting collection",
+      "COLLECTED": "Collected",
+      "IN_ANALYSIS": "In analysis",
+      "AWAITING_VALIDATION": "Awaiting validation",
+      "COMPLETED": "Completed",
+      "CANCELLED": "Cancelled",
+      "ENTERED_IN_ERROR": "Entered in error"
+    },
+    "STATE_GROUP": {
+      "OPEN": "In progress",
+      "OPEN_HINT": "Requests awaiting collection, in analysis or awaiting validation",
+      "COMPLETED": "Completed",
+      "COMPLETED_HINT": "Requests whose results are all validated",
+      "CANCELLED": "Cancelled"
+    },
+    "TIMELINE": {
+      "TITLE": "Specimen and timeline",
+      "ORDERED": "Ordered",
+      "COLLECTED": "Collected",
+      "RECEIVED": "Received at the laboratory",
+      "RESULTED": "Result entered",
+      "VALIDATED": "Validated"
+    },
+    "LINKED_ORDER_NOT_FOUND": "This lab request was not found, or you cannot see it from this hospital."
   },
   "LAB_STAFF": {
     "TITLE": "Lab Staff Management",
@@ -6468,7 +6512,7 @@
         "ORDERED": "Ordered",
         "PENDING": "Pending",
         "RECEIVED": "Received",
-        "RESULTED": "Resulted",
+        "RESULTED": "Awaiting validation",
         "VERIFIED": "Verified",
         "ENTERED_IN_ERROR": "Entered in error"
       },
@@ -7447,6 +7491,11 @@
         "DNR": "Do not resuscitate (DNR)",
         "DNI": "Do not intubate (DNI)",
         "COMFORT_ONLY": "Comfort care only"
+      },
+      "IMAGING_REPORT_HISTORY_EVENT": {
+        "AUTHORED": "Report written",
+        "SIGNED": "Report signed",
+        "CRITICAL_ACKNOWLEDGED": "Critical finding acknowledged"
       }
     },
     "DOCUMENTS": {

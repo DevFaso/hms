@@ -361,7 +361,7 @@ describe('PatientChartComponent — labs section', () => {
 
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('LAB-0001');
-    expect(text).toContain('Resulted');
+    expect(text).toContain('Awaiting validation');
   });
 
   it('says the orders block is scoped to this hospital, because the results block is not', () => {

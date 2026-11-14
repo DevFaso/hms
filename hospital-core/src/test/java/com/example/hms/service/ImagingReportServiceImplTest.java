@@ -3,6 +3,7 @@ package com.example.hms.service;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.enums.ImagingOrderStatus;
+import com.example.hms.enums.ImagingReportHistoryEvent;
 import com.example.hms.enums.ImagingReportStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -15,6 +16,7 @@ import com.example.hms.model.Organization;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.imaging.ImagingReportResponseDTO;
+import com.example.hms.payload.dto.imaging.ImagingReportStatusDTO;
 import com.example.hms.payload.dto.imaging.ImagingReportStatusUpdateRequestDTO;
 import com.example.hms.payload.dto.imaging.ImagingReportUpsertRequestDTO;
 import com.example.hms.repository.DepartmentRepository;
@@ -341,6 +343,69 @@ class ImagingReportServiceImplTest {
         assertThat(report.getSignatureValue()).hasSize(64).matches("[0-9a-f]+");
         // The ordering clinician's signal that the read landed.
         assertThat(imagingOrder.getStatus()).isEqualTo(ImagingOrderStatus.RESULTS_AVAILABLE);
+    }
+
+    /**
+     * r44: the order drawer read "Terminée le —" on a RESULTS_AVAILABLE order
+     * whose report was signed at 08:07. Signing fills the order's completion
+     * time: the study's own when the report records it, else the signature.
+     */
+    @Test
+    void signFillsTheOrdersCompletionTime_r44() {
+        ImagingReport report = persistedReport();
+        report.setImpression("Normal chest.");
+        imagingOrder.setStatus(ImagingOrderStatus.IN_PROGRESS);
+
+        imagingReportService.signReport(reportId);
+
+        assertThat(imagingOrder.getStatus()).isEqualTo(ImagingOrderStatus.RESULTS_AVAILABLE);
+        assertThat(imagingOrder.getCompletedAt()).isNotNull().isEqualTo(report.getSignedAt());
+    }
+
+    @Test
+    void signUsesTheStudysRecordedCompletionAndKeepsOneAlreadyRecorded_r44() {
+        ImagingReport report = persistedReport();
+        report.setImpression("Normal chest.");
+        LocalDateTime performed = LocalDateTime.of(2026, 11, 13, 7, 40);
+        report.setPerformedAt(performed);
+
+        imagingReportService.signReport(reportId);
+        assertThat(imagingOrder.getCompletedAt()).isEqualTo(performed);
+
+        // An addendum signed later on the resulted order moves nothing.
+        ImagingReport addendum = persistedReport();
+        addendum.setImpression("Addendum.");
+        imagingReportService.signReport(reportId);
+        assertThat(imagingOrder.getCompletedAt()).isEqualTo(performed);
+    }
+
+    @Test
+    void signRecordsAMissingCompletionOnAnAlreadyResultedOrder_r44() {
+        ImagingReport report = persistedReport();
+        report.setImpression("Normal chest.");
+        imagingOrder.setStatus(ImagingOrderStatus.RESULTS_AVAILABLE);
+
+        imagingReportService.signReport(reportId);
+
+        assertThat(imagingOrder.getCompletedAt()).isEqualTo(report.getSignedAt());
+        verify(imagingOrderRepository).save(imagingOrder);
+    }
+
+    /** r44 (D1574 class): the history carries a code the portal translates, not English. */
+    @Test
+    void historyRowsTheServerWritesCarryAnEventCode_r44() {
+        ImagingReport report = persistedReport();
+        report.setImpression("Normal chest.");
+
+        imagingReportService.signReport(reportId);
+        ImagingReportResponseDTO signed = new ImagingReportMapper().toResponseDTO(report);
+
+        assertThat(signed.getStatusHistory())
+            .extracting(ImagingReportStatusDTO::getEventCode)
+            .contains(ImagingReportHistoryEvent.SIGNED);
+        assertThat(ImagingReportHistoryEvent.fromStoredText("Report authored"))
+            .isEqualTo(ImagingReportHistoryEvent.AUTHORED);
+        assertThat(ImagingReportHistoryEvent.fromStoredText("Duplicate study")).isNull();
     }
 
     @Test

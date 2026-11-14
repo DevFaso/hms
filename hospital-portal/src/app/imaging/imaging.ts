@@ -15,6 +15,7 @@ import {
   ImagingService,
   ImagingOrderResponse,
   ImagingOrderRequest,
+  ImagingOrderStatus,
   ImagingModality,
   ImagingPriority,
   ImagingLaterality,
@@ -43,6 +44,7 @@ import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { serverLocalDate } from '../shared/date-utils';
 
 /** The cancellation reason's field (QA D1098), marked when it is refused. */
 const CANCEL_REASON_ID = 'imaging-cancel-reason';
@@ -79,6 +81,23 @@ interface ReportForm {
   criticalFinding: boolean;
   reportStatus: AuthorableReportStatus;
 }
+
+/** The orders view's tabs. */
+export type ImagingOrderTab = 'all' | 'ordered' | 'completed' | 'cancelled';
+
+/**
+ * r44: the one bucketing the tabs, the stat cards and the rows share. The
+ * cards counted ORDERED/SCHEDULED/IN_PROGRESS as "active" while a DRAFT or
+ * PENDING_AUTHORIZATION order belonged to no tab but "All", so two rows
+ * showed as 0 active and 1 completed.
+ */
+export const IMAGING_ORDER_TAB_STATUSES: Readonly<
+  Record<Exclude<ImagingOrderTab, 'all'>, readonly ImagingOrderStatus[]>
+> = {
+  ordered: ['DRAFT', 'ORDERED', 'PENDING_AUTHORIZATION', 'SCHEDULED', 'IN_PROGRESS'],
+  completed: ['COMPLETED', 'RESULTS_AVAILABLE'],
+  cancelled: ['CANCELLED'],
+};
 
 /** The new-order form: each request field's element id (QA D1156). */
 const ORDER_FIELD_IDS: Readonly<Record<string, string>> = {
@@ -143,7 +162,12 @@ export class ImagingComponent implements OnInit {
   filtered = signal<ImagingOrderResponse[]>([]);
   loading = signal(true);
   searchTerm = '';
-  activeTab = signal<'all' | 'ordered' | 'completed' | 'cancelled'>('all');
+  /** r44: the ordered-on range (yyyy-MM-dd, the reader's calendar), '' = open. */
+  dateFrom = '';
+  dateTo = '';
+  /** The orders the search and the dates keep, before the tab: what the cards count. */
+  readonly matched = signal<ImagingOrderResponse[]>([]);
+  activeTab = signal<ImagingOrderTab>('all');
   selectedOrder = signal<ImagingOrderResponse | null>(null);
   selectedOrderReports = signal<ImagingReportResponse[]>([]);
 
@@ -497,30 +521,71 @@ export class ImagingComponent implements OnInit {
     });
   }
 
-  setTab(tab: 'all' | 'ordered' | 'completed' | 'cancelled'): void {
+  setTab(tab: ImagingOrderTab): void {
     this.activeTab.set(tab);
     this.applyFilter();
   }
 
+  /** r44: search (patient name, MRN, study, region, modality) and the ordered-on range. */
   applyFilter(): void {
     let list = this.orders();
-    const tab = this.activeTab();
-    if (tab === 'ordered')
-      list = list.filter((o) => ['ORDERED', 'SCHEDULED', 'IN_PROGRESS'].includes(o.status));
-    else if (tab === 'completed')
-      list = list.filter((o) => ['COMPLETED', 'RESULTS_AVAILABLE'].includes(o.status));
-    else if (tab === 'cancelled') list = list.filter((o) => o.status === 'CANCELLED');
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
       list = list.filter(
         (o) =>
           textMatches(o.patientDisplayName, term) ||
+          (o.patientMrn ?? '').toLowerCase().includes(term) ||
           (o.studyType ?? '').toLowerCase().includes(term) ||
           (o.bodyRegion ?? '').toLowerCase().includes(term) ||
           (o.modality ?? '').toLowerCase().includes(term),
       );
     }
-    this.filtered.set(list);
+    if (this.dateFrom || this.dateTo) {
+      list = list.filter((o) => {
+        const day = serverLocalDate(o.orderedAt);
+        return (
+          !!day && (!this.dateFrom || day >= this.dateFrom) && (!this.dateTo || day <= this.dateTo)
+        );
+      });
+    }
+    this.matched.set(list);
+    const tab = this.activeTab();
+    this.filtered.set(tab === 'all' ? list : list.filter((o) => this.inTab(o, tab)));
+  }
+
+  clearDates(): void {
+    this.dateFrom = '';
+    this.dateTo = '';
+    this.applyFilter();
+  }
+
+  private inTab(o: ImagingOrderResponse, tab: Exclude<ImagingOrderTab, 'all'>): boolean {
+    return IMAGING_ORDER_TAB_STATUSES[tab].includes(o.status);
+  }
+
+  /**
+   * r44: "Planifié" with its time when one was set. The date alone is a
+   * calendar date (mediumDate); with a time it is a wall time (dateTime).
+   */
+  scheduledAt(o: ImagingOrderResponse): { scheduledAt: Date; withTime: boolean } | null {
+    const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(o.scheduledDate ?? '');
+    if (!day) return null;
+    // A clinic wall time (LocalDate + typed time), never a server instant.
+    const time = /^(\d{2}):(\d{2})/.exec((o.scheduledTime ?? '').trim());
+    const [y, m, d] = [Number(day[1]), Number(day[2]) - 1, Number(day[3])];
+    return time
+      ? { scheduledAt: new Date(y, m, d, Number(time[1]), Number(time[2])), withTime: true }
+      : { scheduledAt: new Date(y, m, d), withTime: false };
+  }
+
+  /** r44: a laterality the orderer marked not applicable is not shown at all. */
+  lateralityApplies(o: ImagingOrderResponse): boolean {
+    return o.laterality !== 'NOT_APPLICABLE';
+  }
+
+  /** r44: "Completed at" only applies once the study is done. */
+  isResulted(o: ImagingOrderResponse): boolean {
+    return IMAGING_ORDER_TAB_STATUSES.completed.includes(o.status);
   }
 
   viewDetail(o: ImagingOrderResponse): void {
@@ -574,13 +639,15 @@ export class ImagingComponent implements OnInit {
     }
   }
 
+  /** r44: each card counts exactly the rows its tab shows. */
   readonly activeOrderCount = computed(
-    () =>
-      this.orders().filter((o) => ['ORDERED', 'SCHEDULED', 'IN_PROGRESS'].includes(o.status))
-        .length,
+    () => this.matched().filter((o) => this.inTab(o, 'ordered')).length,
   );
   readonly completedOrderCount = computed(
-    () => this.orders().filter((o) => ['COMPLETED', 'RESULTS_AVAILABLE'].includes(o.status)).length,
+    () => this.matched().filter((o) => this.inTab(o, 'completed')).length,
+  );
+  readonly cancelledOrderCount = computed(
+    () => this.matched().filter((o) => this.inTab(o, 'cancelled')).length,
   );
 
   /* ── Results ── */

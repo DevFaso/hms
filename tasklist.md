@@ -6528,9 +6528,28 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Visit summary cards show the day only (D1760 sibling):** "Mes résumés" and the staff lists now come newest first, but a card shows "NOV. 13" with no time, so two same-day visits still look alike.
 - **D1762 sweep, CHECK constraints on enum-like columns:** every single-column allowed-values CHECK on an enum column now allows every constant (EntitySchemaValidationIT.everyEnumColumnCheckAllowsEveryConstant, on Postgres); no other drift found. `obstetric_alert_escalations.source_type` is the only such CHECK on a String column, guarded by ObstetricAlertEscalationSourceTypeGuardTest. Multi-column or negated CHECKs are not read by the guard.
 
+## Standing debt and proposals — imaging screens (fix/imaging-ui)
+- **Proposal, image viewer link (DICOMweb):** open the study from the report through a DICOMweb/OHIF viewer (the report already carries `studyInstanceUid` and `pacsViewerUrl`, but no viewer is configured).
+- **Proposal, comparison with prior studies:** list the patient's earlier studies of the same region and modality next to the report, so the reader can compare.
+- **Proposal, technique, contrast and dose fields:** show and capture technique, contrast agent and radiation dose (`radiationDoseMgy`) as structured fields on the report drawer.
+- **Proposal, acknowledgement by the ordering clinician:** let the ordering clinician mark a signed result as read (today only a critical finding is acknowledged).
+- **Proposal, role separation:** separate who may order, interpret and sign an imaging study, so the reader and the signer are distinct roles where the hospital wants it.
+- **Laterality "not recorded" (decision):** an order with no laterality cannot be told apart from one where laterality does not apply (thorax); the drawer now hides NOT_APPLICABLE and reads "Non renseignée" for a blank. Making the order form default a midline region to NOT_APPLICABLE needs a body-region vocabulary.
+- **Numeric short dates elsewhere (D1575 class):** about 115 `date: 'short'` sites remain outside the imaging screens; the imaging guard (`scripts/lib/imaging-screens.test.mjs`) covers imaging only.
+## Standing debt — lab requests UI (fix/lab-requests-ui)
+- **Several tests in one order or a panel (D1618, no lab panels):** each lab order holds one test, so a CBC plus a glucose ordered together read as two unrelated rows; grouping them under one request (or a panel definition) is not built.
+- **Specimen barcode printing:** the specimen label PDF (`GET /lab-specimens/{id}/label.pdf`) prints only a QR of `barcodeValue`; a linear barcode for analyser and reception scanners, and a scan-in that reads it back, are not built.
+- **Duplicate lab orders are not flagged at ordering (LAB-000023 to 025):** the only check (`LabOrderServiceImpl`, `existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime`) refuses an exact same-timestamp repeat, and the portal sends no `orderDatetime` (the server stamps now), so it never fires; there is no CDS order-select rule for lab tests either. Add a non-blocking warning for the same patient and test still open (or ordered in the last N minutes), with the window set by the clinical owners.
+- **Fasting status for "à jeun" tests:** no entity records whether a test needs fasting or whether the patient fasted (not on the test definition, the order or the specimen), so the drawer cannot show it. Needs a field on the definition (requires fasting) and on the specimen (fasted yes/no) first.
+- **Diagnosis labels:** the drawer labels an order's diagnosis code only from the patient's own diagnosis recorded under that code at the ordering hospital; there is no ICD-10 catalogue to label any other code.
+- **Lab orders list N+1:** the list now reads each row's ordering staff, its user and the patient's hospital registrations lazily; fetch-join them in `findHandledBy` if the list grows slow.
 ## Standing debt — AVS polish (feat/avs-polish)
 - **Checkout preview has no print button:** the staff dialog and "Mes résumés" print the shared summary document (print-only.ts); the checkout dialog's preview shows the same document but cannot print it yet.
 - **Follow-up booking found by day on a later read:** a checkout passes the booked appointment's id; a later read of the summary finds the patient's live appointment at the visit's hospital on the follow-up day booked after the checkout, since the appointment keeps no link to the visit. A source-encounter column would make it exact.
+
+## Questions for the obstetric lead (r50, #1144 follow-ups)
+- **D1802, stillborn to live correction vs a stillbirth death certificate:** should a correction of a baby from stillborn to live be refused, or only warned, while a death record still declares that baby's stillbirth, and which record wins in the register (decision needed; no code changed)?
+- **Neonatal alerts on stillborn babies:** should the Apgar-critical "neonatal resuscitation" and preterm "neonatal team" URGENT alerts still fire, and escalate to the nurse, when every baby of the delivery is stillborn (decision needed; no code changed)?
 
 ## Standing debt — stillbirth certificate conflicts and neonatal alerts (feat/stillbirth-conflict-and-alerts)
 - **D1802 and the neonatal alerts on stillborn babies:** decided 2026-11-14, provisional; see approvals register. "Sign of life" for the conflict check = an Apgar above 0, a heart rate or a respiratory rate recorded for that baby (provisional, for clinical sign-off).

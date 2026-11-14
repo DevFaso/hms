@@ -214,8 +214,8 @@
                         {{ s.patientName }}
                       </div>
                     }
-                    @if (s.birthOrder && s.birthOrder > 1) {
-                      <div class="cell-secondary">
+                    @if (s.birthOrder) {
+                      <div class="cell-secondary" data-testid="stillbirth-birth-order">
                         {{ 'LABOR.BABY_OUTCOME' | translate: { order: s.birthOrder } }}
                       </div>
                     }

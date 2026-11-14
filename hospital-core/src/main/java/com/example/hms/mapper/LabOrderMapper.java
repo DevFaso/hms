@@ -12,10 +12,14 @@ import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.LabOrderRequestDTO;
 import com.example.hms.payload.dto.LabOrderResponseDTO;
 import com.example.hms.persistence.JpaProxyUtils;
+import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+@Slf4j
 @Component
 public class LabOrderMapper {
 
@@ -45,6 +49,8 @@ public class LabOrderMapper {
         LabTestDefinition labTestDefinition = JpaProxyUtils.safeInit(
             labOrder.getLabTestDefinition(), OWNER, labOrderId, "labTestDefinition");
 
+        Staff orderingStaff = JpaProxyUtils.safeInit(labOrder.getOrderingStaff(), OWNER, labOrderId, "orderingStaff");
+
         String patientFullName = patient != null ? patient.getFullName() : null;
         String hospitalName = hospital != null ? hospital.getName() : null;
         // QA D645/D648: a definition deleted before D601 is not a blank cell.
@@ -63,6 +69,9 @@ public class LabOrderMapper {
         .patientFullName(patientFullName)
         // QA D527: the lab worklist has no use for the patient's e-mail; it is not sent.
         .patientEmail(null)
+        .patientMrn(patientMrnAt(patient, hospital, labOrderId))
+        .patientDateOfBirth(patient != null ? patient.getDateOfBirth() : null)
+        .orderingStaffName(staffNameOf(orderingStaff, labOrderId))
         .hospitalId(hospital != null && hospital.getId() != null ? hospital.getId().toString() : null)
         .hospitalName(hospitalName)
         .performingHospitalId(performingHospital != null && performingHospital.getId() != null
@@ -156,5 +165,35 @@ public class LabOrderMapper {
             return order.getOrderNumber();
         }
         return order.getId() != null ? order.getId().toString() : null;
+    }
+
+    /**
+     * The patient's MRN at the order's hospital, or null. A registration row
+     * whose hospital was hard-deleted throws inside the lazy collection; the
+     * row then shows no MRN rather than failing the whole list.
+     */
+    private static String patientMrnAt(Patient patient, Hospital hospital, java.util.UUID labOrderId) {
+        if (patient == null || hospital == null || hospital.getId() == null) {
+            return null;
+        }
+        try {
+            return patient.getMrnForHospital(hospital.getId());
+        } catch (EntityNotFoundException | JpaObjectRetrievalFailureException ex) {
+            log.warn("LabOrder({}) patient has a dangling hospital registration; MRN unavailable.", labOrderId);
+            return null;
+        }
+    }
+
+    /** The ordering clinician's name, or null when the staff row or its user is gone. */
+    private static String staffNameOf(Staff staff, java.util.UUID labOrderId) {
+        if (staff == null) {
+            return null;
+        }
+        try {
+            return staff.getFullName();
+        } catch (EntityNotFoundException | JpaObjectRetrievalFailureException ex) {
+            log.warn("LabOrder({}) ordering staff has a dangling user; name unavailable.", labOrderId);
+            return null;
+        }
     }
 }
