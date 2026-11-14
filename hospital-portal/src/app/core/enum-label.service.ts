@@ -307,7 +307,7 @@ export class EnumLabelService implements OnDestroy {
       COLLECTED: 'Collected',
       RECEIVED: 'Received',
       IN_PROGRESS: 'In Progress',
-      RESULTED: 'Resulted',
+      RESULTED: 'Awaiting validation',
       VERIFIED: 'Verified',
       COMPLETED: 'Completed',
       CANCELLED: 'Cancelled',

@@ -5,6 +5,10 @@
     "A site not listed fails the build; call refuseFields()/focusFirstInvalid(), then delete its pin."
   ],
   "pinned": {
+    "src/app/lab/lab.ts::toast-only-refusal::openLinkedOrder::LAB.LINKED_ORDER_NOT_FOUND": {
+      "count": 1,
+      "why": "Not a form refusal: a /lab?order= link (from the lab result drawer) names an order out of the reader's scope; there is no field to mark"
+    },
     "src/app/admin-assignments/admin-assignments.ts::unmarked-refusal::submitCreate::ASSIGN_ADMIN.FORM_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
