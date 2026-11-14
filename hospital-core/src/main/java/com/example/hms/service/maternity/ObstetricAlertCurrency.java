@@ -35,7 +35,10 @@ import java.util.Optional;
  *       alert of the same type.</li>
  *   <li>Delivery: it stands until acknowledged or the cap, except the
  *       stillbirth alert of a delivery whose babies were all corrected to
- *       live (QA D1714, Rex on #1144).</li>
+ *       live (QA D1714, Rex on #1144), and a neonatal-care or outcome-conflict
+ *       alert a corrected outcome took off the record (provisional, 2026-11-14).</li>
+ *   <li>A newborn's Apgar alert stops once that baby is a confirmed stillbirth
+ *       (provisional, 2026-11-14).</li>
  * </ul>
  * QA D658 (High, patient safety): a later record that did not measure a
  * value says nothing about it. Only the newest later record that re-measured
@@ -59,6 +62,8 @@ public class ObstetricAlertCurrency {
 
     /** Rex on #1144: a corrected baby outcome can withdraw a delivery's stillbirth alert. */
     private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
+    /** Provisional (2026-11-14): no Apgar or preterm reminder for a confirmed stillborn baby, per baby. */
+    private final StillbornNeonatalAlerts stillbornNeonatalAlerts;
 
     /** @return true when the alert no longer warrants a reminder */
     public boolean noLongerUrgent(ObstetricAlertEscalation row) {
@@ -105,6 +110,14 @@ public class ObstetricAlertCurrency {
      * correction withdrew it from the record). Every other delivery alert stands until acknowledged or the cap.
      */
     private boolean deliveryResolved(ObstetricAlertEscalation row) {
+        String withdrawable = withdrawableCode(row.getAlertMessageKey());
+        if (withdrawable != null) {
+            // Provisional (2026-11-14): a corrected outcome took this alert off the record (a confirmed stillbirth,
+            // or an outcome conflict resolved). The row closes; its history stays.
+            return deliveryRecordRepository.findById(row.getSourceId())
+                .map(delivery -> delivery.getAlerts().stream().noneMatch(a -> withdrawable.equals(a.getCode())))
+                .orElse(false);
+        }
         if (!STILLBIRTH_ALERT_MESSAGE_KEY.equals(row.getAlertMessageKey())) {
             return false;
         }
@@ -115,12 +128,30 @@ public class ObstetricAlertCurrency {
             .orElse(false);
     }
 
+    /** The neonatal-care and outcome-conflict alerts a correction can take off a delivery, or null. */
+    private static String withdrawableCode(String messageKey) {
+        if (messageKey == null || !messageKey.startsWith(MESSAGE_KEY_PREFIX)) {
+            return null;
+        }
+        String code = messageKey.substring(MESSAGE_KEY_PREFIX.length());
+        return StillbornNeonatalAlerts.NEONATAL_CARE_CODES.contains(code)
+            || StillbornNeonatalAlerts.OUTCOME_CONFLICT_ALERT.equals(code) ? code : null;
+    }
+
+    private static final String MESSAGE_KEY_PREFIX = "labor.alert.msg.";
+
     private boolean newbornResolved(ObstetricAlertEscalation row) {
         Optional<NewbornAssessment> found = newbornAssessmentRepository.findById(row.getSourceId());
         if (found.isEmpty() || found.get().getPatient() == null || found.get().getAssessmentTime() == null) {
             return false;
         }
         NewbornAssessment source = found.get();
+        // Provisional (2026-11-14): this baby's own Apgar reminder stops once it is a confirmed stillbirth (its birth
+        // order is stillborn on the delivery, and nothing recorded for it shows a sign of life). Per baby: a twin's
+        // outcome says nothing about this one.
+        if ("APGAR".equals(row.getAlertType()) && stillbornNeonatalAlerts.confirmedStillborn(source.getPatient().getId())) {
+            return true;
+        }
         // Review of D1424: on the mother's chart a later reading of twin B said twin A had
         // recovered, and A's reminders stopped. Twins cannot be told apart here, so only a
         // person closes such an alert; another delivery's baby is another baby.

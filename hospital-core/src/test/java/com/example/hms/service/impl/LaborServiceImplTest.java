@@ -84,6 +84,9 @@ class LaborServiceImplTest {
     @Mock private jakarta.persistence.EntityManager entityManager;
     @Mock private com.example.hms.service.maternity.NewbornRegistrationService newbornRegistration;
     @Mock private com.example.hms.service.maternity.FetalDeathEventService fetalDeathEvents;
+    @Mock private com.example.hms.repository.DeliveryNewbornRepository deliveryNewbornRepository;
+    @Mock private com.example.hms.repository.NewbornAssessmentRepository newbornAssessmentRepository;
+    @Mock private com.example.hms.repository.ObstetricAlertEscalationRepository escalationRepository;
 
     private LaborServiceImpl service;
 
@@ -105,7 +108,9 @@ class LaborServiceImplTest {
             notificationService, new LaborMapper(), recordAccessPolicy, reachRecorder,
             TestMessageSources.bundles(), postpartumCarePlanRepository, deliveryChargeService,
             obstetricAlertEscalation, new com.example.hms.mapper.MaternalHistoryMapper(), auditEventLogService,
-            roleValidator, entityManager, newbornRegistration, fetalDeathEvents);
+            roleValidator, entityManager, newbornRegistration, fetalDeathEvents,
+            new com.example.hms.service.maternity.StillbornNeonatalAlerts(deliveryNewbornRepository,
+                newbornAssessmentRepository, escalationRepository));
 
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -2751,5 +2756,196 @@ class LaborServiceImplTest {
             com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_DELIVERY.equals(urgent.sourceType())
                 && record.getId().equals(urgent.sourceId())
                 && "labor.alert.msg.labor-stillbirth".equals(urgent.alertMessageKey())));
+    }
+
+    // ── Provisional 2026-11-14: Apgar and preterm alerts follow each baby's confirmed outcome ──
+
+    private static java.util.List<String> codesOf(DeliveryRecord record) {
+        return record.getAlerts().stream().map(com.example.hms.model.labor.LaborAlert::getCode).toList();
+    }
+
+    private DeliveryRecord savedDelivery() {
+        ArgumentCaptor<DeliveryRecord> saved = ArgumentCaptor.forClass(DeliveryRecord.class);
+        verify(deliveryRecordRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        return saved.getValue();
+    }
+
+    @Test
+    void aConfirmedStillbirthRaisesNoApgarOrPretermAlertButKeepsTheMaternalAndStillbirthOnes() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setLiveBirth(false);
+        request.setApgarFiveMinute(0);
+        request.setGestationalAgeWeeksAtBirth(28);
+        request.setEstimatedBloodLossMl(1200);
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(codesOf(savedDelivery()))
+            .doesNotContain("labor-apgar-critical", "labor-apgar-low", "labor-preterm", "labor-outcome-conflict")
+            .contains("labor-stillbirth", "labor-pph");
+        verify(obstetricAlertEscalation, never()).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            urgent.alertMessageKey() != null && (urgent.alertMessageKey().endsWith("labor-apgar-critical")
+                || urgent.alertMessageKey().endsWith("labor-preterm"))));
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            "labor.alert.msg.labor-stillbirth".equals(urgent.alertMessageKey())));
+    }
+
+    @Test
+    void aStillbornTwinNeverSilencesTheLiveTwinsApgarAndPretermAlerts() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBabies(List.of(baby(com.example.hms.enums.BabyOutcome.LIVE),
+            baby(com.example.hms.enums.BabyOutcome.STILLBORN)));
+        request.setApgarFiveMinute(3);
+        request.setGestationalAgeWeeksAtBirth(28);
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(codesOf(savedDelivery()))
+            .contains("labor-apgar-critical", "labor-preterm", "labor-stillbirth")
+            .doesNotContain("labor-outcome-conflict");
+    }
+
+    @Test
+    void aStillbirthWithARecordedSignOfLifeIsFlaggedNotSilenced() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setLiveBirth(false);
+        request.setApgarFiveMinute(3);
+        request.setGestationalAgeWeeksAtBirth(28);
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(codesOf(savedDelivery()))
+            .contains("labor-apgar-critical", "labor-preterm", "labor-stillbirth", "labor-outcome-conflict");
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            "labor.alert.msg.labor-outcome-conflict".equals(urgent.alertMessageKey())));
+    }
+
+    @Test
+    void anUnknownOutcomeIsFlaggedNotSilenced() {
+        // A delivery recorded before V293: one "not live" flag over twins cannot say which baby was stillborn.
+        DeliveryRecord record = DeliveryRecord.builder().episode(episode).patient(patient).hospital(hospital)
+            .birthDateTime(java.time.LocalDateTime.now()).deliveryMode(DeliveryMode.SPONTANEOUS_VAGINAL)
+            .numberOfInfants(2).liveBirth(false).apgarFiveMinute(0).gestationalAgeWeeksAtBirth(28)
+            .documentedBy(recorder).build();
+        record.setId(UUID.randomUUID());
+        com.example.hms.service.maternity.StillbornNeonatalAlerts.Assessment assessment =
+            new com.example.hms.service.maternity.StillbornNeonatalAlerts(deliveryNewbornRepository,
+                newbornAssessmentRepository, escalationRepository).assess(record);
+        assertThat(assessment.suppress()).isFalse();
+        assertThat(assessment.conflict()).isTrue();
+    }
+
+    private void withNeonatalAlerts(DeliveryRecord record) {
+        record.setApgarFiveMinute(0);
+        record.setGestationalAgeWeeksAtBirth(28);
+        record.addAlert(com.example.hms.enums.LaborAlertType.GENERAL, com.example.hms.enums.LaborAlertSeverity.URGENT,
+            "labor-preterm", "Preterm", "gestationalAgeWeeksAtBirth", new Object[]{28});
+        record.addAlert(com.example.hms.enums.LaborAlertType.GENERAL, com.example.hms.enums.LaborAlertSeverity.URGENT,
+            "labor-apgar-critical", "Apgar 0", "apgarFiveMinute", new Object[]{0});
+    }
+
+    @Test
+    void aCorrectionToStillbornTakesTheBabysNeonatalAlertsOffTheRecord() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.LIVE);
+        withNeonatalAlerts(record);
+        correctionApplies(record, 1, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(1).outcome(com.example.hms.enums.BabyOutcome.STILLBORN).reason("No signs of life").build());
+
+        assertThat(codesOf(record)).doesNotContain("labor-preterm", "labor-apgar-critical")
+            .contains("labor-stillbirth");
+    }
+
+    @Test
+    void aCorrectionToStillbornOfOneTwinKeepsTheDeliveryAlertsForTheLiveTwin() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.LIVE,
+            com.example.hms.enums.BabyOutcome.LIVE);
+        withNeonatalAlerts(record);
+        correctionApplies(record, 2, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(2).outcome(com.example.hms.enums.BabyOutcome.STILLBORN).reason("Twin B").build());
+
+        assertThat(codesOf(record)).contains("labor-preterm", "labor-apgar-critical", "labor-stillbirth");
+    }
+
+    @Test
+    void aCorrectionToLiveReassessesTheNeonatalAlertsAndNotifiesOnlyOnesNeverSent() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.STILLBORN);
+        record.setApgarFiveMinute(0);
+        record.setGestationalAgeWeeksAtBirth(28);
+        correctionApplies(record, 1, com.example.hms.enums.BabyOutcome.LIVE);
+        // The preterm alert was escalated before (live, then stillborn): it is back on the record, never replayed.
+        when(escalationRepository.existsBySourceTypeAndSourceIdAndAlertMessageKey(
+            com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_DELIVERY, record.getId(),
+            "labor.alert.msg.labor-preterm")).thenReturn(true);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(1).outcome(com.example.hms.enums.BabyOutcome.LIVE).reason("Heartbeat").build());
+
+        assertThat(codesOf(record)).contains("labor-preterm", "labor-apgar-critical");
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            "labor.alert.msg.labor-apgar-critical".equals(urgent.alertMessageKey())));
+        verify(obstetricAlertEscalation, never()).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            "labor.alert.msg.labor-preterm".equals(urgent.alertMessageKey())));
+    }
+
+    @Test
+    void anAlertThatStillAppliesAfterACorrectionKeepsItsEntryAndIsNotRepublished() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.LIVE,
+            com.example.hms.enums.BabyOutcome.LIVE);
+        withNeonatalAlerts(record);
+        com.example.hms.model.labor.LaborAlert preterm = record.getAlerts().get(0);
+        correctionApplies(record, 2, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(2).outcome(com.example.hms.enums.BabyOutcome.STILLBORN).reason("Twin B").build());
+
+        assertThat(record.getAlerts()).anySatisfy(alert -> assertThat(alert).isSameAs(preterm));
+        verify(obstetricAlertEscalation, never()).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            "labor.alert.msg.labor-preterm".equals(urgent.alertMessageKey())));
+    }
+
+    @Test
+    void aCorrectionAgainstABabysRecordedSignOfLifeIsFlaggedAndKeepsItsAlerts() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.LIVE,
+            com.example.hms.enums.BabyOutcome.LIVE);
+        withNeonatalAlerts(record);
+        com.example.hms.model.Patient twinB = new com.example.hms.model.Patient();
+        twinB.setId(UUID.randomUUID());
+        when(deliveryNewbornRepository.findByDeliveryRecord_IdOrderByBirthOrderAsc(record.getId())).thenReturn(List.of(
+            com.example.hms.model.labor.DeliveryNewborn.builder().deliveryRecord(record).birthOrder(2)
+                .newbornPatient(twinB).build()));
+        when(newbornAssessmentRepository.anySignOfLifeRecorded(twinB.getId())).thenReturn(true);
+        correctionApplies(record, 2, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(2).outcome(com.example.hms.enums.BabyOutcome.STILLBORN).reason("Twin B").build());
+
+        assertThat(codesOf(record)).contains("labor-outcome-conflict", "labor-preterm", "labor-apgar-critical");
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            "labor.alert.msg.labor-outcome-conflict".equals(urgent.alertMessageKey())));
+    }
+    /** Rex on #1152: a sign of life recorded on the mother's chart for this delivery (no registered baby). */
+    @Test
+    void aCorrectionAgainstASignOfLifeOnTheMothersChartIsFlaggedAndKeepsItsAlerts() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.LIVE);
+        withNeonatalAlerts(record);
+        when(newbornAssessmentRepository.anyUnattributedSignOfLifeRecorded(record.getId())).thenReturn(true);
+        correctionApplies(record, 1, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(1).outcome(com.example.hms.enums.BabyOutcome.STILLBORN).reason("No signs of life").build());
+
+        assertThat(codesOf(record)).contains("labor-outcome-conflict", "labor-preterm", "labor-apgar-critical");
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            "labor.alert.msg.labor-outcome-conflict".equals(urgent.alertMessageKey())));
     }
 }

@@ -1942,7 +1942,10 @@
       "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Episodio de trabajo de parto abierto a su llegada de otro hospital, sin traspaso",
       "FETAL_DEATH_EVENT_RECORDED": "Evento de muerte fetal registrado para un bebé mortinato",
       "FETAL_DEATH_EVENT_SUPERSEDED": "Evento de muerte fetal sustituido tras corregir el resultado del bebé",
-      "DELIVERY_BABY_OUTCOME_CORRECTED": "Resultado de un bebé corregido en un registro de parto"
+      "DELIVERY_BABY_OUTCOME_CORRECTED": "Resultado de un bebé corregido en un registro de parto",
+      "STILLBIRTH_CERTIFICATE_CONFLICT_DEATH": "El acta de defunción declara un mortinato que el parto registra ahora como nacido vivo",
+      "STILLBIRTH_CERTIFICATE_CONFLICT_DELIVERY": "El parto registra como nacido vivo a un bebé que un acta de defunción declara mortinato",
+      "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradicción entre acta de mortinato y parto conciliada"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -6851,7 +6854,9 @@
         "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Nacimiento antes de la llegada",
         "FETAL_DEATH_EVENT_RECORDED": "Muerte fetal registrada",
         "FETAL_DEATH_EVENT_SUPERSEDED": "Muerte fetal sustituida",
-        "DELIVERY_BABY_OUTCOME_CORRECTED": "Resultado del bebé corregido"
+        "DELIVERY_BABY_OUTCOME_CORRECTED": "Resultado del bebé corregido",
+        "STILLBIRTH_CERTIFICATE_CONFLICT": "Contradicción de acta de mortinato",
+        "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradicción de acta de mortinato conciliada"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -12560,7 +12565,9 @@
     "STILLBIRTH_SOURCE_DELIVERY": "Registro del parto",
     "STILLBIRTH_SOURCE_DELIVERY_HISTORICAL": "Registro del parto (anterior al resultado por bebé)",
     "STILLBIRTH_SOURCE_DEATH_RECORD": "Certificado de defunción",
-    "STILLBIRTH_DECLARED": "También declarado por un certificado de defunción (contado una vez)"
+    "STILLBIRTH_DECLARED": "También declarado por un certificado de defunción (contado una vez)",
+    "STILLBIRTH_UNRESOLVED": "No resuelto",
+    "STILLBIRTH_UNRESOLVED_HINT": "El parto registra ahora a este bebé como nacido vivo, pero esta acta de defunción sigue declarando un mortinato. Se cuenta una sola vez hasta conciliarlo: modifique el acta (un bebé nacido vivo que luego falleció es una muerte neonatal), abra una impugnación de la defunción si el bebé está vivo, o corrija el resultado."
   },
   "BED_BOARD": {
     "TITLE": "Tablero de camas",

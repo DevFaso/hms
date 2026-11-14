@@ -274,6 +274,10 @@ public enum AuditEventType {
     FETAL_DEATH_EVENT_SUPERSEDED,
     /** QA D1714: a baby's recorded outcome corrected (live to stillborn or back), with the reason. */
     DELIVERY_BABY_OUTCOME_CORRECTED,
+    /** QA D1802 (provisional): a baby corrected to born alive while a death certificate declares its stillbirth. */
+    STILLBIRTH_CERTIFICATE_CONFLICT,
+    /** QA D1802 (provisional): that contradiction ended (certificate amended or voided, or outcome corrected back). */
+    STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED,
 
     OTHER
 }

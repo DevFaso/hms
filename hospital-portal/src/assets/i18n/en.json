@@ -1942,7 +1942,10 @@
       "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Labour episode opened on arrival from another hospital without a handover",
       "FETAL_DEATH_EVENT_RECORDED": "Fetal-death event recorded for a stillborn baby",
       "FETAL_DEATH_EVENT_SUPERSEDED": "Fetal-death event superseded by a corrected baby outcome",
-      "DELIVERY_BABY_OUTCOME_CORRECTED": "Baby outcome corrected on a delivery record"
+      "DELIVERY_BABY_OUTCOME_CORRECTED": "Baby outcome corrected on a delivery record",
+      "STILLBIRTH_CERTIFICATE_CONFLICT_DEATH": "Death certificate declares a stillbirth the delivery now records as born alive",
+      "STILLBIRTH_CERTIFICATE_CONFLICT_DELIVERY": "Delivery records as born alive a baby a death certificate declares stillborn",
+      "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Stillbirth certificate conflict reconciled"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -6851,7 +6854,9 @@
         "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Birth before arrival",
         "FETAL_DEATH_EVENT_RECORDED": "Fetal-death event recorded",
         "FETAL_DEATH_EVENT_SUPERSEDED": "Fetal-death event superseded",
-        "DELIVERY_BABY_OUTCOME_CORRECTED": "Baby outcome corrected"
+        "DELIVERY_BABY_OUTCOME_CORRECTED": "Baby outcome corrected",
+        "STILLBIRTH_CERTIFICATE_CONFLICT": "Stillbirth certificate conflict",
+        "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Stillbirth certificate conflict reconciled"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -12560,7 +12565,9 @@
     "STILLBIRTH_SOURCE_DELIVERY": "Delivery record",
     "STILLBIRTH_SOURCE_DELIVERY_HISTORICAL": "Delivery record (recorded before per-baby outcomes)",
     "STILLBIRTH_SOURCE_DEATH_RECORD": "Death record",
-    "STILLBIRTH_DECLARED": "Also declared by a death record (counted once)"
+    "STILLBIRTH_DECLARED": "Also declared by a death record (counted once)",
+    "STILLBIRTH_UNRESOLVED": "Unresolved",
+    "STILLBIRTH_UNRESOLVED_HINT": "The delivery now records this baby as born alive, but this death certificate still declares a stillbirth. Counted once until reconciled: amend the certificate (a baby born alive who then died is a neonatal death), open a death-record dispute if the baby is alive, or correct the outcome back."
   },
   "BED_BOARD": {
     "TITLE": "Ward board",

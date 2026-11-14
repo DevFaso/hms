@@ -147,6 +147,11 @@ export interface StillbirthRow {
   whoStillbirth: boolean;
   icdFetalDeath: boolean;
   classificationIncomplete: boolean;
+  /**
+   * QA D1802 (provisional): a death-record row whose delivery now records the baby as born alive. Counted once,
+   * marked unresolved until the certificate is amended or voided, or the outcome is corrected back.
+   */
+  unresolvedConflict?: boolean;
 }
 
 export interface MortalityRegister {

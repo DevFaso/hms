@@ -105,7 +105,10 @@ class NewbornAssessmentServiceImplTest {
             new NewbornAssessmentMapper(),
             recordAccessPolicy,
             reachRecorder,
-            TestMessageSources.bundles()
+            TestMessageSources.bundles(),
+            new com.example.hms.service.maternity.StillbornNeonatalAlerts(deliveryNewbornRepository,
+                assessmentRepository, org.mockito.Mockito.mock(
+                    com.example.hms.repository.ObstetricAlertEscalationRepository.class))
         );
 
         patientId = UUID.randomUUID();
@@ -797,5 +800,87 @@ class NewbornAssessmentServiceImplTest {
             .hospitalId(hospitalId).apgarOneMinute(8).build(), recorderId);
 
         assertEquals(delivery.getId(), response.getDeliveryRecordId());
+    }
+    // -- Provisional (2026-11-14): no Apgar alert, and so no first URGENT notice, for a confirmed stillborn baby --
+
+    private com.example.hms.model.labor.DeliveryRecord registeredAt(int birthOrder, Integer deliveryApgarOneMinute,
+                                                                  com.example.hms.enums.BabyOutcome... outcomes) {
+        com.example.hms.model.labor.DeliveryRecord delivery = com.example.hms.model.labor.DeliveryRecord.builder()
+            .hospital(hospital).numberOfInfants(outcomes.length).apgarOneMinute(deliveryApgarOneMinute)
+            .birthDateTime(java.time.LocalDateTime.now().minusMinutes(10)).build();
+        delivery.setId(UUID.randomUUID());
+        for (int i = 0; i < outcomes.length; i++) {
+            delivery.putBabyOutcome(i + 1, outcomes[i]);
+        }
+        lenient().when(deliveryNewbornRepository.findByNewbornPatient_Id(patientId)).thenReturn(Optional.of(
+            com.example.hms.model.labor.DeliveryNewborn.builder().deliveryRecord(delivery).newbornPatient(patient)
+                .hospital(hospital).birthOrder(birthOrder).build()));
+        return delivery;
+    }
+
+    private NewbornAssessmentResponseDTO recordApgarZero() {
+        return service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).assessmentTime(java.time.LocalDateTime.now().minusMinutes(5))
+            .apgarOneMinute(0).apgarFiveMinute(0).build(), recorderId);
+    }
+
+    @Test
+    void aConfirmedStillbornBabysApgarZeroRaisesNoApgarAlertOrNotice() {
+        registeredAt(1, null, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        NewbornAssessmentResponseDTO response = recordApgarZero();
+
+        assertTrue(response.getAlerts().stream().noneMatch(a -> a.getType() == NewbornAlertType.APGAR));
+        assertTrue(response.getFollowUpActions() == null
+            || !response.getFollowUpActions().contains(NewbornFollowUpAction.NICU_CONSULT));
+        verify(obstetricAlertEscalation, org.mockito.Mockito.never()).raiseAfterCommit(any());
+        verify(notificationService, org.mockito.Mockito.never()).created(anyString(), anyString(), any());
+    }
+
+    @Test
+    void aLiveTwinOfAStillbornBabyStillGetsItsApgarAlertAndNotice() {
+        registeredAt(1, null, com.example.hms.enums.BabyOutcome.LIVE, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        NewbornAssessmentResponseDTO response = recordApgarZero();
+
+        assertEquals(2, response.getAlerts().stream().filter(a -> a.getType() == NewbornAlertType.APGAR
+            && a.getSeverity() == NewbornAlertSeverity.URGENT).count());
+        verify(obstetricAlertEscalation, times(2)).raiseAfterCommit(any());
+    }
+
+    @Test
+    void anUncertainStillbirthStillAlerts() {
+        // Stillborn, but the delivery's own Apgar shows a sign of life and no baby was born alive: uncertain.
+        registeredAt(1, 4, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        NewbornAssessmentResponseDTO response = recordApgarZero();
+
+        assertEquals(2, response.getAlerts().stream().filter(a -> a.getType() == NewbornAlertType.APGAR
+            && a.getSeverity() == NewbornAlertSeverity.URGENT).count());
+        verify(obstetricAlertEscalation, times(2)).raiseAfterCommit(any());
+    }
+    @Test
+    void onTheMothersChartAnUnregisteredConfirmedStillbornBabysApgarZeroRaisesNoNotice() {
+        com.example.hms.model.labor.DeliveryRecord delivery = onTheMothersChart(1);
+        delivery.putBabyOutcome(1, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        NewbornAssessmentResponseDTO response = recordApgarZero();
+
+        assertTrue(response.getAlerts().stream().noneMatch(a -> a.getType() == NewbornAlertType.APGAR));
+        verify(obstetricAlertEscalation, org.mockito.Mockito.never()).raiseAfterCommit(any());
+    }
+
+    /** Rex on #1152: an earlier sign of life on the mother's chart for this delivery makes the stillbirth uncertain. */
+    @Test
+    void onTheMothersChartAnEarlierSignOfLifeKeepsAnUnregisteredStillbornBabysApgarAlert() {
+        com.example.hms.model.labor.DeliveryRecord delivery = onTheMothersChart(1);
+        delivery.putBabyOutcome(1, com.example.hms.enums.BabyOutcome.STILLBORN);
+        when(assessmentRepository.anyUnattributedSignOfLifeRecorded(delivery.getId())).thenReturn(true);
+
+        NewbornAssessmentResponseDTO response = recordApgarZero();
+
+        assertEquals(2, response.getAlerts().stream().filter(a -> a.getType() == NewbornAlertType.APGAR
+            && a.getSeverity() == NewbornAlertSeverity.URGENT).count());
+        verify(obstetricAlertEscalation, times(2)).raiseAfterCommit(any());
     }
 }

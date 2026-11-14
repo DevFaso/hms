@@ -45,6 +45,9 @@ public interface ObstetricAlertEscalationRepository extends JpaRepository<Obstet
     int claimRound(@Param("id") UUID id, @Param("current") short current,
                    @Param("next") short next, @Param("now") LocalDateTime now);
 
+    /** Whether this alert of this record was ever escalated, open or closed (a correction never replays it). */
+    boolean existsBySourceTypeAndSourceIdAndAlertMessageKey(String sourceType, UUID sourceId, String alertMessageKey);
+
     /**
      * QA D1801: the escalations of one source and alert sentence that nobody has acknowledged or closed, so a
      * re-raised alert can replace them instead of escalating beside them.

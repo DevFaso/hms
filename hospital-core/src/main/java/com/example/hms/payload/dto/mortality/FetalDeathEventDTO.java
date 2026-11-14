@@ -44,6 +44,12 @@ public class FetalDeathEventDTO {
     /** The broader ICD level (StillbirthClassification, provisional). */
     private boolean icdFetalDeath;
     private boolean classificationIncomplete;
+
+    /**
+     * QA D1802 (provisional): on a death-record row, the delivery now records this baby as born alive. Counted once,
+     * shown unresolved until the certificate is amended or voided, or the outcome is corrected back.
+     */
+    private boolean unresolvedConflict;
     /** Set when a correction (live to stillborn) created the event: the reason given. */
     private String creationReason;
     /** A correction (stillborn to live) superseded the event: when, by whom, why. It is kept, never deleted. */

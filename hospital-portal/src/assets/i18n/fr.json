@@ -1942,7 +1942,10 @@
       "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Épisode de travail ouvert à son arrivée d’un autre hôpital, sans transmission",
       "FETAL_DEATH_EVENT_RECORDED": "Événement de décès fœtal enregistré pour un bébé mort-né",
       "FETAL_DEATH_EVENT_SUPERSEDED": "Événement de décès fœtal remplacé après correction de l’issue du bébé",
-      "DELIVERY_BABY_OUTCOME_CORRECTED": "Issue d’un bébé corrigée sur un compte rendu d’accouchement"
+      "DELIVERY_BABY_OUTCOME_CORRECTED": "Issue d’un bébé corrigée sur un compte rendu d’accouchement",
+      "STILLBIRTH_CERTIFICATE_CONFLICT_DEATH": "L’acte de décès déclare une mortinaissance que l’accouchement enregistre désormais comme naissance vivante",
+      "STILLBIRTH_CERTIFICATE_CONFLICT_DELIVERY": "L’accouchement enregistre comme né vivant un bébé qu’un acte de décès déclare mort-né",
+      "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradiction entre acte de mortinaissance et accouchement rapprochée"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -6817,7 +6820,9 @@
         "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Naissance avant l'arrivée",
         "FETAL_DEATH_EVENT_RECORDED": "Décès fœtal enregistré",
         "FETAL_DEATH_EVENT_SUPERSEDED": "Décès fœtal remplacé",
-        "DELIVERY_BABY_OUTCOME_CORRECTED": "Issue d’un bébé corrigée"
+        "DELIVERY_BABY_OUTCOME_CORRECTED": "Issue d’un bébé corrigée",
+        "STILLBIRTH_CERTIFICATE_CONFLICT": "Contradiction d’acte de mortinaissance",
+        "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradiction d’acte de mortinaissance rapprochée"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -12560,7 +12565,9 @@
     "STILLBIRTH_SOURCE_DELIVERY": "Compte rendu d’accouchement",
     "STILLBIRTH_SOURCE_DELIVERY_HISTORICAL": "Compte rendu d’accouchement (antérieur à l’issue par bébé)",
     "STILLBIRTH_SOURCE_DEATH_RECORD": "Acte de décès",
-    "STILLBIRTH_DECLARED": "Également déclarée par un acte de décès (comptée une seule fois)"
+    "STILLBIRTH_DECLARED": "Également déclarée par un acte de décès (comptée une seule fois)",
+    "STILLBIRTH_UNRESOLVED": "Non résolu",
+    "STILLBIRTH_UNRESOLVED_HINT": "L’accouchement enregistre désormais ce bébé comme né vivant, mais cet acte de décès déclare toujours une mortinaissance. Compté une seule fois jusqu’au rapprochement : modifiez l’acte (un bébé né vivant puis décédé est un décès néonatal), ouvrez une contestation du décès si le bébé est vivant, ou corrigez l’issue."
   },
   "BED_BOARD": {
     "TITLE": "Tableau des lits",

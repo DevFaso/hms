@@ -78,6 +78,8 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
     private final MessageSource messageSource;
+    /** Provisional (2026-11-14): no Apgar alert for a confirmed stillborn baby, per baby. */
+    private final com.example.hms.service.maternity.StillbornNeonatalAlerts stillbornNeonatalAlerts;
 
     /**
      * QA D1151 (round 21): a newborn assessment records something; a blank
@@ -310,7 +312,11 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
 
     private void evaluateAssessment(NewbornAssessment assessment, NewbornAssessmentRequestDTO request, boolean ownChart) {
         List<NewbornAssessmentAlert> alerts = new ArrayList<>();
-        boolean urgentDetected = evaluateApgar(assessment, alerts);
+        // Provisional (2026-11-14), as on the delivery: the Apgar alerts (and their NICU consult and escalation) are not
+        // raised for a confirmed stillborn baby. A sign of life, an unknown or conflicting outcome, or a live twin's
+        // own assessment always alerts. The other newborn alerts are untouched.
+        boolean urgentDetected = !stillbornNeonatalAlerts.confirmedStillbornAssessment(assessment)
+            && evaluateApgar(assessment, alerts);
         NewbornAlertRules.DangerSigns dangerSigns = new NewbornAlertRules.DangerSigns(assessment.getPoorFeeding(),
             assessment.getConvulsions(), assessment.getSevereChestIndrawing(), assessment.getAbsentSpontaneousMovement());
         for (NewbornAlertRules.Finding finding : NewbornAlertRules.evaluate(readingOf(assessment, request, ownChart), dangerSigns)) {

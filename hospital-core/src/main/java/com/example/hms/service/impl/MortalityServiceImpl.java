@@ -142,6 +142,14 @@ public class MortalityServiceImpl implements MortalityService {
         this.notices = notices;
     }
 
+    /** QA D1802: a stillbirth certificate the delivery now contradicts (null in hand-built tests). */
+    private com.example.hms.service.maternity.StillbirthCertificateConflicts certificateConflicts;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setCertificateConflicts(com.example.hms.service.maternity.StillbirthCertificateConflicts certificateConflicts) {
+        this.certificateConflicts = certificateConflicts;
+    }
+
     static final String VOIDED_CLOSURE_REFERENCE_TYPE = "DEATH_ENTERED_IN_ERROR_CLOSURES";
     static final String VOIDED_CLOSURE_TITLE_KEY = "mortality.enteredInError.closures.title";
     static final String VOIDED_CLOSURE_BODY_KEY = "mortality.enteredInError.closures.body";
@@ -253,6 +261,9 @@ public class MortalityServiceImpl implements MortalityService {
         if (deathRecord.isEnteredInError()) {
             throw new BusinessException("mortality.enteredInError.closed");
         }
+        // QA D1802: read before the edit, so an amendment out of a contradicted stillbirth is audited as reconciled.
+        boolean declaredStillbirth = com.example.hms.service.maternity.StillbirthCertificateConflicts
+            .declaresStillbirth(deathRecord);
         // QA D1490: an amendment reaches the same two classifications. Only what this amendment sets is judged:
         // an autopsy's new cause is never refused over an older row's flags.
         if (Boolean.TRUE.equals(request.getMaternalDeath())) {
@@ -303,7 +314,12 @@ public class MortalityServiceImpl implements MortalityService {
         deathRecord.setAmendedAt(LocalDateTime.now(clock));
         deathRecord.setAmendmentReason(request.getAmendmentReason());
 
-        return mapper.toDto(deathRecordRepository.save(deathRecord));
+        DeathRecord amended = deathRecordRepository.save(deathRecord);
+        if (certificateConflicts != null) {
+            // QA D1802: an amendment out of the stillbirth classification reconciles a contradicted certificate.
+            certificateConflicts.certificateChanged(amended, declaredStillbirth, roleValidator.getCurrentUserId());
+        }
+        return mapper.toDto(amended);
     }
 
     @Override
@@ -332,6 +348,9 @@ public class MortalityServiceImpl implements MortalityService {
                 "Only a hospital administrator of this hospital can mark a death record entered in error.");
         }
         String actorName = currentUsername();
+        // QA D1802: read before the void, so voiding a contradicted stillbirth certificate is audited as reconciled.
+        boolean declaredStillbirth = com.example.hms.service.maternity.StillbirthCertificateConflicts
+            .declaresStillbirth(deathRecord);
         deathRecord.setEnteredInErrorAt(LocalDateTime.now(clock));
         deathRecord.setEnteredInErrorById(actorId);
         deathRecord.setEnteredInErrorByName(actorName);
@@ -353,6 +372,10 @@ public class MortalityServiceImpl implements MortalityService {
         fileClosureReview(saved, patient, closures);
 
         auditEnteredInError(saved, patient.getId(), actorId, actorName, reason, closures);
+        if (certificateConflicts != null) {
+            // QA D1802: a voided certificate no longer contradicts the delivery.
+            certificateConflicts.certificateChanged(saved, declaredStillbirth, actorId);
+        }
         return mapper.toDto(saved);
     }
 
@@ -695,6 +718,11 @@ public class MortalityServiceImpl implements MortalityService {
                 .declaredByDeathRecordId(declarationOfEvent.get(event.getId()))
                 .build());
         }
+        // QA D1802 (provisional): a certificate whose baby the delivery now records as born alive is still counted
+        // once, here, and marked unresolved until it is reconciled.
+        java.util.Set<String> liveBorn = certificateConflicts == null ? Set.of()
+            : certificateConflicts.liveBornIdentities(identityOfDeath.values().stream()
+                .filter(key -> !liveEventOfIdentity.containsKey(key)).collect(java.util.stream.Collectors.toSet()));
         for (DeathRecord death : declared) {
             String key = identityOfDeath.get(death);
             if (key != null && liveEventOfIdentity.containsKey(key)) {
@@ -716,6 +744,7 @@ public class MortalityServiceImpl implements MortalityService {
                 .whoStillbirth(result.whoStillbirth())
                 .icdFetalDeath(result.icdFetalDeath())
                 .classificationIncomplete(result.incomplete())
+                .unresolvedConflict(key != null && liveBorn.contains(key))
                 .build());
         }
         return new Stillbirths(rows,

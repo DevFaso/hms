@@ -48,6 +48,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @Import({ObstetricAlertEscalationService.class, ObstetricAlertEscalationWorker.class, ObstetricAlertCurrency.class,
+    StillbornNeonatalAlerts.class,
     ObstetricAlertEscalationPostgresIT.Config.class})
 @DisplayName("D1762: a labour transfer's urgent notice is escalated on PostgreSQL")
 class ObstetricAlertEscalationPostgresIT {
