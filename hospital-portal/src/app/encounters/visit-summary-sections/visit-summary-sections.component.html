@@ -9,7 +9,7 @@
         @if (summary().patientDateOfBirth) {
           <span data-testid="avs-dob"
             >{{ 'VISIT_SUMMARY.BORN_ON' | translate }}
-            {{ summary().patientDateOfBirth | date: 'mediumDate' : 'UTC' }}
+            {{ summary().patientDateOfBirth | serverTime | date: 'mediumDate' : 'UTC' }}
             @if (age(); as a) {
               ({{ a.key | translate: { n: a.n } }})
             }
@@ -299,7 +299,8 @@
                     @if (m.startDate) {
                       <span class="vss-muted">{{
                         'VISIT_SUMMARY.SINCE'
-                          | translate: { date: m.startDate | date: 'mediumDate' : 'UTC' }
+                          | translate
+                            : { date: m.startDate | serverTime | date: 'mediumDate' : 'UTC' }
                       }}</span>
                     }
                     @if (m.prescriberName) {

@@ -106,10 +106,16 @@ const PROBLEM_STATUS_KEYS: Record<string, string> = {
 
 const DAY_MS = 86_400_000;
 
-/** "1980-05-02" or "1980-05-02T…" as a calendar day, with no time-zone shift. */
-function calendarDay(value: string | null | undefined): Date | null {
+/** "1980-05-02" or "1980-05-02T…" as the epoch day it names, with no time-zone shift. */
+function calendarDay(value: string | null | undefined): number | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value ?? '');
-  return match ? new Date(Date.UTC(+match[1], +match[2] - 1, +match[3])) : null;
+  return match ? Date.UTC(+match[1], +match[2] - 1, +match[3]) / DAY_MS : null;
+}
+
+/** The reader's today, as an epoch day. */
+function today(): number {
+  const now = new Date();
+  return Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / DAY_MS;
 }
 
 /** Text as a reader compares it: case, accents and spaces ignored. */
@@ -235,10 +241,10 @@ export class VisitSummarySectionsComponent {
   readonly age = computed<{ key: string; n: number } | null>(() => {
     const s = this.summary();
     const born = calendarDay(s.patientDateOfBirth);
-    if (!born) return null;
-    const at = calendarDay(s.visitDate) ?? calendarDay(new Date().toISOString());
-    if (!at || at < born) return null;
-    const days = Math.round((at.getTime() - born.getTime()) / DAY_MS);
+    if (born === null) return null;
+    const at = calendarDay(s.visitDate) ?? today();
+    if (at < born) return null;
+    const days = at - born;
     const { years } = completedYearsAndMonths(days);
     if (years >= 2) return { key: 'VISIT_SUMMARY.AGE_YEARS', n: years };
     const months = completedMonths(days);
