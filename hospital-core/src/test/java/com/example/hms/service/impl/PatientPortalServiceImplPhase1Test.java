@@ -910,16 +910,13 @@ class PatientPortalServiceImplPhase1Test {
             historyEntry.setId(UUID.randomUUID());
             historyEntry.setCurrent(false);
 
-            when(primaryCareService.getCurrentPrimaryCare(patientId))
-                    .thenReturn(Optional.of(currentPcp));
-            when(primaryCareService.getPrimaryCareHistory(patientId))
-                    .thenReturn(List.of(historyEntry));
+            when(primaryCareService.getOwnPrimaryCareLinks(patientId)).thenReturn(List.of(currentPcp, historyEntry));
 
             CareTeamDTO result = service.getMyCareTeam(auth);
 
             assertThat(result.getPrimaryCare()).isNotNull();
             assertThat(result.getPrimaryCare().getId()).isEqualTo(currentPcp.getId());
-            assertThat(result.getPrimaryCareHistory()).hasSize(1);
+            assertThat(result.getPrimaryCareHistory()).hasSize(2);
         }
 
         @Test
@@ -927,10 +924,7 @@ class PatientPortalServiceImplPhase1Test {
         void getMyCareTeam_noPcp() {
             stubPatientResolution();
 
-            when(primaryCareService.getCurrentPrimaryCare(patientId))
-                    .thenReturn(Optional.empty());
-            when(primaryCareService.getPrimaryCareHistory(patientId))
-                    .thenReturn(List.of());
+            when(primaryCareService.getOwnPrimaryCareLinks(patientId)).thenReturn(List.of());
 
             CareTeamDTO result = service.getMyCareTeam(auth);
 

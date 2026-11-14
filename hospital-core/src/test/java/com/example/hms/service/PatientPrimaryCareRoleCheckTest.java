@@ -280,7 +280,7 @@ class PatientPrimaryCareRoleCheckTest {
         when(pcpRepo.findCurrentByPatientAndHospital(patientId, hospitalId)).thenReturn(Optional.empty());
 
         assertThat(service.getCurrentPrimaryCare(patientId)).isEmpty();
-        org.mockito.Mockito.verify(pcpRepo, org.mockito.Mockito.never()).findByPatient_IdAndCurrentTrue(any());
+        org.mockito.Mockito.verify(pcpRepo, org.mockito.Mockito.never()).findByPatient_IdAndCurrentTrueOrderByStartDateDesc(any());
     }
 
     @Test

@@ -45,6 +45,7 @@ class PatientPrimaryCareServiceImplTest {
 
     @Mock private PatientPrimaryCareRepository pcpRepo;
     @Mock private PatientRepository patientRepo;
+    @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepo;
     @Mock private HospitalRepository hospitalRepo;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepo;
     @Mock private PatientPrimaryCareMapper mapper;
@@ -194,6 +195,38 @@ class PatientPrimaryCareServiceImplTest {
             assertThat(existing.getEndDate()).isEqualTo(LocalDate.now().minusDays(1));
             verify(pcpRepo).save(existing);
             verify(pcpRepo).save(pcpEntity);
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName("QA D1851: a same-day reassignment ends the old link the day it started, never before")
+        void sameDayReassignmentNeverEndsBeforeStart() {
+            PatientPrimaryCare existing = PatientPrimaryCare.builder()
+                    .patient(patient).hospital(hospital).assignment(assignment)
+                    .startDate(LocalDate.now()).current(true).build();
+            existing.setId(UUID.randomUUID());
+
+            when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.of(assignment));
+            when(pcpRepo.findCurrentByPatientAndHospital(patientId, hospitalId)).thenReturn(Optional.of(existing));
+            when(pcpRepo.save(existing)).thenReturn(existing);
+            when(mapper.toEntity(requestDTO, patient, hospital, assignment)).thenReturn(pcpEntity);
+            when(pcpRepo.save(pcpEntity)).thenReturn(pcpEntity);
+            when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);
+
+            service.assignPrimaryCare(patientId, requestDTO);
+
+            assertThat(existing.isCurrent()).isFalse();
+            assertThat(existing.getEndDate()).isEqualTo(existing.getStartDate());
+        }
+
+        @Test
+        void endDateOnReassignmentClamps() {
+            LocalDate today = LocalDate.of(2026, 11, 14);
+            assertThat(PatientPrimaryCareServiceImpl.endDateOnReassignment(today, today)).isEqualTo(today);
+            assertThat(PatientPrimaryCareServiceImpl.endDateOnReassignment(today.minusDays(5), today))
+                    .isEqualTo(today.minusDays(1));
+            assertThat(PatientPrimaryCareServiceImpl.endDateOnReassignment(null, today)).isEqualTo(today.minusDays(1));
         }
 
         @Test
@@ -502,7 +535,7 @@ class PatientPrimaryCareServiceImplTest {
 
         @Test
         void found() {
-            when(pcpRepo.findByPatient_IdAndCurrentTrue(patientId)).thenReturn(Optional.of(pcpEntity));
+            when(pcpRepo.findByPatient_IdAndCurrentTrueOrderByStartDateDesc(patientId)).thenReturn(List.of(pcpEntity));
             when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);
 
             Optional<PatientPrimaryCareResponseDTO> result = service.getCurrentPrimaryCare(patientId);
@@ -512,11 +545,73 @@ class PatientPrimaryCareServiceImplTest {
 
         @Test
         void notFound() {
-            when(pcpRepo.findByPatient_IdAndCurrentTrue(patientId)).thenReturn(Optional.empty());
+            when(pcpRepo.findByPatient_IdAndCurrentTrueOrderByStartDateDesc(patientId)).thenReturn(List.of());
 
             Optional<PatientPrimaryCareResponseDTO> result = service.getCurrentPrimaryCare(patientId);
 
             assertThat(result).isEmpty();
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName("QA D1850: a current doctor at two hospitals answers the newest, never a 500")
+        void twoHospitalsAnswersTheNewest() {
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            PatientPrimaryCare atOther = PatientPrimaryCare.builder()
+                    .patient(patient).hospital(other).assignment(assignment)
+                    .startDate(LocalDate.now().minusDays(3)).current(true).build();
+            when(pcpRepo.findByPatient_IdAndCurrentTrueOrderByStartDateDesc(patientId))
+                    .thenReturn(List.of(pcpEntity, atOther));
+            when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);
+
+            assertThat(service.getCurrentPrimaryCare(patientId)).contains(responseDTO);
+        }
+    }
+
+    // ─── getOwnPrimaryCareLinks (QA D1850) ───────────────────────
+
+    @Nested
+    class GetOwnPrimaryCareLinks {
+
+        private com.example.hms.model.PatientHospitalRegistration registration(Hospital at, boolean active) {
+            com.example.hms.model.PatientHospitalRegistration r = new com.example.hms.model.PatientHospitalRegistration();
+            r.setHospital(at);
+            r.setActive(active);
+            return r;
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName("every hospital that registers the patient, and none that does not")
+        void spansRegisteredHospitalsOnly() {
+            Hospital b = new Hospital();
+            b.setId(UUID.randomUUID());
+            Hospital deactivated = new Hospital();
+            deactivated.setId(UUID.randomUUID());
+            Hospital unregistered = new Hospital();
+            unregistered.setId(UUID.randomUUID());
+            PatientPrimaryCare atB = PatientPrimaryCare.builder().patient(patient).hospital(b)
+                    .assignment(assignment).startDate(LocalDate.now()).current(true).build();
+            PatientPrimaryCare atDeactivated = PatientPrimaryCare.builder().patient(patient).hospital(deactivated)
+                    .assignment(assignment).startDate(LocalDate.now()).current(true).build();
+            PatientPrimaryCare atUnregistered = PatientPrimaryCare.builder().patient(patient).hospital(unregistered)
+                    .assignment(assignment).startDate(LocalDate.now()).current(true).build();
+            PatientPrimaryCareResponseDTO dtoB = PatientPrimaryCareResponseDTO.builder().hospitalId(b.getId()).build();
+            when(registrationRepo.findByPatientId(patientId)).thenReturn(List.of(
+                    registration(hospital, true), registration(b, true), registration(deactivated, false)));
+            when(pcpRepo.findByPatient_IdOrderByStartDateDesc(patientId))
+                    .thenReturn(List.of(atB, pcpEntity, atDeactivated, atUnregistered));
+            when(mapper.toDto(atB)).thenReturn(dtoB);
+            when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);
+
+            assertThat(service.getOwnPrimaryCareLinks(patientId)).containsExactly(dtoB, responseDTO);
+        }
+
+        @Test
+        void noActiveRegistrationReadsNothing() {
+            when(registrationRepo.findByPatientId(patientId)).thenReturn(List.of(registration(hospital, false)));
+
+            assertThat(service.getOwnPrimaryCareLinks(patientId)).isEmpty();
+            verify(pcpRepo, never()).findByPatient_IdOrderByStartDateDesc(any());
         }
     }
 
