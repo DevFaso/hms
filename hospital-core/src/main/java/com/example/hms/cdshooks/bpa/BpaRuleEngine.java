@@ -333,22 +333,17 @@ public class BpaRuleEngine {
 
     /**
      * QA D1890: the blood pressures of this patient's postpartum observations in the vitals window,
-     * at this hospital, most recent first. An observation another one corrected is left out: the
-     * correction is the reading.
+     * at this hospital, most recent first. Only observations that recorded a pressure are read
+     * (filtered in the query, so newer pressure-less ones cannot hide a severe one), and an
+     * observation another one corrected is left out: the correction is the reading.
      */
     List<com.example.hms.service.maternity.PostpartumSevereHypertension.Reading> loadPostpartumBloodPressures(
         UUID patientId, UUID hospitalId) {
         if (postpartumObservationRepository == null) return List.of();
         LocalDateTime from = LocalDateTime.now().minus(VITALS_LOOKBACK);
-        List<com.example.hms.model.postpartum.PostpartumObservation> observations = postpartumObservationRepository
-            .findWithinRange(patientId, hospitalId, from, null, PageRequest.of(0, VITALS_PAGE_SIZE));
-        Set<UUID> corrected = new java.util.HashSet<>();
-        for (com.example.hms.model.postpartum.PostpartumObservation o : observations) {
-            if (o.getSupersedesObservation() != null) corrected.add(o.getSupersedesObservation().getId());
-        }
-        return observations.stream()
-            .filter(o -> !corrected.contains(o.getId()))
-            .filter(o -> o.getSystolicBpMmHg() != null || o.getDiastolicBpMmHg() != null)
+        return postpartumObservationRepository
+            .findBloodPressuresSince(patientId, hospitalId, from, PageRequest.of(0, VITALS_PAGE_SIZE))
+            .stream()
             .map(o -> new com.example.hms.service.maternity.PostpartumSevereHypertension.Reading(
                 o.getSystolicBpMmHg(), o.getDiastolicBpMmHg(), o.getObservationTime(),
                 o.getDocumentedAt() != null ? o.getDocumentedAt() : o.getCreatedAt()))
