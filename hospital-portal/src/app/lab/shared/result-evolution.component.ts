@@ -1,14 +1,21 @@
 import { formatDecimal } from '../../shared/i18n/app-locale';
-import { Component, computed, input, linkedSignal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { Component, computed, effect, inject, input, linkedSignal, signal } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { LabResultTrendPoint } from '../../services/lab.service';
+import { LabResultReferenceRange, LabResultTrendPoint } from '../../services/lab.service';
+import { DayMonthPipe } from '../../shared/pipes/day-month.pipe';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { LabValuePipe } from './lab-value.pipe';
 import { LabCorrectionBadgeComponent } from './lab-correction-badge.component';
-import { evolutionSeries, exactObservation, observationDelta } from './result-evolution';
+import {
+  deltaPrecision,
+  evolutionSeries,
+  exactObservation,
+  niceAxis,
+  observationDelta,
+} from './result-evolution';
 import { convertValue, knownAnalyte, unitConversion } from './lab-unit-conversion';
 import { serverInstant } from '../../shared/date-utils';
 
@@ -16,7 +23,7 @@ import { serverInstant } from '../../shared/date-utils';
   selector: 'app-result-evolution',
   imports: [
     FormsModule,
-    DatePipe,
+    DayMonthPipe,
     TranslateModule,
     DateTimePipe,
     ServerTimePipe,
@@ -45,15 +52,46 @@ import { serverInstant } from '../../shared/date-utils';
       } @else if (failed()) {
         <p role="alert">{{ 'LAB_EVOLUTION.ERROR' | translate }}</p>
       } @else {
-        <p class="hint">
-          {{
-            (hasCorrections() ? 'LAB_EVOLUTION.CORRECTION_NOTE' : 'LAB_EVOLUTION.NOTE') | translate
-          }}
+        <!--
+          r44: one short sentence; the method (exact conversions only, dates to
+          scale) is behind the info button, available by pointer and keyboard.
+        -->
+        <p class="hint" data-testid="evolution-note">
+          {{ 'LAB_EVOLUTION.NOTE_SHORT' | translate }}
+          <span
+            class="info"
+            (mouseenter)="methodHover.set(true); methodDismissed.set(false)"
+            (mouseleave)="methodHover.set(false)"
+            (focusin)="methodFocus.set(true); methodDismissed.set(false)"
+            (focusout)="methodFocus.set(false); methodPinned.set(false)"
+          >
+            <button
+              type="button"
+              class="info-btn"
+              (click)="toggleMethod()"
+              [attr.aria-expanded]="methodVisible()"
+              [attr.aria-label]="'LAB_EVOLUTION.NOTE_INFO' | translate"
+              [attr.aria-describedby]="resultId() + '-evolution-method'"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">info</span>
+            </button>
+            <span
+              class="tooltip"
+              [class.visible]="methodVisible()"
+              role="tooltip"
+              [id]="resultId() + '-evolution-method'"
+              data-testid="evolution-method"
+              >{{
+                'LAB_EVOLUTION.NOTE_DETAIL' | translate: { unit: unit() ? ' (' + unit() + ')' : '' }
+              }}
+              @if (points().length > 1 && band()) {
+                {{ 'LAB_EVOLUTION.BAND_NOTE' | translate }}
+              }
+            </span>
+          </span>
         </p>
-        @if (hasConversions()) {
-          <p class="hint" data-testid="evolution-conversion-note">
-            {{ 'LAB_EVOLUTION.CONVERSION_NOTE' | translate: { unit: unit() } }}
-          </p>
+        @if (hasCorrections()) {
+          <p class="hint">{{ 'LAB_EVOLUTION.CORRECTION_NOTE' | translate }}</p>
         }
         @if (points().length > 1) {
           <figure>
@@ -63,10 +101,30 @@ import { serverInstant } from '../../shared/date-utils';
               role="img"
               [attr.aria-label]="'LAB_EVOLUTION.CHART_LABEL' | translate"
             >
+              @if (band(); as b) {
+                <!-- r44: the reference range applied to this patient, as a band. -->
+                <rect
+                  class="reference-band"
+                  data-testid="evolution-reference-band"
+                  x="55"
+                  width="525"
+                  [attr.y]="y(b.max)"
+                  [attr.height]="y(b.min) - y(b.max)"
+                >
+                  <title>
+                    {{ 'LAB_RANGE.REFERENCE' | translate }}{{ 'COMMON.COLON' | translate }}
+                    {{ b.min | labValue }} – {{ b.max | labValue: unit() }}
+                  </title>
+                </rect>
+              }
+              @for (tick of axis().ticks; track tick) {
+                <line class="grid" x1="55" x2="580" [attr.y1]="y(tick)" [attr.y2]="y(tick)" />
+                <text class="tick" x="48" [attr.y]="y(tick) + 5" text-anchor="end">
+                  {{ formatAxis(tick) }}
+                </text>
+              }
               <line x1="55" y1="20" x2="55" y2="205" />
               <line x1="55" y1="205" x2="580" y2="205" />
-              <text x="48" y="28" text-anchor="end">{{ formatAxis(bounds().max) }}</text>
-              <text x="48" y="205" text-anchor="end">{{ formatAxis(bounds().min) }}</text>
               @if (!hasCorrections()) {
                 <polyline [attr.points]="linePoints()" />
               }
@@ -90,10 +148,10 @@ import { serverInstant } from '../../shared/date-utils';
                 </circle>
               }
               <text x="55" y="232">
-                {{ points()[0].resultDate | serverTime | date: 'shortDate' }}
+                {{ points()[0].resultDate | dayMonth: undefined : true }}
               </text>
               <text x="580" y="232" text-anchor="end">
-                {{ points()[points().length - 1].resultDate | serverTime | date: 'shortDate' }}
+                {{ points()[points().length - 1].resultDate | dayMonth: undefined : true }}
               </text>
             </svg>
           </figure>
@@ -189,6 +247,47 @@ import { serverInstant } from '../../shared/date-utils';
     line {
       stroke: #a4b7bb;
     }
+    line.grid {
+      stroke: #e1ebea;
+    }
+    .reference-band {
+      fill: #88d7b7;
+      fill-opacity: 0.35;
+    }
+    .info {
+      position: relative;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .info-btn {
+      border: 0;
+      background: none;
+      padding: 0 2px;
+      cursor: help;
+      color: #405a65;
+      line-height: 1;
+    }
+    .info-btn .material-symbols-outlined {
+      font-size: 16px;
+    }
+    .tooltip {
+      display: none;
+      position: absolute;
+      z-index: 5;
+      left: 50%;
+      top: calc(100% + 4px);
+      transform: translateX(-50%);
+      width: min(320px, 80vw);
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: #193c46;
+      color: white;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .tooltip.visible {
+      display: block;
+    }
     polyline {
       fill: none;
       stroke: #08796e;
@@ -237,6 +336,38 @@ import { serverInstant } from '../../shared/date-utils';
   `,
 })
 export class ResultEvolutionComponent {
+  private readonly document = inject(DOCUMENT);
+  constructor() {
+    effect((onCleanup) => {
+      if (!this.methodVisible()) return;
+      // Hover does not move focus. Capture Escape before a containing dialog
+      // handles it, even when the focused control is outside this component.
+      const dismiss = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') this.dismissMethod(event);
+      };
+      this.document.addEventListener('keydown', dismiss, true);
+      onCleanup(() => this.document.removeEventListener('keydown', dismiss, true));
+    });
+  }
+  methodHover = signal(false);
+  methodFocus = signal(false);
+  methodPinned = signal(false);
+  methodDismissed = signal(false);
+  methodVisible = computed(
+    () =>
+      !this.methodDismissed() && (this.methodHover() || this.methodFocus() || this.methodPinned()),
+  );
+  toggleMethod(): void {
+    const pinned = !this.methodPinned();
+    this.methodPinned.set(pinned);
+    this.methodDismissed.set(!pinned);
+  }
+  dismissMethod(event: Event): void {
+    if (!this.methodVisible()) return;
+    this.methodPinned.set(false);
+    this.methodDismissed.set(true);
+    event.stopPropagation();
+  }
   history = input<LabResultTrendPoint[]>([]);
   loading = input(false);
   failed = input(false);
@@ -246,6 +377,8 @@ export class ResultEvolutionComponent {
     computation: () => '',
   });
   preferredUnit = input('');
+  /** r44: the range applied to this patient (gradedReferenceRange), drawn as a band. */
+  referenceRange = input<LabResultReferenceRange | null | undefined>(null);
   /** The test's name and code: they say whether its molar mass is known (glucose). */
   testName = input<string | null | undefined>('');
   testCode = input<string | null | undefined>('');
@@ -305,12 +438,7 @@ export class ResultEvolutionComponent {
     const delta = observationDelta(current, this.observations()[index + 1]);
     if (delta === null) return '—';
     const previous = this.observations()[index + 1];
-    const precision = Math.min(
-      20,
-      Math.max(
-        ...[current, previous].map((p) => (p.resultValue?.trim().split(/[.,]/)[1] ?? '').length),
-      ),
-    );
+    const precision = deltaPrecision(current.resultValue, previous.resultValue);
     return `${delta > 0 ? '+' : ''}${formatDecimal(delta, precision)} ${current.resultUnit.trim()}`;
   }
   linePoints = computed(() =>
@@ -318,15 +446,44 @@ export class ResultEvolutionComponent {
       .map((p) => `${this.x(p.time)},${this.y(p.value)}`)
       .join(' '),
   );
-  bounds = computed(() => {
-    const values = this.points().map((p) => p.value);
-    const min = Math.min(...values),
-      max = Math.max(...values);
-    const pad = Math.max((max - min) * 0.1, Math.abs(max) * 0.01, 0.01);
-    return { min: min - pad, max: max + pad };
+  /**
+   * r44: the applied range's limits in the plotted unit: as stated when the
+   * units match, converted only by an exact factor, otherwise no band.
+   */
+  band = computed(() => {
+    const range = this.referenceRange();
+    const unit = this.unit();
+    if (!range || range.minValue == null || range.maxValue == null || !unit) return null;
+    const from = (range.unit ?? '').trim();
+    if (!from) return null;
+    let min = range.minValue,
+      max = range.maxValue;
+    if (from !== unit) {
+      const conversion = unitConversion(from, unit, this.analyte());
+      if (!conversion?.exact) return null;
+      min = convertValue(min, conversion);
+      max = convertValue(max, conversion);
+    }
+    return Number.isFinite(min) && Number.isFinite(max) && max > min ? { min, max } : null;
   });
+  /** r44: round ticks covering the points and the band. */
+  axis = computed(() => {
+    const values = this.points().map((p) => p.value);
+    const band = this.band();
+    if (band) values.push(band.min, band.max);
+    return (
+      niceAxis(Math.min(...values), Math.max(...values)) ?? {
+        min: 0,
+        max: 1,
+        step: 1,
+        decimals: 0,
+        ticks: [0, 1],
+      }
+    );
+  });
+  bounds = computed(() => ({ min: this.axis().min, max: this.axis().max }));
   formatAxis(value: number): string {
-    return formatDecimal(value, 3);
+    return formatDecimal(value, this.axis().decimals);
   }
   x(time: number): number {
     const times = this.points().map((p) => p.time);

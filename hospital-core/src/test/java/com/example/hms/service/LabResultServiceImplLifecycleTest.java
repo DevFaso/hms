@@ -77,6 +77,8 @@ class LabResultServiceImplLifecycleTest {
     @Mock private InBasketService inBasketService;
     @Mock private com.example.hms.service.lab.LabResultReleaseNotifier releaseNotifier;
 
+    @Mock private com.example.hms.service.lab.LabOrderDuplicateCheck labOrderDuplicateCheck;
+
     @InjectMocks
     private LabResultServiceImpl service;
 

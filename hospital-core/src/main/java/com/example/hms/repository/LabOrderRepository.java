@@ -2,7 +2,6 @@ package com.example.hms.repository;
 
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.model.LabOrder;
-import jakarta.validation.constraints.NotNull;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -122,7 +121,34 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     List<LabOrder> findByStatusAndHospital_Id(LabOrderStatus status, UUID hospitalId);
     List<LabOrder> findByHospital_IdAndStatusIn(UUID hospitalId, java.util.Collection<LabOrderStatus> statuses);
 
-    boolean existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(UUID id, UUID id1, @NotNull LocalDateTime orderDatetime);
+    /**
+     * The duplicate-order check: this patient's orders AT this hospital for
+     * the same test (by definition id, or by test code so a new version of
+     * the test still matches; both sides trimmed and upper-cased, the caller
+     * passes the code normalised), in one of the given statuses, PLACED since the
+     * cutoff: the row's creation time, which the server sets, never the
+     * caller-supplied clinical {@code orderDatetime} (a backdated order is still
+     * a recent placement; Rex on #1150). Newest first. {@code excludeOrderId} keeps an order from
+     * matching itself (pass a random id when there is none).
+     */
+    @Query("""
+        SELECT o FROM LabOrder o LEFT JOIN o.labTestDefinition d
+        WHERE o.patient.id = :patientId
+          AND o.hospital.id = :hospitalId
+          AND o.status IN :statuses
+          AND o.createdAt >= :since
+          AND o.id <> :excludeOrderId
+          AND (o.labTestDefinitionId = :definitionId OR UPPER(TRIM(d.testCode)) = :testCode)
+        ORDER BY o.createdAt DESC
+    """)
+    List<LabOrder> findActiveSameTestSince(@Param("patientId") UUID patientId,
+                                           @Param("hospitalId") UUID hospitalId,
+                                           @Param("definitionId") UUID definitionId,
+                                           @Param("testCode") String testCode,
+                                           @Param("statuses") java.util.Collection<LabOrderStatus> statuses,
+                                           @Param("since") LocalDateTime since,
+                                           @Param("excludeOrderId") UUID excludeOrderId);
+
 
     /** The orders placed during one visit (its after-visit summary lists them). */
     List<LabOrder> findByEncounter_Id(UUID encounterId);

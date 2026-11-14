@@ -93,5 +93,14 @@ public interface LabOrderService {
 
     /** B1: the laboratories the caller may route an order to — every active hospital but the acting one. */
     List<com.example.hms.payload.dto.PerformingLabOptionDTO> listPerformingLabs();
+
+    /**
+     * The duplicate-order warning before an order is placed: the patient's
+     * active orders of this test at this hospital within
+     * {@code LabOrderDuplicateCheck.WINDOW}. {@code hospitalId} may be null
+     * for a caller pinned to a hospital (theirs is used).
+     */
+    List<com.example.hms.payload.dto.LabOrderDuplicateMatchDTO> previewDuplicates(
+        UUID patientId, UUID hospitalId, UUID labTestDefinitionId);
 }
 

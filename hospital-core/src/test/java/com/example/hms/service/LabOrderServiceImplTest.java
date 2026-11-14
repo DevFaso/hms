@@ -89,6 +89,8 @@ class LabOrderServiceImplTest {
     @Mock private com.example.hms.controller.support.ControllerAuthUtils authUtils;
     @Mock private com.example.hms.repository.LabResultRepository labResultRepository;
 
+    @Mock private com.example.hms.service.lab.LabOrderDuplicateCheck labOrderDuplicateCheck;
+
     @InjectMocks
     private LabOrderServiceImpl labOrderService;
 
@@ -955,8 +957,6 @@ class LabOrderServiceImplTest {
         when(labTestDefinitionRepository.findById(labTestDefinitionId)).thenReturn(Optional.of(labTestDefinition));
         // Lenient: an edit that keeps the ordering clinician and the assignment never looks it up.
         lenient().when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
-        lenient().when(labOrderRepository.existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(eq(patientId), eq(labTestDefinitionId), any(LocalDateTime.class)))
-            .thenReturn(false);
     }
 
     private LabOrderRequestDTO.LabOrderRequestDTOBuilder baseRequestBuilder() {
@@ -1086,5 +1086,148 @@ class LabOrderServiceImplTest {
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
             .extracting("messageKey").isEqualTo("lab.order.closed.readOnly");
         verify(labOrderRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    // ── The duplicate warning (found while building PR #1147) ──────────────
+
+    @Test
+    void aDuplicateIsPlacedAndReportedAsAcknowledgedWhenTheOrdererSaidOrderAnyway() {
+        mockCommonLookups();
+        LabOrder earlier = existingLabOrder(UUID.randomUUID());
+        when(labOrderDuplicateCheck.find(any(LabOrder.class))).thenReturn(List.of(earlier));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        LabOrderResponseDTO responseDTO = LabOrderResponseDTO.builder().id(UUID.randomUUID().toString()).build();
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class))).thenReturn(responseDTO);
+
+        LabOrderResponseDTO result = labOrderService.createLabOrder(
+            baseRequestBuilder().acknowledgedDuplicateOrderIds(List.of(earlier.getId())).build(), Locale.ENGLISH);
+
+        // Warned, never blocked: the order is saved and the acknowledgement reported.
+        ArgumentCaptor<LabOrder> saved = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository).save(saved.capture());
+        verify(labOrderDuplicateCheck).report(saved.getValue(), List.of(earlier), true,
+            responseDTO, orderingUserId);
+        assertThat(result).isSameAs(responseDTO);
+    }
+
+    @Test
+    void aDuplicateFromACallerThatDidNotAcknowledgeIsStillPlacedAndReportedUnacknowledged() {
+        mockCommonLookups();
+        LabOrder earlier = existingLabOrder(UUID.randomUUID());
+        when(labOrderDuplicateCheck.find(any(LabOrder.class))).thenReturn(List.of(earlier));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
+            .thenReturn(LabOrderResponseDTO.builder().build());
+
+        labOrderService.createLabOrder(baseRequestBuilder().build(), Locale.ENGLISH);
+
+        verify(labOrderRepository).save(any(LabOrder.class));
+        verify(labOrderDuplicateCheck).report(any(LabOrder.class), eq(List.of(earlier)), eq(false), any(), any());
+    }
+
+    @Test
+    void anAcknowledgementOfAnotherEarlierOrderDoesNotAcknowledgeThisDuplicate() {
+        // Rex on #1150: a stale warning (it showed order A; order B was placed
+        // since) must not record "order anyway" against B.
+        mockCommonLookups();
+        LabOrder shown = existingLabOrder(UUID.randomUUID());
+        LabOrder placedSince = existingLabOrder(UUID.randomUUID());
+        when(labOrderDuplicateCheck.find(any(LabOrder.class))).thenReturn(List.of(placedSince, shown));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
+            .thenReturn(LabOrderResponseDTO.builder().build());
+
+        labOrderService.createLabOrder(
+            baseRequestBuilder().acknowledgedDuplicateOrderIds(List.of(shown.getId())).build(), Locale.ENGLISH);
+
+        verify(labOrderDuplicateCheck).report(any(LabOrder.class), eq(List.of(placedSince, shown)), eq(false),
+            any(), any());
+    }
+
+    @Test
+    void anOrderWithTheSameExplicitTimestampIsPlacedNotRefused() {
+        // Rex on #1150: the legacy exact-timestamp check refused it
+        // ("lab.order.duplicate"); the rule is warn, never block.
+        mockCommonLookups();
+        LabOrder earlier = existingLabOrder(UUID.randomUUID());
+        when(labOrderDuplicateCheck.find(any(LabOrder.class))).thenReturn(List.of(earlier));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
+            .thenReturn(LabOrderResponseDTO.builder().build());
+
+        LabOrderRequestDTO sameMinute = baseRequestBuilder().orderDatetime(earlier.getOrderDatetime()).build();
+        labOrderService.createLabOrder(sameMinute, Locale.ENGLISH);
+
+        verify(labOrderRepository).save(any(LabOrder.class));
+    }
+
+    @Test
+    void theDuplicatePreviewForASuperAdminInGlobalViewReadsTheNamedHospital() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        when(labTestDefinitionRepository.findById(labTestDefinitionId)).thenReturn(Optional.empty());
+
+        assertThat(labOrderService.previewDuplicates(patientId, hospitalId, labTestDefinitionId)).isEmpty();
+        verify(labOrderDuplicateCheck).find(patientId, hospitalId, labTestDefinitionId, null, null);
+
+        // Without a hospital, or without a patient or test, nothing is asked.
+        assertThat(labOrderService.previewDuplicates(patientId, null, labTestDefinitionId)).isEmpty();
+        assertThat(labOrderService.previewDuplicates(null, hospitalId, labTestDefinitionId)).isEmpty();
+        assertThat(labOrderService.previewDuplicates(patientId, hospitalId, null)).isEmpty();
+        verify(labOrderDuplicateCheck).find(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void theDuplicatePreviewIsEmptyForAGlobalCallerWhoIsNotASuperAdmin() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+
+        assertThat(labOrderService.previewDuplicates(patientId, hospitalId, labTestDefinitionId)).isEmpty();
+        verify(labOrderDuplicateCheck, never()).find(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void theDuplicatePreviewIsEmptyForAPatientNotRegisteredHere() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authUtils.resolveUserId(any())).thenReturn(Optional.of(orderingUserId));
+        when(roleValidator.canOrderLabTests(orderingUserId, hospitalId)).thenReturn(true);
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
+
+        assertThat(labOrderService.previewDuplicates(patientId, hospitalId, labTestDefinitionId)).isEmpty();
+        verify(labOrderDuplicateCheck, never()).find(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void theDuplicatePreviewIsScopedToTheCallersHospital() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        // Another hospital named by a pinned caller: nothing, and nothing asked.
+        assertThat(labOrderService.previewDuplicates(patientId, UUID.randomUUID(), labTestDefinitionId)).isEmpty();
+        verify(labOrderDuplicateCheck, never()).find(any(), any(), any(), any(), any());
+
+        // Their own hospital, where they may order and the patient is registered.
+        when(authUtils.resolveUserId(any())).thenReturn(Optional.of(orderingUserId));
+        when(roleValidator.canOrderLabTests(orderingUserId, hospitalId)).thenReturn(true);
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        when(labTestDefinitionRepository.findById(labTestDefinitionId)).thenReturn(Optional.of(labTestDefinition));
+        LabOrder earlier = existingLabOrder(UUID.randomUUID());
+        when(labOrderDuplicateCheck.find(eq(patientId), eq(hospitalId), eq(labTestDefinitionId), any(), isNull()))
+            .thenReturn(List.of(earlier));
+        com.example.hms.payload.dto.LabOrderDuplicateMatchDTO match =
+            com.example.hms.payload.dto.LabOrderDuplicateMatchDTO.builder().orderId(earlier.getId()).build();
+        when(labOrderMapper.toDuplicateMatchDTO(earlier)).thenReturn(match);
+
+        assertThat(labOrderService.previewDuplicates(patientId, null, labTestDefinitionId)).containsExactly(match);
+    }
+
+    @Test
+    void theDuplicatePreviewIsEmptyForACallerWhoMayNotOrderThere() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authUtils.resolveUserId(any())).thenReturn(Optional.of(orderingUserId));
+        when(roleValidator.canOrderLabTests(orderingUserId, hospitalId)).thenReturn(false);
+
+        assertThat(labOrderService.previewDuplicates(patientId, hospitalId, labTestDefinitionId)).isEmpty();
+        verify(labOrderDuplicateCheck, never()).find(any(), any(), any(), any(), any());
     }
 }

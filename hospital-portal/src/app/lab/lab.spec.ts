@@ -91,6 +91,7 @@ describe('LabComponent — performing laboratory', () => {
       'listOrders',
       'listTestDefinitions',
       'listPerformingLabs',
+      'checkDuplicates',
       'createOrder',
       'updateOrder',
       'deleteOrder',
@@ -111,6 +112,7 @@ describe('LabComponent — performing laboratory', () => {
     labService.listOrderResults.and.returnValue(of([]));
     labService.listTestDefinitions.and.returnValue(of([]));
     labService.listPerformingLabs.and.returnValue(of(labs));
+    labService.checkDuplicates.and.returnValue(of([]));
     labService.createOrder.and.returnValue(of(orders[0] ?? order({})));
     labService.updateOrder.and.returnValue(of(orders[0] ?? order({})));
 
@@ -130,7 +132,12 @@ describe('LabComponent — performing laboratory', () => {
       'getAssignments',
     ]);
     profileService.getAssignments.and.returnValue(of([]));
-    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
+    toast = jasmine.createSpyObj<ToastService>('ToastService', [
+      'success',
+      'error',
+      'info',
+      'warning',
+    ]);
     const printService = jasmine.createSpyObj<PrintLabelService>('PrintLabelService', [
       'getSpecimenLabelPdf',
       'openForPrint',
@@ -545,6 +552,205 @@ describe('LabComponent — performing laboratory', () => {
     const payload = labService.createOrder.calls.mostRecent().args[0];
     expect(payload.performingHospitalId).toBeNull();
     expect('performingHospitalId' in payload).toBeTrue();
+  });
+
+  describe('the duplicate-order warning', () => {
+    const earlier = {
+      orderId: 'o-earlier',
+      labOrderCode: 'LAB-000023',
+      labTestName: 'Fasting glucose',
+      status: 'ORDERED',
+    };
+
+    it('shows the warning and sends nothing until "Order anyway"', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.checkDuplicates.and.returnValue(of([earlier]));
+
+      component.openCreate();
+      component.form.patientId = 'p-1';
+      component.form.labTestDefinitionId = 'def-glu';
+      component.submitForm();
+
+      expect(labService.checkDuplicates).toHaveBeenCalledWith('p-1', 'def-glu', jasmine.anything());
+      expect(labService.createOrder).not.toHaveBeenCalled();
+      expect(component.duplicateMatches()).toEqual([earlier]);
+      fixture.detectChanges();
+      const warning = fixture.nativeElement.querySelector('[data-testid="lab-duplicate-warning"]');
+      expect(warning?.textContent).toContain('LAB-000023');
+
+      component.orderAnyway();
+      expect(labService.createOrder).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ acknowledgedDuplicateOrderIds: ['o-earlier'] }),
+      );
+      expect(component.duplicateMatches()).toEqual([]);
+    });
+
+    it('sends the order without an acknowledgement when there is no duplicate', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+
+      component.openCreate();
+      component.submitForm();
+
+      const payload = labService.createOrder.calls.mostRecent().args[0];
+      expect('acknowledgedDuplicateOrderIds' in payload).toBeFalse();
+    });
+
+    it('never blocks the order when the check itself fails', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.checkDuplicates.and.returnValue(throwError(() => new Error('down')));
+
+      component.openCreate();
+      component.submitForm();
+
+      expect(labService.createOrder).toHaveBeenCalledTimes(1);
+    });
+
+    // Rex on #1150: a late preview reply never places an order.
+    it('ignores a preview reply that arrives after the form was closed', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<(typeof earlier)[]>();
+      labService.checkDuplicates.and.returnValue(reply);
+
+      component.openCreate();
+      component.submitForm();
+      component.closeModal();
+      reply.next([]);
+
+      expect(labService.createOrder).not.toHaveBeenCalled();
+      expect(component.saving()).toBeFalse();
+    });
+
+    it('ignores a preview reply about a patient or test no longer on the form', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<(typeof earlier)[]>();
+      labService.checkDuplicates.and.returnValue(reply);
+
+      component.openCreate();
+      component.form.labTestDefinitionId = 'def-glu';
+      component.submitForm();
+      component.form.labTestDefinitionId = 'def-hgb';
+      reply.next([]);
+
+      expect(labService.createOrder).not.toHaveBeenCalled();
+      expect(component.duplicateMatches()).toEqual([]);
+      expect(component.saving()).toBeFalse();
+    });
+
+    it('keeps the write lock when the dialog is closed and reopened during a save', async () => {
+      // Rex on #1150: closing released the lock, so a reopened form sent a second order.
+      await setup(['ROLE_DOCTOR'], []);
+      const written = new Subject<LabOrderResponse>();
+      labService.createOrder.and.returnValue(written);
+
+      component.openCreate();
+      component.submitForm();
+      expect(labService.createOrder).toHaveBeenCalledTimes(1);
+      component.closeModal();
+      expect(component.saving()).toBeTrue();
+      component.openCreate();
+      component.submitForm();
+      component.orderAnyway();
+      expect(labService.createOrder).toHaveBeenCalledTimes(1);
+
+      written.next(order({}));
+      expect(component.saving()).toBeFalse();
+      component.openCreate();
+      component.submitForm();
+      expect(labService.createOrder).toHaveBeenCalledTimes(2);
+    });
+
+    it('tells the clinician about a duplicate the server found when placing the order', async () => {
+      // Rex on #1150: the preview saw none (or failed); the server's own check is not dropped.
+      await setup(['ROLE_DOCTOR'], []);
+      labService.createOrder.and.returnValue(
+        of(
+          order({
+            duplicateOfRecentOrder: true,
+            duplicateAcknowledged: false,
+            duplicateMatches: [{ orderId: 'o-earlier', labOrderCode: 'LAB-000023' }],
+          }),
+        ),
+      );
+
+      component.openCreate();
+      component.submitForm();
+
+      expect(toast.warning).toHaveBeenCalledTimes(1);
+    });
+
+    it('says nothing more when the duplicate the server found was the one acknowledged', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.createOrder.and.returnValue(
+        of(order({ duplicateOfRecentOrder: true, duplicateAcknowledged: true })),
+      );
+
+      component.openCreate();
+      component.submitForm();
+
+      expect(toast.warning).not.toHaveBeenCalled();
+    });
+
+    it('places no order from a preview reply that arrives after leaving the page', async () => {
+      // Rex on #1150: the preview's subscription ends with the component.
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<(typeof earlier)[]>();
+      labService.checkDuplicates.and.returnValue(reply);
+
+      component.openCreate();
+      component.submitForm();
+      fixture.destroy();
+      reply.next([]);
+      reply.error(new Error('late'));
+
+      expect(reply.observed).toBeFalse();
+      expect(labService.createOrder).not.toHaveBeenCalled();
+    });
+
+    it('ignores the reply of an older check once a newer one was asked', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const first = new Subject<(typeof earlier)[]>();
+      const second = new Subject<(typeof earlier)[]>();
+      labService.checkDuplicates.and.returnValues(first, second);
+
+      component.openCreate();
+      component.submitForm();
+      component.submitForm();
+      first.next([]);
+      expect(labService.createOrder).not.toHaveBeenCalled();
+
+      second.next([earlier]);
+      expect(component.duplicateMatches()).toEqual([earlier]);
+      expect(labService.createOrder).not.toHaveBeenCalled();
+    });
+
+    it('asks again instead of acknowledging a warning about another test', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.checkDuplicates.and.returnValue(of([earlier]));
+
+      component.openCreate();
+      component.form.labTestDefinitionId = 'def-glu';
+      component.submitForm();
+      component.form.labTestDefinitionId = 'def-hgb';
+      labService.checkDuplicates.and.returnValue(of([]));
+      component.orderAnyway();
+
+      expect(labService.checkDuplicates).toHaveBeenCalledTimes(2);
+      const payload = labService.createOrder.calls.mostRecent().args[0];
+      expect(payload.labTestDefinitionId).toBe('def-hgb');
+      expect('acknowledgedDuplicateOrderIds' in payload).toBeFalse();
+    });
+
+    it('goes back to the form without ordering', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.checkDuplicates.and.returnValue(of([earlier]));
+
+      component.openCreate();
+      component.submitForm();
+      component.dismissDuplicateWarning();
+
+      expect(component.duplicateMatches()).toEqual([]);
+      expect(labService.createOrder).not.toHaveBeenCalled();
+    });
   });
 
   it('brings an outsourced order back in-house from the edit form', async () => {

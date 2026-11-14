@@ -7,7 +7,9 @@ import {
   OnInit,
   signal,
   ChangeDetectionStrategy,
+  DestroyRef,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
@@ -16,6 +18,7 @@ import {
   LabService,
   LabOrderResponse,
   LabOrderRequest,
+  LabOrderDuplicateMatch,
   LabTestDefinition,
   LabTestDefinitionApprovalRequest,
   LabSpecimen,
@@ -97,6 +100,8 @@ export class LabComponent implements OnInit {
   /** QA D227: a readable order code, not the raw id. */
   readonly shortOrderCode = shortOrderCode;
   private readonly labService = inject(LabService);
+  /** Rex on #1150: the order flow's requests end with the page (no order placed after leaving it). */
+  private readonly destroyRef = inject(DestroyRef);
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
   private readonly activatedRoute = inject(ActivatedRoute);
@@ -162,6 +167,25 @@ export class LabComponent implements OnInit {
   saving = signal(false);
   editingId = signal<string | null>(null);
   form: LabOrderRequest = this.emptyForm();
+  /**
+   * The duplicate-order warning: active orders of the same test for this
+   * patient here, placed recently. Shown before the order is sent; the
+   * clinician may still order anyway (recorded on the order).
+   */
+  duplicateMatches = signal<LabOrderDuplicateMatch[]>([]);
+  /**
+   * Rex on #1150: the preview is asynchronous. Each check, close, reopen or
+   * dismissal advances this counter, and a reply from an older check is
+   * ignored, so a late reply never places an order or shows a stale warning.
+   */
+  private duplicateCheckSeq = 0;
+  /** The patient, hospital and test the shown warning is about. */
+  private duplicateWarningKey: string | null = null;
+  /**
+   * Rex on #1150: a create or update is on the wire. Closing the dialog
+   * releases a preview, never this, so a reopened form cannot send a second write.
+   */
+  private writeInFlight = false;
 
   // QA D820: void (entered in error)
   voidingOrder = signal<LabOrderResponse | null>(null);
@@ -701,6 +725,7 @@ export class LabComponent implements OnInit {
 
   openCreate(): void {
     this.form = this.emptyForm();
+    this.clearDuplicateWarning();
     this.editing.set(false);
     this.editingId.set(null);
     this.selectedPatient.set(null);
@@ -747,9 +772,93 @@ export class LabComponent implements OnInit {
 
   closeModal(): void {
     this.showModal.set(false);
+    // A preview still in flight is abandoned with the form (its reply is
+    // ignored); a write in flight keeps the lock until it answers.
+    if (!this.writeInFlight) this.saving.set(false);
+    this.clearDuplicateWarning();
   }
 
+  /** What a duplicate is judged on: this patient, this hospital, this test. */
+  private duplicateKey(): string {
+    return [this.form.patientId, this.form.hospitalId, this.form.labTestDefinitionId].join('|');
+  }
+
+  private clearDuplicateWarning(): void {
+    this.duplicateCheckSeq++;
+    this.duplicateWarningKey = null;
+    this.duplicateMatches.set([]);
+  }
+
+  /**
+   * A new order first asks whether the same test is already active for the
+   * patient here; if so the warning is shown and nothing is sent until the
+   * clinician chooses "Order anyway". A failed check never blocks the order.
+   */
   submitForm(): void {
+    if (this.writeInFlight) return;
+    if (this.editing()) {
+      this.saveOrder(null);
+      return;
+    }
+    this.clearDuplicateWarning();
+    const seq = this.duplicateCheckSeq;
+    const key = this.duplicateKey();
+    // A reply counts only for the check that is still current, on the form it was asked about.
+    const current = (): boolean => {
+      if (seq !== this.duplicateCheckSeq) return false;
+      if (!this.showModal() || key !== this.duplicateKey()) {
+        this.saving.set(false);
+        return false;
+      }
+      return true;
+    };
+    this.saving.set(true);
+    this.labService
+      .checkDuplicates(
+        this.form.patientId,
+        this.form.labTestDefinitionId,
+        this.form.hospitalId || undefined,
+      )
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (matches) => {
+          if (!current()) return;
+          if (matches.length > 0) {
+            this.duplicateWarningKey = key;
+            this.duplicateMatches.set(matches);
+            this.saving.set(false);
+            return;
+          }
+          this.saveOrder(null);
+        },
+        error: () => {
+          if (current()) this.saveOrder(null);
+        },
+      });
+  }
+
+  /**
+   * "Order anyway": the order carries the ids of the earlier orders the
+   * clinician was shown. If the form changed since the warning, it is asked
+   * again instead of acknowledging a warning about something else.
+   */
+  orderAnyway(): void {
+    const shown = this.duplicateMatches();
+    if (shown.length === 0 || this.duplicateWarningKey !== this.duplicateKey()) {
+      this.submitForm();
+      return;
+    }
+    this.saveOrder(shown.map((d) => d.orderId));
+  }
+
+  /** Back to the form without ordering. */
+  dismissDuplicateWarning(): void {
+    this.clearDuplicateWarning();
+  }
+
+  private saveOrder(acknowledgedDuplicateOrderIds: string[] | null): void {
+    if (this.writeInFlight) return;
+    this.writeInFlight = true;
     this.saving.set(true);
     // The select is always sent, and "" is an explicit null rather than an
     // absent field: absent tells the API to leave the routing as it is, so
@@ -758,20 +867,24 @@ export class LabComponent implements OnInit {
     const payload: LabOrderRequest = {
       ...this.form,
       performingHospitalId: this.form.performingHospitalId || null,
+      ...(acknowledgedDuplicateOrderIds ? { acknowledgedDuplicateOrderIds } : {}),
     };
     const op = this.editing()
       ? this.labService.updateOrder(this.editingId()!, payload)
       : this.labService.createOrder(payload);
-    op.subscribe({
-      next: () => {
+    op.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (saved) => {
+        this.writeInFlight = false;
         this.toast.success(
           this.translate.instant(this.editing() ? 'LAB.TOAST.UPDATED' : 'LAB.TOAST.CREATED'),
         );
+        this.warnOfDuplicateFoundOnPlacing(saved);
         this.closeModal();
         this.saving.set(false);
         this.loadOrders();
       },
       error: (err: unknown) => {
+        this.writeInFlight = false;
         // QA D1094: a refusal the server explains (a closed visit, another
         // patient's visit) is shown in the reader's language; only a failure
         // with no message falls back to the generic toast.
@@ -785,6 +898,20 @@ export class LabComponent implements OnInit {
         this.saving.set(false);
       },
     });
+  }
+
+  /**
+   * Rex on #1150: the server checks again when the order is placed. A
+   * duplicate it found that the clinician did not acknowledge (another order
+   * placed since the preview, or a preview that failed) is told, not dropped.
+   */
+  private warnOfDuplicateFoundOnPlacing(saved: LabOrderResponse | null | undefined): void {
+    if (!saved?.duplicateOfRecentOrder || saved.duplicateAcknowledged) return;
+    const codes = (saved.duplicateMatches ?? [])
+      .map((d) => d.labOrderCode ?? d.orderId)
+      .filter((c): c is string => !!c)
+      .join(', ');
+    this.toast.warning(this.translate.instant('LAB.DUPLICATE.PLACED_ANYWAY', { codes }));
   }
 
   /**

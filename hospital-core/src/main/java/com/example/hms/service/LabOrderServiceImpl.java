@@ -107,6 +107,7 @@ public class LabOrderServiceImpl implements LabOrderService {
     private final com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
     private final com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
     private final com.example.hms.repository.LabResultRepository labResultRepository;
+    private final com.example.hms.service.lab.LabOrderDuplicateCheck duplicateCheck;
     private final com.example.hms.repository.PatientDiagnosisRepository patientDiagnosisRepository;
     private static final HexFormat HEX_FORMAT = HexFormat.of();
 
@@ -114,10 +115,21 @@ public class LabOrderServiceImpl implements LabOrderService {
     @Transactional
     public LabOrderResponseDTO createLabOrder(LabOrderRequestDTO request, Locale locale) {
         LabOrder newLabOrder = buildLabOrder(null, request, true);
+        // The duplicate warning: an active order of the same test for this
+        // patient here, placed recently. It warns, never blocks.
+        List<LabOrder> duplicates = duplicateCheck.find(newLabOrder);
         LabOrder saved = labOrderRepository.save(newLabOrder);
         // B1: the performing laboratory learns about the order (after commit, best-effort).
         routingNotifier.notifyPerformingLab(saved);
-        return labOrderMapper.toLabOrderResponseDTO(saved);
+        LabOrderResponseDTO response = labOrderMapper.toLabOrderResponseDTO(saved);
+        // The acknowledgement names the earlier orders the orderer was shown;
+        // it counts only when it covers every duplicate found now, so a stale
+        // warning (another order placed since) is recorded as unacknowledged.
+        duplicateCheck.report(saved, duplicates,
+            com.example.hms.service.lab.LabOrderDuplicateCheck.acknowledges(
+                request.getAcknowledgedDuplicateOrderIds(), duplicates),
+            response, callerUserId());
+        return response;
     }
 
     @Override
@@ -149,6 +161,44 @@ public class LabOrderServiceImpl implements LabOrderService {
             routingNotifier.notifyPerformingLab(saved);
         }
         return labOrderMapper.toLabOrderResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.LabOrderDuplicateMatchDTO> previewDuplicates(
+            UUID patientId, UUID hospitalId, UUID labTestDefinitionId) {
+        if (patientId == null || labTestDefinitionId == null) {
+            return List.of();
+        }
+        // The hospital the order would be placed at: the caller's own when
+        // pinned (another hospital's orders are not theirs to see), the named
+        // one for a super-admin in global view.
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID targetHospitalId;
+        if (activeHospitalId != null) {
+            if (hospitalId != null && !hospitalId.equals(activeHospitalId)) {
+                return List.of();
+            }
+            targetHospitalId = activeHospitalId;
+        } else {
+            if (hospitalId == null || !roleValidator.isSuperAdminFromJwtClaim()) {
+                return List.of();
+            }
+            targetHospitalId = hospitalId;
+        }
+        // Only someone who may order tests here sees what is already ordered.
+        UUID callerId = callerUserId();
+        boolean mayOrderHere = roleValidator.isSuperAdminFromJwtClaim()
+            || (callerId != null && roleValidator.canOrderLabTests(callerId, targetHospitalId));
+        if (!mayOrderHere
+                || !patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, targetHospitalId)) {
+            return List.of();
+        }
+        LabTestDefinition definition = labTestDefinitionRepository.findById(labTestDefinitionId).orElse(null);
+        String testCode = definition != null ? definition.getTestCode() : null;
+        return duplicateCheck.find(patientId, targetHospitalId, labTestDefinitionId, testCode, null).stream()
+            .map(labOrderMapper::toDuplicateMatchDTO)
+            .toList();
     }
 
     /** 404-not-403: an ordering-side write from any other hospital does not exist. */
@@ -361,11 +411,6 @@ public class LabOrderServiceImpl implements LabOrderService {
         requireOrderableHere(testDefinition, hospital, base);
 
         UserRoleHospitalAssignment assignment = resolveOrderingAssignment(base, request.getAssignmentId(), staff, hospital);
-
-        if (isNew && labOrderRepository.existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(
-            patient.getId(), testDefinition.getId(), request.getOrderDatetime())) {
-            throw new BusinessException("lab.order.duplicate");
-        }
 
         LabOrder labOrder = (base != null) ? base : new LabOrder();
 

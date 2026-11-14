@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ResultEvolutionComponent } from './result-evolution.component';
 
 describe('ResultEvolutionComponent', () => {
@@ -24,6 +24,23 @@ describe('ResultEvolutionComponent', () => {
     return fixture;
   }
 
+  it('omits empty unit parentheses from the method explanation', () => {
+    const fixture = setup();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', { LAB_EVOLUTION: { NOTE_DETAIL: 'Method{{unit}}.' } });
+    translate.use('en');
+    fixture.detectChanges();
+    const method = () =>
+      fixture.nativeElement.querySelector('[data-testid="evolution-method"]').textContent;
+    expect(method()).toContain('Method (g/L).');
+    fixture.componentRef.setInput('preferredUnit', '');
+    fixture.componentRef.setInput('history', [
+      { resultValue: '1', resultUnit: '', resultDate: '2026-11-08T09:00:00Z' },
+    ]);
+    fixture.detectChanges();
+    expect(method()).toContain('Method.');
+    expect(method()).not.toContain('()');
+  });
   it('restores the chronological observations table and the delta column', () => {
     const fixture = setup();
     const host = fixture.nativeElement as HTMLElement;
@@ -88,9 +105,10 @@ describe('ResultEvolutionComponent', () => {
     expect(fixture.nativeElement.querySelector('h3')?.textContent).toContain(
       'LAB_EVOLUTION.AUDIT_TITLE',
     );
-    expect(fixture.nativeElement.querySelector('.hint')?.textContent).toContain(
-      'LAB_EVOLUTION.CORRECTION_NOTE',
+    const hints = [...fixture.nativeElement.querySelectorAll('.hint')].map(
+      (h: Element) => h.textContent ?? '',
     );
+    expect(hints.join(' ')).toContain('LAB_EVOLUTION.CORRECTION_NOTE');
     expect(fixture.componentInstance.deltaAt(0)).toBe('—');
     expect(fixture.nativeElement.querySelectorAll('tbody tr').length).toBe(3);
   });
@@ -126,8 +144,13 @@ describe('ResultEvolutionComponent', () => {
     expect(fixture.componentInstance.unit()).toBe('g/L');
     expect(host.querySelectorAll('circle').length).toBe(3);
     expect(host.querySelector('polyline')).toBeTruthy();
-    expect(host.querySelector('[data-testid="evolution-conversion-note"]')).toBeTruthy();
-    expect(host.querySelector('.hint')?.textContent).toContain('LAB_EVOLUTION.NOTE');
+    // r44: one short sentence; the method is in the info tooltip.
+    expect(host.querySelector('[data-testid="evolution-note"]')?.textContent).toContain(
+      'LAB_EVOLUTION.NOTE_SHORT',
+    );
+    expect(host.querySelector('[data-testid="evolution-method"]')?.textContent).toContain(
+      'LAB_EVOLUTION.NOTE_DETAIL',
+    );
     // The tooltip names the stored value and unit; the table keeps them and marks the conversion.
     const tooltips = [...host.querySelectorAll('circle title')].map((t) => t.textContent ?? '');
     expect(tooltips.filter((t) => t.includes('LAB_EVOLUTION.CONVERTED_FROM')).length).toBe(2);
@@ -158,5 +181,180 @@ describe('ResultEvolutionComponent', () => {
     expect(fixture.componentInstance.units()).toEqual(['mg/L', 'mmol/L']);
     expect(fixture.componentInstance.points().map((p) => p.value)).toEqual([8, 9]);
     expect(fixture.componentInstance.hasConversions()).toBeFalse();
+  });
+
+  it('retains years on both ends of a history spanning years', () => {
+    const fixture = setup();
+    fixture.componentRef.setInput('history', [
+      { resultValue: '1.2', resultUnit: 'g/L', resultDate: '2024-11-12T12:00:00Z' },
+      { resultValue: '1.1', resultUnit: 'g/L', resultDate: '2026-11-13T12:00:00Z' },
+    ]);
+    fixture.detectChanges();
+    const labels = [...fixture.nativeElement.querySelectorAll('svg > text:not(.tick)')].map(
+      (t) => (t as Element).textContent,
+    );
+    expect(labels[0]).toContain('2024');
+    expect(labels[1]).toContain('2026');
+  });
+
+  it('opens the method by click without focus, toggles it, and dismisses with Escape while hovered', () => {
+    const fixture = setup();
+    const host = fixture.nativeElement as HTMLElement;
+    const button = host.querySelector<HTMLButtonElement>('.info-btn')!;
+    const tooltip = host.querySelector<HTMLElement>('[role="tooltip"]')!;
+    expect(getComputedStyle(tooltip).display).toBe('none');
+    button.click();
+    fixture.detectChanges();
+    expect(getComputedStyle(tooltip).display).toBe('block');
+    button.click();
+    fixture.detectChanges();
+    expect(getComputedStyle(tooltip).display).toBe('none');
+    host.querySelector('.info')!.dispatchEvent(new MouseEvent('mouseenter'));
+    fixture.detectChanges();
+    expect(getComputedStyle(tooltip).display).toBe('block');
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true });
+    button.dispatchEvent(escape);
+    fixture.detectChanges();
+    expect(getComputedStyle(tooltip).display).toBe('none');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    button.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    fixture.detectChanges();
+    expect(getComputedStyle(tooltip).display).toBe('block');
+    button.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    host.querySelector('.info')!.dispatchEvent(new MouseEvent('mouseleave'));
+    fixture.detectChanges();
+    expect(getComputedStyle(tooltip).display).toBe('none');
+  });
+
+  it('dismisses a hovered method before Escape reaches a dialog with focus elsewhere', () => {
+    const fixture = setup();
+    const host = fixture.nativeElement as HTMLElement;
+    const dialog = document.createElement('div');
+    const otherControl = document.createElement('button');
+    const closeDialog = jasmine.createSpy('closeDialog');
+    dialog.addEventListener('keydown', closeDialog);
+    document.body.appendChild(dialog);
+    dialog.append(host, otherControl);
+    try {
+      otherControl.focus();
+      host.querySelector('.info')!.dispatchEvent(new MouseEvent('mouseenter'));
+      fixture.detectChanges();
+      expect(fixture.componentInstance.methodVisible()).toBeTrue();
+      otherControl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      expect(fixture.componentInstance.methodVisible()).toBeFalse();
+      expect(closeDialog).not.toHaveBeenCalled();
+      // Once dismissed the next Escape belongs to the containing dialog.
+      otherControl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(closeDialog).toHaveBeenCalledTimes(1);
+      host.querySelector('.info')!.dispatchEvent(new MouseEvent('mouseenter'));
+      fixture.detectChanges();
+      fixture.destroy();
+      otherControl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(closeDialog).toHaveBeenCalledTimes(2);
+    } finally {
+      dialog.remove();
+    }
+  });
+
+  describe('r44 chart', () => {
+    function glucose(range?: { minValue: number; maxValue: number; unit: string }) {
+      const fixture = setup();
+      fixture.componentRef.setInput('testName', 'Glycémie à jeun');
+      fixture.componentRef.setInput('history', [
+        { resultValue: '1.05', resultUnit: 'g/L', resultDate: '2026-11-13T09:00:00Z' },
+        { resultValue: '1.32', resultUnit: 'g/L', resultDate: '2026-11-12T09:00:00Z' },
+      ]);
+      if (range) fixture.componentRef.setInput('referenceRange', range);
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    }
+
+    it('labels the y-axis with round ticks, never "1,288" or "0,952"', () => {
+      const ticks = [...glucose().querySelectorAll('text.tick')].map((t) =>
+        (t.textContent ?? '').trim(),
+      );
+      expect(ticks.length).toBeGreaterThanOrEqual(2);
+      for (const tick of ticks) expect(tick).toMatch(/^-?\d+([.,]\d)?$/);
+    });
+
+    it('draws no band when no range was applied', () => {
+      const host = glucose();
+      expect(host.querySelector('[data-testid="evolution-reference-band"]')).toBeNull();
+      expect(host.querySelector('[data-testid="evolution-method"]')?.textContent).not.toContain(
+        'LAB_EVOLUTION.BAND_NOTE',
+      );
+    });
+
+    it('does not describe a shaded band when there are too few points to draw a chart', () => {
+      const fixture = setup();
+      fixture.componentRef.setInput('referenceRange', {
+        minValue: 0.7,
+        maxValue: 0.99,
+        unit: 'g/L',
+      });
+      fixture.componentRef.setInput('history', [
+        { resultValue: '1.05', resultUnit: 'g/L', resultDate: '2026-11-13T09:00:00Z' },
+      ]);
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('svg')).toBeNull();
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="evolution-method"]').textContent,
+      ).not.toContain('LAB_EVOLUTION.BAND_NOTE');
+    });
+
+    it('shades the applied reference range as a band', () => {
+      const host = glucose({ minValue: 0.7, maxValue: 0.99, unit: 'g/L' });
+      const band = host.querySelector('[data-testid="evolution-reference-band"]')!;
+      expect(band).toBeTruthy();
+      expect(host.querySelector('[data-testid="evolution-method"]')?.textContent).toContain(
+        'LAB_EVOLUTION.BAND_NOTE',
+      );
+      expect(Number(band.getAttribute('height'))).toBeGreaterThan(0);
+      // The axis reaches down to the band.
+      const ticks = [...host.querySelectorAll('text.tick')].map((t) =>
+        Number((t.textContent ?? '').trim().replace(',', '.')),
+      );
+      expect(Math.min(...ticks)).toBeLessThanOrEqual(0.7);
+    });
+
+    it('converts the band by an exact factor only', () => {
+      const converted = glucose({ minValue: 70, maxValue: 99, unit: 'mg/dL' });
+      expect(converted.querySelector('[data-testid="evolution-reference-band"]')).toBeTruthy();
+    });
+
+    it('draws no band in a unit that does not convert', () => {
+      const unknown = glucose({ minValue: 1, maxValue: 2, unit: 'U/L' });
+      expect(unknown.querySelector('[data-testid="evolution-reference-band"]')).toBeNull();
+    });
+
+    for (const unit of ['G/L', '']) {
+      it(`withholds a band with incompatible or undocumented unit '${unit}'`, () => {
+        expect(
+          glucose({ minValue: 1, maxValue: 2, unit }).querySelector(
+            '[data-testid="evolution-reference-band"]',
+          ),
+        ).toBeNull();
+      });
+    }
+
+    it('withholds a band requiring an approximate molar-mass conversion', () => {
+      expect(
+        glucose({ minValue: 4, maxValue: 6, unit: 'mmol/L' }).querySelector(
+          '[data-testid="evolution-reference-band"]',
+        ),
+      ).toBeNull();
+    });
+
+    it('writes the x-axis dates as a day and a month, not a numeric date', () => {
+      const labels = [...glucose().querySelectorAll('svg > text:not(.tick)')].map((t) =>
+        (t.textContent ?? '').trim(),
+      );
+      expect(labels.length).toBe(2);
+      for (const label of labels) {
+        expect(label).not.toContain('/');
+        expect(label).toMatch(/1[23]/);
+      }
+    });
   });
 });

@@ -1839,6 +1839,8 @@
       "PRO_RESPONSE": "Réponses au questionnaire patient enregistrées ({{instrument}}, {{source}})",
       "PRO_ALERT_ACK": "Alerte de sécurité du questionnaire prise en compte",
       "LAB_CORRECTION": "Correction : le résultat {{correction}} remplace le résultat publié {{original}}",
+      "LAB_DUPLICATE_ACKNOWLEDGED": "Alerte de doublon acceptée (« Commander quand même ») : demande {{order}} passée alors que la demande {{earlier}} du même examen est en cours",
+      "LAB_DUPLICATE_UNACKNOWLEDGED": "Alerte de doublon non acceptée : demande {{order}} passée alors que la demande {{earlier}} du même examen est en cours",
       "LAB_AUTOVERIFICATION": "Validation automatique (indicateur N de l’automate) via {{source}}",
       "HL7_ORU_INGESTED": "Message de résultat (ORU^R01) reçu via {{source}}",
       "HL7_ADT": "Message d’admission (ADT^{{type}}) : {{what}} — {{details}}",
@@ -3737,6 +3739,13 @@
     "X_RAY": "Radiographie"
   },
   "LAB": {
+    "DUPLICATE": {
+      "TITLE": "Demande possiblement en double",
+      "BODY": "Ce patient a déjà une demande en cours pour le même examen ici, passée dans les dernières 24 heures. Vérifiez qu'une nouvelle demande est vraiment nécessaire.",
+      "BACK": "Revenir à la demande",
+      "ORDER_ANYWAY": "Commander quand même",
+      "PLACED_ANYWAY": "La demande a été passée, mais ce patient avait déjà une demande en cours pour le même examen ici : {{codes}}. Vérifiez que les deux sont nécessaires."
+    },
     "ABNORMAL": "Anormal",
     "ACCESSION": "N° d'enregistrement",
     "ACTIVE_ORDERS": "Demandes actives",
@@ -4153,7 +4162,14 @@
     "UNGRADED_RELEASE_TITLE": "Valider un résultat non évalué",
     "UNGRADED_RELEASE_CONFIRM": "Je l'ai vérifié, valider",
     "ROW_PENDING_RELEASE": "En attente de publication",
-    "RANGE_NOTES_AS_ENTERED": "Note (texte d’origine)"
+    "RANGE_NOTES_AS_ENTERED": "Note (texte d’origine)",
+    "PREVIOUS_VALUE": "Précédent : {{value}} le {{date}}",
+    "CHANGE": "Variation : {{delta}}",
+    "CHANGE_WITHHELD": "Variation non calculée (valeur non exacte ou unités différentes)",
+    "OTHER_RANGES": "Autres plages ({{count}})",
+    "CRITICAL_LIMITS": "Valeurs critiques",
+    "NO_INTERVAL": "Aucun intervalle",
+    "OPEN_REQUEST": "Ouvrir la demande {{code}}"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -6789,6 +6805,7 @@
         "LAB_ORDER_CANCELLED": "Demande d'examen annulée",
         "LAB_RESULT_SELF_RELEASED": "Résultat d'examen autovalidé",
         "LAB_ORDER_ENTERED_IN_ERROR": "Demande d'examen saisie par erreur",
+        "LAB_ORDER_DUPLICATE_PLACED": "Demande d'examen en double passée",
         "MEDICATION_DOSE_LIMITS_UPDATED": "Limites de dose pédiatriques modifiées",
         "PRESCRIPTION_CDS_OVERRIDDEN": "Alerte d’aide à la décision outrepassée sur une ordonnance",
         "PRESCRIPTION_SIGN_REAUTHENTICATION": "Réauthentification pour signer une ordonnance de stupéfiant",
@@ -13538,7 +13555,6 @@
     "UNIT": "Unité",
     "LOADING": "Chargement de l’historique…",
     "ERROR": "Impossible de charger l’historique. Fermez puis rouvrez les détails pour réessayer.",
-    "NOTE": "Les valeurs numériques exactes sont tracées dans une seule unité lorsque la conversion est exacte (facteur décimal entre unités de masse, ou masse molaire connue de l’analyte) ; sinon, séparément par unité. Les dates sont espacées à l’échelle. L’historique peut inclure des versions antérieures ; les corrections sont signalées. Aucune interprétation clinique n’est déduite.",
     "TIME_AXIS": "Temps",
     "CHART_LABEL": "Observations historiques ; les valeurs exactes figurent dans le tableau des observations.",
     "INSUFFICIENT": "Au moins deux observations numériques datées, dans une même unité connue ou convertible, sont nécessaires.",
@@ -13551,15 +13567,15 @@
     "NEXT": "Page suivante",
     "AUDIT_TITLE": "Versions enregistrées des résultats",
     "CORRECTION_NOTE": "Cet historique contient des corrections. Les versions remplacées ne peuvent pas y être identifiées. Les points montrent uniquement les valeurs enregistrées ; les lignes et variations ne sont pas affichées. Consultez les observations et les corrections avant d’interpréter les changements.",
-    "CONVERSION_NOTE": "Des valeurs saisies dans une autre unité sont converties en {{unit}} pour le graphique. La valeur et l’unité saisies restent affichées, marquées « converti ».",
     "CONVERTED_FROM": "converti, valeur saisie : {{value}}",
-    "CONVERTED_TO": "converti : {{value}}"
+    "CONVERTED_TO": "converti : {{value}}",
+    "NOTE_SHORT": "Les valeurs converties sont marquées « converti » et les corrections sont signalées ; aucune interprétation clinique n’est déduite.",
+    "NOTE_INFO": "Comment le graphique est construit",
+    "NOTE_DETAIL": "Seules les valeurs numériques exactes sont tracées, dans une seule unité{{unit}}. Une valeur saisie dans une autre unité est convertie avec un facteur décimal entre unités compatibles ou la masse molaire connue de l’analyte ; la valeur et l’unité saisies restent affichées. Les dates sont espacées à l’échelle.",
+    "BAND_NOTE": "La bande ombrée est la plage de référence appliquée au résultat sélectionné ; elle peut ne pas s’appliquer aux observations antérieures."
   },
   "LAB_RANGE": {
     "TITLE": "Position du résultat",
-    "LOW": "Bas",
-    "NORMAL": "Normal",
-    "HIGH": "Haut",
     "REFERENCE": "Plage de référence",
     "OUTSIDE_SCALE": "Le résultat dépasse l’échelle affichée ; le repère se trouve au bord.",
     "UNAVAILABLE": "Le positionnement nécessite une valeur numérique exacte et une plage de référence compatible."

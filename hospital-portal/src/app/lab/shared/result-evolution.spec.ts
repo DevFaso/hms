@@ -1,4 +1,10 @@
-import { evolutionSeries, exactObservation, observationDelta } from './result-evolution';
+import {
+  evolutionSeries,
+  exactObservation,
+  niceAxis,
+  observationDelta,
+  previousObservation,
+} from './result-evolution';
 
 describe('result evolution', () => {
   const point = (resultValue: string, resultUnit = 'g/L', resultDate = '2026-11-08T09:00:00Z') => ({
@@ -68,5 +74,86 @@ describe('result evolution', () => {
     expect(observationDelta(current, point('120', 'mg/dL', '2026-11-01T09:00:00Z'))).toBeNull();
     expect(observationDelta(current, point('>1', 'g/L', '2026-11-01T09:00:00Z'))).toBeNull();
     expect(observationDelta(current, point('0.9'))).toBeNull();
+  });
+
+  describe('niceAxis (r44)', () => {
+    it('rounds the review case to tenths', () => {
+      const axis = niceAxis(0.952, 1.288)!;
+      expect(axis.decimals).toBe(1);
+      expect(axis.ticks).toEqual([0.9, 1, 1.1, 1.2, 1.3]);
+    });
+
+    it('covers both ends with 1, 2 or 5 steps at any magnitude', () => {
+      for (const [lo, hi] of [
+        [0.7, 1.32],
+        [3.9, 27.8],
+        [120, 455],
+        [0.0011, 0.0019],
+        [5, 5],
+      ]) {
+        const axis = niceAxis(lo, hi)!;
+        expect(axis.min).toBeLessThanOrEqual(lo);
+        expect(axis.max).toBeGreaterThanOrEqual(hi);
+        const mantissa = axis.step / 10 ** Math.floor(Math.log10(axis.step) + 1e-9);
+        expect([1, 2, 5]).toContain(Math.round(mantissa));
+        expect(axis.ticks.length).toBeLessThanOrEqual(8);
+      }
+    });
+
+    it('has no axis for a non-finite bound', () => {
+      expect(niceAxis(NaN, 1)).toBeNull();
+    });
+
+    it('bounds tick generation for extreme finite inputs and invalid targets', () => {
+      const large = niceAxis(1e307, 2e307)!;
+      expect(large).not.toBeNull();
+      expect(large.min).toBeLessThanOrEqual(1e307);
+      expect(large.max).toBeGreaterThanOrEqual(2e307);
+      expect(large.ticks.every(Number.isFinite)).toBeTrue();
+      expect(large.ticks.length).toBeLessThanOrEqual(102);
+      for (const target of [Infinity, NaN, 1e308, 0, -1]) {
+        const axis = niceAxis(1, 2, target)!;
+        expect(axis.ticks.length).toBeLessThanOrEqual(102);
+      }
+      expect(niceAxis(-Number.MAX_VALUE, Number.MAX_VALUE)).toBeNull();
+      expect(niceAxis(Number.MAX_VALUE, Number.MAX_VALUE)).toBeNull();
+      expect(niceAxis(Number.MIN_VALUE, Number.MIN_VALUE * 2)).toBeNull();
+      expect(niceAxis(1e-22, 2e-22)).toBeNull();
+    });
+  });
+
+  describe('previousObservation (r44)', () => {
+    const current = { resultValue: '1.05', resultUnit: 'g/L', resultDate: '2026-11-13T09:00:00Z' };
+
+    it('takes the latest observation strictly before the result, and the change from it', () => {
+      const prev = previousObservation(
+        [
+          point('1.05', 'g/L', '2026-11-13T09:00:00Z'),
+          point('1.32', 'g/L', '2026-11-12T09:00:00Z'),
+          point('0.9', 'g/L', '2026-11-01T09:00:00Z'),
+        ],
+        current,
+      )!;
+      expect(prev.point.resultValue).toBe('1.32');
+      expect(prev.delta).toBeCloseTo(-0.27, 10);
+    });
+
+    it('withholds the change across units or in a corrected history', () => {
+      expect(
+        previousObservation([point('7.3', 'mmol/L', '2026-11-12T09:00:00Z')], current)!.delta,
+      ).toBeNull();
+      expect(
+        previousObservation(
+          [{ ...point('1.32', 'g/L', '2026-11-12T09:00:00Z'), corrected: true }],
+          current,
+        ),
+      ).toBeNull();
+    });
+
+    it('has no previous value for a first result', () => {
+      expect(
+        previousObservation([point('1.05', 'g/L', '2026-11-13T09:00:00Z')], current),
+      ).toBeNull();
+    });
   });
 });

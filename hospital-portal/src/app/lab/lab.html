@@ -730,6 +730,37 @@
           </label>
         </div>
       </div>
+      @if (duplicateMatches().length > 0) {
+        <div class="duplicate-warning" role="alert" data-testid="lab-duplicate-warning">
+          <p class="duplicate-warning-title">{{ 'LAB.DUPLICATE.TITLE' | translate }}</p>
+          <p>{{ 'LAB.DUPLICATE.BODY' | translate }}</p>
+          <ul>
+            @for (d of duplicateMatches(); track d.orderId) {
+              <li>
+                {{ d.labOrderCode }} · {{ d.labTestName }} ·
+                {{ d.status | enumLabel: 'labOrderStatus' }}
+                @if (d.orderDatetime) {
+                  · {{ d.orderDatetime | serverTime | dateTime }}
+                }
+              </li>
+            }
+          </ul>
+          <div class="duplicate-warning-actions">
+            <button type="button" class="btn-secondary" (click)="dismissDuplicateWarning()">
+              {{ 'LAB.DUPLICATE.BACK' | translate }}
+            </button>
+            <button
+              type="button"
+              class="btn-primary"
+              data-testid="lab-duplicate-order-anyway"
+              (click)="orderAnyway()"
+              [disabled]="saving()"
+            >
+              {{ 'LAB.DUPLICATE.ORDER_ANYWAY' | translate }}
+            </button>
+          </div>
+        </div>
+      }
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeModal()">
           {{ 'COMMON.CANCEL' | translate }}

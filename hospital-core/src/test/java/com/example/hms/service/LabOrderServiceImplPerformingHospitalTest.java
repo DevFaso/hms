@@ -86,6 +86,8 @@ class LabOrderServiceImplPerformingHospitalTest {
     @Mock private com.example.hms.repository.LabResultRepository labResultRepository;
     @Mock private com.example.hms.repository.PatientDiagnosisRepository patientDiagnosisRepository;
 
+    @Mock private com.example.hms.service.lab.LabOrderDuplicateCheck labOrderDuplicateCheck;
+
     @InjectMocks
     private LabOrderServiceImpl service;
 
@@ -887,8 +889,6 @@ class LabOrderServiceImplPerformingHospitalTest {
         when(labTestDefinitionRepository.findById(definition.getId())).thenReturn(Optional.of(definition));
         // Lenient: an edit that keeps the ordering clinician and the assignment never looks it up.
         lenient().when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
-        lenient().when(labOrderRepository.existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(
-            eq(patient.getId()), eq(definition.getId()), any(LocalDateTime.class))).thenReturn(false);
     }
 
     private LabOrderRequestDTO.LabOrderRequestDTOBuilder request() {
