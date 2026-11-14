@@ -3868,7 +3868,44 @@
       "REJECTED_ON_ORDER": "Échantillon rejeté par le laboratoire : un nouveau prélèvement est nécessaire",
       "TITLE": "Rejeter l’échantillon"
     },
-    "SPECIMEN_ORDER_CLOSED": "Cette demande a déjà un résultat ou est annulée : elle ne prend plus de nouvel échantillon. Un nouveau test se fait par une nouvelle demande."
+    "SPECIMEN_ORDER_CLOSED": "Cette demande a déjà un résultat ou est annulée : elle ne prend plus de nouvel échantillon. Un nouveau test se fait par une nouvelle demande.",
+    "PRESCRIBER": "Prescripteur",
+    "MRN": "N° de dossier",
+    "VIEW_FULL_RESULT": "Voir le résultat complet",
+    "TURNAROUND": "Délai de rendu",
+    "TAT_MINUTES": "{{minutes}} min",
+    "TAT_HOURS_MINUTES": "{{hours}} h {{minutes}} min",
+    "TAT_DAYS_HOURS": "{{days}} j {{hours}} h",
+    "AGE_DAY": "{{count}} jour",
+    "AGE_DAYS": "{{count}} jours",
+    "AGE_MONTH": "{{count}} mois",
+    "AGE_MONTHS": "{{count}} mois",
+    "AGE_YEARS": "{{count}} ans",
+    "STATE": {
+      "TO_COLLECT": "À prélever",
+      "COLLECTED": "Prélevée",
+      "IN_ANALYSIS": "En analyse",
+      "AWAITING_VALIDATION": "En attente de validation",
+      "COMPLETED": "Terminée",
+      "CANCELLED": "Annulée",
+      "ENTERED_IN_ERROR": "Saisie par erreur"
+    },
+    "STATE_GROUP": {
+      "OPEN": "En cours",
+      "OPEN_HINT": "Demandes à prélever, en analyse ou en attente de validation",
+      "COMPLETED": "Terminées",
+      "COMPLETED_HINT": "Demandes dont tous les résultats sont validés",
+      "CANCELLED": "Annulées"
+    },
+    "TIMELINE": {
+      "TITLE": "Échantillon et suivi",
+      "ORDERED": "Demandée",
+      "COLLECTED": "Prélevée",
+      "RECEIVED": "Reçue au laboratoire",
+      "RESULTED": "Résultat saisi",
+      "VALIDATED": "Validée"
+    },
+    "LINKED_ORDER_NOT_FOUND": "Cette demande d'analyse est introuvable, ou vous ne pouvez pas la voir depuis cet hôpital."
   },
   "LAB_STAFF": {
     "TITLE": "Gestion du personnel de laboratoire",
@@ -6438,7 +6475,7 @@
         "ORDERED": "Prescrit",
         "PENDING": "En attente",
         "RECEIVED": "Reçu",
-        "RESULTED": "Résultats rendus",
+        "RESULTED": "En attente de validation",
         "VERIFIED": "Vérifié",
         "ENTERED_IN_ERROR": "Saisi par erreur"
       },

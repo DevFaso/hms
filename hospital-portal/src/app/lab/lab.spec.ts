@@ -100,9 +100,15 @@ describe('LabComponent — performing laboratory', () => {
       'receiveSpecimen',
       'rejectSpecimen',
       'submitApprovalAction',
+      'getOrder',
+      'listOrderResults',
     ]);
     labService.listOrders.and.returnValue(of(orders));
     labService.listSpecimens.and.returnValue(of([]));
+    labService.getOrder.and.callFake((id: string) =>
+      of(orders.find((o) => o.id === id) ?? order({ id })),
+    );
+    labService.listOrderResults.and.returnValue(of([]));
     labService.listTestDefinitions.and.returnValue(of([]));
     labService.listPerformingLabs.and.returnValue(of(labs));
     labService.createOrder.and.returnValue(of(orders[0] ?? order({})));
@@ -165,6 +171,22 @@ describe('LabComponent — performing laboratory', () => {
     expect(component.showModal()).toBeTrue();
     expect(patientService.getById).toHaveBeenCalledWith('pat-awa', jasmine.anything());
     expect(component.form.patientId).toBe('pat-awa');
+  });
+
+  it('/lab?order=<id> opens the drawer of that order once the list has loaded', async () => {
+    const linked = order({ id: 'o-linked', status: 'COMPLETED' });
+    await setup(['ROLE_DOCTOR'], [order({ id: 'o-other' }), linked], HOSPITAL_A, {
+      order: 'o-linked',
+    });
+    expect(component.selectedOrder()?.id).toBe('o-linked');
+    expect(component.filtered().some((o) => o.id === 'o-linked')).toBeTrue();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('/lab?order=<id> for an order out of scope says so and opens nothing', async () => {
+    await setup(['ROLE_DOCTOR'], [order({ id: 'o-other' })], HOSPITAL_A, { order: 'o-missing' });
+    expect(component.selectedOrder()).toBeNull();
+    expect(toast.error).toHaveBeenCalledWith('LAB.LINKED_ORDER_NOT_FOUND');
   });
 
   it('QA D956: a plain /lab opens no form', async () => {
@@ -375,14 +397,22 @@ describe('LabComponent — performing laboratory', () => {
       const routine = order({ id: 'o-routine', priority: 'ROUTINE' });
       await setup(['ROLE_LAB_TECHNICIAN'], [stat, routine]);
       const host = fixture.nativeElement as HTMLElement;
-      expect(host.querySelector('[data-testid="lab-priority-o-stat"]')).not.toBeNull();
-      expect(host.querySelector('[data-testid="lab-priority-o-routine"]')).toBeNull();
+      const statBadge = host.querySelector('[data-testid="lab-priority-o-stat"]');
+      expect(statBadge?.classList.contains('priority-stat')).toBeTrue();
+      // Lab requests: ROUTINE is the same badge on every row, neutral.
+      const routineBadge = host.querySelector('[data-testid="lab-priority-o-routine"]');
+      expect(routineBadge?.classList.contains('priority-routine')).toBeTrue();
+      expect(routineBadge?.classList.contains('priority-stat')).toBeFalse();
 
       component.viewOrder(stat);
       fixture.detectChanges();
-      const priority = host.querySelector('[data-testid="detail-priority"] .field-value');
+      const priority = host.querySelector('[data-testid="detail-priority"] .priority-badge');
       expect(priority?.classList.contains('priority-stat')).toBeTrue();
+      // Sized to its text, not stretched across the field.
+      expect(priority?.classList.contains('fit-content')).toBeTrue();
       expect(host.querySelector('.detail-panel')?.textContent).not.toContain('PORTAL');
+      // The channel is a secondary detail, not a main field.
+      expect(host.querySelector('[data-testid="detail-secondary"]')).not.toBeNull();
     });
   });
 
@@ -554,7 +584,7 @@ describe('LabComponent — performing laboratory', () => {
     // Each hospital once: the primary line is this laboratory, the hint is
     // who sent the order. Naming the ordering hospital on both lines left
     // the laboratory unnamed and told the reader nothing twice.
-    const cell: HTMLElement = fixture.nativeElement.querySelector('.data-row td:nth-child(4)');
+    const cell: HTMLElement = fixture.nativeElement.querySelector('.data-row td:nth-child(5)');
     expect(cell.querySelector('.cell-primary')!.textContent).toContain('Central Laboratory B');
     expect(cell.textContent!.match(/Ordering Hospital A/g)!.length).toBe(1);
     expect(component.actingHospitalName(incoming)).toBe('Central Laboratory B');
@@ -579,7 +609,7 @@ describe('LabComponent — performing laboratory', () => {
 
     // The other side of the same relationship: our hospital on the primary
     // line, the laboratory it went to on the hint, each named once.
-    const cell: HTMLElement = fixture.nativeElement.querySelector('.data-row td:nth-child(4)');
+    const cell: HTMLElement = fixture.nativeElement.querySelector('.data-row td:nth-child(5)');
     expect(cell.querySelector('.cell-primary')!.textContent).toContain('Ordering Hospital A');
     expect(cell.textContent!.match(/Central Laboratory B/g)!.length).toBe(1);
     expect(component.counterpartLabelKey(outgoing)).toBe('LAB.SENT_TO');
@@ -962,30 +992,29 @@ describe('LabComponent worklist tabs', () => {
     }
   });
 
-  it('keeps an order on the Pending tab while its specimen is collected and received', () => {
+  it('keeps an order In progress until its results are validated', () => {
     component.orders.set(lifecycle.map(order));
 
     component.setTab('pending');
 
+    // Lab requests: a result entered but not validated (RESULTED, VERIFIED) is not finished.
     expect(component.filtered().map((o) => o.status)).toEqual([
       'ORDERED',
       'PENDING',
       'COLLECTED',
       'RECEIVED',
       'IN_PROGRESS',
+      'RESULTED',
+      'VERIFIED',
     ]);
   });
 
-  it('shows resulted, verified and completed orders on the Completed tab', () => {
+  it('shows only validated (COMPLETED) orders on the Completed tab', () => {
     component.orders.set(lifecycle.map(order));
 
     component.setTab('completed');
 
-    expect(component.filtered().map((o) => o.status)).toEqual([
-      'RESULTED',
-      'VERIFIED',
-      'COMPLETED',
-    ]);
+    expect(component.filtered().map((o) => o.status)).toEqual(['COMPLETED']);
   });
 
   it('places every lifecycle state on exactly one tab, cancelled on neither', () => {
@@ -996,9 +1025,22 @@ describe('LabComponent worklist tabs', () => {
     }
   });
 
-  it('badges COLLECTED and RECEIVED as specimen states and VERIFIED as done', () => {
-    expect(component.getStatusClass('RECEIVED')).toBe('status-badge status-collected');
+  it('badges each state once: RESULTED and VERIFIED await validation, never the finished green', () => {
     expect(component.getStatusClass('COLLECTED')).toBe('status-badge status-collected');
-    expect(component.getStatusClass('VERIFIED')).toBe('status-badge status-completed');
+    expect(component.getStatusClass('RECEIVED')).toBe('status-badge status-in_progress');
+    expect(component.getStatusClass('RESULTED')).toBe('status-badge status-awaiting');
+    expect(component.getStatusClass('VERIFIED')).toBe('status-badge status-awaiting');
+    expect(component.getStatusClass('COMPLETED')).toBe('status-badge status-completed');
+  });
+
+  it('labels every backend status through one state vocabulary', () => {
+    for (const status of lifecycle) {
+      expect(component.stateKey(status))
+        .withContext(status)
+        .toMatch(/^LAB\.STATE\./);
+    }
+    expect(component.stateKey('RESULTED')).toBe('LAB.STATE.AWAITING_VALIDATION');
+    expect(component.stateKey('VERIFIED')).toBe('LAB.STATE.AWAITING_VALIDATION');
+    expect(component.stateKey('COMPLETED')).toBe('LAB.STATE.COMPLETED');
   });
 });
