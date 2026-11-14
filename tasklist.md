@@ -6577,3 +6577,5 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **A recorded review is not shown on the chart:** the banner shows open reviews only; the recorded note, author and time are returned by the API but not displayed.
 - **No escalation of a review left open:** the two URGENT tasks are filed once; reminders, an escalation recipient and any legal or external reporting await the obstetric and child-protection leads' approval.
 - **HL7 ADT admissions carry no actor:** an interface configured to admit as LABOR_DELIVERY opens the review with no `raised_by_user_id`.
+- **Imaging duplicate look-back cap (D1920, provisional product default):** the duplicate preview and the create/edit duplicate check now read at most 90 days (default 30 kept). Not a clinical rule; revisit with the radiology approvers if a longer window is wanted.
+- **CDS hooks other chart reads (D1920 class, not changed):** the patient-view summary and the allergy check read allergies and problems patient-wide (`findByPatient_Id`), across hospitals, by design today; confirm that policy with the shared-patient rules.
