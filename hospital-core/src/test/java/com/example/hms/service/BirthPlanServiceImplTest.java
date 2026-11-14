@@ -500,7 +500,7 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(doctorUser));
         when(patientRepository.findById(patient.getId()))
             .thenReturn(Optional.of(patient));
-        when(birthPlanRepository.findActiveBirthPlanByPatientId(patient.getId()))
+        when(birthPlanRepository.findFirstByPatient_IdAndWithdrawnAtIsNullOrderByCreatedAtDesc(patient.getId()))
             .thenReturn(Optional.of(birthPlan));
         when(birthPlanMapper.toResponseDTO(birthPlan))
             .thenReturn(responseDTO);
@@ -522,7 +522,7 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(doctorUser));
         when(patientRepository.findById(patient.getId()))
             .thenReturn(Optional.of(patient));
-        when(birthPlanRepository.findActiveBirthPlanByPatientId(patient.getId()))
+        when(birthPlanRepository.findFirstByPatient_IdAndWithdrawnAtIsNullOrderByCreatedAtDesc(patient.getId()))
             .thenReturn(Optional.empty());
 
         // When
@@ -828,7 +828,7 @@ class BirthPlanServiceImplTest {
         when(birthPlanMapper.toResponseDTO(foreign)).thenReturn(responseDTO);
 
         assertThat(birthPlanService.getActiveBirthPlan(patient.getId(), doctorUser.getUsername())).isEqualTo(responseDTO);
-        verify(birthPlanRepository, never()).findActiveBirthPlanByPatientId(any());
+        verify(birthPlanRepository, never()).findFirstByPatient_IdAndWithdrawnAtIsNullOrderByCreatedAtDesc(any());
         verify(reachRecorder).recordReach(eq(patient.getId()), eq(hospital.getId()), eq(doctorUser.getId()), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }

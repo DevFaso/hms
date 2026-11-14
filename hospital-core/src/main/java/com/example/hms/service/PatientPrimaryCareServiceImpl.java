@@ -5,11 +5,13 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PatientPrimaryCareMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
+import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.PatientPrimaryCare;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.PatientPrimaryCareRequestDTO;
 import com.example.hms.payload.dto.PatientPrimaryCareResponseDTO;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientPrimaryCareRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -21,8 +23,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -35,6 +40,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
 
     private final PatientPrimaryCareRepository pcpRepo;
     private final PatientRepository patientRepo;
+    private final PatientHospitalRegistrationRepository registrationRepo;
     private final HospitalRepository hospitalRepo;
     private final UserRoleHospitalAssignmentRepository assignmentRepo;
     private final PatientPrimaryCareMapper mapper;
@@ -68,13 +74,23 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
         // End current PCP for this patient at this hospital, if exists
         pcpRepo.findCurrentByPatientAndHospital(patient.getId(), hospital.getId())
             .ifPresent(curr -> {
-                curr.setEndDate(LocalDate.now().minusDays(1));
+                curr.setEndDate(endDateOnReassignment(curr.getStartDate(), LocalDate.now()));
                 curr.setCurrent(false);
                 pcpRepo.save(curr);
             });
 
         PatientPrimaryCare entity = mapper.toEntity(req, patient, hospital, assignment);
         return mapper.toDto(pcpRepo.save(entity));
+    }
+
+    /**
+     * The end date of a link a reassignment replaces: the day before today, never before the
+     * link's own start. A same-day reassignment used to end a link the day before it began
+     * (« 14 nov. 2026 – 13 nov. 2026 », QA D1851); it now ends the day it started.
+     */
+    static LocalDate endDateOnReassignment(LocalDate start, LocalDate today) {
+        LocalDate end = today.minusDays(1);
+        return start != null && end.isBefore(start) ? start : end;
     }
 
     @Override
@@ -140,11 +156,36 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
     public Optional<PatientPrimaryCareResponseDTO> getCurrentPrimaryCare(UUID patientId) {
         // QA r41: a hospital reads only its own patients' links; another hospital's link reads as
         // no link at all (as a missing one does). A verified super-admin in global view reads them all.
+        // QA D1850: global view (or the patient's own record) has one current link per hospital
+        // since #1096, so it reads the list and answers the newest; it used to read an Optional
+        // and answer 500 for a patient with a doctor at two hospitals.
         UUID acting = com.example.hms.security.tenant.TenantOwnership.actingHospitalIdOrNullForGlobalOrOwnPatient();
         Optional<PatientPrimaryCare> link = acting == null
-            ? pcpRepo.findByPatient_IdAndCurrentTrue(patientId)
+            ? pcpRepo.findByPatient_IdAndCurrentTrueOrderByStartDateDesc(patientId).stream().findFirst()
             : pcpRepo.findCurrentByPatientAndHospital(patientId, acting);
         return link.map(mapper::toDto);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientPrimaryCareResponseDTO> getOwnPrimaryCareLinks(UUID patientId) {
+        // QA D1850: the patient's own care team spans every hospital that registers them, whatever
+        // hospital the request names, and never a hospital where they hold no active registration.
+        // Not scoped to the acting hospital, so it serves the signed-in patient's own record only.
+        requireCallerIsThePatient(patientId);
+        Set<UUID> registeredAt = registrationRepo.findByPatientId(patientId).stream()
+            .filter(PatientHospitalRegistration::isActive)
+            .map(PatientHospitalRegistration::getHospital)
+            .filter(Objects::nonNull)
+            .map(Hospital::getId)
+            .collect(Collectors.toSet());
+        if (registeredAt.isEmpty()) {
+            return List.of();
+        }
+        return pcpRepo.findByPatient_IdOrderByStartDateDesc(patientId).stream()
+            .filter(link -> link.getHospital() != null && registeredAt.contains(link.getHospital().getId()))
+            .map(mapper::toDto)
+            .toList();
     }
 
     @Override
@@ -156,6 +197,21 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
             .filter(link -> acting == null || (link.getHospital() != null && acting.equals(link.getHospital().getId())))
             .map(mapper::toDto)
             .toList();
+    }
+
+    /**
+     * The read above crosses hospitals, so it answers only the account the patient record is
+     * linked to; anyone else reads it as a missing patient.
+     */
+    private void requireCallerIsThePatient(UUID patientId) {
+        UUID caller = com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+        boolean own = caller != null && patientRepo.findById(patientId)
+            .map(Patient::getUser)
+            .filter(user -> caller.equals(user.getId()))
+            .isPresent();
+        if (!own) {
+            throw new ResourceNotFoundException("patient.notFound", patientId);
+        }
     }
 
     @Override

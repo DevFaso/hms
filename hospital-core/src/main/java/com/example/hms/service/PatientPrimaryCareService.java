@@ -18,5 +18,13 @@ public interface PatientPrimaryCareService {
 
     List<PatientPrimaryCareResponseDTO> getPrimaryCareHistory(UUID patientId);
 
+    /**
+     * Every primary-care link of the patient's OWN record, current and past, newest first, at
+     * every hospital where the patient holds an active registration, whatever hospital the
+     * request names (QA D1850). The caller resolves {@code patientId} from the signed-in
+     * patient; never call it with an id taken from the request.
+     */
+    List<PatientPrimaryCareResponseDTO> getOwnPrimaryCareLinks(UUID patientId);
+
     void deletePrimaryCare(UUID pcpId);
 }
