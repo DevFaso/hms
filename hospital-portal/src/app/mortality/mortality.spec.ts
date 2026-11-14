@@ -531,6 +531,8 @@ describe('MortalityComponent', () => {
       'MORTALITY.CLASSIFICATION_INCOMPLETE_DEFINITION',
     );
     expect(text('stillbirth-incomplete')).toContain('MORTALITY.CLASSIFICATION_INCOMPLETE');
+    // QA D1800: baby 1 is labelled too, so twins' rows do not read as duplicates.
+    expect(text('stillbirth-birth-order')).toContain('LABOR.BABY_OUTCOME');
     expect(text('deaths-after-live-birth')).toContain('1');
     // The stillbirth death record is not listed among the deaths after a live birth.
     expect(component).toBeTruthy();

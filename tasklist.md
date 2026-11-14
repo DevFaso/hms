@@ -6538,3 +6538,7 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 ## Standing debt — AVS polish (feat/avs-polish)
 - **Checkout preview has no print button:** the staff dialog and "Mes résumés" print the shared summary document (print-only.ts); the checkout dialog's preview shows the same document but cannot print it yet.
 - **Follow-up booking found by day on a later read:** a checkout passes the booked appointment's id; a later read of the summary finds the patient's live appointment at the visit's hospital on the follow-up day booked after the checkout, since the appointment keeps no link to the visit. A source-encounter column would make it exact.
+
+## Questions for the obstetric lead (r50, #1144 follow-ups)
+- **D1802, stillborn to live correction vs a stillbirth death certificate:** should a correction of a baby from stillborn to live be refused, or only warned, while a death record still declares that baby's stillbirth, and which record wins in the register (decision needed; no code changed)?
+- **Neonatal alerts on stillborn babies:** should the Apgar-critical "neonatal resuscitation" and preterm "neonatal team" URGENT alerts still fire, and escalate to the nurse, when every baby of the delivery is stillborn (decision needed; no code changed)?
