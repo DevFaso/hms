@@ -44,13 +44,14 @@ class ObstetricAlertCurrencyTest {
     @Mock private NewbornAssessmentRepository newbornRepository;
     @Mock private PostpartumObservationRepository postpartumRepository;
     @Mock private com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
+    @Mock private StillbornNeonatalAlerts stillbornNeonatalAlerts;
 
     private ObstetricAlertCurrency currency;
 
     @BeforeEach
     void setUp() {
         currency = new ObstetricAlertCurrency(partographRepository, newbornRepository, postpartumRepository,
-            deliveryRecordRepository);
+            deliveryRecordRepository, stillbornNeonatalAlerts);
     }
 
     private static ObstetricAlertEscalation row(String sourceType, UUID sourceId, String alertType) {
@@ -337,5 +338,62 @@ class ObstetricAlertCurrencyTest {
         when(deliveryRecordRepository.findById(id)).thenReturn(Optional.of(delivery));
 
         assertThat(currency.noLongerUrgent(stillbirthRow(id))).isFalse();
+    }
+
+    // ── Provisional 2026-11-14: neonatal-care reminders follow each baby's confirmed outcome ──
+
+    private ObstetricAlertEscalation deliveryRow(UUID deliveryId, String code) {
+        ObstetricAlertEscalation r = row(ObstetricAlertEscalationService.SOURCE_DELIVERY, deliveryId, "GENERAL");
+        r.setAlertMessageKey("labor.alert.msg." + code);
+        return r;
+    }
+
+    @Test
+    void aNeonatalAlertACorrectionTookOffTheDeliveryStopsAndOneStillOnItStands() {
+        com.example.hms.model.labor.DeliveryRecord delivery = com.example.hms.model.labor.DeliveryRecord.builder()
+            .numberOfInfants(1).build();
+        delivery.putBabyOutcome(1, com.example.hms.enums.BabyOutcome.STILLBORN);
+        delivery.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.URGENT, "labor-preterm", "Preterm", "ga");
+        UUID id = UUID.randomUUID();
+        when(deliveryRecordRepository.findById(id)).thenReturn(Optional.of(delivery));
+
+        assertThat(currency.noLongerUrgent(deliveryRow(id, "labor-apgar-critical"))).as("taken off: stops").isTrue();
+        assertThat(currency.noLongerUrgent(deliveryRow(id, "labor-preterm"))).as("still on the record").isFalse();
+        assertThat(currency.noLongerUrgent(deliveryRow(id, "labor-pph"))).as("maternal: until acknowledged").isFalse();
+    }
+
+    @Test
+    void aStillbornBabysOwnApgarReminderStopsAndALiveTwinsDoesNot() {
+        com.example.hms.model.labor.DeliveryRecord twins = new com.example.hms.model.labor.DeliveryRecord();
+        twins.setId(UUID.randomUUID());
+        twins.setNumberOfInfants(2);
+        Patient stillborn = new Patient();
+        stillborn.setId(UUID.randomUUID());
+        Patient live = new Patient();
+        live.setId(UUID.randomUUID());
+        NewbornAssessment ofStillborn = assessment(stillborn, T0, NewbornAlertSeverity.URGENT);
+        ofStillborn.setDeliveryRecord(twins);
+        NewbornAssessment ofLive = assessment(live, T0, NewbornAlertSeverity.URGENT);
+        ofLive.setDeliveryRecord(twins);
+        when(newbornRepository.findById(ofStillborn.getId())).thenReturn(Optional.of(ofStillborn));
+        when(newbornRepository.findById(ofLive.getId())).thenReturn(Optional.of(ofLive));
+        when(stillbornNeonatalAlerts.confirmedStillborn(stillborn.getId())).thenReturn(true);
+        when(stillbornNeonatalAlerts.confirmedStillborn(live.getId())).thenReturn(false);
+
+        assertThat(currency.noLongerUrgent(row(ObstetricAlertEscalationService.SOURCE_NEWBORN, ofStillborn.getId(),
+            "APGAR"))).isTrue();
+        assertThat(currency.noLongerUrgent(row(ObstetricAlertEscalationService.SOURCE_NEWBORN, ofLive.getId(),
+            "APGAR"))).isFalse();
+    }
+
+    @Test
+    void aConfirmedStillbirthNeverStopsAnotherKindOfNewbornAlert() {
+        Patient stillborn = new Patient();
+        stillborn.setId(UUID.randomUUID());
+        NewbornAssessment source = assessment(stillborn, T0, NewbornAlertSeverity.URGENT);
+        when(newbornRepository.findById(source.getId())).thenReturn(Optional.of(source));
+
+        assertThat(currency.noLongerUrgent(row(ObstetricAlertEscalationService.SOURCE_NEWBORN, source.getId(),
+            "RESPIRATORY"))).isFalse();
     }
 }

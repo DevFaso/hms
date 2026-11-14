@@ -51,4 +51,10 @@ public class DeliveryRecordResponseDTO {
 
     /** QA D1592: the babies are not registered yet (registration failed or still to run): reception registers them. */
     private boolean newbornRegistrationPending;
+
+    /**
+     * QA D1802 (provisional): after a correction to born alive, the death certificates that still declare that
+     * baby's stillbirth. They were left unchanged; a reconciliation task went to the certificate reviewers.
+     */
+    private java.util.List<java.util.UUID> contradictedDeathCertificates;
 }

@@ -90,6 +90,9 @@ class InBasketRecipientGuardTest {
         // QA D1592: a baby a delivery could not register, for the delivering hospital's reception.
         Map.entry("NewbornRegistrationService.java", codes(setConstant(
             com.example.hms.service.maternity.NewbornRegistrationService.class, "PENDING_ROLE_CODES"))),
+        // QA D1802: a death certificate a corrected birth outcome contradicts, for whoever may amend a certificate.
+        Map.entry("StillbirthCertificateConflicts.java", codes(setConstant(
+            com.example.hms.service.maternity.StillbirthCertificateConflicts.class, "REVIEWER_ROLE_CODES"))),
         // The store itself: every sender above reaches it through createItem.
         Map.entry("InBasketServiceImpl.java", Set.of()));
 
@@ -167,6 +170,15 @@ class InBasketRecipientGuardTest {
         assertThat(RECIPIENTS.get("ObstetricAlertEscalationWorker.java"))
             .contains("DOCTOR", "MIDWIFE", "NURSE");
         assertThat(LabResultServiceImpl.class).isNotNull();
+    }
+
+    /** QA D1802: the reconciliation goes to exactly whoever may amend a death certificate, the super-admin aside. */
+    @Test
+    void theStillbirthConflictGoesToWhoeverMayAmendACertificate() {
+        Set<String> amenders = new TreeSet<>(rolesOf(constant(com.example.hms.controller.MortalityController.class,
+            "RECORDER")));
+        amenders.remove("SUPER_ADMIN");
+        assertThat(RECIPIENTS.get("StillbirthCertificateConflicts.java")).isEqualTo(amenders);
     }
 
     /** A physician or a surgeon IS a doctor (RoleExpansion), on the server and in the portal. */

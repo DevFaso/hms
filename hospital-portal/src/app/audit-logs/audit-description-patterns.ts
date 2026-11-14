@@ -1506,6 +1506,21 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: [],
   },
   {
+    key: 'AUDIT.DESC.STILLBIRTH_CERTIFICATE_CONFLICT_DEATH',
+    re: /^Death certificate declares a stillbirth the delivery now records as born alive$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.STILLBIRTH_CERTIFICATE_CONFLICT_DELIVERY',
+    re: /^Delivery records as born alive a baby a death certificate declares stillborn$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED',
+    re: /^Stillbirth certificate conflict reconciled$/,
+    params: [],
+  },
+  {
     key: 'AUDIT.DESC.LABOR_EPISODE_HANDOVER_READ',
     re: /^Labour episode handed over by transfer read at the receiving hospital$/,
     params: [],

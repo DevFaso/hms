@@ -55,9 +55,29 @@ public class FetalDeathEventService {
     private final UserRepository userRepository;
     private final AuditEventLogService auditEventLogService;
 
-    /** What a correction did. {@code changed} is false when the baby already had that outcome. */
+    /**
+     * QA D1802: the death certificates a correction to born alive left contradicted (setter-injected; absent in
+     * hand-built tests).
+     */
+    private StillbirthCertificateConflicts certificateConflicts;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setCertificateConflicts(StillbirthCertificateConflicts certificateConflicts) {
+        this.certificateConflicts = certificateConflicts;
+    }
+
+    /**
+     * What a correction did. {@code changed} is false when the baby already had that outcome.
+     * {@code contradictedCertificates}: the live death certificates that still declare this baby's stillbirth after
+     * a correction to born alive (QA D1802; they are left unchanged).
+     */
     public record Correction(boolean changed, BabyOutcome from, BabyOutcome to, FetalDeathEvent created,
-                             FetalDeathEvent superseded) {
+                             FetalDeathEvent superseded, List<UUID> contradictedCertificates) {
+
+        public Correction(boolean changed, BabyOutcome from, BabyOutcome to, FetalDeathEvent created,
+                          FetalDeathEvent superseded) {
+            this(changed, from, to, created, superseded, List.of());
+        }
     }
 
     /**
@@ -114,16 +134,25 @@ public class FetalDeathEventService {
         User actor = userRef(userId);
         FetalDeathEvent created = null;
         FetalDeathEvent superseded = null;
+        List<UUID> contradicted = List.of();
         if (outcome == BabyOutcome.STILLBORN) {
             created = ensureEvent(delivery, birthOrder, FetalDeathEventSource.DELIVERY, actor, why).orElse(null);
+            if (certificateConflicts != null) {
+                certificateConflicts.correctedToStillborn(delivery, birthOrder, userId);
+            }
         } else {
             superseded = fetalDeathEventRepository
                 .findFirstByDeliveryRecord_IdAndBirthOrderAndSupersededAtIsNull(delivery.getId(), birthOrder)
                 .map(event -> supersede(event, actor, why))
                 .orElse(null);
+            // QA D1802 (provisional): the correction stands, the certificate is left as it is and nobody is
+            // reactivated; the contradiction is audited and handed to the certificate reviewers.
+            if (certificateConflicts != null) {
+                contradicted = certificateConflicts.correctedToLive(delivery, birthOrder, superseded, why, userId);
+            }
         }
         auditCorrection(delivery, birthOrder, from, outcome, why, userId, true);
-        return new Correction(true, from, outcome, created, superseded);
+        return new Correction(true, from, outcome, created, superseded, contradicted);
     }
 
     /**

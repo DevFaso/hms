@@ -188,6 +188,8 @@ public class LaborServiceImpl implements LaborService {
     private final com.example.hms.service.maternity.NewbornRegistrationService newbornRegistration;
     /** QA D1714: every stillborn baby of a recorded delivery creates a fetal-death event (no patient account). */
     private final com.example.hms.service.maternity.FetalDeathEventService fetalDeathEvents;
+    /** Provisional (2026-11-14): no Apgar or preterm alert is raised or chased for a confirmed stillborn baby. */
+    private final com.example.hms.service.maternity.StillbornNeonatalAlerts stillbornNeonatalAlerts;
 
     /* ═══════════════════════ Episodes ═══════════════════════ */
 
@@ -1107,8 +1109,13 @@ public class LaborServiceImpl implements LaborService {
         } else {
             addStillbirthAlertOnce(record);
         }
+        reassessNeonatalAlerts(record);
         List<com.example.hms.model.labor.LaborAlert> raised = record.getAlerts().stream()
             .filter(alert -> before.stream().noneMatch(old -> old.getCode() != null && old.getCode().equals(alert.getCode())))
+            // Provisional (2026-11-14): a neonatal-care alert that applies again after a correction is not replayed.
+            .filter(alert -> alert.getCode() == null
+                || !com.example.hms.service.maternity.StillbornNeonatalAlerts.NEONATAL_CARE_CODES.contains(alert.getCode())
+                || !stillbornNeonatalAlerts.alreadyNotified(record.getId(), alert.getCode()))
             .toList();
         DeliveryRecord saved = deliveryRecordRepository.save(record);
         episode.setOutcome(deriveOutcome(saved));
@@ -1119,6 +1126,7 @@ public class LaborServiceImpl implements LaborService {
         response.setBabies(babiesOf(saved));
         response.setFetalDeathEvents(fetalDeathEvents.eventDtosOf(saved));
         response.setNewborns(newbornRegistration.newbornsOf(saved));
+        response.setContradictedDeathCertificates(correction.contradictedCertificates());
         registerNewbornsAfterCommit(saved, userId, response);
         return response;
     }
@@ -1474,14 +1482,10 @@ public class LaborServiceImpl implements LaborService {
     }
 
     private void evaluateDelivery(DeliveryRecord record) {
-        // QA D214: a preterm birth is flagged, not silently recorded.
-        Integer ga = record.getGestationalAgeWeeksAtBirth();
-        if (ga != null && ga < PRETERM_WEEKS) {
-            record.addAlert(LaborAlertType.GENERAL,
-                ga < VERY_PRETERM_WEEKS ? LaborAlertSeverity.URGENT : LaborAlertSeverity.CAUTION,
-                "labor-preterm",
-                alertText("labor-preterm", ga),
-                "gestationalAgeWeeksAtBirth", new Object[]{ga});
+        com.example.hms.service.maternity.StillbornNeonatalAlerts.Assessment neonatal =
+            stillbornNeonatalAlerts.assess(record);
+        if (!neonatal.suppress()) {
+            addPretermAlert(record);
         }
         evaluateBirthWeightPlausibility(record);
         Integer ebl = record.getEstimatedBloodLossMl();
@@ -1497,19 +1501,81 @@ public class LaborServiceImpl implements LaborService {
                 alertText("labor-retained-placenta"),
                 "placentaComplete", new Object[]{});
         }
+        if (!neonatal.suppress()) {
+            addApgarAlert(record);
+        }
+        addStillbirthAlertOnce(record);
+        if (neonatal.conflict()) {
+            addOutcomeConflictAlert(record);
+        }
+    }
+
+    /** QA D214: a preterm birth is flagged, not silently recorded. */
+    private void addPretermAlert(DeliveryRecord record) {
+        Integer ga = record.getGestationalAgeWeeksAtBirth();
+        if (ga != null && ga < PRETERM_WEEKS) {
+            record.addAlert(LaborAlertType.GENERAL,
+                ga < VERY_PRETERM_WEEKS ? LaborAlertSeverity.URGENT : LaborAlertSeverity.CAUTION,
+                com.example.hms.service.maternity.StillbornNeonatalAlerts.PRETERM,
+                alertText(com.example.hms.service.maternity.StillbornNeonatalAlerts.PRETERM, ga),
+                "gestationalAgeWeeksAtBirth", new Object[]{ga});
+        }
+    }
+
+    private void addApgarAlert(DeliveryRecord record) {
         Integer apgar5 = record.getApgarFiveMinute();
         if (apgar5 != null && apgar5 < APGAR_CRITICAL) {
             record.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.URGENT,
-                "labor-apgar-critical",
-                alertText("labor-apgar-critical", apgar5),
+                com.example.hms.service.maternity.StillbornNeonatalAlerts.APGAR_CRITICAL,
+                alertText(com.example.hms.service.maternity.StillbornNeonatalAlerts.APGAR_CRITICAL, apgar5),
                 "apgarFiveMinute", new Object[]{apgar5});
         } else if (apgar5 != null && apgar5 < APGAR_LOW) {
             record.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.CAUTION,
-                "labor-apgar-low",
-                alertText("labor-apgar-low", apgar5),
+                com.example.hms.service.maternity.StillbornNeonatalAlerts.APGAR_LOW,
+                alertText(com.example.hms.service.maternity.StillbornNeonatalAlerts.APGAR_LOW, apgar5),
                 "apgarFiveMinute", new Object[]{apgar5});
         }
-        addStillbirthAlertOnce(record);
+    }
+
+    /**
+     * Provisional (2026-11-14): an unknown baby outcome, or a stillborn one against a recorded sign of life, is not
+     * silenced: the neonatal alerts stand and the maternity team is asked to assess the outcome.
+     */
+    private void addOutcomeConflictAlert(DeliveryRecord record) {
+        record.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.URGENT,
+            com.example.hms.service.maternity.StillbornNeonatalAlerts.OUTCOME_CONFLICT_ALERT,
+            alertText(com.example.hms.service.maternity.StillbornNeonatalAlerts.OUTCOME_CONFLICT_ALERT),
+            "babies", new Object[]{});
+    }
+
+    /**
+     * Provisional (2026-11-14): after a corrected baby outcome, the neonatal-care alerts and the outcome conflict are
+     * evaluated again from the record. An alert that still applies keeps its original entry; one that no longer
+     * applies leaves the record (its escalation then closes and keeps its history, ObstetricAlertCurrency); one that
+     * applies again is back on the record, and is never re-notified once it was escalated (no stale replay).
+     */
+    private void reassessNeonatalAlerts(DeliveryRecord record) {
+        java.util.Set<String> governed = new java.util.HashSet<>(com.example.hms.service.maternity.StillbornNeonatalAlerts.NEONATAL_CARE_CODES);
+        governed.add(com.example.hms.service.maternity.StillbornNeonatalAlerts.OUTCOME_CONFLICT_ALERT);
+        List<com.example.hms.model.labor.LaborAlert> before = record.getAlerts();
+        record.setAlerts(new java.util.ArrayList<>(before.stream()
+            .filter(alert -> alert.getCode() == null || !governed.contains(alert.getCode())).toList()));
+        com.example.hms.service.maternity.StillbornNeonatalAlerts.Assessment neonatal = stillbornNeonatalAlerts.assess(record);
+        if (!neonatal.suppress()) {
+            addPretermAlert(record);
+            addApgarAlert(record);
+        }
+        if (neonatal.conflict()) {
+            addOutcomeConflictAlert(record);
+        }
+        List<com.example.hms.model.labor.LaborAlert> after = new java.util.ArrayList<>();
+        for (com.example.hms.model.labor.LaborAlert alert : record.getAlerts()) {
+            String code = alert.getCode();
+            after.add(code != null && governed.contains(code)
+                ? before.stream().filter(old -> code.equals(old.getCode())).findFirst().orElse(alert)
+                : alert);
+        }
+        record.setAlerts(after);
     }
 
     /** QA D1714: any stillborn baby raises the stillbirth alert, mixed twins included; once per delivery. */

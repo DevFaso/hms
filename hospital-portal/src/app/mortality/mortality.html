@@ -258,6 +258,14 @@
                         {{ 'MORTALITY.STILLBIRTH_DECLARED' | translate }}
                       </div>
                     }
+                    @if (s.unresolvedConflict) {
+                      <span class="flag late" data-testid="stillbirth-unresolved">{{
+                        'MORTALITY.STILLBIRTH_UNRESOLVED' | translate
+                      }}</span>
+                      <div class="cell-secondary">
+                        {{ 'MORTALITY.STILLBIRTH_UNRESOLVED_HINT' | translate }}
+                      </div>
+                    }
                   </td>
                   <td>
                     @if (stillbirthDeathRecord(s); as d) {

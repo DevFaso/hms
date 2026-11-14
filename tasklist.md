@@ -6531,3 +6531,9 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 ## Standing debt — AVS polish (feat/avs-polish)
 - **Checkout preview has no print button:** the staff dialog and "Mes résumés" print the shared summary document (print-only.ts); the checkout dialog's preview shows the same document but cannot print it yet.
 - **Follow-up booking found by day on a later read:** a checkout passes the booked appointment's id; a later read of the summary finds the patient's live appointment at the visit's hospital on the follow-up day booked after the checkout, since the appointment keeps no link to the visit. A source-encounter column would make it exact.
+
+## Standing debt — stillbirth certificate conflicts and neonatal alerts (feat/stillbirth-conflict-and-alerts)
+- **D1802 and the neonatal alerts on stillborn babies:** decided 2026-11-14, provisional; see approvals register. "Sign of life" for the conflict check = an Apgar above 0, a heart rate or a respiratory rate recorded for that baby (provisional, for clinical sign-off).
+- **A stillbirth certificate recorded AFTER the delivery says born alive:** the register marks it unresolved, but no reconciliation task is filed (only the correction path files one).
+- **Portal has no outcome-correction screen:** the API returns `contradictedDeathCertificates` after a correction to born alive; no portal surface shows it yet.
+- **Reminders of a neonatal alert that applies again after a correction are not resent** (no stale replay): the alert is back on the delivery record only; if the clinical lead wants a fresh notice for a baby re-recorded as born alive, that is a rule change.

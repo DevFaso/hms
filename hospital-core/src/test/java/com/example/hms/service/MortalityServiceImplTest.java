@@ -1640,4 +1640,46 @@ class MortalityServiceImplTest {
             assertThat(row.getMotherPatientId()).isEqualTo(mother.getId());
         });
     }
+
+    // ── QA D1802 (provisional 2026-11-14): a certificate the delivery now contradicts ──
+
+    @Test
+    void aStillbirthCertificateOfABabyNowRecordedLiveIsCountedOnceAndMarkedUnresolved() {
+        com.example.hms.model.labor.FetalDeathEvent superseded = fetalDeath(28);
+        superseded.setSupersededAt(LocalDateTime.now().minusHours(1));
+        superseded.setSupersedeReason("born alive");
+        Patient baby = new Patient();
+        baby.setId(UUID.randomUUID());
+        DeathRecord certificate = stillbirthDeathOf(baby, superseded.getId());
+        com.example.hms.service.maternity.StillbirthCertificateConflicts conflicts =
+            org.mockito.Mockito.mock(com.example.hms.service.maternity.StillbirthCertificateConflicts.class);
+        String identity = superseded.getDeliveryRecord().getId() + "#1";
+        when(conflicts.liveBornIdentities(java.util.Set.of(identity))).thenReturn(java.util.Set.of(identity));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "certificateConflicts", conflicts);
+
+        MortalityRegisterDTO register = registerWith(List.of(certificate), List.of(), List.of(), List.of(superseded));
+
+        assertThat(register.getStillbirths()).as("counted once, through the certificate").isEqualTo(1);
+        assertThat(register.getStillbirthRows()).singleElement().satisfies(row -> {
+            assertThat(row.getDeathRecordId()).isEqualTo(certificate.getId());
+            assertThat(row.isUnresolvedConflict()).isTrue();
+        });
+    }
+
+    @Test
+    void aStillbirthCertificateTheDeliveryAgreesWithIsNotMarkedUnresolved() {
+        com.example.hms.model.labor.FetalDeathEvent event = fetalDeath(28);
+        Patient baby = new Patient();
+        baby.setId(UUID.randomUUID());
+        DeathRecord certificate = stillbirthDeathOf(baby, null);
+        com.example.hms.service.maternity.StillbirthCertificateConflicts conflicts =
+            org.mockito.Mockito.mock(com.example.hms.service.maternity.StillbirthCertificateConflicts.class);
+        when(conflicts.liveBornIdentities(any())).thenReturn(java.util.Set.of());
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "certificateConflicts", conflicts);
+
+        MortalityRegisterDTO register = registerWith(List.of(certificate), List.of(event), List.of(event), List.of());
+
+        assertThat(register.getStillbirthRows()).noneMatch(
+            com.example.hms.payload.dto.mortality.FetalDeathEventDTO::isUnresolvedConflict);
+    }
 }

@@ -32,6 +32,10 @@ public interface DeathRecordRepository extends JpaRepository<DeathRecord, UUID> 
     @Query("SELECT d.id FROM DeathRecord d WHERE d.id = :id")
     Optional<UUID> lockById(@Param("id") UUID id);
 
+    /** QA D1802: the live death records that declare one of these fetal-death events. */
+    @Query("SELECT d FROM DeathRecord d WHERE d.fetalDeathEventId IN :eventIds AND d.enteredInErrorAt IS NULL")
+    List<DeathRecord> findLiveByFetalDeathEventIdIn(@Param("eventIds") java.util.Collection<UUID> eventIds);
+
     /** QA D1488: the rows marked entered in error in a period, listed apart from the register's counts. */
     @Query("SELECT d FROM DeathRecord d WHERE d.hospital.id = :hospitalId AND d.enteredInErrorAt IS NOT NULL "
         + "AND d.diedAt >= :from AND d.diedAt < :to ORDER BY d.enteredInErrorAt DESC")
