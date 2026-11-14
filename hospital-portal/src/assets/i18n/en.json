@@ -3580,6 +3580,9 @@
     "ZIP_CODE": "Zip Code"
   },
   "IMAGING": {
+    "ADMIN_READ_ONLY": "Read-only: imaging requests and released reports. Ordering, reporting and signing are done by the clinical team.",
+    "ALL_HOSPITALS": "All hospitals",
+    "HOSPITAL_FILTER": "Hospital",
     "ACCESSION": "Accession number",
     "ACK_CRITICAL": "Acknowledge critical",
     "ACTIVE_ORDERS": "Active Orders",

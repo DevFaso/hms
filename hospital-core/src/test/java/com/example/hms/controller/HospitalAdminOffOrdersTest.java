@@ -44,11 +44,26 @@ class HospitalAdminOffOrdersTest {
     }
 
     @Test
-    @DisplayName("imaging, DICOM, ultrasound and transfusion refuse the role; the imaging sweep keeps it")
+    @DisplayName("imaging is read-only for the role (decision 2026-11-14); DICOM, ultrasound and transfusion refuse it")
     void imagingAndTransfusion() {
-        assertOffChart(ImagingOrderController.class);
-        assertOffChart(ImagingResultController.class, "/critical-escalation/run");
-        assertKept(ImagingResultController.class, "POST /critical-escalation/run");
+        // User decision 2026-11-14 supersedes D5 for imaging: the hospital admin READS
+        // orders and released reports of their hospital, and never acts on a study.
+        for (String read : new String[] {"GET /orders", "GET /orders/{orderId}", "GET /orders/patient/{patientId}",
+            "GET /orders/hospital/{hospitalId}"}) {
+            assertKept(ImagingOrderController.class, read);
+        }
+        for (String write : new String[] {"POST /orders", "PUT /orders/{orderId}", "PUT /orders/{orderId}/status",
+            "POST /orders/{orderId}/signature", "GET /orders/patient/{patientId}/duplicates"}) {
+            assertRefuses(ImagingOrderController.class, write);
+        }
+        for (String read : new String[] {"GET /{reportId}", "GET /order/{orderId}", "GET /order/{orderId}/all",
+            "GET /hospital/{hospitalId}", "POST /critical-escalation/run"}) {
+            assertKept(ImagingResultController.class, read);
+        }
+        for (String write : new String[] {"POST ", "PUT /{reportId}", "POST /{reportId}/sign", "PUT /{reportId}/status",
+            "PUT /{reportId}/acknowledge-critical"}) {
+            assertRefuses(ImagingResultController.class, write);
+        }
         assertOffChart(DicomProxyController.class);
         assertOffChart(UltrasoundController.class);
         assertOffChart(TransfusionController.class);

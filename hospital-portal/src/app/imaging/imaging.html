@@ -38,6 +38,28 @@
       </div>
     </div>
   }
+  @if (canPickHospital) {
+    <!-- User decision 2026-11-14: the super-admin reads every hospital, or one. -->
+    <div class="filter-bar hospital-filter">
+      <label for="imaging-hospital-filter">{{ 'IMAGING.HOSPITAL_FILTER' | translate }}</label>
+      <select
+        id="imaging-hospital-filter"
+        data-testid="imaging-hospital-filter"
+        [ngModel]="hospitalFilter()"
+        (ngModelChange)="setHospitalFilter($event)"
+      >
+        <option value="">{{ 'IMAGING.ALL_HOSPITALS' | translate }}</option>
+        @for (h of hospitals(); track h.id) {
+          <option [value]="h.id">{{ h.name }}</option>
+        }
+      </select>
+    </div>
+  }
+  @if (isAdminReader) {
+    <p class="admin-reader-note" data-testid="imaging-admin-reader-note">
+      {{ 'IMAGING.ADMIN_READ_ONLY' | translate }}
+    </p>
+  }
   @if (view() === 'orders') {
     <!-- r44: each card counts exactly what its tab lists (search and dates applied). -->
     <div class="summary-cards" data-testid="imaging-stat-cards">
@@ -198,6 +220,11 @@
           <thead>
             <tr>
               <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+              @if (showHospitalColumn()) {
+                <th scope="col" data-testid="imaging-hospital-header">
+                  {{ 'ENCOUNTERS.HOSPITAL' | translate }}
+                </th>
+              }
               <th scope="col" data-testid="imaging-status-header">
                 {{ 'COMMON.STATUS' | translate }}
               </th>
@@ -218,6 +245,11 @@
                   </div>
                   <div class="cell-secondary">{{ o.patientMrn }}</div>
                 </td>
+                @if (showHospitalColumn()) {
+                  <td data-testid="imaging-row-hospital">
+                    {{ hospitalNameOf(o.hospitalId, o.hospitalName) }}
+                  </td>
+                }
                 <td>
                   <span
                     class="status-badge {{ getStatusClass(o.status) }}"
@@ -385,6 +417,9 @@
           <thead>
             <tr>
               <th scope="col">{{ 'IMAGING.REPORT_NUMBER' | translate }}</th>
+              @if (showHospitalColumn()) {
+                <th scope="col">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</th>
+              }
               <th scope="col">{{ 'IMAGING.MODALITY' | translate }}</th>
               <th scope="col">{{ 'IMAGING.BODY_REGION' | translate }}</th>
               <th scope="col">{{ 'IMAGING.INTERPRETED_BY' | translate }}</th>
@@ -400,6 +435,9 @@
                   <div class="cell-primary">{{ r.reportNumber || '—' }}</div>
                   <div class="cell-secondary">{{ r.reportTitle }}</div>
                 </td>
+                @if (showHospitalColumn()) {
+                  <td data-testid="imaging-report-hospital">{{ hospitalNameOf(r.hospitalId) }}</td>
+                }
                 <td>
                   <span class="modality-badge">{{
                     r.modality | enumLabel: 'imagingModality'

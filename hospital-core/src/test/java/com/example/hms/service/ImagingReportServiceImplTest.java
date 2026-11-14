@@ -49,6 +49,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -656,5 +658,85 @@ class ImagingReportServiceImplTest {
         assertThatThrownBy(() -> imagingReportService.updateReportStatus(reportId, again))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.report.voided.locked");
+    }
+
+    // ── User decision 2026-11-14: an administrator reads released reports only ──
+
+    private static void signIn(String... authorities) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("u", "n/a",
+                java.util.Arrays.stream(authorities)
+                    .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList()));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void signOut() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    private ImagingReport version(int number, ImagingReportStatus status, boolean signed) {
+        ImagingReport report = new ImagingReport();
+        report.setId(UUID.randomUUID());
+        report.setImagingOrder(imagingOrder);
+        report.setHospital(hospital);
+        report.setReportVersion(number);
+        report.setReportStatus(status);
+        if (signed) {
+            report.setSignedAt(LocalDateTime.now());
+        }
+        return report;
+    }
+
+    /** The super-admin as the token carries them: every inherited role, DOCTOR and NURSE among them. */
+    private static final String[] SUPER_ADMIN = {"ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_RECEPTIONIST",
+        "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_LAB_SCIENTIST", "ROLE_STAFF", "ROLE_PATIENT"};
+
+    @Test
+    void adminDecision_everyAdminReadOfAnOrdersReportsLeavesOutWorkInProgress() {
+        ImagingReport draft = version(4, ImagingReportStatus.DRAFT, false);
+        ImagingReport addendum = version(3, ImagingReportStatus.ADDENDUM, true);
+        ImagingReport preliminary = version(2, ImagingReportStatus.PRELIMINARY, false);
+        ImagingReport finalRead = version(1, ImagingReportStatus.FINAL, true);
+        when(imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(orderId))
+            .thenReturn(List.of(draft, addendum, preliminary, finalRead));
+        when(imagingReportRepository.findFirstByImagingOrder_IdAndLatestVersionIsTrue(orderId))
+            .thenReturn(Optional.of(draft));
+        when(imagingReportRepository.findByHospital_IdAndReportStatusOrderByPerformedAtDesc(hospitalId,
+            ImagingReportStatus.PRELIMINARY)).thenReturn(List.of(preliminary));
+        when(imagingReportRepository.findByHospital_IdAndModalityOrderByPerformedAtDesc(hospitalId,
+            ImagingModality.CT)).thenReturn(List.of(draft, finalRead));
+        when(imagingReportRepository.findById(draft.getId())).thenReturn(Optional.of(draft));
+        when(imagingReportRepository.findById(finalRead.getId())).thenReturn(Optional.of(finalRead));
+        doAnswer(inv -> ImagingReportResponseDTO.builder().id(((ImagingReport) inv.getArgument(0)).getId()).build())
+            .when(imagingReportMapper).toResponseDTO(any(ImagingReport.class));
+
+        for (String[] admin : List.of(SUPER_ADMIN, new String[] {"ROLE_HOSPITAL_ADMIN"}, new String[] {"ROLE_ADMIN"})) {
+            signIn(admin);
+            assertThat(imagingReportService.getReportsForOrder(orderId)).extracting(ImagingReportResponseDTO::getId)
+                .containsExactly(addendum.getId(), finalRead.getId());
+            assertThat(imagingReportService.getLatestReportForOrder(orderId).getId()).isEqualTo(addendum.getId());
+            assertThat(imagingReportService.getReportsByHospitalAndStatus(hospitalId, ImagingReportStatus.PRELIMINARY))
+                .isEmpty();
+            assertThat(imagingReportService.getReportsByHospitalAndModality(hospitalId, ImagingModality.CT))
+                .extracting(ImagingReportResponseDTO::getId).containsExactly(finalRead.getId());
+            assertThatThrownBy(() -> imagingReportService.getReport(draft.getId()))
+                .isInstanceOf(ResourceNotFoundException.class);
+            assertThat(imagingReportService.getReport(finalRead.getId()).getId()).isEqualTo(finalRead.getId());
+        }
+
+        // The care team reads the work in progress.
+        signIn("ROLE_RADIOLOGIST");
+        assertThat(imagingReportService.getReportsForOrder(orderId)).hasSize(4);
+        assertThat(imagingReportService.getLatestReportForOrder(orderId).getId()).isEqualTo(draft.getId());
+        assertThat(imagingReportService.getReport(draft.getId()).getId()).isEqualTo(draft.getId());
+    }
+
+    @Test
+    void adminDecision_aHospitalAdminOfANeverListsBsReports() {
+        UUID hospitalB = UUID.randomUUID();
+        signIn("ROLE_HOSPITAL_ADMIN");
+        assertThatThrownBy(() -> imagingReportService.getReportsByHospitalAndStatus(hospitalB, ImagingReportStatus.FINAL))
+            .isInstanceOf(AccessDeniedException.class);
+        verify(imagingReportRepository, never()).findByHospital_IdAndReportStatusOrderByPerformedAtDesc(eq(hospitalB), any());
     }
 }

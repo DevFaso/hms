@@ -1201,8 +1201,10 @@ export const routes: Routes = [
             // order creation and listing — the guard was the outlier.
             'ROLE_MIDWIFE',
             'ROLE_RADIOLOGIST',
-            // QA D1841: no ROLE_ADMIN — GET /imaging/orders, the page's
-            // load-time read, refuses it (ImagingReadRoleGuardTest).
+            // User decision 2026-11-14: the admin roles read Imagerie
+            // (orders and released reports of their hospitals), read-only.
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],
         },

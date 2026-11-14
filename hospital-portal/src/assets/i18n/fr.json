@@ -3580,6 +3580,9 @@
     "ZIP_CODE": "Code postal"
   },
   "IMAGING": {
+    "ADMIN_READ_ONLY": "Consultation seule : demandes d'imagerie et comptes rendus validés. La prescription, l'interprétation et la signature reviennent à l'équipe clinique.",
+    "ALL_HOSPITALS": "Tous les hôpitaux",
+    "HOSPITAL_FILTER": "Hôpital",
     "ACCESSION": "Numéro d'accession",
     "ACK_CRITICAL": "Confirmer le résultat critique",
     "ACTIVE_ORDERS": "Demandes actives",

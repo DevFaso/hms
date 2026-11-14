@@ -833,6 +833,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_RADIOLOGIST',
+          // User decision 2026-11-14: read-only Imagerie for the admin roles.
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
       },

@@ -3580,6 +3580,9 @@
     "ZIP_CODE": "Código postal"
   },
   "IMAGING": {
+    "ADMIN_READ_ONLY": "Solo lectura: solicitudes de imagen e informes validados. La solicitud, la interpretación y la firma corresponden al equipo clínico.",
+    "ALL_HOSPITALS": "Todos los hospitales",
+    "HOSPITAL_FILTER": "Hospital",
     "ACCESSION": "Número de acceso",
     "ACK_CRITICAL": "Confirmar resultado crítico",
     "ACTIVE_ORDERS": "Órdenes activas",
