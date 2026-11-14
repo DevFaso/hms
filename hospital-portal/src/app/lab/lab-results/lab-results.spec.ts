@@ -917,7 +917,7 @@ describe('LabResultsComponent', () => {
       expect(text(host, 'detail-specimen-type')).toContain('Plasma fluoré');
       expect(text(host, 'detail-collected-at')).toContain('LAB.COLLECTED_AT');
       expect(text(host, 'detail-performing-lab')).toContain('Laboratoire central');
-      expect(text(host, 'detail-lab-comment')).toContain('LAB_RESULTS.LAB_COMMENT');
+      expect(text(host, 'detail-lab-comment')).toContain('COMMON.NOTES');
       expect(text(host, 'detail-lab-comment')).toContain('Prélèvement à jeun confirmé.');
     });
 

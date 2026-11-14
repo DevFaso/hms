@@ -1,5 +1,6 @@
 import { formatDecimal } from '../../shared/i18n/app-locale';
-import { Component, computed, input, linkedSignal, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, linkedSignal, signal } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { LabResultReferenceRange, LabResultTrendPoint } from '../../services/lab.service';
@@ -68,7 +69,6 @@ import { serverInstant } from '../../shared/date-utils';
               type="button"
               class="info-btn"
               (click)="toggleMethod()"
-              (keydown.escape)="dismissMethod($event)"
               [attr.aria-expanded]="methodVisible()"
               [attr.aria-label]="'LAB_EVOLUTION.NOTE_INFO' | translate"
               [attr.aria-describedby]="resultId() + '-evolution-method'"
@@ -336,6 +336,19 @@ import { serverInstant } from '../../shared/date-utils';
   `,
 })
 export class ResultEvolutionComponent {
+  private readonly document = inject(DOCUMENT);
+  constructor() {
+    effect((onCleanup) => {
+      if (!this.methodVisible()) return;
+      // Hover does not move focus. Capture Escape before a containing dialog
+      // handles it, even when the focused control is outside this component.
+      const dismiss = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') this.dismissMethod(event);
+      };
+      this.document.addEventListener('keydown', dismiss, true);
+      onCleanup(() => this.document.removeEventListener('keydown', dismiss, true));
+    });
+  }
   methodHover = signal(false);
   methodFocus = signal(false);
   methodPinned = signal(false);

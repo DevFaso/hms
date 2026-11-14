@@ -226,6 +226,37 @@ describe('ResultEvolutionComponent', () => {
     expect(getComputedStyle(tooltip).display).toBe('none');
   });
 
+  it('dismisses a hovered method before Escape reaches a dialog with focus elsewhere', () => {
+    const fixture = setup();
+    const host = fixture.nativeElement as HTMLElement;
+    const dialog = document.createElement('div');
+    const otherControl = document.createElement('button');
+    const closeDialog = jasmine.createSpy('closeDialog');
+    dialog.addEventListener('keydown', closeDialog);
+    document.body.appendChild(dialog);
+    dialog.append(host, otherControl);
+    try {
+      otherControl.focus();
+      host.querySelector('.info')!.dispatchEvent(new MouseEvent('mouseenter'));
+      fixture.detectChanges();
+      expect(fixture.componentInstance.methodVisible()).toBeTrue();
+      otherControl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      expect(fixture.componentInstance.methodVisible()).toBeFalse();
+      expect(closeDialog).not.toHaveBeenCalled();
+      // Once dismissed the next Escape belongs to the containing dialog.
+      otherControl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(closeDialog).toHaveBeenCalledTimes(1);
+      host.querySelector('.info')!.dispatchEvent(new MouseEvent('mouseenter'));
+      fixture.detectChanges();
+      fixture.destroy();
+      otherControl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(closeDialog).toHaveBeenCalledTimes(2);
+    } finally {
+      dialog.remove();
+    }
+  });
+
   describe('r44 chart', () => {
     function glucose(range?: { minValue: number; maxValue: number; unit: string }) {
       const fixture = setup();

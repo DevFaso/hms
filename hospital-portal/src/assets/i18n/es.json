@@ -4157,7 +4157,6 @@
     "OTHER_RANGES": "Otros intervalos ({{count}})",
     "CRITICAL_LIMITS": "Valores críticos",
     "NO_INTERVAL": "Sin intervalo",
-    "LAB_COMMENT": "Comentario del laboratorio",
     "OPEN_REQUEST": "Abrir la solicitud {{code}}"
   },
   "LAB_RELEASE": {
