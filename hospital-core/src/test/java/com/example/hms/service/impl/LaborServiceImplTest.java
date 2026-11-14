@@ -2932,4 +2932,20 @@ class LaborServiceImplTest {
         verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
             "labor.alert.msg.labor-outcome-conflict".equals(urgent.alertMessageKey())));
     }
+    /** Rex on #1152: a sign of life recorded on the mother's chart for this delivery (no registered baby). */
+    @Test
+    void aCorrectionAgainstASignOfLifeOnTheMothersChartIsFlaggedAndKeepsItsAlerts() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.LIVE);
+        withNeonatalAlerts(record);
+        when(newbornAssessmentRepository.anyUnattributedSignOfLifeRecorded(record.getId())).thenReturn(true);
+        correctionApplies(record, 1, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(1).outcome(com.example.hms.enums.BabyOutcome.STILLBORN).reason("No signs of life").build());
+
+        assertThat(codesOf(record)).contains("labor-outcome-conflict", "labor-preterm", "labor-apgar-critical");
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            "labor.alert.msg.labor-outcome-conflict".equals(urgent.alertMessageKey())));
+    }
 }

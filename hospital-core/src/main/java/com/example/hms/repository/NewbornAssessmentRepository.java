@@ -80,4 +80,16 @@ public interface NewbornAssessmentRepository extends JpaRepository<NewbornAssess
         + " AND (a.apgarOneMinute > 0 OR a.apgarFiveMinute > 0 OR a.apgarTenMinute > 0"
         + " OR a.heartRateBpm > 0 OR a.respirationsPerMin > 0)")
     boolean anySignOfLifeRecorded(@org.springframework.data.repository.query.Param("patientId") UUID patientId);
+
+    /**
+     * Rex on #1152: whether a neonatal assessment of this delivery recorded on the MOTHER's chart (a baby the delivery
+     * did not register, so it cannot be told apart) showed a sign of life. Like the delivery's own Apgar, it belongs to
+     * no baby in particular: it makes a delivery with no live-born baby uncertain.
+     */
+    @org.springframework.data.jpa.repository.Query("SELECT COUNT(a) > 0 FROM NewbornAssessment a"
+        + " WHERE a.deliveryRecord.id = :deliveryId AND a.patient.id = a.deliveryRecord.patient.id"
+        + " AND (a.apgarOneMinute > 0 OR a.apgarFiveMinute > 0 OR a.apgarTenMinute > 0"
+        + " OR a.heartRateBpm > 0 OR a.respirationsPerMin > 0)")
+    boolean anyUnattributedSignOfLifeRecorded(
+        @org.springframework.data.repository.query.Param("deliveryId") UUID deliveryId);
 }

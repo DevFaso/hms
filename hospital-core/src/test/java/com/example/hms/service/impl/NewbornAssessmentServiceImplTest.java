@@ -859,4 +859,28 @@ class NewbornAssessmentServiceImplTest {
             && a.getSeverity() == NewbornAlertSeverity.URGENT).count());
         verify(obstetricAlertEscalation, times(2)).raiseAfterCommit(any());
     }
+    @Test
+    void onTheMothersChartAnUnregisteredConfirmedStillbornBabysApgarZeroRaisesNoNotice() {
+        com.example.hms.model.labor.DeliveryRecord delivery = onTheMothersChart(1);
+        delivery.putBabyOutcome(1, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        NewbornAssessmentResponseDTO response = recordApgarZero();
+
+        assertTrue(response.getAlerts().stream().noneMatch(a -> a.getType() == NewbornAlertType.APGAR));
+        verify(obstetricAlertEscalation, org.mockito.Mockito.never()).raiseAfterCommit(any());
+    }
+
+    /** Rex on #1152: an earlier sign of life on the mother's chart for this delivery makes the stillbirth uncertain. */
+    @Test
+    void onTheMothersChartAnEarlierSignOfLifeKeepsAnUnregisteredStillbornBabysApgarAlert() {
+        com.example.hms.model.labor.DeliveryRecord delivery = onTheMothersChart(1);
+        delivery.putBabyOutcome(1, com.example.hms.enums.BabyOutcome.STILLBORN);
+        when(assessmentRepository.anyUnattributedSignOfLifeRecorded(delivery.getId())).thenReturn(true);
+
+        NewbornAssessmentResponseDTO response = recordApgarZero();
+
+        assertEquals(2, response.getAlerts().stream().filter(a -> a.getType() == NewbornAlertType.APGAR
+            && a.getSeverity() == NewbornAlertSeverity.URGENT).count());
+        verify(obstetricAlertEscalation, times(2)).raiseAfterCommit(any());
+    }
 }

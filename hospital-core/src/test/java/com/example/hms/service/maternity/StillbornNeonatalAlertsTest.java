@@ -178,4 +178,35 @@ class StillbornNeonatalAlertsTest {
             .as("uncertain").isFalse();
         assertThat(rule.confirmedStillbornAssessment(assessmentOf(mother, null))).as("no delivery").isFalse();
     }
+    // -- Rex on #1152: a sign of life recorded on the mother's chart for this delivery (an unregistered baby) --
+
+    @Test
+    void aSignOfLifeOnTheMothersChartKeepsEveryStillbornPathUncertain() {
+        for (int babies = 1; babies <= 3; babies++) {
+            BabyOutcome[] outcomes = new BabyOutcome[babies];
+            java.util.Arrays.fill(outcomes, BabyOutcome.STILLBORN);
+            DeliveryRecord record = delivery(0, outcomes);
+            when(assessments.anyUnattributedSignOfLifeRecorded(record.getId())).thenReturn(true);
+            Patient mother = new Patient();
+            mother.setId(UUID.randomUUID());
+
+            assertThat(rule.assess(record)).as("%d stillborn: delivery alerts kept and flagged", babies)
+                .isEqualTo(new StillbornNeonatalAlerts.Assessment(false, true));
+            for (int order = 1; order <= babies; order++) {
+                assertThat(rule.confirmedStillborn(registered(record, order).getId()))
+                    .as("%d stillborn, baby %d: its reminder is not closed", babies, order).isFalse();
+            }
+            assertThat(rule.confirmedStillbornAssessment(assessmentOf(mother, record)))
+                .as("%d stillborn: a new assessment on the mother's chart still alerts", babies).isFalse();
+        }
+    }
+
+    @Test
+    void aSignOfLifeOnTheMothersChartBelongsToTheLiveTwinNotTheStillbornOne() {
+        DeliveryRecord twins = delivery(0, BabyOutcome.LIVE, BabyOutcome.STILLBORN);
+        when(assessments.anyUnattributedSignOfLifeRecorded(twins.getId())).thenReturn(true);
+
+        assertThat(rule.assess(twins)).isEqualTo(new StillbornNeonatalAlerts.Assessment(false, false));
+        assertThat(rule.confirmedStillborn(registered(twins, 2).getId())).isTrue();
+    }
 }

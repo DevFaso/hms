@@ -70,7 +70,8 @@ public class StillbornNeonatalAlerts {
                 conflict = true;
             }
         }
-        // The delivery holds one Apgar for all its babies: it can only contradict a delivery with no live baby.
+        // The delivery's own Apgar, and any sign of life recorded on the mother's chart for this delivery, belong to no
+        // baby in particular: they can only contradict a delivery with no live baby.
         if (!anyLive && deliverySignOfLife(delivery)) {
             conflict = true;
         }
@@ -99,7 +100,9 @@ public class StillbornNeonatalAlerts {
      *       live twin keeps its alerts.</li>
      *   <li>Otherwise (the mother's chart, the baby not registered) the assessment cannot name its baby: only a
      *       delivery whose every baby is a confirmed stillbirth ({@link #assess} suppresses) is silenced.</li>
-     *   <li>A sign of life in this assessment, or an unknown or conflicting outcome, always alerts.</li>
+     *   <li>A sign of life in this assessment, or one recorded earlier for this baby or for this delivery (its Apgar,
+     *       or the mother's chart, when no baby was born alive), or an unknown or conflicting outcome, always
+     *       alerts.</li>
      * </ul>
      */
     public boolean confirmedStillbornAssessment(NewbornAssessment assessment) {
@@ -128,8 +131,9 @@ public class StillbornNeonatalAlerts {
             return false;
         }
         DeliveryRecord delivery = link.getDeliveryRecord();
-        // Rex on #1152: the same sign-of-life rule as assess(). The delivery's own Apgar above 0, with no live-born
-        // baby it could belong to, contradicts the stillborn outcome: the outcome is uncertain, nothing is closed.
+        // Rex on #1152: the same sign-of-life rule as assess(). A sign of life recorded for the delivery (its Apgar
+        // above 0, or a neonatal assessment on the mother's chart), with no live-born baby it could belong to,
+        // contradicts the stillborn outcome: the outcome is uncertain, nothing is closed.
         return delivery.outcomeOf(link.getBirthOrder()) == BabyOutcome.STILLBORN
             && !newbornAssessmentRepository.anySignOfLifeRecorded(newbornPatientId)
             && !(!anyLiveBorn(delivery) && deliverySignOfLife(delivery));
@@ -169,8 +173,14 @@ public class StillbornNeonatalAlerts {
             .anyMatch(link -> newbornAssessmentRepository.anySignOfLifeRecorded(link.getNewbornPatient().getId()));
     }
 
-    static boolean deliverySignOfLife(DeliveryRecord delivery) {
-        return positive(delivery.getApgarOneMinute()) || positive(delivery.getApgarFiveMinute());
+    /**
+     * A sign of life recorded for the delivery but for no baby in particular: its own Apgar above 0, or (Rex on
+     * #1152) an earlier neonatal assessment of this delivery recorded on the mother's chart. The one shared check of
+     * {@link #assess}, {@link #confirmedStillborn} and {@link #confirmedStillbornAssessment}.
+     */
+    boolean deliverySignOfLife(DeliveryRecord delivery) {
+        return positive(delivery.getApgarOneMinute()) || positive(delivery.getApgarFiveMinute())
+            || (delivery.getId() != null && newbornAssessmentRepository.anyUnattributedSignOfLifeRecorded(delivery.getId()));
     }
 
     private static boolean positive(Integer value) {
