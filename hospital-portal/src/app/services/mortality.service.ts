@@ -135,6 +135,9 @@ export interface StillbirthRow {
   deliveryRecordId: string | null;
   motherPatientId: string | null;
   motherName: string | null;
+  /** On a death-record row: the stillborn baby's own record, never shown as the mother. */
+  patientId?: string | null;
+  patientName?: string | null;
   birthOrder: number | null;
   occurredAt: string;
   gestationalAgeWeeks: number | null;

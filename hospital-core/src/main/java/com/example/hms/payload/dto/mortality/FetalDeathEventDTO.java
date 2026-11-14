@@ -29,6 +29,9 @@ public class FetalDeathEventDTO {
     private UUID deliveryRecordId;
     private UUID motherPatientId;
     private String motherName;
+    /** On a row read from a death record: the stillborn baby's own record (its name), never shown as the mother. */
+    private UUID patientId;
+    private String patientName;
     private Integer birthOrder;
     private LocalDateTime occurredAt;
     private Integer gestationalAgeWeeks;

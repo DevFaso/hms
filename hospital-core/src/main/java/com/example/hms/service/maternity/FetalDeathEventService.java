@@ -103,6 +103,8 @@ public class FetalDeathEventService {
         }
         BabyOutcome from = delivery.outcomeOf(birthOrder);
         if (from == outcome) {
+            // Rex on #1144: a correction that changes nothing is still a recorded act, with its reason and actor.
+            auditCorrection(delivery, birthOrder, from, outcome, why, userId, false);
             return new Correction(false, from, outcome, null, null);
         }
         materializeOutcomes(delivery);
@@ -120,14 +122,25 @@ public class FetalDeathEventService {
                 .map(event -> supersede(event, actor, why))
                 .orElse(null);
         }
+        auditCorrection(delivery, birthOrder, from, outcome, why, userId, true);
+        return new Correction(true, from, outcome, created, superseded);
+    }
+
+    /**
+     * Rex on #1144: every correction is audited with its reason and its actor, whether or not an event was created
+     * or superseded (an unknown baby made live, or a correction to the outcome already recorded).
+     */
+    private void auditCorrection(DeliveryRecord delivery, int birthOrder, BabyOutcome from, BabyOutcome to,
+                                 String reason, UUID userId, boolean changed) {
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("deliveryRecordId", String.valueOf(delivery.getId()));
         details.put("birthOrder", birthOrder);
         details.put("from", from == null ? "UNKNOWN" : from.name());
-        details.put("to", outcome.name());
+        details.put("to", to.name());
+        details.put("changed", changed);
+        details.put("reason", reason);
         audit(AuditEventType.DELIVERY_BABY_OUTCOME_CORRECTED, "DELIVERY_RECORD", delivery.getId(), delivery, userId,
             "Baby outcome corrected on a delivery record", details);
-        return new Correction(true, from, outcome, created, superseded);
     }
 
     /**

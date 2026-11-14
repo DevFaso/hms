@@ -1098,10 +1098,23 @@ public class LaborServiceImpl implements LaborService {
             return unchanged;
         }
         record.setNewbornRegistrationPending(record.isLiveBirth());
-        addStillbirthAlertOnce(record);
+        // Rex on #1144: the alerts follow the corrected outcome. No stillborn baby left: the stillbirth alert goes
+        // (its escalation closes, ObstetricAlertCurrency). A first stillborn baby: the alert is raised and escalated
+        // like one raised at the delivery.
+        List<com.example.hms.model.labor.LaborAlert> before = record.getAlerts();
+        if (record.stillbornOrders().length == 0) {
+            record.setAlerts(before.stream().filter(alert -> !com.example.hms.service.maternity.ObstetricAlertCurrency.STILLBIRTH_ALERT.equals(alert.getCode())).toList());
+        } else {
+            addStillbirthAlertOnce(record);
+        }
+        List<com.example.hms.model.labor.LaborAlert> raised = record.getAlerts().stream()
+            .filter(alert -> before.stream().noneMatch(old -> old.getCode() != null && old.getCode().equals(alert.getCode())))
+            .toList();
         DeliveryRecord saved = deliveryRecordRepository.save(record);
         episode.setOutcome(deriveOutcome(saved));
         episodeRepository.save(episode);
+        publishUrgentAlerts(raised, episode, record.getDocumentedBy(),
+            com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_DELIVERY, saved.getId());
         DeliveryRecordResponseDTO response = laborMapper.toDeliveryResponse(saved);
         response.setBabies(babiesOf(saved));
         response.setFetalDeathEvents(fetalDeathEvents.eventDtosOf(saved));
@@ -1502,12 +1515,12 @@ public class LaborServiceImpl implements LaborService {
     /** QA D1714: any stillborn baby raises the stillbirth alert, mixed twins included; once per delivery. */
     private void addStillbirthAlertOnce(DeliveryRecord record) {
         if (record.stillbornOrders().length == 0
-            || record.getAlerts().stream().anyMatch(alert -> "labor-stillbirth".equals(alert.getCode()))) {
+            || record.getAlerts().stream().anyMatch(alert -> com.example.hms.service.maternity.ObstetricAlertCurrency.STILLBIRTH_ALERT.equals(alert.getCode()))) {
             return;
         }
         record.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.URGENT,
-            "labor-stillbirth",
-            alertText("labor-stillbirth"),
+            com.example.hms.service.maternity.ObstetricAlertCurrency.STILLBIRTH_ALERT,
+            alertText(com.example.hms.service.maternity.ObstetricAlertCurrency.STILLBIRTH_ALERT),
             "liveBirth", new Object[]{});
     }
 

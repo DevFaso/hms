@@ -285,4 +285,42 @@ class FetalDeathEventServiceTest {
         assertThat(stored).hasSize(1);
         verify(deliveries, never()).save(eq(stillbirth));
     }
+
+    // ── Rex on #1144: every correction audits its reason and actor ──
+
+    private AuditEventRequestDTO lastCorrectionAudit() {
+        ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(audit, atLeastOnce()).logEvent(captor.capture());
+        return captor.getAllValues().stream()
+            .filter(e -> e.getEventType() == AuditEventType.DELIVERY_BABY_OUTCOME_CORRECTED)
+            .reduce((a, b) -> b).orElseThrow();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aLiveToLiveCorrectionStillAuditsTheReasonAndTheActor() {
+        DeliveryRecord delivery = delivery(38, BabyOutcome.LIVE);
+
+        service.correctOutcome(delivery, 1, BabyOutcome.LIVE, "Checked again", recorder.getId());
+
+        AuditEventRequestDTO event = lastCorrectionAudit();
+        assertThat(event.getUserId()).isEqualTo(recorder.getId());
+        assertThat((java.util.Map<String, Object>) event.getDetails()).containsEntry("reason", "Checked again")
+            .containsEntry("changed", false);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aCorrectionWithNoEventToSupersedeStillAuditsTheReason() {
+        DeliveryRecord legacy = DeliveryRecord.builder().patient(mother).hospital(hospital).birthDateTime(BORN)
+            .liveBirth(false).numberOfInfants(2).build();
+        legacy.setId(UUID.randomUUID());
+
+        // Baby 2 of a single-flag stillbirth has no outcome and no event: made live, nothing is superseded.
+        service.correctOutcome(legacy, 2, BabyOutcome.LIVE, "Twin B cried at birth", recorder.getId());
+
+        assertThat(stored).isEmpty();
+        assertThat((java.util.Map<String, Object>) lastCorrectionAudit().getDetails())
+            .containsEntry("reason", "Twin B cried at birth");
+    }
 }

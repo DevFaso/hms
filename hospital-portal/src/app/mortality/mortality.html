@@ -209,6 +209,11 @@
                 <tr class="data-row" data-testid="stillbirth-row">
                   <td>
                     <div class="cell-primary">{{ s.motherName || '—' }}</div>
+                    @if (s.patientName) {
+                      <div class="cell-secondary" data-testid="stillbirth-baby-name">
+                        {{ s.patientName }}
+                      </div>
+                    }
                     @if (s.birthOrder && s.birthOrder > 1) {
                       <div class="cell-secondary">
                         {{ 'LABOR.BABY_OUTCOME' | translate: { order: s.birthOrder } }}

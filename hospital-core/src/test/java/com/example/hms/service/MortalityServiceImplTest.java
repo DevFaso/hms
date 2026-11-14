@@ -1580,4 +1580,64 @@ class MortalityServiceImplTest {
 
         assertThat(register.getStillbirths()).isEqualTo(2);
     }
+
+    // ── Rex on #1144: an explicit link must be this baby's event; the baby is not named as the mother ──
+
+    @Test
+    void aDeathRecordCannotDeclareAnotherBabysFetalDeathEvent() {
+        com.example.hms.model.labor.FetalDeathEvent unrelated = fetalDeath(34);
+        when(fetalDeathEventRepository.findByIdAndHospital_Id(unrelated.getId(), hospitalId))
+            .thenReturn(Optional.of(unrelated));
+        com.example.hms.model.labor.DeliveryRecord ownDelivery = com.example.hms.model.labor.DeliveryRecord.builder().build();
+        ownDelivery.setId(UUID.randomUUID());
+        when(deliveryNewbornRepository.findByNewbornPatient_Id(patientId)).thenReturn(Optional.of(
+            com.example.hms.model.labor.DeliveryNewborn.builder().deliveryRecord(ownDelivery).hospital(hospital)
+                .birthOrder(1).build()));
+
+        assertThatThrownBy(() -> service.recordDeath(base().perinatalDeath(true).perinatalType(PerinatalDeathType.STILLBIRTH)
+            .birthStatus(com.example.hms.enums.PerinatalBirthStatus.STILLBIRTH).fetalDeathEventId(unrelated.getId()).build()))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("fetalDeathEventId"));
+        verify(deathRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void aDeathRecordDeclaresItsOwnBabysFetalDeathEvent() {
+        com.example.hms.model.labor.FetalDeathEvent own = fetalDeath(34);
+        when(fetalDeathEventRepository.findByIdAndHospital_Id(own.getId(), hospitalId)).thenReturn(Optional.of(own));
+        when(deliveryNewbornRepository.findByNewbornPatient_Id(patientId)).thenReturn(Optional.of(
+            com.example.hms.model.labor.DeliveryNewborn.builder().deliveryRecord(own.getDeliveryRecord())
+                .motherPatient(own.getMotherPatient()).hospital(hospital).birthOrder(1).build()));
+
+        var saved = service.recordDeath(base().perinatalDeath(true).perinatalType(PerinatalDeathType.STILLBIRTH)
+            .birthStatus(com.example.hms.enums.PerinatalBirthStatus.STILLBIRTH).fetalDeathEventId(own.getId()).build());
+
+        assertThat(saved.getDeathRecord().getFetalDeathEventId()).isEqualTo(own.getId());
+    }
+
+    @Test
+    void aStillbirthDeathRecordRowNamesTheBabyAsThePatientAndTheMotherAsTheMother() {
+        Patient mother = new Patient();
+        mother.setId(UUID.randomUUID());
+        mother.setFirstName("Rose");
+        mother.setLastName("Kaboré");
+        Patient baby = new Patient();
+        baby.setId(UUID.randomUUID());
+        baby.setFirstName("Bébé");
+        baby.setLastName("Kaboré");
+        com.example.hms.model.labor.DeliveryRecord delivery = com.example.hms.model.labor.DeliveryRecord.builder().build();
+        delivery.setId(UUID.randomUUID());
+        when(deliveryNewbornRepository.findByNewbornPatient_IdIn(any())).thenReturn(List.of(
+            com.example.hms.model.labor.DeliveryNewborn.builder().deliveryRecord(delivery).newbornPatient(baby)
+                .motherPatient(mother).hospital(hospital).birthOrder(1).build()));
+        DeathRecord death = stillbirthDeathOf(baby, null);
+
+        MortalityRegisterDTO register = registerWith(List.of(death), List.of(), List.of(), List.of());
+
+        assertThat(register.getStillbirthRows()).singleElement().satisfies(row -> {
+            assertThat(row.getPatientName()).isEqualTo(baby.getFullName());
+            assertThat(row.getMotherName()).isEqualTo(mother.getFullName());
+            assertThat(row.getMotherPatientId()).isEqualTo(mother.getId());
+        });
+    }
 }

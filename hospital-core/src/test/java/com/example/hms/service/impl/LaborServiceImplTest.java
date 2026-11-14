@@ -2695,4 +2695,61 @@ class LaborServiceImplTest {
             .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
         verify(fetalDeathEvents, never()).correctOutcome(any(), org.mockito.ArgumentMatchers.anyInt(), any(), any(), any());
     }
+
+    // ── Rex on #1144: a correction refreshes the stillbirth alert and escalates a new one ──
+
+    private DeliveryRecord deliveredRecordFor(com.example.hms.enums.BabyOutcome... outcomes) {
+        DeliveryRecord record = DeliveryRecord.builder().episode(episode).patient(patient).hospital(hospital)
+            .birthDateTime(java.time.LocalDateTime.now()).deliveryMode(DeliveryMode.SPONTANEOUS_VAGINAL)
+            .numberOfInfants(outcomes.length).documentedBy(recorder).build();
+        record.setId(UUID.randomUUID());
+        for (int i = 0; i < outcomes.length; i++) {
+            record.putBabyOutcome(i + 1, outcomes[i]);
+        }
+        episode.setStatus(LaborStatus.DELIVERED);
+        when(episodeRepository.findStatusById(episodeId)).thenReturn(Optional.of(LaborStatus.DELIVERED));
+        when(deliveryRecordRepository.findByEpisode_Id(episodeId)).thenReturn(Optional.of(record));
+        when(deliveryRecordRepository.save(any(DeliveryRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+        return record;
+    }
+
+    private void correctionApplies(DeliveryRecord record, int order, com.example.hms.enums.BabyOutcome to) {
+        when(fetalDeathEvents.correctOutcome(any(), org.mockito.ArgumentMatchers.anyInt(), any(), any(), any()))
+            .thenAnswer(inv -> {
+                com.example.hms.enums.BabyOutcome from = record.outcomeOf(order);
+                record.putBabyOutcome(order, to);
+                return new com.example.hms.service.maternity.FetalDeathEventService.Correction(true, from, to, null, null);
+            });
+    }
+
+    @Test
+    void correctingTheLastStillbornBabyToLiveWithdrawsTheStillbirthAlert() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.STILLBORN);
+        record.addAlert(com.example.hms.enums.LaborAlertType.GENERAL, com.example.hms.enums.LaborAlertSeverity.URGENT,
+            "labor-stillbirth", "Stillbirth recorded", "liveBirth", new Object[]{});
+        correctionApplies(record, 1, com.example.hms.enums.BabyOutcome.LIVE);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(1).outcome(com.example.hms.enums.BabyOutcome.LIVE).reason("Heartbeat").build());
+
+        assertThat(record.getAlerts()).noneMatch(alert -> "labor-stillbirth".equals(alert.getCode()));
+    }
+
+    @Test
+    void correctingABabyToStillbornRaisesAndEscalatesTheStillbirthAlert() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.LIVE,
+            com.example.hms.enums.BabyOutcome.LIVE);
+        correctionApplies(record, 2, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(2).outcome(com.example.hms.enums.BabyOutcome.STILLBORN).reason("Wrong twin").build());
+
+        assertThat(record.getAlerts()).anyMatch(alert -> "labor-stillbirth".equals(alert.getCode()));
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_DELIVERY.equals(urgent.sourceType())
+                && record.getId().equals(urgent.sourceId())
+                && "labor.alert.msg.labor-stillbirth".equals(urgent.alertMessageKey())));
+    }
 }
