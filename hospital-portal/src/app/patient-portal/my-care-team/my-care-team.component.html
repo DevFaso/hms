@@ -23,29 +23,31 @@
       <p>{{ 'PORTAL.CARE_TEAM.EMPTY_DESC' | translate }}</p>
     </div>
   } @else {
-    @if (current(); as pcp) {
+    @if (currents().length) {
       <section class="portal-section">
         <div class="care-team-list">
-          <div class="ct-card ct-primary" data-testid="care-team-current">
-            <span class="ct-badge">{{ 'PORTAL.CARE_TEAM.PRIMARY_PROVIDER' | translate }}</span>
-            <div class="ct-avatar" style="background: var(--primary-tint)">
-              <span class="material-symbols-outlined" style="color: var(--primary)">star</span>
+          @for (pcp of currents(); track pcp.id) {
+            <div class="ct-card ct-primary" data-testid="care-team-current">
+              <span class="ct-badge">{{ 'PORTAL.CARE_TEAM.PRIMARY_PROVIDER' | translate }}</span>
+              <div class="ct-avatar" style="background: var(--primary-tint)">
+                <span class="material-symbols-outlined" style="color: var(--primary)">star</span>
+              </div>
+              <div class="ct-info">
+                <span class="ct-name">{{ pcp.doctorDisplay || '—' }}</span>
+                @if (pcp.hospitalName) {
+                  <span class="ct-role">{{ pcp.hospitalName }}</span>
+                }
+                @if (pcp.startDate) {
+                  <span class="ct-contact">
+                    {{
+                      'PORTAL.CARE_TEAM.SINCE'
+                        | translate: { date: pcp.startDate | serverTime | date: 'mediumDate' }
+                    }}
+                  </span>
+                }
+              </div>
             </div>
-            <div class="ct-info">
-              <span class="ct-name">{{ pcp.doctorDisplay || '—' }}</span>
-              @if (pcp.hospitalName) {
-                <span class="ct-role">{{ pcp.hospitalName }}</span>
-              }
-              @if (pcp.startDate) {
-                <span class="ct-contact">
-                  {{
-                    'PORTAL.CARE_TEAM.SINCE'
-                      | translate: { date: pcp.startDate | serverTime | date: 'mediumDate' }
-                  }}
-                </span>
-              }
-            </div>
-          </div>
+          }
         </div>
       </section>
     }

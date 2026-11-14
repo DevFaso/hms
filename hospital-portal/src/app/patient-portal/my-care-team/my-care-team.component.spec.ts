@@ -78,6 +78,29 @@ describe('MyCareTeamComponent', () => {
     expect(host().querySelector('[data-testid="care-team-history"]')).toBeNull();
   });
 
+  it('QA D1850: shows one current provider per hospital, each labelled with its hospital', () => {
+    const atA = entry();
+    const atB = entry({
+      id: 'pcp-b',
+      hospitalId: 'h-2',
+      hospitalName: 'CMA Pissy',
+      doctorUserId: 'd-2',
+      doctorDisplay: 'Dr Idrissa Sawadogo',
+    });
+    create({ primaryCare: atA, primaryCares: [atA, atB], primaryCareHistory: [atA, atB] });
+
+    expect(texts('[data-testid="care-team-current"] .ct-name')).toEqual([
+      'Dr Awa Traoré',
+      'Dr Idrissa Sawadogo',
+    ]);
+    expect(texts('[data-testid="care-team-current"] .ct-role')).toEqual([
+      'CHU Yalgado',
+      'CMA Pissy',
+    ]);
+    // Neither current link is repeated as an earlier one.
+    expect(host().querySelector('[data-testid="care-team-history"]')).toBeNull();
+  });
+
   it('lists the earlier providers with their dates under a translated heading', () => {
     const current = entry();
     const earlier = entry({
