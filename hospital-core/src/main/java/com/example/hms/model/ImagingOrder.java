@@ -210,6 +210,21 @@ public class ImagingOrder extends BaseEntity implements TenantScoped {
     @Column(name = "status_updated_at")
     private LocalDateTime statusUpdatedAt;
 
+    /**
+     * When the study was completed: set once, on the order's first entry into
+     * COMPLETED or RESULTS_AVAILABLE (V294). Unlike {@link #statusUpdatedAt}
+     * it is not moved when a COMPLETED order is promoted at signing.
+     */
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
+
+    /** Records the completion time unless one is already recorded. */
+    public void markCompletedAt(LocalDateTime at) {
+        if (completedAt == null && at != null) {
+            completedAt = at;
+        }
+    }
+
     @Column(name = "status_updated_by")
     private UUID statusUpdatedBy;
 

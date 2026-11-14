@@ -1301,6 +1301,29 @@ describe('LaborTabComponent newborns (QA D1592)', () => {
     expect(component.deliveryBabies()).toEqual([{ birthOrder: 1, outcome: 'LIVE' }]);
   });
 
+  it('QA D1803: each baby outcome select has a full row of its own, so its label is never cut', () => {
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    const component = fixture.componentInstance;
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([episode('e1', 'ACTIVE')]);
+    fixture.detectChanges();
+    component.openDeliveryForm();
+    component.deliveryForm.numberOfInfants = 2;
+    fixture.detectChanges();
+    const page = fixture.nativeElement as HTMLElement;
+
+    const fields = Array.from(page.querySelectorAll('.baby-outcome-field')) as HTMLElement[];
+    expect(fields.length).toBe(2);
+    fields.forEach((field) => {
+      expect(getComputedStyle(field).gridColumnStart).toBe('1');
+      expect(getComputedStyle(field).gridColumnEnd).toBe('-1');
+      const select = field.querySelector('select') as HTMLSelectElement;
+      expect(select.getBoundingClientRect().width).toBeGreaterThanOrEqual(
+        field.getBoundingClientRect().width - 1,
+      );
+    });
+  });
+
   it('QA D1714: the delivery summary shows each baby and the fetal-death event', () => {
     laborSpy.episodes.and.returnValue(
       of([{ ...episode('e1', 'DELIVERED'), deliveryRecorded: true }]),

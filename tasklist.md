@@ -6533,6 +6533,14 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Analytical method is not recorded:** neither `LabTestDefinition` nor `LabResult` stores a method; the drawer shows the performing laboratory (outsourced orders) only. The analyser's HL7 sending application (`LabResult.sourceSendingApplication`) is stored but not in the DTO.
 - **Self-release separation is not configurable (I7 question):** entering is open to LAB_SCIENTIST, LAB_TECHNICIAN, LAB_MANAGER, LAB_DIRECTOR, QUALITY_MANAGER, SUPER_ADMIN (and DOCTOR/NURSE/MIDWIFE on point-of-care tests); releasing to LAB_SCIENTIST, LAB_MANAGER, LAB_DIRECTOR, SUPER_ADMIN (`LabResultAuthority`). The author may release their own result after a confirmation, audited as LAB_RESULT_SELF_RELEASED; no setting forbids it. Pending the user's decision.
 
+## Standing debt and proposals — imaging screens (fix/imaging-ui)
+- **Proposal, image viewer link (DICOMweb):** open the study from the report through a DICOMweb/OHIF viewer (the report already carries `studyInstanceUid` and `pacsViewerUrl`, but no viewer is configured).
+- **Proposal, comparison with prior studies:** list the patient's earlier studies of the same region and modality next to the report, so the reader can compare.
+- **Proposal, technique, contrast and dose fields:** show and capture technique, contrast agent and radiation dose (`radiationDoseMgy`) as structured fields on the report drawer.
+- **Proposal, acknowledgement by the ordering clinician:** let the ordering clinician mark a signed result as read (today only a critical finding is acknowledged).
+- **Proposal, role separation:** separate who may order, interpret and sign an imaging study, so the reader and the signer are distinct roles where the hospital wants it.
+- **Laterality "not recorded" (decision):** an order with no laterality cannot be told apart from one where laterality does not apply (thorax); the drawer now hides NOT_APPLICABLE and reads "Non renseignée" for a blank. Making the order form default a midline region to NOT_APPLICABLE needs a body-region vocabulary.
+- **Numeric short dates elsewhere (D1575 class):** about 115 `date: 'short'` sites remain outside the imaging screens; the imaging guard (`scripts/lib/imaging-screens.test.mjs`) covers imaging only.
 ## Standing debt — lab requests UI (fix/lab-requests-ui)
 - **Several tests in one order or a panel (D1618, no lab panels):** each lab order holds one test, so a CBC plus a glucose ordered together read as two unrelated rows; grouping them under one request (or a panel definition) is not built.
 - **Specimen barcode printing:** the specimen label PDF (`GET /lab-specimens/{id}/label.pdf`) prints only a QR of `barcodeValue`; a linear barcode for analyser and reception scanners, and a scan-in that reads it back, are not built.
@@ -6543,3 +6551,7 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 ## Standing debt — AVS polish (feat/avs-polish)
 - **Checkout preview has no print button:** the staff dialog and "Mes résumés" print the shared summary document (print-only.ts); the checkout dialog's preview shows the same document but cannot print it yet.
 - **Follow-up booking found by day on a later read:** a checkout passes the booked appointment's id; a later read of the summary finds the patient's live appointment at the visit's hospital on the follow-up day booked after the checkout, since the appointment keeps no link to the visit. A source-encounter column would make it exact.
+
+## Questions for the obstetric lead (r50, #1144 follow-ups)
+- **D1802, stillborn to live correction vs a stillbirth death certificate:** should a correction of a baby from stillborn to live be refused, or only warned, while a death record still declares that baby's stillbirth, and which record wins in the register (decision needed; no code changed)?
+- **Neonatal alerts on stillborn babies:** should the Apgar-critical "neonatal resuscitation" and preterm "neonatal team" URGENT alerts still fire, and escalate to the nurse, when every baby of the delivery is stillborn (decision needed; no code changed)?
