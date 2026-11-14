@@ -54,8 +54,15 @@
 
           @if (expandedId() === s.id) {
             <div class="avs-body">
-              <!-- Diagnoses -->
-              @if (s.diagnoses.length) {
+              <!-- Polish 2026-11-13: the visit's summary document first, as the staff see it. -->
+              @if (detailOf(s.id); as detail) {
+                <div class="avs-detail-sections" data-testid="avs-detail-sections">
+                  <app-visit-summary-sections [summary]="detail" audience="patient" />
+                </div>
+              }
+
+              <!-- Diagnoses (unless the document above already lists them) -->
+              @if (s.diagnoses.length && !shownInDetail(s.id, 'dischargeDiagnoses')) {
                 <div class="avs-section">
                   <h4>{{ 'PORTAL.SUMMARIES.DIAGNOSES' | translate }}</h4>
                   <div class="avs-tag-list">
@@ -100,7 +107,7 @@
               }
 
               <!-- Medications -->
-              @if (s.medications.length) {
+              @if (s.medications.length && !shownInDetail(s.id, 'prescriptionSummary')) {
                 <div class="avs-section">
                   <h4>{{ 'PORTAL.SUMMARIES.MEDICATIONS' | translate }}</h4>
                   <table class="avs-med-table">
@@ -125,7 +132,7 @@
               }
 
               <!-- Follow-Up Instructions -->
-              @if (followUpText(s)) {
+              @if (followUpText(s) && !shownInDetail(s.id, 'followUpInstructions')) {
                 <div class="avs-section">
                   <h4>{{ 'PORTAL.SUMMARIES.FOLLOW_UP_INSTRUCTIONS' | translate }}</h4>
                   <p>{{ followUpText(s) }}</p>
@@ -168,7 +175,7 @@
               }
 
               <!-- Patient Education -->
-              @if (s.patientEducation) {
+              @if (s.patientEducation && !shownInDetail(s.id, 'patientEducationMaterials')) {
                 <div class="avs-section">
                   <h4>{{ 'PORTAL.SUMMARIES.PATIENT_EDUCATION' | translate }}</h4>
                   <p>{{ s.patientEducation }}</p>
@@ -184,7 +191,7 @@
               }
 
               <!-- Follow-Up Appointment -->
-              @if (s.followUpDate) {
+              @if (s.followUpDate && !shownInDetail(s.id, 'followUpAppointmentDate')) {
                 <div class="avs-section">
                   <h4>{{ 'PORTAL.SUMMARIES.FOLLOW_UP' | translate }}</h4>
                   <p>
@@ -194,16 +201,14 @@
                 </div>
               }
 
-              <!-- The visit's content sections (2026-11-12) -->
-              @if (detailOf(s.id); as detail) {
-                <div class="avs-detail-sections" data-testid="avs-detail-sections">
-                  <app-visit-summary-sections [summary]="detail" />
-                </div>
-              }
-
               <div class="avs-actions">
-                <button class="avs-print-btn" (click)="printSummary($event)">
-                  <span class="material-symbols-outlined">print</span>
+                <button
+                  type="button"
+                  class="avs-print-btn no-print"
+                  (click)="printSummary($event)"
+                  data-testid="avs-print"
+                >
+                  <span class="material-symbols-outlined" aria-hidden="true">print</span>
                   {{ 'PORTAL.SUMMARIES.PRINT' | translate }}
                 </button>
               </div>

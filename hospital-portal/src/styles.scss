@@ -246,6 +246,15 @@ button {
   }
 }
 
+/* Polish 2026-11-13 (shared/print/print-only.ts): one element printed alone,
+   such as the visit summary open in a dialog over a list. Everything that is
+   neither that element, one of its ancestors, nor inside it stays off paper. */
+@media print {
+  body.print-isolated *:not(:has(.print-root)):not(.print-root):not(.print-root *) {
+    display: none !important;
+  }
+}
+
 /* QA D1072: the message shared/forms/invalid-fields.ts shows under a field a
    client-side check refused (inserted at run time, so it lives here, outside
    any component's encapsulated styles). */
