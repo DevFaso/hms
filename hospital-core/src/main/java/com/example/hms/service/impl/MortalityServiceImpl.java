@@ -651,9 +651,27 @@ public class MortalityServiceImpl implements MortalityService {
         List<DeathRecord> declared = deaths.stream()
             .filter(d -> ofPerinatalType(d) == PerinatalDeathType.STILLBIRTH)
             .toList();
+        // Rex on #1144: ONE canonical identity per stillborn baby, its delivery and birth order. A death record names
+        // it through any event it links (superseded ones included) or through the registered baby it was recorded
+        // on; when that baby has a live event, the event counts and the death record does not. So an amended
+        // certificate, an event created after the death record, and an event that replaced a superseded one each
+        // count once.
+        java.util.Map<DeathRecord, String> identityOfDeath = stillbirthIdentities(hospitalId, declared);
+        java.util.Map<String, UUID> liveEventOfIdentity = new java.util.HashMap<>();
+        java.util.Set<UUID> deliveries = new java.util.HashSet<>();
+        identityOfDeath.values().forEach(key -> deliveries.add(UUID.fromString(key.substring(0, key.indexOf('#')))));
+        if (!deliveries.isEmpty()) {
+            for (FetalDeathEvent live : fetalDeathEventRepository.findLiveForDeliveries(hospitalId, deliveries)) {
+                liveEventOfIdentity.put(identityOf(live), live.getId());
+            }
+        }
         java.util.Map<UUID, UUID> declarationOfEvent = new java.util.HashMap<>();
-        declared.stream().filter(d -> d.getFetalDeathEventId() != null)
-            .forEach(d -> declarationOfEvent.putIfAbsent(d.getFetalDeathEventId(), d.getId()));
+        identityOfDeath.forEach((death, key) -> {
+            UUID live = liveEventOfIdentity.get(key);
+            if (live != null) {
+                declarationOfEvent.putIfAbsent(live, death.getId());
+            }
+        });
         List<FetalDeathEventDTO> rows = new java.util.ArrayList<>();
         for (FetalDeathEvent event : fetalDeathEventRepository.findRegister(hospitalId, start, end)) {
             StillbirthClassification.Result result =
@@ -676,11 +694,9 @@ public class MortalityServiceImpl implements MortalityService {
                 .declaredByDeathRecordId(declarationOfEvent.get(event.getId()))
                 .build());
         }
-        List<UUID> linked = declared.stream().map(DeathRecord::getFetalDeathEventId).filter(Objects::nonNull).toList();
-        Set<UUID> heldByAnEvent = linked.isEmpty() ? Set.of()
-            : new java.util.HashSet<>(fetalDeathEventRepository.findLiveIdsAmong(linked));
         for (DeathRecord death : declared) {
-            if (death.getFetalDeathEventId() != null && heldByAnEvent.contains(death.getFetalDeathEventId())) {
+            String key = identityOfDeath.get(death);
+            if (key != null && liveEventOfIdentity.containsKey(key)) {
                 continue;
             }
             StillbirthClassification.Result result = StillbirthClassification.classify(death.getGestationalAgeWeeks(), true);
@@ -700,6 +716,54 @@ public class MortalityServiceImpl implements MortalityService {
             (int) rows.stream().filter(FetalDeathEventDTO::isWhoStillbirth).count(),
             (int) rows.stream().filter(FetalDeathEventDTO::isIcdFetalDeath).count(),
             (int) rows.stream().filter(FetalDeathEventDTO::isClassificationIncomplete).count());
+    }
+
+    /** The stillborn baby an event is about: its delivery and birth order. */
+    private static String identityOf(FetalDeathEvent event) {
+        return event.getDeliveryRecord().getId() + "#" + event.getBirthOrder();
+    }
+
+    /**
+     * Rex on #1144: each stillbirth death record's baby (delivery and birth order), read in two batched, hospital-scoped
+     * queries: the event it links (whatever that event's state), else the registered baby it was recorded on. A
+     * death record with neither has no identity and counts on its own.
+     */
+    private java.util.Map<DeathRecord, String> stillbirthIdentities(UUID hospitalId, List<DeathRecord> declared) {
+        // Keyed by the row itself: identity, not equals, so every death record is its own entry.
+        java.util.Map<DeathRecord, String> identities = new java.util.IdentityHashMap<>();
+        if (declared.isEmpty()) {
+            return identities;
+        }
+        List<UUID> linkedIds = declared.stream().map(DeathRecord::getFetalDeathEventId).filter(Objects::nonNull)
+            .distinct().toList();
+        java.util.Map<UUID, String> identityOfEvent = new java.util.HashMap<>();
+        if (!linkedIds.isEmpty()) {
+            fetalDeathEventRepository.findAtHospitalByIdIn(hospitalId, linkedIds)
+                .forEach(event -> identityOfEvent.put(event.getId(), identityOf(event)));
+        }
+        List<UUID> patientIds = declared.stream().map(DeathRecord::getPatient).filter(Objects::nonNull)
+            .map(Patient::getId).filter(Objects::nonNull).distinct().toList();
+        java.util.Map<UUID, String> identityOfBaby = new java.util.HashMap<>();
+        if (!patientIds.isEmpty()) {
+            for (com.example.hms.model.labor.DeliveryNewborn link
+                    : deliveryNewbornRepository.findByNewbornPatient_IdIn(patientIds)) {
+                if (link.getHospital() != null && hospitalId.equals(link.getHospital().getId())
+                    && link.getDeliveryRecord() != null && link.getNewbornPatient() != null) {
+                    identityOfBaby.put(link.getNewbornPatient().getId(),
+                        link.getDeliveryRecord().getId() + "#" + link.getBirthOrder());
+                }
+            }
+        }
+        for (DeathRecord death : declared) {
+            String key = death.getFetalDeathEventId() == null ? null : identityOfEvent.get(death.getFetalDeathEventId());
+            if (key == null && death.getPatient() != null) {
+                key = identityOfBaby.get(death.getPatient().getId());
+            }
+            if (key != null) {
+                identities.put(death, key);
+            }
+        }
+        return identities;
     }
 
     /**

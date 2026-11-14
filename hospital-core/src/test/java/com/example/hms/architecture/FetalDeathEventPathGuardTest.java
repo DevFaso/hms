@@ -96,7 +96,8 @@ class FetalDeathEventPathGuardTest {
     void theRegisterReadsTheEvents() throws IOException {
         String mortality = SourceScan.stripComments(Files.readString(
             MAIN.resolve("service/impl/MortalityServiceImpl.java"), StandardCharsets.UTF_8));
-        assertThat(mortality).contains("fetalDeathEventRepository.findRegister(", "findLiveIdsAmong(");
+        assertThat(mortality).contains("fetalDeathEventRepository.findRegister(", "findLiveForDeliveries(",
+            "findByNewbornPatient_IdIn(");
     }
 
     @Test

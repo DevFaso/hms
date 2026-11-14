@@ -35,9 +35,22 @@ public interface FetalDeathEventRepository extends JpaRepository<FetalDeathEvent
                                        @Param("from") LocalDateTime from,
                                        @Param("to") LocalDateTime to);
 
-    /** Of these ids, the events not superseded: a death record linked to one is counted through it, once. */
-    @Query("SELECT e.id FROM FetalDeathEvent e WHERE e.id IN :ids AND e.supersededAt IS NULL")
-    List<UUID> findLiveIdsAmong(@Param("ids") Collection<UUID> ids);
+    /**
+     * One hospital's events among these ids, superseded ones included: a death record linked to any event of a baby
+     * names that baby (delivery and birth order), whichever event of it is current.
+     */
+    @Query("SELECT e FROM FetalDeathEvent e WHERE e.hospital.id = :hospitalId AND e.id IN :ids")
+    List<FetalDeathEvent> findAtHospitalByIdIn(@Param("hospitalId") UUID hospitalId,
+                                               @Param("ids") Collection<UUID> ids);
+
+    /**
+     * The register's count-once identity: one hospital's live (not superseded) events of these deliveries, whatever
+     * their date. A stillbirth death record of a baby that has one is counted through it, never again.
+     */
+    @Query("SELECT e FROM FetalDeathEvent e WHERE e.hospital.id = :hospitalId AND e.supersededAt IS NULL "
+        + "AND e.deliveryRecord.id IN :deliveryIds")
+    List<FetalDeathEvent> findLiveForDeliveries(@Param("hospitalId") UUID hospitalId,
+                                                @Param("deliveryIds") Collection<UUID> deliveryIds);
 
     /**
      * The historical backfill: deliveries recorded not live before V293 that have no event at all (a superseded one
