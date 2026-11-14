@@ -191,7 +191,9 @@ export class LabResultsComponent implements OnInit {
    */
   detailPrevious = computed(() => {
     const r = this.selectedResult();
-    return r ? previousObservation(this.detailHistory(), r) : null;
+    return r
+      ? previousObservation(this.detailHistory(), { ...r, corrected: !!r.supersedesResultId })
+      : null;
   });
 
   /**
@@ -203,21 +205,21 @@ export class LabResultsComponent implements OnInit {
     const prev = this.detailPrevious();
     if (!r || !prev) return null;
     const value = this.labValue.transform(prev.point.resultValue, prev.point.resultUnit);
-    const previous = this.translate.instant('LAB_RESULTS.PREVIOUS_VALUE', {
+    const previous = {
       value,
-      date: this.dayMonth.transform(prev.point.resultDate),
-    });
+      date: this.dayMonth.transform(prev.point.resultDate, undefined, true),
+    };
     const change =
       prev.delta === null
-        ? this.translate.instant('LAB_RESULTS.CHANGE_WITHHELD')
-        : this.translate.instant('LAB_RESULTS.CHANGE', {
+        ? null
+        : {
             delta: this.formatChange(
               prev.delta,
               r.resultValue,
               prev.point.resultValue,
               r.resultUnit,
             ),
-          });
+          };
     return { previous, change };
   });
   private readonly labValue = new LabValuePipe();

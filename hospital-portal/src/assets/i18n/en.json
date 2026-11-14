@@ -4153,7 +4153,7 @@
     "RANGE_NOTES_AS_ENTERED": "Note (as entered)",
     "PREVIOUS_VALUE": "Previous: {{value}} on {{date}}",
     "CHANGE": "Change: {{delta}}",
-    "CHANGE_WITHHELD": "Change not computed (different units or a corrected history)",
+    "CHANGE_WITHHELD": "Change not computed (non-exact value, different units or a corrected history)",
     "OTHER_RANGES": "Other ranges ({{count}})",
     "CRITICAL_LIMITS": "Critical values",
     "NO_INTERVAL": "No interval",
@@ -13555,7 +13555,8 @@
     "CONVERTED_TO": "converted: {{value}}",
     "NOTE_SHORT": "Converted values are marked “converted” and corrections are flagged; no clinical interpretation is drawn.",
     "NOTE_INFO": "How the chart is built",
-    "NOTE_DETAIL": "Only exact numeric values are plotted, in one unit ({{unit}}). A value recorded in another unit is converted only when the conversion is exact (a decimal factor between mass units, or the analyte’s known molar mass); the recorded value and unit stay visible. Dates are spaced to scale. The shaded band is the reference range applied to this patient."
+    "NOTE_DETAIL": "Only exact numeric values are plotted, in one unit{{unit}}. A value recorded in another unit is converted only when the conversion is exact (a decimal factor between mass units, or the analyte’s known molar mass); the recorded value and unit stay visible. Dates are spaced to scale.",
+    "BAND_NOTE": "The shaded band is the reference range applied to the selected result; it may not apply to older observations."
   },
   "LAB_RANGE": {
     "TITLE": "Result position",

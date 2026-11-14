@@ -1,5 +1,5 @@
 import { formatDecimal } from '../../shared/i18n/app-locale';
-import { Component, computed, input, linkedSignal } from '@angular/core';
+import { Component, computed, input, linkedSignal, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { LabResultReferenceRange, LabResultTrendPoint } from '../../services/lab.service';
@@ -53,14 +53,23 @@ import { serverInstant } from '../../shared/date-utils';
       } @else {
         <!--
           r44: one short sentence; the method (exact conversions only, dates to
-          scale) is behind the info button, shown on hover and on focus.
+          scale) is behind the info button, available by pointer and keyboard.
         -->
         <p class="hint" data-testid="evolution-note">
           {{ 'LAB_EVOLUTION.NOTE_SHORT' | translate }}
-          <span class="info">
+          <span
+            class="info"
+            (mouseenter)="methodHover.set(true); methodDismissed.set(false)"
+            (mouseleave)="methodHover.set(false)"
+            (focusin)="methodFocus.set(true); methodDismissed.set(false)"
+            (focusout)="methodFocus.set(false); methodPinned.set(false)"
+          >
             <button
               type="button"
               class="info-btn"
+              (click)="toggleMethod()"
+              (keydown.escape)="dismissMethod($event)"
+              [attr.aria-expanded]="methodVisible()"
               [attr.aria-label]="'LAB_EVOLUTION.NOTE_INFO' | translate"
               [attr.aria-describedby]="resultId() + '-evolution-method'"
             >
@@ -68,11 +77,17 @@ import { serverInstant } from '../../shared/date-utils';
             </button>
             <span
               class="tooltip"
+              [class.visible]="methodVisible()"
               role="tooltip"
               [id]="resultId() + '-evolution-method'"
               data-testid="evolution-method"
-              >{{ 'LAB_EVOLUTION.NOTE_DETAIL' | translate: { unit: unit() } }}</span
-            >
+              >{{
+                'LAB_EVOLUTION.NOTE_DETAIL' | translate: { unit: unit() ? ' (' + unit() + ')' : '' }
+              }}
+              @if (points().length > 1 && band()) {
+                {{ 'LAB_EVOLUTION.BAND_NOTE' | translate }}
+              }
+            </span>
           </span>
         </p>
         @if (hasCorrections()) {
@@ -133,10 +148,10 @@ import { serverInstant } from '../../shared/date-utils';
                 </circle>
               }
               <text x="55" y="232">
-                {{ points()[0].resultDate | dayMonth }}
+                {{ points()[0].resultDate | dayMonth: undefined : true }}
               </text>
               <text x="580" y="232" text-anchor="end">
-                {{ points()[points().length - 1].resultDate | dayMonth }}
+                {{ points()[points().length - 1].resultDate | dayMonth: undefined : true }}
               </text>
             </svg>
           </figure>
@@ -270,8 +285,7 @@ import { serverInstant } from '../../shared/date-utils';
       font-size: 12px;
       line-height: 1.5;
     }
-    .info:hover .tooltip,
-    .info:focus-within .tooltip {
+    .tooltip.visible {
       display: block;
     }
     polyline {
@@ -322,6 +336,25 @@ import { serverInstant } from '../../shared/date-utils';
   `,
 })
 export class ResultEvolutionComponent {
+  methodHover = signal(false);
+  methodFocus = signal(false);
+  methodPinned = signal(false);
+  methodDismissed = signal(false);
+  methodVisible = computed(
+    () =>
+      !this.methodDismissed() && (this.methodHover() || this.methodFocus() || this.methodPinned()),
+  );
+  toggleMethod(): void {
+    const pinned = !this.methodPinned();
+    this.methodPinned.set(pinned);
+    this.methodDismissed.set(!pinned);
+  }
+  dismissMethod(event: Event): void {
+    if (!this.methodVisible()) return;
+    this.methodPinned.set(false);
+    this.methodDismissed.set(true);
+    event.stopPropagation();
+  }
   history = input<LabResultTrendPoint[]>([]);
   loading = input(false);
   failed = input(false);
@@ -409,11 +442,12 @@ export class ResultEvolutionComponent {
     const unit = this.unit();
     if (!range || range.minValue == null || range.maxValue == null || !unit) return null;
     const from = (range.unit ?? '').trim();
+    if (!from) return null;
     let min = range.minValue,
       max = range.maxValue;
-    if (from && from.toLowerCase() !== unit.toLowerCase()) {
+    if (from !== unit) {
       const conversion = unitConversion(from, unit, this.analyte());
-      if (!conversion) return null;
+      if (!conversion?.exact) return null;
       min = convertValue(min, conversion);
       max = convertValue(max, conversion);
     }

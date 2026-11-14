@@ -138,7 +138,7 @@
                 </td>
               }
               <td class="order-code" [title]="r.labOrderCode || ''">
-                {{ shortOrderCode(r.labOrderCode) }}
+                {{ shortOrderCode(r.labOrderCode || r.labOrderId) }}
               </td>
               <td>
                 <div class="cell-primary">{{ r.patientFullName || '—' }}</div>
@@ -393,7 +393,8 @@
       >
         <div class="panel-header">
           <h2 id="lab-results-dialog-title-1">
-            {{ 'LAB_RESULTS.DETAIL_TITLE' | translate }} — {{ shortOrderCode(r.labOrderCode) }}
+            {{ 'LAB_RESULTS.DETAIL_TITLE' | translate }} —
+            {{ shortOrderCode(r.labOrderCode || r.labOrderId) }}
           </h2>
           <button
             class="close-btn"
@@ -423,9 +424,14 @@
               @if (detailPreviousText(); as prev) {
                 <!-- r44: the previous observation and the change, from the history already read. -->
                 {{ ' '
-                }}<span class="field-sub" data-testid="detail-previous">{{ prev.previous }}</span
+                }}<span class="field-sub" data-testid="detail-previous">{{
+                  'LAB_RESULTS.PREVIOUS_VALUE' | translate: prev.previous
+                }}</span
                 >{{ ' '
-                }}<span class="field-sub" data-testid="detail-change">{{ prev.change }}</span>
+                }}<span class="field-sub" data-testid="detail-change">{{
+                  (prev.change ? 'LAB_RESULTS.CHANGE' : 'LAB_RESULTS.CHANGE_WITHHELD')
+                    | translate: prev.change ?? {}
+                }}</span>
               }
             </div>
             <div class="detail-field">
@@ -462,9 +468,10 @@
                   routerLink="/lab"
                   [queryParams]="{ order: r.labOrderId }"
                   [attr.aria-label]="
-                    'LAB_RESULTS.OPEN_REQUEST' | translate: { code: shortOrderCode(r.labOrderCode) }
+                    'LAB_RESULTS.OPEN_REQUEST'
+                      | translate: { code: shortOrderCode(r.labOrderCode || r.labOrderId) }
                   "
-                  >{{ shortOrderCode(r.labOrderCode) }}</a
+                  >{{ shortOrderCode(r.labOrderCode || r.labOrderId) }}</a
                 >
               </div>
             }

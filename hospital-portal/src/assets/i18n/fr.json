@@ -4153,7 +4153,7 @@
     "RANGE_NOTES_AS_ENTERED": "Note (texte d’origine)",
     "PREVIOUS_VALUE": "Précédent : {{value}} le {{date}}",
     "CHANGE": "Variation : {{delta}}",
-    "CHANGE_WITHHELD": "Variation non calculée (unités différentes ou historique corrigé)",
+    "CHANGE_WITHHELD": "Variation non calculée (valeur non exacte, unités différentes ou historique corrigé)",
     "OTHER_RANGES": "Autres plages ({{count}})",
     "CRITICAL_LIMITS": "Valeurs critiques",
     "NO_INTERVAL": "Aucun intervalle",
@@ -13555,7 +13555,8 @@
     "CONVERTED_TO": "converti : {{value}}",
     "NOTE_SHORT": "Les valeurs converties sont marquées « converti » et les corrections sont signalées ; aucune interprétation clinique n’est déduite.",
     "NOTE_INFO": "Comment le graphique est construit",
-    "NOTE_DETAIL": "Seules les valeurs numériques exactes sont tracées, dans une seule unité ({{unit}}). Une valeur saisie dans une autre unité n’est convertie que si la conversion est exacte (facteur décimal entre unités de masse, ou masse molaire connue de l’analyte) ; la valeur et l’unité saisies restent affichées. Les dates sont espacées à l’échelle. La bande colorée est l’intervalle de référence appliqué à ce patient."
+    "NOTE_DETAIL": "Seules les valeurs numériques exactes sont tracées, dans une seule unité{{unit}}. Une valeur saisie dans une autre unité n’est convertie que si la conversion est exacte (facteur décimal entre unités de masse, ou masse molaire connue de l’analyte) ; la valeur et l’unité saisies restent affichées. Les dates sont espacées à l’échelle.",
+    "BAND_NOTE": "La bande ombrée est la plage de référence appliquée au résultat sélectionné ; elle peut ne pas s’appliquer aux observations antérieures."
   },
   "LAB_RANGE": {
     "TITLE": "Position du résultat",

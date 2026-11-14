@@ -2,7 +2,7 @@ import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { signal } from '@angular/core';
 import {
   LabResultsComponent,
@@ -769,6 +769,77 @@ describe('LabResultsComponent', () => {
         { resultDate: '2026-11-13T09:00:00Z', resultValue: '1.05', resultUnit: 'g/L' },
       ]);
       expect(host.querySelector('[data-testid="detail-previous"]')).toBeNull();
+    });
+
+    it('translates previous and change labels when the language changes without a reload', () => {
+      const host = open({}, [
+        { resultDate: '2026-11-12T09:00:00Z', resultValue: '1.32', resultUnit: 'g/L' },
+      ]);
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('en', {
+        LAB_RESULTS: { PREVIOUS_VALUE: 'Previous {{value}}', CHANGE: 'Change {{delta}}' },
+      });
+      translate.setTranslation('fr', {
+        LAB_RESULTS: { PREVIOUS_VALUE: 'Précédent {{value}}', CHANGE: 'Variation {{delta}}' },
+      });
+      translate.use('en');
+      fixture.detectChanges();
+      expect(text(host, 'detail-previous')).toContain('Previous');
+      expect(text(host, 'detail-change')).toContain('Change');
+      translate.use('fr');
+      fixture.detectChanges();
+      expect(text(host, 'detail-previous')).toContain('Précédent');
+      expect(text(host, 'detail-change')).toContain('Variation');
+    });
+
+    it('withholds the change when a recorded value has a comparator', () => {
+      const host = open({}, [
+        { resultDate: '2026-11-12T09:00:00Z', resultValue: '<0.1', resultUnit: 'g/L' },
+      ]);
+      expect(component.detailPrevious()!.delta).toBeNull();
+      expect(text(host, 'detail-change')).toContain('LAB_RESULTS.CHANGE_WITHHELD');
+    });
+
+    it('shows no previous measurement from an audit history containing a correction', () => {
+      const host = open({ supersedesResultId: 'superseded-result' }, [
+        { resultDate: '2026-11-12T09:00:00Z', resultValue: '1.32', resultUnit: 'g/L' },
+        {
+          resultDate: '2026-11-13T09:00:00Z',
+          resultValue: '1.05',
+          resultUnit: 'g/L',
+          corrected: true,
+        },
+      ]);
+      expect(host.querySelector('[data-testid="detail-previous"]')).toBeNull();
+      expect(host.querySelector('[data-testid="detail-change"]')).toBeNull();
+      expect(host.querySelector('app-result-evolution app-lab-correction-badge')).toBeTruthy();
+    });
+
+    it('keeps the year of an older previous measurement visible', () => {
+      const host = open({}, [
+        { resultDate: '2024-11-12T09:00:00Z', resultValue: '1.32', resultUnit: 'g/L' },
+      ]);
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('en', {
+        LAB_RESULTS: { PREVIOUS_VALUE: 'Previous {{value}} on {{date}}' },
+      });
+      translate.use('en');
+      fixture.detectChanges();
+      expect(text(host, 'detail-previous')).toContain('2024');
+    });
+
+    it('withholds the comparison for a corrected result even outside the trend window', () => {
+      const host = open({ supersedesResultId: 'superseded-result' }, [
+        { resultDate: '2026-11-12T09:00:00Z', resultValue: '1.32', resultUnit: 'g/L' },
+      ]);
+      expect(host.querySelector('[data-testid="detail-previous"]')).toBeNull();
+    });
+
+    it('gives a request without a recorded code an identifiable link', () => {
+      const host = open({ labOrderCode: null, labOrderId: '00000001-0000-0000-0000-000000000000' });
+      const link = host.querySelector<HTMLAnchorElement>('[data-testid="detail-request"] a')!;
+      expect(link.textContent?.trim()).toBe('#00000001');
+      expect(link.getAttribute('href')).toContain('order=00000001-');
     });
 
     it('lists the applied range first and collapses the others under "other ranges (n)"', () => {

@@ -81,33 +81,52 @@ export function niceAxis(min: number, max: number, target = 4) {
     min -= pad;
     max += pad;
   }
-  const raw = (max - min) / Math.max(1, target);
+  const intervals = Number.isFinite(target) ? Math.min(100, Math.max(1, target)) : 4;
+  const raw = (max - min) / intervals;
+  if (!Number.isFinite(raw) || raw <= 0) return null;
   const magnitude = 10 ** Math.floor(Math.log10(raw));
   const fraction = raw / magnitude;
   const step = (fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10) * magnitude;
+  if (!Number.isFinite(step) || step <= 0) return null;
   const decimals = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
+  // The chart's number formatter supports at most 20 decimal places.
+  if (decimals > 20) return null;
   // Snap away binary noise (0.30000000000000004) at well below the step.
   const factor = 10 ** Math.min(15, decimals + 2);
-  const round = (v: number) => Math.round(v * factor) / factor;
+  const round = (v: number) => {
+    const scaled = v * factor;
+    // Keep large finite endpoints and sub-factor values rather than overflowing
+    // or erasing them while removing ordinary binary rounding noise.
+    return Number.isFinite(scaled) && Math.abs(v) >= 1 / factor ? Math.round(scaled) / factor : v;
+  };
   const lo = round(Math.floor(min / step + 1e-9) * step);
   const hi = round(Math.ceil(max / step - 1e-9) * step);
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return null;
+  const count = Math.round((hi - lo) / step) + 1;
+  if (!Number.isFinite(count) || count < 2 || count > 102) return null;
   const ticks: number[] = [];
-  for (let i = 0; lo + i * step <= hi + step / 2; i++) ticks.push(round(lo + i * step));
+  for (let i = 0; i < count; i++) {
+    const tick = round(lo + i * step);
+    if (!Number.isFinite(tick) || (i > 0 && tick <= ticks[i - 1])) return null;
+    ticks.push(tick);
+  }
   return { min: lo, max: hi, step, decimals, ticks };
 }
 
 /**
  * r44: the observation just before the current result (the latest one dated
  * strictly earlier), from the history the server sent, and the change from it.
- * The change is null (withheld) when the two are in different units, either
- * is not an exact number, or the history holds a correction: a superseded
- * version cannot be told apart there, so no difference is drawn from it (the
- * evolution table withholds its deltas on the same rule).
+ * The change is withheld across units or non-exact numbers. When the history
+ * holds a correction, the whole comparison is withheld: its DTO cannot tell a
+ * superseded version apart from a separate measurement. The audit table still
+ * shows the recorded observations with correction badges.
  */
 export function previousObservation(
   history: LabResultTrendPoint[],
-  current: { resultDate: string; resultValue: string; resultUnit: string },
+  current: { resultDate: string; resultValue: string; resultUnit: string; corrected?: boolean },
 ): { point: LabResultTrendPoint; delta: number | null } | null {
+  // The trend DTO has no order/result identity to distinguish a superseded row.
+  if (current.corrected || history.some((p) => p.corrected)) return null;
   const now = serverInstant(current.resultDate).getTime();
   if (!Number.isFinite(now)) return null;
   let best: LabResultTrendPoint | null = null;
@@ -120,8 +139,7 @@ export function previousObservation(
     }
   }
   if (!best) return null;
-  const corrected = history.some((p) => p.corrected);
-  const delta = corrected ? null : observationDelta(current as LabResultTrendPoint, best);
+  const delta = observationDelta(current as LabResultTrendPoint, best);
   return { point: best, delta };
 }
 

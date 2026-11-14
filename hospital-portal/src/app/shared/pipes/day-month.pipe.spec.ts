@@ -11,6 +11,18 @@ describe('DayMonthPipe (QA D1140)', () => {
     expect(pipe.transform(local, 'en-US')).toBe('Oct 31');
   });
 
+  it('includes an explicitly requested year in each supported locale', () => {
+    for (const locale of ['en-US', 'fr-BF', 'es-ES']) {
+      expect(pipe.transform(new Date(2024, 10, 12, 12), locale, true)).toContain('2024');
+      expect(pipe.transform(local, locale)).not.toContain('2026');
+    }
+  });
+
+  it('reads a zone-less server time as the same instant as its UTC form', () => {
+    expect(pipe.transform('2026-11-12T23:30:00', 'en-US')).toBe(
+      pipe.transform(new Date('2026-11-12T23:30:00Z'), 'en-US'),
+    );
+  });
   it('reads a bare calendar date as that local day, and nothing as nothing', () => {
     expect(pipe.transform('2026-10-31', 'fr-BF')).toMatch(/^31 oct/);
     expect(pipe.transform(null)).toBe('');

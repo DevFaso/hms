@@ -103,6 +103,23 @@ describe('result evolution', () => {
     it('has no axis for a non-finite bound', () => {
       expect(niceAxis(NaN, 1)).toBeNull();
     });
+
+    it('bounds tick generation for extreme finite inputs and invalid targets', () => {
+      const large = niceAxis(1e307, 2e307)!;
+      expect(large).not.toBeNull();
+      expect(large.min).toBeLessThanOrEqual(1e307);
+      expect(large.max).toBeGreaterThanOrEqual(2e307);
+      expect(large.ticks.every(Number.isFinite)).toBeTrue();
+      expect(large.ticks.length).toBeLessThanOrEqual(102);
+      for (const target of [Infinity, NaN, 1e308, 0, -1]) {
+        const axis = niceAxis(1, 2, target)!;
+        expect(axis.ticks.length).toBeLessThanOrEqual(102);
+      }
+      expect(niceAxis(-Number.MAX_VALUE, Number.MAX_VALUE)).toBeNull();
+      expect(niceAxis(Number.MAX_VALUE, Number.MAX_VALUE)).toBeNull();
+      expect(niceAxis(Number.MIN_VALUE, Number.MIN_VALUE * 2)).toBeNull();
+      expect(niceAxis(1e-22, 2e-22)).toBeNull();
+    });
   });
 
   describe('previousObservation (r44)', () => {
@@ -129,7 +146,7 @@ describe('result evolution', () => {
         previousObservation(
           [{ ...point('1.32', 'g/L', '2026-11-12T09:00:00Z'), corrected: true }],
           current,
-        )!.delta,
+        ),
       ).toBeNull();
     });
 
