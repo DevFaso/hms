@@ -4,6 +4,7 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.LabOrderDuplicateMatchDTO;
 import com.example.hms.payload.dto.LabOrderResponseDTO;
 import com.example.hms.persistence.JpaProxyUtils;
