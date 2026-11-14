@@ -111,6 +111,15 @@ const PAGE_HANDLED_403_ACTION_PATTERNS = [
   /\/procedure-orders\/[^/?]+(\/cancel)?(\?|$)/,
 ];
 
+/**
+ * QA D1841: the landing pages (AuthService.resolveLandingPath, and /provider
+ * for a provider user). Everything they read on load feeds a card or a count,
+ * so a refused read there costs that card, never the page: sending the user
+ * from the page they log in to on to /error/403 left a radiologist with no
+ * portal at all. Matched against the router URL, path only.
+ */
+export const LANDING_PAGE_PATTERN = /^\/(dashboard|super-admin|provider)(?:[?#]|$)/;
+
 const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];
 
 /** Requests whose 401 means "the password you typed is wrong". */
@@ -462,7 +471,8 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         const isSilent =
           req.context.get(BACKGROUND_REQUEST) ||
           ((req.method === 'GET' || req.method === 'HEAD') &&
-            SILENT_403_PATTERNS.some((pattern) => pattern.test(req.url))) ||
+            (SILENT_403_PATTERNS.some((pattern) => pattern.test(req.url)) ||
+              LANDING_PAGE_PATTERN.test(router.url))) ||
           (req.method === 'POST' &&
             SILENT_403_POST_PATTERNS.some((pattern) => pattern.test(req.url)));
         const isPageHandledAction =

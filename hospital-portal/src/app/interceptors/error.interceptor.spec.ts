@@ -646,6 +646,43 @@ describe('errorInterceptor', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
   });
 
+  describe('QA D1841: a read refused on a landing page costs the card, not the page', () => {
+    const onPage = (url: string) =>
+      Object.defineProperty(router, 'url', { value: url, configurable: true });
+
+    for (const landing of ['/dashboard', '/super-admin', '/provider', '/dashboard?tab=1']) {
+      it(`a refused GET on ${landing} stays on the page and is reported once`, () => {
+        onPage(landing);
+        let error: HttpErrorResponse | undefined;
+        http.get('/imaging/orders').subscribe({ error: (e) => (error = e) });
+        httpMock.expectOne('/imaging/orders').flush(null, { status: 403, statusText: 'Forbidden' });
+        expect(httpMock.expectOne('/frontend-audit').request.body.type).toBe('SILENT_403');
+
+        expect(router.navigate).not.toHaveBeenCalled();
+        expect(noteRefusal).not.toHaveBeenCalled();
+        expect(error?.status).toBe(403);
+      });
+    }
+
+    it('the same refused GET on any other page still goes to the 403 page', () => {
+      for (const page of ['/imaging', '/dashboards', '/patients/p-1', '/admin/dashboard']) {
+        router.navigate.calls.reset();
+        onPage(page);
+        http.get('/imaging/orders').subscribe({ error: () => undefined });
+        httpMock.expectOne('/imaging/orders').flush(null, { status: 403, statusText: 'Forbidden' });
+        expect(router.navigate).withContext(page).toHaveBeenCalledWith(['/error/403']);
+      }
+    });
+
+    it('a refused write on the dashboard is not silenced by being there', () => {
+      onPage('/dashboard');
+      http.post('/prescriptions', {}).subscribe({ error: () => undefined });
+      httpMock.expectOne('/prescriptions').flush(null, { status: 403, statusText: 'Forbidden' });
+
+      expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
+    });
+  });
+
   it('still redirects a 403 on an unrelated write', () => {
     http.post('/prescriptions', {}).subscribe({ error: () => undefined });
     httpMock.expectOne('/prescriptions').flush(null, { status: 403, statusText: 'Forbidden' });

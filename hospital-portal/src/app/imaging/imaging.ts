@@ -45,6 +45,7 @@ import { refuseFields } from '../shared/forms/invalid-fields';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { serverLocalDate } from '../shared/date-utils';
+import { catchError, forkJoin, map, of } from 'rxjs';
 
 /** The cancellation reason's field (QA D1098), marked when it is refused. */
 const CANCEL_REASON_ID = 'imaging-cancel-reason';
@@ -98,6 +99,29 @@ export const IMAGING_ORDER_TAB_STATUSES: Readonly<
   completed: ['COMPLETED', 'RESULTS_AVAILABLE'],
   cancelled: ['CANCELLED'],
 };
+
+/**
+ * User decision 2026-11-14: the administrative roles read Imagerie and never
+ * act on it; a clinical role held on its own is what acts.
+ */
+export const IMAGING_ADMIN_READER_ROLES: readonly string[] = [
+  'ROLE_SUPER_ADMIN',
+  'ROLE_HOSPITAL_ADMIN',
+  'ROLE_ADMIN',
+];
+export const IMAGING_CLINICAL_ROLES: readonly string[] = [
+  'ROLE_DOCTOR',
+  'ROLE_NURSE',
+  'ROLE_MIDWIFE',
+  'ROLE_RADIOLOGIST',
+];
+/** The report statuses an administrator may read: released (signed) reads only. */
+export const RELEASED_REPORT_STATUSES: readonly ImagingReportStatus[] = [
+  'FINAL',
+  'ADDENDUM',
+  'CORRECTED',
+  'AMENDED',
+];
 
 /** QA D1821: the order statuses a study is started from (placed, not yet performed). */
 export const STARTABLE_ORDER_STATUSES: readonly ImagingOrderStatus[] = ['ORDERED', 'SCHEDULED'];
@@ -219,8 +243,31 @@ export class ImagingComponent implements OnInit {
   reportOrderId = signal<string | null>(null);
   reportForm: ReportForm = this.emptyReportForm();
 
+  /**
+   * User decision 2026-11-14: an administrator (super-admin, hospital admin,
+   * admin) with no clinical role reads orders and released reports, nothing
+   * else; the server answers the same way.
+   */
+  readonly isAdminReader =
+    this.roleContext.hasAnyActiveRole([...IMAGING_ADMIN_READER_ROLES]) &&
+    !this.roleContext.hasAnyActiveRole([...IMAGING_CLINICAL_ROLES]);
+
+  /** The super-admin's « Tous les hôpitaux » view and its hospital filter ('' = all). */
+  readonly canPickHospital = this.roleContext.isSuperAdmin();
+  /** The super-admin's hospital directory has answered (PR #1163: results wait for it). */
+  readonly hospitalsLoaded = signal(false);
+  /** « Tous les hôpitaux » results: the hospitals whose reports could not be read. */
+  readonly reportsFailedHospitals = signal<string[]>([]);
+  readonly hospitalFilter = signal(
+    this.roleContext.isSuperAdmin() && !this.roleContext.globalView()
+      ? (this.roleContext.selectedHospitalId() ?? '')
+      : '',
+  );
+  /** The combined view names each row's hospital. */
+  readonly showHospitalColumn = computed(() => this.canPickHospital && !this.hospitalFilter());
+
   /** Filter tabs on the Results view — reading by any status is fine. */
-  readonly reportStatuses: ImagingReportStatus[] = [
+  private readonly allReportStatuses: ImagingReportStatus[] = [
     'DRAFT',
     'PRELIMINARY',
     'FINAL',
@@ -229,6 +276,11 @@ export class ImagingComponent implements OnInit {
     'AMENDED',
     'CANCELLED',
   ];
+
+  /** The tabs offered: an administrator's are the released statuses only. */
+  readonly reportStatuses: ImagingReportStatus[] = this.isAdminReader
+    ? [...RELEASED_REPORT_STATUSES]
+    : this.allReportStatuses;
 
   /**
    * The statuses an author may assert. FINAL is absent because signing is the
@@ -428,7 +480,15 @@ export class ImagingComponent implements OnInit {
   /** ── TENANT ISOLATION: only SUPER_ADMIN may choose from all hospitals ── */
   private loadAssignedHospitals(): void {
     if (this.roleContext.isSuperAdmin()) {
-      this.hospitalService.list().subscribe((h) => this.hospitals.set(h ?? []));
+      this.hospitalService.list().subscribe({
+        next: (h) => {
+          this.hospitals.set(h ?? []);
+          this.hospitalsLoaded.set(true);
+          // Results opened while the directory was loading wait for it (PR #1163).
+          if (this.view() === 'results' && !this.hospitalFilter()) this.loadReports();
+        },
+        error: () => this.hospitalsLoaded.set(true),
+      });
     } else {
       this.hospitalService.getMyHospitalAsResponse().subscribe({
         next: (h) => {
@@ -582,7 +642,12 @@ export class ImagingComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    this.imagingService.getAllOrders().subscribe({
+    const hospitalId = this.canPickHospital ? this.hospitalFilter() : '';
+    const orders$ = hospitalId
+      ? this.imagingService.getOrdersByHospital(hospitalId)
+      : // « Tous les hôpitaux »: without the chip's hospital, or the combined view is one hospital.
+        this.imagingService.getAllOrders(undefined, { allHospitals: this.canPickHospital });
+    orders$.subscribe({
       next: (list) => {
         this.orders.set(Array.isArray(list) ? list : []);
         this.applyFilter();
@@ -734,12 +799,31 @@ export class ImagingComponent implements OnInit {
   }
 
   private resultsHospitalId(): string | null {
+    if (this.canPickHospital) return this.hospitalFilter() || null;
     return this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
   }
 
+  /** The super-admin picks « Tous les hôpitaux » ('') or one hospital; both views reload. */
+  setHospitalFilter(hospitalId: string): void {
+    this.hospitalFilter.set(hospitalId ?? '');
+    this.load();
+    if (this.view() === 'results') this.loadReports();
+    else this.reports.set([]);
+  }
+
+  /** A row's hospital in the combined view (a report carries its id only). */
+  hospitalNameOf(hospitalId: string | null | undefined, name?: string | null): string {
+    if (name) return name;
+    return this.hospitals().find((h) => h.id === hospitalId)?.name ?? '—';
+  }
+
   loadReports(): void {
+    this.reportsFailedHospitals.set([]);
     const hospitalId = this.resultsHospitalId();
-    if (!hospitalId) return;
+    if (!hospitalId) {
+      if (this.canPickHospital) this.loadReportsEverywhere();
+      return;
+    }
     this.reportsLoading.set(true);
     // Backend ignores `modality` whenever `status` is present, so fetch by
     // status only and apply the modality filter client-side (visibleReports).
@@ -755,6 +839,44 @@ export class ImagingComponent implements OnInit {
           this.reportsLoading.set(false);
         },
       });
+  }
+
+  /**
+   * « Tous les hôpitaux »: the reports are listed per hospital, so the
+   * combined list is each hospital's, merged; a hospital that fails to answer
+   * costs its own rows only.
+   */
+  private loadReportsEverywhere(): void {
+    this.reportsFailedHospitals.set([]);
+    if (!this.hospitalsLoaded()) {
+      // The directory is still loading: it reloads the results when it lands.
+      this.reportsLoading.set(true);
+      return;
+    }
+    const hospitals = this.hospitals();
+    if (hospitals.length === 0) {
+      this.reports.set([]);
+      this.reportsLoading.set(false);
+      return;
+    }
+    this.reportsLoading.set(true);
+    forkJoin(
+      hospitals.map((h) =>
+        this.imagingService.getReportsByHospital(h.id, { status: this.reportStatusFilter() }).pipe(
+          map((list) => ({ hospital: h, list: Array.isArray(list) ? list : [], failed: false })),
+          catchError(() => of({ hospital: h, list: [] as ImagingReportResponse[], failed: true })),
+        ),
+      ),
+    ).subscribe((answers) => {
+      this.reports.set(answers.flatMap((a) => a.list));
+      // A hospital that did not answer is named, never shown as "no reports".
+      const failed = answers.filter((a) => a.failed).map((a) => a.hospital.name);
+      this.reportsFailedHospitals.set(failed);
+      if (failed.length === answers.length) {
+        this.toast.error(this.translate.instant('IMAGING.RESULTS_LOAD_ERROR'));
+      }
+      this.reportsLoading.set(false);
+    });
   }
 
   setReportStatusFilter(status: ImagingReportStatus): void {

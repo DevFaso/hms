@@ -120,6 +120,42 @@ class OnboardingEmailRenderingTest {
     }
 
     @Test
+    @DisplayName("QA D1840: a platform-wide assignment mail names the platform, never a hospital or GLOBAL")
+    void platformWideAssignmentMailNamesThePlatform() {
+        service.sendRoleAssignmentConfirmationEmail("root@e-keneya.test", "Awa Traore", "ROLE_SUPER_ADMIN",
+            null, "123456", "A-3", "https://dev.e-keneya.com/onboarding/role-welcome?assignment=A-3",
+            null, null);
+
+        String[] mail = captured();
+        assertThat(mail[0]).isEqualTo("Action requise : confirmez votre affectation de rôle sur la plateforme")
+            .doesNotContain("hôpital");
+        assertThat(mail[1])
+            .contains("vous a été attribué sur toute la plateforme")
+            .doesNotContain("GLOBAL")
+            .doesNotContain("attribué à");
+    }
+
+    @Test
+    @DisplayName("QA D1840: the platform-wide mail and SMS sentences exist in EN/FR/ES and name the platform")
+    void platformWideSentencesInEveryLanguage() {
+        java.util.Map<Locale, String> platform = java.util.Map.of(
+            Locale.ENGLISH, "whole platform", Locale.FRENCH, "toute la plateforme", Locale.of("es"), "toda la plataforma");
+        for (var entry : platform.entrySet()) {
+            Locale l = entry.getKey();
+            assertThat(messages.getMessage("email.role.assignment.body.assigned.platform", new Object[] {"X"}, l))
+                .contains(entry.getValue());
+            assertThat(messages.getMessage("sms.activation.staff.platform", new Object[] {"X", "1", "u"}, l))
+                .contains(entry.getValue()).contains("1");
+            assertThat(messages.getMessage("sms.activation.registrar.platform", new Object[] {"A", "X", "1"}, l))
+                .contains(entry.getValue()).contains("1");
+            assertThat(messages.getMessage("email.role.assignment.subject.platform", null, l))
+                .isNotBlank();
+        }
+        assertThat(messages.getMessage("sms.activation.registrar.platform", new Object[] {"A", "X", "1"},
+            Locale.FRENCH)).contains("Code d'activation");
+    }
+
+    @Test
     @DisplayName("role labels resolve in EN/FR/ES and an unknown role is humanised")
     void roleLabelsInEveryLanguage() {
         assertThat(service.roleLabel(Locale.FRENCH, "ROLE_DOCTOR")).isEqualTo("Médecin");

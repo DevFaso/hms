@@ -35,7 +35,10 @@ class ActionPermissionsMirrorTest {
     private static final Pattern ENDPOINT_LINE = Pattern.compile("endpoint: '([\\w.]+)#(\\w+)',");
     private static final Pattern QUOTED = Pattern.compile("'([A-Z_]+)'");
     private static final Pattern SIMPLE_EXPRESSION = Pattern.compile(
-        "^(hasAnyAuthority|hasAuthority|hasAnyRole|hasRole)\\(\\s*'[A-Z_]+'(\\s*,\\s*'[A-Z_]+')*\\s*\\)$");
+        "^(hasAnyAuthority|hasAuthority|hasAnyRole|hasRole"
+            // User decision 2026-11-14: a clinical act through a role the caller holds on their own.
+            + "|T\\(com\\.example\\.hms\\.security\\.ClinicalActor\\)\\.holdsOwnRole)"
+            + "\\(\\s*(authentication\\s*,\\s*)?'[A-Z_]+'(\\s*,\\s*'[A-Z_]+')*\\s*\\)$");
 
     record Entry(String action, String controller, String method, Set<String> roles) { }
 
@@ -112,7 +115,8 @@ class ActionPermissionsMirrorTest {
     }
 
     static Set<String> rolesOf(String expression) {
-        boolean roleForm = expression.startsWith("hasRole") || expression.startsWith("hasAnyRole");
+        boolean roleForm = expression.startsWith("hasRole") || expression.startsWith("hasAnyRole")
+            || expression.startsWith("T(com.example.hms.security.ClinicalActor).holdsOwnRole");
         Set<String> roles = new TreeSet<>();
         Matcher q = QUOTED.matcher(expression);
         while (q.find()) {

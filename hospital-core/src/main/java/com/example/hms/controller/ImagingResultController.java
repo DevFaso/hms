@@ -48,7 +48,7 @@ import java.util.UUID;
 @RequestMapping("/imaging/results")
 @Validated
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
 @Tag(name = "Imaging Results", description = "Author, sign, and read radiology reports; acknowledge critical findings")
 public class ImagingResultController {
 
@@ -58,7 +58,7 @@ public class ImagingResultController {
     // ── Authoring ────────────────────────────────────────────────────────
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','RADIOLOGIST','DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'RADIOLOGIST','DOCTOR')")
     @Operation(summary = "Author an imaging report",
                description = "File a new report against an imaging order. Version numbering is derived "
                    + "server-side. A study that already carries a signed report only accepts an "
@@ -71,7 +71,7 @@ public class ImagingResultController {
     }
 
     @PutMapping("/{reportId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','RADIOLOGIST','DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'RADIOLOGIST','DOCTOR')")
     @Operation(summary = "Revise an unsigned imaging report",
                description = "Signed reports are closed to edits; corrections are filed as a new version.")
     public ResponseEntity<ImagingReportResponseDTO> updateReport(
@@ -83,7 +83,7 @@ public class ImagingResultController {
     }
 
     @PostMapping("/{reportId}/sign")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','RADIOLOGIST','DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'RADIOLOGIST','DOCTOR')")
     @Operation(summary = "Sign an imaging report",
                description = "The only path to FINAL. Signer identity and time come from the "
                    + "authenticated caller, never the request body, and a SHA-256 digest over the "
@@ -95,7 +95,7 @@ public class ImagingResultController {
     // ── Reads ────────────────────────────────────────────────────────────
 
     @GetMapping("/{reportId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
     @Operation(summary = "Get imaging report by ID",
                description = "Retrieve full imaging report with findings, impression, and PACS viewer URL")
     public ResponseEntity<ImagingReportResponseDTO> getReport(@PathVariable UUID reportId) {
@@ -104,7 +104,7 @@ public class ImagingResultController {
     }
 
     @GetMapping("/order/{orderId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
     @Operation(summary = "Get latest report for imaging order",
                description = "Retrieve the most recent report version for a specific imaging order")
     public ResponseEntity<ImagingReportResponseDTO> getLatestReportForOrder(@PathVariable UUID orderId) {
@@ -121,7 +121,7 @@ public class ImagingResultController {
     // that policy would be a filter on report status, not on this endpoint.
     // QA D856: MIDWIFE too. A midwife orders and lists imaging (ImagingOrderController
     // admits her on both), so the order detail she opens must read its reports.
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','RADIOLOGIST','NURSE','MIDWIFE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','RADIOLOGIST','NURSE','MIDWIFE')")
     @Operation(summary = "Get all report versions for imaging order",
                description = "Retrieve complete history of report versions (preliminary, final, addenda)")
     public ResponseEntity<List<ImagingReportResponseDTO>> getAllReportsForOrder(@PathVariable UUID orderId) {
@@ -130,7 +130,7 @@ public class ImagingResultController {
     }
 
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','RADIOLOGIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','RADIOLOGIST')")
     @Operation(summary = "List imaging reports for hospital",
                description = "Filter by status (e.g., PRELIMINARY, FINAL) or modality (CT, MRI, X-RAY). "
                    + "The path hospital must be the caller's active hospital; super-admins may name any.")
@@ -156,7 +156,7 @@ public class ImagingResultController {
     // ── Administrative + critical findings ───────────────────────────────
 
     @PutMapping("/{reportId}/status")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','RADIOLOGIST','DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'RADIOLOGIST','DOCTOR')")
     @Operation(summary = "Cancel or void an unsigned report",
                description = "Administrative outcomes only (CANCELLED, ERROR) and a reason is required. "
                    + "Content states come from authoring the report and FINAL only from signing it.")
@@ -182,7 +182,7 @@ public class ImagingResultController {
      * call. All three are fixed: the service stamps the authenticated caller.
      */
     @PutMapping("/{reportId}/acknowledge-critical")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','RADIOLOGIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','RADIOLOGIST')")
     @Operation(summary = "Acknowledge critical imaging result",
                description = "Records the authenticated clinician as having taken responsibility for a "
                    + "critical finding. Refused when the report carries no critical flag.")

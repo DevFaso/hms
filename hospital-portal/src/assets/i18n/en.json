@@ -3101,6 +3101,7 @@
     "NO_ACTIVATION_CHANNEL": "No activation message reached this account — it stays inactive until someone delivers the confirmation code.",
     "SMS_FAILED": "The activation SMS could not be delivered.",
     "SMS_NOT_CONFIGURED": "SMS sending is disabled on this server — no activation SMS was sent.",
+    "SMS_RECIPIENT_NOT_ALLOWED": "The activation SMS was not sent: this environment only texts approved test numbers, and this number is not one of them. Give the code in person or add the number to the test list.",
     "WELCOME_EMAIL_FAILED": "The welcome email with login details could not be delivered."
   },
   "DEPARTMENTS": {
@@ -3579,6 +3580,10 @@
     "ZIP_CODE": "Zip Code"
   },
   "IMAGING": {
+    "RESULTS_PARTIAL_FAILURE": "The reports of these hospitals could not be loaded, so the list is incomplete: {{hospitals}}.",
+    "ADMIN_READ_ONLY": "Read-only: imaging requests and released reports. Ordering, reporting and signing are done by the clinical team.",
+    "ALL_HOSPITALS": "All hospitals",
+    "HOSPITAL_FILTER": "Hospital",
     "ACCESSION": "Accession number",
     "ACK_CRITICAL": "Acknowledge critical",
     "ACTIVE_ORDERS": "Active Orders",

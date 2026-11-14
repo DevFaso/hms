@@ -477,7 +477,7 @@ class OrangeSmsGatewayImplTest {
         OrangeSmsGatewayImpl gateway = gateway("", false);
 
         assertThatThrownBy(() -> gateway.sendSms(List.of("+22670707071"), "a", null))
-            .isInstanceOf(IllegalStateException.class)
+            .isInstanceOf(SmsRecipientNotAllowedException.class)
             .hasMessage(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
         assertThat(tokenRequests).isEmpty();
         assertThat(sendRequests).isEmpty();

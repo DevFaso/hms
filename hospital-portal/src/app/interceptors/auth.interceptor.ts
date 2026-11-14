@@ -6,6 +6,7 @@ import { EMPTY, Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ALL_HOSPITALS_REQUEST } from '../core/request-scope';
 
 function handleExpiredToken(
   auth: AuthService,
@@ -104,7 +105,9 @@ export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
     const establishesScope = SCOPE_ESTABLISHING_PATTERNS.some((pattern) =>
       pattern.test(modified.url),
     );
-    if (hid && !establishesScope) {
+    // « Tous les hôpitaux » (PR #1163): a super-admin's explicit all-hospitals read.
+    const allHospitals = modified.context.get(ALL_HOSPITALS_REQUEST) && roleCtx.isSuperAdmin();
+    if (hid && !establishesScope && !allHospitals) {
       headers['X-Hospital-Id'] = hid;
     }
     if (Object.keys(headers).length) {

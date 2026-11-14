@@ -8,6 +8,9 @@
  * Keep one entry per line in the `endpoint: 'Controller#method'` /
  * `roles: [...]` shape — the backend test parses it.
  *
+ * Imaging writes (user decision 2026-11-14) need a clinical role the caller
+ * holds on their own: SUPER_ADMIN and the admin roles never act on imaging.
+ *
  * Role-level only: a service-layer rule (the acting hospital, the author of a
  * draft) is checked by the page on top of the role gate.
  */
@@ -39,15 +42,15 @@ export const ACTION_PERMISSIONS = {
   },
   imagingOrderCreate: {
     endpoint: 'ImagingOrderController#createOrder',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   imagingOrderUpdate: {
     endpoint: 'ImagingOrderController#updateOrder',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   imagingOrderStatus: {
     endpoint: 'ImagingOrderController#updateStatus',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
+    roles: ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
   },
   labSpecimenCollect: {
     endpoint: 'LabSpecimenController#collectSpecimen',
@@ -84,19 +87,25 @@ export const ACTION_PERMISSIONS = {
   },
   imagingReportsByHospital: {
     endpoint: 'ImagingResultController#getReportsByHospital',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
+    roles: [
+      'ROLE_SUPER_ADMIN',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_ADMIN',
+      'ROLE_DOCTOR',
+      'ROLE_RADIOLOGIST',
+    ],
   },
   imagingReportCreate: {
     endpoint: 'ImagingResultController#createReport',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_RADIOLOGIST', 'ROLE_DOCTOR'],
+    roles: ['ROLE_RADIOLOGIST', 'ROLE_DOCTOR'],
   },
   imagingReportStatus: {
     endpoint: 'ImagingResultController#updateReportStatus',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_RADIOLOGIST', 'ROLE_DOCTOR'],
+    roles: ['ROLE_RADIOLOGIST', 'ROLE_DOCTOR'],
   },
   imagingCriticalAck: {
     endpoint: 'ImagingResultController#acknowledgeCriticalResult',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
+    roles: ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
   },
   admissionCreate: {
     endpoint: 'AdmissionController#admitPatient',
