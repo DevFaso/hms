@@ -294,6 +294,9 @@
                 <span class="cell-secondary" data-testid="detail-patient-identity">
                   @if (o.patientMrn) {
                     {{ 'LAB.MRN' | translate }}{{ 'COMMON.COLON' | translate }} {{ o.patientMrn }}
+                    @if (o.performingHospitalId && o.hospitalName) {
+                      ({{ o.hospitalName }})
+                    }
                   }
                   @if (o.patientMrn && patientAge(o.patientDateOfBirth)) {
                     ·

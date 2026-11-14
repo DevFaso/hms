@@ -348,9 +348,13 @@ export class LabComponent implements OnInit {
     if (today.getDate() < dob.getDate()) months--;
     if (months < 1) {
       const days = Math.floor((today.getTime() - dob.getTime()) / 86400000);
-      return this.translate.instant('LAB.AGE_DAYS', { count: days });
+      return this.translate.instant(days === 1 ? 'LAB.AGE_DAY' : 'LAB.AGE_DAYS', { count: days });
     }
-    if (months < 24) return this.translate.instant('LAB.AGE_MONTHS', { count: months });
+    if (months < 24) {
+      return this.translate.instant(months === 1 ? 'LAB.AGE_MONTH' : 'LAB.AGE_MONTHS', {
+        count: months,
+      });
+    }
     return this.translate.instant('LAB.AGE_YEARS', { count: Math.floor(months / 12) });
   }
 
@@ -918,13 +922,18 @@ export class LabComponent implements OnInit {
     this.filtered.set(list);
   }
 
+  /** Invalidates every drawer request, including a previous opening of the same order. */
+  private detailGeneration = 0;
+
   viewOrder(order: LabOrderResponse): void {
+    const generation = ++this.detailGeneration;
     this.selectedOrder.set(order);
     this.detailResults.set([]);
+    this.detailResultsLoading.set(false);
     // The single-order read adds what the list does not carry (the diagnosis label).
     this.labService.getOrder(order.id).subscribe({
       next: (detail) => {
-        if (detail?.id === order.id && this.selectedOrder()?.id === order.id) {
+        if (generation === this.detailGeneration && detail?.id === order.id) {
           this.selectedOrder.set(detail);
         }
       },
@@ -937,11 +946,12 @@ export class LabComponent implements OnInit {
       this.detailResultsLoading.set(true);
       this.labService.listOrderResults(order.id).subscribe({
         next: (list) => {
-          if (this.selectedOrder()?.id !== order.id) return;
+          if (generation !== this.detailGeneration) return;
           this.detailResults.set((list ?? []).filter((r) => r.labOrderId === order.id));
           this.detailResultsLoading.set(false);
         },
         error: () => {
+          if (generation !== this.detailGeneration) return;
           this.detailResults.set([]);
           this.detailResultsLoading.set(false);
         },
@@ -952,16 +962,20 @@ export class LabComponent implements OnInit {
     this.detailSpecimens.set([]);
     this.labService.listSpecimens(order.id).subscribe({
       next: (list) => {
-        if (this.selectedOrder()?.id === order.id) this.detailSpecimens.set(list ?? []);
+        if (generation === this.detailGeneration) this.detailSpecimens.set(list ?? []);
       },
-      error: () => this.detailSpecimens.set([]),
+      error: () => {
+        if (generation === this.detailGeneration) this.detailSpecimens.set([]);
+      },
     });
   }
 
   closeDetail(): void {
+    ++this.detailGeneration;
     this.selectedOrder.set(null);
     this.detailSpecimens.set([]);
     this.detailResults.set([]);
+    this.detailResultsLoading.set(false);
   }
 
   getStatusClass(status: string): string {

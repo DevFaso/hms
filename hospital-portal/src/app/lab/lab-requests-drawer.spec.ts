@@ -3,7 +3,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 
 import { LabComponent } from './lab';
 import {
@@ -186,6 +186,8 @@ describe('LabComponent — lab requests list and drawer', () => {
           AGE_YEARS: '{{count}} years',
           AGE_MONTHS: '{{count}} months',
           AGE_DAYS: '{{count}} days',
+          AGE_DAY: '{{count}} day',
+          AGE_MONTH: '{{count}} month',
           TAT_MINUTES: '{{minutes}} min',
           TAT_HOURS_MINUTES: '{{hours}} h {{minutes}} min',
           TAT_DAYS_HOURS: '{{days}} d {{hours}} h',
@@ -257,6 +259,76 @@ describe('LabComponent — lab requests list and drawer', () => {
   });
 
   describe('drawer: the result', () => {
+    it('keeps B results and specimens when A fails after B succeeds', async () => {
+      const first = order({ status: 'COMPLETED' });
+      const second = order({ id: 'o-2', status: 'COMPLETED' });
+      await setup([first, second]);
+      const firstResults = new Subject<LabResultResponse[]>();
+      const secondResults = new Subject<LabResultResponse[]>();
+      const firstSpecimens = new Subject<LabSpecimen[]>();
+      const secondSpecimens = new Subject<LabSpecimen[]>();
+      labService.listOrderResults.and.callFake((id) =>
+        id === first.id ? firstResults : secondResults,
+      );
+      labService.listSpecimens.and.callFake((id) =>
+        id === first.id ? firstSpecimens : secondSpecimens,
+      );
+      open(first);
+      open(second);
+      const currentResults = [result({ labOrderId: second.id })];
+      secondResults.next(currentResults);
+      secondSpecimens.next([{ id: 'specimen-b', labOrderId: second.id } as LabSpecimen]);
+      firstResults.error(new Error('stale results'));
+      firstSpecimens.error(new Error('stale specimens'));
+      fixture.detectChanges();
+
+      expect(component.selectedOrder()?.id).toBe(second.id);
+      expect(component.detailResults()).toEqual(currentResults);
+      expect(component.detailSpecimens().map((s) => s.id)).toEqual(['specimen-b']);
+      expect(component.detailResultsLoading()).toBeFalse();
+      expect(q('detail-result-r-1')).not.toBeNull();
+    });
+
+    it('ignores stale detail, result and specimen successes after reopening the same order', async () => {
+      const current = order({ status: 'COMPLETED' });
+      await setup([current]);
+      const oldDetail = new Subject<LabOrderResponse>();
+      const oldResults = new Subject<LabResultResponse[]>();
+      const oldSpecimens = new Subject<LabSpecimen[]>();
+      const newResults = [result({})];
+      labService.getOrder.and.returnValues(oldDetail, of(current));
+      labService.listOrderResults.and.returnValues(oldResults, of(newResults));
+      labService.listSpecimens.and.returnValues(oldSpecimens, of([]));
+      open(current);
+      component.closeDetail();
+      expect(component.detailResultsLoading()).toBeFalse();
+      open(current);
+      oldDetail.next({ ...current, primaryDiagnosisLabel: 'stale' });
+      oldResults.next([result({ id: 'stale' })]);
+      oldSpecimens.next([{ id: 'stale' } as LabSpecimen]);
+
+      expect(component.selectedOrder()).toEqual(current);
+      expect(component.detailResults()).toEqual(newResults);
+      expect(component.detailSpecimens()).toEqual([]);
+    });
+
+    it('resets loading for a non-result order and ignores errors after closing', async () => {
+      const completed = order({ status: 'COMPLETED' });
+      const pending = order({ id: 'pending' });
+      await setup([completed, pending]);
+      const oldResults = new Subject<LabResultResponse[]>();
+      labService.listOrderResults.and.returnValue(oldResults);
+      open(completed);
+      expect(component.detailResultsLoading()).toBeTrue();
+      open(pending);
+      expect(component.detailResultsLoading()).toBeFalse();
+      component.closeDetail();
+      oldResults.error(new Error('closed request'));
+      expect(component.selectedOrder()).toBeNull();
+      expect(component.detailResults()).toEqual([]);
+      expect(component.detailResultsLoading()).toBeFalse();
+    });
+
     it('shows a validated value with the server grade and graded range, and links the result', async () => {
       const o = order({ status: 'COMPLETED' });
       await setup([o], { results: [result({})] });
@@ -331,8 +403,18 @@ describe('LabComponent — lab requests list and drawer', () => {
       const today = new Date(2026, 10, 13);
       expect(component.patientAge('2025-11-01', today)).toBe('12 months');
       expect(component.patientAge('2026-11-03', today)).toBe('10 days');
+      expect(component.patientAge('2026-11-12', today)).toBe('1 day');
+      expect(component.patientAge('2026-10-13', today)).toBe('1 month');
+      expect(component.patientAge('2026-11-13', today)).toBe('0 days');
       expect(component.patientAge('1990-04-02', today)).toBe('36 years');
       expect(component.patientAge(null, today)).toBe('');
+    });
+
+    it('identifies the ordering hospital beside a routed order MRN', async () => {
+      const routed = order({ performingHospitalId: 'lab-b', hospitalName: 'Ordering hospital A' });
+      await setup([routed]);
+      open(routed);
+      expect(q('detail-patient-identity')?.textContent).toContain('(Ordering hospital A)');
     });
   });
 

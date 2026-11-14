@@ -3869,7 +3869,9 @@
     "TAT_MINUTES": "{{minutes}} min",
     "TAT_HOURS_MINUTES": "{{hours}} h {{minutes}} min",
     "TAT_DAYS_HOURS": "{{days}} j {{hours}} h",
+    "AGE_DAY": "{{count}} jour",
     "AGE_DAYS": "{{count}} jours",
+    "AGE_MONTH": "{{count}} mois",
     "AGE_MONTHS": "{{count}} mois",
     "AGE_YEARS": "{{count}} ans",
     "STATE": {
