@@ -52,7 +52,8 @@ export interface ImagingOrderResponse {
   orderedAt: string;
   scheduledDate: string;
   scheduledTime: string;
-  completedAt: string;
+  /** When the study was completed (r44, V294); null while it is not. */
+  completedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -86,9 +87,15 @@ export interface ImagingReportMeasurement {
   notes: string;
 }
 
+/** r44: the history rows the server writes itself (ImagingReportHistoryEvent). */
+export type ImagingReportHistoryEvent = 'AUTHORED' | 'SIGNED' | 'CRITICAL_ACKNOWLEDGED';
+
 export interface ImagingReportStatusEntry {
   id: string;
   status: ImagingReportStatus;
+  /** Set when the server wrote the row: shown translated, never as `statusReason`. */
+  eventCode?: ImagingReportHistoryEvent | null;
+  /** A reason a person typed (a void), or the server's English for an event. */
   statusReason: string;
   changedAt: string;
   changedByName: string;

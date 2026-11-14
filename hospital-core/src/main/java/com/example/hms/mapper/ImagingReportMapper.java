@@ -4,6 +4,7 @@ import com.example.hms.model.ImagingReport;
 import com.example.hms.model.ImagingReportAttachment;
 import com.example.hms.model.ImagingReportMeasurement;
 import com.example.hms.model.ImagingReportStatusHistory;
+import com.example.hms.enums.ImagingReportHistoryEvent;
 import com.example.hms.payload.dto.imaging.ImagingReportAttachmentDTO;
 import com.example.hms.payload.dto.imaging.ImagingReportAttachmentRequestDTO;
 import com.example.hms.payload.dto.imaging.ImagingReportMeasurementDTO;
@@ -324,6 +325,7 @@ public class ImagingReportMapper {
             .id(history.getId())
             .status(history.getStatus())
             .statusReason(history.getStatusReason())
+            .eventCode(ImagingReportHistoryEvent.fromStoredText(history.getStatusReason()))
             .changedAt(history.getChangedAt())
             .changedByStaffId(history.getChangedBy() != null ? history.getChangedBy().getId() : null)
             .changedByName(history.getChangedByName())
