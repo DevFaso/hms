@@ -132,7 +132,12 @@ describe('LabComponent — performing laboratory', () => {
       'getAssignments',
     ]);
     profileService.getAssignments.and.returnValue(of([]));
-    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
+    toast = jasmine.createSpyObj<ToastService>('ToastService', [
+      'success',
+      'error',
+      'info',
+      'warning',
+    ]);
     const printService = jasmine.createSpyObj<PrintLabelService>('PrintLabelService', [
       'getSpecimenLabelPdf',
       'openForPrint',
@@ -629,6 +634,60 @@ describe('LabComponent — performing laboratory', () => {
       expect(labService.createOrder).not.toHaveBeenCalled();
       expect(component.duplicateMatches()).toEqual([]);
       expect(component.saving()).toBeFalse();
+    });
+
+    it('keeps the write lock when the dialog is closed and reopened during a save', async () => {
+      // Rex on #1150: closing released the lock, so a reopened form sent a second order.
+      await setup(['ROLE_DOCTOR'], []);
+      const written = new Subject<LabOrderResponse>();
+      labService.createOrder.and.returnValue(written);
+
+      component.openCreate();
+      component.submitForm();
+      expect(labService.createOrder).toHaveBeenCalledTimes(1);
+      component.closeModal();
+      expect(component.saving()).toBeTrue();
+      component.openCreate();
+      component.submitForm();
+      component.orderAnyway();
+      expect(labService.createOrder).toHaveBeenCalledTimes(1);
+
+      written.next(order({}));
+      expect(component.saving()).toBeFalse();
+      component.openCreate();
+      component.submitForm();
+      expect(labService.createOrder).toHaveBeenCalledTimes(2);
+    });
+
+    it('tells the clinician about a duplicate the server found when placing the order', async () => {
+      // Rex on #1150: the preview saw none (or failed); the server's own check is not dropped.
+      await setup(['ROLE_DOCTOR'], []);
+      labService.createOrder.and.returnValue(
+        of(
+          order({
+            duplicateOfRecentOrder: true,
+            duplicateAcknowledged: false,
+            duplicateMatches: [{ orderId: 'o-earlier', labOrderCode: 'LAB-000023' }],
+          }),
+        ),
+      );
+
+      component.openCreate();
+      component.submitForm();
+
+      expect(toast.warning).toHaveBeenCalledTimes(1);
+    });
+
+    it('says nothing more when the duplicate the server found was the one acknowledged', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.createOrder.and.returnValue(
+        of(order({ duplicateOfRecentOrder: true, duplicateAcknowledged: true })),
+      );
+
+      component.openCreate();
+      component.submitForm();
+
+      expect(toast.warning).not.toHaveBeenCalled();
     });
 
     it('places no order from a preview reply that arrives after leaving the page', async () => {

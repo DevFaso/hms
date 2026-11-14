@@ -154,6 +154,22 @@ class LabOrderDuplicateQueryTest {
             .extracting(LabOrder::getId).containsExactly(earlier.getId());
     }
 
+    @Test
+    @DisplayName("the window runs on placement time: a backdated order placed now still matches, "
+        + "an order placed long ago with a recent clinical time does not")
+    void theWindowIsPlacementTimeNotTheClinicalTime() {
+        // Rex on #1150: orderDatetime is the caller's; created_at is when it was placed.
+        LabOrder backdated = placedNow(patient, glucose, atA, LabOrderStatus.ORDERED, 72);
+        LabOrder longAgo = order(patient, glucose, atA, LabOrderStatus.ORDERED, 72);
+        entityManager.createQuery("UPDATE LabOrder o SET o.orderDatetime = :at WHERE o.id = :id")
+            .setParameter("at", LocalDateTime.now())
+            .setParameter("id", longAgo.getId())
+            .executeUpdate();
+        entityManager.clear();
+
+        assertThat(find(glucose, null)).extracting(LabOrder::getId).containsExactly(backdated.getId());
+    }
+
     private List<LabOrder> find(LabTestDefinition test, UUID exclude) {
         return labOrderRepository.findActiveSameTestSince(patient.getId(), hospitalA.getId(), test.getId(),
             test.getTestCode(), LabOrderDuplicateCheck.ACTIVE,
@@ -166,15 +182,30 @@ class LabOrderDuplicateQueryTest {
             .testCode(prefix + nextId()).name(name).unit("mmol/L").build());
     }
 
+    /** An order PLACED {@code hoursAgo} (its creation time), with the same clinical time. */
     private LabOrder order(Patient who, LabTestDefinition test, Staff orderingStaff, LabOrderStatus status, int hoursAgo) {
-        return labOrderRepository.save(LabOrder.builder()
+        LabOrder saved = placedNow(who, test, orderingStaff, status, hoursAgo);
+        LocalDateTime placedAt = LocalDateTime.now().minusHours(hoursAgo);
+        entityManager.flush();
+        entityManager.createQuery("UPDATE LabOrder o SET o.createdAt = :at WHERE o.id = :id")
+            .setParameter("at", placedAt)
+            .setParameter("id", saved.getId())
+            .executeUpdate();
+        entityManager.clear();
+        return saved;
+    }
+
+    /** An order placed now whose clinical time is {@code clinicalHoursAgo}. */
+    private LabOrder placedNow(Patient who, LabTestDefinition test, Staff orderingStaff, LabOrderStatus status,
+                               int clinicalHoursAgo) {
+        return labOrderRepository.saveAndFlush(LabOrder.builder()
             .patient(who)
             .orderingStaff(orderingStaff)
             .labTestDefinition(test)
             .hospital(orderingStaff.getHospital())
             .assignment(orderingStaff.getAssignment())
             .status(status)
-            .orderDatetime(LocalDateTime.now().minusHours(hoursAgo))
+            .orderDatetime(LocalDateTime.now().minusHours(clinicalHoursAgo))
             .clinicalIndication("Duplicate fixture")
             .build());
     }

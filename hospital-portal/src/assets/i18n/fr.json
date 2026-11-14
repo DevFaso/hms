@@ -3740,7 +3740,8 @@
       "TITLE": "Demande possiblement en double",
       "BODY": "Ce patient a déjà une demande en cours pour le même examen ici, passée dans les dernières 24 heures. Vérifiez qu'une nouvelle demande est vraiment nécessaire.",
       "BACK": "Revenir à la demande",
-      "ORDER_ANYWAY": "Commander quand même"
+      "ORDER_ANYWAY": "Commander quand même",
+      "PLACED_ANYWAY": "La demande a été passée, mais ce patient avait déjà une demande en cours pour le même examen ici : {{codes}}. Vérifiez que les deux sont nécessaires."
     },
     "ABNORMAL": "Anormal",
     "ACCESSION": "N° d'enregistrement",

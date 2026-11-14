@@ -47,6 +47,11 @@ export interface LabOrderResponse {
   cancellationReason?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** On a create response: an active order of the same test was found (warned, never blocked). */
+  duplicateOfRecentOrder?: boolean | null;
+  duplicateMatches?: LabOrderDuplicateMatch[] | null;
+  /** Whether the order carried an acknowledgement covering every duplicate found. */
+  duplicateAcknowledged?: boolean | null;
 }
 
 export interface LabResultResponse {

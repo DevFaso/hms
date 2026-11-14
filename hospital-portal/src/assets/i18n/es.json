@@ -3740,7 +3740,8 @@
       "TITLE": "Posible orden duplicada",
       "BODY": "Este paciente ya tiene una orden activa de la misma prueba aquí, realizada en las últimas 24 horas. Compruebe que una nueva orden sea realmente necesaria.",
       "BACK": "Volver a la orden",
-      "ORDER_ANYWAY": "Ordenar de todos modos"
+      "ORDER_ANYWAY": "Ordenar de todos modos",
+      "PLACED_ANYWAY": "La orden se realizó, pero este paciente ya tenía una orden activa de la misma prueba aquí: {{codes}}. Compruebe que ambas sean necesarias."
     },
     "ABNORMAL": "Anormal",
     "ACCESSION": "N.º de registro",

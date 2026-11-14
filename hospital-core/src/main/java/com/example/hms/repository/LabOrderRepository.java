@@ -125,8 +125,10 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
      * The duplicate-order check: this patient's orders AT this hospital for
      * the same test (by definition id, or by test code so a new version of
      * the test still matches; both sides trimmed and upper-cased, the caller
-     * passes the code normalised), in one of the given statuses, placed since the
-     * cutoff. Newest first. {@code excludeOrderId} keeps an order from
+     * passes the code normalised), in one of the given statuses, PLACED since the
+     * cutoff: the row's creation time, which the server sets, never the
+     * caller-supplied clinical {@code orderDatetime} (a backdated order is still
+     * a recent placement; Rex on #1150). Newest first. {@code excludeOrderId} keeps an order from
      * matching itself (pass a random id when there is none).
      */
     @Query("""
@@ -134,10 +136,10 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
         WHERE o.patient.id = :patientId
           AND o.hospital.id = :hospitalId
           AND o.status IN :statuses
-          AND o.orderDatetime >= :since
+          AND o.createdAt >= :since
           AND o.id <> :excludeOrderId
           AND (o.labTestDefinitionId = :definitionId OR UPPER(TRIM(d.testCode)) = :testCode)
-        ORDER BY o.orderDatetime DESC
+        ORDER BY o.createdAt DESC
     """)
     List<LabOrder> findActiveSameTestSince(@Param("patientId") UUID patientId,
                                            @Param("hospitalId") UUID hospitalId,

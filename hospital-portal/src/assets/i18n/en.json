@@ -3740,7 +3740,8 @@
       "TITLE": "Possible duplicate order",
       "BODY": "This patient already has an active order for the same test here, placed in the last 24 hours. Check that a new order is really needed.",
       "BACK": "Back to the order",
-      "ORDER_ANYWAY": "Order anyway"
+      "ORDER_ANYWAY": "Order anyway",
+      "PLACED_ANYWAY": "The order was placed, but this patient already had an active order for the same test here: {{codes}}. Check that both are needed."
     },
     "ABNORMAL": "Abnormal",
     "ACCESSION": "Accession #",

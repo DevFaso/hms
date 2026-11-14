@@ -60,6 +60,11 @@ public class LabOrderDuplicateCheck {
         LabOrderStatus.ORDERED, LabOrderStatus.PENDING, LabOrderStatus.COLLECTED,
         LabOrderStatus.RECEIVED, LabOrderStatus.IN_PROGRESS));
 
+    /*
+     * The window is measured on the order's placement time (createdAt, set by
+     * the server's local clock in BaseEntity), so the cutoff uses that clock too.
+     */
+
     /** Placeholder for "no order to exclude" ({@code o.id <> :id} never matches it). */
     private static final UUID NO_ORDER = new UUID(0L, 0L);
 
@@ -105,8 +110,6 @@ public class LabOrderDuplicateCheck {
      * Whether the orderer acknowledged THESE duplicates: the ids they were
      * shown cover every match found now. A warning about other orders (a
      * stale one, or none) does not acknowledge a duplicate it never showed.
-     * {@link LabOrder#getOrderDatetime()} and every window here are the
-     * server's local time, as the entity defaults them.
      */
     public static boolean acknowledges(Collection<UUID> acknowledgedIds, List<LabOrder> matches) {
         if (acknowledgedIds == null || acknowledgedIds.isEmpty() || matches == null || matches.isEmpty()) {

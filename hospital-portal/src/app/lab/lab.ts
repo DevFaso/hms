@@ -181,6 +181,11 @@ export class LabComponent implements OnInit {
   private duplicateCheckSeq = 0;
   /** The patient, hospital and test the shown warning is about. */
   private duplicateWarningKey: string | null = null;
+  /**
+   * Rex on #1150: a create or update is on the wire. Closing the dialog
+   * releases a preview, never this, so a reopened form cannot send a second write.
+   */
+  private writeInFlight = false;
 
   // QA D820: void (entered in error)
   voidingOrder = signal<LabOrderResponse | null>(null);
@@ -767,8 +772,9 @@ export class LabComponent implements OnInit {
 
   closeModal(): void {
     this.showModal.set(false);
-    // A preview still in flight is abandoned with the form (its reply is ignored).
-    this.saving.set(false);
+    // A preview still in flight is abandoned with the form (its reply is
+    // ignored); a write in flight keeps the lock until it answers.
+    if (!this.writeInFlight) this.saving.set(false);
     this.clearDuplicateWarning();
   }
 
@@ -789,6 +795,7 @@ export class LabComponent implements OnInit {
    * clinician chooses "Order anyway". A failed check never blocks the order.
    */
   submitForm(): void {
+    if (this.writeInFlight) return;
     if (this.editing()) {
       this.saveOrder(null);
       return;
@@ -850,6 +857,8 @@ export class LabComponent implements OnInit {
   }
 
   private saveOrder(acknowledgedDuplicateOrderIds: string[] | null): void {
+    if (this.writeInFlight) return;
+    this.writeInFlight = true;
     this.saving.set(true);
     // The select is always sent, and "" is an explicit null rather than an
     // absent field: absent tells the API to leave the routing as it is, so
@@ -864,15 +873,18 @@ export class LabComponent implements OnInit {
       ? this.labService.updateOrder(this.editingId()!, payload)
       : this.labService.createOrder(payload);
     op.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => {
+      next: (saved) => {
+        this.writeInFlight = false;
         this.toast.success(
           this.translate.instant(this.editing() ? 'LAB.TOAST.UPDATED' : 'LAB.TOAST.CREATED'),
         );
+        this.warnOfDuplicateFoundOnPlacing(saved);
         this.closeModal();
         this.saving.set(false);
         this.loadOrders();
       },
       error: (err: unknown) => {
+        this.writeInFlight = false;
         // QA D1094: a refusal the server explains (a closed visit, another
         // patient's visit) is shown in the reader's language; only a failure
         // with no message falls back to the generic toast.
@@ -886,6 +898,20 @@ export class LabComponent implements OnInit {
         this.saving.set(false);
       },
     });
+  }
+
+  /**
+   * Rex on #1150: the server checks again when the order is placed. A
+   * duplicate it found that the clinician did not acknowledge (another order
+   * placed since the preview, or a preview that failed) is told, not dropped.
+   */
+  private warnOfDuplicateFoundOnPlacing(saved: LabOrderResponse | null | undefined): void {
+    if (!saved?.duplicateOfRecentOrder || saved.duplicateAcknowledged) return;
+    const codes = (saved.duplicateMatches ?? [])
+      .map((d) => d.labOrderCode ?? d.orderId)
+      .filter((c): c is string => !!c)
+      .join(', ');
+    this.toast.warning(this.translate.instant('LAB.DUPLICATE.PLACED_ANYWAY', { codes }));
   }
 
   /**
