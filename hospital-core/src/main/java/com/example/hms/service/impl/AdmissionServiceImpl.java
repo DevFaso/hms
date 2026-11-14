@@ -229,7 +229,21 @@ public class AdmissionServiceImpl implements AdmissionService {
         stayEncounters.openStayEncounter(admission);
         // QA D712: the emergency visit / same-day consultation ends with the admission.
         encounterAutoCompletion.completeVisitsThatLedToAdmission(admission);
+        // r53 (provisional, pending approval): a minor's labour admission opens a safeguarding review after the
+        // commit. It never blocks or delays this admission.
+        if (admission.getAdmissionType() == AdmissionType.LABOR_DELIVERY && minorLabourSafeguarding != null) {
+            minorLabourSafeguarding.onLabourAdmission(patient, hospital.getId(), admission.getAdmissionDateTime(),
+                com.example.hms.model.safeguarding.SafeguardingReview.SOURCE_ADMISSION, admission.getId(), callerId);
+        }
         return admissionMapper.toResponseDTO(admission);
+    }
+
+    /** r53: the safeguarding screen of a labour admission (setter-injected, like the audit service below). */
+    private com.example.hms.service.safeguarding.MinorLabourSafeguarding minorLabourSafeguarding;
+
+    @Autowired
+    void setMinorLabourSafeguarding(com.example.hms.service.safeguarding.MinorLabourSafeguarding minorLabourSafeguarding) {
+        this.minorLabourSafeguarding = minorLabourSafeguarding;
     }
 
     @Override

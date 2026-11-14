@@ -154,6 +154,68 @@ class AdmissionServiceImplTest {
         assertThat(service.admitPatient(request)).isEqualTo(response);
     }
 
+    // ── r53 (provisional rule 2026-11-14): a minor's labour admission is never blocked; it opens a review ──
+
+    private com.example.hms.service.safeguarding.SafeguardingReviewWorker r53SafeguardingWorker;
+
+    /** The real screen, with its after-commit worker mocked (no transaction here, so it runs at once). */
+    private void wireSafeguarding() {
+        r53SafeguardingWorker = org.mockito.Mockito.mock(com.example.hms.service.safeguarding.SafeguardingReviewWorker.class);
+        service.setMinorLabourSafeguarding(
+            new com.example.hms.service.safeguarding.MinorLabourSafeguarding(r53SafeguardingWorker));
+        when(admissionRepository.save(any(Admission.class))).thenAnswer(inv -> {
+            Admission saved = inv.getArgument(0);
+            saved.setId(admissionId);
+            return saved;
+        });
+        when(admissionMapper.toResponseDTO(any(Admission.class))).thenReturn(new AdmissionResponseDTO());
+    }
+
+    private AdmissionRequestDTO labourAdmissionOfAgedYears(int years) {
+        patient.setGender("FEMALE");
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(years).minusDays(1));
+        AdmissionRequestDTO request = midwifeRequest(com.example.hms.enums.AdmissionType.LABOR_DELIVERY);
+        request.setAdmissionDateTime(java.time.LocalDateTime.now());
+        return request;
+    }
+
+    @Test
+    void r53_aTenYearOldInLabourIsAdmittedAtOnceAndOpensAnUrgentSafeguardingReview() {
+        wireSafeguarding();
+        AdmissionRequestDTO request = labourAdmissionOfAgedYears(10);
+
+        assertThat(service.admitPatient(request)).isNotNull();
+
+        verify(admissionRepository).save(any(Admission.class));
+        org.mockito.ArgumentCaptor<com.example.hms.service.safeguarding.MinorLabourSafeguarding.LabourAdmission> opened =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.service.safeguarding.MinorLabourSafeguarding.LabourAdmission.class);
+        verify(r53SafeguardingWorker).open(opened.capture());
+        assertThat(opened.getValue().ageYears()).isEqualTo(10);
+        assertThat(opened.getValue().thresholdYears()).isEqualTo(13);
+        assertThat(opened.getValue().hospitalId()).isEqualTo(hospitalId);
+        assertThat(opened.getValue().sourceType()).isEqualTo("ADMISSION");
+        assertThat(opened.getValue().sourceId()).isEqualTo(admissionId);
+    }
+
+    @Test
+    void r53_theAdmissionStandsWhenTheSafeguardingReviewCannotBeOpened() {
+        wireSafeguarding();
+        org.mockito.Mockito.doThrow(new IllegalStateException("database down"))
+            .when(r53SafeguardingWorker).open(any());
+        AdmissionRequestDTO request = labourAdmissionOfAgedYears(10);
+
+        assertThat(service.admitPatient(request)).isNotNull();
+        verify(admissionRepository).save(any(Admission.class));
+        verify(stayEncounters).openStayEncounter(any(Admission.class));
+    }
+
+    @Test
+    void r53_aThirteenYearOldOpensNoReviewWithTheProvisionalDefault() {
+        wireSafeguarding();
+        assertThat(service.admitPatient(labourAdmissionOfAgedYears(13))).isNotNull();
+        verify(r53SafeguardingWorker, never()).open(any());
+    }
+
     @Test
     void midwifeIsRefusedAnyNonMaternityAdmission_policy2() {
         // Round 35 / D84: only a physician admits for the other types.

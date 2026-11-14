@@ -81,6 +81,8 @@ class TimelineEventRegistryGuardTest {
 
     /** Patient-owned entities that are not chronology events, each with why. Decide before adding one. */
     static final Map<String, String> NOT_EVENTS = Map.ofEntries(
+        // r53: never on the chronology, which reception, proxies and other hospitals' shared views can reach.
+        Map.entry("SafeguardingReview", "a confidential child-protection review, read only through SafeguardingReviewController"),
         Map.entry("Admission", "the stay is on the chronology as its INPATIENT encounter row (AdmissionStayEncounterService)"),
         Map.entry("TransferOrder", "a bed/ward move inside the stay; the stay's encounter row carries the stay"),
         Map.entry("DischargeApproval", "the nurse's request to discharge; the outcome is the discharge summary row"),
