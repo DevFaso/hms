@@ -33,6 +33,7 @@ import com.example.hms.repository.SocialHistoryRepository;
 import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.service.lab.LabResultCorrections;
 import com.example.hms.service.lab.PatientLabResultGrade;
+import com.example.hms.service.pharmacy.OrderedDrugIdentity;
 import com.example.hms.service.support.PrescriptionIssuance;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -113,6 +114,8 @@ public class AfterVisitSummarySections {
     private final FamilyHistoryRepository familyHistoryRepository;
     private final SocialHistoryRepository socialHistoryRepository;
     private final LabResultMapper labResultMapper;
+    /** Polish 2026-11-13: the booked follow-up's time, service and clinician. */
+    private final com.example.hms.repository.AppointmentRepository appointmentRepository;
 
     /**
      * Fills the content sections of {@code avs} from {@code encounter}, its
@@ -122,6 +125,8 @@ public class AfterVisitSummarySections {
      */
     public void fill(Encounter encounter, AfterVisitSummaryDTO avs, boolean deskReader) {
         fillContact(encounter, avs);
+        // The follow-up's time, service and clinician are what the desk books: not clinical.
+        fillFollowUpAppointment(encounter, avs);
         if (deskReader) {
             return;
         }
@@ -142,6 +147,80 @@ public class AfterVisitSummarySections {
         avs.setSurgicalHistory(surgicalHistory(patientId, hospitalId));
         avs.setFamilyHistory(familyHistory(patientId, hospitalId));
         avs.setSocialHistory(socialHistory(patientId, hospitalId));
+    }
+
+    /**
+     * Polish 2026-11-13: the follow-up booked from this visit. The check-out knows its id; a later
+     * read finds the patient's live appointment at the visit's hospital on the follow-up day,
+     * booked at or after the check-out. Nothing is shown when no such booking exists.
+     *
+     * <p>Rex P2 on #1145: only live bookings are candidates, so a cancelled or missed one never
+     * hides a live one booked after it. When several live bookings remain, the earliest start on
+     * that day is shown (the nearest one the patient has to come to).
+     */
+    private void fillFollowUpAppointment(Encounter encounter, AfterVisitSummaryDTO avs) {
+        UUID patientId = encounter.getPatient() != null ? encounter.getPatient().getId() : null;
+        UUID hospitalId = encounter.getHospital() != null ? encounter.getHospital().getId() : null;
+        if (patientId == null || hospitalId == null) {
+            return;
+        }
+        com.example.hms.model.Appointment booked = null;
+        if (avs.getFollowUpAppointmentId() != null) {
+            booked = appointmentRepository.findById(avs.getFollowUpAppointmentId())
+                .filter(AfterVisitSummarySections::live)
+                .orElse(null);
+        } else {
+            java.time.LocalDate day = followUpDay(avs.getFollowUpAppointmentDate());
+            LocalDateTime checkout = encounter.getCheckoutTimestamp();
+            if (day != null && checkout != null) {
+                booked = appointmentRepository.findByPatient_IdAndHospital_IdAndAppointmentDateBetween(
+                        patientId, hospitalId, day, day).stream()
+                    .filter(a -> a.getCreatedAt() != null && !a.getCreatedAt().isBefore(checkout))
+                    .filter(AfterVisitSummarySections::live)
+                    .min(java.util.Comparator.comparing(com.example.hms.model.Appointment::getStartTime,
+                        java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
+                    .orElse(null);
+            }
+        }
+        // Only the visit's own patient at the visit's own hospital.
+        if (booked == null || booked.getPatient() == null || !patientId.equals(booked.getPatient().getId())
+                || booked.getHospital() == null || !hospitalId.equals(booked.getHospital().getId())) {
+            return;
+        }
+        if (booked.getAppointmentDate() != null) {
+            avs.setFollowUpAppointmentDate(booked.getAppointmentDate().toString());
+        }
+        if (booked.getStartTime() != null) {
+            avs.setFollowUpAppointmentTime(
+                booked.getStartTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
+        }
+        avs.setFollowUpDepartmentName(
+            booked.getDepartment() != null ? trimToNull(booked.getDepartment().getName()) : null);
+        avs.setFollowUpClinicianName(staffName(booked.getStaff()));
+    }
+
+    /** A booking that still holds its slot: not cancelled, not a no-show. */
+    private static boolean live(com.example.hms.model.Appointment appointment) {
+        return com.example.hms.enums.AppointmentStatus.holdsSlot(appointment.getStatus());
+    }
+
+    private static java.time.LocalDate followUpDay(String value) {
+        String day = trimToNull(value);
+        if (day == null) {
+            return null;
+        }
+        try {
+            return java.time.LocalDate.parse(day.length() > 10 ? day.substring(0, 10) : day);
+        } catch (java.time.format.DateTimeParseException ex) {
+            return null;
+        }
+    }
+
+    private static String staffName(com.example.hms.model.Staff staff) {
+        if (staff == null) {
+            return null;
+        }
+        return firstNonBlank(staff.getFullName(), staff.getName());
     }
 
     private static void fillContact(Encounter encounter, AfterVisitSummaryDTO avs) {
@@ -212,6 +291,8 @@ public class AfterVisitSummarySections {
         if (chosen == null) {
             return null;
         }
+        java.time.LocalDate dateOfBirth =
+            encounter.getPatient() != null ? encounter.getPatient().getDateOfBirth() : null;
         return AfterVisitSummaryDTO.VitalSignsResponse.builder()
             .recordedAt(chosen.getRecordedAt())
             .temperatureCelsius(chosen.getTemperatureCelsius())
@@ -224,8 +305,20 @@ public class AfterVisitSummarySections {
             .weightKg(chosen.getWeightKg())
             .heightCm(chosen.getHeightCm())
             .painScore(chosen.getPainScore())
+            .bmi(bmi(chosen.getWeightKg(), chosen.getHeightCm()))
+            // Per value, by the rules that judged the set: a value no rule judges has no flag.
+            .valueFlags(com.example.hms.service.vitals.VitalSignJudgement.valueFlags(chosen, dateOfBirth))
             .flagged(chosen.isClinicallySignificant())
             .build();
+    }
+
+    /** Weight over height squared, one decimal; only when both were recorded. Arithmetic only, no threshold. */
+    static Double bmi(Double weightKg, Double heightCm) {
+        if (weightKg == null || heightCm == null || weightKg <= 0 || heightCm <= 0) {
+            return null;
+        }
+        double metres = heightCm / 100.0;
+        return Math.round(weightKg / (metres * metres) * 10.0) / 10.0;
     }
 
     /**
@@ -343,15 +436,76 @@ public class AfterVisitSummarySections {
             .stream()
             .filter(a -> a.getActualDischargeDateTime() != null)
             .toList();
-        return issued.stream()
+        List<Prescription> active = issued.stream()
             .filter(rx -> MedicationCourseStatus.isActive(rx, closedStays))
-            .map(rx -> AfterVisitSummaryDTO.CurrentMedication.builder()
+            .filter(rx -> firstNonBlank(rx.getMedicationDisplayName(), rx.getMedicationName()) != null)
+            .toList();
+        List<String> keys = drugKeys(active);
+        List<AfterVisitSummaryDTO.CurrentMedication> lines = new ArrayList<>();
+        for (int i = 0; i < active.size(); i++) {
+            Prescription rx = active.get(i);
+            LocalDateTime started = rx.getSignedAt() != null ? rx.getSignedAt() : rx.getCreatedAt();
+            lines.add(AfterVisitSummaryDTO.CurrentMedication.builder()
                 .name(firstNonBlank(rx.getMedicationDisplayName(), rx.getMedicationName()))
                 .dosage(trimToNull(rx.getDosage()))
                 .frequency(trimToNull(rx.getFrequency()))
-                .build())
-            .filter(m -> m.getName() != null)
-            .toList();
+                .startDate(started != null ? started.toLocalDate() : null)
+                .prescriberName(staffName(rx.getSignedBy() != null ? rx.getSignedBy() : rx.getStaff()))
+                .drugKey(keys.get(i))
+                .build());
+        }
+        return lines;
+    }
+
+    /** A strength written into a drug's name ("500 mg", "1 g", "125 mg/5 ml", "0,5 %"). */
+    private static final java.util.regex.Pattern STRENGTH = java.util.regex.Pattern.compile(
+        "\\b\\d+(?:[.,]\\d+)?\\s*(?:mg|g|mcg|\u00b5g|ug|ml|l|ui|iu|%)"
+            + "(?:\\s*/\\s*\\d*(?:[.,]\\d+)?\\s*(?:mg|g|ml|l))?(?!\\p{L})",
+        java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
+
+    /**
+     * User decision 2026-11-13 (option a): which active lines are the same drug, by the identity the
+     * duplicate-order check reads ({@code DuplicateMedicationOrderRule}): the same catalogue item,
+     * else the same name in {@link OrderedDrugIdentity#spellingForm}, the strength written into the
+     * name left out. Lines joined by either are one drug, and share one key. No dose is summed.
+     */
+    static List<String> drugKeys(List<Prescription> active) {
+        int n = active.size();
+        int[] group = new int[n];
+        for (int i = 0; i < n; i++) {
+            group[i] = i;
+        }
+        List<String> names = active.stream().map(AfterVisitSummarySections::nameKey).toList();
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < i; j++) {
+                UUID a = active.get(i).getMedicationCatalogItemId();
+                UUID b = active.get(j).getMedicationCatalogItemId();
+                boolean sameItem = a != null && a.equals(b);
+                boolean sameName = !names.get(i).isEmpty() && names.get(i).equals(names.get(j));
+                if (sameItem || sameName) {
+                    int from = group[i];
+                    int to = group[j];
+                    for (int k = 0; k < n; k++) {
+                        if (group[k] == from) {
+                            group[k] = to;
+                        }
+                    }
+                }
+            }
+        }
+        List<String> keys = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            keys.add("drug-" + group[i]);
+        }
+        return keys;
+    }
+
+    private static String nameKey(Prescription rx) {
+        String name = firstNonBlank(rx.getMedicationName(), rx.getMedicationDisplayName());
+        if (name == null) {
+            return "";
+        }
+        return OrderedDrugIdentity.spellingForm(STRENGTH.matcher(name).replaceAll(" ")).trim();
     }
 
     /** The patient's diagnoses recorded at this hospital, less one removed as entered in error (QA D1240). */

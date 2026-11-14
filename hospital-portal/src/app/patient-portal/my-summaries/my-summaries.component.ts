@@ -7,7 +7,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { AfterVisitSummary as VisitDetail } from '../../services/encounter.service';
 import {
   VisitSummarySectionsComponent,
-  hasContentSections,
+  hasDocumentSections,
 } from '../../encounters/visit-summary-sections/visit-summary-sections.component';
 
 @Component({
@@ -74,9 +74,26 @@ export class MySummariesComponent implements OnInit {
 
   detailOf(id: string): VisitDetail | null {
     const detail = this.details()[id] ?? null;
-    return hasContentSections(detail) || detail?.hospitalPhone || detail?.departmentPhone
-      ? detail
-      : null;
+    return hasDocumentSections(detail) ? detail : null;
+  }
+
+  /**
+   * Polish 2026-11-13: the visit's document already shows this part (the same
+   * stored text), so the card does not repeat it underneath.
+   */
+  shownInDetail(
+    id: string,
+    field:
+      | 'dischargeDiagnoses'
+      | 'prescriptionSummary'
+      | 'followUpInstructions'
+      | 'patientEducationMaterials'
+      | 'followUpAppointmentDate',
+  ): boolean {
+    const detail = this.detailOf(id);
+    if (!detail) return false;
+    const value = detail[field];
+    return Array.isArray(value) ? value.length > 0 : !!value;
   }
 
   /** Remove the complete plan suffix appended by CheckOutMapper once it has its own section. */

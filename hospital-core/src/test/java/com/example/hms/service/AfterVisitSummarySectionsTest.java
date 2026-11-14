@@ -81,10 +81,12 @@ class AfterVisitSummarySectionsTest {
     private final FamilyHistoryRepository families = mock(FamilyHistoryRepository.class);
     private final SocialHistoryRepository socials = mock(SocialHistoryRepository.class);
     private final LabResultMapper labResultMapper = new LabResultMapper();
+    private final com.example.hms.repository.AppointmentRepository appointments =
+        mock(com.example.hms.repository.AppointmentRepository.class);
 
     private final AfterVisitSummarySections sections = new AfterVisitSummarySections(vitals, labOrders, labResults,
         imagingOrders, imagingReports, allergies, prescriptions, admissions, problems, surgeries, families, socials,
-        labResultMapper);
+        labResultMapper, appointments);
 
     private final UUID hospitalId = UUID.randomUUID();
     private final UUID patientId = UUID.randomUUID();
@@ -493,6 +495,195 @@ class AfterVisitSummarySectionsTest {
             }
         }
         assertThat(related).as("the summary reads this patient's chart only").isEmpty();
+    }
+
+    /* ── Polish 2026-11-13 ── */
+
+    @Test
+    @DisplayName("polish: each value the vital-sign rules judge is flagged; 142/88 and an unjudged weight are not")
+    void vitalValuesAreFlaggedOnlyByTheExistingRules() {
+        PatientVitalSign set = new PatientVitalSign();
+        set.setSystolicBpMmHg(142);
+        set.setDiastolicBpMmHg(88);
+        set.setHeartRateBpm(72);
+        set.setSpo2Percent(86);
+        set.setWeightKg(70.0);
+        set.setHeightCm(165.0);
+        when(vitals.findObservationSetsWithinRange(eq(patientId), eq(hospitalId), any(), any(), any()))
+            .thenReturn(List.of(set));
+
+        AfterVisitSummaryDTO.VitalSignsResponse shown = fill().getVitalSigns();
+
+        assertThat(shown.getValueFlags()).containsExactly(java.util.Map.entry("spo2Percent", "LOW"));
+        assertThat(shown.getBmi()).isEqualTo(25.7);
+    }
+
+    @Test
+    @DisplayName("polish: no BMI without both a weight and a height")
+    void noBmiWithoutBothMeasures() {
+        assertThat(AfterVisitSummarySections.bmi(70.0, null)).isNull();
+        assertThat(AfterVisitSummarySections.bmi(null, 165.0)).isNull();
+        assertThat(AfterVisitSummarySections.bmi(70.0, 165.0)).isEqualTo(25.7);
+    }
+
+    @Test
+    @DisplayName("polish: each medicine carries its start date and its prescriber")
+    void medicinesCarryTheirStartAndPrescriber() {
+        Prescription rx = prescription("Amlodipine", PrescriptionStatus.SIGNED);
+        rx.setSignedAt(LocalDateTime.of(2026, 11, 12, 10, 0));
+        com.example.hms.model.Staff signer = new com.example.hms.model.Staff();
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setFirstName("Issa");
+        user.setLastName("Kaboré");
+        signer.setUser(user);
+        rx.setSignedBy(signer);
+        when(prescriptions.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(rx));
+
+        AfterVisitSummaryDTO.CurrentMedication shown = fill().getCurrentMedications().get(0);
+
+        assertThat(shown.getStartDate()).isEqualTo(LocalDate.of(2026, 11, 12));
+        assertThat(shown.getPrescriberName()).isEqualTo("Issa Kaboré");
+    }
+
+    /**
+     * User decision 2026-11-13 (option a): the active lines of one drug share a
+     * key, by the catalogue item or by the name in OrderedDrugIdentity's
+     * spelling form with the strength left out; two different drugs do not.
+     */
+    @Test
+    @DisplayName("option a: three active paracetamol orders share one drug key; two different drugs do not")
+    void activeLinesOfOneDrugShareAKey() {
+        UUID paracetamolItem = UUID.randomUUID();
+        Prescription plain = prescription("Paracétamol", PrescriptionStatus.SIGNED);
+        Prescription withStrength = prescription("PARACETAMOL 500 mg", PrescriptionStatus.SIGNED);
+        Prescription brand = prescription("Doliprane", PrescriptionStatus.SIGNED);
+        brand.setMedicationCatalogItemId(paracetamolItem);
+        withStrength.setMedicationCatalogItemId(paracetamolItem);
+        Prescription amlodipine = prescription("Amlodipine 5 mg", PrescriptionStatus.SIGNED);
+        Prescription metformin = prescription("Metformine", PrescriptionStatus.SIGNED);
+
+        List<String> keys = AfterVisitSummarySections.drugKeys(
+            List.of(plain, withStrength, brand, amlodipine, metformin));
+
+        assertThat(keys.get(0)).isEqualTo(keys.get(1)).isEqualTo(keys.get(2));
+        assertThat(keys.get(3)).isNotEqualTo(keys.get(0)).isNotEqualTo(keys.get(4));
+        assertThat(keys.get(4)).isNotEqualTo(keys.get(0));
+    }
+
+    @Test
+    @DisplayName("option a: a combination is not the drug alone")
+    void aCombinationIsNotTheDrugAlone() {
+        List<String> keys = AfterVisitSummarySections.drugKeys(List.of(
+            prescription("Paracétamol", PrescriptionStatus.SIGNED),
+            prescription("Paracétamol + codéine", PrescriptionStatus.SIGNED)));
+        assertThat(keys.get(0)).isNotEqualTo(keys.get(1));
+    }
+
+    @Test
+    @DisplayName("polish: the follow-up booked at check-out shows its time, service and clinician")
+    void theBookedFollowUpShowsItsTimeServiceAndClinician() {
+        com.example.hms.model.Appointment booked = followUp(patientId, hospitalId,
+            com.example.hms.enums.AppointmentStatus.PENDING);
+        when(appointments.findById(booked.getId())).thenReturn(java.util.Optional.of(booked));
+        AfterVisitSummaryDTO avs = new AfterVisitSummaryDTO();
+        avs.setFollowUpAppointmentId(booked.getId());
+
+        sections.fill(encounter, avs, true);
+
+        assertThat(avs.getFollowUpAppointmentDate()).isEqualTo("2026-12-10");
+        assertThat(avs.getFollowUpAppointmentTime()).isEqualTo("09:30");
+        assertThat(avs.getFollowUpDepartmentName()).isEqualTo("Cardiologie");
+        assertThat(avs.getFollowUpClinicianName()).isEqualTo("Issa Kaboré");
+    }
+
+    @Test
+    @DisplayName("polish: a later read finds the booking on the follow-up day; another hospital's or a cancelled one is not shown")
+    void aLaterReadFindsOnlyThisVisitsLiveBooking() {
+        com.example.hms.model.Appointment elsewhere = followUp(patientId, UUID.randomUUID(),
+            com.example.hms.enums.AppointmentStatus.PENDING);
+        com.example.hms.model.Appointment cancelled = followUp(patientId, hospitalId,
+            com.example.hms.enums.AppointmentStatus.CANCELLED);
+        when(appointments.findByPatient_IdAndHospital_IdAndAppointmentDateBetween(patientId, hospitalId,
+            LocalDate.of(2026, 12, 10), LocalDate.of(2026, 12, 10))).thenReturn(List.of(elsewhere));
+        AfterVisitSummaryDTO avs = new AfterVisitSummaryDTO();
+        avs.setFollowUpAppointmentDate("2026-12-10");
+        sections.fill(encounter, avs, true);
+        assertThat(avs.getFollowUpAppointmentTime()).isNull();
+
+        when(appointments.findByPatient_IdAndHospital_IdAndAppointmentDateBetween(patientId, hospitalId,
+            LocalDate.of(2026, 12, 10), LocalDate.of(2026, 12, 10))).thenReturn(List.of(cancelled));
+        sections.fill(encounter, avs, true);
+        assertThat(avs.getFollowUpAppointmentTime()).isNull();
+
+        com.example.hms.model.Appointment live = followUp(patientId, hospitalId,
+            com.example.hms.enums.AppointmentStatus.SCHEDULED);
+        when(appointments.findByPatient_IdAndHospital_IdAndAppointmentDateBetween(patientId, hospitalId,
+            LocalDate.of(2026, 12, 10), LocalDate.of(2026, 12, 10))).thenReturn(List.of(live));
+        sections.fill(encounter, avs, true);
+        assertThat(avs.getFollowUpAppointmentTime()).isEqualTo("09:30");
+    }
+
+    @Test
+    @DisplayName("Rex P2 #1145: a cancelled booking never hides a live one; the earliest live start is shown")
+    void aCancelledBookingNeverHidesALiveOne() {
+        com.example.hms.model.Appointment cancelled = followUp(patientId, hospitalId,
+            com.example.hms.enums.AppointmentStatus.CANCELLED);
+        cancelled.setStartTime(java.time.LocalTime.of(8, 0));
+        com.example.hms.model.Appointment later = followUp(patientId, hospitalId,
+            com.example.hms.enums.AppointmentStatus.SCHEDULED);
+        later.setStartTime(java.time.LocalTime.of(11, 0));
+        com.example.hms.model.Appointment nearest = followUp(patientId, hospitalId,
+            com.example.hms.enums.AppointmentStatus.PENDING);
+        nearest.setStartTime(java.time.LocalTime.of(9, 30));
+        when(appointments.findByPatient_IdAndHospital_IdAndAppointmentDateBetween(patientId, hospitalId,
+            LocalDate.of(2026, 12, 10), LocalDate.of(2026, 12, 10))).thenReturn(List.of(cancelled, later, nearest));
+        AfterVisitSummaryDTO avs = new AfterVisitSummaryDTO();
+        avs.setFollowUpAppointmentDate("2026-12-10");
+
+        sections.fill(encounter, avs, true);
+
+        assertThat(avs.getFollowUpAppointmentTime()).isEqualTo("09:30");
+    }
+
+    @Test
+    @DisplayName("Rex P2 #1145: a booking cancelled since the check-out shows no time, service or clinician")
+    void aCancelledBookingByIdShowsNothing() {
+        com.example.hms.model.Appointment cancelled = followUp(patientId, hospitalId,
+            com.example.hms.enums.AppointmentStatus.CANCELLED);
+        when(appointments.findById(cancelled.getId())).thenReturn(java.util.Optional.of(cancelled));
+        AfterVisitSummaryDTO avs = new AfterVisitSummaryDTO();
+        avs.setFollowUpAppointmentId(cancelled.getId());
+
+        sections.fill(encounter, avs, true);
+
+        assertThat(avs.getFollowUpAppointmentTime()).isNull();
+        assertThat(avs.getFollowUpClinicianName()).isNull();
+    }
+
+    private com.example.hms.model.Appointment followUp(UUID patient, UUID hospital,
+                                                       com.example.hms.enums.AppointmentStatus status) {
+        Patient p = new Patient();
+        p.setId(patient);
+        Hospital h = new Hospital();
+        h.setId(hospital);
+        Department cardiology = new Department();
+        cardiology.setName("Cardiologie");
+        com.example.hms.model.Staff staff = new com.example.hms.model.Staff();
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setFirstName("Issa");
+        user.setLastName("Kaboré");
+        staff.setUser(user);
+        com.example.hms.model.Appointment a = new com.example.hms.model.Appointment();
+        a.setId(UUID.randomUUID());
+        a.setPatient(p);
+        a.setHospital(h);
+        a.setDepartment(cardiology);
+        a.setStaff(staff);
+        a.setStatus(status);
+        a.setAppointmentDate(LocalDate.of(2026, 12, 10));
+        a.setStartTime(java.time.LocalTime.of(9, 30));
+        a.setCreatedAt(encounter.getCheckoutTimestamp().plusMinutes(1));
+        return a;
     }
 
     @Test

@@ -75,8 +75,23 @@ public class CheckOutMapper {
             builder.followUpAppointmentDate(request.getFollowUpAppointment().getPreferredDate());
         }
 
+        // Polish 2026-11-13: the identity band (date of birth, the MRN at the visit's hospital).
+        if (encounter.getPatient() != null) {
+            builder.patientDateOfBirth(encounter.getPatient().getDateOfBirth())
+                   .patientMrn(encounter.getHospital() != null
+                       ? encounter.getPatient().getMrnForHospital(encounter.getHospital().getId()) : null);
+        }
+        builder.inpatientStay(encounter.getAdmissionId() != null
+            || encounter.getEncounterType() == com.example.hms.enums.EncounterType.INPATIENT);
+
         AfterVisitSummaryDTO summary = builder.build();
-        fillFromSignedNote(summary, encounter.getLatestSignedEncounterNote());
+        EncounterNote signed = encounter.getLatestSignedEncounterNote();
+        fillFromSignedNote(summary, signed);
+        // Polish 2026-11-13: "Signé par ... le ..." from the latest signed note.
+        if (signed != null && signed.getSignedAt() != null) {
+            summary.setSignedAt(signed.getSignedAt());
+            summary.setSignedByName(trimToNull(signed.getSignedByName()));
+        }
         // Provisional platform rule: "not finalised" while a note of the visit waits for its signature.
         summary.setPendingSignature(encounter.hasNoteAwaitingSignature());
         return summary;

@@ -207,29 +207,85 @@ public class VitalSignJudgement {
      * or a NEWS2 total of 5 or more where NEWS2 applies (P3 #25b).
      */
     static boolean outsideAgeRanges(PatientVitalSign v) {
-        return isOutOfRange(v.getHeartRateBpm(), 40, 150)
-            || isBelow(v.getSpo2Percent(), 90)
-            || isOutOfRange(v.getRespiratoryRateBpm(), 8, 30)
-            || isOutOfRange(v.getSystolicBpMmHg(), 80, 200)
-            || isAbove(v.getDiastolicBpMmHg(), 120)
-            || isOutOfDoubleRange(v.getTemperatureCelsius(), 35.0, 40.0)
-            || isOutOfRange(v.getBloodGlucoseMgDl(), 50, 400)
+        return !perVitalFlags(v).isEmpty()
             || (NewsScoreCalculator.applies(v) && NewsScoreCalculator.score(v).total() >= 5);
     }
 
-    private static boolean isOutOfRange(Integer value, int min, int max) {
-        return value != null && (value < min || value > max);
+    /** A value below its rule's floor. */
+    public static final String LOW = "LOW";
+    /** A value above its rule's ceiling. */
+    public static final String HIGH = "HIGH";
+    /** A newborn finding: the newborn rules give no direction to show. */
+    public static final String ABNORMAL = "ABNORMAL";
+
+    /**
+     * Polish 2026-11-13: which values of a set the rules above judge out of range, for a reader
+     * that shows each value (the after-visit summary). Keyed by the vital's field name. The same
+     * rules as {@link #judge}: the newborn rules' URGENT and CAUTION findings under 28 days of life,
+     * else the per-vital limits. A value no rule judges (a weight, a height, a pain score, a
+     * diastolic below any limit) never gets an entry; a NEWS2 total flags the set, not a value.
+     */
+    public static java.util.Map<String, String> valueFlags(PatientVitalSign v, LocalDate dateOfBirth) {
+        if (v == null) {
+            return java.util.Map.of();
+        }
+        LocalDateTime at = v.getRecordedAt() != null ? v.getRecordedAt() : LocalDateTime.now();
+        if (!isNewborn(dateOfBirth, at)) {
+            return perVitalFlags(v);
+        }
+        // Preterm and a persistent rate only change reference notices (INFO), which flag nothing here.
+        NewbornAlertRules.Reading reading = new NewbornAlertRules.Reading(v.getTemperatureCelsius(),
+            v.getHeartRateBpm(), v.getRespiratoryRateBpm(), v.getSpo2Percent(), v.getBloodGlucoseMgDl(), null,
+            v.getSystolicBpMmHg(), v.getDiastolicBpMmHg(), NewbornAlertRules.hoursSinceBirth(null, dateOfBirth, at),
+            false, false);
+        java.util.Map<String, String> flags = new java.util.LinkedHashMap<>();
+        for (NewbornAlertRules.Finding f : NewbornAlertRules.evaluate(reading)) {
+            if (f.severity() != NewbornAlertSeverity.URGENT && f.severity() != NewbornAlertSeverity.CAUTION) {
+                continue;
+            }
+            for (String field : newbornFields(f)) {
+                flags.put(field, ABNORMAL);
+            }
+        }
+        return flags;
     }
 
-    private static boolean isBelow(Integer value, int min) {
-        return value != null && value < min;
+    /** The value(s) a newborn finding is about, from its type and, for the heart, its code. */
+    private static List<String> newbornFields(NewbornAlertRules.Finding f) {
+        return switch (f.type()) {
+            case THERMOREGULATION -> List.of("temperatureCelsius");
+            case RESPIRATORY -> List.of("respiratoryRateBpm");
+            case OXYGENATION -> List.of("spo2Percent");
+            case GLUCOSE -> List.of("bloodGlucoseMgDl");
+            case CARDIOVASCULAR -> f.code() != null && f.code().contains("pressure")
+                ? List.of("systolicBpMmHg", "diastolicBpMmHg") : List.of("heartRateBpm");
+            default -> List.of();
+        };
     }
 
-    private static boolean isAbove(Integer value, int max) {
-        return value != null && value > max;
+    /** The nurse station's per-vital limits, one entry per value outside them. */
+    private static java.util.Map<String, String> perVitalFlags(PatientVitalSign v) {
+        java.util.Map<String, String> flags = new java.util.LinkedHashMap<>();
+        range(flags, "heartRateBpm", v.getHeartRateBpm(), 40, 150);
+        if (v.getSpo2Percent() != null && v.getSpo2Percent() < 90) {
+            flags.put("spo2Percent", LOW);
+        }
+        range(flags, "respiratoryRateBpm", v.getRespiratoryRateBpm(), 8, 30);
+        range(flags, "systolicBpMmHg", v.getSystolicBpMmHg(), 80, 200);
+        if (v.getDiastolicBpMmHg() != null && v.getDiastolicBpMmHg() > 120) {
+            flags.put("diastolicBpMmHg", HIGH);
+        }
+        Double temperature = v.getTemperatureCelsius();
+        if (temperature != null && (temperature < 35.0 || temperature > 40.0)) {
+            flags.put("temperatureCelsius", temperature < 35.0 ? LOW : HIGH);
+        }
+        range(flags, "bloodGlucoseMgDl", v.getBloodGlucoseMgDl(), 50, 400);
+        return flags;
     }
 
-    private static boolean isOutOfDoubleRange(Double value, double min, double max) {
-        return value != null && (value < min || value > max);
+    private static void range(java.util.Map<String, String> flags, String field, Integer value, int min, int max) {
+        if (value != null && (value < min || value > max)) {
+            flags.put(field, value < min ? LOW : HIGH);
+        }
     }
 }
