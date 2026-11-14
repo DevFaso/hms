@@ -304,7 +304,8 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     }
 
     /** How far back a recorded birth still opens postpartum care (QA D517). */
-    static final int POSTPARTUM_DELIVERY_LOOKBACK_DAYS = 365;
+    static final int POSTPARTUM_DELIVERY_LOOKBACK_DAYS =
+        com.example.hms.service.maternity.PostpartumSevereHypertension.AFTER_BIRTH_LOOKBACK_DAYS;
 
     /**
      * QA D517: a postpartum observation was accepted for a woman with no
@@ -503,6 +504,17 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
                 "Infection Screening"));
             escalateMonitoring = true;
             infectionAlert = true;
+        }
+
+        // QA D1890 (provisional, 2026-11-14): severe blood pressure after birth. The thresholds live in
+        // the shared evaluator; this path is after birth by construction (requireRecordedDelivery, and
+        // an observation before the birth is refused). It warns: the observation is saved either way.
+        if (com.example.hms.service.maternity.PostpartumSevereHypertension.isSevere(
+                observation.getSystolicBpMmHg(), observation.getDiastolicBpMmHg())) {
+            alerts.add(buildAlert(PostpartumAlertType.HYPERTENSION, PostpartumAlertSeverity.URGENT,
+                "postpartum-severe-hypertension",
+                alertText("postpartum-severe-hypertension"),
+                "Blood Pressure"));
         }
 
         if (observation.getPainScore() != null && observation.getPainScore() >= PAIN_ALERT_THRESHOLD) {

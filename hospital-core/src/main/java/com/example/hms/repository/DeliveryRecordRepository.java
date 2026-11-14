@@ -24,6 +24,10 @@ public interface DeliveryRecordRepository extends JpaRepository<DeliveryRecord, 
 
     boolean existsByPatient_IdAndBirthDateTimeGreaterThanEqual(UUID patientId, java.time.LocalDateTime since);
 
+    /** D1890 (provisional): a birth recorded for this mother in [from, to], at any hospital. */
+    boolean existsByPatient_IdAndBirthDateTimeBetween(UUID patientId, java.time.LocalDateTime from,
+        java.time.LocalDateTime to);
+
     /** QA D1067: the delivery that ended the pregnancy a maternal history dates (at or after its start). */
     Optional<DeliveryRecord> findFirstByPatient_IdAndHospital_IdAndBirthDateTimeGreaterThanEqualOrderByBirthDateTimeDesc(
         UUID patientId, UUID hospitalId, java.time.LocalDateTime since);

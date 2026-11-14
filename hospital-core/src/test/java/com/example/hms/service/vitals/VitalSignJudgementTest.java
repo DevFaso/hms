@@ -45,10 +45,13 @@ class VitalSignJudgementTest {
     private final NewbornAssessmentRepository assessments = mock(NewbornAssessmentRepository.class);
     private final News2EscalationService news2 = mock(News2EscalationService.class);
     private final NotificationService notifications = mock(NotificationService.class);
+    private final com.example.hms.repository.DeliveryRecordRepository deliveries =
+        mock(com.example.hms.repository.DeliveryRecordRepository.class);
     private final com.example.hms.repository.DeliveryNewbornRepository deliveryNewborns =
         mock(com.example.hms.repository.DeliveryNewbornRepository.class);
     private final VitalSignJudgement judgement = new VitalSignJudgement(assessments, news2, notifications,
-        com.example.hms.i18n.TestMessageSources.bundles(), deliveryNewborns);
+        com.example.hms.i18n.TestMessageSources.bundles(), deliveryNewborns,
+        new com.example.hms.service.maternity.PostpartumSevereHypertension(deliveries));
 
     @AfterEach
     void resetLocale() {
@@ -293,5 +296,68 @@ class VitalSignJudgementTest {
         if (!flags.isEmpty()) {
             assertThat(vital.isClinicallySignificant()).isTrue();
         }
+    }
+    // ---- QA D1890 (provisional, 2026-11-14): severe blood pressure after a recorded birth ----
+
+    private Patient motherDeliveredBefore(boolean delivered) {
+        Patient mother = new Patient();
+        mother.setId(UUID.randomUUID());
+        mother.setFirstName("Awa");
+        mother.setLastName("Sawadogo");
+        mother.setDateOfBirth(LocalDate.of(1995, 3, 1));
+        when(deliveries.existsByPatient_IdAndBirthDateTimeBetween(eq(mother.getId()), any(), eq(NOW)))
+            .thenReturn(delivered);
+        return mother;
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}/{1} after birth -> warning {2}")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "162,112,true", "164,114,true", "160,80,true", "120,110,true", "159,109,false"
+    })
+    @DisplayName("D1890: a nurse-station set after birth is judged by the shared postpartum rule")
+    void aSevereSetAfterBirthIsSignificantAndWarns(int systolic, int diastolic, boolean warns) {
+        LocaleContextHolder.setLocale(Locale.FRENCH);
+        PatientVitalSign vital = set(motherDeliveredBefore(true)).systolicBpMmHg(systolic).diastolicBpMmHg(diastolic).build();
+
+        VitalSignJudgement.Judgement j = judgement.judge(vital);
+
+        assertThat(j.postpartumSevereHypertension()).isEqualTo(warns);
+        assertThat(vital.isClinicallySignificant()).isEqualTo(warns);
+        List<NewbornVitalAlertDTO> alerts = judgement.postpartumAlerts(j);
+        if (warns) {
+            assertThat(alerts).singleElement().satisfies(a -> {
+                assertThat(a.getCode()).isEqualTo("postpartum-severe-hypertension");
+                assertThat(a.getSeverity()).isEqualTo("URGENT");
+                assertThat(a.getType()).isEqualTo("HYPERTENSION");
+                assertThat(a.getMessage()).contains("avis obstétrical urgent requis");
+            });
+        } else {
+            assertThat(alerts).isEmpty();
+        }
+        assertThat(judgement.alerts(j)).as("never a newborn warning").isEmpty();
+    }
+
+    @Test
+    void withNoRecordedBirthTheSameSetRaisesNoPostpartumWarning() {
+        PatientVitalSign vital = set(motherDeliveredBefore(false)).systolicBpMmHg(164).diastolicBpMmHg(114).build();
+        VitalSignJudgement.Judgement j = judgement.judge(vital);
+        assertThat(j.postpartumSevereHypertension()).isFalse();
+        assertThat(judgement.postpartumAlerts(j)).isEmpty();
+    }
+
+    @Test
+    void thePostpartumWarningNotifiesTheRecorderAndThePhysicians() {
+        Patient mother = motherDeliveredBefore(true);
+        UUID hospitalId = UUID.randomUUID();
+        when(news2.recipients(mother.getId(), hospitalId, "nurse_a", null))
+            .thenReturn(new LinkedHashSet<>(List.of("nurse_a", "dr_a")));
+        PatientVitalSign vital = set(mother).systolicBpMmHg(164).diastolicBpMmHg(114).build();
+
+        judgement.escalate(vital, judgement.judge(vital), mother.getId(), hospitalId, "nurse_a", null);
+
+        verify(notifications, times(2)).createNotification(eq("postpartum.alert.notification"), any(),
+            anyString(), eq("MATERNITY_ALERT"));
+        verify(notifications).createNotification(eq("postpartum.alert.notification"), any(), eq("dr_a"),
+            eq("MATERNITY_ALERT"));
     }
 }

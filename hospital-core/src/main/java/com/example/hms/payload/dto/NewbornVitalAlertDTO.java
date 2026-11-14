@@ -10,6 +10,9 @@ import lombok.NoArgsConstructor;
  * newborn assessment (nurse station, triage, the vitals API). The message is rendered
  * in the recorder's language; the code is the newborn assessment's own alert code.
  * The bands behind it are PROVISIONAL, pending the neonatal lead's approval.
+ *
+ * <p>QA D1890: the same shape carries the postpartum severe-blood-pressure warning
+ * ({@code postpartumAlerts}, code {@code postpartum-severe-hypertension}, type HYPERTENSION).
  */
 @Data
 @Builder

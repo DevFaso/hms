@@ -19,4 +19,7 @@ public class NurseVitalCaptureResponseDTO {
     private boolean clinicallySignificant;
     /** The newborn warnings on this set; empty for any patient 28 days old or more. */
     private List<NewbornVitalAlertDTO> newbornAlerts;
+
+    /** QA D1890 (provisional): the severe-blood-pressure-after-birth warning on this set; empty when none. */
+    private java.util.List<NewbornVitalAlertDTO> postpartumAlerts;
 }

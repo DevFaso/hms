@@ -6591,3 +6591,8 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Pre-authorisation start rule has no STAT exemption (D1925):** a study whose pre-authorisation is required starts only once its number is recorded (on the order or in the start request); confirm with the radiology approvers whether an emergency (STAT) start may proceed without it.
 - **Imaging status writes from integrations:** the transition table (`ImagingOrderTransitions`) guards `PUT /imaging/orders/{id}/status` only; a future HL7/DICOM status feed should go through it too.
 - **Notes with addenda in the chart review (D1924 class, not changed):** encounter and nursing notes show the original note's preview; their addenda are separate and not counted on the card. Not the D1924 bug (the original is never hidden), but the card could say "n addenda".
+
+## Standing debt — postpartum severe hypertension (feat/postpartum-severe-bp-alert-r53, D1890)
+- **Vitals alert DTO name:** `NewbornVitalAlertDTO` now also carries the postpartum warning (`postpartumAlerts`); rename it to a neutral `VitalAlertDTO` (backend + portal `NewbornVitalAlert`) in a style-only PR.
+- **Vitals-path warning has no reminder escalation:** the nurse-station/triage/API warning notifies the recorder and physicians once; only the postpartum observation path raises the obstetric escalation with reminders. Decide with the obstetric lead whether a vitals-path reading should escalate too.
+- **Patient vitals API caller does not show the warning:** `PatientVitalSignResponseDTO.postpartumAlerts` is returned but no portal screen reads it yet (same as `newbornAlerts`).

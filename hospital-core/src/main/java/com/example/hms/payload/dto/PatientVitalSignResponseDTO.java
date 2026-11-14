@@ -63,4 +63,7 @@ public class PatientVitalSignResponseDTO {
 
     /** QA D1564: on a write only, the newborn warnings on this set; null on a read. */
     private java.util.List<NewbornVitalAlertDTO> newbornAlerts;
+
+    /** QA D1890 (provisional): the severe-blood-pressure-after-birth warning on this set; empty when none. */
+    private java.util.List<NewbornVitalAlertDTO> postpartumAlerts;
 }

@@ -100,6 +100,18 @@ public class BpaRuleEngine {
         this.failFast = failFast;
     }
 
+    /**
+     * QA D1890: the postpartum observations' blood pressures, for the postpartum severe-hypertension
+     * advisory; null outside Spring (no postpartum reading is loaded).
+     */
+    private com.example.hms.repository.PostpartumObservationRepository postpartumObservationRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setPostpartumObservationRepository(
+        com.example.hms.repository.PostpartumObservationRepository postpartumObservationRepository) {
+        this.postpartumObservationRepository = postpartumObservationRepository;
+    }
+
     public BpaRuleEngine(
         List<BpaRule> rules,
         PatientVitalSignRepository vitalSignRepository,
@@ -139,7 +151,9 @@ public class BpaRuleEngine {
             loadActiveProblems(patientId, hospitalId),
             loadActivePrescriptions(patientId, hospitalId),
             com.example.hms.utility.ObstetricEligibility.isRecordedMale(patient) ? null
-                : loadEstimatedDueDate(patientId, hospitalId)
+                : loadEstimatedDueDate(patientId, hospitalId),
+            com.example.hms.utility.ObstetricEligibility.isRecordedMale(patient) ? List.of()
+                : loadPostpartumBloodPressures(patientId, hospitalId)
         );
     }
 
@@ -211,12 +225,20 @@ public class BpaRuleEngine {
         List<PatientVitalSign> newer = context.recentVitals().stream()
             .filter(v -> enteredAfter(v, acknowledgedAt))
             .toList();
-        if (newer.isEmpty()) {
+        // QA D1890: a postpartum observation's pressure is a reading too, judged by its entry time.
+        List<com.example.hms.service.maternity.PostpartumSevereHypertension.Reading> newerPostpartum =
+            context.postpartumBloodPressures().stream()
+                .filter(r -> {
+                    LocalDateTime entered = r.enteredAt() != null ? r.enteredAt() : r.takenAt();
+                    return entered != null && entered.isAfter(acknowledgedAt);
+                })
+                .toList();
+        if (newer.isEmpty() && newerPostpartum.isEmpty()) {
             return false;
         }
         Set<String> sameOrWorse = sameRuleSameOrWorse(cardUuid);
         BpaRuleContext sinceAcknowledgement = new BpaRuleContext(context.patient(), context.hospitalId(), newer,
-            context.activeProblems(), context.activePrescriptions(), context.estimatedDueDate());
+            context.activeProblems(), context.activePrescriptions(), context.estimatedDueDate(), newerPostpartum);
         return evaluate(sinceAcknowledgement).stream().anyMatch(c -> sameOrWorse.contains(c.uuid()));
     }
 
@@ -307,6 +329,25 @@ public class BpaRuleEngine {
         if (history.getEstimatedDueDate() != null) return history.getEstimatedDueDate();
         return history.getLastMenstrualPeriod() == null ? null
             : history.getLastMenstrualPeriod().plusDays(PregnancyHypertensionProtocolRule.PREGNANCY_DAYS);
+    }
+
+    /**
+     * QA D1890: the blood pressures of this patient's postpartum observations in the vitals window,
+     * at this hospital, most recent first. Only observations that recorded a pressure are read
+     * (filtered in the query, so newer pressure-less ones cannot hide a severe one), and an
+     * observation another one corrected is left out: the correction is the reading.
+     */
+    List<com.example.hms.service.maternity.PostpartumSevereHypertension.Reading> loadPostpartumBloodPressures(
+        UUID patientId, UUID hospitalId) {
+        if (postpartumObservationRepository == null) return List.of();
+        LocalDateTime from = LocalDateTime.now().minus(VITALS_LOOKBACK);
+        return postpartumObservationRepository
+            .findBloodPressuresSince(patientId, hospitalId, from, PageRequest.of(0, VITALS_PAGE_SIZE))
+            .stream()
+            .map(o -> new com.example.hms.service.maternity.PostpartumSevereHypertension.Reading(
+                o.getSystolicBpMmHg(), o.getDiastolicBpMmHg(), o.getObservationTime(),
+                o.getDocumentedAt() != null ? o.getDocumentedAt() : o.getCreatedAt()))
+            .toList();
     }
 
     List<Prescription> loadActivePrescriptions(UUID patientId, UUID hospitalId) {
