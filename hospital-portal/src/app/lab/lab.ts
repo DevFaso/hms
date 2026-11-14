@@ -54,6 +54,7 @@ import { labSeverityFlag, labSeverityTone, LabSeverityFlag } from './shared/lab-
 import { formatLabReferenceRange } from './shared/reference-range-text';
 import { LabValuePipe } from './shared/lab-value.pipe';
 import { ResultRangeComponent } from './shared/result-range.component';
+import { LabCorrectionBadgeComponent } from './shared/lab-correction-badge.component';
 import { serverDateOrInstant, serverInstant } from '../shared/date-utils';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
@@ -85,6 +86,7 @@ export interface LabTimelineStep {
     EnumLabelPipe,
     LabValuePipe,
     ResultRangeComponent,
+    LabCorrectionBadgeComponent,
     RouterLink,
   ],
   templateUrl: './lab.html',

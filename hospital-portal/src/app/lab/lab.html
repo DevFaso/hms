@@ -339,7 +339,8 @@
             <div class="detail-field" data-testid="detail-priority">
               <span class="field-label">{{ 'LAB.PRIORITY' | translate }}</span>
               @if (o.priority) {
-                <span
+                {{ ' '
+                }}<span
                   class="priority-badge fit-content"
                   [class.priority-routine]="!isUrgentPriority(o.priority)"
                   [class.priority-stat]="o.priority === 'STAT'"
@@ -362,6 +363,7 @@
               @for (r of releasedDetailResults(); track r.id) {
                 <div class="result-line" [attr.data-testid]="'detail-result-' + r.id">
                   <strong>{{ r.resultValue | labValue: r.resultUnit }}</strong>
+                  <app-lab-correction-badge [corrected]="!!r.supersedesResultId" />
                   <span [class]="resultFlagClass(r)" [attr.data-testid]="'detail-flag-' + r.id">{{
                     resultFlag(r) === 'UNIT_MISMATCH'
                       ? ('LAB_RESULTS.NOT_GRADED_UNITS_DIFFER' | translate)
