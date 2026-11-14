@@ -3744,7 +3744,7 @@
       "BODY": "Este paciente ya tiene una orden activa de la misma prueba aquí, realizada en las últimas 24 horas. Compruebe que una nueva orden sea realmente necesaria.",
       "BACK": "Volver a la orden",
       "ORDER_ANYWAY": "Ordenar de todos modos",
-      "PLACED_ANYWAY": "La orden se realizó, pero este paciente ya tenía una orden activa de la misma prueba aquí: {{codes}}. Compruebe que ambas sean necesarias."
+      "PLACED_ANYWAY": "La orden se realizó, pero este paciente ya tenía una orden activa de la misma prueba aquí: {{codes}}. Compruebe que todas sean necesarias."
     },
     "ABNORMAL": "Anormal",
     "ACCESSION": "N.º de registro",
@@ -4067,6 +4067,7 @@
     "CORRECTED_HINT": "Este resultado corrige un resultado validado anteriormente; el valor anterior se conserva en el expediente, marcado como sustituido.",
     "TITLE": "Resultados de laboratorio",
     "SUBTITLE": "Gestionar los resultados de pruebas de laboratorio",
+    "LAB_COMMENT": "Comentario del laboratorio",
     "LOADING": "Cargando resultados…",
     "SEARCH": "Buscar por código de orden, paciente o prueba…",
     "TOTAL": "Total de resultados",

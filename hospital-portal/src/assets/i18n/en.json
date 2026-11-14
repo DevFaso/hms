@@ -3744,7 +3744,7 @@
       "BODY": "This patient already has an active order for the same test here, placed in the last 24 hours. Check that a new order is really needed.",
       "BACK": "Back to the order",
       "ORDER_ANYWAY": "Order anyway",
-      "PLACED_ANYWAY": "The order was placed, but this patient already had an active order for the same test here: {{codes}}. Check that both are needed."
+      "PLACED_ANYWAY": "The order was placed, but this patient already had an active order for the same test here: {{codes}}. Check that every one of them is needed."
     },
     "ABNORMAL": "Abnormal",
     "ACCESSION": "Accession #",
@@ -4067,6 +4067,7 @@
     "CORRECTED_HINT": "This result corrects a result released earlier; the earlier value stays on record, marked superseded.",
     "TITLE": "Lab Results",
     "SUBTITLE": "Manage laboratory test results",
+    "LAB_COMMENT": "Laboratory comment",
     "LOADING": "Loading lab results…",
     "SEARCH": "Search by order code, patient, or test…",
     "TOTAL": "Total Results",

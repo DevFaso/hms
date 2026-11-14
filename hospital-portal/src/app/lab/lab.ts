@@ -72,6 +72,24 @@ export interface LabTimelineStep {
   by?: string | null;
 }
 
+/**
+ * One open-and-close of a dialog. A save started in one session must not close,
+ * reset or toast over the next session the user opened before its answer came.
+ */
+class DialogSession {
+  private current = 0;
+  /** Called whenever the dialog opens or closes: every earlier save becomes stale. */
+  renew(): void {
+    this.current++;
+  }
+  capture(): number {
+    return this.current;
+  }
+  isCurrent(token: number): boolean {
+    return token === this.current;
+  }
+}
+
 @Component({
   selector: 'app-lab',
   standalone: true,
@@ -186,6 +204,12 @@ export class LabComponent implements OnInit {
    * releases a preview, never this, so a reopened form cannot send a second write.
    */
   private writeInFlight = false;
+  private readonly orderSession = new DialogSession();
+  private readonly voidSession = new DialogSession();
+  private readonly deleteSession = new DialogSession();
+  private readonly approvalSession = new DialogSession();
+  private readonly specimensSession = new DialogSession();
+  private readonly rejectSession = new DialogSession();
 
   // QA D820: void (entered in error)
   voidingOrder = signal<LabOrderResponse | null>(null);
@@ -724,6 +748,7 @@ export class LabComponent implements OnInit {
   }
 
   openCreate(): void {
+    this.orderSession.renew();
     this.form = this.emptyForm();
     this.clearDuplicateWarning();
     this.editing.set(false);
@@ -739,6 +764,7 @@ export class LabComponent implements OnInit {
   }
 
   openEdit(o: LabOrderResponse): void {
+    this.orderSession.renew();
     const profile = this.auth.getUserProfile();
     this.form = {
       patientId: '',
@@ -771,6 +797,7 @@ export class LabComponent implements OnInit {
   }
 
   closeModal(): void {
+    this.orderSession.renew();
     this.showModal.set(false);
     // A preview still in flight is abandoned with the form (its reply is
     // ignored); a write in flight keeps the lock until it answers.
@@ -869,22 +896,30 @@ export class LabComponent implements OnInit {
       performingHospitalId: this.form.performingHospitalId || null,
       ...(acknowledgedDuplicateOrderIds ? { acknowledgedDuplicateOrderIds } : {}),
     };
-    const op = this.editing()
+    const session = this.orderSession.capture();
+    const wasEditing = this.editing();
+    const op = wasEditing
       ? this.labService.updateOrder(this.editingId()!, payload)
       : this.labService.createOrder(payload);
     op.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (saved) => {
         this.writeInFlight = false;
-        this.toast.success(
-          this.translate.instant(this.editing() ? 'LAB.TOAST.UPDATED' : 'LAB.TOAST.CREATED'),
-        );
-        this.warnOfDuplicateFoundOnPlacing(saved);
-        this.closeModal();
         this.saving.set(false);
+        // An answer that outlived its dialog still refreshes the list, but
+        // never closes, resets or toasts over a dialog opened since.
+        if (this.orderSession.isCurrent(session)) {
+          this.toast.success(
+            this.translate.instant(wasEditing ? 'LAB.TOAST.UPDATED' : 'LAB.TOAST.CREATED'),
+          );
+          this.warnOfDuplicateFoundOnPlacing(saved);
+          this.closeModal();
+        }
         this.loadOrders();
       },
       error: (err: unknown) => {
         this.writeInFlight = false;
+        this.saving.set(false);
+        if (!this.orderSession.isCurrent(session)) return;
         // QA D1094: a refusal the server explains (a closed visit, another
         // patient's visit) is shown in the reader's language; only a failure
         // with no message falls back to the generic toast.
@@ -895,7 +930,6 @@ export class LabComponent implements OnInit {
             ? message
             : this.translate.instant('LAB.TOAST.SAVE_FAILED'),
         );
-        this.saving.set(false);
       },
     });
   }
@@ -926,11 +960,13 @@ export class LabComponent implements OnInit {
   }
 
   openVoid(o: LabOrderResponse): void {
+    this.voidSession.renew();
     this.voidReason.set('');
     this.voidingOrder.set(o);
   }
 
   closeVoid(): void {
+    this.voidSession.renew();
     this.voidingOrder.set(null);
     this.voidReason.set('');
   }
@@ -944,41 +980,51 @@ export class LabComponent implements OnInit {
     const reason = this.voidReason().trim();
     if (!order || !reason) return;
     this.voiding.set(true);
+    const session = this.voidSession.capture();
     this.labService.voidOrder(order.id, reason).subscribe({
       next: () => {
-        this.toast.success(this.translate.instant('LAB.VOID.DONE'));
         this.voiding.set(false);
-        this.closeVoid();
+        if (this.voidSession.isCurrent(session)) {
+          this.toast.success(this.translate.instant('LAB.VOID.DONE'));
+          this.closeVoid();
+        }
         this.loadOrders();
       },
       error: (err: { error?: { message?: string } }) => {
+        this.voiding.set(false);
+        if (!this.voidSession.isCurrent(session)) return;
         // The server's refusal is written for the reader (localised).
         this.toast.error(err?.error?.message ?? this.translate.instant('LAB.VOID.FAILED'));
-        this.voiding.set(false);
       },
     });
   }
 
   confirmDelete(o: LabOrderResponse): void {
+    this.deleteSession.renew();
     this.deletingOrder.set(o);
     this.showDeleteConfirm.set(true);
   }
   cancelDelete(): void {
+    this.deleteSession.renew();
     this.showDeleteConfirm.set(false);
     this.deletingOrder.set(null);
   }
   executeDelete(): void {
     this.deleting.set(true);
+    const session = this.deleteSession.capture();
     this.labService.deleteOrder(this.deletingOrder()!.id).subscribe({
       next: () => {
-        this.toast.success(this.translate.instant('LAB.TOAST.DELETED'));
-        this.cancelDelete();
         this.deleting.set(false);
+        if (this.deleteSession.isCurrent(session)) {
+          this.toast.success(this.translate.instant('LAB.TOAST.DELETED'));
+          this.cancelDelete();
+        }
         this.loadOrders();
       },
       error: (err: unknown) => {
-        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB.TOAST.DELETE_FAILED'));
         this.deleting.set(false);
+        if (!this.deleteSession.isCurrent(session)) return;
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB.TOAST.DELETE_FAILED'));
       },
     });
   }
@@ -1118,6 +1164,7 @@ export class LabComponent implements OnInit {
   processingApproval = signal(false);
 
   openApprovalModal(def: LabTestDefinition): void {
+    this.approvalSession.renew();
     this.approvalTarget.set(def);
     this.approvalAction.set('');
     this.approvalRejectionReason.set('');
@@ -1125,6 +1172,7 @@ export class LabComponent implements OnInit {
   }
 
   closeApprovalModal(): void {
+    this.approvalSession.renew();
     this.showApprovalModal.set(false);
     this.approvalTarget.set(null);
   }
@@ -1142,20 +1190,23 @@ export class LabComponent implements OnInit {
     }
 
     this.processingApproval.set(true);
+    const session = this.approvalSession.capture();
     this.labService.submitApprovalAction(def.id, req).subscribe({
       next: (updated) => {
+        this.processingApproval.set(false);
+        this.labService.listTestDefinitions().subscribe((defs) => this.labTestDefs.set(defs));
+        if (!this.approvalSession.isCurrent(session)) return;
         this.toast.success(
           this.translate.instant('LAB.TOAST.DEFINITION_STATUS_UPDATED', {
             status: this.translate.instant(`LAB.APPROVAL_STATUS.${updated.approvalStatus}`),
           }),
         );
-        this.labService.listTestDefinitions().subscribe((defs) => this.labTestDefs.set(defs));
         this.closeApprovalModal();
-        this.processingApproval.set(false);
       },
       error: (err: unknown) => {
-        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB.TOAST.APPROVAL_FAILED'));
         this.processingApproval.set(false);
+        if (!this.approvalSession.isCurrent(session)) return;
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB.TOAST.APPROVAL_FAILED'));
       },
     });
   }
@@ -1178,6 +1229,7 @@ export class LabComponent implements OnInit {
   // ── Specimen tracking ────────────────────────────────────────────────
 
   openSpecimens(order: LabOrderResponse): void {
+    this.specimensSession.renew();
     this.specimensOrder.set(order);
     // QA D177: the test's own sample type, so the collector confirms it
     // rather than retyping it (still editable for an unusual specimen).
@@ -1196,6 +1248,7 @@ export class LabComponent implements OnInit {
   }
 
   closeSpecimens(): void {
+    this.specimensSession.renew();
     this.showSpecimensModal.set(false);
     this.specimensOrder.set(null);
     this.specimens.set([]);
@@ -1220,6 +1273,7 @@ export class LabComponent implements OnInit {
     if (!order || !this.specimensOrderAcceptsSpecimens() || !this.specimenForm.specimenType.trim())
       return;
     this.specimenSaving.set(true);
+    const session = this.specimensSession.capture();
     this.labService
       .createSpecimen(order.id, {
         specimenType: this.specimenForm.specimenType.trim(),
@@ -1228,19 +1282,21 @@ export class LabComponent implements OnInit {
       })
       .subscribe({
         next: () => {
+          this.specimenSaving.set(false);
+          if (!this.specimensSession.isCurrent(session)) return;
           this.toast.success(this.translate.instant('LAB.TOAST.SPECIMEN_COLLECTED'));
           this.specimenForm = { specimenType: '', currentLocation: '', notes: '' };
-          this.specimenSaving.set(false);
           this.loadSpecimens(order.id);
         },
         error: (err: { error?: { errors?: Record<string, string>; message?: string } }) => {
           // QA D1050: the server's own reason (a field too long), in the reader's
           // language, instead of a generic failure; the form keeps what was typed.
+          this.specimenSaving.set(false);
+          if (!this.specimensSession.isCurrent(session)) return;
           const fieldMessage = Object.values(err?.error?.errors ?? {})[0];
           this.toast.error(
             fieldMessage ?? this.translate.instant('LAB.TOAST.SPECIMEN_COLLECT_FAILED'),
           );
-          this.specimenSaving.set(false);
         },
       });
   }
@@ -1265,17 +1321,20 @@ export class LabComponent implements OnInit {
     const order = this.specimensOrder();
     if (!order) return;
     this.receivingSpecimenId.set(specimen.id);
+    const session = this.specimensSession.capture();
     this.labService.receiveSpecimen(specimen.id).subscribe({
       next: () => {
-        this.toast.success(this.translate.instant('LAB.TOAST.SPECIMEN_RECEIVED'));
         this.receivingSpecimenId.set(null);
+        if (!this.specimensSession.isCurrent(session)) return;
+        this.toast.success(this.translate.instant('LAB.TOAST.SPECIMEN_RECEIVED'));
         this.loadSpecimens(order.id);
       },
       error: (err: unknown) => {
+        this.receivingSpecimenId.set(null);
+        if (!this.specimensSession.isCurrent(session)) return;
         this.toast.error(
           refusalReason(err) ?? this.translate.instant('LAB.TOAST.SPECIMEN_RECEIVE_FAILED'),
         );
-        this.receivingSpecimenId.set(null);
       },
     });
   }
@@ -1297,11 +1356,13 @@ export class LabComponent implements OnInit {
   }
 
   openReject(specimen: LabSpecimen): void {
+    this.rejectSession.renew();
     this.rejectReason.set('');
     this.rejectingSpecimen.set(specimen);
   }
 
   closeReject(): void {
+    this.rejectSession.renew();
     this.rejectingSpecimen.set(null);
     this.rejectReason.set('');
   }
@@ -1316,21 +1377,25 @@ export class LabComponent implements OnInit {
     const reason = this.rejectReason().trim();
     if (!specimen || !order || !reason) return;
     this.rejecting.set(true);
+    const session = this.rejectSession.capture();
+    const specimens = this.specimensSession.capture();
     this.labService.rejectSpecimen(specimen.id, reason).subscribe({
       next: () => {
-        this.toast.success(this.translate.instant('LAB.REJECT_SPECIMEN.DONE'));
         this.rejecting.set(false);
-        this.closeReject();
-        this.loadSpecimens(order.id);
         // The order is back to awaiting collection: the list must say so.
         this.loadOrders();
+        if (!this.rejectSession.isCurrent(session)) return;
+        this.toast.success(this.translate.instant('LAB.REJECT_SPECIMEN.DONE'));
+        this.closeReject();
+        if (this.specimensSession.isCurrent(specimens)) this.loadSpecimens(order.id);
       },
       error: (err: { error?: { message?: string } }) => {
+        this.rejecting.set(false);
+        if (!this.rejectSession.isCurrent(session)) return;
         // The server's refusal is written for the reader (localised).
         this.toast.error(
           err?.error?.message ?? this.translate.instant('LAB.REJECT_SPECIMEN.FAILED'),
         );
-        this.rejecting.set(false);
       },
     });
   }
