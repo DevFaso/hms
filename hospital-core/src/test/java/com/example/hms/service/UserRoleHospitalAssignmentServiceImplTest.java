@@ -535,6 +535,54 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assertThat(com.example.hms.utility.ActivationDeliveryTracker.close()).isEmpty();
     }
 
+    @Test
+    void qaD1840_aPlatformWideAssignmentIsWordedAsSuchNeverAsTheScopeCode() {
+        // A super-admin's assignment has no hospital: the mail and both SMS name
+        // the platform, and no message is composed with the scope code GLOBAL.
+        assignment.setHospital(null);
+        assignee.setPhoneNumber("+22670123456");
+        User registrar = new User();
+        registrar.setId(UUID.randomUUID());
+        registrar.setPhoneNumber("+22699999999");
+        assignment.setRegisteredBy(registrar);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+
+        service.sendNotifications(assignment.getId());
+
+        // The mocked bundle answers each lookup with its key (the default).
+        verify(smsService).send("+22670123456", "sms.activation.staff.platform");
+        verify(smsService).send("+22699999999", "sms.activation.registrar.platform");
+        verify(emailService).sendRoleAssignmentConfirmationEmail(eq("jdoe@hospital.com"), anyString(), anyString(),
+            org.mockito.ArgumentMatchers.isNull(), anyString(), anyString(), any(), any(), any());
+        org.mockito.ArgumentCaptor<Object[]> args = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        verify(messageSource, org.mockito.Mockito.atLeastOnce()).getMessage(anyString(), args.capture(), any(), any());
+        assertThat(args.getAllValues()).filteredOn(java.util.Objects::nonNull)
+            .flatExtracting(java.util.Arrays::asList).doesNotContain("GLOBAL");
+    }
+
+    @Test
+    void qaD1842_aRecipientRefusedByTheAllowlistIsNotReportedAsATransportFailure() {
+        assignee.setPhoneNumber("+22670123456");
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        doThrow(new com.example.hms.service.integration.SmsRecipientNotAllowedException())
+            .when(smsService).send(eq("+22670123456"), anyString());
+
+        com.example.hms.utility.ActivationDeliveryTracker.open();
+        try {
+            service.sendNotifications(assignment.getId());
+            assertThat(com.example.hms.utility.ActivationDeliveryTracker.close())
+                .filteredOn(r -> "SMS".equals(r.getChannel()) && "ACTIVATION".equals(r.getPurpose()))
+                .singleElement()
+                .satisfies(r -> {
+                    assertThat(r.getOutcome()).isEqualTo("RECIPIENT_NOT_ALLOWED");
+                    assertThat(r.getDetail()).contains("allowlist").doesNotContain("transport error");
+                    assertThat(r.getTarget()).isEqualTo("+226*****56");
+                });
+        } finally {
+            com.example.hms.utility.ActivationDeliveryTracker.close();
+        }
+    }
+
     // ---- Tenant isolation: GET /assignments listing ----
 
     @Test

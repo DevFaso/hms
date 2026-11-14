@@ -458,6 +458,11 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         if (activeHospitalId == null || orderHospitalId == null || activeHospitalId.equals(orderHospitalId)) {
             return order;
         }
+        // User decision 2026-11-14: an administrator reads the hospitals they act at, never
+        // across on a patient's treatment relationship (that is the care team's).
+        if (com.example.hms.security.ClinicalActor.isAdministrativeImagingReader()) {
+            throw new ResourceNotFoundException("imaging.order.notFound", orderId);
+        }
         UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;
         UUID requesterUserId = roleValidator.getCurrentUserId();
         // QA D652: another hospital's never-sent DRAFT is its work in progress (NeverSentRule).
@@ -504,7 +509,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             // patient's whole history and keep the acting hospital's rows in
             // memory. Untagged (V158), so every foreign row travels; accounted.
             UUID requesterUserId = roleValidator.getCurrentUserId();
-            Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
+            // User decision 2026-11-14: an administrator reads the acting hospital only.
+            Set<UUID> readable = com.example.hms.security.ClinicalActor.isAdministrativeImagingReader()
+                ? Set.of(activeHospitalId)
+                : recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
             orders = status != null
                 ? imagingOrderRepository.findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedAtDesc(patientId, readable, status)
                 : imagingOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable);
@@ -526,6 +534,13 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     @Override
     @Transactional(readOnly = true)
     public List<ImagingOrderResponseDTO> getOrdersByHospital(UUID hospitalId, ImagingOrderStatus status) {
+        // The path names the hospital: the interceptor has narrowed the scope to it, or refused.
+        // Belt and braces for a caller with no tenant context: never another hospital than the acting one.
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && !activeHospitalId.equals(hospitalId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "Imaging orders can only be listed for your active hospital.");
+        }
         List<ImagingOrder> orders;
         if (status != null) {
             orders = imagingOrderRepository.findByHospital_IdAndStatusInOrderByOrderedAtDesc(hospitalId, List.of(status));

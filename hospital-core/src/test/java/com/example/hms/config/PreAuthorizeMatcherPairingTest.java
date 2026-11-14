@@ -57,7 +57,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class PreAuthorizeMatcherPairingTest extends BaseIT {
 
-    private static final Pattern ROLE_CALL = Pattern.compile("has(Any)?Role\\(([^)]*)\\)");
+    // holdsOwnRole: ClinicalActor's gate (user decision 2026-11-14), a role list the caller holds on their own.
+    private static final Pattern ROLE_CALL = Pattern.compile("(?:has(Any)?Role|holdsOwnRole)\\(([^)]*)\\)");
     private static final Pattern AUTHORITY_CALL = Pattern.compile("has(Any)?Authority\\(([^)]*)\\)");
     private static final Pattern QUOTED = Pattern.compile("'([A-Za-z_]+)'");
     private static final Pattern PATH_VARIABLE = Pattern.compile("\\{[^}]*}");

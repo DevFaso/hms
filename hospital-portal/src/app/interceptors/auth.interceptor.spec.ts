@@ -6,6 +6,7 @@ import { Router } from '@angular/router';
 import { apiPrefixInterceptor } from './auth.interceptor';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
+import { allHospitalsRequestOptions } from '../core/request-scope';
 
 describe('apiPrefixInterceptor', () => {
   let http: HttpClient;
@@ -13,6 +14,7 @@ describe('apiPrefixInterceptor', () => {
   let auth: jasmine.SpyObj<AuthService>;
   let router: jasmine.SpyObj<Router>;
   let effectiveHospitalId: string | null;
+  let superAdmin = false;
 
   beforeEach(() => {
     auth = jasmine.createSpyObj('AuthService', [
@@ -25,6 +27,7 @@ describe('apiPrefixInterceptor', () => {
     router = jasmine.createSpyObj('Router', ['navigate']);
     router.navigate.and.resolveTo(true);
     effectiveHospitalId = 'h1';
+    superAdmin = false;
 
     TestBed.configureTestingModule({
       providers: [
@@ -36,6 +39,7 @@ describe('apiPrefixInterceptor', () => {
           provide: RoleContextService,
           useValue: {
             effectiveHospitalIdForRequest: () => effectiveHospitalId,
+            isSuperAdmin: () => superAdmin,
           } as unknown as RoleContextService,
         },
       ],
@@ -66,6 +70,26 @@ describe('apiPrefixInterceptor', () => {
     const write = httpMock.expectOne('/api/wards/w2');
     expect(write.request.headers.get('X-Hospital-Id')).toBe('h1');
     write.flush({});
+  });
+
+  it('PR #1163: a super-admin all-hospitals read goes without the pinned hospital; nobody else may drop it', () => {
+    auth.getToken.and.returnValue('t1');
+    auth.isExpired.and.returnValue(false);
+    superAdmin = true;
+    http.get('/imaging/orders', allHospitalsRequestOptions()).subscribe();
+    const all = httpMock.expectOne('/api/imaging/orders');
+    expect(all.request.headers.has('X-Hospital-Id')).toBeFalse();
+    all.flush([]);
+    http.get('/imaging/orders').subscribe();
+    const pinned = httpMock.expectOne('/api/imaging/orders');
+    expect(pinned.request.headers.get('X-Hospital-Id')).toBe('h1');
+    pinned.flush([]);
+
+    superAdmin = false;
+    http.get('/imaging/orders', allHospitalsRequestOptions()).subscribe();
+    const staff = httpMock.expectOne('/api/imaging/orders');
+    expect(staff.request.headers.get('X-Hospital-Id')).toBe('h1');
+    staff.flush([]);
   });
 
   it('leaves absolute URLs untouched', () => {

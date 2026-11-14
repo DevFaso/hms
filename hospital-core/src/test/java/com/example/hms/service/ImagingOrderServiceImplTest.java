@@ -44,6 +44,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.Map;
 import java.util.Set;
 
@@ -1560,5 +1562,97 @@ class ImagingOrderServiceImplTest {
             return type.getEnumConstants()[0];
         }
         return null;
+    }
+
+    // ── User decision 2026-11-14: administrators read their hospitals, read-only ──
+
+    private static void signIn(String... authorities) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("u", "n/a",
+                java.util.Arrays.stream(authorities)
+                    .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList()));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void signOut() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    private ImagingOrder orderAtHospital(UUID id, Hospital at) {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(id);
+        order.setHospital(at);
+        order.setPatient(patient);
+        return order;
+    }
+
+    @Test
+    void adminDecision_aHospitalAdminOfANeverReadsBsOrderById_whereADoctorFollowsThePatient() {
+        UUID hospitalB = UUID.randomUUID();
+        ImagingOrder orderAtA = orderAtHospital(orderId, hospital);
+        when(imagingOrderRepository.findByIdUnscoped(orderId)).thenReturn(Optional.of(orderAtA));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        lenient().when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalB)))
+            .thenReturn(Set.of(hospitalB, hospitalId));
+        lenient().when(imagingOrderMapper.toResponseDTO(orderAtA))
+            .thenReturn(ImagingOrderResponseDTO.builder().id(orderId).build());
+
+        signIn("ROLE_HOSPITAL_ADMIN");
+        org.junit.jupiter.api.Assertions.assertThrows(ResourceNotFoundException.class,
+            () -> imagingOrderService.getOrder(orderId));
+
+        signIn("ROLE_DOCTOR");
+        assertThat(imagingOrderService.getOrder(orderId).getId()).isEqualTo(orderId);
+    }
+
+    @Test
+    void adminDecision_aHospitalAdminListsTheActingHospitalOnly_neverAnother() {
+        UUID hospitalB = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        signIn("ROLE_HOSPITAL_ADMIN");
+
+        assertThatThrownBy(() -> imagingOrderService.getOrdersByHospital(hospitalB, null))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(imagingOrderRepository, never()).findByHospital_IdOrderByOrderedAtDesc(hospitalB);
+    }
+
+    @Test
+    void adminDecision_aHospitalAdminReadsAPatientsOrdersAtTheActingHospitalOnly() {
+        UUID hospitalB = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        lenient().when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, hospitalB));
+        signIn("ROLE_HOSPITAL_ADMIN");
+
+        imagingOrderService.getOrdersByPatient(patientId, null);
+
+        verify(imagingOrderRepository).findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, Set.of(hospitalId));
+    }
+
+    @Test
+    void adminDecision_theSuperAdminsCombinedViewHoldsEveryHospital_andTheFilterOne() {
+        Hospital hospitalB = new Hospital();
+        hospitalB.setId(UUID.randomUUID());
+        ImagingOrder atA = orderAtHospital(UUID.randomUUID(), hospital);
+        ImagingOrder atB = orderAtHospital(UUID.randomUUID(), hospitalB);
+        when(imagingOrderRepository.findAllByOrderByOrderedAtDesc()).thenReturn(List.of(atA, atB));
+        when(imagingOrderRepository.findByHospital_IdOrderByOrderedAtDesc(hospitalB.getId())).thenReturn(List.of(atB));
+        when(imagingOrderMapper.toResponseDTO(any(ImagingOrder.class))).thenAnswer(inv -> {
+            ImagingOrder o = inv.getArgument(0);
+            return ImagingOrderResponseDTO.builder().id(o.getId()).hospitalId(o.getHospital().getId()).build();
+        });
+        signIn("ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_PATIENT");
+
+        // « Tous les hôpitaux »: global view, no acting hospital.
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        assertThat(imagingOrderService.getAllOrders(null)).extracting(ImagingOrderResponseDTO::getHospitalId)
+            .containsExactly(hospitalId, hospitalB.getId());
+
+        // The filter: the interceptor narrows the scope to the named hospital.
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB.getId());
+        assertThat(imagingOrderService.getOrdersByHospital(hospitalB.getId(), null))
+            .extracting(ImagingOrderResponseDTO::getHospitalId).containsExactly(hospitalB.getId());
     }
 }

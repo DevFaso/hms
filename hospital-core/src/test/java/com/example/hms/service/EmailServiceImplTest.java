@@ -610,7 +610,7 @@ class EmailServiceImplTest {
         }
 
         @Test
-        @DisplayName("blank role and hospital fall back to bundle sentences, not English literals")
+        @DisplayName("blank role falls back to a bundle sentence; no hospital is a platform-wide assignment (QA D1840)")
         void fallbacksComeFromTheBundle() {
             stubMailSender();
             emailService.sendRoleAssignmentConfirmationEmail(
@@ -618,7 +618,8 @@ class EmailServiceImplTest {
 
             String html = renderedHtml();
             assertThat(html)
-                .contains("email.role.assignment.body.assigned[email.role.assignment.fallback.role|email.role.assignment.fallback.hospital]")
+                .startsWith("email.role.assignment.subject.platform")
+                .contains("email.role.assignment.body.assigned.platform[email.role.assignment.fallback.role]")
                 .contains("email.common.greeting.anonymous")
                 .doesNotContain("the assigned role")
                 .doesNotContain("our hospital network");

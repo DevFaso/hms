@@ -157,14 +157,11 @@ describe('ImagingComponent — r51 study workflow and labels', () => {
     const statusRoles = actionRoles('imagingOrderStatus');
 
     it('the registry still names exactly the endpoint roles (no widening)', () => {
-      expect([...statusRoles].sort()).toEqual([
-        'ROLE_DOCTOR',
-        'ROLE_RADIOLOGIST',
-        'ROLE_SUPER_ADMIN',
-      ]);
+      // User decision 2026-11-14: SUPER_ADMIN no longer acts on a study.
+      expect([...statusRoles].sort()).toEqual(['ROLE_DOCTOR', 'ROLE_RADIOLOGIST']);
     });
 
-    for (const role of ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST', 'ROLE_SUPER_ADMIN']) {
+    for (const role of ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST']) {
       it(`${role}: start on an ordered or scheduled order, complete only once in progress`, () => {
         setUp({ role, orders: ALL_STATUSES.map((status) => order({ id: status, status })) });
         expect(component.activeTab()).toBe('all');
@@ -180,7 +177,14 @@ describe('ImagingComponent — r51 study workflow and labels', () => {
       });
     }
 
-    for (const role of ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST']) {
+    for (const role of [
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_RECEPTIONIST',
+      'ROLE_SUPER_ADMIN',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_ADMIN',
+    ]) {
       it(`${role}: neither start nor complete, on any status`, () => {
         setUp({ role, orders: ALL_STATUSES.map((status) => order({ id: status, status })) });
         expect(q('[data-testid^="imaging-start-"]')).toBeNull();

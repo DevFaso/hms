@@ -260,7 +260,7 @@ public class OrangeSmsGatewayImpl implements IkoddiGateway {
             }
         }
         if (allowed.isEmpty()) {
-            throw new IllegalStateException(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
+            throw new SmsRecipientNotAllowedException();
         }
         ArrayNode accepted = JsonNodeFactory.instance.arrayNode();
         for (int i = 0; i < allowed.size(); i++) {
