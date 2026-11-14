@@ -68,8 +68,9 @@ public class SafeguardingReviewService {
     @Transactional
     public SafeguardingReviewDTO recordReview(UUID reviewId, String note) {
         UUID hospitalId = requireReaderHospital();
-        SafeguardingReview review = reviewRepository.findById(reviewId)
-            .filter(found -> hospitalId.equals(found.getHospitalId()))
+        // First writer wins: the row is locked at its hospital before its status is read, so a concurrent second
+        // record waits, then finds it REVIEWED and gets 409; the first clinician's note is never overwritten.
+        SafeguardingReview review = reviewRepository.lockByIdAtHospital(reviewId, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND_KEY, reviewId));
         UUID callerId = roleValidator.getCurrentUserId();
         if (!isRecorder(callerId, hospitalId)) {

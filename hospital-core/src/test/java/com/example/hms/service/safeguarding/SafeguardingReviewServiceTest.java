@@ -60,7 +60,7 @@ class SafeguardingReviewServiceTest {
             .sourceId(UUID.randomUUID()).patientAgeYears(10).ageThresholdYears(13).raisedAt(LocalDateTime.now())
             .status(SafeguardingReviewStatus.OPEN).build();
         reviewAtA.setId(UUID.randomUUID());
-        when(reviews.findById(reviewAtA.getId())).thenReturn(Optional.of(reviewAtA));
+        when(reviews.lockByIdAtHospital(reviewAtA.getId(), hospitalA)).thenReturn(Optional.of(reviewAtA));
         when(reviews.findByPatientIdAndHospitalIdOrderByRaisedAtDesc(patientId, hospitalA)).thenReturn(List.of(reviewAtA));
         when(reviews.save(any())).thenAnswer(inv -> inv.getArgument(0));
     }
@@ -130,6 +130,27 @@ class SafeguardingReviewServiceTest {
         assertThatThrownBy(() -> service.recordReview(reviewAtA.getId(), "note"))
             .isInstanceOf(AccessDeniedException.class);
         assertThat(reviewAtA.getStatus()).isEqualTo(SafeguardingReviewStatus.OPEN);
+    }
+
+    /** Rex on #1168: two clinicians recording at once; the row is locked at its hospital before its status is read. */
+    @Test
+    void recordingReadsTheReviewUnderARowLockAtItsHospital() {
+        when(roles.isDoctor(caller, hospitalA)).thenReturn(true);
+        service.recordReview(reviewAtA.getId(), "first");
+        verify(reviews).lockByIdAtHospital(reviewAtA.getId(), hospitalA);
+        verify(reviews, never()).findById(any());
+    }
+
+    @Test
+    void theLockIsAPessimisticWriteLockScopedToTheHospital() throws NoSuchMethodException {
+        java.lang.reflect.Method lock = SafeguardingReviewRepository.class
+            .getMethod("lockByIdAtHospital", UUID.class, UUID.class);
+        org.springframework.data.jpa.repository.Lock mode =
+            lock.getAnnotation(org.springframework.data.jpa.repository.Lock.class);
+        assertThat(mode).as("the record path locks the row").isNotNull();
+        assertThat(mode.value()).isEqualTo(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        assertThat(lock.getAnnotation(org.springframework.data.jpa.repository.Query.class).value())
+            .contains("r.hospitalId = :hospitalId");
     }
 
     @Test
