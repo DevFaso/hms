@@ -29,21 +29,28 @@
       <span class="material-symbols-outlined card-icon pending">pending</span>
       <div class="card-info">
         <span class="card-value">{{ stats().pending }}</span
-        ><span class="card-label">{{ 'LAB.PENDING' | translate }}</span>
+        ><span class="card-label">{{ 'LAB.STATE_GROUP.OPEN' | translate }}</span>
+      </div>
+    </div>
+    <div class="summary-card" data-testid="lab-card-awaiting-validation">
+      <span class="material-symbols-outlined card-icon pending">hourglass_top</span>
+      <div class="card-info">
+        <span class="card-value">{{ stats().awaitingValidation }}</span
+        ><span class="card-label">{{ 'LAB.STATE.AWAITING_VALIDATION' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon completed">check_circle</span>
       <div class="card-info">
         <span class="card-value">{{ stats().completed }}</span
-        ><span class="card-label">{{ 'LAB.COMPLETED' | translate }}</span>
+        ><span class="card-label">{{ 'LAB.STATE_GROUP.COMPLETED' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon cancelled">cancel</span>
       <div class="card-info">
         <span class="card-value">{{ stats().cancelled }}</span
-        ><span class="card-label">{{ 'LAB.CANCELLED' | translate }}</span>
+        ><span class="card-label">{{ 'LAB.STATE_GROUP.CANCELLED' | translate }}</span>
       </div>
     </div>
   </div>
@@ -62,19 +69,19 @@
       class="tab"
       [class.active]="activeTab() === 'pending'"
       (click)="setTab('pending')"
-      [title]="'LAB.PENDING_ORDERS' | translate"
+      [title]="'LAB.STATE_GROUP.OPEN_HINT' | translate"
       [attr.aria-pressed]="activeTab() === 'pending'"
     >
-      {{ 'LAB.PENDING' | translate }} ({{ stats().pending }})
+      {{ 'LAB.STATE_GROUP.OPEN' | translate }} ({{ stats().pending }})
     </button>
     <button
       class="tab"
       [class.active]="activeTab() === 'completed'"
       (click)="setTab('completed')"
-      [title]="'LAB.COMPLETED_ORDERS' | translate"
+      [title]="'LAB.STATE_GROUP.COMPLETED_HINT' | translate"
       [attr.aria-pressed]="activeTab() === 'completed'"
     >
-      {{ 'LAB.COMPLETED' | translate }} ({{ stats().completed }})
+      {{ 'LAB.STATE_GROUP.COMPLETED' | translate }} ({{ stats().completed }})
     </button>
   </div>
 
@@ -112,7 +119,12 @@
             <th scope="col">{{ 'LAB.ORDER_CODE' | translate }}</th>
             <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
             <th scope="col">{{ 'LAB.TEST' | translate }}</th>
-            <th scope="col">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</th>
+            <th scope="col">{{ 'LAB.PRESCRIBER' | translate }}</th>
+            @if (showHospitalColumn()) {
+              <th scope="col" data-testid="lab-hospital-column">
+                {{ 'ENCOUNTERS.HOSPITAL' | translate }}
+              </th>
+            }
             <th scope="col">{{ 'LAB.ORDERED' | translate }}</th>
             <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
             <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
@@ -130,10 +142,11 @@
               <td>
                 <div class="cell-primary">
                   {{ order.labTestName || '—' }}
-                  @if (isUrgentPriority(order.priority)) {
-                    <!-- QA D963: STAT and URGENT stand out on the worklist. -->
+                  @if (order.priority) {
+                    <!-- QA D963: STAT and URGENT stand out; ROUTINE is a neutral badge, on every row. -->
                     <span
                       class="priority-badge"
+                      [class.priority-routine]="!isUrgentPriority(order.priority)"
                       [class.priority-stat]="order.priority === 'STAT'"
                       [attr.data-testid]="'lab-priority-' + order.id"
                       >{{ order.priority | enumLabel: 'labOrderPriority' }}</span
@@ -142,29 +155,41 @@
                 </div>
                 <div class="cell-secondary">{{ order.labTestCode || '' }}</div>
               </td>
-              <td>
-                @if (isIncomingExternal(order) || isSentOut(order)) {
-                  <div class="cell-primary">{{ actingHospitalName(order) }}</div>
-                  <div
-                    class="cell-secondary routing-hint"
-                    [attr.data-testid]="
-                      isIncomingExternal(order) ? 'routing-incoming' : 'routing-outgoing'
-                    "
-                  >
-                    {{ counterpartLabelKey(order) | translate }}{{ 'COMMON.COLON' | translate }}
-                    {{ counterpartHospitalName(order) }}
-                  </div>
-                } @else {
-                  {{ order.hospitalName || '—' }}
-                }
+              <td [attr.data-testid]="'lab-prescriber-' + order.id">
+                {{ order.orderingStaffName || '—' }}
               </td>
+              @if (showHospitalColumn()) {
+                <td>
+                  @if (isIncomingExternal(order) || isSentOut(order)) {
+                    <div class="cell-primary">{{ actingHospitalName(order) }}</div>
+                    <div
+                      class="cell-secondary routing-hint"
+                      [attr.data-testid]="
+                        isIncomingExternal(order) ? 'routing-incoming' : 'routing-outgoing'
+                      "
+                    >
+                      {{ counterpartLabelKey(order) | translate }}{{ 'COMMON.COLON' | translate }}
+                      {{ counterpartHospitalName(order) }}
+                    </div>
+                  } @else {
+                    {{ order.hospitalName || '—' }}
+                  }
+                </td>
+              }
               <td class="date-cell">
                 {{ order.orderDatetime ? (order.orderDatetime | serverTime | dateTime) : '—' }}
               </td>
               <td>
-                <span class="status-badge" [class]="getStatusClass(order.status)">{{
-                  order.status | enumLabel: 'labOrderStatus'
-                }}</span>
+                <span
+                  class="status-badge"
+                  [class]="getStatusClass(order.status)"
+                  [attr.data-testid]="'lab-state-' + order.id"
+                  >{{
+                    stateKey(order.status)
+                      ? (stateKey(order.status) ?? '' | translate)
+                      : (order.status | enumLabel: 'labOrderStatus')
+                  }}</span
+                >
               </td>
               <td>
                 <div class="action-group">
@@ -265,6 +290,17 @@
             <div class="detail-field">
               <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span
               ><span class="field-value">{{ o.patientFullName }}</span>
+              @if (o.patientMrn || patientAge(o.patientDateOfBirth)) {
+                <span class="cell-secondary" data-testid="detail-patient-identity">
+                  @if (o.patientMrn) {
+                    {{ 'LAB.MRN' | translate }}{{ 'COMMON.COLON' | translate }} {{ o.patientMrn }}
+                  }
+                  @if (o.patientMrn && patientAge(o.patientDateOfBirth)) {
+                    ·
+                  }
+                  {{ patientAge(o.patientDateOfBirth) }}
+                </span>
+              }
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
@@ -280,37 +316,111 @@
               <span class="field-label">{{ 'LAB.TEST' | translate }}</span
               ><span class="field-value">{{ o.labTestName }} ({{ o.labTestCode }})</span>
             </div>
+            <div class="detail-field" data-testid="detail-prescriber">
+              <span class="field-label">{{ 'LAB.PRESCRIBER' | translate }}</span
+              ><span class="field-value">{{ o.orderingStaffName || '—' }}</span>
+            </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB.ORDER_DATE' | translate }}</span
               ><span class="field-value">{{ o.orderDatetime | serverTime | dateTime }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              >{{ ' '
-              }}<span class="status-badge" [class]="getStatusClass(o.status)">{{
-                o.status | enumLabel: 'labOrderStatus'
-              }}</span>
-            </div>
-            <div class="detail-field" data-testid="detail-priority">
-              <span class="field-label">{{ 'LAB.PRIORITY' | translate }}</span
               ><span
-                class="field-value"
-                [class.priority-badge]="isUrgentPriority(o.priority)"
-                [class.priority-stat]="o.priority === 'STAT'"
-                >{{ o.priority ? (o.priority | enumLabel: 'labOrderPriority') : '—' }}</span
+                [class]="getStatusClass(o.status) + ' fit-content'"
+                data-testid="detail-state"
+                >{{
+                  stateKey(o.status)
+                    ? (stateKey(o.status) ?? '' | translate)
+                    : (o.status | enumLabel: 'labOrderStatus')
+                }}</span
               >
             </div>
-            <div class="detail-field">
-              <span class="field-label">{{ 'LAB.DIAGNOSIS_CODE' | translate }}</span
-              ><span class="field-value">{{ o.primaryDiagnosisCode || '—' }}</span>
+            <div class="detail-field" data-testid="detail-priority">
+              <span class="field-label">{{ 'LAB.PRIORITY' | translate }}</span>
+              @if (o.priority) {
+                <span
+                  class="priority-badge fit-content"
+                  [class.priority-routine]="!isUrgentPriority(o.priority)"
+                  [class.priority-stat]="o.priority === 'STAT'"
+                  >{{ o.priority | enumLabel: 'labOrderPriority' }}</span
+                >
+              } @else {
+                <span class="field-value">—</span>
+              }
             </div>
-            <div class="detail-field">
-              <span class="field-label">{{ 'LAB.ORDER_CHANNEL' | translate }}</span
-              ><span class="field-value">{{
-                o.orderChannel ? (o.orderChannel | enumLabel: 'labOrderChannel') : '—'
-              }}</span>
+            <div class="detail-field" data-testid="detail-diagnosis">
+              <span class="field-label">{{ 'LAB.DIAGNOSIS_CODE' | translate }}</span
+              ><span class="field-value">{{ diagnosisText(o) }}</span>
             </div>
           </div>
+
+          @if (detailAwaitingValidation() || releasedDetailResults().length) {
+            <!-- The result: a value only once validated (released), graded by the server. -->
+            <div class="notes-section detail-result" data-testid="detail-result">
+              <span class="field-label">{{ 'LAB.RESULTS' | translate }}</span>
+              @for (r of releasedDetailResults(); track r.id) {
+                <div class="result-line" [attr.data-testid]="'detail-result-' + r.id">
+                  <strong>{{ r.resultValue | labValue: r.resultUnit }}</strong>
+                  <span [class]="resultFlagClass(r)" [attr.data-testid]="'detail-flag-' + r.id">{{
+                    resultFlag(r) === 'UNIT_MISMATCH'
+                      ? ('LAB_RESULTS.NOT_GRADED_UNITS_DIFFER' | translate)
+                      : resultFlag(r) === 'GRADE_UNKNOWN'
+                        ? ('LAB_RESULTS.GRADE_UNKNOWN' | translate)
+                        : (resultFlag(r) | enumLabel: 'labSeverityFlag')
+                  }}</span>
+                  @if (resultReference(r); as ref) {
+                    <span class="cell-secondary" [attr.data-testid]="'detail-reference-' + r.id"
+                      >{{ 'LAB.REFERENCE_RANGE' | translate }}{{ 'COMMON.COLON' | translate }}
+                      {{ ref }}</span
+                    >
+                  }
+                  <a
+                    class="result-link"
+                    routerLink="/lab-results"
+                    [queryParams]="{ resultId: r.id }"
+                    [attr.data-testid]="'detail-result-link-' + r.id"
+                    >{{ 'LAB.VIEW_FULL_RESULT' | translate }}</a
+                  >
+                </div>
+                <app-result-range [result]="r" />
+              }
+              @if (detailAwaitingValidation()) {
+                <p class="awaiting-validation" data-testid="detail-awaiting-validation">
+                  {{ 'LAB.STATE.AWAITING_VALIDATION' | translate }}
+                </p>
+              }
+            </div>
+          }
+
+          @if (currentDetailSpecimen()?.specimenType || detailTimeline().length > 1) {
+            <!-- Specimen and timeline: only the steps the backend recorded. -->
+            <div class="notes-section" data-testid="detail-timeline">
+              <span class="field-label">{{ 'LAB.TIMELINE.TITLE' | translate }}</span>
+              @if (currentDetailSpecimen()?.specimenType; as type) {
+                <p data-testid="detail-specimen-type">
+                  {{ 'LAB.SAMPLE_TYPE' | translate }}{{ 'COMMON.COLON' | translate }}
+                  {{ type | enumLabel: 'specimenType' : 'asTyped' }}
+                </p>
+              }
+              <ol class="lab-timeline">
+                @for (step of detailTimeline(); track step.key) {
+                  <li>
+                    <span class="timeline-step">{{ step.key | translate }}</span>
+                    <span class="timeline-at">{{ step.at | serverTime | dateTime }}</span>
+                    @if (step.by) {
+                      <span class="cell-secondary">{{ step.by }}</span>
+                    }
+                  </li>
+                }
+              </ol>
+              @if (detailTurnaround(); as tat) {
+                <p class="cell-secondary" data-testid="detail-turnaround">
+                  {{ 'LAB.TURNAROUND' | translate }}{{ 'COMMON.COLON' | translate }} {{ tat }}
+                </p>
+              }
+            </div>
+          }
           @if (o.clinicalIndication) {
             <div class="notes-section">
               <span class="field-label">{{ 'LAB.CLINICAL_INDICATION' | translate }}</span>
@@ -346,6 +456,13 @@
                 }
               </p>
             </div>
+          }
+          @if (o.orderChannel) {
+            <!-- Secondary details: how the request reached the laboratory. -->
+            <p class="detail-secondary cell-secondary" data-testid="detail-secondary">
+              {{ 'LAB.ORDER_CHANNEL' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ o.orderChannel | enumLabel: 'labOrderChannel' }}
+            </p>
           }
         </div>
       </div>

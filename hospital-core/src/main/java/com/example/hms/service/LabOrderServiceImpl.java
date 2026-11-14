@@ -107,6 +107,7 @@ public class LabOrderServiceImpl implements LabOrderService {
     private final com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
     private final com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
     private final com.example.hms.repository.LabResultRepository labResultRepository;
+    private final com.example.hms.repository.PatientDiagnosisRepository patientDiagnosisRepository;
     private static final HexFormat HEX_FORMAT = HexFormat.of();
 
     @Override
@@ -777,7 +778,32 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         recordPerformedHereReach(List.of(labOrder), hospitalId);
 
-        return labOrderMapper.toLabOrderResponseDTO(labOrder);
+        LabOrderResponseDTO dto = labOrderMapper.toLabOrderResponseDTO(labOrder);
+        dto.setPrimaryDiagnosisLabel(primaryDiagnosisLabelOf(labOrder, hospitalId));
+        return dto;
+    }
+
+    /**
+     * The label of the order's diagnosis code: the description of the patient's
+     * own diagnosis recorded under that code at the ordering hospital. Only for a
+     * reader AT the ordering hospital: a laboratory the order was sent to reads
+     * the code it was sent, not the ordering hospital's chart. There is no ICD-10
+     * catalogue to resolve a code nobody recorded, so that stays null.
+     */
+    private String primaryDiagnosisLabelOf(LabOrder labOrder, UUID readerHospitalId) {
+        String code = labOrder.getPrimaryDiagnosisCode();
+        UUID orderingHospitalId = labOrder.getHospital() != null ? labOrder.getHospital().getId() : null;
+        if (code == null || code.isBlank() || labOrder.getPatient() == null || orderingHospitalId == null
+                || (readerHospitalId != null && !readerHospitalId.equals(orderingHospitalId))) {
+            return null;
+        }
+        return patientDiagnosisRepository
+            .findFirstByPatient_IdAndHospital_IdAndIcdCodeIgnoreCaseOrderByDiagnosedAtDesc(
+                labOrder.getPatient().getId(), orderingHospitalId, code.trim())
+            .map(com.example.hms.model.PatientDiagnosis::getDescription)
+            .filter(d -> !d.isBlank())
+            .map(String::trim)
+            .orElse(null);
     }
 
     @Override

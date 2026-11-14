@@ -142,6 +142,8 @@
     "LAB.NORMAL": "Normal",
     "LAB.NOTES": "Notes",
     "LAB.PATIENT": "Patient",
+    "LAB.TAT_HOURS_MINUTES": "{{hours}} h {{minutes}} min",
+    "LAB.TAT_MINUTES": "{{minutes}} min",
     "LAB.TEST": "Test",
     "LABOR.CONTRACTIONS": "Contractions",
     "LABOR.CONTRACTIONS_TEN": "Contractions /10 min",
