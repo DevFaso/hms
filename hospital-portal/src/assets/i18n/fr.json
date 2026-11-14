@@ -314,7 +314,13 @@
       "SUBMIT": "Consigner l’arrivée",
       "DONE": "Arrivée consignée. Son épisode de travail est ouvert ici et {{hospital}} a été alerté.",
       "ERROR": "L’arrivée n’a pas pu être consignée."
-    }
+    },
+    "BABY_OUTCOME": "Bébé {{order}}",
+    "BABY_OUTCOME_LIVE": "Né(e) vivant(e)",
+    "BABY_OUTCOME_STILLBORN": "Mort-né(e) (sans signe de vie)",
+    "BABY_OUTCOME_UNKNOWN": "Non renseigné",
+    "BABY_OUTCOMES": "Issue de chaque bébé",
+    "FETAL_DEATH_EVENT_RECORDED": "Mortinaissance enregistrée comme événement de décès fœtal (sans dossier patient) : elle est comptée dans le registre de mortalité."
   },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Retour aux organisations",
@@ -1931,7 +1937,10 @@
       "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Épisode de travail clos : elle est arrivée dans un autre hôpital sans transmission",
       "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Naissance enregistrée avant son arrivée depuis un autre hôpital",
       "LABOR_EPISODE_HANDOVER_READ": "Épisode de travail transmis par transfert, consulté par l’hôpital d’accueil",
-      "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Épisode de travail ouvert à son arrivée d’un autre hôpital, sans transmission"
+      "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Épisode de travail ouvert à son arrivée d’un autre hôpital, sans transmission",
+      "FETAL_DEATH_EVENT_RECORDED": "Événement de décès fœtal enregistré pour un bébé mort-né",
+      "FETAL_DEATH_EVENT_SUPERSEDED": "Événement de décès fœtal remplacé après correction de l’issue du bébé",
+      "DELIVERY_BABY_OUTCOME_CORRECTED": "Issue d’un bébé corrigée sur un compte rendu d’accouchement"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -6751,7 +6760,10 @@
         "LABOR_EPISODE_TRANSFERRED_OUT": "Travail transféré vers un autre hôpital",
         "LABOR_EPISODE_TRANSFERRED_IN": "Travail reçu d’un autre hôpital",
         "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Travail parti sans transmission",
-        "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Naissance avant l'arrivée"
+        "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Naissance avant l'arrivée",
+        "FETAL_DEATH_EVENT_RECORDED": "Décès fœtal enregistré",
+        "FETAL_DEATH_EVENT_SUPERSEDED": "Décès fœtal remplacé",
+        "DELIVERY_BABY_OUTCOME_CORRECTED": "Issue d’un bébé corrigée"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -7276,7 +7288,8 @@
         "ULTRASOUND": "Échographie",
         "VISIT_TYPE": "Type de visite",
         "WARD": "Unité de soins",
-        "WEBHOOK": "Webhook partenaire"
+        "WEBHOOK": "Webhook partenaire",
+        "FETAL_DEATH_EVENT": "Événement de décès fœtal"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
@@ -12442,12 +12455,12 @@
     "TIMING_DURING_LABOUR_OR_DELIVERY": "Pendant le travail ou l'accouchement",
     "TIMING_WITHIN_42_DAYS_POSTPARTUM": "Dans les 42 jours du post-partum",
     "TIMING_LATE_MATERNAL": "42 jours à un an (maternel tardif)",
-    "PERINATAL_DEFINITION": "OMS : mortinaissances et décès aux jours 0 à 6, à partir de 22 semaines de gestation",
+    "PERINATAL_DEFINITION": "OMS (provisoire) : mortinaissances à {{weeks}} semaines révolues ou plus et décès néonatals précoces (jours 0 à 6)",
     "EARLY_NEONATAL_DEATHS": "Néonatal précoce, jours 0 à 6",
     "LATE_NEONATAL_DEATHS": "Décès néonatals tardifs",
     "LATE_NEONATAL_NOTE": "jours 7 à 27 : déclarés à part, hors du total périnatal",
-    "PERINATAL_ELIGIBILITY_UNKNOWN_COUNT": "dans le total périnatal d'après la classification du clinicien, non confirmés : âge gestationnel, statut à la naissance ou âge manquant ou indécis.",
-    "PERINATAL_BELOW_GESTATION_COUNT": "avec un âge gestationnel inférieur à 22 semaines : comptés en mortinaissances ou néonatal précoce ci-dessus, mais hors du total périnatal.",
+    "PERINATAL_ELIGIBILITY_UNKNOWN_COUNT": "décès néonatals précoces dans le total périnatal d'après la classification du clinicien, non confirmés : âge gestationnel, statut à la naissance ou âge manquant ou indécis.",
+    "PERINATAL_BELOW_GESTATION_COUNT": "décès néonatals précoces avec un âge gestationnel inférieur à 22 semaines : comptés ci-dessus, mais hors du total périnatal.",
     "BIRTH_STATUS": "Statut à la naissance",
     "BIRTH_STATUS_UNKNOWN": "Inconnu",
     "BIRTH_STATUS_LIVE_BIRTH": "Naissance vivante",
@@ -12473,7 +12486,27 @@
       "STAY_LINE": "admis le {{admitted}}, clôturé le {{closed}}",
       "VISITS": "Consultations clôturées :",
       "APPOINTMENTS": "Rendez-vous annulés :"
-    }
+    },
+    "DEATHS_AFTER_LIVE_BIRTH_NOTE": "Décès après une naissance vivante ; les mortinaissances sont comptées dans leur propre section ci-dessous",
+    "STILLBIRTH_SECTION": "Mortinaissances",
+    "STILLBIRTH_SECTION_HINT": "Mortinaissances enregistrées à l’accouchement (événements de décès fœtal, sans dossier patient) et décès enregistrés comme mortinaissances. Chacune est comptée une seule fois. Les seuils sont provisoires, en attente d’approbation par le responsable d’obstétrique et l’autorité de codage.",
+    "STILLBIRTHS_RECORDED": "Mortinaissances enregistrées",
+    "STILLBIRTHS_RECORDED_DEFINITION": "Toutes les mortinaissances enregistrées, quel que soit le terme",
+    "STILLBIRTHS_WHO": "Mortinaissances (OMS)",
+    "STILLBIRTHS_WHO_DEFINITION": "Indicateur OMS : sans signe de vie à {{weeks}} semaines d’aménorrhée révolues ou plus (provisoire)",
+    "STILLBIRTHS_ICD": "Décès fœtaux (CIM)",
+    "STILLBIRTHS_ICD_DEFINITION": "Niveau CIM : à partir de {{weeks}} semaines d’aménorrhée révolues (provisoire)",
+    "CLASSIFICATION_INCOMPLETE": "Classification incomplète",
+    "CLASSIFICATION_INCOMPLETE_DEFINITION": "Terme non renseigné : compté ici, dans aucune statistique tant qu’il n’est pas connu",
+    "STILLBIRTH_MOTHER": "Mère",
+    "STILLBIRTH_DATE": "Date et heure",
+    "STILLBIRTH_GESTATION": "Terme",
+    "GESTATION_WEEKS": "{{weeks}} semaines",
+    "STILLBIRTH_SOURCE": "Origine",
+    "STILLBIRTH_SOURCE_DELIVERY": "Compte rendu d’accouchement",
+    "STILLBIRTH_SOURCE_DELIVERY_HISTORICAL": "Compte rendu d’accouchement (antérieur à l’issue par bébé)",
+    "STILLBIRTH_SOURCE_DEATH_RECORD": "Acte de décès",
+    "STILLBIRTH_DECLARED": "Également déclarée par un acte de décès (comptée une seule fois)"
   },
   "BED_BOARD": {
     "TITLE": "Tableau des lits",

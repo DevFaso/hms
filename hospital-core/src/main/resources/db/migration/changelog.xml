@@ -3491,6 +3491,13 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V293-d1714-fetal-death-events" author="hms-team" runOnChange="false">
+        <sqlFile path="V293__d1714_fetal_death_events.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
     <changeSet id="V294-imaging-order-completed-at" author="hms-team" runOnChange="false">
         <sqlFile path="V294__imaging_order_completed_at.sql"
                  relativeToChangelogFile="true"

@@ -314,7 +314,13 @@
       "SUBMIT": "Record the arrival",
       "DONE": "Arrival recorded. Her labour episode is open here and {{hospital}} has been alerted.",
       "ERROR": "The arrival could not be recorded."
-    }
+    },
+    "BABY_OUTCOME": "Baby {{order}}",
+    "BABY_OUTCOME_LIVE": "Born alive",
+    "BABY_OUTCOME_STILLBORN": "Stillborn (no signs of life)",
+    "BABY_OUTCOME_UNKNOWN": "Not recorded",
+    "BABY_OUTCOMES": "Outcome of each baby",
+    "FETAL_DEATH_EVENT_RECORDED": "Stillbirth recorded as a fetal-death event (no patient record): it is counted in the mortality register."
   },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Back to organizations",
@@ -1931,7 +1937,10 @@
       "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Labour episode closed: she arrived at another hospital without a handover",
       "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Birth recorded as before her arrival from another hospital",
       "LABOR_EPISODE_HANDOVER_READ": "Labour episode handed over by transfer read at the receiving hospital",
-      "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Labour episode opened on arrival from another hospital without a handover"
+      "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Labour episode opened on arrival from another hospital without a handover",
+      "FETAL_DEATH_EVENT_RECORDED": "Fetal-death event recorded for a stillborn baby",
+      "FETAL_DEATH_EVENT_SUPERSEDED": "Fetal-death event superseded by a corrected baby outcome",
+      "DELIVERY_BABY_OUTCOME_CORRECTED": "Baby outcome corrected on a delivery record"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -6785,7 +6794,10 @@
         "LABOR_EPISODE_TRANSFERRED_OUT": "Labour transferred out",
         "LABOR_EPISODE_TRANSFERRED_IN": "Labour transferred in",
         "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Labour left without a handover",
-        "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Birth before arrival"
+        "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Birth before arrival",
+        "FETAL_DEATH_EVENT_RECORDED": "Fetal-death event recorded",
+        "FETAL_DEATH_EVENT_SUPERSEDED": "Fetal-death event superseded",
+        "DELIVERY_BABY_OUTCOME_CORRECTED": "Baby outcome corrected"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -7310,7 +7322,8 @@
         "ULTRASOUND": "Ultrasound",
         "VISIT_TYPE": "Visit type",
         "WARD": "Ward",
-        "WEBHOOK": "Partner webhook"
+        "WEBHOOK": "Partner webhook",
+        "FETAL_DEATH_EVENT": "Fetal-death event"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -12442,12 +12455,12 @@
     "TIMING_DURING_LABOUR_OR_DELIVERY": "During labour or delivery",
     "TIMING_WITHIN_42_DAYS_POSTPARTUM": "Within 42 days postpartum",
     "TIMING_LATE_MATERNAL": "42 days to one year (late maternal)",
-    "PERINATAL_DEFINITION": "WHO: stillbirths and deaths on days 0–6, from 22 weeks of gestation",
+    "PERINATAL_DEFINITION": "WHO (provisional): stillbirths at {{weeks}} or more completed weeks and early neonatal deaths (days 0–6)",
     "EARLY_NEONATAL_DEATHS": "Early neonatal, days 0–6",
     "LATE_NEONATAL_DEATHS": "Late neonatal deaths",
     "LATE_NEONATAL_NOTE": "days 7–27: reported separately, not in the perinatal count",
-    "PERINATAL_ELIGIBILITY_UNKNOWN_COUNT": "in the perinatal count on the clinician's classification, unconfirmed: gestation, birth status or age is missing or undecided.",
-    "PERINATAL_BELOW_GESTATION_COUNT": "with a gestation under 22 weeks: listed as stillbirths or early neonatal above, but not in the perinatal count.",
+    "PERINATAL_ELIGIBILITY_UNKNOWN_COUNT": "early neonatal deaths in the perinatal count on the clinician's classification, unconfirmed: gestation, birth status or age is missing or undecided.",
+    "PERINATAL_BELOW_GESTATION_COUNT": "early neonatal deaths with a gestation under 22 weeks: listed above, but not in the perinatal count.",
     "BIRTH_STATUS": "Birth status",
     "BIRTH_STATUS_UNKNOWN": "Unknown",
     "BIRTH_STATUS_LIVE_BIRTH": "Live birth",
@@ -12473,7 +12486,27 @@
       "STAY_LINE": "admitted {{admitted}}, closed {{closed}}",
       "VISITS": "Visits it closed:",
       "APPOINTMENTS": "Appointments it cancelled:"
-    }
+    },
+    "DEATHS_AFTER_LIVE_BIRTH_NOTE": "Deaths after a live birth; stillbirths are counted in their own section below",
+    "STILLBIRTH_SECTION": "Stillbirths",
+    "STILLBIRTH_SECTION_HINT": "Stillbirths recorded at delivery (fetal-death events, with no patient record) and stillbirth death records. Each is counted once. The thresholds are provisional, pending approval by the obstetric lead and the coding authority.",
+    "STILLBIRTHS_RECORDED": "Stillbirths recorded",
+    "STILLBIRTHS_RECORDED_DEFINITION": "Every stillbirth recorded, whatever the gestation",
+    "STILLBIRTHS_WHO": "WHO stillbirths",
+    "STILLBIRTHS_WHO_DEFINITION": "WHO indicator: no signs of life at {{weeks}} or more completed weeks (provisional)",
+    "STILLBIRTHS_ICD": "Fetal deaths (ICD)",
+    "STILLBIRTHS_ICD_DEFINITION": "ICD level: from {{weeks}} completed weeks (provisional)",
+    "CLASSIFICATION_INCOMPLETE": "Classification incomplete",
+    "CLASSIFICATION_INCOMPLETE_DEFINITION": "Gestation not recorded: counted here, in no statistic until it is known",
+    "STILLBIRTH_MOTHER": "Mother",
+    "STILLBIRTH_DATE": "Date and time",
+    "STILLBIRTH_GESTATION": "Gestation",
+    "GESTATION_WEEKS": "{{weeks}} weeks",
+    "STILLBIRTH_SOURCE": "Source",
+    "STILLBIRTH_SOURCE_DELIVERY": "Delivery record",
+    "STILLBIRTH_SOURCE_DELIVERY_HISTORICAL": "Delivery record (recorded before per-baby outcomes)",
+    "STILLBIRTH_SOURCE_DEATH_RECORD": "Death record",
+    "STILLBIRTH_DECLARED": "Also declared by a death record (counted once)"
   },
   "BED_BOARD": {
     "TITLE": "Ward board",

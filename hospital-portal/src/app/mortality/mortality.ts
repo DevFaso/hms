@@ -18,6 +18,7 @@ import {
   MannerOfDeath,
   MaternalDeathTiming,
   MortalityRegister,
+  StillbirthRow,
   MortalityService,
   PerinatalBirthStatus,
   PerinatalDeathType,
@@ -76,7 +77,19 @@ export class MortalityComponent implements OnInit {
   private readonly confirmService = inject(ConfirmService);
 
   loading = signal(false);
+
+  /** QA D1714: the death record behind a stillbirth row (its own, or the one that declared the event). */
+  stillbirthDeathRecord(row: StillbirthRow): DeathRecordResponse | null {
+    const id = row.deathRecordId ?? row.declaredByDeathRecordId;
+    return id ? ((this.register()?.deaths ?? []).find((d) => d.id === id) ?? null) : null;
+  }
   register = signal<MortalityRegister | null>(null);
+  /** QA D1714: the deaths after a live birth; the stillbirths have their own section. */
+  readonly deathsAfterLiveBirth = computed(() =>
+    (this.register()?.deaths ?? []).filter(
+      (d) => !(d.perinatalDeath && d.perinatalType === 'STILLBIRTH'),
+    ),
+  );
   selected = signal<DeathRecordResponse | null>(null);
   /** Shown after a death is recorded: what the cascade actually closed. */
   lastClosure = signal<DeathClosureSummary | null>(null);

@@ -1285,4 +1285,46 @@ describe('LaborTabComponent newborns (QA D1592)', () => {
       (fixture.nativeElement as HTMLElement).querySelector('[data-testid="delivery-newborns"]'),
     ).toBeNull();
   });
+
+  it('QA D1714: each baby has its own outcome, so mixed twins are sent per baby', () => {
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    const component = fixture.componentInstance;
+    component.deliveryForm = { numberOfInfants: 2 };
+    component.setBabyOutcome(2, 'STILLBORN');
+
+    expect(component.babyOrders()).toEqual([1, 2]);
+    expect(component.deliveryBabies()).toEqual([
+      { birthOrder: 1, outcome: 'LIVE' },
+      { birthOrder: 2, outcome: 'STILLBORN' },
+    ]);
+    component.deliveryForm = { numberOfInfants: 1 };
+    expect(component.deliveryBabies()).toEqual([{ birthOrder: 1, outcome: 'LIVE' }]);
+  });
+
+  it('QA D1714: the delivery summary shows each baby and the fetal-death event', () => {
+    laborSpy.episodes.and.returnValue(
+      of([{ ...episode('e1', 'DELIVERED'), deliveryRecorded: true }]),
+    );
+    laborSpy.delivery.and.returnValue(
+      of({
+        ...record([]),
+        numberOfInfants: 2,
+        babies: [
+          { birthOrder: 1, outcome: 'LIVE' },
+          { birthOrder: 2, outcome: 'STILLBORN', fetalDeathEventId: 'fd1' },
+        ],
+      }),
+    );
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    const page = fixture.nativeElement as HTMLElement;
+
+    const outcomes = (
+      page.querySelector('[data-testid="delivery-baby-outcomes"]')?.textContent ?? ''
+    ).replace(/\s+/g, ' ');
+    expect(outcomes).toContain('Bébé 1 : Né(e) vivant(e)');
+    expect(outcomes).toContain('Bébé 2 : Mort-né(e) (sans signe de vie)');
+    expect(page.querySelector('[data-testid="delivery-fetal-death-event"]')).not.toBeNull();
+  });
 });
