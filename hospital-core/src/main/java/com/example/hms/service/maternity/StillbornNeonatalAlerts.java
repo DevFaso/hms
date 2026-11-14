@@ -3,6 +3,7 @@ package com.example.hms.service.maternity;
 import com.example.hms.enums.BabyOutcome;
 import com.example.hms.model.labor.DeliveryNewborn;
 import com.example.hms.model.labor.DeliveryRecord;
+import com.example.hms.model.neonatal.NewbornAssessment;
 import com.example.hms.repository.DeliveryNewbornRepository;
 import com.example.hms.repository.NewbornAssessmentRepository;
 import com.example.hms.repository.ObstetricAlertEscalationRepository;
@@ -85,14 +86,51 @@ public class StillbornNeonatalAlerts {
         if (newbornPatientId == null) {
             return false;
         }
-        Optional<DeliveryNewborn> link = deliveryNewbornRepository.findByNewbornPatient_Id(newbornPatientId);
-        if (link.isEmpty() || link.get().getDeliveryRecord() == null) {
+        return deliveryNewbornRepository.findByNewbornPatient_Id(newbornPatientId)
+            .map(link -> confirmedStillborn(link, newbornPatientId))
+            .orElse(false);
+    }
+
+    /**
+     * The newborn Apgar alerts of an assessment being recorded (before it is saved) are not raised for a confirmed
+     * stillborn baby: the same per-baby rule as {@link #confirmedStillborn}, plus this assessment's own reading.
+     * <ul>
+     *   <li>A registered baby (its own chart, or recorded there from the mother's): its own birth order decides; a
+     *       live twin keeps its alerts.</li>
+     *   <li>Otherwise (the mother's chart, the baby not registered) the assessment cannot name its baby: only a
+     *       delivery whose every baby is a confirmed stillbirth ({@link #assess} suppresses) is silenced.</li>
+     *   <li>A sign of life in this assessment, or an unknown or conflicting outcome, always alerts.</li>
+     * </ul>
+     */
+    public boolean confirmedStillbornAssessment(NewbornAssessment assessment) {
+        if (assessment == null || showsSignOfLife(assessment)) {
             return false;
         }
-        DeliveryRecord delivery = link.get().getDeliveryRecord();
+        UUID patientId = assessment.getPatient() == null ? null : assessment.getPatient().getId();
+        Optional<DeliveryNewborn> link = patientId == null ? Optional.empty()
+            : deliveryNewbornRepository.findByNewbornPatient_Id(patientId);
+        if (link.isPresent()) {
+            return confirmedStillborn(link.get(), patientId);
+        }
+        DeliveryRecord delivery = assessment.getDeliveryRecord();
+        return delivery != null && assess(delivery).suppress();
+    }
+
+    /** The sign-of-life reading of one assessment, as {@code NewbornAssessmentRepository.anySignOfLifeRecorded}. */
+    static boolean showsSignOfLife(NewbornAssessment assessment) {
+        return positive(assessment.getApgarOneMinute()) || positive(assessment.getApgarFiveMinute())
+            || positive(assessment.getApgarTenMinute()) || positive(assessment.getHeartRateBpm())
+            || positive(assessment.getRespirationsPerMin());
+    }
+
+    private boolean confirmedStillborn(DeliveryNewborn link, UUID newbornPatientId) {
+        if (link.getDeliveryRecord() == null) {
+            return false;
+        }
+        DeliveryRecord delivery = link.getDeliveryRecord();
         // Rex on #1152: the same sign-of-life rule as assess(). The delivery's own Apgar above 0, with no live-born
         // baby it could belong to, contradicts the stillborn outcome: the outcome is uncertain, nothing is closed.
-        return delivery.outcomeOf(link.get().getBirthOrder()) == BabyOutcome.STILLBORN
+        return delivery.outcomeOf(link.getBirthOrder()) == BabyOutcome.STILLBORN
             && !newbornAssessmentRepository.anySignOfLifeRecorded(newbornPatientId)
             && !(!anyLiveBorn(delivery) && deliverySignOfLife(delivery));
     }

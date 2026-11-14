@@ -143,4 +143,39 @@ class StillbornNeonatalAlertsTest {
             DeliveryNewborn.builder().deliveryRecord(record).newbornPatient(baby).birthOrder(order).build()));
         return baby;
     }
+    // -- The assessment being recorded (newborn alert creation) --
+
+    private static com.example.hms.model.neonatal.NewbornAssessment assessmentOf(Patient patient,
+                                                                               DeliveryRecord record) {
+        com.example.hms.model.neonatal.NewbornAssessment assessment = new com.example.hms.model.neonatal.NewbornAssessment();
+        assessment.setPatient(patient);
+        assessment.setDeliveryRecord(record);
+        assessment.setApgarOneMinute(0);
+        return assessment;
+    }
+
+    @Test
+    void anAssessmentOfAConfirmedStillbornBabyIsSilencedAndOneShowingLifeIsNot() {
+        DeliveryRecord record = delivery(null, BabyOutcome.STILLBORN);
+        Patient baby = registered(record, 1);
+        com.example.hms.model.neonatal.NewbornAssessment assessment = assessmentOf(baby, record);
+
+        assertThat(rule.confirmedStillbornAssessment(assessment)).isTrue();
+        assessment.setHeartRateBpm(60);
+        assertThat(rule.confirmedStillbornAssessment(assessment)).as("its own heart rate: a sign of life").isFalse();
+    }
+
+    @Test
+    void anAssessmentOfAnUnregisteredBabyIsSilencedOnlyWhenEveryBabyIsAConfirmedStillbirth() {
+        Patient mother = new Patient();
+        mother.setId(UUID.randomUUID());
+
+        assertThat(rule.confirmedStillbornAssessment(assessmentOf(mother,
+            delivery(null, BabyOutcome.STILLBORN, BabyOutcome.STILLBORN)))).isTrue();
+        assertThat(rule.confirmedStillbornAssessment(assessmentOf(mother,
+            delivery(null, BabyOutcome.STILLBORN, BabyOutcome.LIVE)))).as("which twin? never silenced").isFalse();
+        assertThat(rule.confirmedStillbornAssessment(assessmentOf(mother, delivery(3, BabyOutcome.STILLBORN))))
+            .as("uncertain").isFalse();
+        assertThat(rule.confirmedStillbornAssessment(assessmentOf(mother, null))).as("no delivery").isFalse();
+    }
 }
