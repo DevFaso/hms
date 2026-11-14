@@ -469,6 +469,11 @@ describe('VisitSummarySectionsComponent', () => {
     expect(shown('Paracétamol 250 mg', '50 mg')).toContain('50 mg');
     expect(shown('Haldol 0,5 mg', '5 mg')).toContain('5 mg');
     expect(shown('Amoxicilline 125 mg/5 ml', '125 mg')).toContain('125 mg');
+    expect(shown('Amoxicilline 125 mg / 5 ml', '125 mg')).toContain('125 mg');
+    expect(shown('Amoxicilline 125 mg\u00a0/\u00a05 ml', '125 mg')).toContain('125 mg');
+    expect(shown('Amoxicilline 125 mg\t/ 5 ml', '125 mg')).toContain('125 mg');
+    expect(shown('Amoxicilline 125 mg/5 ml', '5 ml')).toContain('5 ml');
+    expect(shown('Amoxicilline 125 mg / 5 ml', '5 ml')).toContain('5 ml');
     expect(shown('Paracétamol 500mg', '500 mg')).not.toContain('500');
     expect(shown('Haldol 0,5 mg', '0.5 mg')).not.toContain('0.5');
   });

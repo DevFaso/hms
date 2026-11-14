@@ -148,6 +148,7 @@ function strengthText(value: string): string {
     .toLowerCase()
     .replace(/(\d),(\d)/g, '$1.$2')
     .replace(/(\d)\s+(?=[^\d\s])/g, '$1')
+    .replace(/\s*\/\s*/g, '/')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -306,10 +307,11 @@ export class VisitSummarySectionsComponent {
     if (!dose) return null;
     // Rex P2 on #1145: the dose must be a whole strength of the name, never part of one:
     // "50 mg" is not in "250 mg", "5 mg" not in "0,5 mg", and a concentration's
-    // numerator ("125 mg" of "125 mg/5 ml") is not the dose either, so it stays shown.
+    // numerator or denominator ("125 mg" or "5 ml" of "125 mg / 5 ml") is not
+    // the dose either, so it stays shown, regardless of spacing around the slash.
     const name = strengthText(m.name);
     const wanted = new RegExp(
-      `(?:^|[^\\d.])${escapeRegExp(strengthText(dose))}(?![\\d.\\p{L}/])`,
+      `(?:^|[^\\d./])${escapeRegExp(strengthText(dose))}(?![\\d.\\p{L}/])`,
       'u',
     );
     return wanted.test(name) ? null : dose;
