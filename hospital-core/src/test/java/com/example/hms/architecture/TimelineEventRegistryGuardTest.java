@@ -92,6 +92,7 @@ class TimelineEventRegistryGuardTest {
         Map.entry("BillingInvoice", "billing, not clinical"),
         Map.entry("OrderReviewHold", "a review of orders already on the chronology; audited, and on the chart's review list"),
         Map.entry("DeathDispute", "a review of the death row already on the chronology; audited, and on the mortality register"),
+        Map.entry("FetalDeathEvent", "QA D1714: a stillborn baby of the mother's delivery, shown on that delivery record and on the mortality register; the delivery is the chronology row"),
         Map.entry("PharmacyClaim", "billing, not clinical"),
         Map.entry("PharmacyPayment", "billing, not clinical"),
         Map.entry("PharmacySale", "a sale; the prescription row is the clinical event"),

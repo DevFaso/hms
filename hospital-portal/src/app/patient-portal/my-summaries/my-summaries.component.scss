@@ -133,15 +133,18 @@
   }
 }
 
-/* 2026-11-12: the visit's content sections, laid out as the staff dialog's. */
+/* Polish 2026-11-13: the shared summary document, one column at every width. */
 .avs-detail-sections {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin: 12px 0;
+  min-width: 0;
+  margin: 0 0 12px;
 }
-@media (max-width: 600px) {
-  .avs-detail-sections {
-    grid-template-columns: minmax(0, 1fr);
-  }
+
+/* 360 px phones: nothing may push the page sideways. */
+.avs-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.avs-med-table {
+  table-layout: fixed;
+  word-break: break-word;
 }

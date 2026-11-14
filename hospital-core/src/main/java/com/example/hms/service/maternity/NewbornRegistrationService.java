@@ -51,7 +51,8 @@ import java.util.UUID;
  * grant so the mother's portal shows the baby.
  *
  * <p>Idempotent: babies already registered for the delivery are never
- * registered again. A stillbirth registers no one. A count that falls below
+ * registered again. A stillborn baby is never registered (QA D1714: it creates
+ * a fetal-death event instead), so mixed twins register the live one. A count that falls below
  * the babies already registered (or a delivery no longer a live birth) never
  * deletes a patient: the extra rows are flagged for review.
  *
@@ -105,12 +106,18 @@ public class NewbornRegistrationService {
             : deliveryRecordRepository.findById(recorded.getId()).orElse(recorded);
         List<DeliveryNewborn> existing = new ArrayList<>(
             deliveryNewbornRepository.findByDeliveryRecord_IdOrderByBirthOrderAsc(delivery.getId()));
-        int expected = delivery.isLiveBirth() ? Math.max(delivery.getNumberOfInfants(), 0) : 0;
+        // QA D1714: one outcome per baby. Only the live-born babies are registered (mixed twins: the live one).
+        java.util.Set<Integer> liveOrders = new java.util.TreeSet<>();
+        for (int order : delivery.liveOrders()) {
+            liveOrders.add(order);
+        }
+        int count = Math.max(delivery.getNumberOfInfants(), 1);
 
         for (DeliveryNewborn row : existing) {
-            if (row.getBirthOrder() > expected && !row.isNeedsReview()) {
+            if (!liveOrders.contains(row.getBirthOrder()) && !row.isNeedsReview()) {
                 row.setNeedsReview(true);
-                row.setReviewReason(delivery.isLiveBirth() ? REVIEW_COUNT_LOWERED : REVIEW_NOT_LIVE_BIRTH);
+                row.setReviewReason(delivery.isLiveBirth() && row.getBirthOrder() > count
+                    ? REVIEW_COUNT_LOWERED : REVIEW_NOT_LIVE_BIRTH);
                 deliveryNewbornRepository.save(row);
                 log.warn("Delivery {} no longer counts newborn {}: flagged for review", delivery.getId(), row.getId());
             }
@@ -118,9 +125,9 @@ public class NewbornRegistrationService {
 
         java.util.Set<Integer> registeredOrders = new java.util.HashSet<>();
         existing.forEach(row -> registeredOrders.add(row.getBirthOrder()));
-        for (int order = 1; order <= expected; order++) {
+        for (int order : liveOrders) {
             if (!registeredOrders.contains(order)) {
-                existing.add(registerOne(delivery, order, expected, recorderUserId));
+                existing.add(registerOne(delivery, order, count, recorderUserId));
             }
         }
         existing.sort(java.util.Comparator.comparingInt(DeliveryNewborn::getBirthOrder));

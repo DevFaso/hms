@@ -280,7 +280,11 @@ class ReceptionistResponseShapingTest {
         "departmentName", "hospitalName", "hospitalPhone", "departmentPhone", "patientId", "patientName",
         "encounterStatus", "appointmentStatus", "checkoutTimestamp", "followUpAppointmentId", "followUpAppointmentDate",
         // #1138: a status flag ("not finalised"), not clinical content; the desk may see it.
-        "pendingSignature");
+        "pendingSignature",
+        // Polish 2026-11-13: identity the desk reads anyway, the booking it makes, who signed and when,
+        // and whether the visit was a stay. None of it is a clinical note.
+        "patientDateOfBirth", "patientMrn", "inpatientStay", "signedByName", "signedAt",
+        "followUpAppointmentTime", "followUpDepartmentName", "followUpClinicianName");
 
     @Test
     @DisplayName("2026-11-12: every after-visit summary field is kept or removed, and a removed one is empty")

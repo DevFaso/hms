@@ -131,6 +131,7 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("LabOrderServiceImpl.namedAssignment#findById", ACTOR),
         entry("LabReflexRuleServiceImpl.loadTestDef#findById", SHARED),
         entry("LegacyAllergyTextBackfillWorker.backfillOne#findByIdUnscoped", SYSTEM),
+        entry("FetalDeathEventService.backfillHistorical#findById", SYSTEM + " (QA D1714: the startup backfill re-reads a delivery its own query selected; the event is created at that delivery's hospital)"),
         entry("MllpAllowedSenderServiceImpl.deactivate#findById", SUPER_ADMIN),
         entry("MllpAllowedSenderServiceImpl.update#findById", SUPER_ADMIN),
         entry("MllpInboundAdtServiceImpl.processAdt#findByIdUnscoped", "HL7 inbound: bound to the sender's receiving hospital, not a user scope"),

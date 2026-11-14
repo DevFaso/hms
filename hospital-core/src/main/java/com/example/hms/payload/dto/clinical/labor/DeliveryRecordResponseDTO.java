@@ -44,6 +44,10 @@ public class DeliveryRecordResponseDTO {
 
     /** QA D1592: the babies this delivery registered as patients (empty for a stillbirth). */
     private List<DeliveryNewbornDTO> newborns;
+    /** QA D1714: each baby's outcome, in birth order, with the fetal-death event of a stillborn one. */
+    private List<DeliveryBabyDTO> babies;
+    /** QA D1714: every fetal-death event of this delivery, superseded ones included, with their reasons. */
+    private List<com.example.hms.payload.dto.mortality.FetalDeathEventDTO> fetalDeathEvents;
 
     /** QA D1592: the babies are not registered yet (registration failed or still to run): reception registers them. */
     private boolean newbornRegistrationPending;

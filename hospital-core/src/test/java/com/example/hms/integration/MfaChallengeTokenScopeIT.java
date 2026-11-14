@@ -670,19 +670,34 @@ class MfaChallengeTokenScopeIT extends BaseIT {
      * A valid code the server has not accepted yet. A code is accepted once
      * (its time-step is claimed), so each call moves to a later step inside
      * the ±1-step window, waiting for the next 30 s window when all three are
-     * used. Callers that need the SAME code twice keep the string.
+     * used. The previous step is handed out only while it still has
+     * {@link #STEP_MARGIN_MS} of the current step left to be accepted in: the
+     * server reads its own clock when the request lands, and a code made for
+     * the previous step in the last milliseconds of the current one is two
+     * steps old by then (the 400 seen once on CI).
+     * Callers that need the SAME code twice keep the string.
      */
     private static String code(String secret) throws Exception {
         long step;
         synchronized (ISSUED_STEPS) {
-            step = Math.max(currentStep() - 1, ISSUED_STEPS.getOrDefault(secret, Long.MIN_VALUE) + 1);
+            long issued = ISSUED_STEPS.getOrDefault(secret, Long.MIN_VALUE) + 1;
+            step = Math.max(oldestSafeStep(), issued);
             while (step > currentStep() + 1) {
                 java.util.concurrent.locks.LockSupport.parkNanos(250_000_000L);
+                step = Math.max(oldestSafeStep(), issued);
             }
             ISSUED_STEPS.put(secret, step);
         }
         return new DefaultCodeGenerator(HashingAlgorithm.SHA1, 6).generate(secret, step);
     }
+
+    /** The previous step only while it has the margin left; otherwise the current one. */
+    private static long oldestSafeStep() {
+        return System.currentTimeMillis() % STEP_MS <= STEP_MS - STEP_MARGIN_MS ? currentStep() - 1 : currentStep();
+    }
+
+    private static final long STEP_MS = 30_000L;
+    private static final long STEP_MARGIN_MS = 10_000L;
 
     private static long currentStep() {
         return System.currentTimeMillis() / 1000 / 30;

@@ -1,19 +1,79 @@
 :host {
-  display: contents;
+  display: block;
+  min-width: 0;
+}
+/* One column of full-width cards: no half-width card is ever left alone or empty. */
+.vss-doc {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.vss-identity {
+  padding: 14px 18px;
+  background: #eaf5f1;
+  border: 1px solid #c9e5dc;
+  border-radius: 12px;
+  color: #123b3a;
+}
+.vss-identity-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  strong {
+    font-size: 17px;
+    overflow-wrap: anywhere;
+  }
+  .material-symbols-outlined {
+    align-self: center;
+    color: #087269;
+    font-size: 20px;
+  }
+}
+.vss-identity-visit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px 18px;
+  margin: 0;
+  dt {
+    font-size: 11px;
+    font-weight: 650;
+    color: #42645f;
+  }
+  dd {
+    margin: 1px 0 0;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+}
+.vss-signature {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #1d5a4f;
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
 }
 .vss-section {
   min-width: 0;
   background: #fff;
   border: 1px solid #dce6ef;
   border-radius: 12px;
-  padding: 18px 20px;
+  padding: 16px 20px;
   color: #294b60;
   h3 {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 9px;
-    margin: 0 0 13px;
+    margin: 0 0 10px;
     color: #173348;
     font-size: 14px;
     line-height: 1.6;
@@ -24,7 +84,7 @@
     }
   }
   h4 {
-    margin: 14px 0 6px;
+    margin: 12px 0 4px;
     font-size: 13px;
     color: #173348;
   }
@@ -34,10 +94,10 @@
     font-size: 14px;
     overflow-wrap: anywhere;
   }
-  &--wide {
-    grid-column: 1 / -1;
+  &--complaint {
+    border-left: 3px solid #087269;
   }
-  &--contact {
+  &--advice {
     background: #f1faf6;
     border-color: #c9e5dc;
   }
@@ -62,11 +122,22 @@
     color: #075a50;
   }
 }
+.vss-bullets {
+  margin: 0;
+  padding-left: 20px;
+  li {
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+  li::marker {
+    color: #087269;
+  }
+}
 .vss-list {
   list-style: none;
   padding: 0;
   margin: 0;
-  li {
+  > li {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
@@ -74,9 +145,46 @@
     padding: 6px 0;
     border-bottom: 1px solid #edf2f6;
     line-height: 1.6;
+    overflow-wrap: anywhere;
     &:last-child {
       border-bottom: 0;
     }
+  }
+}
+.vss-med {
+  flex-direction: column;
+  align-items: stretch !important;
+}
+.vss-med-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 12px;
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 8px;
+    line-height: 1.6;
+    > span + span::before {
+      content: '·';
+      margin-right: 8px;
+      color: #8aa0b2;
+    }
+  }
+}
+.vss-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 4px 0 !important;
+  padding: 8px 10px;
+  border: 1px solid #f0c674;
+  border-radius: 8px;
+  background: #fff4e0;
+  color: #6b4500 !important;
+  font-size: 13px !important;
+  font-weight: 600;
+  .material-symbols-outlined {
+    font-size: 18px;
   }
 }
 .vss-item-title {
@@ -105,12 +213,67 @@
   color: #52667b;
   font-size: 12px;
 }
+.vss-caption {
+  margin-top: 6px !important;
+  font-style: italic;
+}
 .vss-pre {
   white-space: pre-wrap;
 }
+/* Whom to contact: one compact band at the end, not a tall card. */
+.vss-contact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+  padding: 10px 16px;
+  background: #f1faf6;
+  border: 1px solid #c9e5dc;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #173348;
+  h3 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 13px;
+    .material-symbols-outlined {
+      color: #087269;
+      font-size: 18px;
+    }
+  }
+  a {
+    color: #075a50;
+    font-weight: 600;
+    margin-left: 4px;
+  }
+}
+.vss-contact-item {
+  overflow-wrap: anywhere;
+}
 @media print {
-  .vss-section {
+  .vss-doc {
+    gap: 8px;
+  }
+  .vss-section,
+  .vss-identity,
+  .vss-contact {
     break-inside: avoid;
+    page-break-inside: avoid;
     border-color: #999;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  .vss-section h3,
+  .vss-section h4 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  .vss-flag,
+  .vss-warning {
+    border: 1px solid #000;
+    background: transparent !important;
+    color: #000 !important;
   }
 }
