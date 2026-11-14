@@ -11,7 +11,12 @@ import java.util.UUID;
 
 public interface PatientPrimaryCareRepository extends JpaRepository<PatientPrimaryCare, UUID> {
 
-    Optional<PatientPrimaryCare> findByPatient_IdAndCurrentTrue(UUID patientId);
+    /**
+     * Every current link of a patient, newest first: one per hospital since #1096, so this is a
+     * list. An {@code Optional} here answered 500 for a patient with a doctor at two hospitals
+     * (QA D1850, guarded by {@code PerPatientCurrentFinderGuardTest}).
+     */
+    List<PatientPrimaryCare> findByPatient_IdAndCurrentTrueOrderByStartDateDesc(UUID patientId);
 
     List<PatientPrimaryCare> findByPatient_IdOrderByStartDateDesc(UUID patientId);
 

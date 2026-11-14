@@ -17,10 +17,13 @@ import java.util.UUID;
 @Schema(description = "Aggregated care team view for the patient")
 public class CareTeamDTO {
 
-    @Schema(description = "Current primary care provider")
+    @Schema(description = "The newest current primary care provider (one of primaryCares), kept for older clients")
     private PrimaryCareEntry primaryCare;
 
-    @Schema(description = "Historical primary care providers")
+    @Schema(description = "Every current primary care provider, one per hospital that registers the patient, newest first")
+    private List<PrimaryCareEntry> primaryCares;
+
+    @Schema(description = "Every primary care link, current and past, newest first")
     private List<PrimaryCareEntry> primaryCareHistory;
 
     @Schema(description = "Clinicians of the patient's visits still open, one entry per clinician")
