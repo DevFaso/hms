@@ -682,7 +682,37 @@ public class LabResultServiceImpl implements LabResultService {
 
         LabResultResponseDTO response = labResultMapper.toResponseDTO(labResult);
         response.setTrendHistory(toTrendPoints(trend));
+        addDetailContext(response, labResult.getLabOrder());
         return response;
+    }
+
+    /**
+     * r44: the context the result's detail drawer shows when it is recorded:
+     * the collected specimen (its type and collection time) and the performing
+     * laboratory of an outsourced order. Read here, on the single-result read,
+     * so the list query is not charged a specimen and hospital fetch per row.
+     * A rejected or never-collected specimen is not "the" specimen; of the
+     * collected ones the latest collection is shown.
+     */
+    private void addDetailContext(LabResultResponseDTO response, LabOrder order) {
+        if (order == null) {
+            return;
+        }
+        if (order.getId() != null) {
+            labSpecimenRepository.findByLabOrder_Id(order.getId()).stream()
+                .filter(Objects::nonNull)
+                .filter(s -> s.getStatus() != com.example.hms.enums.LabSpecimenStatus.REJECTED)
+                .filter(s -> s.getCollectedAt() != null)
+                .max(Comparator.comparing(com.example.hms.model.LabSpecimen::getCollectedAt))
+                .ifPresent(specimen -> {
+                    response.setSpecimenType(specimen.getSpecimenType());
+                    response.setSpecimenCollectedAt(specimen.getCollectedAt());
+                });
+        }
+        Hospital performing = order.getPerformingHospital();
+        if (performing != null) {
+            response.setPerformingLabName(performing.getName());
+        }
     }
 
     @Override

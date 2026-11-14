@@ -88,9 +88,10 @@ describe('ResultEvolutionComponent', () => {
     expect(fixture.nativeElement.querySelector('h3')?.textContent).toContain(
       'LAB_EVOLUTION.AUDIT_TITLE',
     );
-    expect(fixture.nativeElement.querySelector('.hint')?.textContent).toContain(
-      'LAB_EVOLUTION.CORRECTION_NOTE',
+    const hints = [...fixture.nativeElement.querySelectorAll('.hint')].map(
+      (h: Element) => h.textContent ?? '',
     );
+    expect(hints.join(' ')).toContain('LAB_EVOLUTION.CORRECTION_NOTE');
     expect(fixture.componentInstance.deltaAt(0)).toBe('—');
     expect(fixture.nativeElement.querySelectorAll('tbody tr').length).toBe(3);
   });
@@ -126,8 +127,13 @@ describe('ResultEvolutionComponent', () => {
     expect(fixture.componentInstance.unit()).toBe('g/L');
     expect(host.querySelectorAll('circle').length).toBe(3);
     expect(host.querySelector('polyline')).toBeTruthy();
-    expect(host.querySelector('[data-testid="evolution-conversion-note"]')).toBeTruthy();
-    expect(host.querySelector('.hint')?.textContent).toContain('LAB_EVOLUTION.NOTE');
+    // r44: one short sentence; the method is in the info tooltip.
+    expect(host.querySelector('[data-testid="evolution-note"]')?.textContent).toContain(
+      'LAB_EVOLUTION.NOTE_SHORT',
+    );
+    expect(host.querySelector('[data-testid="evolution-method"]')?.textContent).toContain(
+      'LAB_EVOLUTION.NOTE_DETAIL',
+    );
     // The tooltip names the stored value and unit; the table keeps them and marks the conversion.
     const tooltips = [...host.querySelectorAll('circle title')].map((t) => t.textContent ?? '');
     expect(tooltips.filter((t) => t.includes('LAB_EVOLUTION.CONVERTED_FROM')).length).toBe(2);
@@ -158,5 +164,64 @@ describe('ResultEvolutionComponent', () => {
     expect(fixture.componentInstance.units()).toEqual(['mg/L', 'mmol/L']);
     expect(fixture.componentInstance.points().map((p) => p.value)).toEqual([8, 9]);
     expect(fixture.componentInstance.hasConversions()).toBeFalse();
+  });
+
+  describe('r44 chart', () => {
+    function glucose(range?: { minValue: number; maxValue: number; unit: string }) {
+      const fixture = setup();
+      fixture.componentRef.setInput('testName', 'Glycémie à jeun');
+      fixture.componentRef.setInput('history', [
+        { resultValue: '1.05', resultUnit: 'g/L', resultDate: '2026-11-13T09:00:00Z' },
+        { resultValue: '1.32', resultUnit: 'g/L', resultDate: '2026-11-12T09:00:00Z' },
+      ]);
+      if (range) fixture.componentRef.setInput('referenceRange', range);
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    }
+
+    it('labels the y-axis with round ticks, never "1,288" or "0,952"', () => {
+      const ticks = [...glucose().querySelectorAll('text.tick')].map((t) =>
+        (t.textContent ?? '').trim(),
+      );
+      expect(ticks.length).toBeGreaterThanOrEqual(2);
+      for (const tick of ticks) expect(tick).toMatch(/^-?\d+([.,]\d)?$/);
+    });
+
+    it('draws no band when no range was applied', () => {
+      expect(glucose().querySelector('[data-testid="evolution-reference-band"]')).toBeNull();
+    });
+
+    it('shades the applied reference range as a band', () => {
+      const host = glucose({ minValue: 0.7, maxValue: 0.99, unit: 'g/L' });
+      const band = host.querySelector('[data-testid="evolution-reference-band"]')!;
+      expect(band).toBeTruthy();
+      expect(Number(band.getAttribute('height'))).toBeGreaterThan(0);
+      // The axis reaches down to the band.
+      const ticks = [...host.querySelectorAll('text.tick')].map((t) =>
+        Number((t.textContent ?? '').trim().replace(',', '.')),
+      );
+      expect(Math.min(...ticks)).toBeLessThanOrEqual(0.7);
+    });
+
+    it('converts the band by an exact factor only', () => {
+      const converted = glucose({ minValue: 70, maxValue: 99, unit: 'mg/dL' });
+      expect(converted.querySelector('[data-testid="evolution-reference-band"]')).toBeTruthy();
+    });
+
+    it('draws no band in a unit that does not convert', () => {
+      const unknown = glucose({ minValue: 1, maxValue: 2, unit: 'U/L' });
+      expect(unknown.querySelector('[data-testid="evolution-reference-band"]')).toBeNull();
+    });
+
+    it('writes the x-axis dates as a day and a month, not a numeric date', () => {
+      const labels = [...glucose().querySelectorAll('svg > text:not(.tick)')].map((t) =>
+        (t.textContent ?? '').trim(),
+      );
+      expect(labels.length).toBe(2);
+      for (const label of labels) {
+        expect(label).not.toContain('/');
+        expect(label).toMatch(/1[23]/);
+      }
+    });
   });
 });

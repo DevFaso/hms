@@ -4097,7 +4097,15 @@
     "UNGRADED_RELEASE_TITLE": "Release a result that is not graded",
     "UNGRADED_RELEASE_CONFIRM": "I reviewed it, release",
     "ROW_PENDING_RELEASE": "Pending release",
-    "RANGE_NOTES_AS_ENTERED": "Note (as entered)"
+    "RANGE_NOTES_AS_ENTERED": "Note (as entered)",
+    "PREVIOUS_VALUE": "Previous: {{value}} on {{date}}",
+    "CHANGE": "Change: {{delta}}",
+    "CHANGE_WITHHELD": "Change not computed (different units or a corrected history)",
+    "OTHER_RANGES": "Other ranges ({{count}})",
+    "CRITICAL_LIMITS": "Critical values",
+    "NO_INTERVAL": "No interval",
+    "LAB_COMMENT": "Laboratory comment",
+    "OPEN_REQUEST": "Open request {{code}}"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Abnormal",
@@ -13433,7 +13441,6 @@
     "UNIT": "Unit",
     "LOADING": "Loading result history…",
     "ERROR": "History could not be loaded. Close and reopen the details to retry.",
-    "NOTE": "Exact numeric observations are plotted in one unit when the conversion is exact (a decimal factor between mass units, or the analyte's known molar mass); otherwise separately by unit. Dates are spaced to scale. Historical records may include earlier versions; corrected records are marked. No clinical interpretation is inferred.",
     "TIME_AXIS": "Time",
     "CHART_LABEL": "Historical observations; exact values are available in the observations table.",
     "INSUFFICIENT": "At least two dated numeric observations in the same known unit, or a convertible one, are needed.",
@@ -13446,15 +13453,14 @@
     "NEXT": "Next page",
     "AUDIT_TITLE": "Recorded result versions",
     "CORRECTION_NOTE": "This history includes corrections. Superseded versions cannot be identified in this history. Points show recorded values only; connecting lines and deltas are withheld. Consult the observations and correction records before interpreting changes.",
-    "CONVERSION_NOTE": "Values recorded in another unit are converted to {{unit}} for the chart. The recorded value and unit stay visible, marked “converted”.",
     "CONVERTED_FROM": "converted, recorded value: {{value}}",
-    "CONVERTED_TO": "converted: {{value}}"
+    "CONVERTED_TO": "converted: {{value}}",
+    "NOTE_SHORT": "Converted values are marked “converted” and corrections are flagged; no clinical interpretation is drawn.",
+    "NOTE_INFO": "How the chart is built",
+    "NOTE_DETAIL": "Only exact numeric values are plotted, in one unit ({{unit}}). A value recorded in another unit is converted only when the conversion is exact (a decimal factor between mass units, or the analyte’s known molar mass); the recorded value and unit stay visible. Dates are spaced to scale. The shaded band is the reference range applied to this patient."
   },
   "LAB_RANGE": {
     "TITLE": "Result position",
-    "LOW": "Low",
-    "NORMAL": "Normal",
-    "HIGH": "High",
     "REFERENCE": "Reference range",
     "OUTSIDE_SCALE": "The result is beyond the displayed scale; the marker is at the edge.",
     "UNAVAILABLE": "Position requires an exact numeric result and a compatible reference interval."

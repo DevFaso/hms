@@ -123,4 +123,14 @@ public class LabResultResponseDTO {
      * say and always for a hand-entered row.
      */
     private String observationResultStatus;
+
+    // ── Detail context (r44 result drawer). Filled on the single-result read
+    // only, from what is recorded; null when nothing is. ──
+
+    /** The collected specimen's type as the laboratory recorded it. */
+    private String specimenType;
+    /** When that specimen was collected. */
+    private LocalDateTime specimenCollectedAt;
+    /** The laboratory the order was sent to, when it was not the ordering hospital's own (B1). */
+    private String performingLabName;
 }

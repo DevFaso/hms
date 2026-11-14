@@ -4097,7 +4097,15 @@
     "UNGRADED_RELEASE_TITLE": "Validar un resultado no evaluado",
     "UNGRADED_RELEASE_CONFIRM": "Lo revisé, validar",
     "ROW_PENDING_RELEASE": "Pendiente de publicación",
-    "RANGE_NOTES_AS_ENTERED": "Nota (texto original)"
+    "RANGE_NOTES_AS_ENTERED": "Nota (texto original)",
+    "PREVIOUS_VALUE": "Anterior: {{value}} el {{date}}",
+    "CHANGE": "Variación: {{delta}}",
+    "CHANGE_WITHHELD": "Variación no calculada (unidades distintas o historial corregido)",
+    "OTHER_RANGES": "Otros intervalos ({{count}})",
+    "CRITICAL_LIMITS": "Valores críticos",
+    "NO_INTERVAL": "Sin intervalo",
+    "LAB_COMMENT": "Comentario del laboratorio",
+    "OPEN_REQUEST": "Abrir la solicitud {{code}}"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -13433,7 +13441,6 @@
     "UNIT": "Unidad",
     "LOADING": "Cargando historial…",
     "ERROR": "No se pudo cargar el historial. Cierre y vuelva a abrir los detalles para reintentar.",
-    "NOTE": "Los valores numéricos exactos se representan en una sola unidad cuando la conversión es exacta (factor decimal entre unidades de masa, o masa molar conocida del analito); si no, por separado según la unidad. Las fechas están a escala. El historial puede incluir versiones anteriores; las correcciones se indican. No se deduce ninguna interpretación clínica.",
     "TIME_AXIS": "Tiempo",
     "CHART_LABEL": "Observaciones históricas; los valores exactos figuran en la tabla de observaciones.",
     "INSUFFICIENT": "Se necesitan al menos dos observaciones numéricas fechadas en la misma unidad conocida o en una convertible.",
@@ -13446,15 +13453,14 @@
     "NEXT": "Página siguiente",
     "AUDIT_TITLE": "Versiones registradas de los resultados",
     "CORRECTION_NOTE": "Este historial incluye correcciones. No se pueden identificar las versiones sustituidas. Los puntos muestran solo los valores registrados; no se muestran líneas ni diferencias. Consulte las observaciones y las correcciones antes de interpretar los cambios.",
-    "CONVERSION_NOTE": "Los valores registrados en otra unidad se convierten a {{unit}} para el gráfico. El valor y la unidad registrados siguen visibles, marcados «convertido».",
     "CONVERTED_FROM": "convertido, valor registrado: {{value}}",
-    "CONVERTED_TO": "convertido: {{value}}"
+    "CONVERTED_TO": "convertido: {{value}}",
+    "NOTE_SHORT": "Los valores convertidos se marcan «convertido» y las correcciones se señalan; no se deduce ninguna interpretación clínica.",
+    "NOTE_INFO": "Cómo se construye el gráfico",
+    "NOTE_DETAIL": "Solo se representan los valores numéricos exactos, en una sola unidad ({{unit}}). Un valor registrado en otra unidad solo se convierte si la conversión es exacta (factor decimal entre unidades de masa, o masa molar conocida del analito); el valor y la unidad registrados siguen visibles. Las fechas están a escala. La banda sombreada es el intervalo de referencia aplicado a este paciente."
   },
   "LAB_RANGE": {
     "TITLE": "Posición del resultado",
-    "LOW": "Bajo",
-    "NORMAL": "Normal",
-    "HIGH": "Alto",
     "REFERENCE": "Intervalo de referencia",
     "OUTSIDE_SCALE": "El resultado supera la escala mostrada; el marcador está en el borde.",
     "UNAVAILABLE": "La posición requiere un resultado numérico exacto y un intervalo de referencia compatible."

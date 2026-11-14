@@ -691,6 +691,180 @@ describe('LabResultsComponent', () => {
 
   /* ── Critical-value read-back (P0 #5) ── */
 
+  describe('r44 result drawer', () => {
+    const adult = {
+      minValue: 0.7,
+      maxValue: 0.99,
+      unit: 'g/L',
+      gender: 'ALL',
+      ageMin: 18,
+      ageMax: 150,
+      ageUnit: 'YEARS',
+      notes: null,
+      criticalLow: 0.45,
+      criticalHigh: 5,
+      source: 'User 2026-10-29 (default, pending local approval)',
+      patientInAgeBand: true,
+    };
+    const adultMmol = {
+      ...adult,
+      minValue: 3.9,
+      maxValue: 5.5,
+      unit: 'mmol/L',
+      criticalLow: 2.5,
+      criticalHigh: 27.8,
+    };
+    const neonatal = {
+      minValue: null,
+      maxValue: null,
+      unit: 'g/L',
+      gender: 'ALL',
+      ageMin: 0,
+      ageMax: 27,
+      ageUnit: 'DAYS',
+      notes: 'Neonatal normal interval not supplied: set it locally.',
+      criticalLow: 0.4,
+      criticalHigh: null,
+      source: 'Common neonatal hypoglycaemia threshold (default, pending local approval)',
+      patientInAgeBand: false,
+    };
+    const neonatalMmol = { ...neonatal, unit: 'mmol/L', criticalLow: 2.2 };
+
+    function open(overrides: Record<string, unknown>, history: Record<string, unknown>[] = []) {
+      fixture.detectChanges();
+      flushInit();
+      const row = component.results()[0];
+      component.viewResult(row);
+      httpMock.expectOne('/lab-results/result-1').flush({
+        ...row,
+        resultValue: '1.05',
+        resultUnit: 'g/L',
+        resultDate: '2026-11-13T09:00:00Z',
+        severityFlag: 'HIGH',
+        ...overrides,
+        trendHistory: history,
+      });
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    }
+    const text = (host: HTMLElement, id: string) =>
+      host.querySelector(`[data-testid="${id}"]`)?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
+
+    it('shows the previous value, its date and the change, from the history it already has', () => {
+      const host = open({}, [
+        { resultDate: '2026-11-12T09:00:00Z', resultValue: '1.32', resultUnit: 'g/L' },
+        { resultDate: '2026-11-13T09:00:00Z', resultValue: '1.05', resultUnit: 'g/L' },
+      ]);
+      expect(text(host, 'detail-previous')).toContain('LAB_RESULTS.PREVIOUS_VALUE');
+      expect(component.detailPrevious()?.point.resultValue).toBe('1.32');
+      expect(
+        component.formatChange(component.detailPrevious()!.delta!, '1.05', '1.32', 'g/L'),
+      ).toMatch(/^-0[.,]27 g\/L$/);
+      expect(text(host, 'detail-change')).toContain('LAB_RESULTS.CHANGE');
+      expect(text(host, 'detail-change')).not.toContain('CHANGE_WITHHELD');
+    });
+
+    it('shows no previous value for a first result', () => {
+      const host = open({}, [
+        { resultDate: '2026-11-13T09:00:00Z', resultValue: '1.05', resultUnit: 'g/L' },
+      ]);
+      expect(host.querySelector('[data-testid="detail-previous"]')).toBeNull();
+    });
+
+    it('lists the applied range first and collapses the others under "other ranges (n)"', () => {
+      const host = open({
+        referenceRanges: [neonatal, adultMmol, adult],
+        gradedReferenceRange: adult,
+      });
+      const section = host.querySelector('[data-testid="reference-ranges"]')!;
+      const first = section.querySelector('.detail-list-item')!;
+      expect(first.getAttribute('data-testid')).toBe('range-applied');
+      const others = section.querySelector<HTMLDetailsElement>('[data-testid="other-ranges"]')!;
+      expect(others).toBeTruthy();
+      expect(others.open).toBeFalse();
+      expect(others.contains(first)).toBeFalse();
+      // The neonatal row has no interval and the patient is an adult: it is left out.
+      expect(component.detailRanges().others).toEqual([adultMmol as never]);
+    });
+
+    it('keeps a no-interval band when the patient is in it, or when the age is unknown', () => {
+      open({
+        referenceRanges: [
+          adult,
+          { ...neonatal, patientInAgeBand: true },
+          { ...neonatalMmol, patientInAgeBand: null },
+        ],
+        gradedReferenceRange: adult,
+      });
+      expect(component.detailRanges().others.length).toBe(2);
+    });
+
+    it('shows two equal configured rows once, and tells per-unit no-interval rows apart', () => {
+      open({
+        referenceRanges: [
+          adult,
+          { ...neonatal, patientInAgeBand: true },
+          { ...neonatal, patientInAgeBand: true },
+          { ...neonatalMmol, patientInAgeBand: true },
+        ],
+        gradedReferenceRange: adult,
+      });
+      const others = component.detailRanges().others;
+      expect(others.length).toBe(2);
+      expect(component.formatReferenceRange(others[0])).toBe('LAB_RESULTS.NO_INTERVAL (g/L)');
+      expect(component.formatReferenceRange(others[1])).toBe('LAB_RESULTS.NO_INTERVAL (mmol/L)');
+    });
+
+    it('shows the stored critical limits, never ones read from the free text', () => {
+      const host = open({ referenceRanges: [adult], gradedReferenceRange: adult });
+      expect(text(host, 'range-critical')).toContain('LAB_RESULTS.CRITICAL_LIMITS');
+      expect(component.formatCriticalLimits(adult as never)).toMatch(/^< 0[.,]45 \/ > 5 g\/L$/);
+      expect(
+        component.formatCriticalLimits({
+          ...adult,
+          criticalLow: null,
+          criticalHigh: null,
+          notes: 'Critical >= 6.5 mmol/L',
+        } as never),
+      ).toBe('');
+    });
+
+    it('shows the recorded context: request link, ordering clinician, specimen, performing lab, comment', () => {
+      const host = open({
+        labOrderId: 'order-32',
+        labOrderCode: 'LAB-000032',
+        orderedByName: 'Dr Awa Traoré',
+        specimenType: 'Plasma fluoré',
+        specimenCollectedAt: '2026-11-13T07:30:00',
+        performingLabName: 'Laboratoire central',
+        notes: 'Prélèvement à jeun confirmé.',
+      });
+      const link = host.querySelector<HTMLAnchorElement>('[data-testid="detail-request"] a')!;
+      expect(link.textContent?.trim()).toBe('LAB-000032');
+      expect(link.getAttribute('href')).toBe('/lab?order=order-32');
+      expect(text(host, 'detail-ordered-by')).toContain('Dr Awa Traoré');
+      expect(text(host, 'detail-specimen-type')).toContain('Plasma fluoré');
+      expect(text(host, 'detail-collected-at')).toContain('LAB.COLLECTED_AT');
+      expect(text(host, 'detail-performing-lab')).toContain('Laboratoire central');
+      expect(text(host, 'detail-lab-comment')).toContain('LAB_RESULTS.LAB_COMMENT');
+      expect(text(host, 'detail-lab-comment')).toContain('Prélèvement à jeun confirmé.');
+    });
+
+    it('shows nothing for context that was not recorded', () => {
+      const host = open({ orderedByName: null, specimenType: null, performingLabName: null });
+      for (const id of [
+        'detail-ordered-by',
+        'detail-specimen-type',
+        'detail-collected-at',
+        'detail-performing-lab',
+      ]) {
+        expect(host.querySelector(`[data-testid="${id}"]`))
+          .withContext(id)
+          .toBeNull();
+      }
+    });
+  });
+
   describe('critical-value read-back', () => {
     it('asks a critical result to be read back rather than merely acknowledged', () => {
       // canReadBack is role-derived and false in this harness; overriding it

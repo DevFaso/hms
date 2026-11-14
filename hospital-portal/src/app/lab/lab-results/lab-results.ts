@@ -14,7 +14,7 @@ import {
 import { actionRoles } from '../../core/action-permissions';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   LabService,
@@ -42,6 +42,9 @@ import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { DayMonthPipe } from '../../shared/pipes/day-month.pipe';
+import { formatDecimal } from '../../shared/i18n/app-locale';
+import { deltaPrecision, previousObservation } from '../shared/result-evolution';
 /**
  * D49: the order code the API sends is the order's UUID. Readers get its first
  * eight characters, enough to tell two orders apart on one screen.
@@ -98,6 +101,7 @@ export const ORDER_STATUSES_AWAITING_SPECIMEN: ReadonlySet<string> = new Set([
     TranslateModule,
     HospitalScopeChipComponent,
     EnumLabelPipe,
+    RouterLink,
   ],
   templateUrl: './lab-results.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -179,6 +183,95 @@ export class LabResultsComponent implements OnInit {
   detailHistory = signal<LabResultTrendPoint[]>([]);
   detailHistoryLoading = signal(false);
   detailHistoryError = signal(false);
+
+  /**
+   * r44: the observation before the open result, from the history the detail
+   * read returned (nothing is fetched for it), and the change from it.
+   */
+  detailPrevious = computed(() => {
+    const r = this.selectedResult();
+    return r ? previousObservation(this.detailHistory(), r) : null;
+  });
+
+  /**
+   * r44: the two lines under the value, "Précédent : 1,32 g/L le 12 nov." and
+   * "Variation : -0,27 g/L" (or why the change is not given).
+   */
+  detailPreviousText = computed(() => {
+    const r = this.selectedResult();
+    const prev = this.detailPrevious();
+    if (!r || !prev) return null;
+    const value = this.labValue.transform(prev.point.resultValue, prev.point.resultUnit);
+    const previous = this.translate.instant('LAB_RESULTS.PREVIOUS_VALUE', {
+      value,
+      date: this.dayMonth.transform(prev.point.resultDate),
+    });
+    const change =
+      prev.delta === null
+        ? this.translate.instant('LAB_RESULTS.CHANGE_WITHHELD')
+        : this.translate.instant('LAB_RESULTS.CHANGE', {
+            delta: this.formatChange(
+              prev.delta,
+              r.resultValue,
+              prev.point.resultValue,
+              r.resultUnit,
+            ),
+          });
+    return { previous, change };
+  });
+  private readonly labValue = new LabValuePipe();
+  private readonly dayMonth = new DayMonthPipe();
+
+  /** "+0,27 g/L" / "-0,27 g/L", at the finer precision of the two recorded values. */
+  formatChange(delta: number, current: string, previous: string, unit: string): string {
+    const text = formatDecimal(delta, deltaPrecision(current, previous));
+    return `${delta > 0 ? '+' : ''}${text} ${(unit ?? '').trim()}`.trim();
+  }
+
+  /**
+   * r44: the reference ranges as the drawer lists them: the one applied to
+   * this patient first, the others apart (collapsed). Each distinct range
+   * once (two equal rows add nothing), and a band that states no interval is
+   * left out when the patient is outside it (the neonatal glucose rows on an
+   * adult); an unknown age keeps it.
+   */
+  detailRanges = computed(() => {
+    const r = this.selectedResult();
+    if (!r) return { applied: null, others: [] as LabResultReferenceRange[] };
+    const seen = new Set<string>();
+    const shown = (r.referenceRanges ?? []).filter((rr) => {
+      const noInterval = rr.minValue == null && rr.maxValue == null;
+      if (noInterval && rr.patientInAgeBand === false) return false;
+      const key = JSON.stringify([
+        rr.minValue,
+        rr.maxValue,
+        rr.unit ?? null,
+        rr.gender ?? null,
+        rr.ageMin,
+        rr.ageMax,
+        rr.ageUnit ?? null,
+        rr.criticalLow ?? null,
+        rr.criticalHigh ?? null,
+        rr.notes ?? null,
+        rr.source ?? null,
+      ]);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const applied = shown.find((rr) => this.isGradedRange(r, rr)) ?? null;
+    return { applied, others: shown.filter((rr) => rr !== applied) };
+  });
+
+  /** r44: the stored critical limits, "< 0,45 / > 5 g/L"; '' when none is stored. */
+  formatCriticalLimits(range: LabResultReferenceRange): string {
+    const parts: string[] = [];
+    if (range.criticalLow != null) parts.push(`< ${formatLabNumber(range.criticalLow)}`);
+    if (range.criticalHigh != null) parts.push(`> ${formatLabNumber(range.criticalHigh)}`);
+    if (!parts.length) return '';
+    const unit = (range.unit ?? '').trim();
+    return parts.join(' / ') + (unit ? ` ${unit}` : '');
+  }
   private detailRequest = 0;
 
   setPageSize(size: number): void {
@@ -770,7 +863,9 @@ export class LabResultsComponent implements OnInit {
     if (max != null) {
       return `≤ ${formatLabNumber(max)}${unit}`;
     }
-    return '—';
+    // r44: two bands with no interval differed only by their unit, and both read "—".
+    const none = this.translate.instant('LAB_RESULTS.NO_INTERVAL');
+    return range.unit ? `${none} (${range.unit})` : none;
   }
 
   formatReferenceRangeAge(range: {

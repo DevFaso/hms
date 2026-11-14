@@ -26,4 +26,12 @@ public class LabResultReferenceRangeDTO {
     private String ageUnit;
     /** Round 18: where the limits come from. */
     private String source;
+    /**
+     * Whether the result's patient is inside this range's age band on the
+     * result date: TRUE inside (or a range with no band), FALSE outside, null
+     * when the patient's age is unknown or the range was not read against a
+     * patient. The detail screen hides a band the patient is outside of when
+     * it states no interval at all.
+     */
+    private Boolean patientInAgeBand;
 }

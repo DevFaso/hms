@@ -469,8 +469,7 @@
     "inBasket.labNormal": "Normal",
     "inBasket.messages": "Messages",
     "inBasket.urgent": "Urgent",
-    "ULTRASOUND.FLAG_TONE_NORMAL": "Normal",
-    "LAB_RANGE.NORMAL": "Normal"
+    "ULTRASOUND.FLAG_TONE_NORMAL": "Normal"
   },
   "es": {
     "CHART.LAB_STATUS_NORMAL": "Normal",
@@ -495,7 +494,6 @@
     "PROVIDER.COMMON.NO": "No",
     "PROVIDER.STAFF.COL_ROLES": "Roles",
     "SHELL.AVATAR_ALT": "Avatar",
-    "inBasket.labNormal": "Normal",
-    "LAB_RANGE.NORMAL": "Normal"
+    "inBasket.labNormal": "Normal"
   }
 }

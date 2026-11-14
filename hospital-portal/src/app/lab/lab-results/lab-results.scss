@@ -825,6 +825,35 @@
   color: var(--primary, #0e7c6b);
 }
 
+/* r44: the previous observation and the change, under the value. */
+.field-sub {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+/* r44: stored critical limits, never derived from the free text. */
+.range-critical {
+  margin-top: 0.3rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #991b1b;
+}
+
+/* r44: the ranges that did not grade this result, collapsed. */
+.other-ranges {
+  margin-top: 0.6rem;
+
+  summary {
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #334155;
+    padding: 0.25rem 0;
+  }
+}
+
 @include diagnostics.workspace;
 
 // Keep row actions on one line; the table scrolls horizontally rather than growing tall.
