@@ -1264,29 +1264,30 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public CareTeamDTO getMyCareTeam(Authentication auth) {
         UUID patientId = resolvePatientId(auth);
 
-        java.util.Optional<PatientPrimaryCareResponseDTO> current = primaryCareService.getCurrentPrimaryCare(patientId);
-        List<PatientPrimaryCareResponseDTO> past = primaryCareService.getPrimaryCareHistory(patientId);
+        // QA D1850: every link at every hospital that registers the patient, whatever hospital
+        // the request names; one current link per hospital since #1096.
+        List<PatientPrimaryCareResponseDTO> links = primaryCareService.getOwnPrimaryCareLinks(patientId);
 
         // The entries carry a hospital id only; one lookup names them all, so
         // the patient reads where their doctor practises, not a blank line.
         Set<UUID> hospitalIds = new java.util.HashSet<>();
-        current.map(PatientPrimaryCareResponseDTO::getHospitalId).ifPresent(hospitalIds::add);
-        past.stream().map(PatientPrimaryCareResponseDTO::getHospitalId)
+        links.stream().map(PatientPrimaryCareResponseDTO::getHospitalId)
                 .filter(java.util.Objects::nonNull).forEach(hospitalIds::add);
         Map<UUID, String> hospitalNames = hospitalIds.isEmpty() ? Map.of()
                 : hospitalRepository.findAllById(hospitalIds).stream()
                         .collect(java.util.stream.Collectors.toMap(Hospital::getId, Hospital::getName, (a, b) -> a));
 
-        CareTeamDTO.PrimaryCareEntry currentPcp = current
+        List<CareTeamDTO.PrimaryCareEntry> history = links.stream()
                 .map(pcp -> toCareTeamEntry(pcp, hospitalNames))
-                .orElse(null);
-
-        List<CareTeamDTO.PrimaryCareEntry> history = past.stream()
-                .map(pcp -> toCareTeamEntry(pcp, hospitalNames))
+                .toList();
+        List<CareTeamDTO.PrimaryCareEntry> currentPcps = history.stream()
+                .filter(CareTeamDTO.PrimaryCareEntry::isCurrent)
                 .toList();
 
         return CareTeamDTO.builder()
-                .primaryCare(currentPcp)
+                // Kept for the native apps, which read one doctor: the newest current link.
+                .primaryCare(currentPcps.isEmpty() ? null : currentPcps.get(0))
+                .primaryCares(currentPcps)
                 .primaryCareHistory(history)
                 .visitClinicians(visitClinicians(patientId))
                 .build();
