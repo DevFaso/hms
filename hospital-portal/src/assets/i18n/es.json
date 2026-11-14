@@ -13555,7 +13555,7 @@
     "CONVERTED_TO": "convertido: {{value}}",
     "NOTE_SHORT": "Los valores convertidos se marcan «convertido» y las correcciones se señalan; no se deduce ninguna interpretación clínica.",
     "NOTE_INFO": "Cómo se construye el gráfico",
-    "NOTE_DETAIL": "Solo se representan los valores numéricos exactos, en una sola unidad{{unit}}. Un valor registrado en otra unidad solo se convierte si la conversión es exacta (factor decimal entre unidades de masa, o masa molar conocida del analito); el valor y la unidad registrados siguen visibles. Las fechas están a escala.",
+    "NOTE_DETAIL": "Solo se representan los valores numéricos exactos, en una sola unidad{{unit}}. Un valor registrado en otra unidad se convierte mediante un factor decimal entre unidades compatibles o la masa molar conocida del analito; el valor y la unidad registrados siguen visibles. Las fechas están a escala.",
     "BAND_NOTE": "La banda sombreada es el intervalo de referencia aplicado al resultado seleccionado; puede no aplicarse a las observaciones anteriores."
   },
   "LAB_RANGE": {

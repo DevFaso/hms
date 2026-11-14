@@ -137,7 +137,7 @@
                   <div class="cell-primary">{{ r.hospitalName || '—' }}</div>
                 </td>
               }
-              <td class="order-code" [title]="r.labOrderCode || ''">
+              <td class="order-code" [title]="r.labOrderCode || r.labOrderId || ''">
                 {{ shortOrderCode(r.labOrderCode || r.labOrderId) }}
               </td>
               <td>

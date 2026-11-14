@@ -13555,7 +13555,7 @@
     "CONVERTED_TO": "converti : {{value}}",
     "NOTE_SHORT": "Les valeurs converties sont marquées « converti » et les corrections sont signalées ; aucune interprétation clinique n’est déduite.",
     "NOTE_INFO": "Comment le graphique est construit",
-    "NOTE_DETAIL": "Seules les valeurs numériques exactes sont tracées, dans une seule unité{{unit}}. Une valeur saisie dans une autre unité n’est convertie que si la conversion est exacte (facteur décimal entre unités de masse, ou masse molaire connue de l’analyte) ; la valeur et l’unité saisies restent affichées. Les dates sont espacées à l’échelle.",
+    "NOTE_DETAIL": "Seules les valeurs numériques exactes sont tracées, dans une seule unité{{unit}}. Une valeur saisie dans une autre unité est convertie avec un facteur décimal entre unités compatibles ou la masse molaire connue de l’analyte ; la valeur et l’unité saisies restent affichées. Les dates sont espacées à l’échelle.",
     "BAND_NOTE": "La bande ombrée est la plage de référence appliquée au résultat sélectionné ; elle peut ne pas s’appliquer aux observations antérieures."
   },
   "LAB_RANGE": {
