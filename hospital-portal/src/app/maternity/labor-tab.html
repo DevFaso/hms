@@ -849,7 +849,7 @@
           </div>
           <!-- QA D1714: one outcome per baby; a stillborn baby creates a fetal-death event, not a patient. -->
           @for (baby of deliveryBabies(); track baby.birthOrder) {
-            <div class="field">
+            <div class="field baby-outcome-field">
               <label [for]="'dl-baby-' + baby.birthOrder">{{
                 'LABOR.BABY_OUTCOME' | translate: { order: baby.birthOrder }
               }}</label>

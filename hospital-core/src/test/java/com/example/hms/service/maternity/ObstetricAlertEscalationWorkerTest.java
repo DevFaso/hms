@@ -143,6 +143,34 @@ class ObstetricAlertEscalationWorkerTest {
     }
 
     @Test
+    void reRaisedStillbirthAlertReplacesTheOpenEscalationInsteadOfEscalatingBesideIt() {
+        // QA D1801: stillborn -> live -> stillborn before the sweep: the first row was never closed.
+        UUID delivery = UUID.randomUUID();
+        ObstetricAlertEscalation first = row((short) 0);
+        when(escalationRepository.findOpenBySourceAndMessageKey(
+            ObstetricAlertEscalationService.SOURCE_DELIVERY, delivery, ObstetricAlertCurrency.STILLBIRTH_ALERT_MESSAGE_KEY))
+            .thenReturn(List.of(first));
+        when(escalationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        worker.raise(stillbirthAlert(delivery, ObstetricAlertCurrency.STILLBIRTH_ALERT_MESSAGE_KEY));
+        assertThat(first.getAcknowledgedAt()).isNotNull();
+        assertThat(first.getAcknowledgedBy()).isNull();
+    }
+
+    @Test
+    void otherDeliveryAlertsAreNeverClosedByARaise() {
+        UUID delivery = UUID.randomUUID();
+        when(escalationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        worker.raise(stillbirthAlert(delivery, "labor.alert.msg.labor-apgar"));
+        verify(escalationRepository, never()).findOpenBySourceAndMessageKey(any(), any(), any());
+    }
+
+    private static ObstetricAlertEscalationService.UrgentAlert stillbirthAlert(UUID delivery, String key) {
+        return new ObstetricAlertEscalationService.UrgentAlert(HOSPITAL, PATIENT, "Jane",
+            ObstetricAlertEscalationService.SOURCE_DELIVERY, delivery, "OTHER", "Other", "Stillbirth", DOCUMENTER,
+            "text", key, null);
+    }
+
+    @Test
     void raiseWithNobodyToNotifyStillSavesTheRow() {
         when(staffRepository.findActiveUsernamesByHospitalAndRole(any(), any())).thenReturn(List.of());
         when(escalationRepository.save(any())).thenReturn(row((short) 0));

@@ -92,6 +92,7 @@ public class ObstetricAlertEscalationWorker {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public UUID raise(ObstetricAlertEscalationService.UrgentAlert alert) {
         LocalDateTime now = LocalDateTime.now(clock);
+        closeSupersededStillbirthEscalations(alert, now);
         ObstetricAlertEscalation row = escalationRepository.save(ObstetricAlertEscalation.builder()
             .hospitalId(alert.hospitalId())
             .patientId(alert.patientId())
@@ -120,6 +121,25 @@ public class ObstetricAlertEscalationWorker {
                 row.getId(), alert.hospitalId());
         }
         return row.getId();
+    }
+
+    /**
+     * QA D1801: a delivery's stillbirth alert is one alert. When a correction withdrew it and a later correction
+     * raised it again before the sweep closed the first escalation, that first row would escalate beside the new
+     * one. The new row replaces it: the old one is closed by the record (empty acknowledgedBy), like a withdrawn alert.
+     */
+    private void closeSupersededStillbirthEscalations(ObstetricAlertEscalationService.UrgentAlert alert,
+                                                      LocalDateTime now) {
+        if (!ObstetricAlertEscalationService.SOURCE_DELIVERY.equals(alert.sourceType())
+            || !ObstetricAlertCurrency.STILLBIRTH_ALERT_MESSAGE_KEY.equals(alert.alertMessageKey())) {
+            return;
+        }
+        for (ObstetricAlertEscalation open : escalationRepository.findOpenBySourceAndMessageKey(
+                alert.sourceType(), alert.sourceId(), alert.alertMessageKey())) {
+            open.setAcknowledgedAt(now);
+            open.setAcknowledgedBy(null);
+            escalationRepository.save(open);
+        }
     }
 
     /**
