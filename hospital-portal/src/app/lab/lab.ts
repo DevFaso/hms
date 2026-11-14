@@ -411,6 +411,7 @@ export class LabComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.linkedOrderId = this.activatedRoute.snapshot.queryParamMap.get('order');
     this.loadOrders();
     this.loadAssignedHospitals();
     this.initPatientSearch();
@@ -428,6 +429,31 @@ export class LabComponent implements OnInit {
         if (active) this.activeAssignmentId = active.id;
       },
     });
+  }
+
+  /** `/lab?order=<id>`: the order to open once the list has loaded (read once). */
+  private linkedOrderId: string | null = null;
+
+  /**
+   * `/lab?order=<id>` (the lab result drawer links a result to its request):
+   * opens that order's drawer, on a tab that lists it. An order that is not in
+   * this reader's scope, or no longer exists, says so instead of opening nothing.
+   */
+  private openLinkedOrder(list: LabOrderResponse[]): void {
+    const id = this.linkedOrderId;
+    if (!id) return;
+    this.linkedOrderId = null;
+    const order = list.find((o) => o.id === id);
+    if (!order) {
+      this.toast.error(this.translate.instant('LAB.LINKED_ORDER_NOT_FOUND'));
+      return;
+    }
+    if (!this.filtered().some((o) => o.id === id)) {
+      this.searchTerm = '';
+      const tab = this.isPending(order) ? 'pending' : this.isCompleted(order) ? 'completed' : 'all';
+      this.setTab(tab);
+    }
+    this.viewOrder(order);
   }
 
   /**
@@ -836,6 +862,7 @@ export class LabComponent implements OnInit {
         this.computeStats(list);
         this.applyFilter();
         this.loading.set(false);
+        this.openLinkedOrder(list);
       },
       error: () => {
         this.toast.error(this.translate.instant('LAB.TOAST.LOAD_FAILED'));

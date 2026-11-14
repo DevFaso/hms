@@ -173,6 +173,22 @@ describe('LabComponent — performing laboratory', () => {
     expect(component.form.patientId).toBe('pat-awa');
   });
 
+  it('/lab?order=<id> opens the drawer of that order once the list has loaded', async () => {
+    const linked = order({ id: 'o-linked', status: 'COMPLETED' });
+    await setup(['ROLE_DOCTOR'], [order({ id: 'o-other' }), linked], HOSPITAL_A, {
+      order: 'o-linked',
+    });
+    expect(component.selectedOrder()?.id).toBe('o-linked');
+    expect(component.filtered().some((o) => o.id === 'o-linked')).toBeTrue();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('/lab?order=<id> for an order out of scope says so and opens nothing', async () => {
+    await setup(['ROLE_DOCTOR'], [order({ id: 'o-other' })], HOSPITAL_A, { order: 'o-missing' });
+    expect(component.selectedOrder()).toBeNull();
+    expect(toast.error).toHaveBeenCalledWith('LAB.LINKED_ORDER_NOT_FOUND');
+  });
+
   it('QA D956: a plain /lab opens no form', async () => {
     await setup(['ROLE_DOCTOR'], []);
     expect(component.showModal()).toBeFalse();

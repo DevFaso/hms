@@ -3886,7 +3886,8 @@
       "RECEIVED": "Received at the laboratory",
       "RESULTED": "Result entered",
       "VALIDATED": "Validated"
-    }
+    },
+    "LINKED_ORDER_NOT_FOUND": "This lab request was not found, or you cannot see it from this hospital."
   },
   "LAB_STAFF": {
     "TITLE": "Lab Staff Management",

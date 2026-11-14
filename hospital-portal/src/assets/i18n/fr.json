@@ -3886,7 +3886,8 @@
       "RECEIVED": "Reçue au laboratoire",
       "RESULTED": "Résultat saisi",
       "VALIDATED": "Validée"
-    }
+    },
+    "LINKED_ORDER_NOT_FOUND": "Cette demande d'analyse est introuvable, ou vous ne pouvez pas la voir depuis cet hôpital."
   },
   "LAB_STAFF": {
     "TITLE": "Gestion du personnel de laboratoire",

@@ -3886,7 +3886,8 @@
       "RECEIVED": "Recibida en el laboratorio",
       "RESULTED": "Resultado registrado",
       "VALIDATED": "Validada"
-    }
+    },
+    "LINKED_ORDER_NOT_FOUND": "No se encontró esta solicitud de laboratorio, o no puede verla desde este hospital."
   },
   "LAB_STAFF": {
     "TITLE": "Gestión de personal de laboratorio",
