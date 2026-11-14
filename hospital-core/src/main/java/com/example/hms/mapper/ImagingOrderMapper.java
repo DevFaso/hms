@@ -17,7 +17,6 @@ import java.time.LocalTime;
 import java.time.format.DateTimeParseException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -168,6 +167,7 @@ public class ImagingOrderMapper {
             .duplicateReferenceOrderId(order.getDuplicateReferenceOrderId())
             .duplicateMatches(toDuplicateMatchDTOs(duplicateMatches))
             .cancelledAt(order.getCancelledAt())
+            .completedAt(order.getCompletedAt())
             .cancellationReason(order.getCancellationReason())
             .cancelledByName(order.getCancelledByName())
             .workflowNotes(order.getWorkflowNotes())
@@ -217,22 +217,10 @@ public class ImagingOrderMapper {
     }
 
     private String resolvePatientDisplayName(Patient patient) {
-        if (patient == null) {
-            return null;
-        }
-        // QA D1036: "Last, First Middle" - the given names whole, middle name included.
-        String first = java.util.stream.Stream.of(patient.getFirstName(), patient.getMiddleName())
-            .filter(part -> part != null && !part.isBlank())
-            .map(String::trim)
-            .collect(java.util.stream.Collectors.joining(" "));
-        String last = Optional.ofNullable(patient.getLastName()).orElse("").trim();
-        if (!last.isEmpty() && !first.isEmpty()) {
-            return last + ", " + first;
-        }
-        if (!last.isEmpty()) {
-            return last;
-        }
-        return !first.isEmpty() ? first : null;
+        // r44: the app's one name format, "First Middle Last" (QA D1036), not
+        // "Last, First": the imaging list read "Traoré, Seydou" where every
+        // other screen reads "Seydou Traoré".
+        return patient == null ? null : patient.getFullName();
     }
 
     /**

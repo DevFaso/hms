@@ -115,6 +115,9 @@ public class ImagingOrderResponseDTO {
 
     private LocalDateTime cancelledAt;
 
+    /** When the study was completed (V294); null while it is not. */
+    private LocalDateTime completedAt;
+
     private String cancellationReason;
 
     private String cancelledByName;

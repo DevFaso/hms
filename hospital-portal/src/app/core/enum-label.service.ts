@@ -509,6 +509,11 @@ export class EnumLabelService implements OnDestroy {
       RESULTS_AVAILABLE: 'Results Available',
       CANCELLED: 'Cancelled',
     },
+    imagingReportHistoryEvent: {
+      AUTHORED: 'Report written',
+      SIGNED: 'Report signed',
+      CRITICAL_ACKNOWLEDGED: 'Critical finding acknowledged',
+    },
     imagingReportStatus: {
       DRAFT: 'Draft',
       PRELIMINARY: 'Preliminary',

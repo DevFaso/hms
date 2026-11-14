@@ -39,28 +39,66 @@
     </div>
   }
   @if (view() === 'orders') {
-    <div class="summary-cards">
-      <div class="summary-card">
-        <span class="material-symbols-outlined card-icon active">radiology</span>
-        <div class="card-info">
+    <!-- r44: each card counts exactly what its tab lists (search and dates applied). -->
+    <div class="summary-cards" data-testid="imaging-stat-cards">
+      <button
+        type="button"
+        class="summary-card"
+        data-testid="imaging-card-ordered"
+        [class.selected]="activeTab() === 'ordered'"
+        [attr.aria-pressed]="activeTab() === 'ordered'"
+        (click)="setTab('ordered')"
+      >
+        <span class="material-symbols-outlined card-icon active" aria-hidden="true">radiology</span>
+        <span class="card-info">
           <span class="card-value">{{ activeOrderCount() }}</span
           ><span class="card-label">{{ 'IMAGING.ACTIVE_ORDERS' | translate }}</span>
-        </div>
-      </div>
-      <div class="summary-card">
-        <span class="material-symbols-outlined card-icon completed">check_circle</span>
-        <div class="card-info">
+        </span>
+      </button>
+      <button
+        type="button"
+        class="summary-card"
+        data-testid="imaging-card-completed"
+        [class.selected]="activeTab() === 'completed'"
+        [attr.aria-pressed]="activeTab() === 'completed'"
+        (click)="setTab('completed')"
+      >
+        <span class="material-symbols-outlined card-icon completed" aria-hidden="true"
+          >check_circle</span
+        >
+        <span class="card-info">
           <span class="card-value">{{ completedOrderCount() }}</span
           ><span class="card-label">{{ 'IMAGING.COMPLETED' | translate }}</span>
-        </div>
-      </div>
-      <div class="summary-card">
-        <span class="material-symbols-outlined card-icon total">bar_chart</span>
-        <div class="card-info">
-          <span class="card-value">{{ orders().length }}</span
+        </span>
+      </button>
+      <button
+        type="button"
+        class="summary-card"
+        data-testid="imaging-card-cancelled"
+        [class.selected]="activeTab() === 'cancelled'"
+        [attr.aria-pressed]="activeTab() === 'cancelled'"
+        (click)="setTab('cancelled')"
+      >
+        <span class="material-symbols-outlined card-icon cancelled" aria-hidden="true">cancel</span>
+        <span class="card-info">
+          <span class="card-value">{{ cancelledOrderCount() }}</span
+          ><span class="card-label">{{ 'IMAGING.CANCELLED_ORDERS' | translate }}</span>
+        </span>
+      </button>
+      <button
+        type="button"
+        class="summary-card"
+        data-testid="imaging-card-all"
+        [class.selected]="activeTab() === 'all'"
+        [attr.aria-pressed]="activeTab() === 'all'"
+        (click)="setTab('all')"
+      >
+        <span class="material-symbols-outlined card-icon total" aria-hidden="true">bar_chart</span>
+        <span class="card-info">
+          <span class="card-value">{{ matched().length }}</span
           ><span class="card-label">{{ 'IMAGING.TOTAL_ORDERS' | translate }}</span>
-        </div>
-      </div>
+        </span>
+      </button>
     </div>
     <div class="filter-bar">
       <div class="tabs">
@@ -111,6 +149,30 @@
           (input)="applyFilter()"
         />
       </div>
+      <!-- r44: the ordered-on range, as the reader's calendar dates. -->
+      <div class="date-filters">
+        <label for="imaging-date-from">{{ 'IMAGING.DATE_FROM' | translate }}</label>
+        <input
+          id="imaging-date-from"
+          type="date"
+          [max]="dateTo || null"
+          [(ngModel)]="dateFrom"
+          (ngModelChange)="applyFilter()"
+        />
+        <label for="imaging-date-to">{{ 'IMAGING.DATE_TO' | translate }}</label>
+        <input
+          id="imaging-date-to"
+          type="date"
+          [min]="dateFrom || null"
+          [(ngModel)]="dateTo"
+          (ngModelChange)="applyFilter()"
+        />
+        @if (dateFrom || dateTo) {
+          <button type="button" class="btn-link" (click)="clearDates()">
+            {{ 'IMAGING.CLEAR_DATES' | translate }}
+          </button>
+        }
+      </div>
     </div>
     @if (loading()) {
       <div class="loading-state">
@@ -136,12 +198,14 @@
           <thead>
             <tr>
               <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+              <th scope="col" data-testid="imaging-status-header">
+                {{ 'COMMON.STATUS' | translate }}
+              </th>
               <th scope="col">{{ 'IMAGING.MODALITY' | translate }}</th>
               <th scope="col">{{ 'IMAGING.STUDY' | translate }}</th>
               <th scope="col">{{ 'IMAGING.BODY_REGION' | translate }}</th>
               <th scope="col">{{ 'IMAGING.PRIORITY' | translate }}</th>
               <th scope="col">{{ 'IMAGING.ORDERED' | translate }}</th>
-              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
               <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
             </tr>
           </thead>
@@ -153,6 +217,13 @@
                     {{ o.patientDisplayName || ('COMMON.UNKNOWN' | translate) }}
                   </div>
                   <div class="cell-secondary">{{ o.patientMrn }}</div>
+                </td>
+                <td>
+                  <span
+                    class="status-badge {{ getStatusClass(o.status) }}"
+                    data-testid="imaging-row-status"
+                    >{{ o.status | enumLabel: 'imagingOrderStatus' }}</span
+                  >
                 </td>
                 <td>
                   <span class="modality-badge">{{
@@ -167,11 +238,6 @@
                   }}</span>
                 </td>
                 <td>{{ o.orderedAt ? (o.orderedAt | serverTime | date: 'mediumDate') : '—' }}</td>
-                <td>
-                  <span class="status-badge {{ getStatusClass(o.status) }}">{{
-                    o.status | enumLabel: 'imagingOrderStatus'
-                  }}</span>
-                </td>
                 <td>
                   <div class="action-group">
                     <button
@@ -404,14 +470,29 @@
               <span class="material-symbols-outlined">verified</span>
               <span>
                 {{ 'IMAGING.SIGNED_LOCKED' | translate }}
-                @if (rep.signatureValue) {
-                  <code class="signature-digest" [title]="rep.signatureValue">{{
-                    rep.signatureValue.slice(0, 16)
-                  }}</code>
-                } @else {
-                  <em>{{ 'IMAGING.SIGNED_UNVERIFIABLE' | translate }}</em>
+                @if (!rep.signatureValue) {
+                  · <em>{{ 'IMAGING.SIGNED_UNVERIFIABLE' | translate }}</em>
                 }
               </span>
+              <!-- r44: the digest is technical proof, not clinical content: behind a toggle. -->
+              @if (rep.signatureValue) {
+                <details class="signature-details" data-testid="imaging-signature-details">
+                  <summary
+                    [title]="'IMAGING.SIGNATURE_FINGERPRINT_HINT' | translate"
+                    [attr.aria-label]="'IMAGING.SIGNATURE_FINGERPRINT' | translate"
+                  >
+                    <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                  </summary>
+                  <small
+                    >{{ 'IMAGING.SIGNATURE_FINGERPRINT' | translate
+                    }}{{ 'COMMON.COLON' | translate }}</small
+                  >
+                  <code class="signature-digest">{{ rep.signatureValue }}</code>
+                  <small class="muted">{{
+                    'IMAGING.SIGNATURE_FINGERPRINT_HINT' | translate
+                  }}</small>
+                </details>
+              }
             </div>
           }
           @if (isCriticalUnacked(rep)) {
@@ -426,7 +507,7 @@
                   @if (rep.criticalNotifiedAt) {
                     {{
                       'IMAGING.CRITICAL_NOTIFIED_AT'
-                        | translate: { time: rep.criticalNotifiedAt | serverTime | date: 'short' }
+                        | translate: { time: rep.criticalNotifiedAt | serverTime | dateTime }
                     }}
                   } @else {
                     {{ 'IMAGING.CRITICAL_NOT_YET_NOTIFIED' | translate }}
@@ -454,7 +535,7 @@
           @if (rep.criticalResultAcknowledgedAt) {
             <p class="muted">
               {{ 'IMAGING.CRITICAL_ACKED_BY' | translate }} {{ rep.criticalResultAckByName }} —
-              {{ rep.criticalResultAcknowledgedAt | serverTime | date: 'short' }}
+              {{ rep.criticalResultAcknowledgedAt | serverTime | dateTime }}
             </p>
           }
           <div class="detail-grid">
@@ -482,9 +563,7 @@
               <span class="field-label">{{ 'IMAGING.SIGNED_BY' | translate }}</span
               ><span class="field-value"
                 >{{ rep.signedByName || '—' }}
-                {{
-                  rep.signedAt ? '(' + (rep.signedAt | serverTime | date: 'short') + ')' : ''
-                }}</span
+                {{ rep.signedAt ? '(' + (rep.signedAt | serverTime | dateTime) + ')' : '' }}</span
               >
             </div>
             <div class="detail-field">
@@ -545,10 +624,15 @@
               <ul class="status-history">
                 @for (h of rep.statusHistory; track h.id) {
                   <li>
-                    {{ h.changedAt | serverTime | date: 'short' }} —
+                    {{ h.changedAt | serverTime | dateTime }} —
                     {{ 'IMAGING.REPORT_STATUS_' + h.status | translate }}
                     {{ h.changedByName ? '(' + h.changedByName + ')' : '' }}
-                    {{ h.statusReason ? '· ' + h.statusReason : '' }}
+                    <!-- r44: an event the server wrote is translated; a typed reason shows as typed. -->
+                    @if (h.eventCode) {
+                      · {{ h.eventCode | enumLabel: 'imagingReportHistoryEvent' }}
+                    } @else if (h.statusReason) {
+                      · {{ h.statusReason }}
+                    }
                   </li>
                 }
               </ul>
@@ -789,10 +873,17 @@
               <span class="field-label">{{ 'IMAGING.BODY_REGION' | translate }}</span
               ><span class="field-value">{{ ord.bodyRegion || '—' }}</span>
             </div>
-            <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.LATERALITY' | translate }}</span
-              ><span class="field-value">{{ ord.laterality || '—' }}</span>
-            </div>
+            <!-- r44: a laterality marked not applicable is not shown. -->
+            @if (lateralityApplies(ord)) {
+              <div class="detail-field" data-testid="imaging-order-laterality">
+                <span class="field-label">{{ 'IMAGING.LATERALITY' | translate }}</span
+                ><span class="field-value">{{
+                  ord.laterality
+                    ? (ord.laterality | enumLabel: 'imagingLaterality')
+                    : ('IMAGING.LATERALITY_NOT_RECORDED' | translate)
+                }}</span>
+              </div>
+            }
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.PRIORITY' | translate }}</span
               ><span class="field-value"
@@ -819,21 +910,25 @@
                 ord.orderedAt ? (ord.orderedAt | serverTime | dateTime) : '—'
               }}</span>
             </div>
-            <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.SCHEDULED' | translate }}</span
-              ><span class="field-value"
-                >{{
-                  ord.scheduledDate ? (ord.scheduledDate | serverTime | date: 'mediumDate') : '—'
-                }}
-                {{ ord.scheduledTime || '' }}</span
-              >
-            </div>
-            <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.COMPLETED_AT' | translate }}</span
-              ><span class="field-value">{{
-                ord.completedAt ? (ord.completedAt | serverTime | dateTime) : '—'
-              }}</span>
-            </div>
+            <!-- r44: "Planifié" with its time when one was set; absent when never scheduled. -->
+            @if (scheduledAt(ord); as sched) {
+              <div class="detail-field" data-testid="imaging-order-scheduled">
+                <span class="field-label">{{ 'IMAGING.SCHEDULED' | translate }}</span
+                ><span class="field-value">{{
+                  sched.withTime
+                    ? (sched.scheduledAt | dateTime)
+                    : (sched.scheduledAt | date: 'mediumDate')
+                }}</span>
+              </div>
+            }
+            @if (isResulted(ord)) {
+              <div class="detail-field" data-testid="imaging-order-completed">
+                <span class="field-label">{{ 'IMAGING.COMPLETED_AT' | translate }}</span
+                ><span class="field-value">{{
+                  ord.completedAt ? (ord.completedAt | serverTime | dateTime) : '—'
+                }}</span>
+              </div>
+            }
           </div>
           @if (ord.clinicalQuestion) {
             <div class="detail-notes">
@@ -848,7 +943,7 @@
               @for (rep of selectedOrderReports(); track rep.id) {
                 <div class="report-card" [attr.data-testid]="'imaging-report-' + rep.id">
                   <div class="report-meta">
-                    <span class="status-badge {{ getStatusClass(rep.reportStatus) }}">{{
+                    <span class="status-badge {{ getReportStatusClass(rep.reportStatus) }}">{{
                       rep.reportStatus | enumLabel: 'imagingReportStatus'
                     }}</span>
                     <span class="report-author">{{
@@ -866,17 +961,18 @@
                       </button>
                     }
                   </div>
-                  @if (rep.impression) {
-                    <p class="report-impression">
-                      <strong
-                        >{{ 'IMAGING.IMPRESSION' | translate
-                        }}{{ 'COMMON.COLON' | translate }}</strong
-                      >
-                      {{ rep.impression }}
-                    </p>
-                  }
+                  <!-- r44: the report drawer's order and labels: Findings, then Conclusion. -->
                   @if (rep.findings) {
-                    <p class="report-findings">{{ rep.findings }}</p>
+                    <div class="detail-notes report-findings">
+                      <span class="field-label">{{ 'IMAGING.FINDINGS' | translate }}</span>
+                      <p>{{ rep.findings }}</p>
+                    </div>
+                  }
+                  @if (rep.impression) {
+                    <div class="detail-notes report-impression">
+                      <span class="field-label">{{ 'IMAGING.IMPRESSION' | translate }}</span>
+                      <p>{{ rep.impression }}</p>
+                    </div>
                   }
                 </div>
               }

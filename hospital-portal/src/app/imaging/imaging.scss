@@ -15,6 +15,18 @@
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   padding: 1.25rem;
+  /* r44: each card is its tab's button. */
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  &.selected {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px var(--primary);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
 }
 .card-icon {
   width: 48px;
@@ -35,6 +47,23 @@
   &.total {
     background: #e0e7ff;
     color: #3730a3;
+  }
+  &.cancelled {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+}
+.date-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  input[type='date'] {
+    padding: 0.4rem 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font: inherit;
   }
 }
 .card-info {
@@ -593,6 +622,27 @@
   em {
     font-weight: 400;
     opacity: 0.85;
+  }
+}
+
+/* r44: the digest is behind a small info toggle, not in the clinician's line. */
+.signature-details {
+  margin-left: auto;
+  font-weight: 400;
+  summary {
+    cursor: pointer;
+    list-style: none;
+    display: inline-flex;
+    &::-webkit-details-marker {
+      display: none;
+    }
+  }
+  &[open] {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 60%;
+    word-break: break-all;
   }
 }
 

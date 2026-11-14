@@ -179,7 +179,7 @@ class ImagingOrderMapperResilienceTest {
 
         assertThat(dto.getId()).isEqualTo(orderId);
         assertThat(dto.getPatientId()).isEqualTo(patient.getId());
-        assertThat(dto.getPatientDisplayName()).isEqualTo("Roe, Jane");
+        assertThat(dto.getPatientDisplayName()).isEqualTo("Jane Roe");
         assertThat(dto.getHospitalId()).isEqualTo(hospital.getId());
         assertThat(dto.getHospitalName()).isEqualTo("Test Hospital");
         assertThat(dto.getModality()).isEqualTo(com.example.hms.enums.ImagingModality.CT);
