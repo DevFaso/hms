@@ -869,6 +869,159 @@ describe('LabComponent — performing laboratory', () => {
     expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
   });
 
+  describe('a save answered after its dialog was closed and another opened (Rex P2 on #1150)', () => {
+    it('does not close, reset or toast over the dialog opened since, yet refreshes the list', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<LabOrderResponse>();
+      labService.createOrder.and.returnValue(reply);
+
+      component.openCreate();
+      component.submitForm();
+      expect(component.saving()).toBeTrue();
+      component.closeModal();
+      component.openCreate();
+      component.form.testName = 'typed in the new dialog';
+      labService.listOrders.calls.reset();
+
+      reply.next(order({}));
+
+      expect(component.showModal()).toBeTrue();
+      expect(component.form.testName).toBe('typed in the new dialog');
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(component.saving()).withContext('the write lock is released').toBeFalse();
+      expect(labService.listOrders).toHaveBeenCalled();
+    });
+
+    it('names the operation that finished, not the one now open', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<LabOrderResponse>();
+      labService.updateOrder.and.returnValue(reply);
+
+      component.openEdit(order({ id: 'o-1' }));
+      component.submitForm();
+      reply.next(order({ id: 'o-1' }));
+
+      expect(toast.success).toHaveBeenCalledOnceWith('LAB.TOAST.UPDATED');
+      expect(component.showModal()).toBeFalse();
+    });
+
+    it('does not show an old failure over the dialog opened since', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<LabOrderResponse>();
+      labService.createOrder.and.returnValue(reply);
+
+      component.openCreate();
+      component.submitForm();
+      component.closeModal();
+      component.openEdit(order({ id: 'o-1' }));
+      reply.error({ status: 500 });
+
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(component.showModal()).toBeTrue();
+      expect(component.saving()).toBeFalse();
+    });
+
+    it('a void answered late leaves the next void dialog open and silent', async () => {
+      await setup(['ROLE_LAB_DIRECTOR'], []);
+      const reply = new Subject<LabOrderResponse>();
+      labService.voidOrder.and.returnValue(reply);
+      const a = order({ id: 'o-a', status: 'COMPLETED' });
+      const b = order({ id: 'o-b', status: 'COMPLETED' });
+
+      component.openVoid(a);
+      component.voidReason.set('Wrong patient');
+      component.executeVoid();
+      component.closeVoid();
+      component.openVoid(b);
+      reply.next(order({ id: 'o-a' }));
+
+      expect(component.voidingOrder()).toBe(b);
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(component.voiding()).toBeFalse();
+    });
+
+    it('a delete answered late leaves the next confirmation open and silent', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<void>();
+      labService.deleteOrder.and.returnValue(reply);
+      const a = order({ id: 'o-a' });
+      const b = order({ id: 'o-b' });
+
+      component.confirmDelete(a);
+      component.executeDelete();
+      component.cancelDelete();
+      component.confirmDelete(b);
+      reply.next();
+
+      expect(component.deletingOrder()).toBe(b);
+      expect(component.showDeleteConfirm()).toBeTrue();
+      expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('an approval answered late leaves the next approval dialog open and silent', async () => {
+      await setup(['ROLE_LAB_DIRECTOR'], []);
+      const reply = new Subject<LabTestDefinition>();
+      labService.submitApprovalAction.and.returnValue(reply);
+      const a = { id: 'def-a' } as LabTestDefinition;
+      const b = { id: 'def-b' } as LabTestDefinition;
+
+      component.openApprovalModal(a);
+      component.approvalAction.set('APPROVE');
+      component.submitApprovalAction();
+      component.closeApprovalModal();
+      component.openApprovalModal(b);
+      reply.next({ id: 'def-a', approvalStatus: 'APPROVED' } as LabTestDefinition);
+
+      expect(component.approvalTarget()).toBe(b);
+      expect(component.showApprovalModal()).toBeTrue();
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(component.processingApproval()).toBeFalse();
+    });
+
+    it('a specimen collected late does not reset or reload another order specimens', async () => {
+      await setup(['ROLE_LAB_TECH'], []);
+      const reply = new Subject<LabSpecimen>();
+      labService.createSpecimen.and.returnValue(reply);
+
+      component.openSpecimens(order({ id: 'o-a', status: 'ORDERED' }));
+      component.specimenForm.specimenType = 'BLOOD';
+      component.collectSpecimen();
+      component.closeSpecimens();
+      component.openSpecimens(order({ id: 'o-b', status: 'ORDERED' }));
+      component.specimenForm.specimenType = 'typed for b';
+      labService.listSpecimens.calls.reset();
+
+      reply.next({ id: 's-1' } as LabSpecimen);
+
+      expect(component.specimenForm.specimenType).toBe('typed for b');
+      expect(labService.listSpecimens).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(component.specimenSaving()).toBeFalse();
+    });
+
+    it('a rejection answered late leaves the next rejection dialog open and silent', async () => {
+      await setup(['ROLE_LAB_TECH'], []);
+      const reply = new Subject<LabSpecimen>();
+      labService.rejectSpecimen.and.returnValue(reply);
+      const sa = { id: 's-a', status: 'COLLECTED' } as LabSpecimen;
+      const sb = { id: 's-b', status: 'COLLECTED' } as LabSpecimen;
+
+      component.openSpecimens(order({ id: 'o-a', status: 'COLLECTED' }));
+      component.openReject(sa);
+      component.rejectReason.set('Hemolysed');
+      component.executeReject();
+      component.closeReject();
+      component.openReject(sb);
+      labService.listOrders.calls.reset();
+      reply.next(sa);
+
+      expect(component.rejectingSpecimen()).toBe(sb);
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(component.rejecting()).toBeFalse();
+      expect(labService.listOrders).toHaveBeenCalled();
+    });
+  });
+
   describe('QA D820: void a COMPLETED order as entered in error', () => {
     const voidButton = (id: string) =>
       fixture.nativeElement.querySelector(

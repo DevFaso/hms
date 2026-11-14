@@ -3744,7 +3744,7 @@
       "BODY": "Ce patient a déjà une demande en cours pour le même examen ici, passée dans les dernières 24 heures. Vérifiez qu'une nouvelle demande est vraiment nécessaire.",
       "BACK": "Revenir à la demande",
       "ORDER_ANYWAY": "Commander quand même",
-      "PLACED_ANYWAY": "La demande a été passée, mais ce patient avait déjà une demande en cours pour le même examen ici : {{codes}}. Vérifiez que les deux sont nécessaires."
+      "PLACED_ANYWAY": "La demande a été passée, mais ce patient avait déjà une demande en cours pour le même examen ici : {{codes}}. Vérifiez que chacune est nécessaire."
     },
     "ABNORMAL": "Anormal",
     "ACCESSION": "N° d'enregistrement",
@@ -4067,6 +4067,7 @@
     "CORRECTED_HINT": "Ce résultat corrige un résultat validé auparavant ; l’ancienne valeur reste au dossier, marquée remplacée.",
     "TITLE": "Résultats de laboratoire",
     "SUBTITLE": "Gérer les résultats des analyses de laboratoire",
+    "LAB_COMMENT": "Commentaire du laboratoire",
     "LOADING": "Chargement des résultats…",
     "SEARCH": "Rechercher par code de commande, patient ou test…",
     "TOTAL": "Total des résultats",
