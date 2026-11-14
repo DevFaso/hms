@@ -183,10 +183,10 @@ class IkoddiGatewayImplTest {
             "HMS", "BF", "226", SmsRecipientAllowlist.parse("+22670707070", "IKODDI"));
 
         assertThatThrownBy(() -> restricted.sendSms(List.of("+22670707071"), "Bonjour", null))
-            .isInstanceOf(IllegalStateException.class)
+            .isInstanceOf(SmsRecipientNotAllowedException.class)
             .hasMessage(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
         assertThatThrownBy(() -> restricted.sendOtp("70 70 70 71", IkoddiGateway.OtpChannel.SMS))
-            .isInstanceOf(IllegalStateException.class)
+            .isInstanceOf(SmsRecipientNotAllowedException.class)
             .hasMessage(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
         noCalls.verify();
     }

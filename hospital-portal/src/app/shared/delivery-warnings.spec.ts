@@ -26,6 +26,12 @@ describe('deliveryWarningKeys', () => {
     ]);
   });
 
+  it('QA D1842: a number the environment may not text is said so, not reported as a failed send', () => {
+    const report = [row({ channel: 'SMS', outcome: 'RECIPIENT_NOT_ALLOWED' })];
+    expect(deliveryWarningKeys(report)).toEqual(['DELIVERY.SMS_RECIPIENT_NOT_ALLOWED']);
+    expect(hasActivationSent(report, 'SMS')).toBeFalse();
+  });
+
   it('does not warn about a phone-first patient having no email', () => {
     // EMAIL NO_CONTACT is expected here — the SMS is the activation route.
     expect(

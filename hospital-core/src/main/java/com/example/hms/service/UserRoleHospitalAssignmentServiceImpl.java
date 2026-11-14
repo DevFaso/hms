@@ -2244,6 +2244,22 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     return GLOBAL_SCOPE;
     }
 
+    /**
+     * QA D1840: the hospital as a notification names it — its name, or null for a
+     * platform-wide assignment (a super-admin's), which the templates word as
+     * "across the whole platform". Never {@link #GLOBAL_SCOPE}: that is a scope
+     * code, and a mail or an SMS read "assigned … at GLOBAL".
+     */
+    static String messageHospitalName(Hospital hospital) {
+        if (hospital == null) {
+            return null;
+        }
+        if (hospital.getName() != null && !hospital.getName().isBlank()) {
+            return hospital.getName();
+        }
+        return hospital.getCode() != null && !hospital.getCode().isBlank() ? hospital.getCode() : null;
+    }
+
     private String getRoleCode(Role role) {
         return role.getCode() != null && !role.getCode().isBlank()
             ? role.getCode()
@@ -2284,7 +2300,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             Locale locale = smsLocaleFor(assignment, user);
             String confirmationCode = assignment.getConfirmationCode();
             String roleLabel = smsRoleLabel(role, locale);
-            String hospitalDisplay = resolveHospitalName(hospital);
+            String hospitalDisplay = messageHospitalName(hospital);
             String assigneeDisplay = resolveDisplayName(user, user != null ? user.getEmail() : "user");
 
             // The assignee's activation SMS goes FIRST and each FYI send is
@@ -2377,8 +2393,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (phone == null || phone.isBlank()) {
             return;
         }
-        sendSmsSilently(phone, smsText("sms.activation.registrar", locale,
-            assigneeDisplay, roleLabel, hospitalDisplay, confirmationCode));
+        sendSmsSilently(phone, hospitalDisplay == null
+            ? smsText("sms.activation.registrar.platform", locale, assigneeDisplay, roleLabel, confirmationCode)
+            : smsText("sms.activation.registrar", locale, assigneeDisplay, roleLabel, hospitalDisplay, confirmationCode));
     }
 
     private void notifyHospitalBySms(Hospital hospital,
@@ -2434,6 +2451,16 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                      : NotificationDeliveryStatusDTO.OUTCOME_MOCKED,
                 ActivationDeliveryTracker.maskPhone(phone),
                 real ? null : "SMS transport disabled — mock channel only logs");
+        } catch (com.example.hms.service.integration.SmsRecipientNotAllowedException ex) {
+            // QA D1842: a dev/uat allowlist refusal is not a transport failure —
+            // nothing is broken and a retry would be refused again. The number
+            // must be put on SMS_RECIPIENT_ALLOWLIST, or the code given in person.
+            log.info("ℹ️ Activation SMS for assignment '{}' not sent: recipient not on this environment's SMS allowlist",
+                assignment.getId());
+            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
+                NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
+                NotificationDeliveryStatusDTO.OUTCOME_RECIPIENT_NOT_ALLOWED,
+                ActivationDeliveryTracker.maskPhone(phone), DETAIL_SMS_RECIPIENT_NOT_ALLOWED);
         } catch (NotificationTransportUnavailableException ex) {
             // "No transport" is not "the send failed" — the registrar's next
             // move is to have an operator finish the SMS configuration, not
@@ -2465,8 +2492,14 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                              String roleLabel, String hospitalDisplay, String confirmationCode) {
         String link = profileCompletionUrl(assignment);
         String linkText = link != null ? link : "";
-        return isPatientRole(assignment)
-            ? smsText("sms.activation.patient", locale, hospitalDisplay, confirmationCode, linkText)
+        if (isPatientRole(assignment)) {
+            String where = hospitalDisplay != null
+                ? hospitalDisplay : smsText("email.role.assignment.fallback.hospital", locale);
+            return smsText("sms.activation.patient", locale, where, confirmationCode, linkText);
+        }
+        // QA D1840: a platform-wide assignment has no hospital to name.
+        return hospitalDisplay == null
+            ? smsText("sms.activation.staff.platform", locale, roleLabel, confirmationCode, linkText)
             : smsText("sms.activation.staff", locale, roleLabel, hospitalDisplay, confirmationCode, linkText);
     }
 
@@ -2539,7 +2572,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
             String userDisplayName = resolveDisplayName(user, email);
             String roleDisplay = assignment.getRole() != null ? getRoleCode(assignment.getRole()) : null;
-            String hospitalDisplay = resolveHospitalName(assignment.getHospital());
+            String hospitalDisplay = messageHospitalName(assignment.getHospital());
             String completionUrl = profileCompletionUrl(assignment);
 
             emailService.sendRoleAssignmentConfirmationEmail(
@@ -2576,6 +2609,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     private static final String DETAIL_SEE_SERVER_LOGS =
         "send failed — transport error in server logs";
+    private static final String DETAIL_SMS_RECIPIENT_NOT_ALLOWED =
+        "recipient not on this environment's SMS allowlist (SMS_RECIPIENT_ALLOWLIST)";
     private static final String DETAIL_MAIL_NOT_CONFIGURED =
         "mail transport not configured on this deployment";
 

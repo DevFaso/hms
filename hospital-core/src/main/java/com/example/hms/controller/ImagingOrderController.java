@@ -110,8 +110,13 @@ public class ImagingOrderController {
 			com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull())).body(results);
 	}
 
+	/**
+	 * QA D1841: the radiologist's worklist (dashboard counts and the /imaging page) — the
+	 * service scopes it to the caller's active hospital. The same readers as every other
+	 * imaging order read ({@code ImagingReadRoleGuardTest}).
+	 */
 	@GetMapping("/orders")
-	@PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST')")
 	@Operation(summary = "List all imaging orders")
 	public ResponseEntity<List<ImagingOrderResponseDTO>> getAllOrders(
 		@RequestParam(required = false) ImagingOrderStatus status

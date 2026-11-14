@@ -11,7 +11,16 @@ export interface NotificationDeliveryStatus {
    * seconds and retries; mail is never sent on the request itself. SENT: an
    * SMS handed to the carrier.
    */
-  outcome: 'SENT' | 'QUEUED' | 'FAILED' | 'NOT_CONFIGURED' | 'MOCKED' | 'NO_CONTACT';
+  outcome:
+    | 'SENT'
+    | 'QUEUED'
+    | 'FAILED'
+    | 'NOT_CONFIGURED'
+    | 'MOCKED'
+    | 'NO_CONTACT'
+    // QA D1842: SMS only — this environment's recipient allowlist (dev, uat)
+    // does not list the number. Not a transport failure.
+    | 'RECIPIENT_NOT_ALLOWED';
   target?: string;
   detail?: string;
 }
@@ -20,7 +29,12 @@ export interface NotificationDeliveryStatus {
  * NO_CONTACT is informational (a phone-first patient simply has no email);
  * only these mean an activation message someone expected went nowhere.
  */
-const PROBLEM_OUTCOMES: readonly string[] = ['FAILED', 'NOT_CONFIGURED', 'MOCKED'];
+const PROBLEM_OUTCOMES: readonly string[] = [
+  'FAILED',
+  'NOT_CONFIGURED',
+  'MOCKED',
+  'RECIPIENT_NOT_ALLOWED',
+];
 
 /** i18n keys (deduplicated) for every message that did NOT reach the person. */
 export function deliveryWarningKeys(
@@ -44,7 +58,7 @@ export function deliveryWarningKeys(
     } else if (r.channel === 'EMAIL') {
       keys.add(r.outcome === 'FAILED' ? 'DELIVERY.EMAIL_FAILED' : 'DELIVERY.EMAIL_NOT_CONFIGURED');
     } else {
-      keys.add(r.outcome === 'FAILED' ? 'DELIVERY.SMS_FAILED' : 'DELIVERY.SMS_NOT_CONFIGURED');
+      keys.add(smsWarningKey(r.outcome));
     }
   }
   // A report made entirely of NO_CONTACT rows produces no key above — each
@@ -61,6 +75,13 @@ export function deliveryWarningKeys(
     keys.add('DELIVERY.NO_ACTIVATION_CHANNEL');
   }
   return [...keys];
+}
+
+/** QA D1842: a number this environment may not text is not "the SMS failed". */
+function smsWarningKey(outcome: NotificationDeliveryStatus['outcome']): string {
+  if (outcome === 'FAILED') return 'DELIVERY.SMS_FAILED';
+  if (outcome === 'RECIPIENT_NOT_ALLOWED') return 'DELIVERY.SMS_RECIPIENT_NOT_ALLOWED';
+  return 'DELIVERY.SMS_NOT_CONFIGURED';
 }
 
 /** Outcomes that mean the message is on its way: sent (SMS) or queued (email). */

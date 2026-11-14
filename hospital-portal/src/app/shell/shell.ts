@@ -833,7 +833,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_RADIOLOGIST',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
       },
