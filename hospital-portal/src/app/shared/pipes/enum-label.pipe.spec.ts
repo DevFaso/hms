@@ -217,7 +217,7 @@ describe('EnumLabelPipe', () => {
   /* ── Phase 2 groups (lab + admin + referrals + signatures) ─ */
 
   it('handles all Phase-2 groups via the English fallback', () => {
-    expect(pipe.transform('RESULTED', 'labOrderStatus')).toBe('Resulted');
+    expect(pipe.transform('RESULTED', 'labOrderStatus')).toBe('Awaiting validation');
     expect(pipe.transform('ABNORMAL', 'abnormalFlag')).toBe('Abnormal');
     expect(pipe.transform('METHOD_COMPARISON', 'validationStudyType')).toBe('Method Comparison');
     expect(pipe.transform('AWAITING_DISCHARGE', 'admissionStatus')).toBe('Awaiting Discharge');

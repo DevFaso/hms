@@ -36,7 +36,8 @@ import { shortOrderCode } from '../../shared/lab/order-code';
 import { nowLocalDatetime, toLocalInputValue, toServerDateTime } from '../../shared/date-utils';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { labSeverityFlag, labSeverityTone, labReleaseNeedsReview } from '../shared/lab-severity';
-import { LabValuePipe, formatLabNumber } from '../shared/lab-value.pipe';
+import { LabValuePipe } from '../shared/lab-value.pipe';
+import { formatLabReferenceRange, ReferenceRangeLimits } from '../shared/reference-range-text';
 import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
@@ -341,6 +342,7 @@ export class LabResultsComponent implements OnInit {
     this.scopeUrl.applyUrlScopeSync(this.route);
 
     this.loadResults();
+    this.openFromQuery();
     // QA D645: an order whose test definition no longer resolves has nothing a
     // result can be entered against; it is not offered ("— — —" in the picker).
     // QA D1347: every order in scope (all pages), not the 500 newest.
@@ -356,6 +358,24 @@ export class LabResultsComponent implements OnInit {
       next: (assignments) => {
         const active = assignments.find((a: { active: boolean }) => a.active);
         if (active) this.activeAssignmentId = active.id;
+      },
+    });
+  }
+
+  /**
+   * `/lab-results?resultId=…` opens that result's detail: the lab requests
+   * drawer links each validated value to its full result here. A result the
+   * reader may not see is refused by the server and nothing opens.
+   */
+  private openFromQuery(): void {
+    const resultId = this.route.snapshot.queryParamMap.get('resultId');
+    if (!resultId) return;
+    this.labService.getResult(resultId).subscribe({
+      next: (r) => {
+        if (r?.id === resultId) this.viewResult(r);
+      },
+      error: () => {
+        /* the list stays shown */
       },
     });
   }
@@ -751,26 +771,9 @@ export class LabResultsComponent implements OnInit {
     return actor || this.translate.instant('LAB_RESULTS.AUTOVERIFICATION');
   }
 
-  formatReferenceRange(range: {
-    minValue: number | null;
-    maxValue: number | null;
-    unit: string | null;
-  }): string {
-    const min = range.minValue;
-    const max = range.maxValue;
-    const unit = range.unit ? ` ${range.unit}` : '';
-
-    // QA D1002: the limits in the reader's number format ("0,7 – 1,1 g/L").
-    if (min != null && max != null) {
-      return `${formatLabNumber(min)} – ${formatLabNumber(max)}${unit}`;
-    }
-    if (min != null) {
-      return `≥ ${formatLabNumber(min)}${unit}`;
-    }
-    if (max != null) {
-      return `≤ ${formatLabNumber(max)}${unit}`;
-    }
-    return '—';
+  /** The shared printing of a range (see {@link formatLabReferenceRange}). */
+  formatReferenceRange(range: ReferenceRangeLimits): string {
+    return formatLabReferenceRange(range);
   }
 
   formatReferenceRangeAge(range: {

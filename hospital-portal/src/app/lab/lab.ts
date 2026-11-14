@@ -21,6 +21,7 @@ import {
   LabTestDefinitionApprovalRequest,
   LabSpecimen,
   PerformingLab,
+  LabResultResponse,
 } from '../services/lab.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -41,13 +42,34 @@ import { shortOrderCode } from '../shared/lab/order-code';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import {
+  LabOrderState,
+  isLabOrderFinished,
+  isLabOrderOpen,
+  labOrderState,
+  labOrderStateClass,
+  labOrderStateKey,
+} from './shared/lab-order-state';
+import { labSeverityFlag, labSeverityTone, LabSeverityFlag } from './shared/lab-severity';
+import { formatLabReferenceRange } from './shared/reference-range-text';
+import { LabValuePipe } from './shared/lab-value.pipe';
+import { ResultRangeComponent } from './shared/result-range.component';
+import { LabCorrectionBadgeComponent } from './shared/lab-correction-badge.component';
+import { serverDateOrInstant, serverInstant } from '../shared/date-utils';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+/** One recorded step of a lab order's timeline in the drawer. */
+export interface LabTimelineStep {
+  key: string;
+  at: string;
+  by?: string | null;
+}
+
 @Component({
   selector: 'app-lab',
   standalone: true,
@@ -63,6 +85,10 @@ import { DateTimePipe } from '../shared/pipes/date-time.pipe';
     FormsModule,
     TranslateModule,
     EnumLabelPipe,
+    LabValuePipe,
+    ResultRangeComponent,
+    LabCorrectionBadgeComponent,
+    RouterLink,
   ],
   templateUrl: './lab.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -107,23 +133,6 @@ export class LabComponent implements OnInit {
     this.roleContext.hasAnyActiveRole(actionRoles('labOrderVoid')),
   );
 
-  /**
-   * Everything the laboratory still owes: from the order being placed,
-   * through the specimen being collected and received, to the analysis.
-   * COLLECTED and RECEIVED are here because the backend now moves an
-   * order through them on the specimen events; without them an order
-   * vanished from both tabs between collection and result entry.
-   */
-  static readonly PENDING_STATUSES: readonly string[] = [
-    'ORDERED',
-    'PENDING',
-    'COLLECTED',
-    'RECEIVED',
-    'IN_PROGRESS',
-  ];
-  /** Results are in: entered, verified, or released and closed. */
-  static readonly COMPLETED_STATUSES: readonly string[] = ['RESULTED', 'VERIFIED', 'COMPLETED'];
-
   orders = signal<LabOrderResponse[]>([]);
   filtered = signal<LabOrderResponse[]>([]);
   searchTerm = '';
@@ -132,7 +141,7 @@ export class LabComponent implements OnInit {
 
   activeTab = signal<'all' | 'pending' | 'completed'>('all');
 
-  stats = signal({ total: 0, pending: 0, completed: 0, cancelled: 0 });
+  stats = signal({ total: 0, pending: 0, awaitingValidation: 0, completed: 0, cancelled: 0 });
 
   hospitals = signal<HospitalResponse[]>([]);
   labTestDefs = signal<LabTestDefinition[]>([]);
@@ -192,6 +201,98 @@ export class LabComponent implements OnInit {
   rejectingSpecimen = signal<LabSpecimen | null>(null);
   rejectReason = signal('');
   rejecting = signal(false);
+  /**
+   * Lab requests list: the hospital column is shown only when the list spans
+   * more than one hospital, or when an order was routed to or from another
+   * laboratory (the column carries that routing). A user at one hospital
+   * would read the same name on every row otherwise.
+   */
+  readonly showHospitalColumn = computed(() => {
+    const list = this.orders();
+    if (list.some((o) => !!o.performingHospitalId)) return true;
+    return new Set(list.map((o) => o.hospitalId ?? o.hospitalName ?? '')).size > 1;
+  });
+
+  /** Lab requests drawer: the open order's results, as the server graded them. */
+  detailResults = signal<LabResultResponse[]>([]);
+  detailResultsLoading = signal(false);
+  /**
+   * The results the drawer shows a value for: released (validated) and not
+   * replaced by a released correction. An unreleased value is never shown here,
+   * even to the laboratory: until validation the drawer says so instead.
+   */
+  readonly releasedDetailResults = computed(() =>
+    this.detailResults().filter((r) => r.released && !r.supersededByResultId),
+  );
+  /** The order still waits for a result to be validated (D1743: never "finished" before it). */
+  readonly detailAwaitingValidation = computed(
+    () => labOrderState(this.selectedOrder()?.status) === 'AWAITING_VALIDATION',
+  );
+  /** The specimen the order's timeline follows: the newest one not rejected. */
+  readonly currentDetailSpecimen = computed<LabSpecimen | null>(() => {
+    const live = this.detailSpecimens().filter((sp) => sp.status !== 'REJECTED');
+    return (
+      [...live].sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))[0] ?? null
+    );
+  });
+  /**
+   * The order's timeline: only the steps the backend recorded, in order, each
+   * with its time and, where recorded, who. Nothing is inferred or invented.
+   */
+  readonly detailTimeline = computed<LabTimelineStep[]>(() => {
+    const o = this.selectedOrder();
+    if (!o) return [];
+    const steps: LabTimelineStep[] = [];
+    if (o.orderDatetime) {
+      steps.push({ key: 'LAB.TIMELINE.ORDERED', at: o.orderDatetime, by: o.orderingStaffName });
+    }
+    const specimen = this.currentDetailSpecimen();
+    if (specimen?.collectedAt) {
+      steps.push({
+        key: 'LAB.TIMELINE.COLLECTED',
+        at: specimen.collectedAt,
+        by: specimen.collectedByName,
+      });
+    }
+    if (specimen?.receivedAt) {
+      steps.push({
+        key: 'LAB.TIMELINE.RECEIVED',
+        at: specimen.receivedAt,
+        by: specimen.receivedByName,
+      });
+    }
+    const resultedAt = this.detailResults()
+      .filter((r) => !r.supersededByResultId)
+      .map((r) => r.resultDate)
+      .filter((d): d is string => !!d)
+      .sort()[0];
+    if (resultedAt) {
+      steps.push({ key: 'LAB.TIMELINE.RESULTED', at: resultedAt });
+    }
+    const released = this.lastRelease();
+    if (released?.releasedAt) {
+      steps.push({
+        key: 'LAB.TIMELINE.VALIDATED',
+        at: released.releasedAt,
+        by: released.releasedByFullName,
+      });
+    }
+    return steps;
+  });
+  /**
+   * Turnaround time: from the order to the validation of its last shown
+   * result, only when both are recorded. Null otherwise; never estimated.
+   */
+  readonly detailTurnaround = computed<string | null>(() => {
+    const o = this.selectedOrder();
+    const released = this.lastRelease();
+    if (!o?.orderDatetime || !released?.releasedAt) return null;
+    const ms =
+      serverInstant(released.releasedAt).getTime() - serverInstant(o.orderDatetime).getTime();
+    if (!Number.isFinite(ms) || ms < 0) return null;
+    return this.formatDuration(ms);
+  });
+
   /** QA D962: the specimens of the order open in the detail panel, for their rejection reasons. */
   detailSpecimens = signal<LabSpecimen[]>([]);
   readonly rejectedDetailSpecimens = computed(() =>
@@ -225,12 +326,111 @@ export class LabComponent implements OnInit {
     'OTHER',
   ];
 
+  /** The newest validation among the shown results (the end of the turnaround). */
+  private lastRelease(): LabResultResponse | null {
+    return (
+      [...this.releasedDetailResults()]
+        .filter((r) => !!r.releasedAt)
+        .sort((a, b) => (b.releasedAt ?? '').localeCompare(a.releasedAt ?? ''))[0] ?? null
+    );
+  }
+
+  /** "2 h 05 min", "3 j 4 h", "45 min": the turnaround in the reader's language. */
+  formatDuration(ms: number): string {
+    const totalMinutes = Math.floor(ms / 60000);
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    if (days > 0) return this.translate.instant('LAB.TAT_DAYS_HOURS', { days, hours });
+    if (hours > 0) {
+      return this.translate.instant('LAB.TAT_HOURS_MINUTES', {
+        hours,
+        minutes: String(minutes).padStart(2, '0'),
+      });
+    }
+    return this.translate.instant('LAB.TAT_MINUTES', { minutes });
+  }
+
+  /**
+   * The patient's age on the drawer, from the date of birth the order carries:
+   * days under a month, months under two years, years after. Empty when unknown.
+   */
+  patientAge(dateOfBirth: string | null | undefined, today: Date = new Date()): string {
+    if (!dateOfBirth) return '';
+    const dob = serverDateOrInstant(dateOfBirth);
+    if (Number.isNaN(dob.getTime()) || dob > today) return '';
+    let months = (today.getFullYear() - dob.getFullYear()) * 12 + today.getMonth() - dob.getMonth();
+    if (today.getDate() < dob.getDate()) months--;
+    if (months < 1) {
+      const days = Math.floor((today.getTime() - dob.getTime()) / 86400000);
+      return this.translate.instant(days === 1 ? 'LAB.AGE_DAY' : 'LAB.AGE_DAYS', { count: days });
+    }
+    if (months < 24) {
+      return this.translate.instant(months === 1 ? 'LAB.AGE_MONTH' : 'LAB.AGE_MONTHS', {
+        count: months,
+      });
+    }
+    return this.translate.instant('LAB.AGE_YEARS', { count: Math.floor(months / 12) });
+  }
+
+  /** "R35 — Polyurie" when the label is known, else the code alone. */
+  diagnosisText(o: LabOrderResponse): string {
+    const code = (o.primaryDiagnosisCode ?? '').trim();
+    if (!code) return '—';
+    const label = (o.primaryDiagnosisLabel ?? '').trim();
+    return label ? `${code} — ${label}` : code;
+  }
+
+  /** The state an order status reads as (see lab-order-state.ts). */
+  stateOf(status: string | null | undefined): LabOrderState | null {
+    return labOrderState(status);
+  }
+
+  /** The label key of an order's state; null for a status this page does not know. */
+  stateKey(status: string | null | undefined): string | null {
+    const state = labOrderState(status);
+    return state ? labOrderStateKey(state) : null;
+  }
+
+  /** The result's grade, as every lab screen reads it (shared lab-severity). */
+  resultFlag(r: LabResultResponse): LabSeverityFlag {
+    return labSeverityFlag(r);
+  }
+
+  /** The badge class of a result's grade, as the lab-results page draws it. */
+  resultFlagClass(r: LabResultResponse): string {
+    switch (labSeverityTone(labSeverityFlag(r))) {
+      case 'critical':
+        return 'severity-badge severity-critical';
+      case 'abnormal':
+        return 'severity-badge severity-high';
+      case 'normal':
+        return 'severity-badge severity-normal';
+      default:
+        return 'severity-badge';
+    }
+  }
+
+  /**
+   * The reference text beside a value: the range the server graded it against
+   * (LabResultMapper.gradedReferenceRange), else, for a qualitative test, its
+   * expected answer. Null when neither exists.
+   */
+  resultReference(r: LabResultResponse): string | null {
+    const graded = r.gradedReferenceRange;
+    if (graded && (graded.minValue != null || graded.maxValue != null)) {
+      return formatLabReferenceRange(graded);
+    }
+    return r.expectedResult?.trim() || null;
+  }
+
   /** QA D963: a STAT or URGENT order is flagged wherever the lab reads it. */
   isUrgentPriority(priority: string | null | undefined): boolean {
     return priority === 'STAT' || priority === 'URGENT';
   }
 
   ngOnInit(): void {
+    this.linkedOrderId = this.activatedRoute.snapshot.queryParamMap.get('order');
     this.loadOrders();
     this.loadAssignedHospitals();
     this.initPatientSearch();
@@ -248,6 +448,31 @@ export class LabComponent implements OnInit {
         if (active) this.activeAssignmentId = active.id;
       },
     });
+  }
+
+  /** `/lab?order=<id>`: the order to open once the list has loaded (read once). */
+  private linkedOrderId: string | null = null;
+
+  /**
+   * `/lab?order=<id>` (the lab result drawer links a result to its request):
+   * opens that order's drawer, on a tab that lists it. An order that is not in
+   * this reader's scope, or no longer exists, says so instead of opening nothing.
+   */
+  private openLinkedOrder(list: LabOrderResponse[]): void {
+    const id = this.linkedOrderId;
+    if (!id) return;
+    this.linkedOrderId = null;
+    const order = list.find((o) => o.id === id);
+    if (!order) {
+      this.toast.error(this.translate.instant('LAB.LINKED_ORDER_NOT_FOUND'));
+      return;
+    }
+    if (!this.filtered().some((o) => o.id === id)) {
+      this.searchTerm = '';
+      const tab = this.isPending(order) ? 'pending' : this.isCompleted(order) ? 'completed' : 'all';
+      this.setTab(tab);
+    }
+    this.viewOrder(order);
   }
 
   /**
@@ -737,6 +962,7 @@ export class LabComponent implements OnInit {
         this.computeStats(list);
         this.applyFilter();
         this.loading.set(false);
+        this.openLinkedOrder(list);
       },
       error: () => {
         this.toast.error(this.translate.instant('LAB.TOAST.LOAD_FAILED'));
@@ -745,18 +971,22 @@ export class LabComponent implements OnInit {
     });
   }
 
+  /** Still owed by the laboratory, validation included ("En cours"). */
   isPending(order: LabOrderResponse): boolean {
-    return LabComponent.PENDING_STATUSES.includes(order.status ?? '');
+    return isLabOrderOpen(order.status);
   }
 
+  /** Every result validated ("Terminées"); a result awaiting validation is not. */
   isCompleted(order: LabOrderResponse): boolean {
-    return LabComponent.COMPLETED_STATUSES.includes(order.status ?? '');
+    return isLabOrderFinished(order.status);
   }
 
   private computeStats(list: LabOrderResponse[]): void {
     this.stats.set({
       total: list.length,
       pending: list.filter((o) => this.isPending(o)).length,
+      awaitingValidation: list.filter((o) => labOrderState(o.status) === 'AWAITING_VALIDATION')
+        .length,
       completed: list.filter((o) => this.isCompleted(o)).length,
       cancelled: list.filter((o) => o.status === 'CANCELLED').length,
     });
@@ -788,44 +1018,64 @@ export class LabComponent implements OnInit {
     this.filtered.set(list);
   }
 
+  /** Invalidates every drawer request, including a previous opening of the same order. */
+  private detailGeneration = 0;
+
   viewOrder(order: LabOrderResponse): void {
+    const generation = ++this.detailGeneration;
     this.selectedOrder.set(order);
+    this.detailResults.set([]);
+    this.detailResultsLoading.set(false);
+    // The single-order read adds what the list does not carry (the diagnosis label).
+    this.labService.getOrder(order.id).subscribe({
+      next: (detail) => {
+        if (generation === this.detailGeneration && detail?.id === order.id) {
+          this.selectedOrder.set(detail);
+        }
+      },
+      error: () => {
+        /* the row's own fields stay shown */
+      },
+    });
+    const state = labOrderState(order.status);
+    if (state === 'AWAITING_VALIDATION' || state === 'COMPLETED') {
+      this.detailResultsLoading.set(true);
+      this.labService.listOrderResults(order.id).subscribe({
+        next: (list) => {
+          if (generation !== this.detailGeneration) return;
+          this.detailResults.set((list ?? []).filter((r) => r.labOrderId === order.id));
+          this.detailResultsLoading.set(false);
+        },
+        error: () => {
+          if (generation !== this.detailGeneration) return;
+          this.detailResults.set([]);
+          this.detailResultsLoading.set(false);
+        },
+      });
+    }
     // QA D962: a rejected specimen and its reason show on the order, so the
     // ordering doctor sees why a new sample is needed.
     this.detailSpecimens.set([]);
     this.labService.listSpecimens(order.id).subscribe({
       next: (list) => {
-        if (this.selectedOrder()?.id === order.id) this.detailSpecimens.set(list ?? []);
+        if (generation === this.detailGeneration) this.detailSpecimens.set(list ?? []);
       },
-      error: () => this.detailSpecimens.set([]),
+      error: () => {
+        if (generation === this.detailGeneration) this.detailSpecimens.set([]);
+      },
     });
   }
 
   closeDetail(): void {
+    ++this.detailGeneration;
     this.selectedOrder.set(null);
     this.detailSpecimens.set([]);
+    this.detailResults.set([]);
+    this.detailResultsLoading.set(false);
   }
 
   getStatusClass(status: string): string {
-    switch (status) {
-      case 'COMPLETED':
-      case 'VERIFIED':
-      case 'RESULTED':
-        return 'status-badge status-completed';
-      case 'IN_PROGRESS':
-        return 'status-badge status-in_progress';
-      case 'COLLECTED':
-      case 'RECEIVED':
-        return 'status-badge status-collected';
-      case 'PENDING':
-      case 'ORDERED':
-        return 'status-badge status-pending';
-      case 'CANCELLED':
-      case 'ENTERED_IN_ERROR':
-        return 'status-badge status-cancelled';
-      default:
-        return 'status-badge';
-    }
+    return labOrderStateClass(labOrderState(status));
   }
 
   // ── Lab Test Definition Approval Workflow ────────────────────────────

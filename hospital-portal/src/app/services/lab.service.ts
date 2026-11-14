@@ -11,6 +11,12 @@ export interface LabOrderResponse {
   patientFullName: string;
   /** QA D527: no longer sent on lab orders (the worklist does not show it). */
   patientEmail?: string | null;
+  /** Lab requests drawer: the patient's MRN at the order's hospital. */
+  patientMrn?: string | null;
+  /** Lab requests drawer: the patient's date of birth (yyyy-MM-dd), for the age. */
+  patientDateOfBirth?: string | null;
+  /** Lab requests list and drawer: the clinician who placed the order. */
+  orderingStaffName?: string | null;
   hospitalId?: string;
   hospitalName: string;
   /** Laboratory (hospital) performing the test; null when this hospital's own lab does (B1). */
@@ -28,6 +34,8 @@ export interface LabOrderResponse {
   medicalNecessityNote: string;
   notes: string;
   primaryDiagnosisCode: string;
+  /** The patient's own diagnosis label for the code; only on the single-order read. */
+  primaryDiagnosisLabel?: string | null;
   additionalDiagnosisCodes: string[];
   /** QA D963: ROUTINE, URGENT or STAT (LabOrderResponseDTO.priority). */
   priority?: string | null;
@@ -376,7 +384,11 @@ export interface LabSpecimen {
   barcodeValue: string | null;
   specimenType: string | null;
   collectedAt: string | null;
+  /** Lab requests drawer timeline: who collected it. */
+  collectedByName?: string | null;
   receivedAt: string | null;
+  /** Lab requests drawer timeline: who received it in the laboratory. */
+  receivedByName?: string | null;
   currentLocation: string | null;
   status: LabSpecimenStatus;
   notes: string | null;
@@ -532,6 +544,26 @@ export class LabService {
         })
         .pipe(map((res) => res?.data)),
     );
+  }
+
+  /**
+   * The results of one order, graded by the server (LabResultMapper), for the
+   * lab requests drawer. A reader outside the laboratory gets released rows only.
+   */
+  listOrderResults(labOrderId: string): Observable<LabResultResponse[]> {
+    // QA D1347: every page (an order's corrections included), in one total order.
+    return allPages((page, size) =>
+      this.http
+        .get<ApiWrapper<PageResponse<LabResultResponse>>>('/lab-results', {
+          params: new HttpParams()
+            .set('labOrderId', labOrderId)
+            .set('page', String(page))
+            .set('size', String(size))
+            .append('sort', 'resultDate,desc')
+            .append('sort', 'id,desc'),
+        })
+        .pipe(map((res) => res?.data)),
+    ).pipe(map((all) => all.rows));
   }
 
   getResult(id: string): Observable<LabResultResponse> {
