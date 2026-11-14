@@ -107,6 +107,7 @@ class CdsHooksInvokeSecurityIT extends BaseIT {
     @MockitoBean private RecordAccessPolicy recordAccessPolicy;
     @MockitoBean private PatientAllergyRepository allergyRepository;
     @MockitoBean private PatientProblemRepository problemRepository;
+    @MockitoBean private com.example.hms.repository.PrescriptionRepository prescriptionRepository;
     @Autowired private com.example.hms.repository.HospitalRepository hospitalRepository;
     @Autowired private com.example.hms.repository.UserRepository userRepository;
     @Autowired private com.example.hms.repository.RoleRepository roleRepository;
@@ -259,6 +260,37 @@ class CdsHooksInvokeSecurityIT extends BaseIT {
         MvcResult unknown = invoke(doctor, "hms-patient-view", unknownPatient);
         assertThat(shape(restricted)).isEqualTo(shape(unknown)).isEqualTo("200|{\"cards\":[]}");
         verify(allergyRepository, never()).findByPatient_Id(any());
+    }
+
+    @Test
+    @DisplayName("QA D1920 class: a shared patient's prescription at their first hospital is no duplicate card at another")
+    void orderRulesReadThePatientsOrdersAtTheCallersHospitalOnly() throws Exception {
+        // First registered at B, now also registered at A: the hook services
+        // used to read the orders at the patient's first hospital (B).
+        UUID shared = UUID.randomUUID();
+        Patient sharedPatient = patient(shared, false);
+        sharedPatient.setHospitalId(hospitalB);
+        when(patientRepository.findByIdUnscoped(shared)).thenReturn(Optional.of(sharedPatient));
+        when(registrationRepository.existsByPatientIdAndHospitalId(shared, hospitalA)).thenReturn(true);
+        when(registrationRepository.existsByPatientIdAndHospitalId(shared, hospitalB)).thenReturn(true);
+        com.example.hms.model.Prescription atB = new com.example.hms.model.Prescription();
+        atB.setId(UUID.randomUUID());
+        atB.setMedicationName("Penicillin V 500 mg");
+        atB.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        atB.setCreatedAt(java.time.LocalDateTime.now().minusHours(1));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(shared, hospitalB)).thenReturn(List.of(atB));
+
+        String doctorA = linkedToken("doctor-a", hospitalA, "DOCTOR");
+        for (String serviceId : List.of("hms-order-select-rules", "hms-medication-prescribe-rules", "hms-order-sign-rules")) {
+            assertThat(shape(invoke(doctorA, serviceId, shared))).as(serviceId).isEqualTo("200|{\"cards\":[]}");
+        }
+        verify(prescriptionRepository, never()).findByPatient_IdAndHospital_Id(shared, hospitalB);
+        verify(prescriptionRepository, org.mockito.Mockito.atLeastOnce()).findByPatient_IdAndHospital_Id(shared, hospitalA);
+
+        // The control: at B, the same draft is a duplicate of B's order.
+        String doctorB = linkedToken("doctor-b", hospitalB, "DOCTOR");
+        assertThat(invoke(doctorB, "hms-order-sign-rules", shared).getResponse().getContentAsString())
+            .contains("Penicillin V 500 mg");
     }
 
     @Test
