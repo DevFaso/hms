@@ -5,7 +5,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { ImagingComponent, RELEASED_REPORT_STATUSES } from './imaging';
 import {
@@ -60,10 +60,18 @@ describe('ImagingComponent — administrators read, never act (decision 2026-11-
   let fixture: ComponentFixture<ImagingComponent>;
   let component: ImagingComponent;
   let imaging: jasmine.SpyObj<ImagingService>;
+  let toast: jasmine.SpyObj<ToastService>;
 
   beforeAll(() => registerLocaleData(localeFr));
 
-  function setUp(roles: string[], superAdmin = false): void {
+  interface Options {
+    /** The chip pins this hospital (not in global view). */
+    pinned?: string;
+    /** The hospital directory answers when this emits, not at once. */
+    directory?: Subject<HospitalResponse[]>;
+  }
+
+  function setUp(roles: string[], superAdmin = false, opts: Options = {}): void {
     imaging = jasmine.createSpyObj('ImagingService', [
       'getAllOrders',
       'getOrdersByHospital',
@@ -83,7 +91,8 @@ describe('ImagingComponent — administrators read, never act (decision 2026-11-
       of([{ id: 'r-' + hospitalId, hospitalId, reportStatus: 'FINAL' } as ImagingReportResponse]),
     );
     const hospital = jasmine.createSpyObj('HospitalService', ['list', 'getMyHospitalAsResponse']);
-    hospital.list.and.returnValue(of(HOSPITALS));
+    hospital.list.and.returnValue(opts.directory ?? of(HOSPITALS));
+    toast = jasmine.createSpyObj('ToastService', ['success', 'error']);
     hospital.getMyHospitalAsResponse.and.returnValue(of(HOSPITALS[0]));
     const auth = jasmine.createSpyObj('AuthService', ['getHospitalId', 'getUserProfile']);
     auth.getHospitalId.and.returnValue('h1');
@@ -98,17 +107,14 @@ describe('ImagingComponent — administrators read, never act (decision 2026-11-
         { provide: ImagingService, useValue: imaging },
         { provide: HospitalService, useValue: hospital },
         { provide: PatientService, useValue: jasmine.createSpyObj('PatientService', ['list']) },
-        {
-          provide: ToastService,
-          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
-        },
+        { provide: ToastService, useValue: toast },
         { provide: AuthService, useValue: auth },
         {
           provide: RoleContextService,
           useValue: {
             isSuperAdmin: () => superAdmin,
-            globalView: () => superAdmin,
-            selectedHospitalId: () => null,
+            globalView: () => superAdmin && !opts.pinned,
+            selectedHospitalId: () => opts.pinned ?? null,
             activeHospitalId: superAdmin ? null : 'h1',
             hasAnyActiveRole: (wanted: string[]) => roles.some((r) => wanted.includes(r)),
           } as unknown as RoleContextService,
@@ -202,5 +208,58 @@ describe('ImagingComponent — administrators read, never act (decision 2026-11-
       ),
     ).map((c) => c.textContent?.trim());
     expect(cells).toEqual(['CHU Yalgado', 'CHR Koudougou']);
+  });
+
+  // ── Rex round 2 on #1163 ──
+
+  it('« Tous les hôpitaux » after a pinned hospital reads every hospital, not the pinned one', () => {
+    setUp(['ROLE_SUPER_ADMIN'], true, { pinned: 'h1' });
+    expect(component.hospitalFilter()).toBe('h1');
+    expect(imaging.getOrdersByHospital).toHaveBeenCalledWith('h1');
+    component.setHospitalFilter('');
+    expect(imaging.getAllOrders).toHaveBeenCalledWith(undefined, { allHospitals: true });
+  });
+
+  it('results opened before the hospital directory answers load once it lands', () => {
+    const directory = new Subject<HospitalResponse[]>();
+    setUp(['ROLE_SUPER_ADMIN'], true, { directory });
+    component.setView('results');
+    fixture.detectChanges();
+    expect(imaging.getReportsByHospital).not.toHaveBeenCalled();
+    expect(component.reportsLoading()).toBeTrue();
+
+    directory.next(HOSPITALS);
+    fixture.detectChanges();
+    expect(imaging.getReportsByHospital).toHaveBeenCalledWith('h1', { status: 'FINAL' });
+    expect(imaging.getReportsByHospital).toHaveBeenCalledWith('h2', { status: 'FINAL' });
+    expect(component.reports().length).toBe(2);
+    expect(component.reportsLoading()).toBeFalse();
+  });
+
+  it('a hospital whose reports fail is named, never shown as having none', () => {
+    setUp(['ROLE_SUPER_ADMIN'], true);
+    imaging.getReportsByHospital.and.callFake((hospitalId: string) =>
+      hospitalId === 'h2'
+        ? throwError(() => new Error('down'))
+        : of([{ id: 'r-h1', hospitalId, reportStatus: 'FINAL' } as ImagingReportResponse]),
+    );
+    component.setView('results');
+    fixture.detectChanges();
+    const warning = q('[data-testid="imaging-results-partial-failure"]');
+    expect(warning?.textContent).toContain('CHR Koudougou');
+    expect(warning?.textContent).not.toContain('CHU Yalgado');
+    expect(component.reports().map((r) => r.id)).toEqual(['r-h1']);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('when every hospital fails the results say so', () => {
+    setUp(['ROLE_SUPER_ADMIN'], true);
+    imaging.getReportsByHospital.and.returnValue(throwError(() => new Error('down')));
+    component.setView('results');
+    fixture.detectChanges();
+    expect(toast.error).toHaveBeenCalled();
+    expect(q('[data-testid="imaging-results-partial-failure"]')?.textContent).toContain(
+      'CHU Yalgado',
+    );
   });
 });

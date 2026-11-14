@@ -3580,6 +3580,7 @@
     "ZIP_CODE": "Zip Code"
   },
   "IMAGING": {
+    "RESULTS_PARTIAL_FAILURE": "The reports of these hospitals could not be loaded, so the list is incomplete: {{hospitals}}.",
     "ADMIN_READ_ONLY": "Read-only: imaging requests and released reports. Ordering, reporting and signing are done by the clinical team.",
     "ALL_HOSPITALS": "All hospitals",
     "HOSPITAL_FILTER": "Hospital",

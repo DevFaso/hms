@@ -393,6 +393,14 @@
       </div>
     </div>
 
+    @if (!reportsLoading() && reportsFailedHospitals().length > 0) {
+      <p class="partial-failure" role="alert" data-testid="imaging-results-partial-failure">
+        {{
+          'IMAGING.RESULTS_PARTIAL_FAILURE'
+            | translate: { hospitals: reportsFailedHospitals().join(', ') }
+        }}
+      </p>
+    }
     @if (reportsLoading()) {
       <div class="loading-state">
         <div class="spinner"></div>

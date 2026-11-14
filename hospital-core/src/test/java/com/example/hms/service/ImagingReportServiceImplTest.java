@@ -74,6 +74,7 @@ class ImagingReportServiceImplTest {
     // read them in English through the real bundles (set up in setUp).
     @org.junit.jupiter.api.AfterEach
     void resetRefusalLocale() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
         com.example.hms.utility.MessageUtil.setMessageSource(null);
         org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
     }
@@ -667,11 +668,6 @@ class ImagingReportServiceImplTest {
             new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("u", "n/a",
                 java.util.Arrays.stream(authorities)
                     .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList()));
-    }
-
-    @org.junit.jupiter.api.AfterEach
-    void signOut() {
-        org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }
 
     private ImagingReport version(int number, ImagingReportStatus status, boolean signed) {

@@ -45,7 +45,7 @@ import { refuseFields } from '../shared/forms/invalid-fields';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { serverLocalDate } from '../shared/date-utils';
-import { catchError, forkJoin, of } from 'rxjs';
+import { catchError, forkJoin, map, of } from 'rxjs';
 
 /** The cancellation reason's field (QA D1098), marked when it is refused. */
 const CANCEL_REASON_ID = 'imaging-cancel-reason';
@@ -254,6 +254,10 @@ export class ImagingComponent implements OnInit {
 
   /** The super-admin's « Tous les hôpitaux » view and its hospital filter ('' = all). */
   readonly canPickHospital = this.roleContext.isSuperAdmin();
+  /** The super-admin's hospital directory has answered (PR #1163: results wait for it). */
+  readonly hospitalsLoaded = signal(false);
+  /** « Tous les hôpitaux » results: the hospitals whose reports could not be read. */
+  readonly reportsFailedHospitals = signal<string[]>([]);
   readonly hospitalFilter = signal(
     this.roleContext.isSuperAdmin() && !this.roleContext.globalView()
       ? (this.roleContext.selectedHospitalId() ?? '')
@@ -476,7 +480,15 @@ export class ImagingComponent implements OnInit {
   /** ── TENANT ISOLATION: only SUPER_ADMIN may choose from all hospitals ── */
   private loadAssignedHospitals(): void {
     if (this.roleContext.isSuperAdmin()) {
-      this.hospitalService.list().subscribe((h) => this.hospitals.set(h ?? []));
+      this.hospitalService.list().subscribe({
+        next: (h) => {
+          this.hospitals.set(h ?? []);
+          this.hospitalsLoaded.set(true);
+          // Results opened while the directory was loading wait for it (PR #1163).
+          if (this.view() === 'results' && !this.hospitalFilter()) this.loadReports();
+        },
+        error: () => this.hospitalsLoaded.set(true),
+      });
     } else {
       this.hospitalService.getMyHospitalAsResponse().subscribe({
         next: (h) => {
@@ -633,7 +645,8 @@ export class ImagingComponent implements OnInit {
     const hospitalId = this.canPickHospital ? this.hospitalFilter() : '';
     const orders$ = hospitalId
       ? this.imagingService.getOrdersByHospital(hospitalId)
-      : this.imagingService.getAllOrders();
+      : // « Tous les hôpitaux »: without the chip's hospital, or the combined view is one hospital.
+        this.imagingService.getAllOrders(undefined, { allHospitals: this.canPickHospital });
     orders$.subscribe({
       next: (list) => {
         this.orders.set(Array.isArray(list) ? list : []);
@@ -805,6 +818,7 @@ export class ImagingComponent implements OnInit {
   }
 
   loadReports(): void {
+    this.reportsFailedHospitals.set([]);
     const hospitalId = this.resultsHospitalId();
     if (!hospitalId) {
       if (this.canPickHospital) this.loadReportsEverywhere();
@@ -833,20 +847,34 @@ export class ImagingComponent implements OnInit {
    * costs its own rows only.
    */
   private loadReportsEverywhere(): void {
+    this.reportsFailedHospitals.set([]);
+    if (!this.hospitalsLoaded()) {
+      // The directory is still loading: it reloads the results when it lands.
+      this.reportsLoading.set(true);
+      return;
+    }
     const hospitals = this.hospitals();
     if (hospitals.length === 0) {
       this.reports.set([]);
+      this.reportsLoading.set(false);
       return;
     }
     this.reportsLoading.set(true);
     forkJoin(
       hospitals.map((h) =>
-        this.imagingService
-          .getReportsByHospital(h.id, { status: this.reportStatusFilter() })
-          .pipe(catchError(() => of([] as ImagingReportResponse[]))),
+        this.imagingService.getReportsByHospital(h.id, { status: this.reportStatusFilter() }).pipe(
+          map((list) => ({ hospital: h, list: Array.isArray(list) ? list : [], failed: false })),
+          catchError(() => of({ hospital: h, list: [] as ImagingReportResponse[], failed: true })),
+        ),
       ),
-    ).subscribe((lists) => {
-      this.reports.set(lists.flatMap((l) => (Array.isArray(l) ? l : [])));
+    ).subscribe((answers) => {
+      this.reports.set(answers.flatMap((a) => a.list));
+      // A hospital that did not answer is named, never shown as "no reports".
+      const failed = answers.filter((a) => a.failed).map((a) => a.hospital.name);
+      this.reportsFailedHospitals.set(failed);
+      if (failed.length === answers.length) {
+        this.toast.error(this.translate.instant('IMAGING.RESULTS_LOAD_ERROR'));
+      }
       this.reportsLoading.set(false);
     });
   }
