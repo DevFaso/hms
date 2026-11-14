@@ -286,4 +286,37 @@ class NewbornRegistrationServiceTest {
         verify(inBasket, times(1)).removeAllItemsForReference(any(), any());
         verify(inBasket, never()).createItemInNewTransaction(any());
     }
+
+    @Test
+    @DisplayName("QA D1714: mixed twins register the live baby only; the stillborn one is not a patient")
+    void mixedTwinsRegisterTheLiveBabyOnly() {
+        DeliveryRecord twins = delivery(true, 2, InfantSex.MALE);
+        twins.putBabyOutcome(1, com.example.hms.enums.BabyOutcome.STILLBORN);
+        twins.putBabyOutcome(2, com.example.hms.enums.BabyOutcome.LIVE);
+
+        List<DeliveryNewbornDTO> babies = service.registerLiveBorn(twins, null);
+
+        ArgumentCaptor<PatientRequestDTO> record = ArgumentCaptor.forClass(PatientRequestDTO.class);
+        verify(registration, times(1)).registerNewborn(any(), record.capture(), eq(hospital.getId()), any());
+        assertThat(record.getValue().getFirstName()).isEqualTo("Bébé 2");
+        assertThat(babies).extracting(DeliveryNewbornDTO::getBirthOrder).containsExactly(2);
+    }
+
+    @Test
+    @DisplayName("QA D1714: a registered baby corrected to stillborn is flagged for review, never removed")
+    void aBabyCorrectedToStillbornIsFlaggedForReview() {
+        DeliveryRecord twins = delivery(true, 2, InfantSex.FEMALE);
+        twins.putBabyOutcome(1, com.example.hms.enums.BabyOutcome.LIVE);
+        twins.putBabyOutcome(2, com.example.hms.enums.BabyOutcome.LIVE);
+        service.registerLiveBorn(twins, null);
+
+        twins.putBabyOutcome(2, com.example.hms.enums.BabyOutcome.STILLBORN);
+        List<DeliveryNewbornDTO> babies = service.registerLiveBorn(twins, null);
+
+        assertThat(babies).hasSize(2);
+        assertThat(babies.get(1).isNeedsReview()).isTrue();
+        assertThat(babies.get(1).getReviewReason()).isEqualTo(NewbornRegistrationService.REVIEW_NOT_LIVE_BIRTH);
+        assertThat(babies.get(0).isNeedsReview()).isFalse();
+        verify(links, never()).delete(any());
+    }
 }

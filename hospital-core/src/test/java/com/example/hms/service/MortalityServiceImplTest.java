@@ -54,6 +54,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -95,6 +96,8 @@ class MortalityServiceImplTest {
     @Mock private com.example.hms.service.InBasketService inBasketService;
     @Mock private com.example.hms.repository.NewbornAssessmentRepository newbornAssessmentRepository;
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
+    @Mock private com.example.hms.repository.FetalDeathEventRepository fetalDeathEventRepository;
+    @Mock private com.example.hms.repository.DeliveryNewbornRepository deliveryNewbornRepository;
     @Spy private Clock clock = Clock.systemDefaultZone();
     @Spy private MortalityMapper mapper = new MortalityMapper();
 
@@ -920,8 +923,11 @@ class MortalityServiceImplTest {
         // The late maternal death is NOT in the maternal count.
         assertThat(register.getMaternalDeaths()).isEqualTo(2);
         assertThat(register.getLateMaternalDeaths()).isEqualTo(1);
-        assertThat(register.getPerinatalDeaths()).isEqualTo(2);
+        // QA D1714: perinatal = WHO stillbirths (28+ weeks) + early neonatal. The stillbirth has no gestation: it is
+        // recorded and counted as classification incomplete, not in the perinatal figure.
+        assertThat(register.getPerinatalDeaths()).isEqualTo(1);
         assertThat(register.getStillbirths()).isEqualTo(1);
+        assertThat(register.getStillbirthsClassificationIncomplete()).isEqualTo(1);
     }
 
     // ── CR-07: the WHO perinatal numerator ──────────────────────────────
@@ -957,10 +963,14 @@ class MortalityServiceImplTest {
         assertThat(register.getLateNeonatalDeaths()).isEqualTo(2);
         assertThat(register.getEarlyNeonatalDeaths()).isEqualTo(1);
         assertThat(register.getStillbirths()).isEqualTo(2);
-        // The early neonatal death and the stillbirth of unknown gestation.
-        assertThat(register.getPerinatalDeaths()).isEqualTo(2);
-        assertThat(register.getPerinatalEligibilityUnknown()).isEqualTo(1);
-        assertThat(register.getPerinatalBelowGestation()).isEqualTo(1);
+        // QA D1714: the early neonatal death only. The stillbirth of unknown gestation is classification incomplete;
+        // the one at 21 weeks is recorded, under every statistic's threshold.
+        assertThat(register.getPerinatalDeaths()).isEqualTo(1);
+        assertThat(register.getPerinatalEligibilityUnknown()).isZero();
+        assertThat(register.getPerinatalBelowGestation()).isZero();
+        assertThat(register.getStillbirthsClassificationIncomplete()).isEqualTo(1);
+        assertThat(register.getStillbirthsIcd()).isZero();
+        assertThat(register.getStillbirthsWho()).isZero();
     }
 
     @Test
@@ -1336,5 +1346,298 @@ class MortalityServiceImplTest {
         service.recordDeath(base().build());
 
         verify(stayEncounters).closeNursingWorkOfEndedStay(open);
+    }
+
+    // ── QA D1714: stillbirths recorded at delivery ──────────────────────
+
+    private com.example.hms.model.labor.FetalDeathEvent fetalDeath(Integer weeks) {
+        com.example.hms.model.labor.DeliveryRecord delivery = com.example.hms.model.labor.DeliveryRecord.builder().build();
+        delivery.setId(UUID.randomUUID());
+        Patient mother = new Patient();
+        mother.setId(UUID.randomUUID());
+        com.example.hms.model.labor.FetalDeathEvent event = com.example.hms.model.labor.FetalDeathEvent.builder()
+            .deliveryRecord(delivery)
+            .motherPatient(mother)
+            .hospital(hospital)
+            .birthOrder(1)
+            .occurredAt(LocalDateTime.now().minusDays(1))
+            .gestationalAgeWeeks(weeks)
+            .noSignsOfLife(true)
+            .source(com.example.hms.enums.FetalDeathEventSource.DELIVERY)
+            .build();
+        event.setId(UUID.randomUUID());
+        return event;
+    }
+
+    @Test
+    void aStillbirthRecordedAtDeliveryReachesTheRegisterWithoutAPatient() {
+        when(fetalDeathEventRepository.findRegister(eq(hospitalId), any(), any())).thenReturn(List.of(fetalDeath(36)));
+
+        MortalityRegisterDTO register = service.getRegister(LocalDate.now().minusDays(30), LocalDate.now());
+
+        assertThat(register.getStillbirths()).isEqualTo(1);
+        assertThat(register.getStillbirthsWho()).isEqualTo(1);
+        assertThat(register.getPerinatalDeaths()).isEqualTo(1);
+        assertThat(register.getTotalDeaths()).as("deaths after a live birth are counted apart").isZero();
+        assertThat(register.getStillbirthRows()).singleElement()
+            .satisfies(row -> assertThat(row.getDeathRecordId()).isNull());
+    }
+
+    @Test
+    void eachStatisticClassifiesAt27And28And22WeeksAndMissingGestationIsIncomplete() {
+        DeathRecord earlyNeonatal = classified(PerinatalDeathType.EARLY_NEONATAL, 38,
+            com.example.hms.enums.PerinatalBirthStatus.LIVE_BIRTH, com.example.hms.enums.PerinatalAgeBasis.ELAPSED_TIME);
+        when(deathRecordRepository.findRegister(any(), any(), any())).thenReturn(List.of(earlyNeonatal));
+        when(fetalDeathEventRepository.findRegister(eq(hospitalId), any(), any()))
+            .thenReturn(List.of(fetalDeath(27), fetalDeath(28), fetalDeath(22), fetalDeath(21), fetalDeath(null)));
+
+        MortalityRegisterDTO register = service.getRegister(LocalDate.now().minusDays(30), LocalDate.now());
+
+        assertThat(register.getStillbirths()).as("recorded whatever the gestation").isEqualTo(5);
+        assertThat(register.getStillbirthsWho()).as("WHO: 28 weeks and over").isEqualTo(1);
+        assertThat(register.getStillbirthsIcd()).as("ICD: 22 weeks and over").isEqualTo(3);
+        assertThat(register.getStillbirthsClassificationIncomplete()).as("missing gestation, never 0").isEqualTo(1);
+        assertThat(register.getPerinatalDeaths()).as("WHO stillbirths + early neonatal").isEqualTo(2);
+        assertThat(register.getWhoStillbirthMinWeeks()).isEqualTo(28);
+        assertThat(register.getIcdFetalDeathMinWeeks()).isEqualTo(22);
+        assertThat(register.getStillbirthRows()).filteredOn(r -> r.getGestationalAgeWeeks() == null)
+            .singleElement().satisfies(r -> assertThat(r.isClassificationIncomplete()).isTrue());
+    }
+
+    @Test
+    void aLaterDeathDeclarationOfTheSameFetalDeathIsCountedOnce() {
+        com.example.hms.model.labor.FetalDeathEvent event = fetalDeath(30);
+        DeathRecord declaration = classified(PerinatalDeathType.STILLBIRTH, 30,
+            com.example.hms.enums.PerinatalBirthStatus.STILLBIRTH, com.example.hms.enums.PerinatalAgeBasis.ELAPSED_TIME);
+        declaration.setFetalDeathEventId(event.getId());
+        DeathRecord unlinked = classified(PerinatalDeathType.STILLBIRTH, 33,
+            com.example.hms.enums.PerinatalBirthStatus.STILLBIRTH, com.example.hms.enums.PerinatalAgeBasis.ELAPSED_TIME);
+        when(deathRecordRepository.findRegister(any(), any(), any())).thenReturn(List.of(declaration, unlinked));
+        when(fetalDeathEventRepository.findRegister(eq(hospitalId), any(), any())).thenReturn(List.of(event));
+        when(fetalDeathEventRepository.findAtHospitalByIdIn(eq(hospitalId), any())).thenReturn(List.of(event));
+        when(fetalDeathEventRepository.findLiveForDeliveries(eq(hospitalId), any())).thenReturn(List.of(event));
+
+        MortalityRegisterDTO register = service.getRegister(LocalDate.now().minusDays(30), LocalDate.now());
+
+        assertThat(register.getStillbirths()).as("the event once, plus the declaration no event holds").isEqualTo(2);
+        assertThat(register.getStillbirthsWho()).isEqualTo(2);
+        assertThat(register.getPerinatalDeaths()).isEqualTo(2);
+    }
+
+    @Test
+    void aStillbirthDeathRecordOfARegisteredBabyLinksToItsEvent() {
+        com.example.hms.model.labor.FetalDeathEvent event = fetalDeath(35);
+        com.example.hms.model.labor.DeliveryNewborn link = com.example.hms.model.labor.DeliveryNewborn.builder()
+            .deliveryRecord(event.getDeliveryRecord()).hospital(hospital).birthOrder(1).build();
+        when(deliveryNewbornRepository.findByNewbornPatient_Id(patientId)).thenReturn(Optional.of(link));
+        when(fetalDeathEventRepository.findFirstByDeliveryRecord_IdAndBirthOrderAndSupersededAtIsNull(
+            event.getDeliveryRecord().getId(), 1)).thenReturn(Optional.of(event));
+
+        var saved = service.recordDeath(base().perinatalDeath(true).perinatalType(PerinatalDeathType.STILLBIRTH)
+            .birthStatus(com.example.hms.enums.PerinatalBirthStatus.STILLBIRTH).gestationalAgeWeeks(35).build());
+
+        assertThat(saved.getDeathRecord().getFetalDeathEventId()).isEqualTo(event.getId());
+    }
+
+    @Test
+    void anotherHospitalsFetalDeathEventCannotBeDeclared() {
+        UUID foreignEvent = UUID.randomUUID();
+        when(fetalDeathEventRepository.findByIdAndHospital_Id(foreignEvent, hospitalId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.recordDeath(base().perinatalDeath(true).perinatalType(PerinatalDeathType.STILLBIRTH)
+            .birthStatus(com.example.hms.enums.PerinatalBirthStatus.STILLBIRTH).fetalDeathEventId(foreignEvent).build()))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("fetalDeathEventId"));
+        verify(deathRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void aBabyRegisteredAtAnotherHospitalDoesNotLinkToItsEvent() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        com.example.hms.model.labor.FetalDeathEvent event = fetalDeath(35);
+        com.example.hms.model.labor.DeliveryNewborn link = com.example.hms.model.labor.DeliveryNewborn.builder()
+            .deliveryRecord(event.getDeliveryRecord()).hospital(other).birthOrder(1).build();
+        when(deliveryNewbornRepository.findByNewbornPatient_Id(patientId)).thenReturn(Optional.of(link));
+        when(fetalDeathEventRepository.findFirstByDeliveryRecord_IdAndBirthOrderAndSupersededAtIsNull(any(), eq(1)))
+            .thenReturn(Optional.of(event));
+
+        var saved = service.recordDeath(base().perinatalDeath(true).perinatalType(PerinatalDeathType.STILLBIRTH)
+            .birthStatus(com.example.hms.enums.PerinatalBirthStatus.STILLBIRTH).build());
+
+        assertThat(saved.getDeathRecord().getFetalDeathEventId()).isNull();
+    }
+
+    @Test
+    void theRegisterReadsOnlyTheActingHospitalsFetalDeathEvents() {
+        service.getRegister(LocalDate.now().minusDays(30), LocalDate.now());
+
+        verify(fetalDeathEventRepository).findRegister(eq(hospitalId), any(), any());
+    }
+
+    // ── Rex on #1144: count each stillbirth once, by its baby (delivery + birth order) ──
+
+    private DeathRecord stillbirthDeathOf(Patient baby, UUID linkedEvent) {
+        DeathRecord death = classified(PerinatalDeathType.STILLBIRTH, 34,
+            com.example.hms.enums.PerinatalBirthStatus.STILLBIRTH, com.example.hms.enums.PerinatalAgeBasis.ELAPSED_TIME);
+        death.setId(UUID.randomUUID());
+        death.setPatient(baby);
+        death.setFetalDeathEventId(linkedEvent);
+        return death;
+    }
+
+    private Patient registeredBabyOf(com.example.hms.model.labor.FetalDeathEvent event) {
+        Patient baby = new Patient();
+        baby.setId(UUID.randomUUID());
+        com.example.hms.model.labor.DeliveryNewborn link = com.example.hms.model.labor.DeliveryNewborn.builder()
+            .deliveryRecord(event.getDeliveryRecord()).newbornPatient(baby).hospital(hospital)
+            .birthOrder(event.getBirthOrder()).build();
+        when(deliveryNewbornRepository.findByNewbornPatient_IdIn(any())).thenReturn(List.of(link));
+        return baby;
+    }
+
+    private MortalityRegisterDTO registerWith(List<DeathRecord> deaths,
+                                              List<com.example.hms.model.labor.FetalDeathEvent> inPeriod,
+                                              List<com.example.hms.model.labor.FetalDeathEvent> live,
+                                              List<com.example.hms.model.labor.FetalDeathEvent> linkable) {
+        when(deathRecordRepository.findRegister(any(), any(), any())).thenReturn(deaths);
+        when(fetalDeathEventRepository.findRegister(eq(hospitalId), any(), any())).thenReturn(inPeriod);
+        when(fetalDeathEventRepository.findLiveForDeliveries(eq(hospitalId), any())).thenReturn(live);
+        when(fetalDeathEventRepository.findAtHospitalByIdIn(eq(hospitalId), any())).thenReturn(linkable);
+        return service.getRegister(LocalDate.now().minusDays(30), LocalDate.now());
+    }
+
+    @Test
+    void aCertificateAmendedToStillbirthIsCountedOnceThroughTheBabysEvent() {
+        com.example.hms.model.labor.FetalDeathEvent event = fetalDeath(34);
+        // Recorded as an early neonatal death of the registered baby, then amended to a stillbirth: never linked.
+        DeathRecord amended = stillbirthDeathOf(registeredBabyOf(event), null);
+        amended.setAmendedAt(LocalDateTime.now());
+
+        MortalityRegisterDTO register = registerWith(List.of(amended), List.of(event), List.of(event), List.of());
+
+        assertThat(register.getStillbirths()).isEqualTo(1);
+        assertThat(register.getStillbirthsWho()).isEqualTo(1);
+        assertThat(register.getPerinatalDeaths()).isEqualTo(1);
+        assertThat(register.getStillbirthRows()).singleElement()
+            .satisfies(row -> assertThat(row.getDeclaredByDeathRecordId()).isEqualTo(amended.getId()));
+    }
+
+    @Test
+    void anEventCreatedAfterTheDeathRecordIsNotCountedAgain() {
+        com.example.hms.model.labor.FetalDeathEvent event = fetalDeath(34);
+        // The death record came first (no event then); a later correction created the baby's event.
+        DeathRecord earlier = stillbirthDeathOf(registeredBabyOf(event), null);
+
+        MortalityRegisterDTO register = registerWith(List.of(earlier), List.of(event), List.of(event), List.of());
+
+        assertThat(register.getStillbirths()).isEqualTo(1);
+        assertThat(register.getStillbirthsIcd()).isEqualTo(1);
+    }
+
+    @Test
+    void aDeathRecordLinkedLaterToTheEventIsNotCountedAgain() {
+        com.example.hms.model.labor.FetalDeathEvent event = fetalDeath(34);
+        Patient unregistered = new Patient();
+        unregistered.setId(UUID.randomUUID());
+        DeathRecord linkedLater = stillbirthDeathOf(unregistered, event.getId());
+
+        MortalityRegisterDTO register = registerWith(List.of(linkedLater), List.of(event), List.of(event), List.of(event));
+
+        assertThat(register.getStillbirths()).isEqualTo(1);
+    }
+
+    @Test
+    void anEventThatReplacedASupersededOneCountsOnceAndTheSupersededNever() {
+        com.example.hms.model.labor.FetalDeathEvent superseded = fetalDeath(34);
+        superseded.setSupersededAt(LocalDateTime.now().minusHours(3));
+        superseded.setSupersedeReason("heartbeat found");
+        com.example.hms.model.labor.FetalDeathEvent replacement = fetalDeath(34);
+        replacement.setDeliveryRecord(superseded.getDeliveryRecord());
+        Patient unregistered = new Patient();
+        unregistered.setId(UUID.randomUUID());
+        // The death record still names the superseded event; the same baby's replacement is the live one.
+        DeathRecord declaration = stillbirthDeathOf(unregistered, superseded.getId());
+
+        MortalityRegisterDTO register = registerWith(List.of(declaration), List.of(replacement), List.of(replacement),
+            List.of(superseded));
+
+        assertThat(register.getStillbirths()).isEqualTo(1);
+        assertThat(register.getStillbirthRows()).singleElement().satisfies(row -> {
+            assertThat(row.getId()).isEqualTo(replacement.getId());
+            assertThat(row.getDeclaredByDeathRecordId()).isEqualTo(declaration.getId());
+        });
+    }
+
+    @Test
+    void aStillbirthDeathRecordOfAnotherBabyStillCounts() {
+        com.example.hms.model.labor.FetalDeathEvent event = fetalDeath(34);
+        Patient unregistered = new Patient();
+        unregistered.setId(UUID.randomUUID());
+        DeathRecord unrelated = stillbirthDeathOf(unregistered, null);
+
+        MortalityRegisterDTO register = registerWith(List.of(unrelated), List.of(event), List.of(event), List.of());
+
+        assertThat(register.getStillbirths()).isEqualTo(2);
+    }
+
+    // ── Rex on #1144: an explicit link must be this baby's event; the baby is not named as the mother ──
+
+    @Test
+    void aDeathRecordCannotDeclareAnotherBabysFetalDeathEvent() {
+        com.example.hms.model.labor.FetalDeathEvent unrelated = fetalDeath(34);
+        when(fetalDeathEventRepository.findByIdAndHospital_Id(unrelated.getId(), hospitalId))
+            .thenReturn(Optional.of(unrelated));
+        com.example.hms.model.labor.DeliveryRecord ownDelivery = com.example.hms.model.labor.DeliveryRecord.builder().build();
+        ownDelivery.setId(UUID.randomUUID());
+        when(deliveryNewbornRepository.findByNewbornPatient_Id(patientId)).thenReturn(Optional.of(
+            com.example.hms.model.labor.DeliveryNewborn.builder().deliveryRecord(ownDelivery).hospital(hospital)
+                .birthOrder(1).build()));
+
+        assertThatThrownBy(() -> service.recordDeath(base().perinatalDeath(true).perinatalType(PerinatalDeathType.STILLBIRTH)
+            .birthStatus(com.example.hms.enums.PerinatalBirthStatus.STILLBIRTH).fetalDeathEventId(unrelated.getId()).build()))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("fetalDeathEventId"));
+        verify(deathRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void aDeathRecordDeclaresItsOwnBabysFetalDeathEvent() {
+        com.example.hms.model.labor.FetalDeathEvent own = fetalDeath(34);
+        when(fetalDeathEventRepository.findByIdAndHospital_Id(own.getId(), hospitalId)).thenReturn(Optional.of(own));
+        when(deliveryNewbornRepository.findByNewbornPatient_Id(patientId)).thenReturn(Optional.of(
+            com.example.hms.model.labor.DeliveryNewborn.builder().deliveryRecord(own.getDeliveryRecord())
+                .motherPatient(own.getMotherPatient()).hospital(hospital).birthOrder(1).build()));
+
+        var saved = service.recordDeath(base().perinatalDeath(true).perinatalType(PerinatalDeathType.STILLBIRTH)
+            .birthStatus(com.example.hms.enums.PerinatalBirthStatus.STILLBIRTH).fetalDeathEventId(own.getId()).build());
+
+        assertThat(saved.getDeathRecord().getFetalDeathEventId()).isEqualTo(own.getId());
+    }
+
+    @Test
+    void aStillbirthDeathRecordRowNamesTheBabyAsThePatientAndTheMotherAsTheMother() {
+        Patient mother = new Patient();
+        mother.setId(UUID.randomUUID());
+        mother.setFirstName("Rose");
+        mother.setLastName("Kaboré");
+        Patient baby = new Patient();
+        baby.setId(UUID.randomUUID());
+        baby.setFirstName("Bébé");
+        baby.setLastName("Kaboré");
+        com.example.hms.model.labor.DeliveryRecord delivery = com.example.hms.model.labor.DeliveryRecord.builder().build();
+        delivery.setId(UUID.randomUUID());
+        when(deliveryNewbornRepository.findByNewbornPatient_IdIn(any())).thenReturn(List.of(
+            com.example.hms.model.labor.DeliveryNewborn.builder().deliveryRecord(delivery).newbornPatient(baby)
+                .motherPatient(mother).hospital(hospital).birthOrder(1).build()));
+        DeathRecord death = stillbirthDeathOf(baby, null);
+
+        MortalityRegisterDTO register = registerWith(List.of(death), List.of(), List.of(), List.of());
+
+        assertThat(register.getStillbirthRows()).singleElement().satisfies(row -> {
+            assertThat(row.getPatientName()).isEqualTo(baby.getFullName());
+            assertThat(row.getMotherName()).isEqualTo(mother.getFullName());
+            assertThat(row.getMotherPatientId()).isEqualTo(mother.getId());
+        });
     }
 }

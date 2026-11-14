@@ -84,8 +84,13 @@
     <div class="summary-cards">
       <div class="summary-card">
         <div class="card-info">
-          <span class="card-value">{{ reg.totalDeaths }}</span>
+          <span class="card-value" data-testid="deaths-after-live-birth">{{
+            reg.deathsAfterLiveBirth ?? reg.totalDeaths
+          }}</span>
           <span class="card-label">{{ 'MORTALITY.TOTAL_DEATHS' | translate }}</span>
+          <small class="card-note">{{
+            'MORTALITY.DEATHS_AFTER_LIVE_BIRTH_NOTE' | translate
+          }}</small>
         </div>
       </div>
       <div class="summary-card maternal">
@@ -107,11 +112,12 @@
           <span class="card-value">{{ reg.perinatalDeaths }}</span>
           <span class="card-label">{{ 'MORTALITY.PERINATAL_DEATHS' | translate }}</span>
           <small class="card-note" data-testid="perinatal-definition">{{
-            'MORTALITY.PERINATAL_DEFINITION' | translate
+            'MORTALITY.PERINATAL_DEFINITION'
+              | translate: { weeks: reg.whoStillbirthMinWeeks ?? '—' }
           }}</small>
           <small class="card-note"
-            >{{ 'MORTALITY.STILLBIRTHS' | translate }}{{ 'COMMON.COLON' | translate }}
-            {{ reg.stillbirths }}</small
+            >{{ 'MORTALITY.STILLBIRTHS_WHO' | translate }}{{ 'COMMON.COLON' | translate }}
+            {{ reg.stillbirthsWho ?? 0 }}</small
           >
           <small class="card-note"
             >{{ 'MORTALITY.EARLY_NEONATAL_DEATHS' | translate }}{{ 'COMMON.COLON' | translate }}
@@ -141,13 +147,145 @@
       </p>
     }
 
+    <!-- QA D1714: the stillbirths, their own section, each figure naming its definition (provisional). -->
+    <section class="stillbirth-section" data-testid="stillbirth-section">
+      <h2 class="error-list-title">{{ 'MORTALITY.STILLBIRTH_SECTION' | translate }}</h2>
+      <p class="muted">{{ 'MORTALITY.STILLBIRTH_SECTION_HINT' | translate }}</p>
+      <div class="summary-cards">
+        <div class="summary-card" data-testid="stillbirths-recorded">
+          <div class="card-info">
+            <span class="card-value">{{ reg.stillbirths }}</span>
+            <span class="card-label">{{ 'MORTALITY.STILLBIRTHS_RECORDED' | translate }}</span>
+            <small class="card-note">{{
+              'MORTALITY.STILLBIRTHS_RECORDED_DEFINITION' | translate
+            }}</small>
+          </div>
+        </div>
+        <div class="summary-card perinatal" data-testid="stillbirths-who">
+          <div class="card-info">
+            <span class="card-value">{{ reg.stillbirthsWho ?? 0 }}</span>
+            <span class="card-label">{{ 'MORTALITY.STILLBIRTHS_WHO' | translate }}</span>
+            <small class="card-note">{{
+              'MORTALITY.STILLBIRTHS_WHO_DEFINITION'
+                | translate: { weeks: reg.whoStillbirthMinWeeks ?? '—' }
+            }}</small>
+          </div>
+        </div>
+        <div class="summary-card" data-testid="stillbirths-icd">
+          <div class="card-info">
+            <span class="card-value">{{ reg.stillbirthsIcd ?? 0 }}</span>
+            <span class="card-label">{{ 'MORTALITY.STILLBIRTHS_ICD' | translate }}</span>
+            <small class="card-note">{{
+              'MORTALITY.STILLBIRTHS_ICD_DEFINITION'
+                | translate: { weeks: reg.icdFetalDeathMinWeeks ?? '—' }
+            }}</small>
+          </div>
+        </div>
+        <div class="summary-card" data-testid="stillbirths-incomplete">
+          <div class="card-info">
+            <span class="card-value">{{ reg.stillbirthsClassificationIncomplete ?? 0 }}</span>
+            <span class="card-label">{{ 'MORTALITY.CLASSIFICATION_INCOMPLETE' | translate }}</span>
+            <small class="card-note">{{
+              'MORTALITY.CLASSIFICATION_INCOMPLETE_DEFINITION' | translate
+            }}</small>
+          </div>
+        </div>
+      </div>
+      @if (reg.stillbirthRows?.length) {
+        <div class="data-table">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">{{ 'MORTALITY.STILLBIRTH_MOTHER' | translate }}</th>
+                <th scope="col">{{ 'MORTALITY.STILLBIRTH_DATE' | translate }}</th>
+                <th scope="col">{{ 'MORTALITY.STILLBIRTH_GESTATION' | translate }}</th>
+                <th scope="col">{{ 'MORTALITY.FLAGS' | translate }}</th>
+                <th scope="col">{{ 'MORTALITY.STILLBIRTH_SOURCE' | translate }}</th>
+                <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of reg.stillbirthRows; track $index) {
+                <tr class="data-row" data-testid="stillbirth-row">
+                  <td>
+                    <div class="cell-primary">{{ s.motherName || '—' }}</div>
+                    @if (s.patientName) {
+                      <div class="cell-secondary" data-testid="stillbirth-baby-name">
+                        {{ s.patientName }}
+                      </div>
+                    }
+                    @if (s.birthOrder && s.birthOrder > 1) {
+                      <div class="cell-secondary">
+                        {{ 'LABOR.BABY_OUTCOME' | translate: { order: s.birthOrder } }}
+                      </div>
+                    }
+                  </td>
+                  <td>{{ s.occurredAt | serverTime | date: 'short' }}</td>
+                  <td>
+                    @if (s.gestationalAgeWeeks !== null) {
+                      {{
+                        'MORTALITY.GESTATION_WEEKS' | translate: { weeks: s.gestationalAgeWeeks }
+                      }}
+                    } @else {
+                      —
+                    }
+                  </td>
+                  <td>
+                    @if (s.classificationIncomplete) {
+                      <span class="flag late" data-testid="stillbirth-incomplete">{{
+                        'MORTALITY.CLASSIFICATION_INCOMPLETE' | translate
+                      }}</span>
+                    } @else {
+                      @if (s.whoStillbirth) {
+                        <span class="flag perinatal">{{
+                          'MORTALITY.STILLBIRTHS_WHO' | translate
+                        }}</span>
+                      }
+                      @if (s.icdFetalDeath) {
+                        <span class="flag">{{ 'MORTALITY.STILLBIRTHS_ICD' | translate }}</span>
+                      }
+                    }
+                  </td>
+                  <td>
+                    {{
+                      (s.source
+                        ? 'MORTALITY.STILLBIRTH_SOURCE_' + s.source
+                        : 'MORTALITY.STILLBIRTH_SOURCE_DEATH_RECORD'
+                      ) | translate
+                    }}
+                    @if (s.declaredByDeathRecordId) {
+                      <div class="cell-secondary">
+                        {{ 'MORTALITY.STILLBIRTH_DECLARED' | translate }}
+                      </div>
+                    }
+                  </td>
+                  <td>
+                    @if (stillbirthDeathRecord(s); as d) {
+                      <button
+                        class="action-link"
+                        (click)="openDetail(d)"
+                        [title]="'COMMON.VIEW' | translate"
+                        [attr.aria-label]="'COMMON.VIEW' | translate"
+                      >
+                        <span class="material-symbols-outlined">visibility</span>
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+
     @if (reg.disputedDeaths) {
       <p class="disputed-count" data-testid="register-disputed-count">
         {{ reg.disputedDeaths }} {{ 'MORTALITY.DISPUTED_COUNT' | translate }}
       </p>
     }
 
-    @if (reg.deaths.length === 0) {
+    @if (deathsAfterLiveBirth().length === 0) {
       <div class="empty-state">
         <span class="material-symbols-outlined empty-icon">description</span>
         <h3>{{ 'MORTALITY.NO_DEATHS' | translate }}</h3>
@@ -167,7 +305,7 @@
             </tr>
           </thead>
           <tbody>
-            @for (d of reg.deaths; track d.id) {
+            @for (d of deathsAfterLiveBirth(); track d.id) {
               <tr class="data-row">
                 <td>
                   <div class="cell-primary">{{ d.patientName }}</div>
