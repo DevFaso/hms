@@ -564,6 +564,60 @@ class LabResultServiceImplPerformingHospitalTest {
             .build();
     }
 
+    /** r44 result drawer: the detail read carries the collected specimen and the performing laboratory. */
+    @Test
+    void theDetailReadCarriesTheCollectedSpecimenAndThePerformingLab() {
+        LabResultResponseDTO detail = LabResultResponseDTO.builder().id("detail").build();
+        when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
+        when(labResultMapper.toResponseDTO(result)).thenReturn(detail);
+        org.mockito.Mockito.lenient().when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
+            .thenReturn(List.of());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        LocalDateTime earlier = LocalDateTime.of(2026, 11, 12, 7, 30);
+        LocalDateTime later = earlier.plusHours(2);
+        com.example.hms.model.LabSpecimen first = specimen("Sérum", earlier, com.example.hms.enums.LabSpecimenStatus.RECEIVED);
+        com.example.hms.model.LabSpecimen rejected = specimen("Hémolysé", later.plusHours(1), com.example.hms.enums.LabSpecimenStatus.REJECTED);
+        com.example.hms.model.LabSpecimen recollected = specimen("Plasma fluoré", later, com.example.hms.enums.LabSpecimenStatus.COMPLETED);
+        com.example.hms.model.LabSpecimen notCollected = specimen("Sang total", null, com.example.hms.enums.LabSpecimenStatus.PENDING);
+        when(labSpecimenRepository.findByLabOrder_Id(order.getId()))
+            .thenReturn(List.of(first, rejected, recollected, notCollected));
+
+        LabResultResponseDTO response = service.getLabResultById(result.getId(), Locale.ENGLISH);
+
+        assertThat(response.getSpecimenType()).isEqualTo("Plasma fluoré");
+        assertThat(response.getSpecimenCollectedAt()).isEqualTo(later);
+        assertThat(response.getPerformingLabName()).isEqualTo("Central Laboratory");
+    }
+
+    /** r44: nothing recorded is nothing shown; an in-house order names no performing lab. */
+    @Test
+    void theDetailReadLeavesUnrecordedContextEmpty() {
+        order.setPerformingHospital(null);
+        LabResultResponseDTO detail = LabResultResponseDTO.builder().id("detail").build();
+        when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
+        when(labResultMapper.toResponseDTO(result)).thenReturn(detail);
+        org.mockito.Mockito.lenient().when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
+            .thenReturn(List.of());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(labSpecimenRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of());
+
+        LabResultResponseDTO response = service.getLabResultById(result.getId(), Locale.ENGLISH);
+
+        assertThat(response.getSpecimenType()).isNull();
+        assertThat(response.getSpecimenCollectedAt()).isNull();
+        assertThat(response.getPerformingLabName()).isNull();
+    }
+
+    private com.example.hms.model.LabSpecimen specimen(String type, LocalDateTime collectedAt,
+                                                       com.example.hms.enums.LabSpecimenStatus status) {
+        com.example.hms.model.LabSpecimen specimen = new com.example.hms.model.LabSpecimen();
+        specimen.setLabOrder(order);
+        specimen.setSpecimenType(type);
+        specimen.setCollectedAt(collectedAt);
+        specimen.setStatus(status);
+        return specimen;
+    }
+
     private static Hospital hospital(String name) {
         Hospital hospital = new Hospital();
         hospital.setId(UUID.randomUUID());

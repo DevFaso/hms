@@ -137,8 +137,8 @@
                   <div class="cell-primary">{{ r.hospitalName || '—' }}</div>
                 </td>
               }
-              <td class="order-code" [title]="r.labOrderCode || ''">
-                {{ shortOrderCode(r.labOrderCode) }}
+              <td class="order-code" [title]="r.labOrderCode || r.labOrderId || ''">
+                {{ shortOrderCode(r.labOrderCode || r.labOrderId) }}
               </td>
               <td>
                 <div class="cell-primary">{{ r.patientFullName || '—' }}</div>
@@ -393,7 +393,8 @@
       >
         <div class="panel-header">
           <h2 id="lab-results-dialog-title-1">
-            {{ 'LAB_RESULTS.DETAIL_TITLE' | translate }} — {{ shortOrderCode(r.labOrderCode) }}
+            {{ 'LAB_RESULTS.DETAIL_TITLE' | translate }} —
+            {{ shortOrderCode(r.labOrderCode || r.labOrderId) }}
           </h2>
           <button
             class="close-btn"
@@ -420,6 +421,18 @@
                 >{{ r.resultValue | labValue }}
                 {{ r.resultUnit || ('LAB_RESULTS.UNIT_UNKNOWN' | translate) }}</span
               >
+              @if (detailPreviousText(); as prev) {
+                <!-- r44: the previous observation and the change, from the history already read. -->
+                {{ ' '
+                }}<span class="field-sub" data-testid="detail-previous">{{
+                  'LAB_RESULTS.PREVIOUS_VALUE' | translate: prev.previous
+                }}</span
+                >{{ ' '
+                }}<span class="field-sub" data-testid="detail-change">{{
+                  (prev.change ? 'LAB_RESULTS.CHANGE' : 'LAB_RESULTS.CHANGE_WITHHELD')
+                    | translate: prev.change ?? {}
+                }}</span>
+              }
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB_RESULTS.SEVERITY' | translate }}</span>
@@ -447,6 +460,47 @@
               <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span>
               <span class="field-value">{{ r.hospitalName || '—' }}</span>
             </div>
+            @if (r.labOrderId) {
+              <div class="detail-field" data-testid="detail-request">
+                <span class="field-label">{{ 'LAB.ORDER' | translate }}</span>
+                <a
+                  class="field-value"
+                  routerLink="/lab"
+                  [queryParams]="{ order: r.labOrderId }"
+                  [attr.aria-label]="
+                    'LAB_RESULTS.OPEN_REQUEST'
+                      | translate: { code: shortOrderCode(r.labOrderCode || r.labOrderId) }
+                  "
+                  >{{ shortOrderCode(r.labOrderCode || r.labOrderId) }}</a
+                >
+              </div>
+            }
+            @if (r.orderedByName) {
+              <div class="detail-field" data-testid="detail-ordered-by">
+                <span class="field-label">{{ 'LAB.ORDERED_BY' | translate }}</span>
+                <span class="field-value">{{ r.orderedByName }}</span>
+              </div>
+            }
+            @if (r.specimenType) {
+              <div class="detail-field" data-testid="detail-specimen-type">
+                <span class="field-label">{{ 'LAB.SPECIMEN_TYPE' | translate }}</span>
+                <span class="field-value">{{
+                  r.specimenType | enumLabel: 'specimenType' : 'asTyped'
+                }}</span>
+              </div>
+            }
+            @if (r.specimenCollectedAt) {
+              <div class="detail-field" data-testid="detail-collected-at">
+                <span class="field-label">{{ 'LAB.COLLECTED_AT' | translate }}</span>
+                <span class="field-value">{{ r.specimenCollectedAt | serverTime | dateTime }}</span>
+              </div>
+            }
+            @if (r.performingLabName) {
+              <div class="detail-field" data-testid="detail-performing-lab">
+                <span class="field-label">{{ 'LAB.PERFORMING_LAB' | translate }}</span>
+                <span class="field-value">{{ r.performingLabName }}</span>
+              </div>
+            }
             <div class="detail-field">
               <span class="field-label">{{ 'LAB_RESULTS.RELEASED' | translate }}</span>
               <span class="field-value">{{
@@ -520,55 +574,92 @@
             [preferredUnit]="r.gradedReferenceRange?.unit || r.resultUnit || ''"
             [testName]="r.labTestName"
             [testCode]="r.labTestCode"
+            [referenceRange]="r.gradedReferenceRange"
             [loading]="detailHistoryLoading()"
             [failed]="detailHistoryError()"
           />
 
-          @if (r.referenceRanges.length) {
-            <div class="detail-section">
-              <span class="field-label">{{ 'LAB_RESULTS.REFERENCE_RANGES' | translate }}</span>
-              <div class="detail-list">
-                @for (rr of r.referenceRanges; track $index) {
-                  <div
-                    class="detail-list-item"
-                    [class.range-applied]="isGradedRange(r, rr)"
-                    [attr.data-testid]="isGradedRange(r, rr) ? 'range-applied' : null"
-                  >
-                    <div class="range-main">
-                      {{ formatReferenceRange(rr) }}
-                      @if (isGradedRange(r, rr)) {
-                        <span class="range-applied-label">{{
-                          'LAB_RESULTS.RANGE_APPLIED' | translate
-                        }}</span>
-                      }
-                    </div>
-                    <div class="range-meta">
-                      <span
-                        >{{ 'LAB_RESULTS.GENDER' | translate }}{{ 'COMMON.COLON' | translate }}
-                        {{ rr.gender || 'ALL' | enumLabel: 'gender' }}</span
-                      >
-                      <span
-                        >{{ 'LAB_RESULTS.AGE_RANGE' | translate }}{{ 'COMMON.COLON' | translate }}
-                        {{ formatReferenceRangeAge(rr) }}</span
-                      >
-                    </div>
-                    <!-- Free text stored as entered (any language): labelled, never translated. -->
-                    @if (rr.notes) {
-                      <div class="range-notes free-text" data-testid="range-notes">
-                        {{ 'LAB_RESULTS.RANGE_NOTES_AS_ENTERED' | translate
-                        }}{{ 'COMMON.COLON' | translate }}
-                        {{ rr.notes }}
-                      </div>
-                    }
-                    @if (rr.source) {
-                      <div class="range-notes free-text" data-testid="range-source">
-                        {{ 'LAB_RESULTS.RANGE_SOURCE' | translate }}{{ 'COMMON.COLON' | translate }}
-                        {{ rr.source }}
-                      </div>
-                    }
-                  </div>
+          <ng-template #rangeRow let-rr>
+            <div
+              class="detail-list-item"
+              [class.range-applied]="isGradedRange(r, rr)"
+              [attr.data-testid]="isGradedRange(r, rr) ? 'range-applied' : null"
+            >
+              <div class="range-main">
+                {{ formatReferenceRange(rr) }}
+                @if (isGradedRange(r, rr)) {
+                  <span class="range-applied-label">{{
+                    'LAB_RESULTS.RANGE_APPLIED' | translate
+                  }}</span>
                 }
               </div>
+              <div class="range-meta">
+                <span
+                  >{{ 'LAB_RESULTS.GENDER' | translate }}{{ 'COMMON.COLON' | translate }}
+                  {{ rr.gender || 'ALL' | enumLabel: 'gender' }}</span
+                >
+                <span
+                  >{{ 'LAB_RESULTS.AGE_RANGE' | translate }}{{ 'COMMON.COLON' | translate }}
+                  {{ formatReferenceRangeAge(rr) }}</span
+                >
+              </div>
+              @if (formatCriticalLimits(rr); as critical) {
+                <div class="range-critical" data-testid="range-critical">
+                  {{ 'LAB_RESULTS.CRITICAL_LIMITS' | translate }}{{ 'COMMON.COLON' | translate }}
+                  {{ critical }}
+                </div>
+              }
+              <!-- Free text stored as entered (any language): labelled, never translated. -->
+              @if (rr.notes) {
+                <div class="range-notes free-text" data-testid="range-notes">
+                  {{ 'LAB_RESULTS.RANGE_NOTES_AS_ENTERED' | translate
+                  }}{{ 'COMMON.COLON' | translate }}
+                  {{ rr.notes }}
+                </div>
+              }
+              @if (rr.source) {
+                <div class="range-notes free-text" data-testid="range-source">
+                  {{ 'LAB_RESULTS.RANGE_SOURCE' | translate }}{{ 'COMMON.COLON' | translate }}
+                  {{ rr.source }}
+                </div>
+              }
+            </div>
+          </ng-template>
+
+          @let ranges = detailRanges();
+          @if (ranges.applied || ranges.others.length) {
+            <div class="detail-section" data-testid="reference-ranges">
+              <span class="field-label">{{ 'LAB_RESULTS.REFERENCE_RANGES' | translate }}</span>
+              @if (ranges.applied; as applied) {
+                <div class="detail-list">
+                  <ng-container
+                    *ngTemplateOutlet="rangeRow; context: { $implicit: applied }"
+                  ></ng-container>
+                </div>
+                @if (ranges.others.length) {
+                  <!-- r44: the ranges that did not grade this result, collapsed. -->
+                  <details class="other-ranges" data-testid="other-ranges">
+                    <summary>
+                      {{ 'LAB_RESULTS.OTHER_RANGES' | translate: { count: ranges.others.length } }}
+                    </summary>
+                    <div class="detail-list">
+                      @for (rr of ranges.others; track $index) {
+                        <ng-container
+                          *ngTemplateOutlet="rangeRow; context: { $implicit: rr }"
+                        ></ng-container>
+                      }
+                    </div>
+                  </details>
+                }
+              } @else {
+                <div class="detail-list">
+                  @for (rr of ranges.others; track $index) {
+                    <ng-container
+                      *ngTemplateOutlet="rangeRow; context: { $implicit: rr }"
+                    ></ng-container>
+                  }
+                </div>
+              }
             </div>
           } @else if (r.expectedResult) {
             <!-- QA D834: a qualitative test has no range, it has an expected answer. -->
@@ -597,7 +688,7 @@
           }
 
           @if (r.notes) {
-            <div class="notes-section">
+            <div class="notes-section" data-testid="detail-lab-comment">
               <span class="field-label">{{ 'COMMON.NOTES' | translate }}</span>
               <p>{{ r.notes }}</p>
             </div>

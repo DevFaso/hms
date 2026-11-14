@@ -6528,6 +6528,11 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Visit summary cards show the day only (D1760 sibling):** "Mes résumés" and the staff lists now come newest first, but a card shows "NOV. 13" with no time, so two same-day visits still look alike.
 - **D1762 sweep, CHECK constraints on enum-like columns:** every single-column allowed-values CHECK on an enum column now allows every constant (EntitySchemaValidationIT.everyEnumColumnCheckAllowsEveryConstant, on Postgres); no other drift found. `obstetric_alert_escalations.source_type` is the only such CHECK on a String column, guarded by ObstetricAlertEscalationSourceTypeGuardTest. Multi-column or negated CHECKs are not read by the guard.
 
+## Standing debt — lab result drawer (fix/lab-result-drawer)
+- **Reference range approval status is not stored:** a range is a JSON value on its test definition with no approval field; "(default, pending local approval)" exists only inside the free-text `source`, which the drawer never parses. Add a per-range status (or a definition-version status the drawer can show) if the "En attente d'approbation locale" badge is wanted.
+- **Analytical method is not recorded:** neither `LabTestDefinition` nor `LabResult` stores a method; the drawer shows the performing laboratory (outsourced orders) only. The analyser's HL7 sending application (`LabResult.sourceSendingApplication`) is stored but not in the DTO.
+- **Self-release separation is not configurable (I7 question):** entering is open to LAB_SCIENTIST, LAB_TECHNICIAN, LAB_MANAGER, LAB_DIRECTOR, QUALITY_MANAGER, SUPER_ADMIN (and DOCTOR/NURSE/MIDWIFE on point-of-care tests); releasing to LAB_SCIENTIST, LAB_MANAGER, LAB_DIRECTOR, SUPER_ADMIN (`LabResultAuthority`). The author may release their own result after a confirmation, audited as LAB_RESULT_SELF_RELEASED; no setting forbids it. Pending the user's decision.
+
 ## Standing debt and proposals — imaging screens (fix/imaging-ui)
 - **Proposal, image viewer link (DICOMweb):** open the study from the report through a DICOMweb/OHIF viewer (the report already carries `studyInstanceUid` and `pacsViewerUrl`, but no viewer is configured).
 - **Proposal, comparison with prior studies:** list the patient's earlier studies of the same region and modality next to the report, so the reader can compare.

@@ -127,6 +127,13 @@ export interface LabResultResponse {
    * HL7 table 0085); null when it did not say, and always for a typed row.
    */
   observationResultStatus?: string | null;
+  /** The ordering clinician's name, as recorded on the order. */
+  orderedByName?: string | null;
+  /** r44, single-result read only: the collected specimen's type and collection time. */
+  specimenType?: string | null;
+  specimenCollectedAt?: string | null;
+  /** r44, single-result read only: the laboratory an outsourced order was sent to. */
+  performingLabName?: string | null;
 }
 
 export interface LabResultReferenceRange {
@@ -143,6 +150,8 @@ export interface LabResultReferenceRange {
   ageUnit?: 'YEARS' | 'MONTHS' | 'DAYS' | null;
   /** Round 18: where the limits come from. */
   source?: string | null;
+  /** r44: the result's patient is in this age band (null: age unknown). */
+  patientInAgeBand?: boolean | null;
 }
 
 export interface LabResultTrendPoint {
