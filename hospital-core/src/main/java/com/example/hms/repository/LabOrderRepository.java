@@ -122,6 +122,31 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     List<LabOrder> findByStatusAndHospital_Id(LabOrderStatus status, UUID hospitalId);
     List<LabOrder> findByHospital_IdAndStatusIn(UUID hospitalId, java.util.Collection<LabOrderStatus> statuses);
 
+    /**
+     * The duplicate-order check: this patient's orders AT this hospital for
+     * the same test (by definition id, or by test code so a new version of
+     * the test still matches), in one of the given statuses, placed since the
+     * cutoff. Newest first. {@code excludeOrderId} keeps an order from
+     * matching itself (pass a random id when there is none).
+     */
+    @Query("""
+        SELECT o FROM LabOrder o LEFT JOIN o.labTestDefinition d
+        WHERE o.patient.id = :patientId
+          AND o.hospital.id = :hospitalId
+          AND o.status IN :statuses
+          AND o.orderDatetime >= :since
+          AND o.id <> :excludeOrderId
+          AND (o.labTestDefinitionId = :definitionId OR d.testCode = :testCode)
+        ORDER BY o.orderDatetime DESC
+    """)
+    List<LabOrder> findActiveSameTestSince(@Param("patientId") UUID patientId,
+                                           @Param("hospitalId") UUID hospitalId,
+                                           @Param("definitionId") UUID definitionId,
+                                           @Param("testCode") String testCode,
+                                           @Param("statuses") java.util.Collection<LabOrderStatus> statuses,
+                                           @Param("since") LocalDateTime since,
+                                           @Param("excludeOrderId") UUID excludeOrderId);
+
     boolean existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(UUID id, UUID id1, @NotNull LocalDateTime orderDatetime);
 
     /** The orders placed during one visit (its after-visit summary lists them). */

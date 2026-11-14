@@ -1839,6 +1839,8 @@
       "PRO_RESPONSE": "Patient questionnaire answers recorded ({{instrument}}, {{source}})",
       "PRO_ALERT_ACK": "Questionnaire safety alert acknowledged",
       "LAB_CORRECTION": "Correction: result {{correction}} replaces released result {{original}}",
+      "LAB_DUPLICATE_ACKNOWLEDGED": "Duplicate warning acknowledged (\"Order anyway\"): lab order {{order}} placed while active order {{earlier}} of the same test is open",
+      "LAB_DUPLICATE_UNACKNOWLEDGED": "Duplicate warning not acknowledged: lab order {{order}} placed while active order {{earlier}} of the same test is open",
       "LAB_AUTOVERIFICATION": "Automatic validation (analyser flag N) via {{source}}",
       "HL7_ORU_INGESTED": "Lab result message (ORU^R01) received via {{source}}",
       "HL7_ADT": "Admission message (ADT^{{type}}): {{what}} — {{details}}",
@@ -3727,6 +3729,12 @@
     "X_RAY": "X-Ray"
   },
   "LAB": {
+    "DUPLICATE": {
+      "TITLE": "Possible duplicate order",
+      "BODY": "This patient already has an active order for the same test here, placed in the last 24 hours. Check that a new order is really needed.",
+      "BACK": "Back to the order",
+      "ORDER_ANYWAY": "Order anyway"
+    },
     "ABNORMAL": "Abnormal",
     "ACCESSION": "Accession #",
     "ACTIVE_ORDERS": "Active Orders",
@@ -6776,6 +6784,7 @@
         "LAB_ORDER_CANCELLED": "Lab Order Cancelled",
         "LAB_RESULT_SELF_RELEASED": "Lab Result Self-Released",
         "LAB_ORDER_ENTERED_IN_ERROR": "Lab Order Entered in Error",
+        "LAB_ORDER_DUPLICATE_PLACED": "Duplicate lab order placed",
         "MEDICATION_DOSE_LIMITS_UPDATED": "Paediatric dose limits updated",
         "PRESCRIPTION_CDS_OVERRIDDEN": "Prescription decision-support alert overridden",
         "PRESCRIPTION_SIGN_REAUTHENTICATION": "Re-authentication to sign a controlled-drug prescription",

@@ -84,6 +84,27 @@ public class LabOrderController {
     }
 
     /**
+     * The duplicate-order warning before submitting: the patient's active
+     * orders of the same test at this hospital, placed recently. A literal
+     * path, matched before {@code /{id}}. Empty when there is none, or when
+     * the caller may not order tests at that hospital.
+     */
+    @GetMapping("/duplicates")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'SUPER_ADMIN')")
+    @Operation(summary = "Preview potential duplicate lab orders before submission",
+               description = "Active orders (not yet resulted, cancelled or voided) of the same test for the same "
+                   + "patient at the same hospital within the duplicate window. Ordering anyway is allowed: send "
+                   + "duplicateAcknowledged=true on the create request to record the acknowledgement.")
+    @ApiResponse(responseCode = "200", description = "Possible duplicates (possibly none)")
+    public ResponseEntity<ApiResponseWrapper<java.util.List<com.example.hms.payload.dto.LabOrderDuplicateMatchDTO>>> previewDuplicates(
+        @RequestParam UUID patientId,
+        @RequestParam UUID labTestDefinitionId,
+        @RequestParam(required = false) UUID hospitalId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+            labOrderService.previewDuplicates(patientId, hospitalId, labTestDefinitionId)));
+    }
+
+    /**
      * Get a lab order by ID.
      * Doctors, Nurses, Lab staff, Staff, and Admins can view.
      */

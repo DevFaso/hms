@@ -853,6 +853,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^PRO safety alert acknowledged$/,
   },
   {
+    key: 'AUDIT.DESC.LAB_DUPLICATE_ACKNOWLEDGED',
+    re: /^Duplicate warning acknowledged \(order anyway\): lab order (\S+) placed while active order (\S+) of the same test is open$/,
+    params: ['order', 'earlier'],
+  },
+  {
+    key: 'AUDIT.DESC.LAB_DUPLICATE_UNACKNOWLEDGED',
+    re: /^Duplicate warning not acknowledged: lab order (\S+) placed while active order (\S+) of the same test is open$/,
+    params: ['order', 'earlier'],
+  },
+  {
     key: 'AUDIT.DESC.LAB_CORRECTION',
     re: /^Correction: result (\S+) supersedes released result (\S+)$/,
     params: ['correction', 'original'],

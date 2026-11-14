@@ -85,6 +85,8 @@ class LabOrderServiceImplPerformingHospitalTest {
     @Mock private com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
     @Mock private com.example.hms.repository.LabResultRepository labResultRepository;
 
+    @Mock private com.example.hms.service.lab.LabOrderDuplicateCheck labOrderDuplicateCheck;
+
     @InjectMocks
     private LabOrderServiceImpl service;
 

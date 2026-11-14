@@ -16,6 +16,7 @@ import {
   LabService,
   LabOrderResponse,
   LabOrderRequest,
+  LabOrderDuplicateMatch,
   LabTestDefinition,
   LabTestDefinitionApprovalRequest,
   LabSpecimen,
@@ -153,6 +154,12 @@ export class LabComponent implements OnInit {
   saving = signal(false);
   editingId = signal<string | null>(null);
   form: LabOrderRequest = this.emptyForm();
+  /**
+   * The duplicate-order warning: active orders of the same test for this
+   * patient here, placed recently. Shown before the order is sent; the
+   * clinician may still order anyway (recorded on the order).
+   */
+  duplicateMatches = signal<LabOrderDuplicateMatch[]>([]);
 
   // QA D820: void (entered in error)
   voidingOrder = signal<LabOrderResponse | null>(null);
@@ -476,6 +483,7 @@ export class LabComponent implements OnInit {
 
   openCreate(): void {
     this.form = this.emptyForm();
+    this.duplicateMatches.set([]);
     this.editing.set(false);
     this.editingId.set(null);
     this.selectedPatient.set(null);
@@ -522,9 +530,50 @@ export class LabComponent implements OnInit {
 
   closeModal(): void {
     this.showModal.set(false);
+    this.duplicateMatches.set([]);
   }
 
+  /**
+   * A new order first asks whether the same test is already active for the
+   * patient here; if so the warning is shown and nothing is sent until the
+   * clinician chooses "Order anyway". A failed check never blocks the order.
+   */
   submitForm(): void {
+    if (this.editing()) {
+      this.saveOrder(false);
+      return;
+    }
+    this.saving.set(true);
+    this.labService
+      .checkDuplicates(
+        this.form.patientId,
+        this.form.labTestDefinitionId,
+        this.form.hospitalId || undefined,
+      )
+      .subscribe({
+        next: (matches) => {
+          if (matches.length > 0) {
+            this.duplicateMatches.set(matches);
+            this.saving.set(false);
+            return;
+          }
+          this.saveOrder(false);
+        },
+        error: () => this.saveOrder(false),
+      });
+  }
+
+  /** "Order anyway": the warning was read; the acknowledgement goes with the order. */
+  orderAnyway(): void {
+    this.saveOrder(true);
+  }
+
+  /** Back to the form without ordering. */
+  dismissDuplicateWarning(): void {
+    this.duplicateMatches.set([]);
+  }
+
+  private saveOrder(duplicateAcknowledged: boolean): void {
     this.saving.set(true);
     // The select is always sent, and "" is an explicit null rather than an
     // absent field: absent tells the API to leave the routing as it is, so
@@ -533,6 +582,7 @@ export class LabComponent implements OnInit {
     const payload: LabOrderRequest = {
       ...this.form,
       performingHospitalId: this.form.performingHospitalId || null,
+      ...(duplicateAcknowledged ? { duplicateAcknowledged: true } : {}),
     };
     const op = this.editing()
       ? this.labService.updateOrder(this.editingId()!, payload)

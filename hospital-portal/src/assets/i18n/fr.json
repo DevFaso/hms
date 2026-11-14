@@ -1839,6 +1839,8 @@
       "PRO_RESPONSE": "Réponses au questionnaire patient enregistrées ({{instrument}}, {{source}})",
       "PRO_ALERT_ACK": "Alerte de sécurité du questionnaire prise en compte",
       "LAB_CORRECTION": "Correction : le résultat {{correction}} remplace le résultat publié {{original}}",
+      "LAB_DUPLICATE_ACKNOWLEDGED": "Alerte de doublon acceptée (« Commander quand même ») : demande {{order}} passée alors que la demande {{earlier}} du même examen est en cours",
+      "LAB_DUPLICATE_UNACKNOWLEDGED": "Alerte de doublon non acceptée : demande {{order}} passée alors que la demande {{earlier}} du même examen est en cours",
       "LAB_AUTOVERIFICATION": "Validation automatique (indicateur N de l’automate) via {{source}}",
       "HL7_ORU_INGESTED": "Message de résultat (ORU^R01) reçu via {{source}}",
       "HL7_ADT": "Message d’admission (ADT^{{type}}) : {{what}} — {{details}}",
@@ -3727,6 +3729,12 @@
     "X_RAY": "Radiographie"
   },
   "LAB": {
+    "DUPLICATE": {
+      "TITLE": "Demande possiblement en double",
+      "BODY": "Ce patient a déjà une demande en cours pour le même examen ici, passée dans les dernières 24 heures. Vérifiez qu'une nouvelle demande est vraiment nécessaire.",
+      "BACK": "Revenir à la demande",
+      "ORDER_ANYWAY": "Commander quand même"
+    },
     "ABNORMAL": "Anormal",
     "ACCESSION": "N° d'enregistrement",
     "ACTIVE_ORDERS": "Demandes actives",
@@ -6742,6 +6750,7 @@
         "LAB_ORDER_CANCELLED": "Demande d'examen annulée",
         "LAB_RESULT_SELF_RELEASED": "Résultat d'examen autovalidé",
         "LAB_ORDER_ENTERED_IN_ERROR": "Demande d'examen saisie par erreur",
+        "LAB_ORDER_DUPLICATE_PLACED": "Demande d'examen en double passée",
         "MEDICATION_DOSE_LIMITS_UPDATED": "Limites de dose pédiatriques modifiées",
         "PRESCRIPTION_CDS_OVERRIDDEN": "Alerte d’aide à la décision outrepassée sur une ordonnance",
         "PRESCRIPTION_SIGN_REAUTHENTICATION": "Réauthentification pour signer une ordonnance de stupéfiant",

@@ -131,6 +131,11 @@ public class LabOrderRequestDTO {
     @jakarta.validation.constraints.Size(max = 2048)
     private String standingOrderReviewNotes;
 
+    @Schema(description = "True when the orderer saw the duplicate-order warning (an active order of the same "
+            + "test for this patient at this hospital, placed recently) and chose to order anyway. The order is "
+            + "placed either way; the acknowledgement is recorded on the order's audit trail.")
+    private Boolean duplicateAcknowledged;
+
     private LocalDateTime orderDatetime;
 
     private LocalDateTime completedAt;

@@ -307,6 +307,22 @@ export interface LabOrderRequest {
    * there. The order form always sends it explicitly.
    */
   performingHospitalId?: string | null;
+  /** The orderer saw the duplicate-order warning and chose "Order anyway"; recorded on the order. */
+  duplicateAcknowledged?: boolean;
+}
+
+/**
+ * An active order of the same test for the same patient at this hospital,
+ * placed recently (GET /lab-orders/duplicates): the new order may duplicate it.
+ */
+export interface LabOrderDuplicateMatch {
+  orderId: string;
+  labOrderCode?: string;
+  labTestName?: string;
+  labTestCode?: string;
+  priority?: string;
+  status?: string;
+  orderDatetime?: string;
 }
 
 /** A laboratory a clinician may route an order to (GET /lab-orders/performing-labs). */
@@ -537,6 +553,22 @@ export class LabService {
   listPerformingLabs(): Observable<PerformingLab[]> {
     return this.http
       .get<ApiWrapper<PerformingLab[]>>('/lab-orders/performing-labs')
+      .pipe(map((res) => res?.data ?? []));
+  }
+
+  /**
+   * The duplicate-order warning before submitting. Empty when there is none;
+   * a failed check is treated as none (the warning never blocks an order).
+   */
+  checkDuplicates(
+    patientId: string,
+    labTestDefinitionId: string,
+    hospitalId?: string,
+  ): Observable<LabOrderDuplicateMatch[]> {
+    const params: Record<string, string> = { patientId, labTestDefinitionId };
+    if (hospitalId) params['hospitalId'] = hospitalId;
+    return this.http
+      .get<ApiWrapper<LabOrderDuplicateMatch[]>>('/lab-orders/duplicates', { params })
       .pipe(map((res) => res?.data ?? []));
   }
 

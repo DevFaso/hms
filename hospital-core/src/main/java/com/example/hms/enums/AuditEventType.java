@@ -69,6 +69,8 @@ public enum AuditEventType {
     LAB_ORDER_CANCELLED,
     /** QA D820: a lab order voided as entered in error, with its stated reason on the order. */
     LAB_ORDER_ENTERED_IN_ERROR,
+    /** A lab order placed while an active order of the same test was open (warned, never blocked). */
+    LAB_ORDER_DUPLICATE_PLACED,
     /** QA D429: a specimen collected or received. */
     LAB_SPECIMEN_UPDATED,
     /** QA D429: a lab result entered. */

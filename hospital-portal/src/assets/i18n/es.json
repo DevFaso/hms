@@ -1839,6 +1839,8 @@
       "PRO_RESPONSE": "Respuestas al cuestionario del paciente registradas ({{instrument}}, {{source}})",
       "PRO_ALERT_ACK": "Alerta de seguridad del cuestionario reconocida",
       "LAB_CORRECTION": "Corrección: el resultado {{correction}} sustituye al resultado publicado {{original}}",
+      "LAB_DUPLICATE_ACKNOWLEDGED": "Alerta de duplicado aceptada («Ordenar de todos modos»): orden {{order}} realizada mientras la orden {{earlier}} de la misma prueba está activa",
+      "LAB_DUPLICATE_UNACKNOWLEDGED": "Alerta de duplicado no aceptada: orden {{order}} realizada mientras la orden {{earlier}} de la misma prueba está activa",
       "LAB_AUTOVERIFICATION": "Validación automática (indicador N del analizador) vía {{source}}",
       "HL7_ORU_INGESTED": "Mensaje de resultado (ORU^R01) recibido vía {{source}}",
       "HL7_ADT": "Mensaje de admisión (ADT^{{type}}): {{what}} — {{details}}",
@@ -3727,6 +3729,12 @@
     "X_RAY": "Radiografía"
   },
   "LAB": {
+    "DUPLICATE": {
+      "TITLE": "Posible orden duplicada",
+      "BODY": "Este paciente ya tiene una orden activa de la misma prueba aquí, realizada en las últimas 24 horas. Compruebe que una nueva orden sea realmente necesaria.",
+      "BACK": "Volver a la orden",
+      "ORDER_ANYWAY": "Ordenar de todos modos"
+    },
     "ABNORMAL": "Anormal",
     "ACCESSION": "N.º de registro",
     "ACTIVE_ORDERS": "Órdenes activas",
@@ -6776,6 +6784,7 @@
         "LAB_ORDER_CANCELLED": "Orden de laboratorio cancelada",
         "LAB_RESULT_SELF_RELEASED": "Resultado de laboratorio autovalidado",
         "LAB_ORDER_ENTERED_IN_ERROR": "Orden de laboratorio registrada por error",
+        "LAB_ORDER_DUPLICATE_PLACED": "Orden de laboratorio duplicada realizada",
         "MEDICATION_DOSE_LIMITS_UPDATED": "Límites de dosis pediátricos modificados",
         "PRESCRIPTION_CDS_OVERRIDDEN": "Alerta de apoyo a la decisión anulada en una receta",
         "PRESCRIPTION_SIGN_REAUTHENTICATION": "Reautenticación para firmar una receta de estupefaciente",

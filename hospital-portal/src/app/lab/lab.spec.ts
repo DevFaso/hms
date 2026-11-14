@@ -91,6 +91,7 @@ describe('LabComponent — performing laboratory', () => {
       'listOrders',
       'listTestDefinitions',
       'listPerformingLabs',
+      'checkDuplicates',
       'createOrder',
       'updateOrder',
       'deleteOrder',
@@ -105,6 +106,7 @@ describe('LabComponent — performing laboratory', () => {
     labService.listSpecimens.and.returnValue(of([]));
     labService.listTestDefinitions.and.returnValue(of([]));
     labService.listPerformingLabs.and.returnValue(of(labs));
+    labService.checkDuplicates.and.returnValue(of([]));
     labService.createOrder.and.returnValue(of(orders[0] ?? order({})));
     labService.updateOrder.and.returnValue(of(orders[0] ?? order({})));
 
@@ -515,6 +517,70 @@ describe('LabComponent — performing laboratory', () => {
     const payload = labService.createOrder.calls.mostRecent().args[0];
     expect(payload.performingHospitalId).toBeNull();
     expect('performingHospitalId' in payload).toBeTrue();
+  });
+
+  describe('the duplicate-order warning', () => {
+    const earlier = {
+      orderId: 'o-earlier',
+      labOrderCode: 'LAB-000023',
+      labTestName: 'Fasting glucose',
+      status: 'ORDERED',
+    };
+
+    it('shows the warning and sends nothing until "Order anyway"', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.checkDuplicates.and.returnValue(of([earlier]));
+
+      component.openCreate();
+      component.form.patientId = 'p-1';
+      component.form.labTestDefinitionId = 'def-glu';
+      component.submitForm();
+
+      expect(labService.checkDuplicates).toHaveBeenCalledWith('p-1', 'def-glu', jasmine.anything());
+      expect(labService.createOrder).not.toHaveBeenCalled();
+      expect(component.duplicateMatches()).toEqual([earlier]);
+      fixture.detectChanges();
+      const warning = fixture.nativeElement.querySelector('[data-testid="lab-duplicate-warning"]');
+      expect(warning?.textContent).toContain('LAB-000023');
+
+      component.orderAnyway();
+      expect(labService.createOrder).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ duplicateAcknowledged: true }),
+      );
+      expect(component.duplicateMatches()).toEqual([]);
+    });
+
+    it('sends the order without an acknowledgement when there is no duplicate', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+
+      component.openCreate();
+      component.submitForm();
+
+      const payload = labService.createOrder.calls.mostRecent().args[0];
+      expect('duplicateAcknowledged' in payload).toBeFalse();
+    });
+
+    it('never blocks the order when the check itself fails', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.checkDuplicates.and.returnValue(throwError(() => new Error('down')));
+
+      component.openCreate();
+      component.submitForm();
+
+      expect(labService.createOrder).toHaveBeenCalledTimes(1);
+    });
+
+    it('goes back to the form without ordering', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.checkDuplicates.and.returnValue(of([earlier]));
+
+      component.openCreate();
+      component.submitForm();
+      component.dismissDuplicateWarning();
+
+      expect(component.duplicateMatches()).toEqual([]);
+      expect(labService.createOrder).not.toHaveBeenCalled();
+    });
   });
 
   it('brings an outsourced order back in-house from the edit form', async () => {
