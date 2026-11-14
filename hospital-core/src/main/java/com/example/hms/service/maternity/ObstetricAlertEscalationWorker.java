@@ -135,10 +135,12 @@ public class ObstetricAlertEscalationWorker {
             return;
         }
         for (ObstetricAlertEscalation open : escalationRepository.findOpenBySourceAndMessageKey(
-                alert.sourceType(), alert.sourceId(), alert.alertMessageKey())) {
+                alert.hospitalId(), alert.sourceType(), alert.sourceId(), alert.alertMessageKey())) {
             open.setAcknowledgedAt(now);
             open.setAcknowledgedBy(null);
             escalationRepository.save(open);
+            // Its open CRITICAL tasks go too: acknowledging one could not stop the replacement's reminders.
+            inBasketItemRepository.deleteOpenByReference(open.getId(), REFERENCE_TYPE);
         }
     }
 
@@ -174,6 +176,8 @@ public class ObstetricAlertEscalationWorker {
             row.setAcknowledgedAt(LocalDateTime.now(clock));
             row.setAcknowledgedBy(null);
             escalationRepository.save(row);
+            // The withdrawn alert's open tasks no longer point at anything that stands.
+            inBasketItemRepository.deleteOpenByReference(row.getId(), REFERENCE_TYPE);
             return false;
         }
         short current = row.getEscalationLevel();

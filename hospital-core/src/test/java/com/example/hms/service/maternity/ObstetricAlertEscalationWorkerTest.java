@@ -147,13 +147,15 @@ class ObstetricAlertEscalationWorkerTest {
         // QA D1801: stillborn -> live -> stillborn before the sweep: the first row was never closed.
         UUID delivery = UUID.randomUUID();
         ObstetricAlertEscalation first = row((short) 0);
-        when(escalationRepository.findOpenBySourceAndMessageKey(
+        when(escalationRepository.findOpenBySourceAndMessageKey(HOSPITAL,
             ObstetricAlertEscalationService.SOURCE_DELIVERY, delivery, ObstetricAlertCurrency.STILLBIRTH_ALERT_MESSAGE_KEY))
             .thenReturn(List.of(first));
         when(escalationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         worker.raise(stillbirthAlert(delivery, ObstetricAlertCurrency.STILLBIRTH_ALERT_MESSAGE_KEY));
         assertThat(first.getAcknowledgedAt()).isNotNull();
         assertThat(first.getAcknowledgedBy()).isNull();
+        // Rex on #1151: the replaced series' open in-basket tasks are removed, so only the current ones remain.
+        verify(inBasketItemRepository).deleteOpenByReference(first.getId(), ObstetricAlertEscalationWorker.REFERENCE_TYPE);
     }
 
     @Test
@@ -161,7 +163,8 @@ class ObstetricAlertEscalationWorkerTest {
         UUID delivery = UUID.randomUUID();
         when(escalationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         worker.raise(stillbirthAlert(delivery, "labor.alert.msg.labor-apgar"));
-        verify(escalationRepository, never()).findOpenBySourceAndMessageKey(any(), any(), any());
+        verify(escalationRepository, never()).findOpenBySourceAndMessageKey(any(), any(), any(), any());
+        verify(inBasketItemRepository, never()).deleteOpenByReference(any(), any());
     }
 
     private static ObstetricAlertEscalationService.UrgentAlert stillbirthAlert(UUID delivery, String key) {
@@ -219,6 +222,7 @@ class ObstetricAlertEscalationWorkerTest {
         assertThat(r.getAcknowledgedAt()).isNotNull();
         assertThat(r.getAcknowledgedBy()).isNull();
         verify(escalationRepository).save(r);
+        verify(inBasketItemRepository).deleteOpenByReference(r.getId(), ObstetricAlertEscalationWorker.REFERENCE_TYPE);
         verify(escalationRepository, never()).claimRound(any(), anyShort(), anyShort(), any());
         verify(notificationService, never()).createNotification(any(), any(), any(), any());
     }

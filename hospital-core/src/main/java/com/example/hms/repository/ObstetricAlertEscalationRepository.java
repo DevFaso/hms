@@ -51,10 +51,11 @@ public interface ObstetricAlertEscalationRepository extends JpaRepository<Obstet
      */
     @Query("""
         SELECT e FROM ObstetricAlertEscalation e
-        WHERE e.sourceType = :sourceType AND e.sourceId = :sourceId
+        WHERE e.hospitalId = :hospitalId AND e.sourceType = :sourceType AND e.sourceId = :sourceId
           AND e.alertMessageKey = :messageKey AND e.acknowledgedAt IS NULL
         """)
-    List<ObstetricAlertEscalation> findOpenBySourceAndMessageKey(@Param("sourceType") String sourceType,
+    List<ObstetricAlertEscalation> findOpenBySourceAndMessageKey(@Param("hospitalId") UUID hospitalId,
+                                                                 @Param("sourceType") String sourceType,
                                                                  @Param("sourceId") UUID sourceId,
                                                                  @Param("messageKey") String messageKey);
 }
