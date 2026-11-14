@@ -1682,4 +1682,52 @@ class MortalityServiceImplTest {
         assertThat(register.getStillbirthRows()).noneMatch(
             com.example.hms.payload.dto.mortality.FetalDeathEventDTO::isUnresolvedConflict);
     }
+    // Rex on #1152: each certificate hook hands over what the certificate declared BEFORE the change, so a
+    // reconciliation is audited even when no reviewer task was ever filed.
+
+    @Test
+    void voidingAStillbirthCertificateTellsTheConflictsItDeclaredTheStillbirthBefore() {
+        DeathRecord existing = recordedDeath();
+        existing.setPerinatalDeath(Boolean.TRUE);
+        existing.setPerinatalType(PerinatalDeathType.STILLBIRTH);
+        when(roleValidator.getCurrentUserId()).thenReturn(callerUserId);
+        com.example.hms.service.maternity.StillbirthCertificateConflicts conflicts =
+            org.mockito.Mockito.mock(com.example.hms.service.maternity.StillbirthCertificateConflicts.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "certificateConflicts", conflicts);
+
+        service.markEnteredInError(existing.getId(),
+            com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Born alive").build());
+
+        verify(conflicts).certificateChanged(existing, true, callerUserId);
+    }
+
+    @Test
+    void amendingAStillbirthCertificateOutOfTheClassificationTellsTheConflictsItDeclaredItBefore() {
+        DeathRecord deathRecord = persisted();
+        deathRecord.setPerinatalDeath(Boolean.TRUE);
+        deathRecord.setPerinatalType(PerinatalDeathType.STILLBIRTH);
+        when(roleValidator.getCurrentUserId()).thenReturn(callerUserId);
+        com.example.hms.service.maternity.StillbirthCertificateConflicts conflicts =
+            org.mockito.Mockito.mock(com.example.hms.service.maternity.StillbirthCertificateConflicts.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "certificateConflicts", conflicts);
+
+        service.amendDeathRecord(deathRecord.getId(), DeathRecordAmendmentDTO.builder()
+            .amendmentReason("Born alive, died at 2 h").perinatalDeath(Boolean.FALSE).build());
+
+        verify(conflicts).certificateChanged(deathRecord, true, callerUserId);
+    }
+
+    @Test
+    void amendingACertificateThatNeverDeclaredAStillbirthSaysSo() {
+        DeathRecord deathRecord = persisted();
+        when(roleValidator.getCurrentUserId()).thenReturn(callerUserId);
+        com.example.hms.service.maternity.StillbirthCertificateConflicts conflicts =
+            org.mockito.Mockito.mock(com.example.hms.service.maternity.StillbirthCertificateConflicts.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "certificateConflicts", conflicts);
+
+        service.amendDeathRecord(deathRecord.getId(), DeathRecordAmendmentDTO.builder()
+            .amendmentReason("Post-mortem findings").underlyingCause("Pulmonary embolism").build());
+
+        verify(conflicts).certificateChanged(deathRecord, false, callerUserId);
+    }
 }

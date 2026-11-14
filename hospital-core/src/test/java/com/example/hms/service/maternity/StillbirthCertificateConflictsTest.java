@@ -112,6 +112,8 @@ class StillbirthCertificateConflictsTest {
             .thenAnswer(inv -> stored.stream()
                 .filter(e -> e.getBirthOrder() == (int) inv.getArgument(1) && !e.isSuperseded()).findFirst());
         when(events.findByDeliveryRecord_IdOrderByBirthOrderAscCreatedAtAsc(any())).thenAnswer(inv -> List.copyOf(stored));
+        when(events.findById(any())).thenAnswer(inv -> stored.stream()
+            .filter(e -> e.getId().equals(inv.getArgument(0))).findFirst());
 
         delivery = DeliveryRecord.builder().patient(mother).hospital(hospital).birthDateTime(diedAt.minusHours(2))
             .deliveryMode(DeliveryMode.SPONTANEOUS_VAGINAL).numberOfInfants(1).gestationalAgeWeeksAtBirth(28).build();
@@ -130,9 +132,10 @@ class StillbirthCertificateConflictsTest {
         });
         when(deathRecords.findByPatient_Id(baby.getId())).thenAnswer(inv ->
             certificate.isEnteredInError() ? Optional.empty() : Optional.of(certificate));
-        when(newborns.findByDeliveryRecord_IdOrderByBirthOrderAsc(delivery.getId())).thenReturn(List.of(
-            DeliveryNewborn.builder().deliveryRecord(delivery).newbornPatient(baby).hospital(hospital).birthOrder(1)
-                .build()));
+        DeliveryNewborn babyLink = DeliveryNewborn.builder().deliveryRecord(delivery).newbornPatient(baby)
+            .hospital(hospital).birthOrder(1).build();
+        when(newborns.findByDeliveryRecord_IdOrderByBirthOrderAsc(delivery.getId())).thenReturn(List.of(babyLink));
+        when(newborns.findByNewbornPatient_Id(baby.getId())).thenReturn(Optional.of(babyLink));
         when(assignments.findLiveUsersAtHospitalWithRoleCodes(hospital.getId(),
             StillbirthCertificateConflicts.REVIEWER_ROLE_CODES)).thenReturn(List.of(doctor, midwife));
         when(inBasket.createItem(any())).thenAnswer(inv -> {
@@ -250,7 +253,7 @@ class StillbirthCertificateConflictsTest {
         correctToLive("Heartbeat heard at birth");
         certificate.setEnteredInErrorAt(LocalDateTime.now());
 
-        conflicts.certificateChanged(certificate, doctor.getId());
+        conflicts.certificateChanged(certificate, true, doctor.getId());
 
         assertThat(filed).isEmpty();
     }
@@ -261,11 +264,11 @@ class StillbirthCertificateConflictsTest {
         correctToLive("Heartbeat heard at birth");
 
         certificate.setNotes("autopsy pending");
-        conflicts.certificateChanged(certificate, doctor.getId());
+        conflicts.certificateChanged(certificate, true, doctor.getId());
         assertThat(filed).as("still a stillbirth certificate: still contradicted").hasSize(2);
 
         certificate.setPerinatalType(PerinatalDeathType.EARLY_NEONATAL);
-        conflicts.certificateChanged(certificate, doctor.getId());
+        conflicts.certificateChanged(certificate, true, doctor.getId());
         assertThat(filed).isEmpty();
     }
 
@@ -280,5 +283,97 @@ class StillbirthCertificateConflictsTest {
         delivery.putBabyOutcome(1, BabyOutcome.STILLBORN);
         assertThat(conflicts.liveBornIdentities(List.of(delivery.getId() + "#1"))).isEmpty();
         verify(deliveries, atLeastOnce()).findAllById(eq(Set.of(delivery.getId())));
+    }
+    // -- Rex on #1152: the reconciliation is audited whether or not a task was filed --
+
+    private void noReviewerAtTheHospital() {
+        when(assignments.findLiveUsersAtHospitalWithRoleCodes(hospital.getId(),
+            StillbirthCertificateConflicts.REVIEWER_ROLE_CODES)).thenReturn(List.of());
+    }
+
+    private List<AuditEventRequestDTO> reconciliations() {
+        ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(audit, org.mockito.Mockito.atLeast(0)).logEvent(captor.capture());
+        return captor.getAllValues().stream()
+            .filter(a -> a.getEventType() == AuditEventType.STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED).toList();
+    }
+
+    private void assertOneReconciliation(String resolution) {
+        assertThat(reconciliations()).singleElement().satisfies(a -> {
+            assertThat(a.getEntityType()).isEqualTo("DEATH_RECORD");
+            assertThat(a.getResourceId()).isEqualTo(certificate.getId().toString());
+            assertThat(a.getPatientId()).isEqualTo(baby.getId());
+            @SuppressWarnings("unchecked")
+            Map<String, Object> details = (Map<String, Object>) a.getDetails();
+            assertThat(details).containsEntry("resolution", resolution).containsEntry("tasksCleared", 0);
+        });
+    }
+
+    @Test
+    @DisplayName("no reviewer, no task: the reconciliation by amendment is still audited")
+    void anAmendmentReconcilesAndAuditsWithoutAnyTask() {
+        noReviewerAtTheHospital();
+        correctToLive("Heartbeat heard at birth");
+        assertThat(filed).isEmpty();
+
+        certificate.setPerinatalType(PerinatalDeathType.EARLY_NEONATAL);
+        conflicts.certificateChanged(certificate, true, doctor.getId());
+
+        assertOneReconciliation("CERTIFICATE_AMENDED");
+    }
+
+    @Test
+    @DisplayName("no reviewer, no task: voiding the certificate is audited as a reconciliation")
+    void aVoidReconcilesAndAuditsWithoutAnyTask() {
+        noReviewerAtTheHospital();
+        correctToLive("Heartbeat heard at birth");
+
+        certificate.setEnteredInErrorAt(LocalDateTime.now());
+        conflicts.certificateChanged(certificate, true, doctor.getId());
+
+        assertOneReconciliation("CERTIFICATE_ENTERED_IN_ERROR");
+    }
+
+    @Test
+    @DisplayName("no reviewer, no task: correcting back to stillborn is audited as a reconciliation")
+    void correctingBackReconcilesAndAuditsWithoutAnyTask() {
+        noReviewerAtTheHospital();
+        correctToLive("Heartbeat heard at birth");
+
+        service.correctOutcome(delivery, 1, BabyOutcome.STILLBORN, "Heartbeat was not the baby", actor.getId());
+
+        assertOneReconciliation("OUTCOME_CORRECTED_TO_STILLBORN");
+    }
+
+    @Test
+    @DisplayName("a certificate linked through the registered baby, not an event, is reconciled and audited too")
+    void aPatientLinkedCertificateIsReconciledToo() {
+        noReviewerAtTheHospital();
+        certificate.setFetalDeathEventId(null);
+        correctToLive("Heartbeat heard at birth");
+
+        certificate.setEnteredInErrorAt(LocalDateTime.now());
+        conflicts.certificateChanged(certificate, true, doctor.getId());
+
+        assertOneReconciliation("CERTIFICATE_ENTERED_IN_ERROR");
+    }
+
+    @Test
+    @DisplayName("no conflict ended, no task cleared: nothing is recorded as reconciled")
+    void aChangeThatEndsNoConflictIsNotAReconciliation() {
+        noReviewerAtTheHospital();
+        // A correction to stillborn from an unknown outcome was never in conflict with the stillbirth certificate.
+        conflicts.correctedToStillborn(delivery, 1, null, actor.getId());
+        // The delivery agrees with the certificate (stillborn): voiding it ends no contradiction.
+        certificate.setEnteredInErrorAt(LocalDateTime.now());
+        conflicts.certificateChanged(certificate, true, doctor.getId());
+        // A certificate that never declared a stillbirth, amended while the baby is recorded born alive.
+        DeathRecord neonatal = DeathRecord.builder().patient(baby).hospital(hospital).diedAt(diedAt)
+            .perinatalDeath(true).perinatalType(PerinatalDeathType.EARLY_NEONATAL).build();
+        neonatal.setId(UUID.randomUUID());
+        delivery.putBabyOutcome(1, BabyOutcome.LIVE);
+        conflicts.certificateChanged(neonatal, false, doctor.getId());
+
+        assertThat(reconciliations()).isEmpty();
     }
 }

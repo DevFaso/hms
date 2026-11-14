@@ -92,4 +92,55 @@ class StillbornNeonatalAlertsTest {
         assertThat(rule.confirmedStillborn(twinB.getId())).as("a recorded sign of life: assess, never silence")
             .isFalse();
     }
+    /**
+     * Rex on #1152: the delivery's Apgar above 0 is a sign of life when no baby was born alive. The newborn's own
+     * Apgar reminder must not close then (ObstetricAlertCurrency.newbornResolved): the outcome is uncertain.
+     */
+    @Test
+    void aDeliveryApgarAboveZeroWithNoLiveBabyKeepsEachStillbornBabysReminder() {
+        for (int babies = 1; babies <= 3; babies++) {
+            for (boolean oneMinute : new boolean[]{true, false}) {
+                BabyOutcome[] outcomes = new BabyOutcome[babies];
+                java.util.Arrays.fill(outcomes, BabyOutcome.STILLBORN);
+                DeliveryRecord record = delivery(oneMinute ? null : 4, outcomes);
+                if (oneMinute) {
+                    record.setApgarOneMinute(2);
+                }
+                for (int order = 1; order <= babies; order++) {
+                    Patient baby = registered(record, order);
+                    assertThat(rule.confirmedStillborn(baby.getId()))
+                        .as("%d stillborn, Apgar at %s: uncertain, never closed", babies, oneMinute ? "1 min" : "5 min")
+                        .isFalse();
+                }
+                assertThat(rule.assess(record)).as("the delivery rule agrees")
+                    .isEqualTo(new StillbornNeonatalAlerts.Assessment(false, true));
+            }
+        }
+    }
+
+    @Test
+    void aDeliveryApgarOfZeroOrNoneLeavesAStillbornBabyConfirmed() {
+        for (Integer apgar : new Integer[]{null, 0}) {
+            DeliveryRecord record = delivery(apgar, BabyOutcome.STILLBORN);
+            record.setApgarOneMinute(apgar);
+            assertThat(rule.confirmedStillborn(registered(record, 1).getId())).isTrue();
+        }
+    }
+
+    @Test
+    void aDeliveryApgarBelongsToTheLiveTwinNotTheStillbornOne() {
+        DeliveryRecord twins = delivery(9, BabyOutcome.LIVE, BabyOutcome.STILLBORN);
+        twins.setApgarOneMinute(7);
+
+        assertThat(rule.confirmedStillborn(registered(twins, 2).getId())).isTrue();
+        assertThat(rule.confirmedStillborn(registered(twins, 1).getId())).isFalse();
+    }
+
+    private Patient registered(DeliveryRecord record, int order) {
+        Patient baby = new Patient();
+        baby.setId(UUID.randomUUID());
+        when(newborns.findByNewbornPatient_Id(baby.getId())).thenReturn(Optional.of(
+            DeliveryNewborn.builder().deliveryRecord(record).newbornPatient(baby).birthOrder(order).build()));
+        return baby;
+    }
 }

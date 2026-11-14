@@ -261,6 +261,9 @@ public class MortalityServiceImpl implements MortalityService {
         if (deathRecord.isEnteredInError()) {
             throw new BusinessException("mortality.enteredInError.closed");
         }
+        // QA D1802: read before the edit, so an amendment out of a contradicted stillbirth is audited as reconciled.
+        boolean declaredStillbirth = com.example.hms.service.maternity.StillbirthCertificateConflicts
+            .declaresStillbirth(deathRecord);
         // QA D1490: an amendment reaches the same two classifications. Only what this amendment sets is judged:
         // an autopsy's new cause is never refused over an older row's flags.
         if (Boolean.TRUE.equals(request.getMaternalDeath())) {
@@ -314,7 +317,7 @@ public class MortalityServiceImpl implements MortalityService {
         DeathRecord amended = deathRecordRepository.save(deathRecord);
         if (certificateConflicts != null) {
             // QA D1802: an amendment out of the stillbirth classification reconciles a contradicted certificate.
-            certificateConflicts.certificateChanged(amended, roleValidator.getCurrentUserId());
+            certificateConflicts.certificateChanged(amended, declaredStillbirth, roleValidator.getCurrentUserId());
         }
         return mapper.toDto(amended);
     }
@@ -345,6 +348,9 @@ public class MortalityServiceImpl implements MortalityService {
                 "Only a hospital administrator of this hospital can mark a death record entered in error.");
         }
         String actorName = currentUsername();
+        // QA D1802: read before the void, so voiding a contradicted stillbirth certificate is audited as reconciled.
+        boolean declaredStillbirth = com.example.hms.service.maternity.StillbirthCertificateConflicts
+            .declaresStillbirth(deathRecord);
         deathRecord.setEnteredInErrorAt(LocalDateTime.now(clock));
         deathRecord.setEnteredInErrorById(actorId);
         deathRecord.setEnteredInErrorByName(actorName);
@@ -368,7 +374,7 @@ public class MortalityServiceImpl implements MortalityService {
         auditEnteredInError(saved, patient.getId(), actorId, actorName, reason, closures);
         if (certificateConflicts != null) {
             // QA D1802: a voided certificate no longer contradicts the delivery.
-            certificateConflicts.certificateChanged(saved, actorId);
+            certificateConflicts.certificateChanged(saved, declaredStillbirth, actorId);
         }
         return mapper.toDto(saved);
     }

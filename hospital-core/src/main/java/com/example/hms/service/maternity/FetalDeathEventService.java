@@ -138,7 +138,7 @@ public class FetalDeathEventService {
         if (outcome == BabyOutcome.STILLBORN) {
             created = ensureEvent(delivery, birthOrder, FetalDeathEventSource.DELIVERY, actor, why).orElse(null);
             if (certificateConflicts != null) {
-                certificateConflicts.correctedToStillborn(delivery, birthOrder, userId);
+                certificateConflicts.correctedToStillborn(delivery, birthOrder, from, userId);
             }
         } else {
             superseded = fetalDeathEventRepository

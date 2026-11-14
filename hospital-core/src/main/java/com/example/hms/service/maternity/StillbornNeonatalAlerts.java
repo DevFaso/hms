@@ -78,7 +78,8 @@ public class StillbornNeonatalAlerts {
 
     /**
      * The reminders of a newborn's own neonatal-care alert stop once that baby is a confirmed stillbirth (its delivery
-     * records it stillborn and none of its assessments shows a sign of life). Per baby, through its birth order.
+     * records it stillborn, none of its assessments shows a sign of life, and the delivery's Apgar shows none either
+     * when no baby of that delivery was born alive). Per baby, through its birth order.
      */
     public boolean confirmedStillborn(UUID newbornPatientId) {
         if (newbornPatientId == null) {
@@ -89,8 +90,22 @@ public class StillbornNeonatalAlerts {
             return false;
         }
         DeliveryRecord delivery = link.get().getDeliveryRecord();
+        // Rex on #1152: the same sign-of-life rule as assess(). The delivery's own Apgar above 0, with no live-born
+        // baby it could belong to, contradicts the stillborn outcome: the outcome is uncertain, nothing is closed.
         return delivery.outcomeOf(link.get().getBirthOrder()) == BabyOutcome.STILLBORN
-            && !newbornAssessmentRepository.anySignOfLifeRecorded(newbornPatientId);
+            && !newbornAssessmentRepository.anySignOfLifeRecorded(newbornPatientId)
+            && !(!anyLiveBorn(delivery) && deliverySignOfLife(delivery));
+    }
+
+    /** Whether the delivery records at least one of its babies as born alive. */
+    static boolean anyLiveBorn(DeliveryRecord delivery) {
+        int babies = Math.max(delivery.getNumberOfInfants(), 1);
+        for (int order = 1; order <= babies; order++) {
+            if (delivery.outcomeOf(order) == BabyOutcome.LIVE) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Whether this delivery alert was ever escalated: a correction re-evaluates, it never replays a notice. */

@@ -36,6 +36,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -98,26 +99,35 @@ public class StillbirthCertificateConflicts {
         return conflicting;
     }
 
-    /** The baby is stillborn again: the contradiction has ended for each certificate of this baby. */
-    public void correctedToStillborn(DeliveryRecord delivery, int birthOrder, UUID actorId) {
+    /**
+     * The baby is stillborn again: the contradiction has ended for each certificate of this baby.
+     *
+     * @param from the outcome the delivery recorded before this correction: only a baby recorded born alive was in
+     *             conflict with its stillbirth certificate
+     */
+    public void correctedToStillborn(DeliveryRecord delivery, int birthOrder, BabyOutcome from, UUID actorId) {
+        boolean wasContradicted = from == BabyOutcome.LIVE;
         for (DeathRecord certificate : certificatesDeclaring(delivery, birthOrder)) {
-            reconcile(certificate, "OUTCOME_CORRECTED_TO_STILLBORN", actorId);
+            reconcile(certificate, "OUTCOME_CORRECTED_TO_STILLBORN", wasContradicted, actorId);
         }
     }
 
     /**
-     * A certificate was amended or marked entered in error. Once it no longer declares a stillbirth, any
-     * reconciliation task filed for it is done.
+     * A certificate was amended or marked entered in error. Once it no longer declares a stillbirth, the conflict it
+     * was in (if any) is reconciled: audited, and any reconciliation task filed for it is done.
+     *
+     * @param declaredStillbirthBefore whether the certificate declared the stillbirth before this change
+     *                                 ({@link #declaresStillbirth}, read before the edit)
      */
-    public void certificateChanged(DeathRecord certificate, UUID actorId) {
-        if (certificate == null || certificate.getId() == null) {
+    public void certificateChanged(DeathRecord certificate, boolean declaredStillbirthBefore, UUID actorId) {
+        if (certificate == null || certificate.getId() == null || declaresStillbirth(certificate)) {
             return;
         }
-        if (certificate.isEnteredInError()) {
-            reconcile(certificate, "CERTIFICATE_ENTERED_IN_ERROR", actorId);
-        } else if (!declaresStillbirth(certificate)) {
-            reconcile(certificate, "CERTIFICATE_AMENDED", actorId);
-        }
+        // Rex on #1152: the conflict is judged from the records, not from the tasks. A hospital with no reviewer had
+        // no task filed, and its reconciliation is still audited.
+        boolean wasContradicted = declaredStillbirthBefore && recordedLiveBorn(certificate);
+        reconcile(certificate, certificate.isEnteredInError() ? "CERTIFICATE_ENTERED_IN_ERROR" : "CERTIFICATE_AMENDED",
+            wasContradicted, actorId);
     }
 
     /**
@@ -169,7 +179,25 @@ public class StillbirthCertificateConflicts {
         return found.values().stream().filter(StillbirthCertificateConflicts::declaresStillbirth).toList();
     }
 
-    static boolean declaresStillbirth(DeathRecord death) {
+    /** Whether the delivery records as born alive the baby this certificate is for (through its event or patient). */
+    boolean recordedLiveBorn(DeathRecord certificate) {
+        if (certificate.getFetalDeathEventId() != null) {
+            Optional<FetalDeathEvent> event = fetalDeathEventRepository.findById(certificate.getFetalDeathEventId());
+            if (event.isPresent() && event.get().getDeliveryRecord() != null
+                && event.get().getDeliveryRecord().outcomeOf(event.get().getBirthOrder()) == BabyOutcome.LIVE) {
+                return true;
+            }
+        }
+        if (certificate.getPatient() == null || certificate.getPatient().getId() == null) {
+            return false;
+        }
+        return deliveryNewbornRepository.findByNewbornPatient_Id(certificate.getPatient().getId())
+            .filter(link -> link.getDeliveryRecord() != null)
+            .map(link -> link.getDeliveryRecord().outcomeOf(link.getBirthOrder()) == BabyOutcome.LIVE)
+            .orElse(false);
+    }
+
+    public static boolean declaresStillbirth(DeathRecord death) {
         return !death.isEnteredInError() && Boolean.TRUE.equals(death.getPerinatalDeath())
             && death.getPerinatalType() == PerinatalDeathType.STILLBIRTH;
     }
@@ -186,8 +214,14 @@ public class StillbirthCertificateConflicts {
         UUID hospitalId = certificate.getHospital().getId();
         String babyName = certificate.getPatient() == null ? null : certificate.getPatient().getFullName();
         Object[] bodyArgs = {babyName, birthOrder, reason};
-        for (com.example.hms.model.User reviewer
-                : assignmentRepository.findLiveUsersAtHospitalWithRoleCodes(hospitalId, REVIEWER_ROLE_CODES)) {
+        List<com.example.hms.model.User> reviewers =
+            assignmentRepository.findLiveUsersAtHospitalWithRoleCodes(hospitalId, REVIEWER_ROLE_CODES);
+        if (reviewers.isEmpty()) {
+            // The conflict is audited all the same; nobody at this hospital may amend the certificate yet.
+            log.warn("[STILLBIRTH_CONFLICT] No certificate reviewer at hospital {}: no reconciliation task filed",
+                hospitalId);
+        }
+        for (com.example.hms.model.User reviewer : reviewers) {
             CreateInBasketItemRequest item = new CreateInBasketItemRequest();
             item.setRecipientUserId(reviewer.getId());
             item.setHospitalId(hospitalId);
@@ -206,9 +240,14 @@ public class StillbirthCertificateConflicts {
         }
     }
 
-    private void reconcile(DeathRecord certificate, String how, UUID actorId) {
+    /**
+     * Clears the reconciliation tasks and audits the reconciliation. Rex on #1152: the audit follows the conflict,
+     * not the task count: a conflict nobody could be tasked with (no reviewer at the hospital) is reconciled and
+     * audited all the same. A change that ends no conflict and clears no task records nothing.
+     */
+    private void reconcile(DeathRecord certificate, String how, boolean wasContradicted, UUID actorId) {
         int removed = inBasketService.removeAllItemsForReference(reference(certificate.getId()), REFERENCE_TYPE);
-        if (removed == 0) {
+        if (removed == 0 && !wasContradicted) {
             return;
         }
         Map<String, Object> details = new LinkedHashMap<>();
