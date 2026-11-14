@@ -266,7 +266,9 @@ class ServiceWriteTenantLoadCoverageTest {
             String body = source.substring(method.end(), i);
             if (body.contains("pcpRepo.findByPatient_Id")) {
                 reads++;
-                if (!body.contains("actingHospitalIdOrNullForGlobal") && !body.contains("TenantOwnership.require")) {
+                // QA D1850: the patient's own cross-hospital read is bound to the caller instead.
+                if (!body.contains("actingHospitalIdOrNullForGlobal") && !body.contains("TenantOwnership.require")
+                    && !body.contains("requireCallerIsThePatient(patientId)")) {
                     unscoped.add(method.group(1));
                 }
             }

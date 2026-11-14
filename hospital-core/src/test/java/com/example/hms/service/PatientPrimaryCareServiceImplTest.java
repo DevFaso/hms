@@ -573,6 +573,34 @@ class PatientPrimaryCareServiceImplTest {
     @Nested
     class GetOwnPrimaryCareLinks {
 
+        private final UUID patientUserId = UUID.randomUUID();
+
+        @BeforeEach
+        void signInAsThePatient() {
+            com.example.hms.model.User user = new com.example.hms.model.User();
+            user.setId(patientUserId);
+            patient.setUser(user);
+            com.example.hms.security.context.HospitalContextHolder.setContext(
+                    com.example.hms.security.context.HospitalContext.builder().principalUserId(patientUserId).build());
+            org.mockito.Mockito.lenient().when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
+        }
+
+        @org.junit.jupiter.api.AfterEach
+        void signOut() {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName("another account reads the patient as missing")
+        void anotherCallerIsRefused() {
+            com.example.hms.security.context.HospitalContextHolder.setContext(
+                    com.example.hms.security.context.HospitalContext.builder().principalUserId(UUID.randomUUID()).build());
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getOwnPrimaryCareLinks(patientId))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            verify(pcpRepo, never()).findByPatient_IdOrderByStartDateDesc(any());
+        }
+
         private com.example.hms.model.PatientHospitalRegistration registration(Hospital at, boolean active) {
             com.example.hms.model.PatientHospitalRegistration r = new com.example.hms.model.PatientHospitalRegistration();
             r.setHospital(at);

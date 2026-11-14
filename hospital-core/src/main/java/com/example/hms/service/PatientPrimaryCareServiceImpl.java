@@ -171,6 +171,8 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
     public List<PatientPrimaryCareResponseDTO> getOwnPrimaryCareLinks(UUID patientId) {
         // QA D1850: the patient's own care team spans every hospital that registers them, whatever
         // hospital the request names, and never a hospital where they hold no active registration.
+        // Not scoped to the acting hospital, so it serves the signed-in patient's own record only.
+        requireCallerIsThePatient(patientId);
         Set<UUID> registeredAt = registrationRepo.findByPatientId(patientId).stream()
             .filter(PatientHospitalRegistration::isActive)
             .map(PatientHospitalRegistration::getHospital)
@@ -195,6 +197,21 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
             .filter(link -> acting == null || (link.getHospital() != null && acting.equals(link.getHospital().getId())))
             .map(mapper::toDto)
             .toList();
+    }
+
+    /**
+     * The read above crosses hospitals, so it answers only the account the patient record is
+     * linked to; anyone else reads it as a missing patient.
+     */
+    private void requireCallerIsThePatient(UUID patientId) {
+        UUID caller = com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+        boolean own = caller != null && patientRepo.findById(patientId)
+            .map(Patient::getUser)
+            .filter(user -> caller.equals(user.getId()))
+            .isPresent();
+        if (!own) {
+            throw new ResourceNotFoundException("patient.notFound", patientId);
+        }
     }
 
     @Override
