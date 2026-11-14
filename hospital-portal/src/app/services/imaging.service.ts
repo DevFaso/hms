@@ -119,6 +119,7 @@ export interface ImagingReportResponse {
   recommendations: string;
   comparisonStudies: string;
   contrastAdministered: boolean | null;
+  contrastDetails?: string | null;
   performedByName: string;
   interpretingProviderName: string;
   signedByName: string;

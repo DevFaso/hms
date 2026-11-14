@@ -301,6 +301,18 @@
   font-size: 0.95rem;
   color: #111827;
 }
+/* QA D1821: start, complete and write the report from the request drawer. */
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+}
 .detail-notes {
   margin-top: 1.5rem;
   p {

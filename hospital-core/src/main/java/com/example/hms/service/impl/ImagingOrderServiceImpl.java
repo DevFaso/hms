@@ -234,12 +234,11 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         requireNotInThePast(request.getScheduledDate(), order.getScheduledDate());
         order.setStatus(request.getStatus());
-        order.setScheduledDate(request.getScheduledDate());
-        order.setScheduledTime(request.getScheduledTime());
-        order.setAppointmentLocation(request.getAppointmentLocation());
-        order.setWorkflowNotes(request.getWorkflowNotes());
-        order.setRequiresAuthorization(request.getRequiresAuthorization());
-        order.setAuthorizationNumber(request.getAuthorizationNumber());
+        // QA D1822 (r51): a status write carries the status and its reason. A
+        // field it leaves out is kept: "start", "complete" and "cancel" erased
+        // the schedule, the appointment location, the workflow notes and the
+        // pre-authorisation. A field the caller does send is still applied.
+        applyPresentSchedulingFields(order, request);
         // QA D503 class: who changed the status is the session, never the
         // performedBy fields of the request (kept on the DTO for old clients).
         UUID actorId = com.example.hms.security.CallerIdentity.currentUserId();
@@ -348,6 +347,28 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             .filter(part -> part != null && !part.isBlank())
             .collect(java.util.stream.Collectors.joining(" "));
         return name.isBlank() ? user.getUsername() : name;
+    }
+
+    /** QA D1822: only the scheduling fields a status write actually carries; null keeps the stored value. */
+    private static void applyPresentSchedulingFields(ImagingOrder order, ImagingOrderStatusUpdateRequestDTO request) {
+        if (request.getScheduledDate() != null) {
+            order.setScheduledDate(request.getScheduledDate());
+        }
+        if (request.getScheduledTime() != null) {
+            order.setScheduledTime(request.getScheduledTime());
+        }
+        if (request.getAppointmentLocation() != null) {
+            order.setAppointmentLocation(request.getAppointmentLocation());
+        }
+        if (request.getWorkflowNotes() != null) {
+            order.setWorkflowNotes(request.getWorkflowNotes());
+        }
+        if (request.getRequiresAuthorization() != null) {
+            order.setRequiresAuthorization(request.getRequiresAuthorization());
+        }
+        if (request.getAuthorizationNumber() != null) {
+            order.setAuthorizationNumber(request.getAuthorizationNumber());
+        }
     }
 
     static void requireNotInThePast(java.time.LocalDate requested, java.time.LocalDate current) {

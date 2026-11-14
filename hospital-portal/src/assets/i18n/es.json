@@ -3647,7 +3647,7 @@
     "NO_RESULTS": "Aún no hay resultados",
     "NO_STAFF_CONTEXT": "No se pudo resolver su perfil de personal",
     "ORDERED": "Solicitado",
-    "ORDERED_AT": "Ordenado a las",
+    "ORDERED_AT": "Ordenado el",
     "ORDERED_BY": "Solicitado por",
     "ORDERED_DATE": "Fecha de la orden",
     "ORDERING_PROVIDER": "Médico solicitante",
@@ -3681,14 +3681,6 @@
     "REPORT_SAVE_ERROR": "No se pudo guardar el informe",
     "REPORT_SIGNED": "Informe firmado",
     "REPORT_SIGN_ERROR": "No se pudo firmar el informe",
-    "REPORT_STATUS_ADDENDUM": "Adenda",
-    "REPORT_STATUS_AMENDED": "Enmendado",
-    "REPORT_STATUS_CANCELLED": "Cancelado",
-    "REPORT_STATUS_CORRECTED": "Corregido",
-    "REPORT_STATUS_DRAFT": "Borrador",
-    "REPORT_STATUS_ERROR": "Error",
-    "REPORT_STATUS_FINAL": "Definitivo",
-    "REPORT_STATUS_PRELIMINARY": "Preliminar",
     "REPORT_TITLE": "Título del informe",
     "REPORT_UPDATED": "Informe actualizado",
     "REPORT_VERSION": "Versión",
@@ -3736,7 +3728,14 @@
     "VOID_HINT": "Anula un informe sin firmar. Un informe firmado debe sustituirse por una versión corregida.",
     "VOID_REASON_REQUIRED": "Se requiere un motivo para anular un informe",
     "VOID_REPORT": "Anular informe",
-    "X_RAY": "Radiografía"
+    "X_RAY": "Radiografía",
+    "COMPLETED_ORDERS": "Completadas",
+    "START_STUDY": "Iniciar el estudio",
+    "COMPLETE_STUDY": "Finalizar el estudio",
+    "STUDY_STARTED": "Estudio iniciado",
+    "STUDY_COMPLETED": "Estudio finalizado",
+    "STUDY_STATUS_ERROR": "No se pudo actualizar el estado del estudio",
+    "COMPLETE_STUDY_CONFIRM": "¿Marcar este estudio como finalizado? Un estudio finalizado no se puede reabrir."
   },
   "LAB": {
     "DUPLICATE": {
@@ -6581,7 +6580,7 @@
         "SCHEDULED": "Programado"
       },
       "IMAGING_REPORT_STATUS": {
-        "ADDENDUM": "Anexo",
+        "ADDENDUM": "Adenda",
         "AMENDED": "Enmendado",
         "CANCELLED": "Cancelado",
         "CORRECTED": "Corregido",

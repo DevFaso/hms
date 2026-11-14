@@ -68,6 +68,14 @@ public class ImagingOrderMapper {
             .build();
     }
 
+    /**
+     * An edit of the order. The fields of the portal's edit form (modality,
+     * study, region, laterality, priority, clinical question) are the form's
+     * to replace, so a blank one clears. QA D1822 class (r51): every other
+     * field - the safety flags, the schedule, the appointment, the
+     * pre-authorisation, the workflow notes, the visit - is kept when the
+     * request leaves it out; an edit erased them all.
+     */
     public void updateEntityFromRequest(ImagingOrder order, ImagingOrderRequestDTO dto) {
         if (order == null || dto == null) {
             return;
@@ -78,28 +86,72 @@ public class ImagingOrderMapper {
         order.setLaterality(dto.getLaterality());
         order.setPriority(dto.getPriority());
         order.setClinicalQuestion(dto.getClinicalQuestion());
-        order.setContrastRequired(dto.getContrastRequired());
-        order.setContrastType(dto.getContrastType());
-        order.setHasContrastAllergy(dto.getHasContrastAllergy());
-        order.setContrastAllergyDetails(dto.getContrastAllergyDetails());
-        order.setSedationRequired(dto.getSedationRequired());
-        order.setSedationType(dto.getSedationType());
-        order.setSedationNotes(dto.getSedationNotes());
-        order.setRequiresNpo(dto.getRequiresNpo());
-        order.setHasImplantedDevice(dto.getHasImplantedDevice());
-        order.setImplantedDeviceDetails(dto.getImplantedDeviceDetails());
-        order.setRequiresPregnancyTest(dto.getRequiresPregnancyTest());
-        order.setNeedsInterpreter(dto.getNeedsInterpreter());
-        order.setAdditionalProtocols(dto.getAdditionalProtocols());
-        order.setSpecialInstructions(dto.getSpecialInstructions());
-        order.setScheduledDate(dto.getScheduledDate());
-        order.setScheduledTime(dto.getScheduledTime());
-        order.setAppointmentLocation(dto.getAppointmentLocation());
-        order.setPortableStudy(dto.getPortableStudy());
-        order.setRequiresAuthorization(dto.getRequiresAuthorization());
-        order.setAuthorizationNumber(dto.getAuthorizationNumber());
-        order.setWorkflowNotes(dto.getWorkflowNotes());
-        order.setEncounterId(dto.getEncounterId());
+        if (dto.getContrastRequired() != null) {
+            order.setContrastRequired(dto.getContrastRequired());
+        }
+        if (dto.getContrastType() != null) {
+            order.setContrastType(dto.getContrastType());
+        }
+        if (dto.getHasContrastAllergy() != null) {
+            order.setHasContrastAllergy(dto.getHasContrastAllergy());
+        }
+        if (dto.getContrastAllergyDetails() != null) {
+            order.setContrastAllergyDetails(dto.getContrastAllergyDetails());
+        }
+        if (dto.getSedationRequired() != null) {
+            order.setSedationRequired(dto.getSedationRequired());
+        }
+        if (dto.getSedationType() != null) {
+            order.setSedationType(dto.getSedationType());
+        }
+        if (dto.getSedationNotes() != null) {
+            order.setSedationNotes(dto.getSedationNotes());
+        }
+        if (dto.getRequiresNpo() != null) {
+            order.setRequiresNpo(dto.getRequiresNpo());
+        }
+        if (dto.getHasImplantedDevice() != null) {
+            order.setHasImplantedDevice(dto.getHasImplantedDevice());
+        }
+        if (dto.getImplantedDeviceDetails() != null) {
+            order.setImplantedDeviceDetails(dto.getImplantedDeviceDetails());
+        }
+        if (dto.getRequiresPregnancyTest() != null) {
+            order.setRequiresPregnancyTest(dto.getRequiresPregnancyTest());
+        }
+        if (dto.getNeedsInterpreter() != null) {
+            order.setNeedsInterpreter(dto.getNeedsInterpreter());
+        }
+        if (dto.getAdditionalProtocols() != null) {
+            order.setAdditionalProtocols(dto.getAdditionalProtocols());
+        }
+        if (dto.getSpecialInstructions() != null) {
+            order.setSpecialInstructions(dto.getSpecialInstructions());
+        }
+        if (dto.getScheduledDate() != null) {
+            order.setScheduledDate(dto.getScheduledDate());
+        }
+        if (dto.getScheduledTime() != null) {
+            order.setScheduledTime(dto.getScheduledTime());
+        }
+        if (dto.getAppointmentLocation() != null) {
+            order.setAppointmentLocation(dto.getAppointmentLocation());
+        }
+        if (dto.getPortableStudy() != null) {
+            order.setPortableStudy(dto.getPortableStudy());
+        }
+        if (dto.getRequiresAuthorization() != null) {
+            order.setRequiresAuthorization(dto.getRequiresAuthorization());
+        }
+        if (dto.getAuthorizationNumber() != null) {
+            order.setAuthorizationNumber(dto.getAuthorizationNumber());
+        }
+        if (dto.getWorkflowNotes() != null) {
+            order.setWorkflowNotes(dto.getWorkflowNotes());
+        }
+        if (dto.getEncounterId() != null) {
+            order.setEncounterId(dto.getEncounterId());
+        }
     }
 
     public ImagingOrderResponseDTO toResponseDTO(ImagingOrder order) {

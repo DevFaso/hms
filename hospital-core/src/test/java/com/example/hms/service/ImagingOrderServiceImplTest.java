@@ -1381,4 +1381,115 @@ class ImagingOrderServiceImplTest {
         assertThat(order.getStudyType()).isEqualTo("Chest PA");
         verify(imagingOrderRepository, never()).save(any());
     }
+
+    /**
+     * QA D1822 (r51): a status write touches the status, its timestamps and
+     * its reason, nothing else. Start, complete and cancel each erased the
+     * schedule, the appointment location, the workflow notes and the
+     * pre-authorisation. Every other field of the order is read by reflection,
+     * so a field added later is covered too.
+     */
+    @Test
+    void aStatusWriteKeepsEveryNonStatusField_D1822() throws Exception {
+        Set<String> statusFields = Set.of("status", "statusUpdatedAt", "statusUpdatedBy", "completedAt",
+            "cancelledAt", "cancellationReason", "cancelledByUserId", "cancelledByName");
+        ImagingOrderStatus[][] steps = {
+            {ImagingOrderStatus.ORDERED, ImagingOrderStatus.IN_PROGRESS},
+            {ImagingOrderStatus.IN_PROGRESS, ImagingOrderStatus.COMPLETED},
+            {ImagingOrderStatus.SCHEDULED, ImagingOrderStatus.CANCELLED},
+        };
+        for (ImagingOrderStatus[] step : steps) {
+            ImagingOrder order = new ImagingOrder();
+            order.setPatient(patient);
+            order.setHospital(hospital);
+            Map<String, Object> before = new java.util.HashMap<>();
+            for (java.lang.reflect.Field f : statusWriteFields(ImagingOrder.class)) {
+                if (statusFields.contains(f.getName()) || f.getName().equals("orderingProviderUserId")) {
+                    continue;
+                }
+                Object value = sampleFor(f.getType());
+                if (value != null) {
+                    f.set(order, value);
+                }
+                before.put(f.getName(), f.get(order));
+            }
+            order.setId(orderId);
+            before.put("id", orderId);
+            order.setScheduledDate(LocalDate.now().minusDays(1));
+            before.put("scheduledDate", order.getScheduledDate());
+            order.setStatus(step[0]);
+            when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+            when(imagingOrderRepository.save(order)).thenReturn(order);
+            when(imagingOrderMapper.toResponseDTO(order)).thenReturn(ImagingOrderResponseDTO.builder().id(orderId).build());
+
+            imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+                .status(step[1]).cancellationReason("Examen non nécessaire").build());
+
+            assertThat(order.getStatus()).isEqualTo(step[1]);
+            for (java.lang.reflect.Field f : statusWriteFields(ImagingOrder.class)) {
+                if (before.containsKey(f.getName())) {
+                    assertThat(f.get(order)).as("%s -> %s: ImagingOrder.%s", step[0], step[1], f.getName())
+                        .isEqualTo(before.get(f.getName()));
+                }
+            }
+        }
+    }
+
+    /** QA D1822: a scheduling field the status write does carry is still applied. */
+    @Test
+    void aStatusWriteStillAppliesTheSchedulingFieldsItCarries_D1822() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setStatus(ImagingOrderStatus.ORDERED);
+        order.setAppointmentLocation("Salle 2");
+        order.setAuthorizationNumber("PA-1");
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+        when(imagingOrderMapper.toResponseDTO(order)).thenReturn(ImagingOrderResponseDTO.builder().id(orderId).build());
+
+        imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.SCHEDULED).scheduledDate(LocalDate.now().plusDays(2)).scheduledTime("10:15")
+            .build());
+
+        assertThat(order.getScheduledDate()).isEqualTo(LocalDate.now().plusDays(2));
+        assertThat(order.getScheduledTime()).isEqualTo("10:15");
+        assertThat(order.getAppointmentLocation()).isEqualTo("Salle 2");
+        assertThat(order.getAuthorizationNumber()).isEqualTo("PA-1");
+    }
+
+    private static List<java.lang.reflect.Field> statusWriteFields(Class<?> type) {
+        List<java.lang.reflect.Field> fields = new java.util.ArrayList<>();
+        for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
+            for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                if (!java.lang.reflect.Modifier.isStatic(f.getModifiers())) {
+                    f.setAccessible(true);
+                    fields.add(f);
+                }
+            }
+        }
+        return fields;
+    }
+
+    /** A stored value per simple type; associations and collections keep what the entity has. */
+    private static Object sampleFor(Class<?> type) {
+        if (type == String.class) {
+            return "stored value";
+        }
+        if (type == Boolean.class) {
+            return Boolean.TRUE;
+        }
+        if (type == LocalDate.class) {
+            return LocalDate.now().plusDays(7);
+        }
+        if (type == LocalDateTime.class) {
+            return LocalDateTime.of(2026, 11, 14, 10, 15);
+        }
+        if (type == UUID.class) {
+            return UUID.fromString("00000000-0000-0000-0000-000000001822");
+        }
+        if (type.isEnum()) {
+            return type.getEnumConstants()[0];
+        }
+        return null;
+    }
 }
