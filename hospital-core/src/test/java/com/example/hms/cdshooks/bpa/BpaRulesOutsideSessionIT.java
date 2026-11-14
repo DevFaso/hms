@@ -97,6 +97,10 @@ class BpaRulesOutsideSessionIT extends BaseIT {
     @Autowired private PatientProblemRepository problemRepository;
     @Autowired private MaternalHistoryRepository maternalHistoryRepository;
     @Autowired private BpaProtocolRepository protocolRepository;
+    @Autowired private com.example.hms.repository.LaborEpisodeRepository episodeRepository;
+    @Autowired private com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
+    @Autowired private com.example.hms.repository.PostpartumCarePlanRepository carePlanRepository;
+    @Autowired private com.example.hms.repository.PostpartumObservationRepository postpartumObservationRepository;
 
     @Value("${hms.cds.rules.fail-fast:false}")
     private boolean failFast;
@@ -111,6 +115,10 @@ class BpaRulesOutsideSessionIT extends BaseIT {
     private Patient pregnant;
     private LocalDateTime febrileReadingAt;
     private LocalDateTime pregnantReadingAt;
+    /** QA D1890: delivered two hours ago, 162/112 on a postpartum observation (no vital set). */
+    private Patient delivered;
+    private com.example.hms.model.postpartum.PostpartumCarePlan deliveredPlan;
+    private com.example.hms.model.postpartum.PostpartumObservation severeObservation;
 
     @BeforeEach
     void seed() {
@@ -180,6 +188,74 @@ class BpaRulesOutsideSessionIT extends BaseIT {
             .status(ProblemStatus.ACTIVE)
             .build());
         cleanup.add(0, () -> problemRepository.deleteById(problem.getId()));
+
+        delivered = patient("FEMALE", LocalDate.of(1996, 2, 2));
+        com.example.hms.model.labor.LaborEpisode episode = episodeRepository.save(
+            com.example.hms.model.labor.LaborEpisode.builder()
+                .patient(delivered).hospital(hospital).admittedAt(now.minusHours(8))
+                .status(com.example.hms.enums.LaborStatus.DELIVERED).build());
+        cleanup.add(0, () -> episodeRepository.deleteById(episode.getId()));
+        com.example.hms.model.labor.DeliveryRecord delivery = deliveryRecordRepository.save(
+            com.example.hms.model.labor.DeliveryRecord.builder()
+                .episode(episode).patient(delivered).hospital(hospital).birthDateTime(now.minusHours(2))
+                .deliveryMode(com.example.hms.enums.DeliveryMode.SPONTANEOUS_VAGINAL).build());
+        cleanup.add(0, () -> deliveryRecordRepository.deleteById(delivery.getId()));
+        com.example.hms.model.postpartum.PostpartumCarePlan plan = carePlanRepository.save(
+            com.example.hms.model.postpartum.PostpartumCarePlan.builder()
+                .patient(delivered).hospital(hospital).build());
+        cleanup.add(0, () -> carePlanRepository.deleteById(plan.getId()));
+        deliveredPlan = plan;
+        com.example.hms.model.postpartum.PostpartumObservation observation = postpartumObservationRepository.save(
+            com.example.hms.model.postpartum.PostpartumObservation.builder()
+                .patient(delivered).hospital(hospital).carePlan(plan)
+                .observationTime(now.minusMinutes(20)).documentedAt(now.minusMinutes(20))
+                .systolicBpMmHg(162).diastolicBpMmHg(112).build());
+        cleanup.add(0, () -> postpartumObservationRepository.deleteById(observation.getId()));
+        severeObservation = observation;
+    }
+
+    /** A postpartum observation for {@link #delivered}, saved and cleaned up. */
+    private com.example.hms.model.postpartum.PostpartumObservation observation(LocalDateTime at, Integer sys, Integer dia,
+            com.example.hms.model.postpartum.PostpartumObservation corrects) {
+        com.example.hms.model.postpartum.PostpartumObservation saved = postpartumObservationRepository.save(
+            com.example.hms.model.postpartum.PostpartumObservation.builder()
+                .patient(delivered).hospital(hospital).carePlan(deliveredPlan)
+                .observationTime(at).documentedAt(at)
+                .systolicBpMmHg(sys).diastolicBpMmHg(dia).painScore(sys == null ? 2 : null)
+                .supersedesObservation(corrects).build());
+        cleanup.add(0, () -> postpartumObservationRepository.deleteById(saved.getId()));
+        return saved;
+    }
+
+    /**
+     * Rex on #1167 (D1890): the engine read one page of 100 observations, so 101 newer
+     * observations without a pressure pushed the severe one out and the card vanished.
+     */
+    @Test
+    void newerObservationsWithoutAPressureNeverHideASevereOne() {
+        LocalDateTime start = severeObservation.getObservationTime().plusSeconds(10);
+        for (int i = 0; i < 101; i++) {
+            observation(start.plusSeconds(i), null, null, null);
+        }
+        BpaRuleContext context = engine.buildContext(reload(delivered), hospital.getId());
+        assertThat(context.postpartumBloodPressures())
+            .extracting(com.example.hms.service.maternity.PostpartumSevereHypertension.Reading::systolic)
+            .containsExactly(162);
+        assertThat(postpartumRule().evaluate(context)).hasSize(1);
+    }
+
+    /** A correction is the reading, even one that recorded no pressure. */
+    @Test
+    void aCorrectedSevereObservationNoLongerCounts() {
+        observation(severeObservation.getObservationTime(), null, null, severeObservation);
+        BpaRuleContext context = engine.buildContext(reload(delivered), hospital.getId());
+        assertThat(context.postpartumBloodPressures()).isEmpty();
+        assertThat(postpartumRule().evaluate(context)).isEmpty();
+    }
+
+    private BpaRule postpartumRule() {
+        return bpaRules.stream().filter(r -> PostpartumSevereHypertensionRule.PROTOCOL_CODE.equals(r.id()))
+            .findFirst().orElseThrow();
     }
 
     @AfterEach
@@ -201,14 +277,18 @@ class BpaRulesOutsideSessionIT extends BaseIT {
         assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
         BpaRuleContext febrileContext = engine.buildContext(reload(febrile), hospital.getId());
         BpaRuleContext pregnantContext = engine.buildContext(reload(pregnant), hospital.getId());
+        BpaRuleContext deliveredContext = engine.buildContext(reload(delivered), hospital.getId());
         assertThat(febrileContext.recentVitals()).isNotEmpty();
         assertThat(pregnantContext.recentVitals()).isNotEmpty();
+        assertThat(deliveredContext.postpartumBloodPressures()).as("D1890: the postpartum observation's pressure")
+            .isNotEmpty();
 
         List<String> silent = new ArrayList<>();
         for (BpaRule rule : bpaRules) {
             // No try/catch: a LazyInitializationException (or any other) fails the test.
             List<CdsCard> cards = new ArrayList<>(rule.evaluate(febrileContext));
             cards.addAll(rule.evaluate(pregnantContext));
+            cards.addAll(rule.evaluate(deliveredContext));
             if (cards.isEmpty()) {
                 silent.add(rule.id());
             }

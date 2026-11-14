@@ -7017,6 +7017,7 @@
         "EDUCATION": "Education",
         "FOLLOW_UP": "Follow-Up",
         "HEMORRHAGE": "Hemorrhage",
+        "HYPERTENSION": "Severe hypertension",
         "INFECTION": "Infection",
         "PAIN": "Pain",
         "PSYCHOSOCIAL": "Psychosocial"
@@ -13181,6 +13182,7 @@
   "VITAL_LIMITS": {
     "NEWBORN_WARNING": "Newborn (under 28 days): the reading is saved and was judged against the newborn ranges (provisional, pending the neonatal lead's approval).",
     "NEWBORN_WARNING_URGENT": "Newborn (under 28 days): the reading is saved, judged against the newborn ranges (provisional, pending the neonatal lead's approval), and the care team has been notified.",
+    "POSTPARTUM_WARNING_URGENT": "After birth: the reading is saved and the care team has been notified. Provisional rule, pending the obstetric lead's approval.",
     "BP_ORDER": "The diastolic pressure must be lower than the systolic pressure.",
     "TEMPERATURE": "Temperature must be between {{min}} and {{max}} °C.",
     "HEART_RATE": "Heart rate must be between {{min}} and {{max}} bpm.",

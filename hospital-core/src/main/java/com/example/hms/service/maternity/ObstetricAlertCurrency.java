@@ -248,6 +248,8 @@ public class ObstetricAlertCurrency {
             case "HEMORRHAGE" -> Arrays.asList(o.getSystolicBpMmHg(), o.getPulseBpm(), o.getFundusTone(),
                 o.getLochiaAmount(), o.getEstimatedBloodLossMl());
             case "INFECTION" -> Arrays.asList(o.getTemperatureCelsius());
+            // QA D1890: a later observation that re-measured both pressures decides.
+            case "HYPERTENSION" -> Arrays.asList(o.getSystolicBpMmHg(), o.getDiastolicBpMmHg());
             default -> List.of();
         };
     }
@@ -262,6 +264,7 @@ public class ObstetricAlertCurrency {
         return switch (type) {
             case "HEMORRHAGE" -> o.isExcessiveBleeding() || o.isUterineAtonySuspected();
             case "INFECTION" -> o.isFoulLochiaOdor() || o.isUterineTenderness() || o.isChillsOrRigors();
+            case "HYPERTENSION" -> false;
             default -> true;
         };
     }

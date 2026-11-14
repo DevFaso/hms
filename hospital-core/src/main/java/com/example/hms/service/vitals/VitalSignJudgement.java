@@ -46,6 +46,11 @@ import java.util.UUID;
  *
  * <p>Every other age keeps the rules it had: the nurse station's per-vital limits and a NEWS2
  * total of 5 or more (NEWS2 itself only applies from 16 years).
+ *
+ * <p>QA D1890 (PROVISIONAL, 2026-11-14, pending the obstetric lead's approval): a mother's severe
+ * blood pressure after a recorded birth ({@link com.example.hms.service.maternity.PostpartumSevereHypertension},
+ * the rule the postpartum observation and the BPA panel also use) marks the set significant, comes
+ * back as an URGENT postpartum warning and notifies the same people. It never refuses the set.
  */
 @Slf4j
 @Service
@@ -67,11 +72,25 @@ public class VitalSignJudgement {
     private final MessageSource messageSource;
     /** QA D1592: a baby registered from a delivery knows its birth before any assessment is recorded. */
     private final com.example.hms.repository.DeliveryNewbornRepository deliveryNewbornRepository;
+    /** QA D1890 (provisional): severe blood pressure after a recorded birth, the shared rule. */
+    private final com.example.hms.service.maternity.PostpartumSevereHypertension postpartumSevereHypertension;
 
-    /** What the judgement found: whether the newborn rules applied, and their findings. */
-    public record Judgement(boolean newborn, List<NewbornAlertRules.Finding> newbornFindings) {
+    /** The postpartum warning's notice and type label (the postpartum observation's own). */
+    static final String POSTPARTUM_NOTICE_KEY = "postpartum.alert.notification";
+    static final String POSTPARTUM_TYPE_KEY = "postpartum.alert.type.HYPERTENSION";
+
+    /**
+     * What the judgement found: whether the newborn rules applied, and their findings; and whether
+     * the set is a severe blood pressure after a recorded birth (QA D1890).
+     */
+    public record Judgement(boolean newborn, List<NewbornAlertRules.Finding> newbornFindings,
+                            boolean postpartumSevereHypertension) {
         public Judgement {
             newbornFindings = newbornFindings == null ? List.of() : List.copyOf(newbornFindings);
+        }
+
+        public Judgement(boolean newborn, List<NewbornAlertRules.Finding> newbornFindings) {
+            this(newborn, newbornFindings, false);
         }
 
         static Judgement notNewborn() {
@@ -110,8 +129,12 @@ public class VitalSignJudgement {
             judgement = new Judgement(true, NewbornAlertRules.evaluate(reading));
             significant = judgement.newbornSignificant();
         } else {
-            judgement = Judgement.notNewborn();
-            significant = outsideAgeRanges(vital);
+            // QA D1890: a severe pressure after a recorded birth is significant and warns; never refuses.
+            boolean postpartumSevere = postpartumSevereHypertension != null && patient != null
+                && postpartumSevereHypertension.applies(patient.getId(), vital.getSystolicBpMmHg(),
+                    vital.getDiastolicBpMmHg(), at);
+            judgement = new Judgement(false, List.of(), postpartumSevere);
+            significant = postpartumSevere || outsideAgeRanges(vital);
         }
         if (significant) {
             vital.setClinicallySignificant(true);
@@ -127,6 +150,9 @@ public class VitalSignJudgement {
                          String recorderUsername, String visitPhysicianUsername) {
         news2EscalationService.escalateIfNeeded(saved, patientId, hospitalId, recorderUsername,
             visitPhysicianUsername);
+        if (judgement != null && judgement.postpartumSevereHypertension() && patientId != null && hospitalId != null) {
+            notifyPostpartumSevereHypertension(saved, patientId, hospitalId, recorderUsername, visitPhysicianUsername);
+        }
         if (judgement == null || !judgement.newborn() || patientId == null || hospitalId == null) {
             return;
         }
@@ -153,6 +179,47 @@ public class VitalSignJudgement {
                 }
             }
         }
+    }
+
+    /**
+     * QA D1890: the postpartum observation's own notice (type, patient, warning) to the recorder, the
+     * stay's responsible physician and the visit's clinician, each in her language. Never throws.
+     */
+    private void notifyPostpartumSevereHypertension(PatientVitalSign saved, UUID patientId, UUID hospitalId,
+                                                    String recorderUsername, String visitPhysicianUsername) {
+        Set<String> recipients = news2EscalationService.recipients(patientId, hospitalId, recorderUsername,
+            visitPhysicianUsername);
+        String fullName = saved != null && saved.getPatient() != null
+            ? Objects.toString(saved.getPatient().getFullName(), "") : "";
+        Object patientArg = fullName.isBlank() ? NotificationLocalizer.key("patient.fallback.generic") : fullName;
+        Object[] args = {NotificationLocalizer.key(POSTPARTUM_TYPE_KEY), patientArg,
+            ObstetricAlertEscalationWorker.alertMessageArg(
+                com.example.hms.service.maternity.PostpartumSevereHypertension.MESSAGE_KEY, null, "")};
+        for (String recipient : recipients) {
+            try {
+                notificationService.createNotification(POSTPARTUM_NOTICE_KEY, args, recipient, NOTIFICATION_TYPE);
+            } catch (RuntimeException ex) {
+                log.warn("Postpartum blood-pressure notice not created: {}", ex.getClass().getSimpleName());
+            }
+        }
+    }
+
+    /**
+     * QA D1890: the severe-blood-pressure-after-birth warning as the recorder reads it, in her
+     * language. Empty when the set raised none.
+     */
+    public List<NewbornVitalAlertDTO> postpartumAlerts(Judgement judgement) {
+        if (judgement == null || !judgement.postpartumSevereHypertension()) {
+            return List.of();
+        }
+        java.util.Locale locale = LocaleContextHolder.getLocale();
+        return List.of(NewbornVitalAlertDTO.builder()
+            .code(com.example.hms.service.maternity.PostpartumSevereHypertension.ALERT_CODE)
+            .severity("URGENT")
+            .type(com.example.hms.enums.PostpartumAlertType.HYPERTENSION.name())
+            .message(messageSource.getMessage(com.example.hms.service.maternity.PostpartumSevereHypertension.MESSAGE_KEY,
+                null, com.example.hms.service.maternity.PostpartumSevereHypertension.ALERT_CODE, locale))
+            .build());
     }
 
     /** The findings as the recorder reads them, in her language. Empty for anyone not a newborn. */

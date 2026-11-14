@@ -122,6 +122,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         PatientVitalSignResponseDTO response = vitalSignMapper.toResponse(saved);
         if (response != null) {
             response.setNewbornAlerts(vitalSignJudgement.alerts(judgement));
+            response.setPostpartumAlerts(vitalSignJudgement.postpartumAlerts(judgement));
         }
         return response;
     }

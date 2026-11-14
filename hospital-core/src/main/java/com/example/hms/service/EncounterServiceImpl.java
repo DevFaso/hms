@@ -2329,6 +2329,7 @@ public class EncounterServiceImpl implements EncounterService {
                 .chiefComplaint(saved.getChiefComplaint())
                 .vitalSignId(savedVital.getId())
                 .newbornAlerts(vitalSignJudgement.alerts(judgement))
+                .postpartumAlerts(vitalSignJudgement.postpartumAlerts(judgement))
                 .build();
     }
 
