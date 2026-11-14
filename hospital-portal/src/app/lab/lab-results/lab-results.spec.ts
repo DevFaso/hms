@@ -845,7 +845,7 @@ describe('LabResultsComponent', () => {
     it('lists the applied range first and collapses the others under "other ranges (n)"', () => {
       const host = open({
         referenceRanges: [neonatal, adultMmol, adult],
-        gradedReferenceRange: adult,
+        gradedReferenceRange: { ...adult, patientInAgeBand: null },
       });
       const section = host.querySelector('[data-testid="reference-ranges"]')!;
       const first = section.querySelector('.detail-list-item')!;

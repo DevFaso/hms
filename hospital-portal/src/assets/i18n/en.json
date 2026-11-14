@@ -4153,7 +4153,7 @@
     "RANGE_NOTES_AS_ENTERED": "Note (as entered)",
     "PREVIOUS_VALUE": "Previous: {{value}} on {{date}}",
     "CHANGE": "Change: {{delta}}",
-    "CHANGE_WITHHELD": "Change not computed (non-exact value, different units or a corrected history)",
+    "CHANGE_WITHHELD": "Change not computed (non-exact value or different units)",
     "OTHER_RANGES": "Other ranges ({{count}})",
     "CRITICAL_LIMITS": "Critical values",
     "NO_INTERVAL": "No interval",
