@@ -146,7 +146,7 @@ public class SevereHypertension {
     public static final String REACH_DESCRIPTION =
         "Cross-hospital obstetric record read on the treatment relationship";
     /** The earliest birth "has given birth" looks back to. */
-    private static final LocalDateTime ANY_BIRTH_FROM = LocalDateTime.of(1900, 1, 1, 0, 0);
+    private static final LocalDateTime ANY_BIRTH_FROM = LocalDateTime.of(1900, java.time.Month.JANUARY, 1, 0, 0);
 
     private final DeliveryRecordRepository deliveryRecordRepository;
     private final MaternalHistoryRepository maternalHistoryRepository;

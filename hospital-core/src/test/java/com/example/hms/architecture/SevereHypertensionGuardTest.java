@@ -112,8 +112,9 @@ class SevereHypertensionGuardTest {
     @Test
     void theRuleReadsObstetricRecordsOnlyThroughTheRecordAccessPolicy() throws IOException {
         String evaluator = code(EVALUATOR);
-        assertThat(evaluator).contains("recordAccessPolicy.readableHospitalIds(").contains("reachRecorder.recordReach(");
         assertThat(evaluator)
+            .contains("recordAccessPolicy.readableHospitalIds(")
+            .contains("reachRecorder.recordReach(")
             .doesNotContain("findCurrentByPatientId(")
             .doesNotContain("existsByPatient_IdAndStatus(")
             .doesNotContain("findFirstByPatient_IdAndStatusOrderByAdmittedAtDesc(")

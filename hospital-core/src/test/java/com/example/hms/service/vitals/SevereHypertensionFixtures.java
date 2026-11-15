@@ -42,14 +42,14 @@ public final class SevereHypertensionFixtures {
      * exact hospitals and window it is asked, as the real query does.
      */
     public static void bornOn(DeliveryRecordRepository deliveries, UUID patientId, UUID hospitalId, LocalDateTime at) {
-        DeliveryRecord record = birth(hospitalId, at);
+        DeliveryRecord delivery = birth(hospitalId, at);
         when(deliveries.findFirstByPatient_IdAndHospital_IdInAndBirthDateTimeBetweenOrderByBirthDateTimeDesc(
             eq(patientId), any(), any(), any())).thenAnswer(inv -> {
                 Collection<UUID> hospitals = inv.getArgument(1);
                 LocalDateTime from = inv.getArgument(2);
                 LocalDateTime to = inv.getArgument(3);
                 boolean found = hospitals.contains(hospitalId) && !at.isBefore(from) && !at.isAfter(to);
-                return found ? Optional.of(record) : Optional.empty();
+                return found ? Optional.of(delivery) : Optional.empty();
             });
     }
 }

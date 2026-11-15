@@ -5,7 +5,6 @@ import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientVitalSign;
 import com.example.hms.repository.DeliveryRecordRepository;
-import com.example.hms.service.vitals.SevereHypertension;
 import com.example.hms.service.vitals.SevereHypertension.Reading;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -16,10 +15,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * QA D1890 (provisional, 2026-11-14): the BPA panel was empty for 162/112 and 164/114 after birth,
