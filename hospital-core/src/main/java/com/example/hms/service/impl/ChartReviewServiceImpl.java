@@ -541,16 +541,26 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     static List<ImagingReport> shownImagingReports(ImagingReport latest, List<ImagingReport> history) {
         List<ImagingReport> all = history != null && !history.isEmpty() ? history
             : latest != null ? List.of(latest) : List.of();
+        // Rex on #1169: released means signed. An unsigned CORRECTED, AMENDED or
+        // ADDENDUM (the author can save one before signing) never displaces
+        // the signed conclusion and is not listed.
         List<ImagingReport> released = all.stream()
-            .filter(r -> RELEASED_IMAGING_REPORTS.contains(r.getReportStatus()))
+            .filter(r -> r.isSigned() && RELEASED_IMAGING_REPORTS.contains(r.getReportStatus()))
             .sorted(Comparator.comparing((ImagingReport r) -> r.getReportVersion() != null ? r.getReportVersion() : 0)
                 .thenComparing(ImagingReport::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
             .toList();
         if (!released.isEmpty()) {
             return released;
         }
-        return latest != null ? List.of(latest) : List.of();
+        // Nothing signed yet: the latest read shared with the care team, never a draft or a void.
+        return latest != null && !UNSHOWN_IMAGING_REPORTS.contains(latest.getReportStatus())
+            ? List.of(latest) : List.of();
     }
+
+    /** Never on the chart: a draft, and a voided or rejected report. */
+    private static final Set<com.example.hms.enums.ImagingReportStatus> UNSHOWN_IMAGING_REPORTS = java.util.EnumSet.of(
+        com.example.hms.enums.ImagingReportStatus.DRAFT, com.example.hms.enums.ImagingReportStatus.CANCELLED,
+        com.example.hms.enums.ImagingReportStatus.ERROR);
 
     /** The version the study's conclusion is read from: the last one shown that is not an addendum. */
     static ImagingReport conclusionReport(List<ImagingReport> shown) {

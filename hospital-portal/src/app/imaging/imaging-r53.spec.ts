@@ -6,7 +6,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { ImagingComponent } from './imaging';
 import {
@@ -217,6 +217,56 @@ describe('ImagingComponent — r53 imaging', () => {
       expect(imaging.checkDuplicates).toHaveBeenCalledTimes(2);
       expect(imaging.checkDuplicates.calls.mostRecent().args).toEqual(['p1', 'XRAY', 'Thorax']);
       expect(imaging.createOrder).toHaveBeenCalledTimes(1);
+    });
+
+    it('Rex #1169: closing during a pending preview cancels it and never blocks the next order', () => {
+      setUp(['ROLE_DOCTOR']);
+      const pending = new Subject<ImagingDuplicateMatch[]>();
+      imaging.checkDuplicates.and.returnValue(pending);
+      fillNewOrder();
+      component.submitForm();
+      expect(component.saving()).toBeTrue();
+
+      component.closeModal();
+      expect(component.saving()).toBeFalse();
+      expect(pending.observed).toBeFalse();
+      // A late answer to the cancelled preview places nothing.
+      pending.next([]);
+      expect(imaging.createOrder).not.toHaveBeenCalled();
+
+      // The next order goes through.
+      imaging.checkDuplicates.and.returnValue(of([]));
+      fillNewOrder();
+      component.submitForm();
+      expect(imaging.createOrder).toHaveBeenCalledTimes(1);
+    });
+
+    it('Rex #1169: a preview pending when the page is left never places the order', () => {
+      setUp(['ROLE_DOCTOR']);
+      const pending = new Subject<ImagingDuplicateMatch[]>();
+      imaging.checkDuplicates.and.returnValue(pending);
+      fillNewOrder();
+      component.submitForm();
+
+      fixture.destroy();
+      expect(pending.observed).toBeFalse();
+      pending.next([]);
+      expect(imaging.createOrder).not.toHaveBeenCalled();
+    });
+
+    it('Rex #1169: a write that answers after its dialog closed never closes or toasts over a new one', () => {
+      setUp(['ROLE_DOCTOR']);
+      const write = new Subject<ImagingOrderResponse>();
+      imaging.createOrder.and.returnValue(write);
+      fillNewOrder();
+      component.submitForm();
+      component.closeModal();
+      component.openCreate();
+      write.next(order({ id: 'o-new' }));
+      write.complete();
+      expect(component.showModal()).toBeTrue();
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(component.saving()).toBeFalse();
     });
 
     it('a failed preview never blocks the order; a duplicate the server found is then told', () => {

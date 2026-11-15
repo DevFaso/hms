@@ -3,6 +3,7 @@ import { textMatches } from '../shared/person-search';
 import {
   Component,
   computed,
+  DestroyRef,
   ElementRef,
   inject,
   OnInit,
@@ -47,7 +48,7 @@ import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { localDateString, serverLocalDate } from '../shared/date-utils';
 import { ActivatedRoute } from '@angular/router';
-import { catchError, forkJoin, map, of } from 'rxjs';
+import { catchError, forkJoin, map, of, Subscription } from 'rxjs';
 
 /** The cancellation reason's field (QA D1098), marked when it is refused. */
 const CANCEL_REASON_ID = 'imaging-cancel-reason';
@@ -246,6 +247,16 @@ export class ImagingComponent implements OnInit {
   readonly duplicateMatches = signal<ImagingDuplicateMatch[]>([]);
   /** Each check, close, reopen or dismissal advances it; a stale reply is ignored. */
   private duplicateCheckSeq = 0;
+  /**
+   * Rex on #1169: the preview on the wire. Closing, reopening, dismissing or
+   * leaving the page cancels it, so a late answer never places an order and
+   * never leaves the form busy.
+   */
+  private previewSub: Subscription | null = null;
+  /** A create or update is on the wire; closing the dialog never releases it. */
+  private writeInFlight = false;
+  /** Advanced on every open and close: a write answers only to the dialog that sent it. */
+  private dialogSession = 0;
   /** The patient, hospital, modality and region the shown warning is about. */
   private duplicateWarningKey: string | null = null;
 
@@ -502,6 +513,11 @@ export class ImagingComponent implements OnInit {
     ];
   }
 
+  constructor() {
+    // Rex on #1169: a preview still pending when the page is left is dropped.
+    inject(DestroyRef).onDestroy(() => this.clearDuplicateWarning());
+  }
+
   ngOnInit(): void {
     this.load();
     this.loadAssignedHospitals();
@@ -577,6 +593,7 @@ export class ImagingComponent implements OnInit {
   }
 
   openCreate(): void {
+    this.dialogSession++;
     this.form = this.emptyForm();
     this.formError.set(null);
     this.clearDuplicateWarning();
@@ -611,6 +628,7 @@ export class ImagingComponent implements OnInit {
       requiresAuthorization: !!o.requiresAuthorization,
       authorizationNumber: o.authorizationNumber ?? '',
     };
+    this.dialogSession++;
     this.clearDuplicateWarning();
     this.selectedPatient.set({
       id: o.patientId,
@@ -626,6 +644,7 @@ export class ImagingComponent implements OnInit {
   }
 
   closeModal(): void {
+    this.dialogSession++;
     this.showModal.set(false);
     this.clearDuplicateWarning();
   }
@@ -644,6 +663,12 @@ export class ImagingComponent implements OnInit {
     this.duplicateCheckSeq++;
     this.duplicateWarningKey = null;
     this.duplicateMatches.set([]);
+    // Rex on #1169: a cancelled preview releases the form; a write in flight keeps it.
+    if (this.previewSub) {
+      this.previewSub.unsubscribe();
+      this.previewSub = null;
+    }
+    if (!this.writeInFlight) this.saving.set(false);
   }
 
   /**
@@ -693,10 +718,11 @@ export class ImagingComponent implements OnInit {
       return true;
     };
     this.saving.set(true);
-    this.imagingService
+    this.previewSub = this.imagingService
       .checkDuplicates(this.form.patientId, this.form.modality, this.form.bodyRegion)
       .subscribe({
         next: (matches) => {
+          this.previewSub = null;
           if (!current()) return;
           if (Array.isArray(matches) && matches.length > 0) {
             this.duplicateWarningKey = key;
@@ -707,6 +733,7 @@ export class ImagingComponent implements OnInit {
           this.saveOrder(false);
         },
         error: () => {
+          this.previewSub = null;
           if (current()) this.saveOrder(false);
         },
       });
@@ -748,15 +775,24 @@ export class ImagingComponent implements OnInit {
   }
 
   private saveOrder(acknowledgedDuplicate: boolean): void {
+    if (this.writeInFlight) return;
+    this.writeInFlight = true;
     this.saving.set(true);
     this.formError.set(null);
     const payload = this.orderPayload();
     const wasEditing = this.editing();
+    const session = this.dialogSession;
     const op = wasEditing
       ? this.imagingService.updateOrder(this.editId, payload)
       : this.imagingService.createOrder(payload);
     op.subscribe({
       next: (saved) => {
+        this.writeInFlight = false;
+        this.saving.set(false);
+        this.load();
+        // An answer that outlived its dialog refreshes the list only: it never
+        // closes or toasts over a dialog opened since.
+        if (session !== this.dialogSession) return;
         this.toast.success(
           this.translate.instant(wasEditing ? 'IMAGING.ORDER_UPDATED' : 'IMAGING.ORDER_CREATED'),
         );
@@ -766,10 +802,11 @@ export class ImagingComponent implements OnInit {
           this.toast.warning(this.translate.instant('IMAGING.DUPLICATE.PLACED_ANYWAY'));
         }
         this.closeModal();
-        this.saving.set(false);
-        this.load();
       },
       error: (err: unknown) => {
+        this.writeInFlight = false;
+        this.saving.set(false);
+        if (session !== this.dialogSession) return;
         // QA D611: the server's reason stays in the open modal; nothing typed is lost.
         // QA D1156: a validation refusal names its fields by their labels and
         // marks them, never the bare "must not be null" text.
@@ -785,7 +822,6 @@ export class ImagingComponent implements OnInit {
         }
         this.formError.set(reason);
         this.toast.error(reason ?? this.translate.instant('IMAGING.ORDER_SAVE_ERROR'));
-        this.saving.set(false);
       },
     });
   }

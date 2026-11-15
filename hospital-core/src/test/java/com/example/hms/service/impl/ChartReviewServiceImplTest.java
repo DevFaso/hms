@@ -585,9 +585,11 @@ class ChartReviewServiceImplTest {
         ImagingReport signed = imagingReport(img, "Appendicite aiguë non compliquée");
         signed.setReportVersion(1);
         signed.setLatestVersion(Boolean.FALSE);
+        signed.setSignedAt(now.minusHours(3));
         ImagingReport addendum = imagingReport(img, "Inchangé");
         addendum.setReportStatus(ImagingReportStatus.ADDENDUM);
         addendum.setReportVersion(2);
+        addendum.setSignedAt(now.minusHours(1));
         ImagingReport draft = imagingReport(img, "Brouillon abandonné");
         draft.setReportStatus(ImagingReportStatus.CANCELLED);
         draft.setReportVersion(1);
@@ -605,6 +607,62 @@ class ChartReviewServiceImplTest {
                 org.assertj.core.groups.Tuple.tuple("ADDENDUM", "Inchangé"));
         assertThat(entry.getReportImpression()).isEqualTo("Appendicite aiguë non compliquée");
         assertThat(entry.getReportStatus()).isEqualTo("FINAL");
+    }
+
+    /**
+     * Rex on #1169: an unsigned later version (any status the author can save
+     * before signing) never displaces the signed conclusion and is not listed,
+     * in the card, the timeline and the PDF alike.
+     */
+    @Test
+    void anUnsignedLaterVersionNeverDisplacesTheSignedConclusion_Rex1169() {
+        for (ImagingReportStatus unsignedStatus : ImagingReportStatus.values()) {
+            ImagingOrder img = imagingOrder(LocalDateTime.now().minusDays(1), ImagingModality.CT, "Scanner");
+            when(imagingOrderRepo.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(
+                any(UUID.class), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(img)));
+            ImagingReport signed = imagingReport(img, "Conclusion signée");
+            signed.setReportVersion(1);
+            signed.setLatestVersion(Boolean.FALSE);
+            signed.setSignedAt(LocalDateTime.now().minusHours(2));
+            ImagingReport unsigned = imagingReport(img, "Révision non signée");
+            unsigned.setReportStatus(unsignedStatus);
+            unsigned.setReportVersion(2);
+            when(imagingReportRepo.findByImagingOrder_IdInAndLatestVersionIsTrue(any())).thenReturn(List.of(unsigned));
+            when(imagingReportRepo.findByImagingOrder_IdIn(any())).thenReturn(List.of(unsigned, signed));
+
+            ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+            ChartReviewDTO.ImagingEntryDTO entry = dto.getImaging().get(0);
+            assertThat(entry.getReports()).as(unsignedStatus.name())
+                .extracting(ChartReviewDTO.ImagingReportEntryDTO::getImpression)
+                .containsExactly("Conclusion signée");
+            assertThat(entry.getReportImpression()).as(unsignedStatus.name()).isEqualTo("Conclusion signée");
+            assertThat(dto.getTimeline()).as(unsignedStatus.name())
+                .filteredOn(e -> e.getSection() == Section.IMAGING)
+                .extracting("summary").containsExactly("Conclusion signée");
+        }
+    }
+
+    /** Rex on #1169: with nothing signed, a draft (or a void) is not shown. */
+    @Test
+    void aDraftAloneIsNotShown_Rex1169() {
+        for (ImagingReportStatus hidden : new ImagingReportStatus[] {
+                ImagingReportStatus.DRAFT, ImagingReportStatus.CANCELLED, ImagingReportStatus.ERROR}) {
+            ImagingOrder img = imagingOrder(LocalDateTime.now().minusDays(1), ImagingModality.XRAY, "Thorax");
+            when(imagingOrderRepo.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(
+                any(UUID.class), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(img)));
+            ImagingReport draft = imagingReport(img, "Brouillon");
+            draft.setReportStatus(hidden);
+            draft.setReportVersion(1);
+            when(imagingReportRepo.findByImagingOrder_IdInAndLatestVersionIsTrue(any())).thenReturn(List.of(draft));
+
+            ChartReviewDTO.ImagingEntryDTO entry = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null).getImaging().get(0);
+
+            assertThat(entry.getReports()).as(hidden.name()).isNull();
+            assertThat(entry.getReportImpression()).as(hidden.name()).isNull();
+        }
     }
 
     /** QA D1924: a single unsigned read is still shown, as before. */
