@@ -20,6 +20,55 @@ class AppointmentSlotRulesGuardTest {
 
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
 
+    @Test
+    void bookingIdentityUniquenessLivesInARegisteredMigration() throws IOException {
+        Path migrations = Paths.get("src/main/resources/db/migration");
+        String sql = Files.readString(migrations.resolve("V320__appointment_booking_identity.sql"));
+        assertThat(sql).contains("CREATE UNIQUE INDEX IF NOT EXISTS uq_appointment_booking_request",
+            "ON clinical.appointments (booking_request_key)",
+            "booking_request_durable OR status NOT IN ('CANCELLED', 'NO_SHOW')");
+        assertThat(Files.readString(migrations.resolve("changelog.xml")))
+            .contains("path=\"V320__appointment_booking_identity.sql\"");
+        // Keep the partial index aligned with the existing slot-occupancy rule.
+        for (com.example.hms.enums.AppointmentStatus status : com.example.hms.enums.AppointmentStatus.values()) {
+            assertThat(status.holdsSlot()).isEqualTo(status != com.example.hms.enums.AppointmentStatus.CANCELLED
+                && status != com.example.hms.enums.AppointmentStatus.NO_SHOW);
+        }
+    }
+
+    @Test
+    void everyNewAppointmentWriterHasAnIdempotencyBoundary() throws IOException {
+        int publicBookingPaths = 0;
+        for (Path file : javaFiles()) {
+            String rel = MAIN.relativize(file).toString().replace('\\', '/');
+            // Mapping is not persistence; the synthetic seeder is disabled outside dev.
+            if (rel.startsWith("mapper/") || rel.startsWith("fhir/")
+                    || rel.equals("bootstrap/DevSyntheticDataSeeder.java")) continue;
+            String src = com.example.hms.testsupport.SourceScan.stripComments(read(file));
+            for (String token : List.of("new Appointment(", "Appointment.builder(")) {
+                for (int at = src.indexOf(token); at >= 0; at = src.indexOf(token, at + 1)) {
+                    String body = enclosingMethod(src, at);
+                    // These derived writes commit with an existing versioned parent whose
+                    // one-way transition rejects retries; they do not accept a fresh booking intent.
+                    boolean derived = (rel.equals("service/EncounterServiceImpl.java")
+                            && body.contains("createFollowUpAppointmentFromCheckout("))
+                        || (rel.equals("service/impl/GeneralReferralServiceImpl.java")
+                            && body.contains("createAppointmentForReferral("))
+                        || (rel.equals("service/scheduling/SlotInventoryServiceImpl.java")
+                            && body.contains(" book("));
+                    if (derived) continue;
+                    publicBookingPaths++;
+                    assertThat(body).as(rel + " must replay before writing and stamp the persisted booking")
+                        .contains("bookingIdentity.replay(appointmentRepository)", "bookingIdentity.stamp(appointment)",
+                            "appointmentRepository.flush()", "staffRepository.findLockedById(");
+                    assertThat(body.indexOf("bookingIdentity.replay("))
+                        .isLessThan(body.indexOf(token));
+                }
+            }
+        }
+        assertThat(publicBookingPaths).as("staff and patient public booking writers").isEqualTo(2);
+    }
+
     /**
      * Whether {@code src} holds the hand-written interval-overlap idiom, in its
      * two spellings and with any argument ({@code a.isBefore(x) && y.isBefore(b)},

@@ -17,6 +17,8 @@ import java.util.UUID;
 @Repository
 public interface AppointmentRepository extends JpaRepository<Appointment, UUID>, JpaSpecificationExecutor<Appointment> {
 
+    List<Appointment> findAllByBookingRequestKey(String bookingRequestKey);
+
     /**
      * Claims an appointment for reminding: sets the stamp only if nobody has.
      * Returns 1 for the caller that won and 0 for everyone else, so the sweep

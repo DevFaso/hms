@@ -20,6 +20,9 @@ import java.util.UUID;
 @Schema(description = "Patient request to self-schedule an appointment")
 public class PortalBookAppointmentRequestDTO {
 
+    /** One UUID per booking intent; retain it across retries. Optional for older clients. */
+    private UUID bookingRequestId;
+
     @NotNull
     @Schema(description = "Hospital where the appointment should be booked",
             requiredMode = Schema.RequiredMode.REQUIRED)
