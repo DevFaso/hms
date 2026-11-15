@@ -123,6 +123,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         if (response != null) {
             response.setNewbornAlerts(vitalSignJudgement.alerts(judgement));
             response.setPostpartumAlerts(vitalSignJudgement.postpartumAlerts(judgement));
+            response.setHypertensionAlerts(vitalSignJudgement.hypertensionAlerts(judgement));
         }
         return response;
     }

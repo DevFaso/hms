@@ -1209,6 +1209,49 @@ describe('NurseStationComponent — two-tier polling', () => {
     );
   });
 
+  it('r54: sends the ticked organ-damage signs and shows the adult warning from the server', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(
+      of({
+        clinicallySignificant: true,
+        hypertensionAlerts: [
+          {
+            code: 'adult-severe-hypertension',
+            severity: 'URGENT',
+            type: 'HYPERTENSION',
+            message: 'Urgent medical review required.',
+          },
+        ],
+      }),
+    );
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsOrganDamage(['CHEST_PAIN']);
+    expect(component.vitalsHasReading())
+      .withContext('a ticked sign alone is not a reading')
+      .toBeFalse();
+    component.updateVitalsField('systolicBpMmHg', '190');
+    component.submitVitals();
+    expect(nurseServiceSpy.captureVitals.calls.mostRecent().args[1].organDamageSymptoms).toEqual([
+      'CHEST_PAIN',
+    ]);
+    expect(toastSpy.push).toHaveBeenCalledWith(
+      'error',
+      jasmine.stringMatching(/ADULT_HTN_URGENT.*Urgent medical review required\./),
+      jasmine.any(Number),
+    );
+  });
+
+  it('r54: no ticked sign is sent as nothing', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(of({}));
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsOrganDamage(['DYSPNEA']);
+    component.updateVitalsOrganDamage([]);
+    component.updateVitalsField('systolicBpMmHg', '120');
+    component.submitVitals();
+    expect(
+      nurseServiceSpy.captureVitals.calls.mostRecent().args[1].organDamageSymptoms,
+    ).toBeUndefined();
+  });
+
   it('a set with no newborn warning shows none', () => {
     nurseServiceSpy.captureVitals.and.returnValue(of({ newbornAlerts: [] }));
     component.recordVitals('p1', 'Awa');

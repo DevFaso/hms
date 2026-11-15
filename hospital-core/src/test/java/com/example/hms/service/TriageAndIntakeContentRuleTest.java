@@ -37,7 +37,9 @@ class TriageAndIntakeContentRuleTest {
     /** Recorded with a vital sign, never instead of one. */
     private static final Set<String> NOT_ALONE = Set.of(
         "weightKg", "heightCm", "onOxygen", "consciousnessLevel", "painScale", "fundalHeightCm", "chiefComplaint",
-        "fallRisk", "fallRiskScore", "roomAssignment");
+        "fallRisk", "fallRiskScore", "roomAssignment",
+        // r54: the organ-damage signs ticked with a blood pressure.
+        "organDamageSymptoms");
 
     /** The rank itself and the class property. */
     private static final Set<String> METADATA = Set.of("class", "esiScore", "bloodPressureOrdered");
@@ -124,6 +126,10 @@ class TriageAndIntakeContentRuleTest {
         }
         if (type.isEnum()) {
             return type.getEnumConstants()[0];
+        }
+        if (type == List.class) {
+            // The one list on the triage request (r54).
+            return List.of(com.example.hms.enums.OrganDamageSymptom.CHEST_PAIN);
         }
         throw new IllegalStateException("no sample for " + type);
     }

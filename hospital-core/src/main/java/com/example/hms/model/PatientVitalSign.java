@@ -131,6 +131,13 @@ public class PatientVitalSign extends BaseEntity {
     @Column(name = "fundal_height_cm")
     private Integer fundalHeightCm;
 
+    /**
+     * r54 (V299, provisional): the signs of acute organ damage ticked with this blood pressure, as
+     * {@link com.example.hms.enums.OrganDamageSymptom} names, comma-separated; null for none.
+     */
+    @Column(name = "organ_damage_symptoms", length = 200)
+    private String organDamageSymptoms;
+
     @Builder.Default
     @Column(name = "clinically_significant", nullable = false)
     private boolean clinicallySignificant = false;

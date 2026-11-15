@@ -54,6 +54,8 @@ const NO_DESTINATION = {
   LICENSE_EXPIRY: 'staff only (credentialing); the staff bell expands the message',
   MATERNITY_ALERT: 'staff only (maternity team); the staff bell expands the message',
   NEWS2_ESCALATION: 'staff only (ward escalation); the staff bell expands the message',
+  SEVERE_HYPERTENSION:
+    'staff only (r54 adult severe blood pressure with a sign of organ damage); the staff bell expands the message',
   OBSTETRIC_ALERT: 'staff only (maternity team); the staff bell expands the message',
   OBSTETRIC_ALERT_ESCALATION: 'staff only (escalation chain); the staff bell expands the message',
   POSITIVE_CULTURE_RESULT: 'staff only (ordering clinician); the staff bell expands the message',

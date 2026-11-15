@@ -1,3 +1,4 @@
+import { OrganDamageSymptom } from '../shared/organ-damage-symptoms';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, defer, map } from 'rxjs';
@@ -178,6 +179,8 @@ export interface TriageSubmissionRequest {
   fallRisk?: boolean;
   fallRiskScore?: number;
   roomAssignment?: string;
+  /** r54: the organ-damage signs ticked with the blood pressure (optional). */
+  organDamageSymptoms?: OrganDamageSymptom[];
 }
 
 export interface TriageSubmissionResponse {
@@ -192,8 +195,10 @@ export interface TriageSubmissionResponse {
   vitalSignId: string;
   /** QA D1564: the newborn warnings on the triage set; empty for anyone 28 days old or more. */
   newbornAlerts?: NewbornVitalAlert[];
-  /** QA D1890: the severe-blood-pressure-after-birth warning on the triage set; empty when none. */
+  /** QA D1890, r54: the obstetric severe-blood-pressure warning (pregnancy, or 42 days after a birth); empty when none. */
   postpartumAlerts?: NewbornVitalAlert[];
+  /** r54: the adult severe-blood-pressure warning; empty when none. */
+  hypertensionAlerts?: NewbornVitalAlert[];
 }
 
 export interface MedicationReconciliationEntry {

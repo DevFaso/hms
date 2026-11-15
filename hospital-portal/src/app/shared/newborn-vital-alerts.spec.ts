@@ -1,4 +1,5 @@
 import {
+  announceHypertensionWarning,
   announceNewbornWarning,
   announcePostpartumWarning,
   NEWBORN_WARNING_MS,
@@ -87,6 +88,46 @@ describe('postpartum vital alerts', () => {
     expect(toast.push).toHaveBeenCalledOnceWith(
       'error',
       '[VITAL_LIMITS.POSTPARTUM_WARNING_URGENT] Avis obstétrical urgent requis.',
+      NEWBORN_WARNING_MS,
+    );
+  });
+});
+
+/** r54: an adult's severe blood pressure; the rule is the server's, never the portal's. */
+describe('adult severe blood pressure alerts', () => {
+  const translate = { instant: (key: string) => `[${key}]` };
+  const alert = (severity: NewbornVitalAlert['severity'], message: string): NewbornVitalAlert => ({
+    code: 'adult-severe-hypertension',
+    severity,
+    type: 'HYPERTENSION',
+    message,
+  });
+
+  it('says nothing when the set raised nothing', () => {
+    const toast = { push: jasmine.createSpy('push') };
+    expect(announceHypertensionWarning(undefined, toast, translate)).toBeFalse();
+    expect(announceHypertensionWarning([], toast, translate)).toBeFalse();
+    expect(toast.push).not.toHaveBeenCalled();
+  });
+
+  it('shows a long-lived warning toast asking for a recheck', () => {
+    const toast = { push: jasmine.createSpy('push') };
+    expect(
+      announceHypertensionWarning([alert('WARNING', 'Recontrôler la tension.')], toast, translate),
+    ).toBeTrue();
+    expect(toast.push).toHaveBeenCalledOnceWith(
+      'warning',
+      '[VITAL_LIMITS.ADULT_HTN_WARNING] Recontrôler la tension.',
+      NEWBORN_WARNING_MS,
+    );
+  });
+
+  it('shows an urgent error toast when a sign of organ damage was ticked', () => {
+    const toast = { push: jasmine.createSpy('push') };
+    announceHypertensionWarning([alert('URGENT', 'Avis médical urgent requis.')], toast, translate);
+    expect(toast.push).toHaveBeenCalledOnceWith(
+      'error',
+      '[VITAL_LIMITS.ADULT_HTN_URGENT] Avis médical urgent requis.',
       NEWBORN_WARNING_MS,
     );
   });

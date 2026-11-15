@@ -59,6 +59,12 @@ public class TriageSubmissionRequestDTO {
     private Integer painScale;
 
     /**
+     * r54 (provisional): the signs of acute organ damage the recorder ticked next to the blood pressure.
+     * Optional; one sign turns an adult's severe-range warning URGENT. Never required to save.
+     */
+    private java.util.List<com.example.hms.enums.OrganDamageSymptom> organDamageSymptoms;
+
+    /**
      * QA D1031: the fundal height measured at an antenatal contact, in cm.
      * Charted with the vitals in the clinician's language; no expected value
      * is computed (no reference curve is held in the codebase).
