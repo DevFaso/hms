@@ -117,8 +117,12 @@ public class BillingInvoiceMapper {
         dto.setPatientResponsibilityAmount(patientResponsibility.max(BigDecimal.ZERO));
 
         dto.setStatus(invoice.getStatus() != null ? invoice.getStatus().name() : null);
-        dto.setNotes(invoice.getNotes());
-        dto.setCancelReason(invoice.getCancelReason());
+        // QA D1901: server-written notes and reasons in the reader's language
+        // (Accept-Language); what a person typed is shown as typed.
+        dto.setNotes(com.example.hms.service.billing.BillingTextRenderer.render(invoice.getNotesCode(), invoice.getNotesArgs(),
+            invoice.getNotes()));
+        dto.setCancelReason(com.example.hms.service.billing.BillingTextRenderer.render(invoice.getCancelReasonCode(),
+            invoice.getCancelReasonArgs(), invoice.getCancelReason()));
         dto.setCancelledAt(invoice.getCancelledAt() != null ? invoice.getCancelledAt().toString() : null);
         dto.setCreatedAt(invoice.getCreatedAt() != null ? invoice.getCreatedAt().toString() : null);
         dto.setUpdatedAt(invoice.getUpdatedAt() != null ? invoice.getUpdatedAt().toString() : null);

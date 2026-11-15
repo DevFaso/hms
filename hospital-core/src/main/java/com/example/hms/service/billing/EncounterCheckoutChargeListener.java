@@ -11,8 +11,6 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.TreatmentRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.service.InvoiceNumberAllocator;
-import com.example.hms.service.i18n.NotificationLocales;
-import com.example.hms.utility.MessageUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionPhase;
@@ -60,6 +58,8 @@ import java.util.UUID;
 @Slf4j
 @Service
 public class EncounterCheckoutChargeListener {
+
+    static final String DRAFT_NOTE_CODE = "billing.checkout.draftNote";
 
     private static final List<String> FALLBACK_OWNER_ROLES = List.of("ROLE_BILLING_SPECIALIST", "ROLE_HOSPITAL_ADMIN");
 
@@ -153,6 +153,10 @@ public class EncounterCheckoutChargeListener {
             event.checkedOutAt() != null ? event.checkedOutAt() : encounter.getCheckoutTimestamp(), prices);
 
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
+        // QA D1901: the note is kept as its code and the visit's code, shown
+        // in each reader's language; notes holds the French copy.
+        BillingText note = BillingText.of(DRAFT_NOTE_CODE,
+            BillingText.value(event.encounterCode() != null ? event.encounterCode() : encounter.getCode()));
         BillingInvoice invoice = BillingInvoice.builder()
             .patient(encounter.getPatient())
             .hospital(encounter.getHospital())
@@ -163,8 +167,7 @@ public class EncounterCheckoutChargeListener {
             .totalAmount(BigDecimal.ZERO)
             .amountPaid(BigDecimal.ZERO)
             .status(InvoiceStatus.DRAFT)
-            .notes(MessageUtil.resolve(NotificationLocales.STAFF, "billing.checkout.draftNote",
-                event.encounterCode() != null ? event.encounterCode() : encounter.getCode()))
+            .notes(note.french()).notesCode(note.code()).notesArgs(note.argsJson())
             .build();
 
         for (VisitChargeSource source : sources) {
@@ -198,8 +201,13 @@ public class EncounterCheckoutChargeListener {
             .setScale(2, RoundingMode.HALF_UP);
         String description = charge.description();
         String text = description.length() > 255 ? description.substring(0, 255) : description;
+        BillingText worded = charge.text();
         return InvoiceItem.builder()
             .itemDescription(text)
+            // QA D1901: a line the server worded keeps its code (shown in each
+            // reader's language); a service or order name has none.
+            .textCode(worded != null ? worded.code() : null)
+            .textArgs(worded != null ? worded.argsJson() : null)
             .quantity(charge.quantity())
             .itemCategory(charge.category())
             .unitPrice(unit)

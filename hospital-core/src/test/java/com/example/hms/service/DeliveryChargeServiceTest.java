@@ -143,6 +143,39 @@ class DeliveryChargeServiceTest {
         }
     }
 
+    /**
+     * QA D1901: an English-speaking recorder wrote the birth's note and line in
+     * English for everyone. They are stored as codes (mode, ISO day) with the
+     * French copy, and each reader sees them in their own language.
+     */
+    @Test
+    void theNoteAndLineAreStoredAsCodesWhateverTheRecordersLanguage_D1901() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+        try {
+            recorderWorksHere();
+            delivery.setBirthDateTime(java.time.LocalDateTime.of(2026, 10, 23, 11, 40));
+            when(treatmentRepository.findByHospital_Id(hospital.getId())).thenReturn(List.of());
+
+            BillingInvoice invoice = service.chargeDelivery(delivery, recorderId).orElseThrow();
+
+            assertThat(invoice.getNotes()).startsWith("Frais de naissance : Accouchement (voie basse), né(e) le 23 oct. 2026.");
+            assertThat(invoice.getNotesCode()).isEqualTo("maternity.delivery.charge.note");
+            assertThat(invoice.getNotesArgs())
+                .isEqualTo("[{\"code\":\"maternity.delivery.charge.vaginal\"},{\"date\":\"2026-10-23\"}]");
+            var line = invoice.getInvoiceItems().iterator().next();
+            assertThat(line.getItemDescription()).isEqualTo("Accouchement (voie basse)");
+            assertThat(line.getTextCode()).isEqualTo("maternity.delivery.charge.vaginal");
+
+            assertThat(new com.example.hms.mapper.BillingInvoiceMapper().toBillingInvoiceResponseDTO(invoice).getNotes())
+                .startsWith("Birth charge: Delivery (vaginal birth), born Oct 23, 2026.");
+            assertThat(new com.example.hms.mapper.InvoiceItemMapper().toInvoiceItemResponseDTO(line).getItemDescription())
+                .isEqualTo("Delivery (vaginal birth)");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
     /** QA D516: a cross-hospital or super-admin recorder still bills the birth, under the billing desk. */
     @Test
     void recorderWithoutAnAssignmentThere_filesTheLineUnderTheBillingDesk() {

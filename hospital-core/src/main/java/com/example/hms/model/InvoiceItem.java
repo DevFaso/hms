@@ -52,6 +52,19 @@ public class InvoiceItem extends BaseEntity {
     @Column(nullable = false, length = 255)
     private String itemDescription;
 
+    /**
+     * QA D1901: when the server wrote {@link #itemDescription} (the default
+     * consultation, the bed days, a transfusion, a delivery), its message code
+     * and arguments (V301), so each reader sees it in their own language;
+     * {@link #itemDescription} keeps the French copy. Null for a line a person
+     * typed or a hospital's own service name, shown as written.
+     */
+    @Column(name = "text_code", length = 120)
+    private String textCode;
+
+    @Column(name = "text_args", columnDefinition = "TEXT")
+    private String textArgs;
+
     @NotNull @Positive
     @Column(nullable = false)
     private Integer quantity;

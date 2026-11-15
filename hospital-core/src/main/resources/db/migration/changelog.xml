@@ -3541,4 +3541,21 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V301 (QA D1901, billing-money plan PR 1) - billing text the server
+         writes is stored as a message code plus arguments, so each reader
+         sees it in their own language: invoice_items.text_code/text_args,
+         billing_invoices.notes_code/notes_args and
+         cancel_reason_code/cancel_reason_args. Backfills a code only where the
+         stored text equals a server template exactly; counts only in NOTICEs.
+         One DO block (splitStatements=false). Idempotent. V301-V319 are
+         reserved for the billing-money plan.
+         ================================================================= -->
+    <changeSet id="V301-billing-text-code-and-args" author="hms-team" runOnChange="false">
+        <sqlFile path="V301__billing_text_code_and_args.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

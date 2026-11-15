@@ -100,4 +100,35 @@ class BillingInvoiceMapperTest {
     void noCreatorOnFileNoName_D428() {
         assertThat(mapper.toBillingInvoiceResponseDTO(new BillingInvoice()).getCreatedByName()).isNull();
     }
+
+    /** QA D1901: the copay's reason in each reader's language, still naming the invoice; a typed one as typed. */
+    @Test
+    void theServerReasonFollowsTheReaderAndATypedOneIsShownAsTyped_D1901() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        BillingInvoiceMapper mapper = new BillingInvoiceMapper();
+        com.example.hms.model.BillingInvoice copay = new com.example.hms.model.BillingInvoice();
+        copay.setCancelReason("Ticket modérateur reporté sur la facture CHW-2026-000020.");
+        copay.setCancelReasonCode("billing.invoice.copayCreditedReason");
+        copay.setCancelReasonArgs("[{\"value\":\"CHW-2026-000020\"}]");
+        com.example.hms.model.BillingInvoice typed = new com.example.hms.model.BillingInvoice();
+        typed.setCancelReason("Erreur de saisie");
+        typed.setNotes("Pansement simple");
+        try {
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+            org.assertj.core.api.Assertions.assertThat(mapper.toBillingInvoiceResponseDTO(copay).getCancelReason())
+                .isEqualTo("Copay carried onto invoice CHW-2026-000020.");
+            org.assertj.core.api.Assertions.assertThat(mapper.toBillingInvoiceResponseDTO(typed).getCancelReason())
+                .isEqualTo("Erreur de saisie");
+            org.assertj.core.api.Assertions.assertThat(mapper.toBillingInvoiceResponseDTO(typed).getNotes())
+                .isEqualTo("Pansement simple");
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            org.assertj.core.api.Assertions.assertThat(mapper.toBillingInvoiceResponseDTO(copay).getCancelReason())
+                .isEqualTo("Ticket modérateur reporté sur la facture CHW-2026-000020.");
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.forLanguageTag("es"));
+            org.assertj.core.api.Assertions.assertThat(mapper.toBillingInvoiceResponseDTO(copay).getCancelReason())
+                .isEqualTo("Copago trasladado a la factura CHW-2026-000020.");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
 }

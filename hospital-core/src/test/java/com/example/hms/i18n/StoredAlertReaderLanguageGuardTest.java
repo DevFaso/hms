@@ -52,10 +52,8 @@ class StoredAlertReaderLanguageGuardTest {
 
     /** Every class writing staff-language text, and who reads it. */
     private static final Map<String, String> KNOWN = Map.ofEntries(
-        Map.entry("service/billing/BedDaysChargeSource.java", STORED_RECORD),
-        Map.entry("service/billing/ConsultationChargeSource.java", STORED_RECORD),
-        Map.entry("service/billing/EncounterCheckoutChargeListener.java", STORED_RECORD),
-        Map.entry("service/billing/TransfusionChargeSource.java", STORED_RECORD),
+        // QA D1901: the French copy kept in a billing text column; each reader's copy is rendered from its code.
+        Map.entry("service/billing/BillingTextRenderer.java", "the French copy of billing text; the reader's is rendered from its code"),
         Map.entry("service/CriticalValueNotificationService.java", "an SMS and a notice's copy: the recipient's phone has no session"),
         Map.entry("service/ImagingCriticalNotificationService.java", "an SMS: the recipient's phone has no session"),
         Map.entry("service/impl/LaborServiceImpl.java", ALERT + "; the override note joins what the user typed"),

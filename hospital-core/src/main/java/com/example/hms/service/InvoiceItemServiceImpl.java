@@ -128,7 +128,15 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
 
         // apply updates
         item.setBillingInvoice(invoice);
-        item.setItemDescription(dto.getItemDescription());
+        // QA D1901: pricing a line in place echoes its description in the
+        // reader's language; an echo keeps the server's code, anything else
+        // is the person's own text, shown as typed.
+        if (!com.example.hms.service.billing.BillingTextRenderer.isShownText(dto.getItemDescription(), item.getTextCode(),
+                item.getTextArgs(), item.getItemDescription())) {
+            item.setItemDescription(dto.getItemDescription());
+            item.setTextCode(null);
+            item.setTextArgs(null);
+        }
         item.setQuantity(dto.getQuantity());
         item.setUnitPrice(dto.getUnitPrice());
         item.setItemCategory(dto.getItemCategory());

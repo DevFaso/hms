@@ -353,4 +353,39 @@ class PdfInvoiceServiceTest {
 
         assertThat(text).contains("pdf.invoice.balanceDue 500 F CFA").doesNotContain("7 450");
     }
+
+    /**
+     * QA D1901: a line and a cancellation reason the server wrote are printed
+     * in the paper's language, from their codes, with the real bundles; a line
+     * the cashier typed is printed as typed in every language.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "fr|Consultation|Transfusion : plaquettes|Ticket modérateur reporté sur la facture CHW-2026-000020.",
+        "en|Consultation|Transfusion: platelets|Copay carried onto invoice CHW-2026-000020.",
+        "es|Consulta|Transfusión: plaquetas|Copago trasladado a la factura CHW-2026-000020."
+    })
+    void serverWrittenTextIsPrintedInThePapersLanguage_D1901(String lang, String consultation, String transfusion,
+                                                           String reason) throws Exception {
+        PdfInvoiceService real = new PdfInvoiceService(com.example.hms.i18n.TestMessageSources.bundles());
+        invoice.setStatus(InvoiceStatus.CANCELLED);
+        invoice.setCancelReason("Ticket modérateur reporté sur la facture CHW-2026-000020.");
+        invoice.setCancelReasonCode("billing.invoice.copayCreditedReason");
+        invoice.setCancelReasonArgs("[{\"value\":\"CHW-2026-000020\"}]");
+        List<InvoiceItem> lines = List.of(
+            line("Consultation", "billing.checkout.consultation", null),
+            line("Transfusion : plaquettes", "billing.checkout.transfusion",
+                "[{\"code\":\"transfusion.productType.PLATELETS\"}]"),
+            line("Pansement simple", null, null));
+
+        String text = textOf(real.generateInvoicePdf(invoice, lines, List.of(), List.of(), Locale.forLanguageTag(lang)));
+
+        assertThat(text).contains(consultation, transfusion, "Pansement simple", reason);
+    }
+
+    private static InvoiceItem line(String description, String code, String args) {
+        return InvoiceItem.builder().itemDescription(description).textCode(code).textArgs(args)
+            .itemCategory(ItemCategory.SERVICE).quantity(1)
+            .unitPrice(new BigDecimal("0.00")).totalPrice(new BigDecimal("0.00")).build();
+    }
 }
