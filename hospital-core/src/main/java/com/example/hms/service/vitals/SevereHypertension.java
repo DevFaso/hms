@@ -254,9 +254,9 @@ public class SevereHypertension {
             if (recentBirth.isPresent()) {
                 return new Found(Scope.POSTPARTUM, hospitalOf(recentBirth.get().getHospital()));
             }
-            Optional<UUID> pregnancySource = pregnancySource(patientId, readable, at);
-            if (pregnancySource.isPresent()) {
-                return new Found(Scope.PREGNANT, pregnancySource.get());
+            Optional<Found> pregnancy = pregnancy(patientId, readable, at);
+            if (pregnancy.isPresent()) {
+                return pregnancy.get();
             }
         }
         if (isAdult(patient.getDateOfBirth(), at)) {
@@ -310,17 +310,17 @@ public class SevereHypertension {
     }
 
     /**
-     * The hospital of the record that makes her pregnant at {@code at}: an active labour episode, or
+     * Pregnant at {@code at}, with the hospital of the record that says so: an active labour episode, or
      * the current maternal history (latest version among the readable hospitals) whose pregnancy
      * covers the reading's day with no birth recorded since its start.
      */
-    private Optional<UUID> pregnancySource(UUID patientId, Set<UUID> readable, LocalDateTime at) {
+    private Optional<Found> pregnancy(UUID patientId, Set<UUID> readable, LocalDateTime at) {
         if (laborEpisodeRepository != null) {
             Optional<LaborEpisode> labour = laborEpisodeRepository
                 .findFirstByPatient_IdAndHospital_IdInAndStatusOrderByAdmittedAtDesc(patientId, readable,
                     LaborStatus.ACTIVE);
             if (labour.isPresent()) {
-                return Optional.of(hospitalOf(labour.get().getHospital()));
+                return Optional.of(new Found(Scope.PREGNANT, hospitalOf(labour.get().getHospital())));
             }
         }
         if (maternalHistoryRepository == null) {
@@ -333,7 +333,7 @@ public class SevereHypertension {
             || latestBirth(patientId, readable, dueDate.minusDays(PREGNANCY_DAYS).atStartOfDay(), at).isPresent()) {
             return Optional.empty();
         }
-        return Optional.of(hospitalOf(history.get().getHospital()));
+        return Optional.of(new Found(Scope.PREGNANT, hospitalOf(history.get().getHospital())));
     }
 
     private static UUID hospitalOf(com.example.hms.model.Hospital hospital) {

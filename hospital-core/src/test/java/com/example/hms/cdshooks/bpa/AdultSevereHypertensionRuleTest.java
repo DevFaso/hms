@@ -101,10 +101,16 @@ class AdultSevereHypertensionRuleTest {
 
     @Test
     void after42DaysThePostpartumCardIsSilentAndTheAdultOneJudges() {
-        delivered(adult, false);
+        // r54 review: a real birth on record, 43 days before the reading.
+        com.example.hms.service.vitals.SevereHypertensionFixtures.bornOn(deliveries, adult.getId(), HERE,
+            LocalDateTime.now().minusDays(43).minusMinutes(5));
         BpaRuleContext ctx = context(adult, List.of(vital(164, 114, 5, null)), List.of());
         assertThat(postpartumRule.evaluate(ctx)).as("the obstetric rule ends at day 42").isEmpty();
         assertThat(rule.evaluate(ctx)).as("164/114 is below the adult thresholds").isEmpty();
+        BpaRuleContext severe = context(adult, List.of(vital(184, 100, 5, null)), List.of());
+        assertThat(postpartumRule.evaluate(severe)).as("day 43 is not postpartum").isEmpty();
+        assertThat(rule.evaluate(severe)).as("day 43: the adult card").singleElement()
+            .satisfies(c -> assertThat(c.indicator()).isEqualTo(CdsCard.Indicator.WARNING));
     }
 
     @Test

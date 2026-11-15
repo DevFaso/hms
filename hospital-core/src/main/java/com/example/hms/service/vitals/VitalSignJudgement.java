@@ -81,6 +81,8 @@ public class VitalSignJudgement {
     /** The postpartum warning's notice and type label (the postpartum observation's own). */
     static final String POSTPARTUM_NOTICE_KEY = "postpartum.alert.notification";
     static final String POSTPARTUM_TYPE_KEY = "postpartum.alert.type.HYPERTENSION";
+    /** r54 review: a pregnant patient's notice is headed as a pregnancy alert, never "postpartum". */
+    static final String PREGNANCY_NOTICE_KEY = "vitals.alert.notification.pregnancy";
 
     /** The adult URGENT warning's notice and type label (r54). */
     static final String HYPERTENSION_NOTICE_KEY = "vitals.alert.notification";
@@ -209,10 +211,10 @@ public class VitalSignJudgement {
                                        UUID hospitalId, String recorderUsername, String visitPhysicianUsername) {
         if (bloodPressure.obstetric()) {
             notifySevereHypertension(saved, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
-                true, bloodPressure.messageKey());
+                bloodPressure.scope(), bloodPressure.messageKey());
         } else if (bloodPressure.adult() && bloodPressure.level() == SevereHypertension.Level.URGENT) {
             notifySevereHypertension(saved, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
-                false, bloodPressure.messageKey());
+                bloodPressure.scope(), bloodPressure.messageKey());
         }
     }
 
@@ -222,19 +224,23 @@ public class VitalSignJudgement {
      */
     private void notifySevereHypertension(PatientVitalSign saved, UUID patientId, UUID hospitalId,
                                           String recorderUsername, String visitPhysicianUsername,
-                                          boolean obstetric, String messageKey) {
+                                          SevereHypertension.Scope scope, String messageKey) {
         Set<String> recipients = news2EscalationService.recipients(patientId, hospitalId, recorderUsername,
             visitPhysicianUsername);
         String fullName = saved != null && saved.getPatient() != null
             ? Objects.toString(saved.getPatient().getFullName(), "") : "";
         Object patientArg = fullName.isBlank() ? NotificationLocalizer.key("patient.fallback.generic") : fullName;
-        // Obstetric: the postpartum observation's own notice; adult: the vitals notice.
-        Object[] args = {NotificationLocalizer.key(obstetric ? POSTPARTUM_TYPE_KEY : HYPERTENSION_TYPE_KEY), patientArg,
+        // Postpartum: the postpartum observation's own notice; pregnancy: a pregnancy notice (r54
+        // review: never headed "postpartum" for a woman still pregnant); adult: the vitals notice.
+        Object[] args = {NotificationLocalizer.key(scope == SevereHypertension.Scope.ADULT
+                ? HYPERTENSION_TYPE_KEY : POSTPARTUM_TYPE_KEY), patientArg,
             ObstetricAlertEscalationWorker.alertMessageArg(messageKey, null, "")};
         for (String recipient : recipients) {
             try {
-                if (obstetric) {
+                if (scope == SevereHypertension.Scope.POSTPARTUM) {
                     notificationService.createNotification(POSTPARTUM_NOTICE_KEY, args, recipient, NOTIFICATION_TYPE);
+                } else if (scope == SevereHypertension.Scope.PREGNANT) {
+                    notificationService.createNotification(PREGNANCY_NOTICE_KEY, args, recipient, NOTIFICATION_TYPE);
                 } else {
                     notificationService.createNotification(HYPERTENSION_NOTICE_KEY, args, recipient,
                         HYPERTENSION_NOTIFICATION_TYPE);

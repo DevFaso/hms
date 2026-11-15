@@ -438,4 +438,38 @@ class VitalSignJudgementTest {
         assertThat(j.adultSevereHypertension()).isFalse();
         assertThat(judgement.hypertensionAlerts(j)).isEmpty();
     }
+
+    /**
+     * r54 review P3: a pregnant patient's severe-pressure notice was headed "Postpartum alert". It is
+     * a pregnancy notice; the postpartum one stays for a mother after birth.
+     */
+    @Test
+    void aPregnantPatientsNoticeIsAPregnancyNoticeNeverPostpartum() {
+        com.example.hms.repository.MaternalHistoryRepository histories =
+            mock(com.example.hms.repository.MaternalHistoryRepository.class);
+        VitalSignJudgement withPregnancy = new VitalSignJudgement(assessments, news2, notifications,
+            com.example.hms.i18n.TestMessageSources.bundles(), deliveryNewborns,
+            new SevereHypertension(deliveries, histories, null, null, null));
+        Patient pregnant = motherDeliveredBefore(false);
+        com.example.hms.model.MaternalHistory history = new com.example.hms.model.MaternalHistory();
+        history.setEstimatedDueDate(NOW.toLocalDate().plusWeeks(12));
+        when(histories.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(
+            eq(pregnant.getId()), any())).thenReturn(Optional.of(history));
+        UUID hospitalId = UUID.randomUUID();
+        when(news2.recipients(pregnant.getId(), hospitalId, "nurse_a", null))
+            .thenReturn(new LinkedHashSet<>(List.of("nurse_a")));
+        PatientVitalSign vital = bpSet(pregnant).systolicBpMmHg(164).diastolicBpMmHg(114).build();
+
+        VitalSignJudgement.Judgement j = withPregnancy.judge(vital);
+        assertThat(j.bloodPressure().scope()).isEqualTo(SevereHypertension.Scope.PREGNANT);
+        withPregnancy.escalate(vital, j, pregnant.getId(), hospitalId, "nurse_a", null);
+
+        verify(notifications).createNotification(eq("vitals.alert.notification.pregnancy"), any(), eq("nurse_a"),
+            eq("MATERNITY_ALERT"));
+        verify(notifications, never()).createNotification(eq("postpartum.alert.notification"), any(), anyString(),
+            anyString());
+        LocaleContextHolder.setLocale(Locale.FRENCH);
+        assertThat(com.example.hms.i18n.TestMessageSources.bundles().getMessage("vitals.alert.notification.pregnancy",
+            new Object[] {"t", "p", "m"}, Locale.FRENCH)).startsWith("Alerte de grossesse").doesNotContain("post-partum");
+    }
 }
