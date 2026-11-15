@@ -91,12 +91,13 @@ public class ImagingReportMapper {
         if (report == null) {
             return null;
         }
+        com.example.hms.model.Patient patient = patientOf(report);
 
         return ImagingReportResponseDTO.builder()
             .id(report.getId())
             .imagingOrderId(report.getImagingOrder() != null ? report.getImagingOrder().getId() : null)
-            .patientId(patientOf(report) != null ? patientOf(report).getId() : null)
-            .patientDisplayName(patientOf(report) != null ? patientOf(report).getFullName() : null)
+            .patientId(patient != null ? patient.getId() : null)
+            .patientDisplayName(patient != null ? patient.getFullName() : null)
             .patientMrn(patientMrnOf(report))
             .hospitalId(report.getHospital() != null ? report.getHospital().getId() : null)
             .organizationId(report.getOrganization() != null ? report.getOrganization().getId() : null)
