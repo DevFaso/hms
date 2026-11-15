@@ -22,6 +22,17 @@ public class ImagingReportResponseDTO {
 
     private UUID imagingOrderId;
 
+    /**
+     * QA D1923 (r53): whose report it is. The results list and the report
+     * drawer named no patient, so a report was revised and signed with no name
+     * or MRN on screen. The MRN is the one of the report's hospital.
+     */
+    private UUID patientId;
+
+    private String patientDisplayName;
+
+    private String patientMrn;
+
     private UUID hospitalId;
 
     private UUID organizationId;

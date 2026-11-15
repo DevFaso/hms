@@ -55,8 +55,33 @@ export interface ImagingOrderResponse {
   scheduledTime: string;
   /** When the study was completed (r44, V294); null while it is not. */
   completedAt: string | null;
+  /** QA D1922 (r53): contrast, the patient's contrast allergy, where, and the pre-authorisation. */
+  contrastRequired?: boolean | null;
+  contrastType?: string | null;
+  hasContrastAllergy?: boolean | null;
+  contrastAllergyDetails?: string | null;
+  appointmentLocation?: string | null;
+  workflowNotes?: string | null;
+  requiresAuthorization?: boolean | null;
+  authorizationNumber?: string | null;
+  /** QA D1921 (r53): the server found a recent order of the same study when this one was placed. */
+  duplicateOfRecentOrder?: boolean | null;
+  duplicateReferenceOrderId?: string | null;
+  duplicateMatches?: ImagingDuplicateMatch[] | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** A recent order of the same study for the patient here (GET …/duplicates, QA D1920 scope). */
+export interface ImagingDuplicateMatch {
+  orderId: string;
+  modality: ImagingModality;
+  bodyRegion?: string | null;
+  studyType?: string | null;
+  priority?: ImagingPriority | null;
+  status: ImagingOrderStatus;
+  orderedAt?: string | null;
+  scheduledAt?: string | null;
 }
 
 export interface ImagingOrderRequest {
@@ -69,6 +94,18 @@ export interface ImagingOrderRequest {
   priority: ImagingPriority;
   laterality?: ImagingLaterality;
   clinicalQuestion?: string;
+  /** QA D1922 (r53): the fields the API has always stored and the form never sent. */
+  contrastRequired?: boolean;
+  contrastType?: string;
+  hasContrastAllergy?: boolean;
+  contrastAllergyDetails?: string;
+  /** yyyy-MM-dd, the clinic's calendar day. */
+  scheduledDate?: string;
+  /** HH:mm, the clinic's wall time. */
+  scheduledTime?: string;
+  appointmentLocation?: string;
+  requiresAuthorization?: boolean;
+  authorizationNumber?: string;
 }
 
 export type ImagingReportStatus =
@@ -106,6 +143,10 @@ export interface ImagingReportStatusEntry {
 export interface ImagingReportResponse {
   id: string;
   imagingOrderId: string;
+  /** QA D1923 (r53): whose report it is, with the MRN of the report's hospital. */
+  patientId?: string | null;
+  patientDisplayName?: string | null;
+  patientMrn?: string | null;
   hospitalId: string;
   reportNumber: string;
   reportStatus: ImagingReportStatus;
@@ -268,9 +309,20 @@ export class ImagingService {
     );
   }
 
-  checkDuplicates(patientId: string): Observable<ImagingOrderResponse[]> {
-    return this.http.get<ImagingOrderResponse[]>(
+  /**
+   * QA D1921 (r53): the patient's recent orders of the same modality (and
+   * region) at the caller's hospital, scoped server-side (QA D1920).
+   */
+  checkDuplicates(
+    patientId: string,
+    modality: ImagingModality,
+    bodyRegion?: string,
+  ): Observable<ImagingDuplicateMatch[]> {
+    let params = new HttpParams().set('modality', modality);
+    if (bodyRegion?.trim()) params = params.set('bodyRegion', bodyRegion.trim());
+    return this.http.get<ImagingDuplicateMatch[]>(
       `${this.baseUrl}/orders/patient/${patientId}/duplicates`,
+      { params },
     );
   }
 

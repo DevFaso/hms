@@ -692,6 +692,10 @@ class ImagingOrderServiceImplTest {
         imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
             .status(ImagingOrderStatus.SCHEDULED).build());
         assertThat(order.getCompletedAt()).isNull();
+        // QA D1925: a study is completed once it has been started again.
+        imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.IN_PROGRESS).build());
+        assertThat(order.getCompletedAt()).isNull();
 
         imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
             .status(ImagingOrderStatus.COMPLETED).build());
@@ -720,19 +724,23 @@ class ImagingOrderServiceImplTest {
         verify(imagingOrderRepository, never()).save(any());
     }
 
+    /** QA D1925 (r53): results come from a signed report, never from a status write (was allowed by D1098). */
     @Test
-    void updateOrderStatus_aCompletedOrderStillMovesToResultsAvailable_D1098() {
+    void updateOrderStatus_aCompletedOrderReachesResultsOnlyBySigning_D1925() {
         ImagingOrder order = new ImagingOrder();
         order.setId(orderId);
         order.setStatus(ImagingOrderStatus.COMPLETED);
         when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        when(imagingOrderRepository.save(order)).thenReturn(order);
-        when(imagingOrderMapper.toResponseDTO(order)).thenReturn(ImagingOrderResponseDTO.builder().id(orderId).build());
 
-        imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
-            .status(ImagingOrderStatus.RESULTS_AVAILABLE).build());
+        ImagingOrderStatusUpdateRequestDTO request = ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.RESULTS_AVAILABLE).build();
+        assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting(e -> ((com.example.hms.exception.BusinessException) e).getMessageKey())
+            .isEqualTo("imaging.order.resultsOnlyBySigning");
 
-        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.RESULTS_AVAILABLE);
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.COMPLETED);
+        verify(imagingOrderRepository, never()).save(any());
     }
 
     @Test
@@ -1654,5 +1662,114 @@ class ImagingOrderServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB.getId());
         assertThat(imagingOrderService.getOrdersByHospital(hospitalB.getId(), null))
             .extracting(ImagingOrderResponseDTO::getHospitalId).containsExactly(hospitalB.getId());
+    }
+    // ═══ QA D1925 (r53): the status writes the endpoint accepts ═══
+
+    /**
+     * Guard: every (current, requested) pair, written through the service.
+     * The expected table is spelled out here, not read from production, so a
+     * loosened table fails as surely as a removed check. RESULTS_AVAILABLE is
+     * never a status write's target (signing a report is), COMPLETED follows
+     * IN_PROGRESS only, and a resulted or cancelled order is closed.
+     */
+    @Test
+    void everyStatusWritePair_followsTheTransitionTable_D1925() {
+        Map<ImagingOrderStatus, Set<ImagingOrderStatus>> expected = new java.util.EnumMap<>(ImagingOrderStatus.class);
+        expected.put(ImagingOrderStatus.DRAFT, Set.of(ImagingOrderStatus.DRAFT, ImagingOrderStatus.ORDERED,
+            ImagingOrderStatus.PENDING_AUTHORIZATION, ImagingOrderStatus.SCHEDULED, ImagingOrderStatus.CANCELLED));
+        expected.put(ImagingOrderStatus.ORDERED, Set.of(ImagingOrderStatus.ORDERED,
+            ImagingOrderStatus.PENDING_AUTHORIZATION, ImagingOrderStatus.SCHEDULED, ImagingOrderStatus.IN_PROGRESS,
+            ImagingOrderStatus.CANCELLED));
+        expected.put(ImagingOrderStatus.PENDING_AUTHORIZATION, Set.of(ImagingOrderStatus.PENDING_AUTHORIZATION,
+            ImagingOrderStatus.ORDERED, ImagingOrderStatus.SCHEDULED, ImagingOrderStatus.IN_PROGRESS,
+            ImagingOrderStatus.CANCELLED));
+        expected.put(ImagingOrderStatus.SCHEDULED, Set.of(ImagingOrderStatus.SCHEDULED, ImagingOrderStatus.ORDERED,
+            ImagingOrderStatus.PENDING_AUTHORIZATION, ImagingOrderStatus.IN_PROGRESS, ImagingOrderStatus.CANCELLED));
+        expected.put(ImagingOrderStatus.IN_PROGRESS, Set.of(ImagingOrderStatus.IN_PROGRESS,
+            ImagingOrderStatus.SCHEDULED, ImagingOrderStatus.COMPLETED, ImagingOrderStatus.CANCELLED));
+        expected.put(ImagingOrderStatus.COMPLETED, Set.of());
+        expected.put(ImagingOrderStatus.RESULTS_AVAILABLE, Set.of());
+        expected.put(ImagingOrderStatus.CANCELLED, Set.of());
+
+        lenient().when(imagingOrderRepository.save(any(ImagingOrder.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(imagingOrderMapper.toResponseDTO(any(ImagingOrder.class)))
+            .thenReturn(ImagingOrderResponseDTO.builder().id(orderId).build());
+        java.util.List<String> wrong = new java.util.ArrayList<>();
+        for (ImagingOrderStatus from : ImagingOrderStatus.values()) {
+            for (ImagingOrderStatus to : ImagingOrderStatus.values()) {
+                ImagingOrder order = new ImagingOrder();
+                order.setId(orderId);
+                order.setPatient(patient);
+                order.setHospital(hospital);
+                order.setStatus(from);
+                when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+                Throwable refused = org.assertj.core.api.Assertions.catchThrowable(() ->
+                    imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+                        .status(to).cancellationReason("Examen non nécessaire").build()));
+                if (refused != null && !(refused instanceof com.example.hms.exception.BusinessException)) {
+                    throw new AssertionError(from + " -> " + to + " failed with " + refused, refused);
+                }
+                boolean accepted = refused == null;
+                if (accepted != expected.get(from).contains(to)) {
+                    wrong.add(from + " -> " + to + (accepted ? " accepted" : " refused"));
+                }
+            }
+        }
+        assertThat(wrong).as("status writes off the table").isEmpty();
+    }
+
+    /** QA D1925: the r53 jumps are refused with a reason the reader understands. */
+    @Test
+    void theR53JumpsAreRefusedWithTheirOwnReason_D1925() {
+        assertThat(refusalKey(ImagingOrderStatus.ORDERED, ImagingOrderStatus.RESULTS_AVAILABLE, null, null))
+            .isEqualTo("imaging.order.resultsOnlyBySigning");
+        assertThat(refusalKey(ImagingOrderStatus.ORDERED, ImagingOrderStatus.COMPLETED, null, null))
+            .isEqualTo("imaging.order.completeBeforeStart");
+        assertThat(refusalKey(ImagingOrderStatus.DRAFT, ImagingOrderStatus.IN_PROGRESS, null, null))
+            .isEqualTo("imaging.order.invalidTransition");
+    }
+
+    /** QA D1925: a study needing pre-authorisation starts once its number is recorded. */
+    @Test
+    void aStudyNeedingPreAuthorisationStartsOnlyWithItsNumber_D1925() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setStatus(ImagingOrderStatus.ORDERED);
+        order.setRequiresAuthorization(true);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        for (String missing : new String[] {null, "  "}) {
+            order.setAuthorizationNumber(missing);
+            Throwable refused = org.assertj.core.api.Assertions.catchThrowable(() ->
+                imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+                    .status(ImagingOrderStatus.IN_PROGRESS).build()));
+            assertThat(refused).isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, e -> {
+                assertThat(e.getMessageKey()).isEqualTo("imaging.order.authorizationNumberRequired");
+                assertThat(e.getField()).isEqualTo("authorizationNumber");
+            });
+        }
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+        verify(imagingOrderRepository, never()).save(any());
+
+        // The number written with the start is enough; so is one already on the order.
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+        when(imagingOrderMapper.toResponseDTO(order)).thenReturn(ImagingOrderResponseDTO.builder().id(orderId).build());
+        imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.IN_PROGRESS).authorizationNumber("PA-R53-01").build());
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.IN_PROGRESS);
+        assertThat(order.getAuthorizationNumber()).isEqualTo("PA-R53-01");
+    }
+
+    private String refusalKey(ImagingOrderStatus from, ImagingOrderStatus to, Boolean requiresAuth, String number) {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setStatus(from);
+        order.setRequiresAuthorization(requiresAuth);
+        order.setAuthorizationNumber(number);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        Throwable refused = org.assertj.core.api.Assertions.catchThrowable(() ->
+            imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder().status(to).build()));
+        assertThat(refused).isInstanceOf(com.example.hms.exception.BusinessException.class);
+        return ((com.example.hms.exception.BusinessException) refused).getMessageKey();
     }
 }

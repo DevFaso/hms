@@ -455,8 +455,9 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             return List.of();
         }
         Map<UUID, ImagingReport> latestByOrderId = batchLoadLatestReports(orders);
+        Map<UUID, List<ImagingReport>> historyByOrderId = batchLoadReportHistory(latestByOrderId);
         return orders.stream()
-            .map(o -> toImagingDto(o, latestByOrderId.get(o.getId())))
+            .map(o -> toImagingDto(o, latestByOrderId.get(o.getId()), historyByOrderId.get(o.getId())))
             .sorted(Comparator.comparing(ImagingEntryDTO::getOrderedAt, Comparator.nullsLast(Comparator.reverseOrder()))
                 .thenComparing(ImagingEntryDTO::getId, Comparator.nullsLast(Comparator.naturalOrder())))
             .toList();
@@ -502,6 +503,73 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             }
         }
         return byOrder;
+    }
+
+    /**
+     * QA D1924 (r53): every version of the reports that have more than one
+     * (a signed conclusion and its addenda), in one query. A first version
+     * is its own history.
+     */
+    private Map<UUID, List<ImagingReport>> batchLoadReportHistory(Map<UUID, ImagingReport> latestByOrderId) {
+        List<UUID> withHistory = latestByOrderId.entrySet().stream()
+            .filter(e -> e.getValue().getReportVersion() != null && e.getValue().getReportVersion() > 1)
+            .map(Map.Entry::getKey)
+            .toList();
+        if (withHistory.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, List<ImagingReport>> byOrder = new HashMap<>();
+        for (ImagingReport r : imagingReportRepository.findByImagingOrder_IdIn(withHistory)) {
+            UUID oid = r.getImagingOrder() != null ? r.getImagingOrder().getId() : null;
+            if (oid != null) {
+                byOrder.computeIfAbsent(oid, k -> new ArrayList<>()).add(r);
+            }
+        }
+        return byOrder;
+    }
+
+    /** The report statuses a clinician reads as signed, released content. */
+    private static final Set<com.example.hms.enums.ImagingReportStatus> RELEASED_IMAGING_REPORTS = java.util.EnumSet.of(
+        com.example.hms.enums.ImagingReportStatus.FINAL, com.example.hms.enums.ImagingReportStatus.ADDENDUM,
+        com.example.hms.enums.ImagingReportStatus.CORRECTED, com.example.hms.enums.ImagingReportStatus.AMENDED);
+
+    /**
+     * QA D1924 (r53): what the chart shows of a study's reports. The signed
+     * versions oldest first (the conclusion, then each addendum or
+     * correction); with none signed, the latest report alone.
+     */
+    static List<ImagingReport> shownImagingReports(ImagingReport latest, List<ImagingReport> history) {
+        List<ImagingReport> all = history != null && !history.isEmpty() ? history
+            : latest != null ? List.of(latest) : List.of();
+        // Rex on #1169: released means signed. An unsigned CORRECTED, AMENDED or
+        // ADDENDUM (the author can save one before signing) never displaces
+        // the signed conclusion and is not listed.
+        List<ImagingReport> released = all.stream()
+            .filter(r -> r.isSigned() && RELEASED_IMAGING_REPORTS.contains(r.getReportStatus()))
+            .sorted(Comparator.comparing((ImagingReport r) -> r.getReportVersion() != null ? r.getReportVersion() : 0)
+                .thenComparing(ImagingReport::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+            .toList();
+        if (!released.isEmpty()) {
+            return released;
+        }
+        // Nothing signed yet: the latest read shared with the care team, never a draft or a void.
+        return latest != null && !UNSHOWN_IMAGING_REPORTS.contains(latest.getReportStatus())
+            ? List.of(latest) : List.of();
+    }
+
+    /** Never on the chart: a draft, and a voided or rejected report. */
+    private static final Set<com.example.hms.enums.ImagingReportStatus> UNSHOWN_IMAGING_REPORTS = java.util.EnumSet.of(
+        com.example.hms.enums.ImagingReportStatus.DRAFT, com.example.hms.enums.ImagingReportStatus.CANCELLED,
+        com.example.hms.enums.ImagingReportStatus.ERROR);
+
+    /** The version the study's conclusion is read from: the last one shown that is not an addendum. */
+    static ImagingReport conclusionReport(List<ImagingReport> shown) {
+        for (int i = shown.size() - 1; i >= 0; i--) {
+            if (shown.get(i).getReportStatus() != com.example.hms.enums.ImagingReportStatus.ADDENDUM) {
+                return shown.get(i);
+            }
+        }
+        return shown.isEmpty() ? null : shown.get(shown.size() - 1);
     }
 
     private static int compareVersion(Integer a, Integer b) {
@@ -751,9 +819,13 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .build();
     }
 
-    private ImagingEntryDTO toImagingDto(ImagingOrder o, ImagingReport latest) {
+    private ImagingEntryDTO toImagingDto(ImagingOrder o, ImagingReport latest, List<ImagingReport> history) {
+        // QA D1926 (r53): the appointment's time, when one was typed, is kept.
+        java.time.LocalTime time = wallTime(o.getScheduledTime());
         LocalDateTime scheduledFor = o.getScheduledDate() != null
-            ? o.getScheduledDate().atStartOfDay() : null;
+            ? o.getScheduledDate().atTime(time != null ? time : java.time.LocalTime.MIDNIGHT) : null;
+        List<ImagingReport> shown = shownImagingReports(latest, history);
+        ImagingReport conclusion = conclusionReport(shown);
         return ImagingEntryDTO.builder()
             .id(o.getId())
             .modality(o.getModality() != null ? o.getModality().name() : null)
@@ -764,12 +836,45 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .status(o.getStatus() != null ? o.getStatus().name() : null)
             .orderedAt(o.getOrderedAt())
             .scheduledFor(scheduledFor)
+            .scheduledTime(scheduledFor != null && time != null ? time.toString() : null)
             .clinicalQuestion(o.getClinicalQuestion())
-            .reportStatus(latest != null && latest.getReportStatus() != null
-                ? latest.getReportStatus().name() : null)
-            .reportImpression(latest != null ? truncatePreview(latest.getImpression()) : null)
+            .reportStatus(conclusion != null && conclusion.getReportStatus() != null
+                ? conclusion.getReportStatus().name() : null)
+            .reportImpression(conclusion != null ? truncatePreview(conclusion.getImpression()) : null)
+            .reports(shown.isEmpty() ? null : shown.stream().map(ChartReviewServiceImpl::toImagingReportEntry).toList())
             .build();
     }
+
+    private static ChartReviewDTO.ImagingReportEntryDTO toImagingReportEntry(ImagingReport r) {
+        return ChartReviewDTO.ImagingReportEntryDTO.builder()
+            .id(r.getId())
+            .reportStatus(r.getReportStatus() != null ? r.getReportStatus().name() : null)
+            .reportVersion(r.getReportVersion())
+            .impression(truncatePreview(r.getImpression()))
+            .signedAt(r.getSignedAt())
+            .signedByName(r.getSignedBy() != null ? r.getSignedBy().getFullName() : null)
+            .createdAt(r.getCreatedAt())
+            .build();
+    }
+
+    /** "10:00" or "9:30" typed on the order (a leading time); anything else (a window, free text) is no time. */
+    private static java.time.LocalTime wallTime(String typed) {
+        if (typed == null) {
+            return null;
+        }
+        String trimmed = typed.strip();
+        int end = 0;
+        while (end < trimmed.length() && (Character.isDigit(trimmed.charAt(end)) || trimmed.charAt(end) == ':')) {
+            end++;
+        }
+        try {
+            return java.time.LocalTime.parse(trimmed.substring(0, end), WALL_TIME);
+        } catch (java.time.format.DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    private static final java.time.format.DateTimeFormatter WALL_TIME = java.time.format.DateTimeFormatter.ofPattern("H:mm");
 
     private ProcedureEntryDTO toProcedureDto(ProcedureOrder p) {
         return ProcedureEntryDTO.builder()

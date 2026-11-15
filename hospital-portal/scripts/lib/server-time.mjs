@@ -33,6 +33,10 @@ export const WALL_CLOCK = new Map([
     "an imaging order's planned slot (LocalDate + typed local time), built as a local Date",
   ],
   [
+    'patients/chart-review/chart-review.component.html:sched',
+    "QA D1926: the chart card's imaging slot (LocalDate + typed local time), built as a local Date",
+  ],
+  [
     'slot-admin/slot-admin.html:startAt',
     'slot built from a session template (LocalDate + LocalTime)',
   ],

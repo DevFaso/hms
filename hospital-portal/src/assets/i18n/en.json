@@ -1184,7 +1184,9 @@
         "POSTPONED": "Postponed"
       }
     },
-    "NURSING_NOTE": "Nursing note"
+    "NURSING_NOTE": "Nursing note",
+    "ADDENDUM": "Addendum",
+    "OPEN_IMAGING_REPORT": "Open the report"
   },
   "ORDER_SETS": {
     "QUANTITY_VALUE": "Quantity: {{value}} {{unit}}",
@@ -3740,7 +3742,33 @@
     "STUDY_STARTED": "Study started",
     "STUDY_COMPLETED": "Study completed",
     "STUDY_STATUS_ERROR": "The study status could not be updated",
-    "COMPLETE_STUDY_CONFIRM": "Mark this study as completed? A completed study cannot be reopened."
+    "COMPLETE_STUDY_CONFIRM": "Mark this study as completed? A completed study cannot be reopened.",
+    "CONTRAST_REQUIRED": "Contrast required",
+    "CONTRAST_TYPE": "Contrast type",
+    "CONTRAST_TYPE_PLACEHOLDER": "e.g. IV iodinated",
+    "CONTRAST_ALLERGY": "Contrast allergy",
+    "CONTRAST_ALLERGY_DETAILS": "Allergy details",
+    "CONTRAST_ALLERGY_PLACEHOLDER": "Reaction, premedication given…",
+    "SCHEDULED_DATE": "Exam date",
+    "SCHEDULED_TIME": "Exam time",
+    "LOCATION": "Location",
+    "REQUIRES_AUTHORIZATION": "Pre-authorisation required",
+    "AUTHORIZATION_NUMBER": "Pre-authorisation number",
+    "AUTHORIZATION_NUMBER_HINT": "The study can be started once this number is recorded.",
+    "AUTHORIZATION_NUMBER_MISSING": "Required, number not recorded yet",
+    "PRE_AUTHORIZATION": "Pre-authorisation",
+    "WORKFLOW_NOTES": "Workflow notes",
+    "SCHEDULED_TIME_NEEDS_DATE": "Enter the exam date for this time.",
+    "SCHEDULED_DATE_PAST": "The exam date cannot be in the past.",
+    "ORDER_NOT_FOUND": "This imaging order could not be opened.",
+    "DUPLICATE": {
+      "TITLE": "Possible duplicate order",
+      "BODY": "This patient already has an imaging order for the same modality and region here, placed in the last 30 days. Check that a new order is really needed.",
+      "BACK": "Back to the order",
+      "ORDER_ANYWAY": "Order anyway",
+      "PLACED_ANYWAY": "The order was placed, but this patient already had a recent order for the same modality and region here. Check that each one is needed.",
+      "FLAGGED": "Possible duplicate of a recent order for the same modality and region."
+    }
   },
   "LAB": {
     "DUPLICATE": {

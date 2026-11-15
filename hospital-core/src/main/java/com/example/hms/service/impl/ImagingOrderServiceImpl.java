@@ -232,6 +232,12 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         if (RESULTED_STATES.contains(order.getStatus()) && request.getStatus() == order.getStatus()) {
             throw new com.example.hms.exception.FieldBusinessException("status", "imaging.order.resulted.locked");
         }
+        // QA D1925 (r53): the steps follow each other; results come from a
+        // signed report, and a study needing pre-authorisation starts with its number.
+        com.example.hms.service.support.ImagingOrderTransitions.require(order.getStatus(), request.getStatus());
+        com.example.hms.service.support.ImagingOrderTransitions.requireAuthorisationToStart(request.getStatus(),
+            request.getRequiresAuthorization() != null ? request.getRequiresAuthorization() : order.getRequiresAuthorization(),
+            request.getAuthorizationNumber() != null ? request.getAuthorizationNumber() : order.getAuthorizationNumber());
         if (cancelling) {
             requireCancelAuthor(order);
         }
