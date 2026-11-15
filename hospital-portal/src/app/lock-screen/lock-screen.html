@@ -1,5 +1,14 @@
 <div class="lock-overlay">
-  <div class="lock-card">
+  <!-- QA D2011: a modal dialog — focus lands on the password, Tab stays inside, Escape keeps it locked. -->
+  <div
+    class="lock-card"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="lock-screen-title"
+    aria-describedby="lock-screen-hint"
+    appDialogFocus
+    (dialogDismiss)="keepLocked()"
+  >
     <!-- Lock icon -->
     <div class="lock-icon-wrapper">
       <span class="material-symbols-outlined lock-icon">lock</span>
@@ -18,8 +27,8 @@
       <p class="user-role">{{ userRole | roleLabel }}</p>
     </div>
 
-    <p class="lock-message">{{ 'LOCK.SESSION_LOCKED' | translate }}</p>
-    <p class="lock-sub">{{ 'LOCK.ENTER_PASSWORD' | translate }}</p>
+    <p class="lock-message" id="lock-screen-title">{{ 'LOCK.SESSION_LOCKED' | translate }}</p>
+    <p class="lock-sub" id="lock-screen-hint">{{ 'LOCK.ENTER_PASSWORD' | translate }}</p>
 
     @if (error) {
       <div class="error-banner" role="alert">

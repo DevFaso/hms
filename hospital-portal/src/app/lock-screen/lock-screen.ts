@@ -11,10 +11,17 @@ import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { refreshWithSupersededRetry } from '../interceptors/error.interceptor';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
 @Component({
   selector: 'app-lock-screen',
   standalone: true,
-  imports: [SubmitGuardDirective, FormsModule, TranslateModule, RoleLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    DialogFocusDirective,
+    FormsModule,
+    TranslateModule,
+    RoleLabelPipe,
+  ],
   templateUrl: './lock-screen.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lock-screen.scss',
@@ -171,6 +178,14 @@ export class LockScreenComponent {
   switchUser(): void {
     this.idle.unlock(); // clear lock state
     this.switchedUser.emit();
+  }
+
+  /**
+   * QA D2011: Escape on the lock screen does nothing — only the password,
+   * "Switch user" or "Sign out" leave it. The dialog idiom routes Escape here.
+   */
+  keepLocked(): void {
+    // Intentionally empty: the session stays locked.
   }
 
   togglePassword(): void {
