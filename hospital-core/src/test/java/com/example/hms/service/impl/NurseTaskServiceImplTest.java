@@ -2862,8 +2862,8 @@ class NurseTaskServiceImplTest {
             .heartRateBpm(72).build();
 
         assertThatThrownBy(() -> service.captureVitals(patientId, UUID.randomUUID(), nurseHospitalId, req))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not registered at this hospital");
+            // QA D1870: "not here" is "not found", like GET /patients/{id}, never a distinct refusal.
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
     }
 
     /* ════════════════════════════════════════════════════════════════════

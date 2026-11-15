@@ -94,6 +94,57 @@ class PatientFacingUnfinishedContentGuardTest {
         Map.entry("service/impl/PatientVitalSignServiceImpl.java#getVitalsPageForPatientPortal",
             new Rule("", "measurements: no author draft state")));
 
+    private static final String NO_VOID_STATE = "the record type has no entered-in-error state";
+
+    /**
+     * QA round 54 (the D1910/D1912 class, voided records): every patient-facing read with the token
+     * that leaves out a record removed or marked entered in error, or why it needs none. The keys
+     * must match {@link #PORTAL_READS}: a new patient read says how it treats a voided record.
+     */
+    private static final Map<String, Rule> VOIDED_RECORDS = Map.ofEntries(
+        Map.entry("mapper/EncounterMapper.java#toPatientPortalEncounterResponseDTO", new Rule("", NO_VOID_STATE)),
+        Map.entry("service/EncounterServiceImpl.java#getEncountersForPortalPatient", new Rule("", NO_VOID_STATE)),
+        Map.entry("service/impl/ConsultationServiceImpl.java#getConsultationsForPortalPatient",
+            new Rule("", NO_VOID_STATE)),
+        Map.entry("service/TreatmentPlanServiceImpl.java#listForPortalPatient", new Rule("PATIENT_VISIBLE_STATUSES",
+            "approved plans only")),
+        Map.entry("service/DischargeSummaryServiceImpl.java#getDischargeSummariesForPortalPatient",
+            new Rule("publishedToPatient", "published summaries only")),
+        Map.entry("service/PrescriptionServiceImpl.java#getPrescriptionsForPortalPatient",
+            new Rule("PrescriptionIssuance.issuedOnly(", "issued prescriptions only")),
+        Map.entry("service/impl/GeneralReferralServiceImpl.java#getReferralsForPortalPatient",
+            new Rule("", NO_VOID_STATE)),
+        Map.entry("service/impl/PatientLabResultServiceImpl.java#getLabResultsForPatientPortal",
+            new Rule("", "D1912: LabResult's @SQLRestriction hides every result of a voided order (pinned below)")),
+        Map.entry("service/impl/PatientLabResultServiceImpl.java#countLabResultsForPatientPortal",
+            new Rule("", "D1912: LabResult's @SQLRestriction hides every result of a voided order (pinned below)")),
+        Map.entry("service/impl/PatientMedicationServiceImpl.java#getMedicationsForPatientPortal",
+            new Rule("", "issued orders only (NeverSignedOrderReadersGuardTest)")),
+        Map.entry("service/impl/PatientMedicationServiceImpl.java#getMedicationsPageForPatientPortal",
+            new Rule("PrescriptionIssuance::wasIssued", "issued orders only")),
+        Map.entry("service/impl/PatientMedicationServiceImpl.java#countMedicationsForPatientPortal",
+            new Rule("PrescriptionIssuance.PROPOSALS", "issued orders only")),
+        Map.entry("service/BillingInvoiceServiceImpl.java#getInvoicesForPortalPatient", new Rule("", NO_VOID_STATE)),
+        Map.entry("service/impl/ImmunizationServiceImpl.java#getImmunizationsForPatientPortal",
+            new Rule("ImmunizationServiceImpl::isLiveRecord",
+                "round 54: a dose removed or marked ENTERED_IN_ERROR reached the portal, the apps and the summary")),
+        Map.entry("service/impl/PatientVitalSignServiceImpl.java#getRecentVitalsForPatientPortal",
+            new Rule("", NO_VOID_STATE)),
+        Map.entry("service/impl/PatientVitalSignServiceImpl.java#getVitalsPageForPatientPortal",
+            new Rule("", NO_VOID_STATE)));
+
+    /** Patient-facing record sources outside the read methods above: "file" to the token it must hold. */
+    private static final Map<String, Rule> VOIDED_ELSEWHERE = Map.ofEntries(
+        Map.entry("model/LabResult.java", new Rule("lab.lab_orders.status = 'ENTERED_IN_ERROR'",
+            "D1912: a voided order's results load nowhere")),
+        Map.entry("service/allergy/PatientAllergySummarySync.java",
+            new Rule("AllergyVerificationStatus.ENTERED_IN_ERROR",
+                "round 54: the allergy summary the portal and the apps show leaves out an entered-in-error allergy")),
+        Map.entry("service/AfterVisitSummarySections.java", new Rule("AllergyVerificationStatus.ENTERED_IN_ERROR",
+            "the after-visit summary's allergies")),
+        Map.entry("repository/PatientUploadedDocumentRepository.java", new Rule("DeletedAtIsNull",
+            "a deleted document is not listed")));
+
     /** Readers of note entries, with the token that shows how an unsigned entry is treated. */
     private static final Map<String, Rule> NOTE_READERS = Map.ofEntries(
         // Patient-facing: the signed entry only.
@@ -178,6 +229,45 @@ class PatientFacingUnfinishedContentGuardTest {
         assertThat(problems).as(SourceScan.MANDATE).isEmpty();
         assertThat(found).as("a listed reader that no longer reads note entries comes off the list")
             .containsExactlyInAnyOrderElementsOf(NOTE_READERS.keySet());
+    }
+
+    @Test
+    @DisplayName("round 54: every patient-facing read leaves out a record removed or marked entered in error")
+    void everyPatientFacingReadLeavesOutAVoidedRecord() throws IOException {
+        assertThat(VOIDED_RECORDS.keySet()).as("every patient-facing read states how it treats a voided record")
+            .containsExactlyInAnyOrderElementsOf(PORTAL_READS.keySet());
+        List<String> problems = new ArrayList<>();
+        for (Map.Entry<String, Rule> e : VOIDED_RECORDS.entrySet()) {
+            String[] parts = e.getKey().split("#");
+            String code = SourceScan.stripComments(Files.readString(ROOT.resolve(parts[0]), StandardCharsets.UTF_8));
+            String body = SourceScan.methodBody(code, parts[1]);
+            if (body == null || !body.contains(e.getValue().token())) {
+                problems.add(e.getKey() + " no longer holds `" + e.getValue().token() + "`: " + e.getValue().reason());
+            }
+        }
+        for (Map.Entry<String, Rule> e : VOIDED_ELSEWHERE.entrySet()) {
+            String code = SourceScan.stripComments(Files.readString(ROOT.resolve(e.getKey()), StandardCharsets.UTF_8));
+            if (!code.contains(e.getValue().token())) {
+                problems.add(e.getKey() + " no longer holds `" + e.getValue().token() + "`: " + e.getValue().reason());
+            }
+        }
+        assertThat(problems).as(SourceScan.MANDATE).isEmpty();
+    }
+
+    @Test
+    @DisplayName("D1912: the lab void reads its result ids before the order is marked entered in error")
+    void theLabVoidReadsItsResultsBeforeTheStatusFlips() throws IOException {
+        // Read after the flip, LabResult's @SQLRestriction hides them (the finder auto-flushes), and the
+        // patient's "new result" notification is never withdrawn.
+        String code = SourceScan.stripComments(Files.readString(ROOT.resolve("service/LabOrderServiceImpl.java"),
+            StandardCharsets.UTF_8));
+        String body = SourceScan.methodBody(code, "voidLabOrder");
+        assertThat(body).isNotNull();
+        int read = body.indexOf("labResultRepository.findByLabOrder_Id(");
+        int flip = body.indexOf("setStatus(LabOrderStatus.ENTERED_IN_ERROR)");
+        assertThat(read).as("voidLabOrder reads the result ids").isNotNegative();
+        assertThat(flip).as("voidLabOrder marks the order entered in error").isNotNegative();
+        assertThat(read).as("the result ids are read before the status flips").isLessThan(flip);
     }
 
     @Test

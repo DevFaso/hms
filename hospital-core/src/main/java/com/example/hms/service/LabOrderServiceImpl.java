@@ -1140,6 +1140,12 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         requireOrderDecisionAuthority(roleValidator.getCurrentUserId(), labOrder.getHospital().getId(),
             "lab.order.voidForbidden");
+        // QA D1912 (round 54): the result ids are read BEFORE the status flips.
+        // LabResult's @SQLRestriction hides every result of an ENTERED_IN_ERROR
+        // order, and the finder auto-flushes the dirty order, so read after the
+        // flip it returned nothing and the withdraw below was a no-op.
+        List<UUID> voidedResultIds = labResultRepository.findByLabOrder_Id(labOrder.getId()).stream()
+            .map(com.example.hms.model.LabResult::getId).filter(java.util.Objects::nonNull).toList();
         // The one reason column on the order: for a voided order it says why it
         // was entered in error. Who voided it and when is the audit row.
         labOrder.setCancellationReason(voidReason);
@@ -1147,8 +1153,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         LabOrder saved = labOrderRepository.save(labOrder);
         // QA D1912 (round 53): the voided results leave the portal; their
         // "new result available" notifications leave with them.
-        resultReleaseNotifier.patientResultsWithdrawn(saved, labResultRepository.findByLabOrder_Id(saved.getId())
-            .stream().map(com.example.hms.model.LabResult::getId).filter(java.util.Objects::nonNull).toList());
+        resultReleaseNotifier.patientResultsWithdrawn(saved, voidedResultIds);
         log.info("Lab order {} voided as entered in error", saved.getId());
         return labOrderMapper.toLabOrderResponseDTO(saved);
     }

@@ -124,8 +124,8 @@ class PatientGuarantorServiceImplTest {
         GuarantorRequestDTO dto = request("X", false);
 
         assertThatThrownBy(() -> service.add(patientId, foreignHospitalId, dto))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("guarantor.patient.notRegistered");
+            // QA D1870: "not here" is "not found", like GET /patients/{id}, never a distinct refusal.
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
     }
 
     @Test

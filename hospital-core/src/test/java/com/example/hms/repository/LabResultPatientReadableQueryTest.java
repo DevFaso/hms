@@ -200,6 +200,24 @@ class LabResultPatientReadableQueryTest {
     }
 
     @Test
+    @DisplayName("QA D1912: once its order is marked entered in error, a result no longer loads by its order")
+    void aVoidedOrdersResultsAreHiddenFromTheOrderFinder() {
+        // The premise of LabOrderServiceImpl#voidLabOrder reading the result
+        // ids BEFORE the status flips: read after it (the finder auto-flushes
+        // the dirty order) the @SQLRestriction hides them, and the patient's
+        // "new result" notification was never withdrawn.
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        LabOrder order = orderedAndRunAtA.getLabOrder();
+        assertThat(labResultRepository.findByLabOrder_Id(order.getId())).extracting(LabResult::getId)
+            .containsExactly(orderedAndRunAtA.getId());
+
+        order.setStatus(com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR);
+        labOrderRepository.save(order);
+
+        assertThat(labResultRepository.findByLabOrder_Id(order.getId())).isEmpty();
+    }
+
+    @Test
     @DisplayName("findAllPatientResults reads every hospital's rows, but still only this patient's")
     void allPatientResults() {
         List<LabResult> rows = labResultRepository.findAllPatientResults(patient.getId(),

@@ -111,6 +111,8 @@ export class SubmitGuardDirective {
   private static nextId = 0;
   private readonly fallbackId = `submit-guard-${++SubmitGuardDirective.nextId}`;
   private marked: string[] = [];
+  /** The form root whose edits keep a shown reason current (QA D1940), once per root. */
+  private watched: HTMLElement | null = null;
 
   constructor() {
     const button = this.host.nativeElement as HTMLElement;
@@ -120,6 +122,9 @@ export class SubmitGuardDirective {
     button.addEventListener('click', onClick, true);
     inject(DestroyRef).onDestroy(() => {
       button.removeEventListener('click', onClick, true);
+      this.watched?.removeEventListener('input', this.onEdit);
+      this.watched?.removeEventListener('change', this.onEdit);
+      this.watched = null;
       this.clear();
     });
     effect(() => {
@@ -175,6 +180,51 @@ export class SubmitGuardDirective {
       badPhones ? this.translate.instant(PHONE_KEY) : '',
     ].filter((t) => t !== '');
     this.showMessage(said.join(' '));
+    this.watch(root);
+  }
+
+  /**
+   * QA D1940 (round 54): the reason under the button ("Champs obligatoires
+   * manquants : Service, Date, Heure") kept naming fields after they were
+   * filled, until the next click. While it is shown, every edit in the form
+   * recomputes it: a filled field leaves the sentence, and the sentence (with
+   * the marks) goes when nothing is missing any more. Read after the edit's
+   * change detection, so the guard expression is current too.
+   */
+  private watch(root: HTMLElement): void {
+    if (this.watched === root) return;
+    this.watched?.removeEventListener('input', this.onEdit);
+    this.watched?.removeEventListener('change', this.onEdit);
+    this.watched = root;
+    root.addEventListener('input', this.onEdit);
+    root.addEventListener('change', this.onEdit);
+  }
+
+  private readonly onEdit = (): void => {
+    setTimeout(() => this.refreshShown(), 0);
+  };
+
+  private refreshShown(): void {
+    const id = this.messageId();
+    const msg = this.messageElement(id);
+    if (!msg) return;
+    const root = this.root();
+    const all = this.guardedFieldIds(root);
+    const blank = all.filter((f) => isBlank(root.querySelector(`#${CSS.escape(f)}`)));
+    let reason = this.appSubmitGuard();
+    if (!reason && blank.some((f) => this.requiredById(root, f))) reason = true;
+    const wholeForm = this.submitGuardRequired() || !this.isSecondaryAction();
+    const badPhones =
+      invalidPhoneInputs(root).filter((el) => wholeForm || all.includes(el.id)).length > 0;
+    if (!reason && !badPhones) {
+      this.clear();
+      return;
+    }
+    const said = [
+      reason ? this.messageFor(reason, root, blank) : '',
+      badPhones ? this.translate.instant(PHONE_KEY) : '',
+    ].filter((t) => t !== '');
+    msg.textContent = said.join(' ');
   }
 
   /**
