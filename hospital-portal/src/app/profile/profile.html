@@ -1052,6 +1052,24 @@
                             </button>
                           </div>
                         </div>
+                      } @else if (verifyingContactId() === rc.id && verificationError()) {
+                        <!-- D2000: the FIRST send refused (429, 503, 400): say why and offer a way on. -->
+                        <div class="verification-form" data-testid="recovery-send-refused">
+                          <div class="form-error" role="alert">{{ verificationError() }}</div>
+                          <div class="form-actions">
+                            <button
+                              class="btn-secondary"
+                              data-testid="recovery-send-retry"
+                              (click)="sendVerificationCode(rc)"
+                              [disabled]="verificationSending()"
+                            >
+                              {{ 'PROFILE.RESEND_CODE' | translate }}
+                            </button>
+                            <button class="btn-link" (click)="cancelVerification()">
+                              {{ 'COMMON.CANCEL' | translate }}
+                            </button>
+                          </div>
+                        </div>
                       }
                     }
                   </div>

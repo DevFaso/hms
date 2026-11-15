@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { signal, WritableSignal } from '@angular/core';
@@ -680,6 +681,40 @@ describe('ProfileComponent — editing the profile', () => {
       host.querySelector<HTMLButtonElement>('.recovery-badges .btn-sm-primary')!.click();
       expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledWith('rc1');
       expect(host.querySelector('[data-testid="recovery-phone-unverifiable"]')).toBeNull();
+    });
+
+    it('a refused FIRST send (429, 503) says why and offers a retry and a cancel', () => {
+      const host = fixture.nativeElement as HTMLElement;
+      component.credentials.set(health(true));
+      fixture.detectChanges();
+      for (const [status, message] of [
+        [429, 'Un code vient d’être envoyé à ce contact.'],
+        [503, 'Les SMS ne peuvent pas encore être envoyés depuis cette plateforme.'],
+      ] as const) {
+        profiles.sendRecoveryVerificationCode.and.returnValue(
+          throwError(() => new HttpErrorResponse({ status, error: { message } })),
+        );
+        host.querySelector<HTMLButtonElement>('.recovery-badges .btn-sm-primary')!.click();
+        fixture.detectChanges();
+
+        const alert = host.querySelector('[data-testid="recovery-send-refused"] [role="alert"]');
+        expect(alert?.textContent).withContext(String(status)).toContain(message);
+        const retry = host.querySelector<HTMLButtonElement>('[data-testid="recovery-send-retry"]');
+        expect(retry).withContext(String(status)).not.toBeNull();
+
+        retry!.click();
+        fixture.detectChanges();
+        expect(
+          host.querySelector('[data-testid="recovery-send-refused"] [role="alert"]')?.textContent,
+        )
+          .withContext(`${status} retried`)
+          .toContain(message);
+
+        component.cancelVerification();
+        fixture.detectChanges();
+        expect(host.querySelector('[data-testid="recovery-send-refused"]')).toBeNull();
+      }
+      expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledTimes(4);
     });
 
     it('refuses the sign-in email or phone as a recovery contact, on the field', () => {
