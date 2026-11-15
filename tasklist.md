@@ -6608,3 +6608,9 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Patient apps do not say "not finalised":** the server no longer sends an unsigned note to the apps; they show no assessment and do not read the new `notePendingSignature` flag yet (Android/iOS parity).
 - **Treatment plans, ARCHIVED:** the patient now reads APPROVED plans only; an archived plan that had been approved is hidden too, because nothing on the row says it was approved (`signOffAt` is never written). Record the approval to show it again.
 - **Voided lab result, clinician notifications:** the void withdraws the PATIENT's LAB_RESULT notifications only; the ordering clinician's correction or critical-value notifications about the voided result stay.
+
+## Standing debt — severe blood pressure (feat/severe-bp-adult-and-pregnancy-r54)
+- **Pregnancy card on the BPA panel is hospital-scoped:** `PregnancyHypertensionProtocolRule` reads the due date of this hospital's maternal history only; a woman known pregnant only through another hospital's history or an active labour gets the URGENT warning at vitals entry but no pregnancy card (the adult card stays silent for her, so the panel shows nothing). Read the scope from `SevereHypertension.scopeOf`.
+- **Ticked organ-damage signs are not shown back:** they are stored on the vital set (V299) and drive the warning and the BPA card, but no read DTO or chart view shows which signs were ticked.
+- **Organ-damage checklist on the patient apps:** the vitals API accepts `organDamageSymptoms`, but only the nurse station and triage offer the checklist; the Android/iOS apps and the patient's home readings do not (a home reading is judged, so it can warn, never URGENT).
+- **Adult warning is not escalated on the postpartum observation:** after day 42 the observation carries a CAUTION recheck alert; it has no organ-damage checklist, so it never becomes URGENT there.

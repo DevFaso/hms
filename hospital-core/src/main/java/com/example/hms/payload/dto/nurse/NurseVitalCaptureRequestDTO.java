@@ -79,6 +79,12 @@ public class NurseVitalCaptureRequestDTO {
     @Max(value = 10, message = "{vitals.painScale.range}")
     private Integer painScale;
 
+    /**
+     * r54 (provisional): the signs of acute organ damage the recorder ticked next to the blood pressure.
+     * Optional; one sign turns an adult's severe-range warning URGENT. Never required to save.
+     */
+    private java.util.List<com.example.hms.enums.OrganDamageSymptom> organDamageSymptoms;
+
     @com.example.hms.validation.ReportedOn("diastolicBpMmHg")
     @AssertTrue(message = "{vitals.bloodPressure.invalid}")
     @JsonIgnore

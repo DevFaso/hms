@@ -4,8 +4,9 @@ import com.example.hms.cdshooks.CdsCardText;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
 import com.example.hms.model.PatientVitalSign;
-import com.example.hms.service.maternity.PostpartumSevereHypertension;
-import com.example.hms.service.maternity.PostpartumSevereHypertension.Reading;
+import com.example.hms.service.vitals.SevereHypertension;
+import com.example.hms.service.vitals.SevereHypertension.Reading;
+import com.example.hms.service.vitals.SevereHypertension.Scope;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,9 +14,11 @@ import java.util.List;
 /**
  * QA D1890 — Best-Practice Advisory: severe hypertension after birth. The latest blood pressure in
  * the engine's window, from a vital set or a postpartum observation, is judged by
- * {@link PostpartumSevereHypertension} (systolic &ge; 160 OR diastolic &ge; 110 mmHg, taken after a
- * recorded birth): the same rule the postpartum observation and every vitals write use. A match is a
- * CRITICAL card asking for an urgent obstetric review; the card never blocks anything.
+ * {@link SevereHypertension}, the rule the postpartum observation and every vitals write use; this
+ * card speaks for its postpartum scope (systolic &ge; 160 OR diastolic &ge; 110 mmHg, taken up to 42
+ * days after a recorded birth; r54: was 365). A match is a CRITICAL card asking for an urgent
+ * obstetric review; the card never blocks anything. After 42 days the adult advisory
+ * ({@link AdultSevereHypertensionRule}) judges the reading.
  *
  * <p>The pregnancy advisory ({@link PregnancyHypertensionProtocolRule}) stops at a recorded birth
  * (the engine drops the due date), so the two never speak about the same reading.
@@ -27,10 +30,10 @@ public class PostpartumSevereHypertensionRule implements BpaRule {
 
     public static final String PROTOCOL_CODE = "POSTPARTUM_SEVERE_HYPERTENSION";
 
-    private final PostpartumSevereHypertension evaluator;
+    private final SevereHypertension evaluator;
     private final CdsCardText text;
 
-    public PostpartumSevereHypertensionRule(PostpartumSevereHypertension evaluator, CdsCardText text) {
+    public PostpartumSevereHypertensionRule(SevereHypertension evaluator, CdsCardText text) {
         this.evaluator = evaluator;
         this.text = text;
     }
@@ -44,8 +47,9 @@ public class PostpartumSevereHypertensionRule implements BpaRule {
     public List<CdsCard> evaluate(BpaRuleContext context) {
         if (context == null || !context.hasPatient() || evaluator == null) return List.of();
         Reading latest = latest(context);
-        if (latest == null || !evaluator.applies(context.patient().getId(), latest.systolic(), latest.diastolic(),
-            latest.takenAt())) {
+        if (latest == null) return List.of();
+        SevereHypertension.Verdict verdict = evaluator.evaluate(context.patient(), latest);
+        if (verdict == null || !verdict.raised() || verdict.scope() != Scope.POSTPARTUM) {
             return List.of();
         }
         return List.of(buildCard(latest, text.zoneOf(context.hospitalId())));
@@ -55,7 +59,8 @@ public class PostpartumSevereHypertensionRule implements BpaRule {
     static Reading latest(BpaRuleContext context) {
         List<Reading> readings = new ArrayList<>(context.postpartumBloodPressures());
         for (PatientVitalSign v : context.recentVitals()) {
-            readings.add(new Reading(v.getSystolicBpMmHg(), v.getDiastolicBpMmHg(), v.getRecordedAt(), v.getCreatedAt()));
+            readings.add(new Reading(v.getSystolicBpMmHg(), v.getDiastolicBpMmHg(), v.getRecordedAt(), v.getCreatedAt(),
+                !com.example.hms.enums.OrganDamageSymptom.parse(v.getOrganDamageSymptoms()).isEmpty()));
         }
         Reading latest = null;
         for (Reading r : readings) {

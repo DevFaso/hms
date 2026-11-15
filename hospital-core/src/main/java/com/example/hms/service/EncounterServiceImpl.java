@@ -2330,6 +2330,7 @@ public class EncounterServiceImpl implements EncounterService {
                 .vitalSignId(savedVital.getId())
                 .newbornAlerts(vitalSignJudgement.alerts(judgement))
                 .postpartumAlerts(vitalSignJudgement.postpartumAlerts(judgement))
+                .hypertensionAlerts(vitalSignJudgement.hypertensionAlerts(judgement))
                 .build();
     }
 
@@ -2400,6 +2401,8 @@ public class EncounterServiceImpl implements EncounterService {
                 // rendered in the reader's language when read (VitalSignNotes).
                 .painScore(req.getPainScale())
                 .fundalHeightCm(req.getFundalHeightCm())
+                // r54: the organ-damage signs the shared severe-blood-pressure rule reads.
+                .organDamageSymptoms(com.example.hms.enums.OrganDamageSymptom.join(req.getOrganDamageSymptoms()))
                 .build();
     }
 

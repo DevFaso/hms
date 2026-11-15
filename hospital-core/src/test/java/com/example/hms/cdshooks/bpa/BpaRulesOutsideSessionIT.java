@@ -239,7 +239,7 @@ class BpaRulesOutsideSessionIT extends BaseIT {
         }
         BpaRuleContext context = engine.buildContext(reload(delivered), hospital.getId());
         assertThat(context.postpartumBloodPressures())
-            .extracting(com.example.hms.service.maternity.PostpartumSevereHypertension.Reading::systolic)
+            .extracting(com.example.hms.service.vitals.SevereHypertension.Reading::systolic)
             .containsExactly(162);
         assertThat(postpartumRule().evaluate(context)).hasSize(1);
     }

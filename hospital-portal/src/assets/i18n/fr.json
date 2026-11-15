@@ -6987,7 +6987,8 @@
         "PRO_CRITICAL_ITEM": "Élément PRO critique",
         "PRO_CRITICAL_ITEM_ESCALATION": "Escalade — élément PRO critique",
         "PRO_SCREEN_POSITIVE": "Dépistage PRO positif",
-        "REORDER_ALERT": "Alerte de réapprovisionnement"
+        "REORDER_ALERT": "Alerte de réapprovisionnement",
+        "SEVERE_HYPERTENSION": "Hypertension sévère"
       },
       "ORGANIZATION_TYPE": {
         "ACADEMIC_CENTER": "Centre universitaire",
@@ -13212,7 +13213,9 @@
   "VITAL_LIMITS": {
     "NEWBORN_WARNING": "Nouveau-né (moins de 28 jours) : la mesure est enregistrée et a été évaluée selon les valeurs du nouveau-né (provisoires, en attente de l'approbation du responsable de néonatologie).",
     "NEWBORN_WARNING_URGENT": "Nouveau-né (moins de 28 jours) : la mesure est enregistrée, évaluée selon les valeurs du nouveau-né (provisoires, en attente de l'approbation du responsable de néonatologie), et l'équipe soignante a été prévenue.",
-    "POSTPARTUM_WARNING_URGENT": "Après la naissance : la mesure est enregistrée et l'équipe soignante a été prévenue. Règle provisoire, en attente de l'approbation du responsable d'obstétrique.",
+    "POSTPARTUM_WARNING_URGENT": "Grossesse ou post-partum : la mesure est enregistrée et l'équipe soignante a été prévenue. Règle provisoire, en attente de l'approbation du responsable d'obstétrique.",
+    "ADULT_HTN_WARNING": "Tension artérielle très élevée : la mesure est enregistrée. Règle provisoire, en attente de l'approbation du responsable clinique.",
+    "ADULT_HTN_URGENT": "Tension artérielle très élevée avec un signe d'atteinte d'organe : la mesure est enregistrée et l'équipe soignante a été prévenue. Règle provisoire, en attente de l'approbation du responsable clinique.",
     "BP_ORDER": "La pression diastolique doit être inférieure à la pression systolique.",
     "TEMPERATURE": "La température doit être comprise entre {{min}} et {{max}} °C.",
     "HEART_RATE": "La fréquence cardiaque doit être comprise entre {{min}} et {{max}} bpm.",
@@ -13224,6 +13227,14 @@
     "WEIGHT": "Le poids doit être compris entre {{min}} et {{max}} kg.",
     "HEIGHT": "La taille doit être comprise entre {{min}} et {{max}} cm.",
     "HEAD_CIRCUMFERENCE": "Le périmètre crânien doit être compris entre {{min}} et {{max}} cm."
+  },
+  "ORGAN_DAMAGE": {
+    "LEGEND": "Signes d'atteinte d'organe (facultatif, si la tension est élevée)",
+    "CHEST_PAIN": "Douleur thoracique",
+    "NEUROLOGICAL_SIGNS": "Signes neurologiques",
+    "DYSPNEA": "Dyspnée",
+    "VISUAL_DISTURBANCE": "Troubles visuels",
+    "SEVERE_HEADACHE": "Céphalée sévère"
   },
   "FIELD_LIMITS": {
     "RANGE": "{{field}} : la valeur doit être comprise entre {{min}} et {{max}}.",

@@ -7021,7 +7021,8 @@
         "PRO_CRITICAL_ITEM": "Ítem PRO crítico",
         "PRO_CRITICAL_ITEM_ESCALATION": "Escalamiento — ítem PRO crítico",
         "PRO_SCREEN_POSITIVE": "Cribado PRO positivo",
-        "REORDER_ALERT": "Alerta de reabastecimiento"
+        "REORDER_ALERT": "Alerta de reabastecimiento",
+        "SEVERE_HYPERTENSION": "Hipertensión grave"
       },
       "ORGANIZATION_TYPE": {
         "ACADEMIC_CENTER": "Centro académico",
@@ -13212,7 +13213,9 @@
   "VITAL_LIMITS": {
     "NEWBORN_WARNING": "Recién nacido (menos de 28 días): la medición se ha guardado y se ha evaluado con los valores del recién nacido (provisionales, pendientes de la aprobación del responsable de neonatología).",
     "NEWBORN_WARNING_URGENT": "Recién nacido (menos de 28 días): la medición se ha guardado, se ha evaluado con los valores del recién nacido (provisionales, pendientes de la aprobación del responsable de neonatología) y se ha avisado al equipo asistencial.",
-    "POSTPARTUM_WARNING_URGENT": "Después del parto: la medición se ha guardado y se ha avisado al equipo asistencial. Regla provisional, pendiente de la aprobación del responsable de obstetricia.",
+    "POSTPARTUM_WARNING_URGENT": "Embarazo o posparto: la medición se ha guardado y se ha avisado al equipo asistencial. Regla provisional, pendiente de la aprobación del responsable de obstetricia.",
+    "ADULT_HTN_WARNING": "Presión arterial muy elevada: la medición se ha guardado. Regla provisional, pendiente de la aprobación del responsable clínico.",
+    "ADULT_HTN_URGENT": "Presión arterial muy elevada con un signo de daño de órganos: la medición se ha guardado y se ha avisado al equipo asistencial. Regla provisional, pendiente de la aprobación del responsable clínico.",
     "BP_ORDER": "La presión diastólica debe ser inferior a la presión sistólica.",
     "TEMPERATURE": "La temperatura debe estar entre {{min}} y {{max}} °C.",
     "HEART_RATE": "La frecuencia cardíaca debe estar entre {{min}} y {{max}} lpm.",
@@ -13224,6 +13227,14 @@
     "WEIGHT": "El peso debe estar entre {{min}} y {{max}} kg.",
     "HEIGHT": "La talla debe estar entre {{min}} y {{max}} cm.",
     "HEAD_CIRCUMFERENCE": "El perímetro cefálico debe estar entre {{min}} y {{max}} cm."
+  },
+  "ORGAN_DAMAGE": {
+    "LEGEND": "Signos de daño de órganos (opcional, con una presión arterial elevada)",
+    "CHEST_PAIN": "Dolor torácico",
+    "NEUROLOGICAL_SIGNS": "Signos neurológicos",
+    "DYSPNEA": "Disnea",
+    "VISUAL_DISTURBANCE": "Alteraciones visuales",
+    "SEVERE_HEADACHE": "Cefalea intensa"
   },
   "FIELD_LIMITS": {
     "RANGE": "{{field}}: el valor debe estar entre {{min}} y {{max}}.",

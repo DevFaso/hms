@@ -41,7 +41,7 @@ describe('TriageFormComponent', () => {
 
   beforeEach(async () => {
     mockEncounterService = jasmine.createSpyObj('EncounterService', ['submitTriage']);
-    mockToastService = jasmine.createSpyObj('ToastService', ['success', 'error']);
+    mockToastService = jasmine.createSpyObj('ToastService', ['success', 'error', 'push']);
     mockPatientService = jasmine.createSpyObj('PatientService', ['getById']);
     mockPatientService.getById.and.returnValue(throwError(() => new Error('not asked')));
 
@@ -250,6 +250,41 @@ describe('TriageFormComponent', () => {
     expect(emitSpy).toHaveBeenCalledWith(sampleResponse);
     expect(mockToastService.success).toHaveBeenCalled();
     expect(component.saving()).toBeFalse();
+  });
+
+  it('r54: sends the ticked organ-damage signs and shows the adult warning from the server', () => {
+    mockEncounterService.submitTriage.and.returnValue(
+      of({
+        ...sampleResponse,
+        hypertensionAlerts: [
+          {
+            code: 'adult-severe-hypertension',
+            severity: 'WARNING',
+            type: 'HYPERTENSION',
+            message: 'Recheck the blood pressure at rest.',
+          },
+        ],
+      }),
+    );
+    fillMinimum();
+    component.organDamageSymptoms.set(['VISUAL_DISTURBANCE']);
+    component.submit();
+    const sent = mockEncounterService.submitTriage.calls.mostRecent().args[1];
+    expect(sent.organDamageSymptoms).toEqual(['VISUAL_DISTURBANCE']);
+    expect(mockToastService.push).toHaveBeenCalledWith(
+      'warning',
+      jasmine.stringMatching(/ADULT_HTN_WARNING.*Recheck the blood pressure at rest\./),
+      jasmine.any(Number),
+    );
+  });
+
+  it('r54: no ticked sign is sent as nothing', () => {
+    mockEncounterService.submitTriage.and.returnValue(of(sampleResponse));
+    fillMinimum();
+    component.submit();
+    expect(
+      mockEncounterService.submitTriage.calls.mostRecent().args[1].organDamageSymptoms,
+    ).toBeUndefined();
   });
 
   it('should show error toast on failure', () => {

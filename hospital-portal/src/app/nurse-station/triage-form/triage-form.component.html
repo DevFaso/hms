@@ -264,6 +264,13 @@
               {{ 'TRIAGE.ON_OXYGEN' | translate }}
             </label>
           </div>
+          <!-- r54 (provisional): optional organ-damage signs, read by the server's severe-pressure rule. -->
+          <div class="form-group">
+            <app-organ-damage-symptoms
+              [selected]="organDamageSymptoms()"
+              (selectedChange)="organDamageSymptoms.set($event)"
+            />
+          </div>
         </div>
       </fieldset>
 

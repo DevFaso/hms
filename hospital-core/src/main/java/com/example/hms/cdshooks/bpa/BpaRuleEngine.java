@@ -226,7 +226,7 @@ public class BpaRuleEngine {
             .filter(v -> enteredAfter(v, acknowledgedAt))
             .toList();
         // QA D1890: a postpartum observation's pressure is a reading too, judged by its entry time.
-        List<com.example.hms.service.maternity.PostpartumSevereHypertension.Reading> newerPostpartum =
+        List<com.example.hms.service.vitals.SevereHypertension.Reading> newerPostpartum =
             context.postpartumBloodPressures().stream()
                 .filter(r -> {
                     LocalDateTime entered = r.enteredAt() != null ? r.enteredAt() : r.takenAt();
@@ -325,10 +325,7 @@ public class BpaRuleEngine {
     }
 
     static LocalDate dueDateOf(MaternalHistory history) {
-        if (history.getEstimatedDueDateByUltrasound() != null) return history.getEstimatedDueDateByUltrasound();
-        if (history.getEstimatedDueDate() != null) return history.getEstimatedDueDate();
-        return history.getLastMenstrualPeriod() == null ? null
-            : history.getLastMenstrualPeriod().plusDays(PregnancyHypertensionProtocolRule.PREGNANCY_DAYS);
+        return com.example.hms.service.vitals.SevereHypertension.dueDateOf(history);
     }
 
     /**
@@ -337,14 +334,14 @@ public class BpaRuleEngine {
      * (filtered in the query, so newer pressure-less ones cannot hide a severe one), and an
      * observation another one corrected is left out: the correction is the reading.
      */
-    List<com.example.hms.service.maternity.PostpartumSevereHypertension.Reading> loadPostpartumBloodPressures(
+    List<com.example.hms.service.vitals.SevereHypertension.Reading> loadPostpartumBloodPressures(
         UUID patientId, UUID hospitalId) {
         if (postpartumObservationRepository == null) return List.of();
         LocalDateTime from = LocalDateTime.now().minus(VITALS_LOOKBACK);
         return postpartumObservationRepository
             .findBloodPressuresSince(patientId, hospitalId, from, PageRequest.of(0, VITALS_PAGE_SIZE))
             .stream()
-            .map(o -> new com.example.hms.service.maternity.PostpartumSevereHypertension.Reading(
+            .map(o -> new com.example.hms.service.vitals.SevereHypertension.Reading(
                 o.getSystolicBpMmHg(), o.getDiastolicBpMmHg(), o.getObservationTime(),
                 o.getDocumentedAt() != null ? o.getDocumentedAt() : o.getCreatedAt()))
             .toList();

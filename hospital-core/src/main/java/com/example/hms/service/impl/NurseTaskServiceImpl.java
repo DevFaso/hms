@@ -2281,6 +2281,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             // QA D1169: the score is a number, rendered in the reader's language when read.
             .notes(request.getNotes() != null && !request.getNotes().isBlank() ? request.getNotes().strip() : null)
             .painScore(request.getPainScale())
+            // r54: the organ-damage signs the shared severe-blood-pressure rule reads.
+            .organDamageSymptoms(com.example.hms.enums.OrganDamageSymptom.join(request.getOrganDamageSymptoms()))
             .build();
 
         // QA D1564: the shared judgement - a newborn's set against the newborn bands, every
@@ -2332,6 +2334,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .clinicallySignificant(clinicallySig)
             .newbornAlerts(vitalSignJudgement.alerts(judgement))
             .postpartumAlerts(vitalSignJudgement.postpartumAlerts(judgement))
+            .hypertensionAlerts(vitalSignJudgement.hypertensionAlerts(judgement))
             .build();
     }
 

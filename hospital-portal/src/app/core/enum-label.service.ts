@@ -910,6 +910,7 @@ export class EnumLabelService implements OnDestroy {
       PRO_CRITICAL_ITEM_ESCALATION: 'Critical PRO Item Escalation',
       PRO_SCREEN_POSITIVE: 'Positive PRO Screen',
       REORDER_ALERT: 'Reorder Alert',
+      SEVERE_HYPERTENSION: 'Severe hypertension',
     },
 
     /* ── Order source (snapshot drawer + nurse station board) ─── */

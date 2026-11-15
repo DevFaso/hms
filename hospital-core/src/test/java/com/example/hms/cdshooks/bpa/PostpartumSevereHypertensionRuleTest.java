@@ -5,8 +5,8 @@ import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientVitalSign;
 import com.example.hms.repository.DeliveryRecordRepository;
-import com.example.hms.service.maternity.PostpartumSevereHypertension;
-import com.example.hms.service.maternity.PostpartumSevereHypertension.Reading;
+import com.example.hms.service.vitals.SevereHypertension;
+import com.example.hms.service.vitals.SevereHypertension.Reading;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -30,7 +30,7 @@ class PostpartumSevereHypertensionRuleTest {
 
     private final DeliveryRecordRepository deliveries = mock(DeliveryRecordRepository.class);
     private final PostpartumSevereHypertensionRule rule =
-        new PostpartumSevereHypertensionRule(new PostpartumSevereHypertension(deliveries), CdsCardText.ENGLISH);
+        new PostpartumSevereHypertensionRule(new SevereHypertension(deliveries), CdsCardText.ENGLISH);
     private final Patient mother = mother();
 
     private static Patient mother() {

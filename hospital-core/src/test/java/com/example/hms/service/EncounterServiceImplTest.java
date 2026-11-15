@@ -161,7 +161,7 @@ class EncounterServiceImplTest {
             org.mockito.Mockito.mock(com.example.hms.service.NotificationService.class),
             com.example.hms.i18n.TestMessageSources.bundles(),
             org.mockito.Mockito.mock(com.example.hms.repository.DeliveryNewbornRepository.class),
-            new com.example.hms.service.maternity.PostpartumSevereHypertension(
+            new com.example.hms.service.vitals.SevereHypertension(
                 org.mockito.Mockito.mock(com.example.hms.repository.DeliveryRecordRepository.class))));
         com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
         signInAsDoctor();

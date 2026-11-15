@@ -51,7 +51,7 @@ class VitalSignJudgementTest {
         mock(com.example.hms.repository.DeliveryNewbornRepository.class);
     private final VitalSignJudgement judgement = new VitalSignJudgement(assessments, news2, notifications,
         com.example.hms.i18n.TestMessageSources.bundles(), deliveryNewborns,
-        new com.example.hms.service.maternity.PostpartumSevereHypertension(deliveries));
+        new com.example.hms.service.vitals.SevereHypertension(deliveries));
 
     @AfterEach
     void resetLocale() {
@@ -359,5 +359,73 @@ class VitalSignJudgementTest {
             anyString(), eq("MATERNITY_ALERT"));
         verify(notifications).createNotification(eq("postpartum.alert.notification"), any(), eq("dr_a"),
             eq("MATERNITY_ALERT"));
+    }
+
+    // ---- r54 adult (provisional, 2026-11-15): severe blood pressure in an adult with no obstetric scope ----
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "adult {0}/{1} -> warning {2}")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "180,80,true", "120,120,true", "179,119,false", "164,114,false"
+    })
+    @DisplayName("r54: an adult woman with no delivery is judged by the adult rule (the QA observation: 164/114)")
+    void anAdultWithNoDeliveryIsJudgedByTheAdultRule(int systolic, int diastolic, boolean warns) {
+        LocaleContextHolder.setLocale(Locale.FRENCH);
+        PatientVitalSign vital = set(motherDeliveredBefore(false)).systolicBpMmHg(systolic).diastolicBpMmHg(diastolic)
+            .build();
+
+        VitalSignJudgement.Judgement j = judgement.judge(vital);
+
+        assertThat(j.adultSevereHypertension()).isEqualTo(warns);
+        assertThat(j.postpartumSevereHypertension()).isFalse();
+        assertThat(judgement.postpartumAlerts(j)).isEmpty();
+        if (warns) {
+            assertThat(vital.isClinicallySignificant()).isTrue();
+            assertThat(judgement.hypertensionAlerts(j)).singleElement().satisfies(a -> {
+                assertThat(a.getCode()).isEqualTo("adult-severe-hypertension");
+                assertThat(a.getSeverity()).isEqualTo("WARNING");
+                assertThat(a.getType()).isEqualTo("HYPERTENSION");
+                assertThat(a.getMessage()).startsWith("Hypertension sévère — recontrôler la tension au repos")
+                    .contains("d'atteinte d'organe");
+            });
+        } else {
+            assertThat(judgement.hypertensionAlerts(j)).isEmpty();
+        }
+    }
+
+    @Test
+    void aSignOfOrganDamageMakesTheAdultWarningUrgentAndNotifies() {
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        Patient adult = motherDeliveredBefore(false);
+        UUID hospitalId = UUID.randomUUID();
+        when(news2.recipients(adult.getId(), hospitalId, "nurse_a", null))
+            .thenReturn(new LinkedHashSet<>(List.of("nurse_a", "dr_a")));
+        PatientVitalSign vital = set(adult).systolicBpMmHg(190).diastolicBpMmHg(100)
+            .organDamageSymptoms("CHEST_PAIN").build();
+
+        VitalSignJudgement.Judgement j = judgement.judge(vital);
+        assertThat(judgement.hypertensionAlerts(j)).singleElement()
+            .satisfies(a -> assertThat(a.getSeverity()).isEqualTo("URGENT"));
+        judgement.escalate(vital, j, adult.getId(), hospitalId, "nurse_a", null);
+
+        verify(notifications, times(2)).createNotification(eq("vitals.alert.notification"), any(), anyString(),
+            eq("SEVERE_HYPERTENSION"));
+    }
+
+    @Test
+    void aPlainAdultWarningNotifiesNoOne() {
+        Patient adult = motherDeliveredBefore(false);
+        PatientVitalSign vital = set(adult).systolicBpMmHg(185).diastolicBpMmHg(100).build();
+        judgement.escalate(vital, judgement.judge(vital), adult.getId(), UUID.randomUUID(), "nurse_a", null);
+        verify(notifications, never()).createNotification(eq("vitals.alert.notification"), any(), anyString(), anyString());
+    }
+
+    @Test
+    void underEighteenTheAdultRuleIsSilent() {
+        Patient teen = bornDaysAgo(16 * 365);
+        teen.setId(UUID.randomUUID());
+        PatientVitalSign vital = set(teen).systolicBpMmHg(185).diastolicBpMmHg(125).build();
+        VitalSignJudgement.Judgement j = judgement.judge(vital);
+        assertThat(j.adultSevereHypertension()).isFalse();
+        assertThat(judgement.hypertensionAlerts(j)).isEmpty();
     }
 }

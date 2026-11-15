@@ -95,9 +95,16 @@ class BpaAcknowledgementCoversWhatItSawTest {
                 List.of(), DUE_AT_30_WEEKS),
             // QA D1890 (provisional): severe blood pressure after a recorded birth.
             new Case("PostpartumSevereHypertensionRule", new PostpartumSevereHypertensionRule(
-                    new com.example.hms.service.maternity.PostpartumSevereHypertension(delivered()),
+                    new com.example.hms.service.vitals.SevereHypertension(delivered()),
                     com.example.hms.cdshooks.CdsCardText.ENGLISH),
                 at -> PatientVitalSign.builder().systolicBpMmHg(164).diastolicBpMmHg(114).recordedAt(at).build(),
+                List.of(), null),
+            // r54 (provisional): severe blood pressure in an adult with no birth on record.
+            new Case("AdultSevereHypertensionRule", new AdultSevereHypertensionRule(
+                    new com.example.hms.service.vitals.SevereHypertension(
+                        mock(com.example.hms.repository.DeliveryRecordRepository.class)),
+                    com.example.hms.cdshooks.CdsCardText.ENGLISH),
+                at -> PatientVitalSign.builder().systolicBpMmHg(184).diastolicBpMmHg(100).recordedAt(at).build(),
                 List.of(), null));
     }
 
