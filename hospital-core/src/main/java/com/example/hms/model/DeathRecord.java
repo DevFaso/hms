@@ -7,7 +7,9 @@ import com.example.hms.enums.PerinatalBirthStatus;
 import com.example.hms.enums.PerinatalDeathType;
 import com.example.hms.enums.PerinatalReportingEligibility;
 import com.example.hms.enums.PlaceOfDeath;
+import com.example.hms.security.EncryptedStringConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -96,7 +98,8 @@ public class DeathRecord extends BaseEntity {
 
     /** What finally stopped the heart. */
     @Size(max = 500)
-    @Column(name = "immediate_cause", nullable = false, length = 500)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "immediate_cause", nullable = false, columnDefinition = "TEXT")
     private String immediateCause;
 
     @Size(max = 20)
@@ -109,7 +112,8 @@ public class DeathRecord extends BaseEntity {
      * register nothing on its own.
      */
     @Size(max = 500)
-    @Column(name = "underlying_cause", length = 500)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "underlying_cause", columnDefinition = "TEXT")
     private String underlyingCause;
 
     @Size(max = 20)
@@ -117,7 +121,8 @@ public class DeathRecord extends BaseEntity {
     private String underlyingCauseCode;
 
     @Size(max = 1000)
-    @Column(name = "contributing_causes", length = 1000)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "contributing_causes", columnDefinition = "TEXT")
     private String contributingCauses;
 
     @Column(name = "maternal_death", nullable = false)
@@ -178,11 +183,13 @@ public class DeathRecord extends BaseEntity {
     private LocalDateTime amendedAt;
 
     @Size(max = 500)
-    @Column(name = "amendment_reason", length = 500)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "amendment_reason", columnDefinition = "TEXT")
     private String amendmentReason;
 
     @Size(max = 1000)
-    @Column(name = "notes", length = 1000)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -202,7 +209,8 @@ public class DeathRecord extends BaseEntity {
     private String enteredInErrorByName;
 
     @Size(max = 500)
-    @Column(name = "entered_in_error_reason", length = 500)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "entered_in_error_reason", columnDefinition = "TEXT")
     private String enteredInErrorReason;
 
     /**

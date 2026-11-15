@@ -5,7 +5,9 @@ import com.example.hms.model.BaseEntity;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.User;
+import com.example.hms.security.EncryptedStringConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -15,6 +17,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -95,7 +98,9 @@ public class FetalDeathEvent extends BaseEntity {
     private User recordedBy;
 
     /** Set when the event was created by a correction (live to stillborn): the reason given. */
-    @Column(name = "creation_reason", length = 500)
+    @Size(max = 500)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "creation_reason", columnDefinition = "TEXT")
     private String creationReason;
 
     @Column(name = "superseded_at")
@@ -105,7 +110,9 @@ public class FetalDeathEvent extends BaseEntity {
     @JoinColumn(name = "superseded_by_user_id", foreignKey = @ForeignKey(name = "fk_fetal_death_superseded_by"))
     private User supersededBy;
 
-    @Column(name = "supersede_reason", length = 500)
+    @Size(max = 500)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "supersede_reason", columnDefinition = "TEXT")
     private String supersedeReason;
 
     public boolean isSuperseded() {
