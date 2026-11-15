@@ -175,11 +175,10 @@ public class VitalSignJudgement {
             // Obstetric: always URGENT. Adult: only the URGENT one (a sign of organ damage) is notified.
             if (bloodPressure.obstetric()) {
                 notifySevereHypertension(saved, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
-                    POSTPARTUM_NOTICE_KEY, POSTPARTUM_TYPE_KEY, bloodPressure.messageKey(), NOTIFICATION_TYPE);
+                    true, bloodPressure.messageKey());
             } else if (bloodPressure.adult() && bloodPressure.level() == SevereHypertension.Level.URGENT) {
                 notifySevereHypertension(saved, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
-                    HYPERTENSION_NOTICE_KEY, HYPERTENSION_TYPE_KEY, bloodPressure.messageKey(),
-                    HYPERTENSION_NOTIFICATION_TYPE);
+                    false, bloodPressure.messageKey());
             }
         }
         if (judgement == null || !judgement.newborn() || patientId == null || hospitalId == null) {
@@ -216,18 +215,23 @@ public class VitalSignJudgement {
      */
     private void notifySevereHypertension(PatientVitalSign saved, UUID patientId, UUID hospitalId,
                                           String recorderUsername, String visitPhysicianUsername,
-                                          String noticeKey, String typeKey, String messageKey,
-                                          String notificationType) {
+                                          boolean obstetric, String messageKey) {
         Set<String> recipients = news2EscalationService.recipients(patientId, hospitalId, recorderUsername,
             visitPhysicianUsername);
         String fullName = saved != null && saved.getPatient() != null
             ? Objects.toString(saved.getPatient().getFullName(), "") : "";
         Object patientArg = fullName.isBlank() ? NotificationLocalizer.key("patient.fallback.generic") : fullName;
-        Object[] args = {NotificationLocalizer.key(typeKey), patientArg,
+        // Obstetric: the postpartum observation's own notice; adult: the vitals notice.
+        Object[] args = {NotificationLocalizer.key(obstetric ? POSTPARTUM_TYPE_KEY : HYPERTENSION_TYPE_KEY), patientArg,
             ObstetricAlertEscalationWorker.alertMessageArg(messageKey, null, "")};
         for (String recipient : recipients) {
             try {
-                notificationService.createNotification(noticeKey, args, recipient, notificationType);
+                if (obstetric) {
+                    notificationService.createNotification(POSTPARTUM_NOTICE_KEY, args, recipient, NOTIFICATION_TYPE);
+                } else {
+                    notificationService.createNotification(HYPERTENSION_NOTICE_KEY, args, recipient,
+                        HYPERTENSION_NOTIFICATION_TYPE);
+                }
             } catch (RuntimeException ex) {
                 log.warn("Severe blood-pressure notice not created: {}", ex.getClass().getSimpleName());
             }

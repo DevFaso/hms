@@ -264,6 +264,10 @@ final class ComputedKeys {
         site(r, d, "com/example/hms/service/impl/NewbornAssessmentServiceImpl.java|String messageKey = alert.getCode() == null ? null : ALERT_MSG_PREFIX + alert.getCode()",
             "NewbornAssessmentServiceImpl.java|newborn.alert.msg.");
         // QA D1564: the shared vitals judgement raises NewbornAlertRules' own codes and types.
+        // r54: the shared severe-blood-pressure rule's sentence, one per scope and level.
+        r.put("com/example/hms/service/vitals/VitalSignJudgement.java|bloodPressure.messageKey()", severeHypertensionMessages());
+        r.put("com/example/hms/service/vitals/VitalSignJudgement.java|bloodPressure.messageKey() #2", severeHypertensionMessages());
+        r.put("com/example/hms/service/vitals/VitalSignJudgement.java|verdict.messageKey()", severeHypertensionMessages());
         site(r, d, "com/example/hms/service/vitals/VitalSignJudgement.java|ALERT_MSG_PREFIX + f.code()",
             "NewbornAssessmentServiceImpl.java|newborn.alert.msg.");
         site(r, d, "com/example/hms/service/vitals/VitalSignJudgement.java|ALERT_MSG_PREFIX + finding.code()",
@@ -372,6 +376,22 @@ final class ComputedKeys {
     }
 
     /** {@code MessageUtil.resolve(reason.code())}: the code of every step-up refusal reason. */
+    /** Every sentence the severe-blood-pressure verdict can name: each raised scope at each level. */
+    private static Domain severeHypertensionMessages() {
+        return () -> {
+            Set<String> keys = new TreeSet<>();
+            for (com.example.hms.service.vitals.SevereHypertension.Scope scope
+                    : com.example.hms.service.vitals.SevereHypertension.Scope.values()) {
+                for (com.example.hms.service.vitals.SevereHypertension.Level level
+                        : com.example.hms.service.vitals.SevereHypertension.Level.values()) {
+                    String key = new com.example.hms.service.vitals.SevereHypertension.Verdict(scope, level).messageKey();
+                    if (key != null) keys.add(key);
+                }
+            }
+            return keys;
+        };
+    }
+
     private static Domain mfaStepUpReasons() {
         return () -> {
             Set<String> keys = new TreeSet<>();

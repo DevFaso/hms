@@ -119,6 +119,8 @@ class BpaRulesOutsideSessionIT extends BaseIT {
     private Patient delivered;
     private com.example.hms.model.postpartum.PostpartumCarePlan deliveredPlan;
     private com.example.hms.model.postpartum.PostpartumObservation severeObservation;
+    /** r54: an adult woman with no birth or pregnancy on record, 186/124 (adult severe range). */
+    private Patient hypertensive;
 
     @BeforeEach
     void seed() {
@@ -212,6 +214,12 @@ class BpaRulesOutsideSessionIT extends BaseIT {
                 .systolicBpMmHg(162).diastolicBpMmHg(112).build());
         cleanup.add(0, () -> postpartumObservationRepository.deleteById(observation.getId()));
         severeObservation = observation;
+
+        hypertensive = patient("FEMALE", LocalDate.of(1970, 6, 6));
+        vital(hypertensive, PatientVitalSign.builder()
+            .recordedAt(now.minusMinutes(15))
+            .systolicBpMmHg(186)
+            .diastolicBpMmHg(124));
     }
 
     /** A postpartum observation for {@link #delivered}, saved and cleaned up. */
@@ -278,6 +286,7 @@ class BpaRulesOutsideSessionIT extends BaseIT {
         BpaRuleContext febrileContext = engine.buildContext(reload(febrile), hospital.getId());
         BpaRuleContext pregnantContext = engine.buildContext(reload(pregnant), hospital.getId());
         BpaRuleContext deliveredContext = engine.buildContext(reload(delivered), hospital.getId());
+        BpaRuleContext hypertensiveContext = engine.buildContext(reload(hypertensive), hospital.getId());
         assertThat(febrileContext.recentVitals()).isNotEmpty();
         assertThat(pregnantContext.recentVitals()).isNotEmpty();
         assertThat(deliveredContext.postpartumBloodPressures()).as("D1890: the postpartum observation's pressure")
@@ -289,6 +298,7 @@ class BpaRulesOutsideSessionIT extends BaseIT {
             List<CdsCard> cards = new ArrayList<>(rule.evaluate(febrileContext));
             cards.addAll(rule.evaluate(pregnantContext));
             cards.addAll(rule.evaluate(deliveredContext));
+            cards.addAll(rule.evaluate(hypertensiveContext));
             if (cards.isEmpty()) {
                 silent.add(rule.id());
             }
