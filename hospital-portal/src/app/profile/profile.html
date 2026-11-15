@@ -973,14 +973,11 @@
                               <button
                                 class="btn-sm-primary"
                                 (click)="sendVerificationCode(rc)"
-                                [disabled]="
-                                  verificationSending() ||
-                                  (rc.contactType === 'PHONE' && !phoneRecoveryAvailable())
-                                "
-                                [title]="
+                                [disabled]="verificationSending()"
+                                [appSubmitGuard]="
                                   rc.contactType === 'PHONE' && !phoneRecoveryAvailable()
                                     ? ('PROFILE.RECOVERY_PHONE_UNAVAILABLE' | translate)
-                                    : ''
+                                    : false
                                 "
                               >
                                 {{ 'PROFILE.VERIFY' | translate }}

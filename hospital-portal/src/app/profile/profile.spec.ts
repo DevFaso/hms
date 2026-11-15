@@ -668,11 +668,21 @@ describe('ProfileComponent — editing the profile', () => {
       const verify = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
         '.recovery-badges .btn-sm-primary',
       )!;
-      expect(verify.disabled).toBeTrue();
+      profiles.sendRecoveryVerificationCode.and.returnValue(
+        of({ message: 'sent', contactType: 'PHONE' }),
+      );
+      verify.click();
+      fixture.detectChanges();
+      // The click is stopped and the reason is said, not swallowed by a disabled button.
+      expect(profiles.sendRecoveryVerificationCode).not.toHaveBeenCalled();
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+        'PROFILE.RECOVERY_PHONE_UNAVAILABLE',
+      );
 
       component.credentials.set(health(true));
       fixture.detectChanges();
-      expect(verify.disabled).toBeFalse();
+      verify.click();
+      expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledWith('rc1');
     });
 
     it('refuses the sign-in email or phone as a recovery contact, on the field', () => {
