@@ -2,7 +2,10 @@ import { refusalReason } from '../../shared/refusal-reason';
 import {
   announceNewbornWarning,
   announcePostpartumWarning,
+  announceHypertensionWarning,
 } from '../../shared/newborn-vital-alerts';
+import { OrganDamageSymptomsComponent } from '../../shared/organ-damage-symptoms/organ-damage-symptoms.component';
+import { OrganDamageSymptom } from '../../shared/organ-damage-symptoms';
 import {
   Component,
   EventEmitter,
@@ -55,6 +58,7 @@ const TRIAGE_VITAL_IDS = TRIAGE_VITAL_INPUTS.map(([, id]) => id);
   standalone: true,
   imports: [
     SubmitGuardDirective,
+    OrganDamageSymptomsComponent,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -123,6 +127,8 @@ export class TriageFormComponent {
   weightKg = signal<number | null>(null);
   heightCm = signal<number | null>(null);
   painScale = signal<number | null>(null);
+  /** r54 (provisional): the optional organ-damage signs, read by the server's severe-pressure rule. */
+  organDamageSymptoms = signal<OrganDamageSymptom[]>([]);
   /** QA D1031: the antenatal fundal height, in cm (optional). */
   fundalHeightCm = signal<number | null>(null);
 
@@ -209,6 +215,7 @@ export class TriageFormComponent {
     return (
       vitals.some((v) => v !== null) ||
       !!this.consciousnessLevel() ||
+      this.organDamageSymptoms().length > 0 ||
       this.onOxygen() ||
       this.fallRisk() ||
       !!this.roomAssignment().trim() ||
@@ -326,6 +333,9 @@ export class TriageFormComponent {
       onOxygen: this.onOxygen(),
       consciousnessLevel: this.consciousnessLevel() || undefined,
       painScale: this.painScale() ?? undefined,
+      organDamageSymptoms: this.organDamageSymptoms().length
+        ? this.organDamageSymptoms()
+        : undefined,
       fundalHeightCm: this.showFundalHeight() ? (this.fundalHeightCm() ?? undefined) : undefined,
       fallRisk: this.fallRisk() || undefined,
       fallRiskScore: this.fallRiskScore() ?? undefined,
@@ -340,6 +350,8 @@ export class TriageFormComponent {
         announceNewbornWarning(response?.newbornAlerts, this.toast, this.translate);
         // QA D1890: a mother's severe pressure after birth; saved, and warned (URGENT).
         announcePostpartumWarning(response?.postpartumAlerts, this.toast, this.translate);
+        // r54: an adult's severe pressure; saved, and warned (a recheck; URGENT with a sign of organ damage).
+        announceHypertensionWarning(response?.hypertensionAlerts, this.toast, this.translate);
         this.triageCompleted.emit(response);
       },
       error: (err) => {

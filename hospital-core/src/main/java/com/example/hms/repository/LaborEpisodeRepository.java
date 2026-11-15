@@ -25,6 +25,10 @@ public interface LaborEpisodeRepository extends JpaRepository<LaborEpisode, UUID
     /** QA D1631: her newest episode of this status at any hospital (one woman, one active labour). */
     Optional<LaborEpisode> findFirstByPatient_IdAndStatusOrderByAdmittedAtDesc(UUID patientId, LaborStatus status);
 
+    /** r54: her newest episode of this status at the hospitals the record-access policy lets the reader see. */
+    Optional<LaborEpisode> findFirstByPatient_IdAndHospital_IdInAndStatusOrderByAdmittedAtDesc(
+        UUID patientId, java.util.Collection<UUID> hospitalIds, LaborStatus status);
+
     List<LaborEpisode> findByPatient_IdAndHospital_IdOrderByAdmittedAtDesc(
         UUID patientId, UUID hospitalId, Pageable pageable);
 

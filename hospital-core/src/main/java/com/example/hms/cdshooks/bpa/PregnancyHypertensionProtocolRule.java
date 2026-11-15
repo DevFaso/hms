@@ -36,12 +36,11 @@ public class PregnancyHypertensionProtocolRule implements BpaRule {
     public static final String PROTOCOL_CODE = "PREGNANCY_HYPERTENSION";
     public static final int HTN_SYSTOLIC = 140;
     public static final int HTN_DIASTOLIC = 90;
-    public static final int SEVERE_HTN_SYSTOLIC = 160;
-    public static final int SEVERE_HTN_DIASTOLIC = 110;
-    /** Naegele: a due date is 280 days after the last menstrual period. */
-    static final int PREGNANCY_DAYS = 280;
-    /** Post-term is 42 weeks, two weeks past the due date; beyond it the pregnancy is not assumed ongoing. */
-    static final int POST_TERM_GRACE_DAYS = 14;
+    /** r54: the obstetric severe range and the pregnancy dating are the shared rule's. */
+    public static final int SEVERE_HTN_SYSTOLIC = com.example.hms.service.vitals.SevereHypertension.OBSTETRIC_SYSTOLIC;
+    public static final int SEVERE_HTN_DIASTOLIC = com.example.hms.service.vitals.SevereHypertension.OBSTETRIC_DIASTOLIC;
+    static final int PREGNANCY_DAYS = com.example.hms.service.vitals.SevereHypertension.PREGNANCY_DAYS;
+    static final int POST_TERM_GRACE_DAYS = com.example.hms.service.vitals.SevereHypertension.POST_TERM_GRACE_DAYS;
 
     private final BpaProtocolRepository protocolRepository;
     private final CdsCardText text;
@@ -79,9 +78,7 @@ public class PregnancyHypertensionProtocolRule implements BpaRule {
     }
 
     static boolean isPregnant(LocalDate dueDate, LocalDate today) {
-        if (dueDate == null) return false;
-        return !today.isBefore(dueDate.minusDays(PREGNANCY_DAYS))
-            && !today.isAfter(dueDate.plusDays(POST_TERM_GRACE_DAYS));
+        return com.example.hms.service.vitals.SevereHypertension.isPregnantOn(dueDate, today);
     }
 
     static long gestationalWeeks(LocalDate dueDate, LocalDate today) {
@@ -93,8 +90,8 @@ public class PregnancyHypertensionProtocolRule implements BpaRule {
     }
 
     static boolean isSevere(PatientVitalSign v) {
-        return atOrAbove(v.getSystolicBpMmHg(), SEVERE_HTN_SYSTOLIC)
-            || atOrAbove(v.getDiastolicBpMmHg(), SEVERE_HTN_DIASTOLIC);
+        return com.example.hms.service.vitals.SevereHypertension.isObstetricSevere(v.getSystolicBpMmHg(),
+            v.getDiastolicBpMmHg());
     }
 
     private static boolean atOrAbove(Integer value, int threshold) {

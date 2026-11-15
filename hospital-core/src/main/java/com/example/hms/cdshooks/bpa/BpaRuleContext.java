@@ -47,7 +47,7 @@ public record BpaRuleContext(
     List<PatientProblem> activeProblems,
     List<Prescription> activePrescriptions,
     LocalDate estimatedDueDate,
-    List<com.example.hms.service.maternity.PostpartumSevereHypertension.Reading> postpartumBloodPressures
+    List<com.example.hms.service.vitals.SevereHypertension.Reading> postpartumBloodPressures
 ) {
 
     /** A context with no postpartum observation readings. */

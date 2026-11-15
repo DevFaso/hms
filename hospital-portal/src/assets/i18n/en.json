@@ -2056,7 +2056,8 @@
       "REFERRAL": "referral",
       "STORYBOARD": "patient overview",
       "ULTRASOUND_ORDER": "ultrasound order",
-      "VITAL_SIGNS": "vital signs"
+      "VITAL_SIGNS": "vital signs",
+      "OBSTETRIC_RECORD": "obstetric record"
     },
     "CROSS_HOSPITAL_PURPOSE": {
       "TO_OPEN_A_LABOUR_EPISODE": ", to open a labour episode"
@@ -7037,7 +7038,8 @@
         "PRO_CRITICAL_ITEM": "Critical PRO Item",
         "PRO_CRITICAL_ITEM_ESCALATION": "Critical PRO Item Escalation",
         "PRO_SCREEN_POSITIVE": "Positive PRO Screen",
-        "REORDER_ALERT": "Reorder Alert"
+        "REORDER_ALERT": "Reorder Alert",
+        "SEVERE_HYPERTENSION": "Severe hypertension"
       },
       "ORGANIZATION_TYPE": {
         "ACADEMIC_CENTER": "Academic Center",
@@ -13235,7 +13237,9 @@
   "VITAL_LIMITS": {
     "NEWBORN_WARNING": "Newborn (under 28 days): the reading is saved and was judged against the newborn ranges (provisional, pending the neonatal lead's approval).",
     "NEWBORN_WARNING_URGENT": "Newborn (under 28 days): the reading is saved, judged against the newborn ranges (provisional, pending the neonatal lead's approval), and the care team has been notified.",
-    "POSTPARTUM_WARNING_URGENT": "After birth: the reading is saved and the care team has been notified. Provisional rule, pending the obstetric lead's approval.",
+    "POSTPARTUM_WARNING_URGENT": "Pregnancy or after birth: the reading is saved and the care team has been notified. Provisional rule, pending the obstetric lead's approval.",
+    "ADULT_HTN_WARNING": "Severe blood pressure: the reading is saved. Provisional rule, pending the clinical lead's approval.",
+    "ADULT_HTN_URGENT": "Severe blood pressure with a sign of organ damage: the reading is saved and the care team has been notified. Provisional rule, pending the clinical lead's approval.",
     "BP_ORDER": "The diastolic pressure must be lower than the systolic pressure.",
     "TEMPERATURE": "Temperature must be between {{min}} and {{max}} °C.",
     "HEART_RATE": "Heart rate must be between {{min}} and {{max}} bpm.",
@@ -13247,6 +13251,14 @@
     "WEIGHT": "Weight must be between {{min}} and {{max}} kg.",
     "HEIGHT": "Height must be between {{min}} and {{max}} cm.",
     "HEAD_CIRCUMFERENCE": "Head circumference must be between {{min}} and {{max}} cm."
+  },
+  "ORGAN_DAMAGE": {
+    "LEGEND": "Signs of organ damage (optional, with a high blood pressure)",
+    "CHEST_PAIN": "Chest pain",
+    "NEUROLOGICAL_SIGNS": "Neurological signs",
+    "DYSPNEA": "Shortness of breath",
+    "VISUAL_DISTURBANCE": "Visual disturbance",
+    "SEVERE_HEADACHE": "Severe headache"
   },
   "FIELD_LIMITS": {
     "RANGE": "{{field}}: the value must be between {{min}} and {{max}}.",

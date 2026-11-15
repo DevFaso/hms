@@ -89,8 +89,9 @@ public class LaborServiceImpl implements LaborService {
     static final double ACTION_LINE_LAG_HOURS = 4.0;
     static final double MATERNAL_FEVER_C = 38.0;
     static final int MATERNAL_TACHYCARDIA_BPM = 120;
-    static final int SEVERE_HTN_SYSTOLIC = 160;
-    static final int SEVERE_HTN_DIASTOLIC = 110;
+    /** The obstetric severe range is the shared rule's (r54): one place holds it. */
+    static final int SEVERE_HTN_SYSTOLIC = com.example.hms.service.vitals.SevereHypertension.OBSTETRIC_SYSTOLIC;
+    static final int SEVERE_HTN_DIASTOLIC = com.example.hms.service.vitals.SevereHypertension.OBSTETRIC_DIASTOLIC;
     static final int HTN_SYSTOLIC = 140;
     static final int HTN_DIASTOLIC = 90;
     static final int PPH_BLOOD_LOSS_ML = 500;
@@ -1471,7 +1472,7 @@ public class LaborServiceImpl implements LaborService {
         }
         Integer sys = entry.getSystolicBpMmHg();
         Integer dia = entry.getDiastolicBpMmHg();
-        boolean severe = (sys != null && sys >= SEVERE_HTN_SYSTOLIC) || (dia != null && dia >= SEVERE_HTN_DIASTOLIC);
+        boolean severe = com.example.hms.service.vitals.SevereHypertension.isObstetricSevere(sys, dia);
         boolean mild = (sys != null && sys >= HTN_SYSTOLIC) || (dia != null && dia >= HTN_DIASTOLIC);
         if (severe) {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.URGENT,

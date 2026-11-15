@@ -88,6 +88,8 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     private final CrossHospitalReachRecorder reachRecorder;
     private final MessageSource messageSource;
     private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
+    /** r54: the shared severe-blood-pressure rule (obstetric up to 42 days after birth, adult after). */
+    private final com.example.hms.service.vitals.SevereHypertension severeHypertension;
 
     @Override
     public PostpartumObservationResponseDTO recordObservation(UUID patientId,
@@ -304,8 +306,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     }
 
     /** How far back a recorded birth still opens postpartum care (QA D517). */
-    static final int POSTPARTUM_DELIVERY_LOOKBACK_DAYS =
-        com.example.hms.service.maternity.PostpartumSevereHypertension.AFTER_BIRTH_LOOKBACK_DAYS;
+    static final int POSTPARTUM_DELIVERY_LOOKBACK_DAYS = 365;
 
     /**
      * QA D517: a postpartum observation was accepted for a woman with no
@@ -506,14 +507,19 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             infectionAlert = true;
         }
 
-        // QA D1890 (provisional, 2026-11-14): severe blood pressure after birth. The thresholds live in
-        // the shared evaluator; this path is after birth by construction (requireRecordedDelivery, and
-        // an observation before the birth is refused). It warns: the observation is saved either way.
-        if (com.example.hms.service.maternity.PostpartumSevereHypertension.isSevere(
-                observation.getSystolicBpMmHg(), observation.getDiastolicBpMmHg())) {
+        // QA D1890, r54 (provisional): severe blood pressure. The shared rule judges it: obstetric
+        // (URGENT) up to 42 days after the birth, the adult rule (a recheck warning) after that. It
+        // warns: the observation is saved either way.
+        com.example.hms.service.vitals.SevereHypertension.Verdict bloodPressure = judgeBloodPressure(observation);
+        if (bloodPressure.obstetric()) {
             alerts.add(buildAlert(PostpartumAlertType.HYPERTENSION, PostpartumAlertSeverity.URGENT,
-                "postpartum-severe-hypertension",
-                alertText("postpartum-severe-hypertension"),
+                com.example.hms.service.vitals.SevereHypertension.ALERT_CODE,
+                alertText(com.example.hms.service.vitals.SevereHypertension.ALERT_CODE),
+                "Blood Pressure"));
+        } else if (bloodPressure.adult()) {
+            alerts.add(buildAlert(PostpartumAlertType.HYPERTENSION, PostpartumAlertSeverity.CAUTION,
+                com.example.hms.service.vitals.SevereHypertension.ADULT_ALERT_CODE,
+                alertText(com.example.hms.service.vitals.SevereHypertension.ADULT_ALERT_CODE),
                 "Blood Pressure"));
         }
 
@@ -566,6 +572,31 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             || observation.isFoulLochiaOdor()
             || observation.isUterineTenderness()
             || observation.isChillsOrRigors();
+    }
+
+    /**
+     * r54: the observation's pressure under the shared rule, at the observation's time and hospital.
+     * This path is after a birth by construction, so without the evaluator (a unit built outside
+     * Spring) the reading is judged as postpartum; and a mother the rule finds in no scope (under 18,
+     * her birth not readable here) is judged by the adult thresholds, which cover anyone who has
+     * given birth once past the 42 days (r54 review, provisional).
+     */
+    private com.example.hms.service.vitals.SevereHypertension.Verdict judgeBloodPressure(PostpartumObservation observation) {
+        Integer systolic = observation.getSystolicBpMmHg();
+        Integer diastolic = observation.getDiastolicBpMmHg();
+        if (severeHypertension == null) {
+            return com.example.hms.service.vitals.SevereHypertension.judge(
+                com.example.hms.service.vitals.SevereHypertension.Scope.POSTPARTUM, systolic, diastolic, false);
+        }
+        com.example.hms.service.vitals.SevereHypertension.Verdict verdict = severeHypertension.evaluate(
+            observation.getPatient(),
+            com.example.hms.service.recordaccess.CrossHospitalReachRecorder.hospitalIdOf(observation.getHospital()),
+            systolic, diastolic, observation.getObservationTime(), false);
+        if (verdict == null || verdict.scope() == com.example.hms.service.vitals.SevereHypertension.Scope.NONE) {
+            return com.example.hms.service.vitals.SevereHypertension.judge(
+                com.example.hms.service.vitals.SevereHypertension.Scope.ADULT, systolic, diastolic, false);
+        }
+        return verdict;
     }
 
     /**
