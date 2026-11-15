@@ -116,6 +116,55 @@ class PasswordResetServiceImplTest {
             () -> service.requestResetByPhone("70202020", Locale.FRENCH, null));
     }
 
+    /**
+     * D2000 class (prod 2026-11-15, Orange 401 on the token): a refused SMS logged
+     * "failed" and then "issued by SMS". The success line and the audit come only
+     * after the provider accepted; the caller's answer is the same either way.
+     */
+    @Test
+    void d2000_aRefusedResetSmsIsNeverLoggedOrAuditedAsIssued() {
+        user.setEmail(null);
+        user.setPhoneNumber("+22670202020");
+        when(userRepository.findByPhoneNumber("+22670202020")).thenReturn(Optional.of(user));
+        when(smsService.deliversRealSms()).thenReturn(true);
+        when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(messageSource.getMessage(eq("sms.passwordReset.link"), any(), any(Locale.class))).thenReturn("link");
+        doThrow(new IllegalStateException("sms.orange.authFailed")).when(smsService).send(any(), any());
+
+        ch.qos.logback.classic.Logger logger =
+            (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(PasswordResetServiceImpl.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+            new ch.qos.logback.core.read.ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> service.requestResetByPhone("70202020", Locale.FRENCH, null));
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        java.util.List<String> lines = appender.list.stream()
+            .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage).toList();
+        assertThat(lines).noneMatch(l -> l.contains("issued by SMS"));
+        assertThat(lines).anyMatch(l -> l.contains("SMS NOT sent for user " + userId));
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void d2000_anAcceptedResetSmsIsLoggedAndAuditedAsIssued() {
+        user.setEmail(null);
+        user.setPhoneNumber("+22670202020");
+        when(userRepository.findByPhoneNumber("+22670202020")).thenReturn(Optional.of(user));
+        when(smsService.deliversRealSms()).thenReturn(true);
+        when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(messageSource.getMessage(eq("sms.passwordReset.link"), any(), any(Locale.class))).thenReturn("link");
+
+        service.requestResetByPhone("70202020", Locale.FRENCH, null);
+
+        verify(auditEventLogService).logEvent(any());
+    }
+
     @Test
     void qaD222_aMailFailureNeverReachesTheCaller() {
         when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
