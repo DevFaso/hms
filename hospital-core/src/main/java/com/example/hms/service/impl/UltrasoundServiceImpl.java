@@ -22,6 +22,7 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UltrasoundOrderRepository;
 import com.example.hms.repository.UltrasoundReportRepository;
+import com.example.hms.service.support.PatientSafeView;
 import com.example.hms.service.UltrasoundService;
 import com.example.hms.service.PatientSubjectReadGuard;
 import com.example.hms.service.PatientSubjectReaderRoles;
@@ -681,7 +682,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         if (!mayReadReport(report)) {
             throw new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_KEY, reportId);
         }
-        return ultrasoundMapper.toReportResponseDTO(report);
+        return asReadBy(report);
     }
 
     @Override
@@ -692,7 +693,19 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         if (!mayReadReport(report)) {
             throw reportForOrderNotFound(orderId);
         }
-        return ultrasoundMapper.toReportResponseDTO(report);
+        return asReadBy(report);
+    }
+
+    /**
+     * QA D1960: a patient, or staff reading their own report outside their hospital, reads the
+     * patient's copy; staff in scope read the report whole.
+     */
+    private UltrasoundReportResponseDTO asReadBy(UltrasoundReport report) {
+        UltrasoundReportResponseDTO dto = ultrasoundMapper.toReportResponseDTO(report);
+        Hospital at = report != null ? report.getHospital() : null;
+        boolean asPatient = subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.ULTRASOUND_READS)
+            || !inStaffScope(at);
+        return asPatient ? PatientSafeView.ultrasoundReport(dto) : dto;
     }
 
     /**
@@ -799,7 +812,8 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         if (patientOnly && dto != null && order.getReport() != null && !order.getReport().isReleasedToPatient()) {
             dto.setReport(null);
         }
-        return dto;
+        // QA D1960: the patient's copy, not the high-risk notes, why it was cancelled or the review notes.
+        return patientOnly ? PatientSafeView.ultrasoundOrder(dto) : dto;
     }
 
     private static ResourceNotFoundException reportForOrderNotFound(UUID orderId) {

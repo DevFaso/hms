@@ -1868,7 +1868,19 @@ public class EncounterServiceImpl implements EncounterService {
 
         requireEncounterReadable(e, scope);
 
-        return encounterMapper.toEncounterResponseDTO(e);
+        // QA D1960 (the D1910 class on the by-id read): a patient, or staff reading their own visit
+        // outside their hospital, read the patient's copy: the signed note only, never a draft entry.
+        return readsAsItsPatient(e, scope) ? encounterMapper.toPatientPortalEncounterResponseDTO(e)
+            : encounterMapper.toEncounterResponseDTO(e);
+    }
+
+    /** After {@link #requireEncounterReadable}: was the encounter readable only because the caller is its patient? */
+    private static boolean readsAsItsPatient(Encounter encounter, EncounterReadScope scope) {
+        if (scope.subject()) {
+            return true;
+        }
+        UUID encounterHospitalId = encounter.getHospital() != null ? encounter.getHospital().getId() : null;
+        return !scope.crossTenant() && !isAtCallerHospital(encounterHospitalId, scope.hospitalId());
     }
 
     /**

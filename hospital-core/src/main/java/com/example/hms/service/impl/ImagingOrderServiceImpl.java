@@ -19,6 +19,7 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.service.ImagingOrderService;
 import com.example.hms.service.PatientSubjectReadGuard;
 import com.example.hms.service.PatientSubjectReaderRoles;
+import com.example.hms.service.support.PatientSafeView;
 import com.example.hms.service.support.ImagingPreAuthorisationPolicy;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
@@ -577,7 +578,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             List<ImagingOrder> own = status != null
                 ? imagingOrderRepository.findByPatient_IdAndStatusOrderByOrderedAtDesc(patientId, status)
                 : imagingOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId);
-            return own.stream().map(imagingOrderMapper::toResponseDTO).toList();
+            // QA D1960: the patient's copy, not the care team's working notes.
+            return own.stream().map(imagingOrderMapper::toResponseDTO).map(PatientSafeView::imagingOrder).toList();
         }
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
