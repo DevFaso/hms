@@ -72,6 +72,18 @@
       "hospital-core/src/main/java/com/example/hms/enums/PermissionMatrixAuditAction.java"
     ]
   },
+  "priceListCategory": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PriceListCategory.java"
+  },
+  "priceListLinkType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PriceListLinkType.java"
+  },
+  "priceListPriceStatus": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PriceListPriceStatus.java"
+  },
+  "priceListSystemKey": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PriceListSystemKey.java"
+  },
   "auditStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/AuditStatus.java" },
   "bedStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/BedStatus.java" },
   "bloodProductType": {

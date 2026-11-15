@@ -273,6 +273,21 @@ public class RoleValidator {
     }
     public boolean hasRole(UUID userId, UUID hospitalId, String roleCode) { return hasAnyCode(userId, hospitalId, roleCode); }
 
+    /**
+     * Billing-money plan PR 2 (owner decision D-1, 2026-11-15): who maintains a hospital's price list - a hospital
+     * admin or an accountant assignment AT that hospital. Never the cashier, a clinician or the platform super-admin
+     * on their own (RoleExpansion grants the super-admin the hospital admin AUTHORITY, never an assignment).
+     */
+    public boolean canMaintainPriceList(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, "ACCOUNTANT");
+    }
+
+    /** Billing-money plan PR 2 (plan section 3.8): who reads a hospital's price list there. */
+    public boolean canReadPriceList(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, "ACCOUNTANT", "BILLING_SPECIALIST",
+            "RECEPTIONIST", "CLAIMS_REVIEWER");
+    }
+
     public void validateRoleOrThrow(UUID userId, UUID hospitalId, String roleCode) {
         if (!hasAnyCode(userId, hospitalId, roleCode)) {
             // #1096 review: the user does not hold the role (role.notfound is a role that does not

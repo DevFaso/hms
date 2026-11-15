@@ -530,6 +530,26 @@ export const routes: Routes = [
         ],
       },
 
+      // Billing-money plan PR 2: the hospital's price list (grille tarifaire).
+      // Read by every role that bills or quotes; the page offers writes only to
+      // the hospital admin and the accountant (action-permissions.ts).
+      {
+        path: 'billing/tarifs',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_SUPER_ADMIN',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ACCOUNTANT',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_RECEPTIONIST',
+            'ROLE_CLAIMS_REVIEWER',
+          ],
+        },
+        loadComponent: () =>
+          import('./billing/price-list/price-list.component').then((m) => m.PriceListComponent),
+      },
+
       // Billing
       {
         path: 'billing',

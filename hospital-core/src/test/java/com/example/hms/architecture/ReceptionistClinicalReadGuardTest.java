@@ -148,7 +148,13 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("StaffShiftResponseDTO#cancellationReason", "staff rota"),
         Map.entry("StaffShiftResponseDTO#notes", "staff rota"),
         Map.entry("TreatmentConsentResponseDTO#notes", "the desk records consents"),
-        Map.entry("UserRecoveryContactDTO#notes", "the caller's own account"));
+        Map.entry("UserRecoveryContactDTO#notes", "the caller's own account"),
+        // Billing-money plan PR 2: the desk reads the hospital's price list to quote a price (plan section 3.8).
+        // None of it is about a patient: a tariff, why the admin changed or retired it, what it is linked to.
+        Map.entry("PriceListPriceDTO#changeReason", "why the admin or accountant changed a tariff: no patient"),
+        Map.entry("PriceListItemDTO#deactivationReason", "why a tariff item was retired: no patient"),
+        Map.entry("PriceListLinkOptionsDTO#imagingModalities", "the imaging modality names, a fixed list: no patient"),
+        Map.entry("PriceListLinkOptionsDTO#treatments", "the hospital's catalogue of services, by name: no patient"));
 
     /**
      * Request type#field the role may send, and why it overwrites no clinician's text: a new

@@ -1656,6 +1656,10 @@
     "WRITE_DELETE": "Deleted: {{entity}}",
     "WRITE_ENTITY_UNKNOWN": "record",
     "DESC": {
+      "PRICE_LIST_ITEM_CREATED": "Price list item {{item}} created with price {{version}}",
+      "PRICE_LIST_ITEM_UPDATED": "Price list item {{item}} edited",
+      "PRICE_LIST_ITEM_DEACTIVATED": "Price list item {{item}} deactivated, reason recorded",
+      "PRICE_VERSION_ADDED": "New price {{version}} for price list item {{item}}, effective {{from}}",
       "NEWBORN_REGISTERED_FROM_DELIVERY": "Newborn registered from a recorded delivery",
       "NEWBORN_REGISTRATION_PENDING": "Newborn registration pending after a recorded delivery",
       "PARTNER_DISPENSE_OF_HELD_RX": "{{what}} confirmed dispensing prescription {{rx}}, which is held for review; the hold stands. A person must check with the patient and the partner.",
@@ -2433,7 +2437,63 @@
     "ADJUSTMENT_REVERSAL_NOTE": "The amount goes back on what is owed. Money already received, such as the copay paid at check-in, stays recorded.",
     "ADJUSTMENT_REVERSAL_FAILED": "The adjustment could not be undone.",
     "EMAIL_ADDRESS_INVALID": "Not a valid e-mail address: {{ addresses }}",
-    "LINE_QUANTITY_POSITIVE": "Enter a whole quantity greater than zero."
+    "LINE_QUANTITY_POSITIVE": "Enter a whole quantity greater than zero.",
+    "PRICE_LIST": {
+      "TITLE": "Price list",
+      "SUBTITLE": "The hospital’s prices with their effective dates. A price already applied never changes: add a new price instead.",
+      "BACK_TO_BILLING": "Back to billing",
+      "NEW_ITEM": "New item",
+      "EDIT": "Edit item",
+      "NEW_PRICE": "New price",
+      "DEACTIVATE": "Deactivate",
+      "DEACTIVATE_CONFIRM": "Deactivate this price list item?",
+      "DEACTIVATE_NOTE": "The item can no longer be billed or take a new price. Its history is kept.",
+      "DEACTIVATED": "Item deactivated.",
+      "CATEGORY": "Category",
+      "ALL_CATEGORIES": "All categories",
+      "SEARCH": "Search (code or label)",
+      "SHOW_INACTIVE": "Show deactivated items",
+      "LOADING": "Loading the price list…",
+      "LOAD_FAILED": "The price list could not be loaded.",
+      "EMPTY": "No item in the price list.",
+      "CODE": "Code",
+      "CODE_HINT": "The hospital’s tariff code (e.g. CS-GEN). It never changes once created.",
+      "LABEL": "Label",
+      "LINK": "Link",
+      "LINK_TO": "Link to",
+      "NOT_LINKED": "Not linked (price chosen at the till)",
+      "LINKED_LAB_TEST": "Lab test",
+      "LINKED_TREATMENT": "Service",
+      "LINKED_SYSTEM": "System element",
+      "LINKED_PRODUCT": "Blood product",
+      "LINKED_MODALITY": "Imaging modality",
+      "LINKED_STUDY": "Imaging study type",
+      "LINKED_STUDY_HINT": "As written on the imaging order (e.g. radiographie thorax face).",
+      "LINKED_PROCEDURE": "Procedure code",
+      "UNIT_PRICE": "Unit price (F CFA)",
+      "EFFECTIVE_SINCE": "In force since",
+      "EFFECTIVE_FROM": "Effective date",
+      "NEXT_PRICE": "Planned price",
+      "NEXT_PRICE_FROM": "{{amount}} from {{date}}",
+      "NO_PRICE_TODAY": "No price today",
+      "CURRENT_PRICE": "Price in force: {{amount}}",
+      "STATE": "State",
+      "ACTIVE": "Active",
+      "INACTIVE": "Deactivated",
+      "HISTORY": "Price history",
+      "HISTORY_EMPTY": "No price recorded.",
+      "FROM": "From",
+      "TO": "To",
+      "STATUS": "Status",
+      "CHANGE_REASON": "Reason for the change",
+      "ADDED_BY": "Added by",
+      "NEW_PRICE_NOTE": "The current price applies until the day before the effective date. Invoices already posted do not change.",
+      "REPLACE_SCHEDULED": "Replace the planned price",
+      "SAVED": "Item saved.",
+      "PRICE_SAVED": "New price saved.",
+      "SAVE_FAILED": "Saving failed.",
+      "DEACTIVATE_REASON": "Reason for deactivating"
+    }
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -4596,7 +4656,8 @@
     "PROVIDER_AUDIT": "Audit trail",
     "DHIS2": "DHIS2 export",
     "ADT_INTAKE": "ADT intake",
-    "UNSIGNED_NOTES": "Unsigned notes"
+    "UNSIGNED_NOTES": "Unsigned notes",
+    "PRICE_LIST": "Price list"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Critical alert",
@@ -6908,7 +6969,11 @@
         "DELIVERY_BABY_OUTCOME_CORRECTED": "Baby outcome corrected",
         "STILLBIRTH_CERTIFICATE_CONFLICT": "Stillbirth certificate conflict",
         "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Stillbirth certificate conflict reconciled",
-        "IMAGING_ORDER_DUPLICATE_PLACED": "Duplicate imaging order placed"
+        "IMAGING_ORDER_DUPLICATE_PLACED": "Duplicate imaging order placed",
+        "PRICE_LIST_ITEM_CREATED": "Price list item created",
+        "PRICE_LIST_ITEM_UPDATED": "Price list item updated",
+        "PRICE_LIST_ITEM_DEACTIVATED": "Price list item deactivated",
+        "PRICE_VERSION_ADDED": "New price added"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -7291,6 +7356,8 @@
         "GENERAL": "General"
       },
       "AUDIT_ENTITY_TYPE": {
+        "PRICE_LIST_ITEM": "Price list item",
+        "BILLING": "Billing",
         "SAFEGUARDING": "Child-protection vigilance review",
         "DELIVERY_RECORD": "Delivery record",
         "ORDER_REVIEW_HOLD": "Order review hold",
@@ -7575,6 +7642,36 @@
         "PRIOR_INADEQUATE_OR_UNAVAILABLE": "Previous study inadequate or unavailable",
         "DIFFERENT_REGION_OR_QUESTION": "Different region or clinical question",
         "OTHER": "Other"
+      },
+      "PRICE_LIST_CATEGORY": {
+        "CONSULTATION": "Consultation",
+        "LAB_TEST": "Laboratory",
+        "IMAGING": "Imaging",
+        "PROCEDURE": "Procedure",
+        "BED_DAY": "Bed day",
+        "TRANSFUSION": "Transfusion",
+        "DELIVERY": "Delivery",
+        "OTHER_SERVICE": "Other (medicines, supplies, fees)"
+      },
+      "PRICE_LIST_LINK_TYPE": {
+        "SYSTEM": "System",
+        "LAB_TEST_DEFINITION": "Lab test",
+        "PROCEDURE_CODE": "Procedure",
+        "IMAGING_STUDY": "Imaging study",
+        "TRANSFUSION_PRODUCT": "Blood product",
+        "TREATMENT": "Service"
+      },
+      "PRICE_LIST_PRICE_STATUS": {
+        "SCHEDULED": "Planned",
+        "IN_FORCE": "In force",
+        "ENDED": "Ended",
+        "REPLACED": "Replaced before it applied"
+      },
+      "PRICE_LIST_SYSTEM_KEY": {
+        "CONSULTATION_DEFAULT": "Default consultation",
+        "BED_DAY": "Bed day",
+        "DELIVERY_VAGINAL": "Vaginal delivery",
+        "DELIVERY_CAESAREAN": "Caesarean section"
       }
     },
     "DOCUMENTS": {

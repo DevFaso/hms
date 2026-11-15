@@ -1,3 +1,4 @@
+import { provideRouter } from '@angular/router';
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import {
   HttpErrorResponse,
@@ -95,6 +96,7 @@ describe('BillingComponent', () => {
       providers: [
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: BillingService, useValue: billingSpy },
         { provide: ToastService, useValue: toastSpy },
         { provide: PermissionService, useValue: permissionSpy },
@@ -1459,6 +1461,7 @@ describe('BillingComponent', () => {
         providers: [
           provideHttpClient(withXhr()),
           provideHttpClientTesting(),
+          provideRouter([]),
           { provide: BillingService, useValue: billingSpy },
           { provide: ToastService, useValue: toastSpy },
           { provide: PermissionService, useValue: permissionSpy },
@@ -1691,6 +1694,7 @@ describe('BillingComponent as a billing specialist (QA D181)', () => {
       providers: [
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: BillingService, useValue: billingSpy },
         {
           provide: ToastService,

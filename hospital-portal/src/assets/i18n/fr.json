@@ -1656,6 +1656,10 @@
     "WRITE_DELETE": "Suppression : {{entity}}",
     "WRITE_ENTITY_UNKNOWN": "enregistrement",
     "DESC": {
+      "PRICE_LIST_ITEM_CREATED": "Article de grille {{item}} créé avec le prix {{version}}",
+      "PRICE_LIST_ITEM_UPDATED": "Article de grille {{item}} modifié",
+      "PRICE_LIST_ITEM_DEACTIVATED": "Article de grille {{item}} désactivé, motif enregistré",
+      "PRICE_VERSION_ADDED": "Nouveau prix {{version}} pour l’article de grille {{item}}, en vigueur le {{from}}",
       "NEWBORN_REGISTERED_FROM_DELIVERY": "Nouveau-né enregistré à partir d’un accouchement",
       "NEWBORN_REGISTRATION_PENDING": "Enregistrement du nouveau-né en attente après un accouchement",
       "PARTNER_DISPENSE_OF_HELD_RX": "{{what}} a confirmé la délivrance de la prescription {{rx}}, suspendue pour révision ; la suspension demeure. Une personne doit vérifier auprès du patient et du partenaire.",
@@ -2433,7 +2437,63 @@
     "ADJUSTMENT_REVERSAL_NOTE": "Le montant revient sur ce qui reste dû. L'argent déjà reçu, comme le ticket modérateur payé à l'accueil, reste enregistré.",
     "ADJUSTMENT_REVERSAL_FAILED": "L'ajustement n'a pas pu être annulé.",
     "EMAIL_ADDRESS_INVALID": "Adresse e-mail non valide : {{ addresses }}",
-    "LINE_QUANTITY_POSITIVE": "Saisissez une quantité entière supérieure à zéro."
+    "LINE_QUANTITY_POSITIVE": "Saisissez une quantité entière supérieure à zéro.",
+    "PRICE_LIST": {
+      "TITLE": "Grille tarifaire",
+      "SUBTITLE": "Les prix de l’établissement, avec leur date d’effet. Un prix déjà appliqué n’est jamais modifié : on ajoute un nouveau prix.",
+      "BACK_TO_BILLING": "Retour à la facturation",
+      "NEW_ITEM": "Nouvel article",
+      "EDIT": "Modifier l’article",
+      "NEW_PRICE": "Nouveau prix",
+      "DEACTIVATE": "Désactiver",
+      "DEACTIVATE_CONFIRM": "Désactiver cet article de la grille ?",
+      "DEACTIVATE_NOTE": "L’article ne pourra plus être facturé ni recevoir de nouveau prix. Son historique est conservé.",
+      "DEACTIVATED": "Article désactivé.",
+      "CATEGORY": "Catégorie",
+      "ALL_CATEGORIES": "Toutes les catégories",
+      "SEARCH": "Rechercher (code ou libellé)",
+      "SHOW_INACTIVE": "Afficher les articles désactivés",
+      "LOADING": "Chargement de la grille…",
+      "LOAD_FAILED": "La grille tarifaire n’a pas pu être chargée.",
+      "EMPTY": "Aucun article dans la grille.",
+      "CODE": "Code",
+      "CODE_HINT": "Le code tarifaire de l’établissement (ex. CS-GEN). Il ne change plus une fois créé.",
+      "LABEL": "Libellé",
+      "LINK": "Lien",
+      "LINK_TO": "Lier à",
+      "NOT_LINKED": "Non lié (prix choisi à la caisse)",
+      "LINKED_LAB_TEST": "Test de laboratoire",
+      "LINKED_TREATMENT": "Prestation",
+      "LINKED_SYSTEM": "Élément système",
+      "LINKED_PRODUCT": "Produit sanguin",
+      "LINKED_MODALITY": "Modalité d’imagerie",
+      "LINKED_STUDY": "Type d’examen d’imagerie",
+      "LINKED_STUDY_HINT": "Tel qu’il est écrit sur la demande d’examen (ex. radiographie thorax face).",
+      "LINKED_PROCEDURE": "Code de l’acte",
+      "UNIT_PRICE": "Prix unitaire (F CFA)",
+      "EFFECTIVE_SINCE": "En vigueur depuis",
+      "EFFECTIVE_FROM": "Date d’effet",
+      "NEXT_PRICE": "Prix prévu",
+      "NEXT_PRICE_FROM": "{{amount}} à partir du {{date}}",
+      "NO_PRICE_TODAY": "Pas de prix aujourd’hui",
+      "CURRENT_PRICE": "Prix en vigueur : {{amount}}",
+      "STATE": "État",
+      "ACTIVE": "Actif",
+      "INACTIVE": "Désactivé",
+      "HISTORY": "Historique des prix",
+      "HISTORY_EMPTY": "Aucun prix enregistré.",
+      "FROM": "Du",
+      "TO": "Au",
+      "STATUS": "Statut",
+      "CHANGE_REASON": "Motif du changement",
+      "ADDED_BY": "Ajouté par",
+      "NEW_PRICE_NOTE": "Le prix actuel reste appliqué jusqu’à la veille de la date d’effet. Les factures déjà établies ne changent pas.",
+      "REPLACE_SCHEDULED": "Remplacer le prix prévu",
+      "SAVED": "Article enregistré.",
+      "PRICE_SAVED": "Nouveau prix enregistré.",
+      "SAVE_FAILED": "L’enregistrement a échoué.",
+      "DEACTIVATE_REASON": "Motif de la désactivation"
+    }
   },
   "CHAT": {
     "ACCESS_DENIED": "Vous n'avez pas l'autorisation d'accéder à la messagerie.",
@@ -4596,7 +4656,8 @@
     "PROVIDER_AUDIT": "Journal d'audit",
     "DHIS2": "Export DHIS2",
     "ADT_INTAKE": "Admissions ADT automatiques",
-    "UNSIGNED_NOTES": "Notes non signées"
+    "UNSIGNED_NOTES": "Notes non signées",
+    "PRICE_LIST": "Grille tarifaire"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -6874,7 +6935,11 @@
         "DELIVERY_BABY_OUTCOME_CORRECTED": "Issue d’un bébé corrigée",
         "STILLBIRTH_CERTIFICATE_CONFLICT": "Contradiction d’acte de mortinaissance",
         "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradiction d’acte de mortinaissance rapprochée",
-        "IMAGING_ORDER_DUPLICATE_PLACED": "Demande d'imagerie en double passée"
+        "IMAGING_ORDER_DUPLICATE_PLACED": "Demande d'imagerie en double passée",
+        "PRICE_LIST_ITEM_CREATED": "Article de grille créé",
+        "PRICE_LIST_ITEM_UPDATED": "Article de grille modifié",
+        "PRICE_LIST_ITEM_DEACTIVATED": "Article de grille désactivé",
+        "PRICE_VERSION_ADDED": "Nouveau prix ajouté"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -7257,6 +7322,8 @@
         "GENERAL": "Général"
       },
       "AUDIT_ENTITY_TYPE": {
+        "PRICE_LIST_ITEM": "Article de la grille tarifaire",
+        "BILLING": "Facturation",
         "SAFEGUARDING": "Revue de vigilance protection de l’enfance",
         "DELIVERY_RECORD": "Compte rendu d’accouchement",
         "ORDER_REVIEW_HOLD": "Blocage pour revue de prescription",
@@ -7541,6 +7608,36 @@
         "PRIOR_INADEQUATE_OR_UNAVAILABLE": "Examen précédent inadéquat ou indisponible",
         "DIFFERENT_REGION_OR_QUESTION": "Région ou question clinique différente",
         "OTHER": "Autre"
+      },
+      "PRICE_LIST_CATEGORY": {
+        "CONSULTATION": "Consultation",
+        "LAB_TEST": "Laboratoire",
+        "IMAGING": "Imagerie",
+        "PROCEDURE": "Acte",
+        "BED_DAY": "Journée d’hospitalisation",
+        "TRANSFUSION": "Transfusion",
+        "DELIVERY": "Accouchement",
+        "OTHER_SERVICE": "Autre (médicaments, consommables, frais)"
+      },
+      "PRICE_LIST_LINK_TYPE": {
+        "SYSTEM": "Système",
+        "LAB_TEST_DEFINITION": "Test de laboratoire",
+        "PROCEDURE_CODE": "Acte",
+        "IMAGING_STUDY": "Examen d’imagerie",
+        "TRANSFUSION_PRODUCT": "Produit sanguin",
+        "TREATMENT": "Prestation"
+      },
+      "PRICE_LIST_PRICE_STATUS": {
+        "SCHEDULED": "Prévu",
+        "IN_FORCE": "En vigueur",
+        "ENDED": "Terminé",
+        "REPLACED": "Remplacé avant application"
+      },
+      "PRICE_LIST_SYSTEM_KEY": {
+        "CONSULTATION_DEFAULT": "Consultation par défaut",
+        "BED_DAY": "Journée d’hospitalisation",
+        "DELIVERY_VAGINAL": "Accouchement par voie basse",
+        "DELIVERY_CAESAREAN": "Césarienne"
       }
     },
     "DOCUMENTS": {

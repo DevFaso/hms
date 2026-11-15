@@ -1377,6 +1377,27 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { what: 'phrase:PAYMENT_EVENT' },
   },
   {
+    // Billing-money plan PR 2: the price list (ids only; the label, price and reason stay on the rows).
+    key: 'AUDIT.DESC.PRICE_LIST_ITEM_CREATED',
+    re: /^Price list item (\S+) created with price version (\S+)$/,
+    params: ['item', 'version'],
+  },
+  {
+    key: 'AUDIT.DESC.PRICE_LIST_ITEM_UPDATED',
+    re: /^Price list item (\S+) updated$/,
+    params: ['item'],
+  },
+  {
+    key: 'AUDIT.DESC.PRICE_LIST_ITEM_DEACTIVATED',
+    re: /^Price list item (\S+) deactivated$/,
+    params: ['item'],
+  },
+  {
+    key: 'AUDIT.DESC.PRICE_VERSION_ADDED',
+    re: /^Price version (\S+) added to price list item (\S+), effective (\S+)$/,
+    params: ['version', 'item', 'from'],
+  },
+  {
     // QA D974: a discount, waiver or credit note on an invoice.
     key: 'AUDIT.DESC.INVOICE_ADJUSTMENT',
     re: /^Invoice adjustment ([A-Z_]+) on invoice (\S+)$/,
