@@ -6,7 +6,7 @@ import com.example.hms.exception.MfaStepUpRefusedException;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.UserRepository;
-import com.example.hms.security.LoginAttemptStore;
+import com.example.hms.security.LoginAttemptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,8 +31,11 @@ import java.util.UUID;
  *       sign-in or an earlier signature, is refused) and the same
  *       {@code MFA_FAILURE} audit as every other step-up.</li>
  *   <li><strong>No authenticator</strong>: the prescriber's HMS password,
- *       checked against the stored hash, with its own lockout (5 wrong
- *       passwords per 15 minutes, then 15 minutes locked).</li>
+ *       checked against the stored hash. D2001: the guesses count in the
+ *       account's sign-in bucket ({@link LoginAttemptService#checkPassword}),
+ *       so they add up with the sign-in, the lock screen and every other
+ *       password check: 5 wrong passwords per 15 minutes, then 15 minutes
+ *       locked everywhere.</li>
  *   <li><strong>An account whose password HMS does not hold</strong> (signed
  *       in through Keycloak OIDC or SAML, {@code authSource} not
  *       {@code internal}): the password path cannot verify anything, so the
@@ -53,10 +56,6 @@ import java.util.UUID;
 public class PrescriberReauthenticationService {
 
     static final String ACTION = "controlled-drug prescription signing";
-    static final int MAX_PASSWORD_FAILURES = 5;
-    static final long PASSWORD_WINDOW_MS = 15 * 60 * 1000L;
-    static final long PASSWORD_LOCK_MS = 15 * 60 * 1000L;
-    static final String PASSWORD_KEY_PREFIX = "rx-sign-password:";
 
     public static final String METHOD_TOTP = "TOTP";
     public static final String METHOD_PASSWORD = "PASSWORD";
@@ -64,7 +63,7 @@ public class PrescriberReauthenticationService {
     private final MfaService mfaService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final LoginAttemptStore attemptStore;
+    private final LoginAttemptService loginAttemptService;
     private final AuditEventLogService auditEventLogService;
 
     /** The verified factor and when, written on the prescription as its two-factor proof. */
@@ -105,20 +104,17 @@ public class PrescriberReauthenticationService {
         if (!StringUtils.hasText(password)) {
             throw refused(userId, prescriptionId, METHOD_PASSWORD, MfaStepUpRefusedException.Reason.PASSWORD_REQUIRED);
         }
-        String key = PASSWORD_KEY_PREFIX + userId;
-        // The attempt is counted BEFORE the password is compared (atomically in
-        // the store), so concurrent guesses cannot exceed the limit; a right
-        // password clears the count.
-        boolean allowed = attemptStore.remainingLockMs(key) <= 0
-            && attemptStore.recordFailure(key, MAX_PASSWORD_FAILURES, PASSWORD_WINDOW_MS, PASSWORD_LOCK_MS)
-                <= MAX_PASSWORD_FAILURES;
-        if (!allowed) {
+        // D2001: counted in the account's sign-in bucket, BEFORE the password
+        // is compared (atomically in the store), so concurrent guesses cannot
+        // exceed the limit; a right password clears the count, as a sign-in does.
+        LoginAttemptService.PasswordCheck check = loginAttemptService.checkPassword(userId,
+            () -> passwordEncoder.matches(password, user.getPasswordHash()));
+        if (check == LoginAttemptService.PasswordCheck.LOCKED) {
             throw refused(userId, prescriptionId, METHOD_PASSWORD, MfaStepUpRefusedException.Reason.PASSWORD_LOCKED);
         }
-        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+        if (check != LoginAttemptService.PasswordCheck.ACCEPTED) {
             throw refused(userId, prescriptionId, METHOD_PASSWORD, MfaStepUpRefusedException.Reason.PASSWORD_INVALID);
         }
-        attemptStore.clear(key);
         audit(userId, prescriptionId, METHOD_PASSWORD, AuditStatus.SUCCESS, null);
         return new Verified(METHOD_PASSWORD, LocalDateTime.now(java.time.ZoneId.systemDefault()));
     }

@@ -4451,6 +4451,7 @@
     "CREDENTIALS_REQUIRED": "Nom d'utilisateur et mot de passe requis.",
     "TOKEN_MISSING": "Jeton manquant dans la réponse.",
     "LOGIN_FAILED": "Échec de la connexion. Veuillez réessayer.",
+    "LOCKED_FROM_LOCK_SCREEN": "Trop de mots de passe incorrects : vous avez été déconnecté et le compte est temporairement verrouillé. Réessayez plus tard.",
     "ENTER_EMAIL": "Veuillez saisir votre adresse e-mail.",
     "RESEND_ACTIVATION": "Renvoyer l'e-mail d'activation",
     "RA_TITLE": "Activer votre compte",

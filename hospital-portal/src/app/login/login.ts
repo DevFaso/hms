@@ -149,6 +149,10 @@ export class Login implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     if (!this.isBrowser) return;
+    // D2001: the lock screen signed the user out on the account lockout.
+    if (this.route.snapshot.queryParamMap.get('reason') === 'locked') {
+      this.error = this.translate.instant('LOGIN.LOCKED_FROM_LOCK_SCREEN');
+    }
     this.checkBootstrapStatus();
   }
 

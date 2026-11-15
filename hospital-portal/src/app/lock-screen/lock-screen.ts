@@ -31,6 +31,14 @@ export class LockScreenComponent {
   /** Emitted when a different user wants to sign in (complete session clear) */
   readonly switchedUser = output<void>();
 
+  /**
+   * D2001: emitted when the server answers 423 — the account is locked after
+   * too many wrong passwords (here or at the sign-in) and the server has
+   * already revoked this session's tokens. The shell signs out and shows the
+   * lockout on the sign-in page.
+   */
+  readonly lockedOut = output<void>();
+
   password = '';
   error = '';
   loading = signal(false);
@@ -116,7 +124,16 @@ export class LockScreenComponent {
         },
         // Reached only with a token we just confirmed good, so a 401 here
         // really is the wrong password.
-        error: (err: HttpErrorResponse) => this.failWith(this.verifyErrorKey(err)),
+        error: (err: HttpErrorResponse) => {
+          if (err?.status === 423) {
+            this.loading.set(false);
+            this.password = '';
+            this.idle.unlock(); // clear lock state
+            this.lockedOut.emit();
+            return;
+          }
+          this.failWith(this.verifyErrorKey(err));
+        },
       });
   }
 

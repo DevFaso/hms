@@ -167,6 +167,35 @@ describe('LockScreenComponent — unlock', () => {
     expect(component.error).toBe('LOCK.ERROR_SESSION_MISMATCH');
   });
 
+  // ── D2001: the account lockout ends the session ─────────────
+
+  it('signs out on 423 (account locked) instead of offering another guess', () => {
+    const lockedOut = jasmine.createSpy('lockedOut');
+    component.lockedOut.subscribe(lockedOut);
+    setUp({ tokenExpired: false });
+    component.unlock();
+    expectVerify().flush(
+      { message: 'Account is temporarily locked. Try again in 15 minutes.' },
+      { status: 423, statusText: 'Locked' },
+    );
+
+    expect(lockedOut).toHaveBeenCalledTimes(1);
+    expect(idle.unlock).toHaveBeenCalled();
+    expect(component.error).toBe('');
+    expect(component.password).toBe('');
+    expect(component.loading()).toBeFalse();
+  });
+
+  it('does not sign out on a plain wrong password (401)', () => {
+    const lockedOut = jasmine.createSpy('lockedOut');
+    component.lockedOut.subscribe(lockedOut);
+    setUp({ tokenExpired: false });
+    component.unlock();
+    expectVerify().flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    expect(lockedOut).not.toHaveBeenCalled();
+  });
+
   it('reports a retryable failure on a server error', () => {
     setUp({ tokenExpired: false });
     component.unlock();

@@ -176,4 +176,57 @@ class LoginAttemptServiceTest {
         account("known", id);
         assertThat(service.keyFor("known")).isEqualTo(LoginAttemptService.USER_KEY_PREFIX + id);
     }
+
+    // ── D2001: checkPassword, the account bucket every own-password check uses ──
+
+    @Test
+    @DisplayName("D2001: checkPassword counts in the sign-in's key, so the two add up both ways")
+    void checkPasswordSharesTheSignInBucket() {
+        UUID id = UUID.randomUUID();
+        account("nurse", id);
+        fail("nurse", 3);
+        assertThat(service.checkPassword(id, () -> false)).isEqualTo(LoginAttemptService.PasswordCheck.REJECTED);
+        assertThat(service.checkPassword(id, () -> false))
+            .isEqualTo(LoginAttemptService.PasswordCheck.REJECTED_NOW_LOCKED);
+        assertThat(service.isLocked("nurse")).isTrue();
+        assertThat(service.remainingAccountLockMs(id)).isPositive();
+    }
+
+    @Test
+    @DisplayName("D2001: a locked account is refused before the password is compared")
+    void checkPasswordRefusesALockedAccountWithoutComparing() {
+        UUID id = UUID.randomUUID();
+        account("nurse", id);
+        fail("nurse", 5);
+        boolean[] compared = {false};
+        assertThat(service.checkPassword(id, () -> compared[0] = true))
+            .isEqualTo(LoginAttemptService.PasswordCheck.LOCKED);
+        assertThat(compared[0]).isFalse();
+    }
+
+    @Test
+    @DisplayName("D2001: a guess past the limit (a concurrent one won the race) is refused without comparing")
+    void checkPasswordCountsBeforeComparing() {
+        LoginAttemptStore store = mock(LoginAttemptStore.class);
+        when(store.remainingLockMs(anyString())).thenReturn(0L);
+        when(store.recordFailure(anyString(), org.mockito.ArgumentMatchers.anyInt(),
+            org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong()))
+            .thenReturn(LoginAttemptService.MAX_ATTEMPTS + 1);
+        LoginAttemptService raced = new LoginAttemptService(store, users);
+        boolean[] compared = {false};
+        assertThat(raced.checkPassword(UUID.randomUUID(), () -> compared[0] = true))
+            .isEqualTo(LoginAttemptService.PasswordCheck.LOCKED);
+        assertThat(compared[0]).isFalse();
+    }
+
+    @Test
+    @DisplayName("D2001: a right password clears the account's failures, as a sign-in does")
+    void checkPasswordClearsOnSuccess() {
+        UUID id = UUID.randomUUID();
+        account("nurse", id);
+        fail("nurse", 4);
+        assertThat(service.checkPassword(id, () -> true)).isEqualTo(LoginAttemptService.PasswordCheck.ACCEPTED);
+        fail("nurse", 4);
+        assertThat(service.isLocked("nurse")).isFalse();
+    }
 }

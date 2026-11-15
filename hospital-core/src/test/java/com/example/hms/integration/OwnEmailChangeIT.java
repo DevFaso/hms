@@ -204,8 +204,12 @@ class OwnEmailChangeIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("five wrong passwords lock the email change, not the owner's sign-in")
-    void wrongPasswordsHereDoNotLockSignIn() throws Exception {
+    @DisplayName("D2001: five wrong passwords here lock the account everywhere, the sign-in included")
+    void wrongPasswordsHereCountInTheSignInBucket() throws Exception {
+        // Reverses the earlier "not the owner's sign-in" rule: anyone who knows
+        // a username could already lock its sign-in from the anonymous login
+        // page, so keeping this endpoint's guesses apart protected nothing and
+        // gave a session holder five more guesses per surface (D2001).
         String token = hms(nurse, "ROLE_NURSE");
         for (int i = 0; i < 5; i++) {
             assertThat(status(post("/auth/me/change-email"), token,
@@ -216,13 +220,14 @@ class OwnEmailChangeIT extends BaseIT {
         assertThat(locked.getResponse().getStatus()).isEqualTo(400);
         assertThat(message(locked)).isEqualTo(MessageUtil.resolve("user.email.change.locked"));
 
-        assertThat(loginAttemptService.isLocked(nurse.getUsername())).isFalse();
+        assertThat(loginAttemptService.isLocked(nurse.getUsername())).isTrue();
         MvcResult login = mockMvc.perform(post("/auth/login").with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
                     Map.of("username", nurse.getUsername(), "password", PASSWORD))))
             .andReturn();
-        assertThat(login.getResponse().getStatus()).isEqualTo(200);
+        assertThat(login.getResponse().getStatus()).isEqualTo(423);
+        loginAttemptService.resetAttempts(nurse.getId());
     }
 
     @Test

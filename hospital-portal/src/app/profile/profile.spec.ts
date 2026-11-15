@@ -676,6 +676,22 @@ describe('ProfileComponent — editing the profile', () => {
       expect(component.changingPassword()).toBeFalse();
     });
 
+    it('D2001: a 423 shows the server lockout sentence', () => {
+      profiles.changePassword.and.returnValue(
+        throwError(() => ({
+          status: 423,
+          error: { message: 'Compte temporairement verrouillé. Réessayez dans 15 minutes.' },
+        })),
+      );
+      fill('Bad-Pass-1', 'New-Pass-12', 'New-Pass-12');
+      component.changePassword();
+
+      expect(toast.error).toHaveBeenCalledWith(
+        'Compte temporairement verrouillé. Réessayez dans 15 minutes.',
+      );
+      expect(component.changingPassword()).toBeFalse();
+    });
+
     it('a single sign-on session gets a hint instead of the form', () => {
       ssoAuthenticated.set(true);
       fixture.detectChanges();

@@ -4451,6 +4451,7 @@
     "CREDENTIALS_REQUIRED": "Username and password required.",
     "TOKEN_MISSING": "Token missing in response.",
     "LOGIN_FAILED": "Login failed. Please try again.",
+    "LOCKED_FROM_LOCK_SCREEN": "Too many incorrect passwords: you have been signed out and the account is temporarily locked. Try again later.",
     "ENTER_EMAIL": "Please enter your email address.",
     "RESEND_ACTIVATION": "Resend activation e-mail",
     "RA_TITLE": "Activate your account",

@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
@@ -535,5 +535,49 @@ describe('Login — bootstrap phone field (QA D906)', () => {
       .expectOne('/auth/bootstrap-signup')
       .flush({ message: 'server says no' }, { status: 400, statusText: 'Bad Request' });
     expect(component.error).toBe('server says no');
+  });
+});
+
+describe('Login — the lock-screen lockout notice (D2001)', () => {
+  function createWith(reason: string | null): Login {
+    TestBed.configureTestingModule({
+      imports: [Login, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        {
+          provide: OidcAuthService,
+          useValue: jasmine.createSpyObj<OidcAuthService>('OidcAuthService', [
+            'isEnabled',
+            'isAvailable',
+            'discoveryFailed',
+            'login',
+          ]),
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: { queryParamMap: convertToParamMap(reason === null ? {} : { reason }) },
+          },
+        },
+      ],
+    });
+    const component = TestBed.createComponent(Login).componentInstance;
+    component.ngOnInit();
+    TestBed.inject(HttpTestingController).match('/auth/bootstrap-status');
+    return component;
+  }
+
+  it('shows the lockout message when the lock screen signed the user out', () => {
+    expect(createWith('locked').error).toBe('LOGIN.LOCKED_FROM_LOCK_SCREEN');
+  });
+
+  it('shows nothing on an ordinary visit', () => {
+    expect(createWith(null).error).toBe('');
+  });
+
+  it('ignores any other reason value', () => {
+    expect(createWith('expired').error).toBe('');
   });
 });

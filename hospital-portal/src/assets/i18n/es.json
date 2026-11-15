@@ -4451,6 +4451,7 @@
     "CREDENTIALS_REQUIRED": "Se requieren nombre de usuario y contraseña.",
     "TOKEN_MISSING": "Falta el token en la respuesta.",
     "LOGIN_FAILED": "Error al iniciar sesión. Inténtelo de nuevo.",
+    "LOCKED_FROM_LOCK_SCREEN": "Demasiadas contraseñas incorrectas: se ha cerrado su sesión y la cuenta está bloqueada temporalmente. Vuelva a intentarlo más tarde.",
     "ENTER_EMAIL": "Introduzca su dirección de correo electrónico.",
     "RESEND_ACTIVATION": "Reenviar el correo de activación",
     "RA_TITLE": "Activar su cuenta",
