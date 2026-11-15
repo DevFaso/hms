@@ -104,9 +104,7 @@ public class LoginAttemptService {
      * @param matcher compares the typed password; true when it is right
      */
     public PasswordCheck checkPassword(UUID userId, BooleanSupplier matcher) {
-        if (userId == null) {
-            throw new IllegalArgumentException("checkPassword needs the account id");
-        }
+        java.util.Objects.requireNonNull(userId);
         String key = USER_KEY_PREFIX + userId;
         if (store.remainingLockMs(key) > 0) {
             return PasswordCheck.LOCKED;
