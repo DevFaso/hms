@@ -47,7 +47,9 @@ public class PharmacyDirectoryServiceImpl implements PharmacyDirectoryService {
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
-            throw new BusinessException("patient.notRegisteredInHospital");
+            // QA D1870 (round 53): a patient not registered here is "not found", like GET /patients/{id};
+            // a distinct answer told a caller holding the id that the patient exists at another hospital.
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
 
         // A clinical destination only: a provider's id (or an unknown one) is

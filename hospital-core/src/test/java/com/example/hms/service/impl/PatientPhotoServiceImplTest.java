@@ -154,8 +154,8 @@ class PatientPhotoServiceImplTest {
         MockMultipartFile file = jpeg("face.jpg", new byte[] {1});
 
         assertThatThrownBy(() -> service.upload(patientId, foreignScope, file))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("patient.photo.notRegistered");
+            // QA D1870: "not here" is "not found", like GET /patients/{id}, never a distinct refusal.
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
     }
 
     @Test

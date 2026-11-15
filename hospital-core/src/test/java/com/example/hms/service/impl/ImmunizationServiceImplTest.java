@@ -499,4 +499,28 @@ class ImmunizationServiceImplTest {
             com.example.hms.exception.FieldBusinessException.class, () -> service.updateImmunization(immunizationId, echo)).getField())
             .isEqualTo("doseNumber");
     }
+
+    @Test
+    void portalRead_leavesOutRemovedAndEnteredInErrorDoses() {
+        // QA round 54 (the D1910/D1912 class): a voided dose reached the patient's portal, apps and health summary.
+        PatientImmunization given = new PatientImmunization();
+        given.setId(UUID.randomUUID());
+        given.setStatus("COMPLETED");
+        PatientImmunization voided = new PatientImmunization();
+        voided.setId(UUID.randomUUID());
+        voided.setStatus("ENTERED_IN_ERROR");
+        PatientImmunization removed = new PatientImmunization();
+        removed.setId(UUID.randomUUID());
+        removed.setStatus("COMPLETED");
+        removed.setActive(false);
+        ImmunizationResponseDTO shown = new ImmunizationResponseDTO();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(immunizationRepository.findByPatient_IdOrderByAdministrationDateDesc(patientId))
+            .thenReturn(List.of(voided, given, removed));
+        when(immunizationMapper.toResponseDTO(given)).thenReturn(shown);
+
+        assertThat(service.getImmunizationsForPatientPortal(patientId)).containsExactly(shown);
+        verify(immunizationMapper, never()).toResponseDTO(voided);
+        verify(immunizationMapper, never()).toResponseDTO(removed);
+    }
 }

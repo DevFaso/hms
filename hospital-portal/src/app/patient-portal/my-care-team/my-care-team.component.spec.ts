@@ -122,6 +122,25 @@ describe('MyCareTeamComponent', () => {
     expect(period).toContain('2026');
   });
 
+  it('QA D1941: an earlier link stored with its end before its start never reads backwards', () => {
+    const current = entry({ id: 'pcp-now', startDate: '2026-11-14' });
+    const backwards = entry({
+      id: 'pcp-old',
+      startDate: '2026-11-14',
+      endDate: '2026-11-13',
+      current: false,
+    });
+    create({ primaryCare: current, primaryCareHistory: [current, backwards] });
+
+    const range = host()
+      .querySelector('[data-testid="care-team-history"] .ct-contact')!
+      .textContent!.replace(/\s+/g, ' ')
+      .trim();
+    const [from, to] = range.split(' – ');
+    expect(to).toBe(from);
+    expect(fixture.componentInstance.shownEnd(entry({ endDate: '2026-12-01' }))).toBe('2026-12-01');
+  });
+
   it('shows the history alone when there is no current provider', () => {
     create({
       primaryCare: null,

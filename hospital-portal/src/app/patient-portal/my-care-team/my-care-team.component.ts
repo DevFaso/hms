@@ -52,6 +52,17 @@ export class MyCareTeamComponent implements OnInit {
       (e) => !e.current && !currentIds.has(e.id),
     );
   });
+  /**
+   * QA D1941 (round 54): a link closed before #1165 on the day it started has an
+   * end the day before its start ("14 nov. – 13 nov."). Never shown: such an
+   * end reads as the start. Both are ISO local dates (`yyyy-MM-dd`), so they compare as text.
+   */
+  shownEnd(e: PrimaryCareEntry): string | null {
+    if (e.endDate && e.startDate && e.endDate < e.startDate) {
+      return e.startDate;
+    }
+    return e.endDate;
+  }
   /** The clinicians of the patient's visits still open (QA D115). */
   readonly visitClinicians = computed<VisitClinicianEntry[]>(
     () => this.team()?.visitClinicians ?? [],

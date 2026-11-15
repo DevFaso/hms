@@ -38,11 +38,21 @@ public class PatientPrimaryCareMapper {
             .doctorDisplay(e.getAssignment().getUser().getFirstName() + " " +
                 e.getAssignment().getUser().getLastName())
             .startDate(e.getStartDate())
-            .endDate(e.getEndDate())
+            .endDate(displayedEnd(e.getStartDate(), e.getEndDate()))
             .current(e.isCurrent())
             .createdAt(toOffset(e.getCreatedAt()))
             .updatedAt(toOffset(e.getUpdatedAt()))
             .build();
+    }
+
+    /**
+     * QA D1941 (round 54): links closed by the code before #1165 on the day they
+     * started stored an end the day BEFORE their start, and read "14 nov. 2026 -
+     * 13 nov. 2026" on /my-care-team and the staff views. Never shown: an end
+     * before the start reads as the start. The stored row is left as written.
+     */
+    static java.time.LocalDate displayedEnd(java.time.LocalDate start, java.time.LocalDate end) {
+        return start != null && end != null && end.isBefore(start) ? start : end;
     }
 
     /**

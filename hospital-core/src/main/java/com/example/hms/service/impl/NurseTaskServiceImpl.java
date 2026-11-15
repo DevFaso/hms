@@ -2252,7 +2252,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("nurse.patient.notRegisteredHere");
+            // QA D1870 (round 53): a patient not registered here is "not found", like GET /patients/{id};
+            // a distinct answer told a caller holding the id that the patient exists at another hospital.
+            throw new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId);
         }
         com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(patient, null, "recordedAt");
         requireNotDischargedWithoutVisit(patientId, hospitalId);
@@ -2549,7 +2551,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             careNoteParts(request));
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("nurse.patient.notRegisteredHere");
+            // QA D1870 (round 53): a patient not registered here is "not found", like GET /patients/{id};
+            // a distinct answer told a caller holding the id that the patient exists at another hospital.
+            throw new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId);
         }
 
         User author = userRepository.findById(nurseUserId)
