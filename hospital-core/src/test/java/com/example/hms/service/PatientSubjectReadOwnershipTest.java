@@ -255,6 +255,47 @@ class PatientSubjectReadOwnershipTest {
             service.getOrdersByPatient(otherPatientId, null);
             verify(imagingOrderRepository).findByPatient_IdOrderByOrderedAtDesc(otherPatientId);
         }
+
+        private com.example.hms.payload.dto.imaging.ImagingOrderResponseDTO withStaffNotes() {
+            return com.example.hms.payload.dto.imaging.ImagingOrderResponseDTO.builder()
+                .id(UUID.randomUUID()).studyType("CT abdomen").bodyRegion("Abdomen")
+                .scheduledDate(java.time.LocalDate.now()).scheduledTime("09:00").appointmentLocation("Salle 2")
+                .workflowNotes("appeler le radiologue").duplicateOverrideNote("vu la semaine passée")
+                .authorizationNumber("PA-1").contrastAllergyDetails("urticaire").cancellationReason("doublon")
+                .sedationNotes("midazolam").build();
+        }
+
+        @Test
+        @DisplayName("QA D1960: the patient reads the study and the appointment, never the care team's working notes")
+        void thePatientReadsThePatientsCopy() {
+            passwordLogin("ROLE_PATIENT");
+            ImagingOrder own = new ImagingOrder();
+            when(imagingOrderRepository.findByPatient_IdOrderByOrderedAtDesc(ownPatientId)).thenReturn(List.of(own));
+            when(imagingOrderMapper.toResponseDTO(own)).thenReturn(withStaffNotes());
+
+            assertThat(service.getOrdersByPatient(ownPatientId, null)).singleElement().satisfies(o -> {
+                assertThat(o.getStudyType()).isEqualTo("CT abdomen");
+                assertThat(o.getAppointmentLocation()).isEqualTo("Salle 2");
+                assertThat(o.getWorkflowNotes()).isNull();
+                assertThat(o.getDuplicateOverrideNote()).isNull();
+                assertThat(o.getAuthorizationNumber()).isNull();
+                assertThat(o.getContrastAllergyDetails()).isNull();
+                assertThat(o.getCancellationReason()).isNull();
+                assertThat(o.getSedationNotes()).isNull();
+            });
+        }
+
+        @Test
+        @DisplayName("QA D1960: staff keep the working notes")
+        void staffKeepTheWorkingNotes() {
+            passwordLogin("ROLE_RADIOLOGIST");
+            ImagingOrder theirs = new ImagingOrder();
+            when(imagingOrderRepository.findByPatient_IdOrderByOrderedAtDesc(otherPatientId)).thenReturn(List.of(theirs));
+            when(imagingOrderMapper.toResponseDTO(theirs)).thenReturn(withStaffNotes());
+
+            assertThat(service.getOrdersByPatient(otherPatientId, null)).singleElement()
+                .satisfies(o -> assertThat(o.getWorkflowNotes()).isEqualTo("appeler le radiologue"));
+        }
     }
 
     // ── GET /imaging/results/{reportId} and /imaging/results/order/{orderId} ─
@@ -273,7 +314,9 @@ class PatientSubjectReadOwnershipTest {
 
         private final UUID reportId = UUID.randomUUID();
         private final UUID orderId = UUID.randomUUID();
-        private final ImagingReportResponseDTO dto = new ImagingReportResponseDTO();
+        private final ImagingReportResponseDTO dto = ImagingReportResponseDTO.builder().id(UUID.randomUUID())
+            .impression("Pas d'anomalie").lockReason("relecture en cours")
+            .statusHistory(List.of(new com.example.hms.payload.dto.imaging.ImagingReportStatusDTO())).build();
 
         private ImagingOrder orderFor(UUID patientId) {
             ImagingOrder order = new ImagingOrder();
@@ -313,8 +356,11 @@ class PatientSubjectReadOwnershipTest {
             passwordLogin("ROLE_PATIENT");
             stub(reportFor(ownPatientId, ImagingReportStatus.FINAL, true));
 
-            assertThat(service.getReport(reportId)).isSameAs(dto);
-            assertThat(service.getLatestReportForOrder(orderId)).isSameAs(dto);
+            // QA D1960: the patient's copy, rebuilt from the patient's fields.
+            assertThat(service.getReport(reportId)).isNotSameAs(dto).extracting("id", "impression", "lockReason")
+                .containsExactly(dto.getId(), "Pas d'anomalie", null);
+            assertThat(service.getLatestReportForOrder(orderId)).isNotSameAs(dto)
+                .satisfies(r -> assertThat(r.getStatusHistory()).isNull());
         }
 
         @Test
@@ -423,6 +469,26 @@ class PatientSubjectReadOwnershipTest {
         }
 
         @Test
+        @DisplayName("QA D1960: the patient's copy leaves out the clinical notes and why it was cancelled; staff keep them")
+        void thePatientReadsThePatientsCopy() {
+            ProcedureOrder own = orderFor(ownPatientId);
+            own.setProcedureName("Biopsie");
+            own.setClinicalNotes("note clinique");
+            own.setCancellationReason("raison interne");
+            when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(own));
+            when(procedureOrderRepository.findByPatient_IdOrderByOrderedAtDesc(ownPatientId)).thenReturn(List.of(own));
+
+            passwordLogin("ROLE_PATIENT");
+            assertThat(service.getProcedureOrder(orderId)).extracting("procedureName", "clinicalNotes", "cancellationReason")
+                .containsExactly("Biopsie", null, null);
+            assertThat(service.getProcedureOrdersForPatient(ownPatientId)).singleElement()
+                .extracting("clinicalNotes", "cancellationReason").containsExactly(null, null);
+
+            passwordLogin("ROLE_NURSE");
+            assertThat(service.getProcedureOrder(orderId).getClinicalNotes()).isEqualTo("note clinique");
+        }
+
+        @Test
         @DisplayName("another patient's order answers as a missing id, before the hospital check")
         void foreignOrderAnswersAsMissing() {
             passwordLogin("ROLE_PATIENT");
@@ -504,8 +570,11 @@ class PatientSubjectReadOwnershipTest {
             when(reportRepository.findById(reportId)).thenReturn(Optional.of(report));
             when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.of(report));
             when(ultrasoundMapper.toOrderResponseDTO(any())).thenAnswer(inv -> UltrasoundOrderResponseDTO.builder()
-                .id(orderId).report(UltrasoundReportResponseDTO.builder().id(reportId).build()).build());
-            when(ultrasoundMapper.toReportResponseDTO(any())).thenReturn(UltrasoundReportResponseDTO.builder().id(reportId).build());
+                .id(orderId).highRiskNotes("surveillance rapprochée").cancellationReason("raison interne")
+                .report(UltrasoundReportResponseDTO.builder().id(reportId).providerReviewNotes("à revoir").build())
+                .build());
+            when(ultrasoundMapper.toReportResponseDTO(any())).thenAnswer(inv -> UltrasoundReportResponseDTO.builder()
+                .id(reportId).providerReviewNotes("à revoir").build());
         }
 
         private void stubNoRows() {
@@ -527,6 +596,23 @@ class PatientSubjectReadOwnershipTest {
                 .satisfies(o -> assertThat(o.getReport()).isNotNull());
             // Ownership is the patient's boundary, not the active hospital.
             verifyNoInteractions(roleValidator);
+        }
+
+        @Test
+        @DisplayName("QA D1960: the patient's copy leaves out the high-risk notes, the cancellation reason and the review notes")
+        void thePatientReadsThePatientsCopy() {
+            passwordLogin("ROLE_PATIENT");
+            stubRows(ownPatientId, hospitalB, true);
+
+            assertThat(service.getOrderById(orderId)).satisfies(o -> {
+                assertThat(o.getHighRiskNotes()).isNull();
+                assertThat(o.getCancellationReason()).isNull();
+                assertThat(o.getReport().getProviderReviewNotes()).isNull();
+            });
+            assertThat(service.getOrdersByPatientId(ownPatientId)).singleElement()
+                .satisfies(o -> assertThat(o.getHighRiskNotes()).isNull());
+            assertThat(service.getReportById(reportId).getProviderReviewNotes()).isNull();
+            assertThat(service.getReportByOrderId(orderId).getProviderReviewNotes()).isNull();
         }
 
         @Test
@@ -602,6 +688,9 @@ class PatientSubjectReadOwnershipTest {
             assertThat(service.getReportByOrderId(orderId).getId()).isEqualTo(reportId);
             service.getOrdersByPatientId(otherPatientId);
             verify(orderRepository).findAllByPatientId(otherPatientId);
+            // QA D1960: staff at the order's hospital keep the care team's notes.
+            assertThat(service.getOrderById(orderId).getHighRiskNotes()).isNotNull();
+            assertThat(service.getReportById(reportId).getProviderReviewNotes()).isNotNull();
         }
 
         @Test

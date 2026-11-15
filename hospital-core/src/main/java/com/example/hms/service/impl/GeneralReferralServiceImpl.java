@@ -430,6 +430,8 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         return referralRepository.findByPatientIdOrderByCreatedAtDesc(patientId).stream()
             .filter(referral -> referral.getStatus() != ReferralStatus.DRAFT)
             .map(this::toResponse)
+            // QA D1960: the patient's copy, without the clinicians' acknowledgement or cancellation text.
+            .map(com.example.hms.service.support.PatientSafeView::referral)
             .toList();
     }
 

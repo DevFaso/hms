@@ -22,6 +22,7 @@ import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.ImagingReportRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.service.support.PatientSafeView;
 import com.example.hms.service.ImagingCriticalNotificationService;
 import com.example.hms.service.ImagingReportService;
 import com.example.hms.service.PatientSubjectReadGuard;
@@ -356,10 +357,15 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             if (!releasedToCaller(report)) {
                 throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
             }
-            return imagingReportMapper.toResponseDTO(report);
+            // QA D1960: the patient's copy, not the trail, the lock or the escalation.
+            return PatientSafeView.imagingReport(imagingReportMapper.toResponseDTO(report));
         }
-        if (!reportInScope(report) && !releasedToCallerAsItsPatient(report)) {
-            throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
+        if (!reportInScope(report)) {
+            if (!releasedToCallerAsItsPatient(report)) {
+                throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
+            }
+            // Staff reading their own report elsewhere read it as its patient (#754's rule).
+            return PatientSafeView.imagingReport(imagingReportMapper.toResponseDTO(report));
         }
         // User decision 2026-11-14: an administrator reads released reports only;
         // a draft or a preliminary read answers as a missing id.
@@ -406,7 +412,9 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         if (asPatient && !report.isReleasedToPatient()) {
             throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId);
         }
-        return imagingReportMapper.toResponseDTO(report);
+        // QA D1960: a patient reads the patient's copy.
+        return asPatient ? PatientSafeView.imagingReport(imagingReportMapper.toResponseDTO(report))
+            : imagingReportMapper.toResponseDTO(report);
     }
 
     @Override

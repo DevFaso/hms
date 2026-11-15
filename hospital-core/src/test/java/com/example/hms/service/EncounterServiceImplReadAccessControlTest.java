@@ -152,6 +152,8 @@ class EncounterServiceImplReadAccessControlTest {
         lenient().when(patientRepository.existsByIdAndUserId(callerPatientId, callerUserId)).thenReturn(true);
         lenient().when(encounterMapper.toEncounterResponseDTO(any(Encounter.class)))
             .thenReturn(new EncounterResponseDTO());
+        lenient().when(encounterMapper.toPatientPortalEncounterResponseDTO(any(Encounter.class)))
+            .thenReturn(new EncounterResponseDTO());
         lenient().when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(), any()))
             .thenReturn(new AfterVisitSummaryDTO());
     }
@@ -838,6 +840,33 @@ class EncounterServiceImplReadAccessControlTest {
             Encounter mineElsewhere = encounterAt(otherHospital, callerPatient, false);
 
             assertThat(service.getEncounterById(mineElsewhere.getId(), locale)).isNotNull();
+            // QA D1960: read as its patient, so the patient's copy (signed note only).
+            verify(encounterMapper).toPatientPortalEncounterResponseDTO(mineElsewhere);
+            verify(encounterMapper, never()).toEncounterResponseDTO(mineElsewhere);
+        }
+
+        @Test
+        @DisplayName("QA D1960: a patient reads the patient's copy of their encounter, never the staff one with drafts")
+        void aPatientReadsThePatientsCopy() {
+            authenticateAs("ROLE_PATIENT");
+            Encounter mine = encounterAt(hospital, callerPatient, false);
+
+            service.getEncounterById(mine.getId(), locale);
+
+            verify(encounterMapper).toPatientPortalEncounterResponseDTO(mine);
+            verify(encounterMapper, never()).toEncounterResponseDTO(mine);
+        }
+
+        @Test
+        @DisplayName("QA D1960: staff at the encounter's hospital keep the staff copy")
+        void staffInScopeKeepTheStaffCopy() {
+            authenticateAs("ROLE_DOCTOR");
+            Encounter here = encounterAt(hospital, callerPatient, false);
+
+            service.getEncounterById(here.getId(), locale);
+
+            verify(encounterMapper).toEncounterResponseDTO(here);
+            verify(encounterMapper, never()).toPatientPortalEncounterResponseDTO(here);
         }
 
         @Test
