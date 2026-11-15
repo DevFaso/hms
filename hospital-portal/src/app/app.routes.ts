@@ -1182,6 +1182,8 @@ export const routes: Routes = [
             'ROLE_HOSPITAL_ADMIN',
             // QA D1592: a newborn a delivery could not register waits here for reception.
             'ROLE_RECEPTIONIST',
+            // Provisional rule 1 (2026-11-15): the pre-authorisation to obtain after an urgent imaging study.
+            'ROLE_BILLING_SPECIALIST',
             'ROLE_SUPER_ADMIN',
           ],
         },

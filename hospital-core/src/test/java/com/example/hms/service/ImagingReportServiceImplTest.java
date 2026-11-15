@@ -330,6 +330,54 @@ class ImagingReportServiceImplTest {
 
     // ── Signing ──────────────────────────────────────────────────────────
 
+    /** QA D1930 (r54): signing a revision keeps its kind; only an original read becomes FINAL. */
+    @Test
+    void signingKeepsTheReportKind_D1930() {
+        for (ImagingReportStatus kind : List.of(ImagingReportStatus.ADDENDUM, ImagingReportStatus.CORRECTED,
+                ImagingReportStatus.AMENDED, ImagingReportStatus.PRELIMINARY, ImagingReportStatus.DRAFT)) {
+            ImagingReport report = persistedReport();
+            report.setReportStatus(kind);
+            report.setImpression("Inchangé.");
+
+            imagingReportService.signReport(reportId);
+
+            ImagingReportStatus expected = kind == ImagingReportStatus.PRELIMINARY || kind == ImagingReportStatus.DRAFT
+                ? ImagingReportStatus.FINAL : kind;
+            assertThat(report.getReportStatus()).as("signed " + kind).isEqualTo(expected);
+            assertThat(report.getStatusHistory()).as("history of " + kind)
+                .anyMatch(h -> h.getStatus() == expected);
+        }
+    }
+
+    /** QA D1930 class: an edit cannot turn an addendum into an original read (it would sign FINAL), nor back. */
+    @Test
+    void anEditKeepsTheReportKind_D1930() {
+        ImagingReport report = persistedReport();
+        report.setReportStatus(ImagingReportStatus.ADDENDUM);
+        report.setFindings("f");
+        report.setImpression("i");
+        assertThatThrownBy(() -> imagingReportService.updateReport(reportId, ImagingReportUpsertRequestDTO.builder()
+                .imagingOrderId(orderId).findings("f").impression("i")
+                .reportStatus(ImagingReportStatus.PRELIMINARY).build()))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getMessageKey()).isEqualTo("imaging.report.kindFixed"));
+        assertThat(report.getReportStatus()).isEqualTo(ImagingReportStatus.ADDENDUM);
+    }
+
+    /** QA D1930 class: a read written on a signed study with no status named is not a second original. */
+    @Test
+    void aReadWithNoStatusOnASignedStudyIsRefused_D1930() {
+        ImagingReport signed = new ImagingReport();
+        signed.setId(UUID.randomUUID());
+        signed.setSignedAt(java.time.LocalDateTime.now());
+        signed.setReportStatus(ImagingReportStatus.FINAL);
+        when(imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(orderId)).thenReturn(List.of(signed));
+        assertThatThrownBy(() -> imagingReportService.createReport(ImagingReportUpsertRequestDTO.builder()
+                .imagingOrderId(orderId).findings("f").impression("i").build()))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getMessageKey()).isEqualTo("imaging.report.studyAlreadySigned"));
+    }
+
     @Test
     void signStampsServerIdentityDigestAndFinalStatus() {
         ImagingReport report = persistedReport();

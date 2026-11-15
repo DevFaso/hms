@@ -317,7 +317,7 @@ class AfterVisitSummarySectionsTest {
         cancelled.setCancellationReason("INTERNAL-REASON");
         when(imagingOrders.findByEncounterIdAndStatusNotIn(eq(encounter.getId()), any()))
             .thenReturn(List.of(signedOrder, preliminaryOrder, cancelled));
-        when(imagingReports.findByImagingOrder_IdInAndLatestVersionIsTrue(any())).thenReturn(List.of(
+        when(imagingReports.findByImagingOrder_IdIn(any())).thenReturn(List.of(
             imagingReport(signedOrder, "Pas de foyer", LocalDateTime.now()),
             imagingReport(preliminaryOrder, "UNSIGNED-READ", null)));
 
@@ -327,6 +327,30 @@ class AfterVisitSummarySectionsTest {
             .containsExactly("Pas de foyer", null, null);
         assertThat(tests.get(2).getStatus()).isEqualTo("CANCELLED");
         assertThat(tests.toString()).doesNotContain("UNSIGNED-READ").doesNotContain("INTERNAL-REASON");
+    }
+
+    /**
+     * QA D1930 (r54) class: the summary read the latest version alone, so a
+     * signed addendum ("Inchangé") hid the conclusion. The signed original
+     * stays the conclusion, also when the addendum was stored FINAL before the fix.
+     */
+    @Test
+    @DisplayName("D1930: the conclusion, not an addendum, is the study's impression")
+    void theConclusionNotAnAddendumIsTheImpression_D1930() {
+        ImagingOrder order = imagingOrder("Scanner abdominal", ImagingOrderStatus.RESULTS_AVAILABLE);
+        when(imagingOrders.findByEncounterIdAndStatusNotIn(eq(encounter.getId()), any())).thenReturn(List.of(order));
+        for (com.example.hms.enums.ImagingReportStatus addendumKind : List.of(
+                com.example.hms.enums.ImagingReportStatus.ADDENDUM, com.example.hms.enums.ImagingReportStatus.FINAL)) {
+            ImagingReport original = imagingReport(order, "Appendicite aiguë", LocalDateTime.now().minusHours(3));
+            original.setReportVersion(1);
+            ImagingReport addendum = imagingReport(order, "Inchangé", LocalDateTime.now());
+            addendum.setReportVersion(2);
+            addendum.setReportStatus(addendumKind);
+            when(imagingReports.findByImagingOrder_IdIn(any())).thenReturn(List.of(addendum, original));
+
+            assertThat(fill().getOrderedTests()).as(addendumKind.name())
+                .extracting(AfterVisitSummaryDTO.OrderedTest::getImpression).containsExactly("Appendicite aiguë");
+        }
     }
 
     @Test

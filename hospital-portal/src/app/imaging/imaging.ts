@@ -24,6 +24,8 @@ import {
   ImagingReportStatus,
   ImagingReportAuthorRequest,
   ImagingDuplicateMatch,
+  ImagingDuplicateOverrideReason,
+  IMAGING_DUPLICATE_OVERRIDE_REASONS,
 } from '../services/imaging.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -41,6 +43,7 @@ import {
   refusedFieldReasons,
 } from '../shared/refusal-reason';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { AuthorshipService } from '../shared/authorship.service';
 import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
 import { refuseFields } from '../shared/forms/invalid-fields';
@@ -135,6 +138,11 @@ export const RELEASED_REPORT_STATUSES: readonly ImagingReportStatus[] = [
   'AMENDED',
 ];
 
+/** Provisional rule 2: the note « Autre » requires, in the duplicate warning. */
+const DUPLICATE_NOTE_ID = 'img-duplicate-note';
+/** Provisional rule 1: the drawer's pre-authorisation number field. */
+const RECORD_AUTH_NUMBER_ID = 'img-record-authNumber';
+
 /** QA D1821: the order statuses a study is started from (placed, not yet performed). */
 export const STARTABLE_ORDER_STATUSES: readonly ImagingOrderStatus[] = ['ORDERED', 'SCHEDULED'];
 
@@ -187,6 +195,7 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
     TranslateModule,
     EnumLabelPipe,
     PatientPickerComponent,
+    InlineSubFormDirective,
   ],
   templateUrl: './imaging.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -259,6 +268,23 @@ export class ImagingComponent implements OnInit {
   private dialogSession = 0;
   /** The patient, hospital, modality and region the shown warning is about. */
   private duplicateWarningKey: string | null = null;
+
+  /**
+   * Provisional rule 2 (2026-11-15, pending the radiology approver):
+   * « Commander quand même » names why, from a short fixed list; « Autre »
+   * needs a note. The server refuses an override without its reason too.
+   */
+  readonly overrideReasons = IMAGING_DUPLICATE_OVERRIDE_REASONS;
+  readonly overrideReason = signal<ImagingDuplicateOverrideReason | null>(null);
+  readonly overrideNote = signal('');
+  readonly overrideError = signal<string | null>(null);
+
+  /**
+   * Provisional rule 1 (2026-11-15): the pre-authorisation number obtained
+   * after an urgent study, recorded from the request drawer.
+   */
+  readonly authorizationNumberDraft = signal('');
+  readonly authorizationSaving = signal(false);
 
   showDeleteConfirm = signal(false);
   deletingItem = signal<ImagingOrderResponse | null>(null);
@@ -663,6 +689,9 @@ export class ImagingComponent implements OnInit {
     this.duplicateCheckSeq++;
     this.duplicateWarningKey = null;
     this.duplicateMatches.set([]);
+    this.overrideReason.set(null);
+    this.overrideNote.set('');
+    this.overrideError.set(null);
     // Rex on #1169: a cancelled preview releases the form; a write in flight keeps it.
     if (this.previewSub) {
       this.previewSub.unsubscribe();
@@ -739,12 +768,32 @@ export class ImagingComponent implements OnInit {
       });
   }
 
-  /** "Order anyway": asked again if the form changed since the warning. */
+  /**
+   * "Order anyway": asked again if the form changed since the warning, and
+   * only with a reason (and a note for « Autre ») (provisional rule 2).
+   */
   orderAnyway(): void {
     if (this.duplicateMatches().length === 0 || this.duplicateWarningKey !== this.duplicateKey()) {
       this.submitForm();
       return;
     }
+    const reason = this.overrideReason();
+    const reasonIds = this.overrideReasons.map((r) => `img-duplicate-reason-${r}`);
+    const allIds = [...reasonIds, DUPLICATE_NOTE_ID];
+    if (!reason) {
+      const message = this.translate.instant('IMAGING.DUPLICATE.REASON_REQUIRED');
+      this.overrideError.set(message);
+      refuseFields(this.host.nativeElement, [reasonIds[0]], allIds, message);
+      return;
+    }
+    if (reason === 'OTHER' && !this.overrideNote().trim()) {
+      const message = this.translate.instant('IMAGING.DUPLICATE.NOTE_REQUIRED');
+      this.overrideError.set(message);
+      refuseFields(this.host.nativeElement, [DUPLICATE_NOTE_ID], allIds, message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], allIds, '');
+    this.overrideError.set(null);
     this.saveOrder(true);
   }
 
@@ -780,6 +829,11 @@ export class ImagingComponent implements OnInit {
     this.saving.set(true);
     this.formError.set(null);
     const payload = this.orderPayload();
+    if (acknowledgedDuplicate && this.overrideReason()) {
+      payload.duplicateOverride = true;
+      payload.duplicateOverrideReason = this.overrideReason() ?? undefined;
+      payload.duplicateOverrideNote = this.overrideNote().trim() || undefined;
+    }
     const wasEditing = this.editing();
     const session = this.dialogSession;
     const op = wasEditing
@@ -953,6 +1007,56 @@ export class ImagingComponent implements OnInit {
     return this.orders().find((x) => x.id === o.duplicateReferenceOrderId) ?? null;
   }
 
+  /**
+   * Provisional rule 1: whoever may start a study (the status endpoint's
+   * roles) records the number of a study done without it.
+   */
+  canRecordAuthorization(o: ImagingOrderResponse): boolean {
+    return this.canCancelOrder() && !!o.authorizationPending;
+  }
+
+  recordAuthorization(o: ImagingOrderResponse): void {
+    const number = this.authorizationNumberDraft().trim();
+    if (!number) {
+      const message = this.translate.instant('IMAGING.PREAUTH_PENDING.NUMBER_REQUIRED');
+      refuseFields(
+        this.host.nativeElement,
+        [RECORD_AUTH_NUMBER_ID],
+        [RECORD_AUTH_NUMBER_ID],
+        message,
+      );
+      this.toast.error(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], [RECORD_AUTH_NUMBER_ID], '');
+    if (this.authorizationSaving()) return;
+    this.authorizationSaving.set(true);
+    this.imagingService.recordAuthorization(o.id, number).subscribe({
+      next: (updated) => {
+        this.authorizationSaving.set(false);
+        this.authorizationNumberDraft.set('');
+        this.toast.success(this.translate.instant('IMAGING.PREAUTH_PENDING.RECORDED'));
+        if (this.selectedOrder()?.id === o.id) {
+          this.selectedOrder.set(
+            updated ?? {
+              ...o,
+              authorizationNumber: number,
+              authorizationPending: false,
+              authorizationPendingSince: null,
+            },
+          );
+        }
+        this.load();
+      },
+      error: (err: unknown) => {
+        this.authorizationSaving.set(false);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('IMAGING.PREAUTH_PENDING.RECORD_ERROR'),
+        );
+      },
+    });
+  }
+
   /** QA D1922: a pre-authorisation required and not yet numbered (the study cannot start, D1925). */
   awaitsAuthorizationNumber(o: {
     requiresAuthorization?: boolean | null;
@@ -973,6 +1077,7 @@ export class ImagingComponent implements OnInit {
 
   viewDetail(o: ImagingOrderResponse): void {
     this.selectedOrder.set(o);
+    this.authorizationNumberDraft.set('');
     this.selectedOrderReports.set([]);
     this.imagingService.getReportsForOrder(o.id).subscribe({
       next: (reports) => this.selectedOrderReports.set(reports ?? []),

@@ -100,6 +100,15 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     private final ImagingCriticalNotificationService criticalNotificationService;
     private final PatientSubjectReadGuard subjectReadGuard;
 
+    /** Provisional rule 1: the billing follow-up of a pending pre-authorisation; null in a hand-built unit test. */
+    private com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp preAuthorisationFollowUp;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setPreAuthorisationFollowUp(
+            com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp preAuthorisationFollowUp) {
+        this.preAuthorisationFollowUp = preAuthorisationFollowUp;
+    }
+
     // ── Authoring ────────────────────────────────────────────────────────
 
     @Override
@@ -247,14 +256,18 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         if (report.getInterpretingProvider() == null) {
             report.setInterpretingProvider(signer);
         }
-        report.setReportStatus(ImagingReportStatus.FINAL);
+        // QA D1930 (r54): a signature attests a report, it does not change its
+        // kind. A signed addendum (or correction) stays one, so the signed
+        // original stays the study's conclusion everywhere it is read.
+        ImagingReportStatus signedStatus = signedStatusOf(report.getReportStatus());
+        report.setReportStatus(signedStatus);
         report.setLockedForEditing(Boolean.TRUE);
         report.setLockReason("Signed by " + displayName(signer));
         report.setSignatureAlgorithm(SIGNATURE_ALGORITHM);
         report.setSignatureValue(computeSignatureDigest(canonicalSignaturePayload(report, signedAt)));
         report.setUpdatedBy(roleValidator.getCurrentUserId());
 
-        appendStatusHistory(report, ImagingReportStatus.FINAL, ImagingReportHistoryEvent.SIGNED.storedText(), signer, null);
+        appendStatusHistory(report, signedStatus, ImagingReportHistoryEvent.SIGNED.storedText(), signer, null);
 
         // Close the loop for the ordering clinician: a signed read is what
         // makes results available. Without this the order sits at COMPLETED
@@ -544,6 +557,11 @@ public class ImagingReportServiceImpl implements ImagingReportService {
                                      boolean creating) {
         ImagingReportStatus requested = request.getReportStatus();
         if (requested == null) {
+            // QA D1930 class: a read written on a signed study with no status
+            // named is not a second original (it would sign FINAL).
+            if (creating && hasSignedReport(imagingOrder.getId())) {
+                throw new com.example.hms.exception.FieldBusinessException("reportStatus", "imaging.report.studyAlreadySigned");
+            }
             if (creating && report.getReportStatus() == null) {
                 report.setReportStatus(ImagingReportStatus.PRELIMINARY);
             }
@@ -560,7 +578,23 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             && hasSignedReport(imagingOrder.getId())) {
             throw new com.example.hms.exception.FieldBusinessException("reportStatus", "imaging.report.studyAlreadySigned");
         }
+        // QA D1930 class: an edit keeps the report's kind. An addendum saved
+        // back as PRELIMINARY would sign as a second FINAL conclusion.
+        if (!creating && report.getReportStatus() != null
+                && REVISION_STATUSES.contains(report.getReportStatus()) != REVISION_STATUSES.contains(requested)) {
+            throw new com.example.hms.exception.FieldBusinessException("reportStatus", "imaging.report.kindFixed");
+        }
         report.setReportStatus(requested);
+    }
+
+    /**
+     * QA D1930 (r54): the status a signature gives a report. A revision
+     * (ADDENDUM, CORRECTED, AMENDED) keeps its kind; an original read becomes
+     * FINAL. The one place a signed status is chosen
+     * ({@code ImagingReportKindGuardTest}).
+     */
+    static ImagingReportStatus signedStatusOf(ImagingReportStatus current) {
+        return current != null && REVISION_STATUSES.contains(current) ? current : ImagingReportStatus.FINAL;
     }
 
     /** QA D1428 class: a voided read stays voided; a status write moved it back to PRELIMINARY. */
@@ -622,7 +656,14 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         order.setStatus(ImagingOrderStatus.RESULTS_AVAILABLE);
         order.setStatusUpdatedAt(LocalDateTime.now());
         order.setStatusUpdatedBy(roleValidator.getCurrentUserId());
+        // Provisional rule 1: a study reported without its required
+        // pre-authorisation number is flagged, never refused.
+        com.example.hms.service.support.ImagingPreAuthorisationPolicy.FollowUp preAuth =
+            com.example.hms.service.support.ImagingPreAuthorisationPolicy.reconcile(order, order.getStatusUpdatedAt());
         imagingOrderRepository.save(order);
+        if (preAuthorisationFollowUp != null) {
+            preAuthorisationFollowUp.apply(order, preAuth);
+        }
     }
 
     private static LocalDateTime firstNonNull(LocalDateTime... candidates) {

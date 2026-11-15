@@ -94,6 +94,8 @@ export interface ChartReviewImaging {
   reportImpression?: string | null;
   /** QA D1924 (r53): the signed conclusion and each addendum, oldest first. */
   reports?: ChartReviewImagingReport[] | null;
+  /** Provisional rule 1 (2026-11-15): the study was done without its pre-authorisation number. */
+  authorizationPending?: boolean | null;
 }
 
 /** One version of an imaging study's report, as the chart shows it. */

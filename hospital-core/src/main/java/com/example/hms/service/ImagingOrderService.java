@@ -21,6 +21,10 @@ public interface ImagingOrderService {
 
     ImagingOrderResponseDTO captureProviderSignature(UUID orderId, ImagingOrderSignatureRequestDTO request, UUID signerUserId);
 
+    /** Provisional rule 1: records the pre-authorisation number, clearing a pending flag and its task. */
+    ImagingOrderResponseDTO recordAuthorization(UUID orderId,
+                                                com.example.hms.payload.dto.imaging.ImagingOrderAuthorizationRequestDTO request);
+
     ImagingOrderResponseDTO getOrder(UUID orderId);
 
     List<ImagingOrderResponseDTO> getOrdersByPatient(UUID patientId, ImagingOrderStatus status);

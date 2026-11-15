@@ -147,6 +147,7 @@ class DeceasedPatientCareGuardTest {
         GeneralReferral#acknowledgeReferral,completeReferral,rejectReferral,cancelReferral,expireOverdueReferrals | closes or follows a referral made before the death; submitting one is refused
         HighRiskPregnancyCarePlan#updatePlan,addCareTeamNote,markMilestoneComplete | late documentation
         ImagingOrder#updateOrder,updateStatus,captureSignature | closes or documents an order made before the death
+        ImagingOrder#recordAuthorization | administrative: the insurer's pre-authorisation number of a study already done (provisional rule 1)
         Isolation#discontinuePrecaution | lifting a precaution
         LabOrder#updateLabOrder,deleteLabOrder,transitionLabOrderStatus,voidLabOrder | closes or corrects an order made before the death; results of its samples stay open
         LabSpecimen#receiveSpecimen,rejectSpecimen | a sample collected before the death

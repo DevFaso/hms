@@ -804,7 +804,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'In-Basket',
         translationKey: 'NAV.IN_BASKET',
         route: '/in-basket',
-        permission: 'View Patient Records',
+        // Roles only (no permission key): billing staff, who do not get
+        // 'View Patient Records', read the pre-authorisation follow-up here
+        // (provisional rule 1, 2026-11-15). The route guard uses the same roles.
         roles: [
           'ROLE_HOSPITAL_ADMIN',
           'ROLE_RECEPTIONIST',
@@ -818,6 +820,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_PHARMACY_VERIFIER',
           'ROLE_PHYSICIAN',
           'ROLE_SURGEON',
+          'ROLE_BILLING_SPECIALIST',
           'ROLE_SUPER_ADMIN',
         ],
       },

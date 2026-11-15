@@ -863,6 +863,17 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['order', 'earlier'],
   },
   {
+    key: 'AUDIT.DESC.IMAGING_DUPLICATE_OVERRIDDEN',
+    re: /^Duplicate warning overridden \((\S+)\): imaging order (\S+) placed while recent order (\S+) of the same study exists$/,
+    params: ['reason', 'order', 'earlier'],
+    localise: { reason: 'enum' },
+  },
+  {
+    key: 'AUDIT.DESC.IMAGING_DUPLICATE_NOT_OVERRIDDEN',
+    re: /^Duplicate warning not overridden: imaging order (\S+) placed while recent order (\S+) of the same study exists$/,
+    params: ['order', 'earlier'],
+  },
+  {
     key: 'AUDIT.DESC.LAB_CORRECTION',
     re: /^Correction: result (\S+) supersedes released result (\S+)$/,
     params: ['correction', 'original'],
