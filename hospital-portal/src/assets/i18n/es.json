@@ -1947,7 +1947,9 @@
       "DELIVERY_BABY_OUTCOME_CORRECTED": "Resultado de un bebé corregido en un registro de parto",
       "STILLBIRTH_CERTIFICATE_CONFLICT_DEATH": "El acta de defunción declara un mortinato que el parto registra ahora como nacido vivo",
       "STILLBIRTH_CERTIFICATE_CONFLICT_DELIVERY": "El parto registra como nacido vivo a un bebé que un acta de defunción declara mortinato",
-      "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradicción entre acta de mortinato y parto conciliada"
+      "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradicción entre acta de mortinato y parto conciliada",
+      "IMAGING_DUPLICATE_OVERRIDDEN": "Alerta de duplicado anulada («Solicitar de todos modos», motivo: {{reason}}): solicitud de imagen {{order}} realizada mientras existe la solicitud reciente {{earlier}} del mismo estudio",
+      "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Alerta de duplicado no anulada: solicitud de imagen {{order}} realizada mientras existe la solicitud reciente {{earlier}} del mismo estudio"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -3767,7 +3769,20 @@
       "BACK": "Volver a la solicitud",
       "ORDER_ANYWAY": "Solicitar de todos modos",
       "PLACED_ANYWAY": "La solicitud se realizó, pero este paciente ya tenía aquí una solicitud reciente de la misma modalidad y región. Compruebe que cada una es necesaria.",
-      "FLAGGED": "Posible duplicado de una solicitud reciente de la misma modalidad y región."
+      "FLAGGED": "Posible duplicado de una solicitud reciente de la misma modalidad y región.",
+      "REASON_LEGEND": "¿Por qué solicitar de todos modos?",
+      "REASON_REQUIRED": "Elija por qué solicita este estudio a pesar de la solicitud reciente.",
+      "NOTE_REQUIRED": "Describa el motivo: la nota es obligatoria con «Otro».",
+      "NOTE_LABEL": "Precise el motivo",
+      "OVERRIDE_LABEL": "Solicitada a pesar de una solicitud reciente"
+    },
+    "PREAUTH_PENDING": {
+      "FLAG": "Autorización previa pendiente",
+      "BODY": "Estudio urgente realizado sin su número de autorización previa. Facturación debe obtenerla; registre el número en cuanto se conozca.",
+      "RECORD": "Registrar el número",
+      "RECORDED": "Número de autorización previa registrado.",
+      "RECORD_ERROR": "No se pudo registrar el número de autorización previa.",
+      "NUMBER_REQUIRED": "Introduzca el número de autorización previa."
     }
   },
   "LAB": {
@@ -6890,7 +6905,8 @@
         "FETAL_DEATH_EVENT_SUPERSEDED": "Muerte fetal sustituida",
         "DELIVERY_BABY_OUTCOME_CORRECTED": "Resultado del bebé corregido",
         "STILLBIRTH_CERTIFICATE_CONFLICT": "Contradicción de acta de mortinato",
-        "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradicción de acta de mortinato conciliada"
+        "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradicción de acta de mortinato conciliada",
+        "IMAGING_ORDER_DUPLICATE_PLACED": "Solicitud de imagen duplicada realizada"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -7419,7 +7435,8 @@
         "VISIT_TYPE": "Tipo de visita",
         "WARD": "Planta",
         "WEBHOOK": "Webhook de socio",
-        "FETAL_DEATH_EVENT": "Evento de muerte fetal"
+        "FETAL_DEATH_EVENT": "Evento de muerte fetal",
+        "IMAGING_ORDER": "Solicitud de imagen"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
@@ -7550,6 +7567,12 @@
         "AUTHORED": "Informe redactado",
         "SIGNED": "Informe firmado",
         "CRITICAL_ACKNOWLEDGED": "Resultado crítico reconocido"
+      },
+      "IMAGING_DUPLICATE_OVERRIDE_REASON": {
+        "CLINICAL_CHANGE": "Cambio clínico",
+        "PRIOR_INADEQUATE_OR_UNAVAILABLE": "Estudio anterior inadecuado o no disponible",
+        "DIFFERENT_REGION_OR_QUESTION": "Región o pregunta clínica diferente",
+        "OTHER": "Otro"
       }
     },
     "DOCUMENTS": {

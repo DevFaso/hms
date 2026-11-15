@@ -562,14 +562,14 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         com.example.hms.enums.ImagingReportStatus.DRAFT, com.example.hms.enums.ImagingReportStatus.CANCELLED,
         com.example.hms.enums.ImagingReportStatus.ERROR);
 
-    /** The version the study's conclusion is read from: the last one shown that is not an addendum. */
+    /** The version the study's conclusion is read from (QA D1924 / D1930: {@link com.example.hms.service.support.ImagingReportConclusion}). */
     static ImagingReport conclusionReport(List<ImagingReport> shown) {
-        for (int i = shown.size() - 1; i >= 0; i--) {
-            if (shown.get(i).getReportStatus() != com.example.hms.enums.ImagingReportStatus.ADDENDUM) {
-                return shown.get(i);
-            }
-        }
-        return shown.isEmpty() ? null : shown.get(shown.size() - 1);
+        return com.example.hms.service.support.ImagingReportConclusion.of(shown);
+    }
+
+    /** QA D1930 (r54): how the chart names each shown version. */
+    static String shownKind(ImagingReport r, List<ImagingReport> shown) {
+        return com.example.hms.service.support.ImagingReportConclusion.kindOf(r);
     }
 
     private static int compareVersion(Integer a, Integer b) {
@@ -841,14 +841,15 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .reportStatus(conclusion != null && conclusion.getReportStatus() != null
                 ? conclusion.getReportStatus().name() : null)
             .reportImpression(conclusion != null ? truncatePreview(conclusion.getImpression()) : null)
-            .reports(shown.isEmpty() ? null : shown.stream().map(ChartReviewServiceImpl::toImagingReportEntry).toList())
+            .reports(shown.isEmpty() ? null : shown.stream().map(r -> toImagingReportEntry(r, shown)).toList())
+            .authorizationPending(o.getAuthorizationPendingSince() != null)
             .build();
     }
 
-    private static ChartReviewDTO.ImagingReportEntryDTO toImagingReportEntry(ImagingReport r) {
+    private static ChartReviewDTO.ImagingReportEntryDTO toImagingReportEntry(ImagingReport r, List<ImagingReport> shown) {
         return ChartReviewDTO.ImagingReportEntryDTO.builder()
             .id(r.getId())
-            .reportStatus(r.getReportStatus() != null ? r.getReportStatus().name() : null)
+            .reportStatus(shownKind(r, shown))
             .reportVersion(r.getReportVersion())
             .impression(truncatePreview(r.getImpression()))
             .signedAt(r.getSignedAt())

@@ -1471,7 +1471,9 @@ class ImagingOrderServiceImplTest {
     @Test
     void aStatusWriteKeepsEveryNonStatusField_D1822() throws Exception {
         Set<String> statusFields = Set.of("status", "statusUpdatedAt", "statusUpdatedBy", "completedAt",
-            "cancelledAt", "cancellationReason", "cancelledByUserId", "cancelledByName");
+            "cancelledAt", "cancellationReason", "cancelledByUserId", "cancelledByName",
+            // Provisional rule 1: the pre-authorisation flag follows the status (ImagingPreAuthorisationPolicy).
+            "authorizationPendingSince");
         ImagingOrderStatus[][] steps = {
             {ImagingOrderStatus.ORDERED, ImagingOrderStatus.IN_PROGRESS},
             {ImagingOrderStatus.IN_PROGRESS, ImagingOrderStatus.COMPLETED},
@@ -1771,5 +1773,191 @@ class ImagingOrderServiceImplTest {
             imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder().status(to).build()));
         assertThat(refused).isInstanceOf(com.example.hms.exception.BusinessException.class);
         return ((com.example.hms.exception.BusinessException) refused).getMessageKey();
+    }
+    // ── Provisional rule 1 (2026-11-15): urgent imaging is never blocked by a pre-authorisation ──
+
+    private ImagingOrder awaitingAuthorisation(ImagingOrderPriority priority, ImagingOrderStatus status) {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setPatient(patient);
+        order.setHospital(hospital);
+        order.setPriority(priority);
+        order.setStatus(status);
+        order.setRequiresAuthorization(true);
+        lenient().when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        lenient().when(imagingOrderRepository.save(order)).thenReturn(order);
+        lenient().when(imagingOrderMapper.toResponseDTO(order)).thenReturn(ImagingOrderResponseDTO.builder().id(orderId).build());
+        return order;
+    }
+
+    private com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp followUpMock() {
+        com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp followUp =
+            mock(com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp.class);
+        imagingOrderService.setPreAuthorisationFollowUp(followUp);
+        return followUp;
+    }
+
+    @Test
+    void anUrgentOrStatStudyStartsWithoutItsNumber_flaggedAndFollowedUp_rule1() {
+        for (ImagingOrderPriority urgent : List.of(ImagingOrderPriority.URGENT, ImagingOrderPriority.STAT)) {
+            com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp followUp = followUpMock();
+            ImagingOrder order = awaitingAuthorisation(urgent, ImagingOrderStatus.ORDERED);
+
+            imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+                .status(ImagingOrderStatus.IN_PROGRESS).build());
+
+            assertThat(order.getStatus()).as(urgent.name()).isEqualTo(ImagingOrderStatus.IN_PROGRESS);
+            assertThat(order.getAuthorizationPendingSince()).as(urgent.name()).isNotNull();
+            verify(followUp).apply(order, com.example.hms.service.support.ImagingPreAuthorisationPolicy.FollowUp.OPENED);
+        }
+    }
+
+    @Test
+    void aRoutineStudyIsStillRefusedWithoutItsNumber_rule1() {
+        com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp followUp = followUpMock();
+        ImagingOrder order = awaitingAuthorisation(ImagingOrderPriority.ROUTINE, ImagingOrderStatus.SCHEDULED);
+
+        assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+                .status(ImagingOrderStatus.IN_PROGRESS).build()))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getMessageKey()).isEqualTo("imaging.order.authorizationNumberRequired"));
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.SCHEDULED);
+        assertThat(order.getAuthorizationPendingSince()).isNull();
+        verify(imagingOrderRepository, never()).save(any());
+        org.mockito.Mockito.verifyNoInteractions(followUp);
+    }
+
+    @Test
+    void recordingTheNumberClearsTheFlagAndClosesTheTask_atEveryStatusTheStudyReached_rule1() {
+        for (ImagingOrderStatus reached : List.of(ImagingOrderStatus.IN_PROGRESS, ImagingOrderStatus.COMPLETED,
+                ImagingOrderStatus.RESULTS_AVAILABLE, ImagingOrderStatus.CANCELLED)) {
+            com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp followUp = followUpMock();
+            ImagingOrder order = awaitingAuthorisation(ImagingOrderPriority.STAT, reached);
+            order.setAuthorizationPendingSince(LocalDateTime.now().minusHours(2));
+
+            imagingOrderService.recordAuthorization(orderId,
+                com.example.hms.payload.dto.imaging.ImagingOrderAuthorizationRequestDTO.builder()
+                    .authorizationNumber("  CNAMU-2026-001 ").build());
+
+            assertThat(order.getAuthorizationNumber()).as(reached.name()).isEqualTo("CNAMU-2026-001");
+            assertThat(order.getAuthorizationPendingSince()).as(reached.name()).isNull();
+            assertThat(order.getStatus()).as(reached.name()).isEqualTo(reached);
+            verify(followUp).apply(order, com.example.hms.service.support.ImagingPreAuthorisationPolicy.FollowUp.CLOSED);
+        }
+    }
+
+    @Test
+    void theNumberSentWithAStatusWriteAlsoClearsTheFlag_rule1() {
+        com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp followUp = followUpMock();
+        ImagingOrder order = awaitingAuthorisation(ImagingOrderPriority.URGENT, ImagingOrderStatus.IN_PROGRESS);
+        order.setAuthorizationPendingSince(LocalDateTime.now().minusHours(1));
+
+        imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.COMPLETED).authorizationNumber("PA-77").build());
+
+        assertThat(order.getAuthorizationPendingSince()).isNull();
+        verify(followUp).apply(order, com.example.hms.service.support.ImagingPreAuthorisationPolicy.FollowUp.CLOSED);
+    }
+
+    @Test
+    void aBlankNumberIsRefusedAndAClosedOrderStaysClosed_rule1() {
+        ImagingOrder order = awaitingAuthorisation(ImagingOrderPriority.STAT, ImagingOrderStatus.IN_PROGRESS);
+        assertThatThrownBy(() -> imagingOrderService.recordAuthorization(orderId,
+                com.example.hms.payload.dto.imaging.ImagingOrderAuthorizationRequestDTO.builder().authorizationNumber(" ").build()))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getMessageKey()).isEqualTo("imaging.order.authorizationNumberBlank"));
+
+        order.setStatus(ImagingOrderStatus.CANCELLED);
+        assertThatThrownBy(() -> imagingOrderService.recordAuthorization(orderId,
+                com.example.hms.payload.dto.imaging.ImagingOrderAuthorizationRequestDTO.builder().authorizationNumber("PA-1").build()))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    // ── Provisional rule 2 (2026-11-15): « Commander quand même » records a reason ──
+
+    private List<ImagingOrder> stubDuplicate() {
+        ImagingOrder earlier = new ImagingOrder();
+        earlier.setId(UUID.randomUUID());
+        List<ImagingOrder> matches = List.of(earlier);
+        lenient().when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(hospitalId), any(), any(),
+            any(LocalDateTime.class))).thenReturn(matches);
+        return matches;
+    }
+
+    private ImagingOrderRequestDTO overriding(com.example.hms.enums.ImagingDuplicateOverrideReason reason, String note) {
+        ImagingOrderRequestDTO request = requestWithVisit(null);
+        request.setDuplicateOverride(true);
+        request.setDuplicateOverrideReason(reason);
+        request.setDuplicateOverrideNote(note);
+        return request;
+    }
+
+    @Test
+    void eachOverrideReasonIsStoredWithWhoAndWhen_rule2() {
+        for (com.example.hms.enums.ImagingDuplicateOverrideReason reason
+                : com.example.hms.enums.ImagingDuplicateOverrideReason.values()) {
+            com.example.hms.service.imaging.ImagingDuplicateOverride audit =
+                mock(com.example.hms.service.imaging.ImagingDuplicateOverride.class);
+            imagingOrderService.setDuplicateOverride(audit);
+            ImagingOrder order = stubCreate(null);
+            List<ImagingOrder> matches = stubDuplicate();
+            UUID orderer = UUID.randomUUID();
+            signer(orderer, "Awa", "Traoré");
+            String note = reason == com.example.hms.enums.ImagingDuplicateOverrideReason.OTHER ? "  Bilan préopératoire  " : null;
+
+            imagingOrderService.createOrder(overriding(reason, note), orderer);
+
+            assertThat(order.getDuplicateOfRecentOrder()).as(reason.name()).isTrue();
+            assertThat(order.getDuplicateOverride()).as(reason.name()).isTrue();
+            assertThat(order.getDuplicateOverrideReason()).as(reason.name()).isEqualTo(reason);
+            assertThat(order.getDuplicateOverrideNote()).as(reason.name())
+                .isEqualTo(note == null ? null : "Bilan préopératoire");
+            assertThat(order.getDuplicateOverrideByUserId()).as(reason.name()).isEqualTo(orderer);
+            assertThat(order.getDuplicateOverrideByName()).as(reason.name()).isEqualTo("Awa Traoré");
+            assertThat(order.getDuplicateOverrideAt()).as(reason.name()).isNotNull();
+            verify(audit).audit(order, matches);
+        }
+    }
+
+    @Test
+    void otherNeedsANote_rule2() {
+        stubCreate(null);
+        stubDuplicate();
+        for (String blank : new String[] {null, "   "}) {
+            assertThatThrownBy(() -> imagingOrderService.createOrder(
+                    overriding(com.example.hms.enums.ImagingDuplicateOverrideReason.OTHER, blank), null))
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, e -> {
+                    assertThat(e.getMessageKey()).isEqualTo("imaging.order.duplicateOverride.noteRequired");
+                    assertThat(e.getField()).isEqualTo("duplicateOverrideNote");
+                });
+        }
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void aClaimedOverrideWithNoReasonIsRefused_rule2() {
+        stubCreate(null);
+        stubDuplicate();
+        assertThatThrownBy(() -> imagingOrderService.createOrder(overriding(null, "note"), null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, e -> {
+                assertThat(e.getMessageKey()).isEqualTo("imaging.order.duplicateOverride.reasonRequired");
+                assertThat(e.getField()).isEqualTo("duplicateOverrideReason");
+            });
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void noOverrideIsStoredWhenTheServerFindsNoDuplicate_rule2() {
+        ImagingOrder order = stubCreate(null);
+        lenient().when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(hospitalId), any(), any(),
+            any(LocalDateTime.class))).thenReturn(List.of());
+
+        imagingOrderService.createOrder(overriding(
+            com.example.hms.enums.ImagingDuplicateOverrideReason.CLINICAL_CHANGE, null), null);
+
+        assertThat(order.getDuplicateOfRecentOrder()).isFalse();
+        assertThat(order.getDuplicateOverride()).isNull();
+        assertThat(order.getDuplicateOverrideReason()).isNull();
     }
 }

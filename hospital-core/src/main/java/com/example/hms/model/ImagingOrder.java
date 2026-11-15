@@ -9,6 +9,7 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.tenant.TenantEntityListener;
 import com.example.hms.security.tenant.TenantScoped;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
@@ -194,6 +195,39 @@ public class ImagingOrder extends BaseEntity implements TenantScoped {
 
     @Column(name = "duplicate_reference_order_id")
     private UUID duplicateReferenceOrderId;
+
+    /**
+     * Provisional rule 2 (2026-11-15, V297): the orderer chose « Commander
+     * quand même » on the duplicate warning, with a reason from a fixed list.
+     */
+    @Column(name = "duplicate_override")
+    private Boolean duplicateOverride;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "duplicate_override_reason", length = 40)
+    private com.example.hms.enums.ImagingDuplicateOverrideReason duplicateOverrideReason;
+
+    /** Free text (required with OTHER): it can name the patient's history, so it is encrypted. */
+    @Convert(converter = com.example.hms.security.EncryptedStringConverter.class)
+    @Column(name = "duplicate_override_note", columnDefinition = "TEXT")
+    private String duplicateOverrideNote;
+
+    @Column(name = "duplicate_override_by_user_id")
+    private UUID duplicateOverrideByUserId;
+
+    @Column(name = "duplicate_override_by_name", length = 150)
+    private String duplicateOverrideByName;
+
+    @Column(name = "duplicate_override_at")
+    private LocalDateTime duplicateOverrideAt;
+
+    /**
+     * Provisional rule 1 (2026-11-15, V297): when the study was done without
+     * its required pre-authorisation number (an urgent start). Null when not
+     * pending; set and cleared only by {@code ImagingPreAuthorisationPolicy}.
+     */
+    @Column(name = "authorization_pending_since")
+    private LocalDateTime authorizationPendingSince;
 
     @Column(name = "cancelled_at")
     private LocalDateTime cancelledAt;

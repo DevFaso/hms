@@ -59,7 +59,9 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("patient.photo.notRegistered");
+            // QA D1870 (round 53): a patient not registered here is "not found", like GET /patients/{id};
+            // a distinct answer told a caller holding the id that the patient exists at another hospital.
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
         validate(file);
 

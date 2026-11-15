@@ -195,6 +195,8 @@ class GuardDriftRatchetTest {
         listed.put("GeneralReferralController.scheduleReferral", GENERALREFERRALCONTROLLER_REASON);
         listed.put("GeneralReferralController.startReferral", GENERALREFERRALCONTROLLER_REASON);
         listed.put("ImagingOrderController.captureSignature", IMAGINGORDERCONTROLLER_REASON);
+        // Provisional rule 1: the status endpoint's roles record the pre-authorisation number of a study they may start.
+        listed.put("ImagingOrderController.recordAuthorization", IMAGINGORDERCONTROLLER_REASON);
         listed.put("ImagingOrderController.updateStatus", IMAGINGORDERCONTROLLER_REASON);
         listed.put("ImagingResultController.acknowledgeCriticalResult", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingResultController.createReport", IMAGINGRESULTCONTROLLER_REASON);

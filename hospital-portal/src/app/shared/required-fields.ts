@@ -1,3 +1,4 @@
+import { WritableSignal } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 
 /** One required field of a form: the label key it is shown under, and whether it holds a value. */
@@ -29,6 +30,62 @@ export function missingRequiredMessage(
     .map((f) => translate.instant(f.labelKey));
   if (missing.length === 0) return null;
   return translate.instant('COMMON.MISSING_REQUIRED_FIELDS', { fields: missing.join(', ') });
+}
+
+/**
+ * QA D1940 (round 54): a banner set on submit from {@link missingRequiredMessage}
+ * ("Champs obligatoires manquants : Service, Date, Heure") kept naming fields
+ * after they were filled, until the next submit. A form whose banner stays on
+ * screen (a signal, not a toast) refuses through this instead: {@link check}
+ * sets the banner as before, and while it still shows that sentence every
+ * edit inside `root` recomputes it, so a filled field leaves the sentence and
+ * the banner goes when nothing is missing. Another message the form put in
+ * the banner since (a server error) is left alone.
+ */
+export class LiveRequiredMessage {
+  private shown: string | null = null;
+  private watched: HTMLElement | null = null;
+  private readonly refresh = (): void => {
+    if (this.shown === null || this.banner() !== this.shown) {
+      this.shown = null;
+      return;
+    }
+    this.shown = missingRequiredMessage(this.translate, this.fields());
+    this.banner.set(this.shown);
+  };
+
+  constructor(
+    private readonly translate: TranslateService,
+    /** The form's required fields with their CURRENT values, read at each call. */
+    private readonly fields: () => readonly RequiredField[],
+    /** The banner the message is shown in. */
+    private readonly banner: WritableSignal<string | null>,
+  ) {}
+
+  /**
+   * On submit: the "missing fields" message, also put in the banner, or null
+   * when every field is filled (the banner is then left as it is).
+   */
+  check(root: HTMLElement | null | undefined): string | null {
+    const message = missingRequiredMessage(this.translate, this.fields());
+    this.shown = message;
+    if (message === null) return null;
+    this.banner.set(message);
+    if (root && this.watched !== root) {
+      this.stop();
+      this.watched = root;
+      root.addEventListener('input', this.refresh);
+      root.addEventListener('change', this.refresh);
+    }
+    return message;
+  }
+
+  /** Stops following the form's edits (the form is closed or destroyed). */
+  stop(): void {
+    this.watched?.removeEventListener('input', this.refresh);
+    this.watched?.removeEventListener('change', this.refresh);
+    this.watched = null;
+  }
 }
 
 /**

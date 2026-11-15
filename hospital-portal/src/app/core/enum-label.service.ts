@@ -462,6 +462,13 @@ export class EnumLabelService implements OnDestroy {
       URGENT: 'Urgent',
       STAT: 'STAT (immediate)',
     },
+    // Provisional rule 2 (2026-11-15): why an imaging order was placed despite the duplicate warning.
+    imagingDuplicateOverrideReason: {
+      CLINICAL_CHANGE: 'Clinical change',
+      PRIOR_INADEQUATE_OR_UNAVAILABLE: 'Previous study inadequate or unavailable',
+      DIFFERENT_REGION_OR_QUESTION: 'Different region or clinical question',
+      OTHER: 'Other',
+    },
     admissionType: {
       EMERGENCY: 'Emergency',
       ELECTIVE: 'Elective',
@@ -661,6 +668,7 @@ export class EnumLabelService implements OnDestroy {
       LAB_ORDER_CANCELLED: 'Lab Order Cancelled',
       LAB_ORDER_ENTERED_IN_ERROR: 'Lab Order Entered in Error',
       LAB_ORDER_DUPLICATE_PLACED: 'Duplicate Lab Order Placed',
+      IMAGING_ORDER_DUPLICATE_PLACED: 'Duplicate Imaging Order Placed',
       LAB_SPECIMEN_UPDATED: 'Lab Specimen Updated',
       LAB_RESULT_CREATED: 'Lab Result Created',
       LAB_RESULT_ACKNOWLEDGED: 'Lab Result Acknowledged',

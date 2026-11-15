@@ -237,6 +237,8 @@ public class ChartReviewDTO {
          * report, the latest report alone.
          */
         private List<ImagingReportEntryDTO> reports;
+        /** Provisional rule 1 (V297): the study was done without its required pre-authorisation number. */
+        private Boolean authorizationPending;
     }
 
     @Getter

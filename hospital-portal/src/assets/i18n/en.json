@@ -1947,7 +1947,9 @@
       "DELIVERY_BABY_OUTCOME_CORRECTED": "Baby outcome corrected on a delivery record",
       "STILLBIRTH_CERTIFICATE_CONFLICT_DEATH": "Death certificate declares a stillbirth the delivery now records as born alive",
       "STILLBIRTH_CERTIFICATE_CONFLICT_DELIVERY": "Delivery records as born alive a baby a death certificate declares stillborn",
-      "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Stillbirth certificate conflict reconciled"
+      "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Stillbirth certificate conflict reconciled",
+      "IMAGING_DUPLICATE_OVERRIDDEN": "Duplicate warning overridden (\"Order anyway\", reason: {{reason}}): imaging order {{order}} placed while recent order {{earlier}} of the same study exists",
+      "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Duplicate warning not overridden: imaging order {{order}} placed while recent order {{earlier}} of the same study exists"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -3767,7 +3769,20 @@
       "BACK": "Back to the order",
       "ORDER_ANYWAY": "Order anyway",
       "PLACED_ANYWAY": "The order was placed, but this patient already had a recent order for the same modality and region here. Check that each one is needed.",
-      "FLAGGED": "Possible duplicate of a recent order for the same modality and region."
+      "FLAGGED": "Possible duplicate of a recent order for the same modality and region.",
+      "REASON_LEGEND": "Why order anyway?",
+      "REASON_REQUIRED": "Choose why you are ordering this study despite the recent order.",
+      "NOTE_REQUIRED": "Describe the reason: a note is required with \"Other\".",
+      "NOTE_LABEL": "Detail the reason",
+      "OVERRIDE_LABEL": "Ordered despite a recent order"
+    },
+    "PREAUTH_PENDING": {
+      "FLAG": "Pre-authorisation pending",
+      "BODY": "Urgent study done without its pre-authorisation number. Billing has been asked to obtain it; record the number as soon as it is known.",
+      "RECORD": "Record the number",
+      "RECORDED": "Pre-authorisation number recorded.",
+      "RECORD_ERROR": "The pre-authorisation number could not be recorded.",
+      "NUMBER_REQUIRED": "Enter the pre-authorisation number."
     }
   },
   "LAB": {
@@ -6890,7 +6905,8 @@
         "FETAL_DEATH_EVENT_SUPERSEDED": "Fetal-death event superseded",
         "DELIVERY_BABY_OUTCOME_CORRECTED": "Baby outcome corrected",
         "STILLBIRTH_CERTIFICATE_CONFLICT": "Stillbirth certificate conflict",
-        "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Stillbirth certificate conflict reconciled"
+        "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Stillbirth certificate conflict reconciled",
+        "IMAGING_ORDER_DUPLICATE_PLACED": "Duplicate imaging order placed"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -7419,7 +7435,8 @@
         "VISIT_TYPE": "Visit type",
         "WARD": "Ward",
         "WEBHOOK": "Partner webhook",
-        "FETAL_DEATH_EVENT": "Fetal-death event"
+        "FETAL_DEATH_EVENT": "Fetal-death event",
+        "IMAGING_ORDER": "Imaging order"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -7550,6 +7567,12 @@
         "AUTHORED": "Report written",
         "SIGNED": "Report signed",
         "CRITICAL_ACKNOWLEDGED": "Critical finding acknowledged"
+      },
+      "IMAGING_DUPLICATE_OVERRIDE_REASON": {
+        "CLINICAL_CHANGE": "Clinical change",
+        "PRIOR_INADEQUATE_OR_UNAVAILABLE": "Previous study inadequate or unavailable",
+        "DIFFERENT_REGION_OR_QUESTION": "Different region or clinical question",
+        "OTHER": "Other"
       }
     },
     "DOCUMENTS": {

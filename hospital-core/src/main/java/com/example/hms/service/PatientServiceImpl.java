@@ -1289,7 +1289,9 @@ public class PatientServiceImpl implements PatientService {
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
-            throw new BusinessException("patient.notRegisteredInHospital");
+            // QA D1870 (round 53): a patient not registered here is "not found", like GET /patients/{id};
+            // a distinct answer told a caller holding the id that the patient exists at another hospital.
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
         boolean includeSensitive = Boolean.TRUE.equals(request.getIncludeSensitiveData());
@@ -1422,7 +1424,9 @@ public class PatientServiceImpl implements PatientService {
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, resolvedHospitalId)) {
-            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "patient.notRegisteredInHospital");
+            // QA D1870 (round 53): a patient not registered here is "not found", like GET /patients/{id};
+            // a distinct answer told a caller holding the id that the patient exists at another hospital.
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
         boolean includeSensitive = Boolean.TRUE.equals(request.getIncludeSensitiveData());
@@ -1571,7 +1575,9 @@ public class PatientServiceImpl implements PatientService {
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
-            throw new BusinessException("patient.notRegisteredInHospital");
+            // QA D1870 (round 53): a patient not registered here is "not found", like GET /patients/{id};
+            // a distinct answer told a caller holding the id that the patient exists at another hospital.
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
         LinkedHashSet<String> sensitiveSections = new LinkedHashSet<>();
@@ -2072,7 +2078,9 @@ public class PatientServiceImpl implements PatientService {
 
     private void ensurePatientRegistered(UUID patientId, UUID hospitalId) {
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
-            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "patient.notRegisteredInHospital");
+            // QA D1870 (round 53): a patient not registered here is "not found", like GET /patients/{id};
+            // a distinct answer told a caller holding the id that the patient exists at another hospital.
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
     }
 

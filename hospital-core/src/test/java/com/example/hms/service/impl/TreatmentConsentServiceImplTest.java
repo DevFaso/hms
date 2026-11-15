@@ -165,8 +165,8 @@ class TreatmentConsentServiceImplTest {
 
         assertThatThrownBy(() -> service.record(patientId, foreignHospitalId, null,
             TreatmentConsentSource.MANUAL, request))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not registered");
+            // QA D1870: "not here" is "not found", like GET /patients/{id}, never a distinct refusal.
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
     }
 
     @Test

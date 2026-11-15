@@ -1,5 +1,6 @@
 import {
   Component,
+  ElementRef,
   OnInit,
   computed,
   inject,
@@ -10,7 +11,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { missingRequiredMessage } from '../../shared/required-fields';
+import { LiveRequiredMessage } from '../../shared/required-fields';
 import { catchError, of } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 
@@ -65,6 +66,7 @@ export class SubscriptionsComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly confirm = inject(ConfirmService);
   private readonly toast = inject(ToastService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly loading = signal(true);
   readonly errored = signal(false);
@@ -74,6 +76,14 @@ export class SubscriptionsComponent implements OnInit {
   readonly editing = signal<SubscriptionPlan | null>(null);
   readonly form = signal<SubscriptionPlanRequest>({ ...FRESH_REQUEST });
   readonly formError = signal<string | null>(null);
+  private readonly formMissing = new LiveRequiredMessage(
+    this.translate,
+    () => [
+      { labelKey: 'SUBSCRIPTIONS.FORM.NAME', value: this.form().name },
+      { labelKey: 'SUBSCRIPTIONS.FORM.TIER_CODE', value: this.form().tierCode },
+    ],
+    this.formError,
+  );
   readonly formBusy = signal(false);
   // Explicit visibility flag — the form reset on "New plan" leaves every
   // field empty, so a derived "is form populated?" predicate would hide
@@ -161,12 +171,8 @@ export class SubscriptionsComponent implements OnInit {
     const body = this.form();
     // QA D1358: name the blank fields, not a fixed list (the text passes the
     // template's translate pipe unchanged).
-    const missing = missingRequiredMessage(this.translate, [
-      { labelKey: 'SUBSCRIPTIONS.FORM.NAME', value: body.name },
-      { labelKey: 'SUBSCRIPTIONS.FORM.TIER_CODE', value: body.tierCode },
-    ]);
-    if (missing) {
-      this.formError.set(missing);
+    // QA D1940: the banner names only the fields still blank, as they are filled.
+    if (this.formMissing.check(this.host.nativeElement)) {
       return;
     }
     if (this.fractionDigits(body.currency) === 0 && body.monthlyPriceCents % HUNDREDTHS !== 0) {

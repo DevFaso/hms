@@ -1947,7 +1947,9 @@
       "DELIVERY_BABY_OUTCOME_CORRECTED": "Issue d’un bébé corrigée sur un compte rendu d’accouchement",
       "STILLBIRTH_CERTIFICATE_CONFLICT_DEATH": "L’acte de décès déclare une mortinaissance que l’accouchement enregistre désormais comme naissance vivante",
       "STILLBIRTH_CERTIFICATE_CONFLICT_DELIVERY": "L’accouchement enregistre comme né vivant un bébé qu’un acte de décès déclare mort-né",
-      "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradiction entre acte de mortinaissance et accouchement rapprochée"
+      "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradiction entre acte de mortinaissance et accouchement rapprochée",
+      "IMAGING_DUPLICATE_OVERRIDDEN": "Alerte de doublon outrepassée (« Commander quand même », motif : {{reason}}) : demande d'imagerie {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
+      "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Doublon possible, sans « Commander quand même » : demande d'imagerie {{order}} passée alors que la demande récente {{earlier}} du même examen existe"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -3767,7 +3769,20 @@
       "BACK": "Revenir à la demande",
       "ORDER_ANYWAY": "Commander quand même",
       "PLACED_ANYWAY": "La demande a été passée, mais ce patient avait déjà ici une demande récente de même modalité et de même région. Vérifiez que chacune est nécessaire.",
-      "FLAGGED": "Doublon possible d'une demande récente de même modalité et de même région."
+      "FLAGGED": "Doublon possible d'une demande récente de même modalité et de même région.",
+      "REASON_LEGEND": "Pourquoi commander quand même ?",
+      "REASON_REQUIRED": "Choisissez pourquoi vous commandez cet examen malgré la demande récente.",
+      "NOTE_REQUIRED": "Précisez le motif : une note est obligatoire avec « Autre ».",
+      "NOTE_LABEL": "Précisez le motif",
+      "OVERRIDE_LABEL": "Commandée malgré une demande récente"
+    },
+    "PREAUTH_PENDING": {
+      "FLAG": "Préautorisation en attente",
+      "BODY": "Examen urgent réalisé sans son numéro de préautorisation. La facturation est chargée de l'obtenir ; enregistrez le numéro dès qu'il est connu.",
+      "RECORD": "Enregistrer le numéro",
+      "RECORDED": "Numéro de préautorisation enregistré.",
+      "RECORD_ERROR": "Le numéro de préautorisation n'a pas pu être enregistré.",
+      "NUMBER_REQUIRED": "Saisissez le numéro de préautorisation."
     }
   },
   "LAB": {
@@ -6856,7 +6871,8 @@
         "FETAL_DEATH_EVENT_SUPERSEDED": "Décès fœtal remplacé",
         "DELIVERY_BABY_OUTCOME_CORRECTED": "Issue d’un bébé corrigée",
         "STILLBIRTH_CERTIFICATE_CONFLICT": "Contradiction d’acte de mortinaissance",
-        "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradiction d’acte de mortinaissance rapprochée"
+        "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradiction d’acte de mortinaissance rapprochée",
+        "IMAGING_ORDER_DUPLICATE_PLACED": "Demande d'imagerie en double passée"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -7385,7 +7401,8 @@
         "VISIT_TYPE": "Type de visite",
         "WARD": "Unité de soins",
         "WEBHOOK": "Webhook partenaire",
-        "FETAL_DEATH_EVENT": "Événement de décès fœtal"
+        "FETAL_DEATH_EVENT": "Événement de décès fœtal",
+        "IMAGING_ORDER": "Demande d'imagerie"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
@@ -7516,6 +7533,12 @@
         "AUTHORED": "Compte rendu rédigé",
         "SIGNED": "Compte rendu signé",
         "CRITICAL_ACKNOWLEDGED": "Résultat critique pris en compte"
+      },
+      "IMAGING_DUPLICATE_OVERRIDE_REASON": {
+        "CLINICAL_CHANGE": "Changement clinique",
+        "PRIOR_INADEQUATE_OR_UNAVAILABLE": "Examen précédent inadéquat ou indisponible",
+        "DIFFERENT_REGION_OR_QUESTION": "Région ou question clinique différente",
+        "OTHER": "Autre"
       }
     },
     "DOCUMENTS": {

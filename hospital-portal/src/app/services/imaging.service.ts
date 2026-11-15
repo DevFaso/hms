@@ -68,9 +68,29 @@ export interface ImagingOrderResponse {
   duplicateOfRecentOrder?: boolean | null;
   duplicateReferenceOrderId?: string | null;
   duplicateMatches?: ImagingDuplicateMatch[] | null;
+  /** Provisional rule 2 (2026-11-15): placed with « Commander quand même », and why. */
+  duplicateOverride?: boolean | null;
+  duplicateOverrideReason?: ImagingDuplicateOverrideReason | null;
+  duplicateOverrideNote?: string | null;
+  duplicateOverrideByName?: string | null;
+  duplicateOverrideAt?: string | null;
+  /** Provisional rule 1 (2026-11-15): the study was done without its pre-authorisation number. */
+  authorizationPending?: boolean | null;
+  authorizationPendingSince?: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+/** Provisional rule 2 (2026-11-15): why an order was placed despite the duplicate warning. */
+export type ImagingDuplicateOverrideReason =
+  'CLINICAL_CHANGE' | 'PRIOR_INADEQUATE_OR_UNAVAILABLE' | 'DIFFERENT_REGION_OR_QUESTION' | 'OTHER';
+
+export const IMAGING_DUPLICATE_OVERRIDE_REASONS: readonly ImagingDuplicateOverrideReason[] = [
+  'CLINICAL_CHANGE',
+  'PRIOR_INADEQUATE_OR_UNAVAILABLE',
+  'DIFFERENT_REGION_OR_QUESTION',
+  'OTHER',
+];
 
 /** A recent order of the same study for the patient here (GET …/duplicates, QA D1920 scope). */
 export interface ImagingDuplicateMatch {
@@ -106,6 +126,10 @@ export interface ImagingOrderRequest {
   appointmentLocation?: string;
   requiresAuthorization?: boolean;
   authorizationNumber?: string;
+  /** Provisional rule 2: « Commander quand même » carries its reason (and a note with OTHER). */
+  duplicateOverride?: boolean;
+  duplicateOverrideReason?: ImagingDuplicateOverrideReason;
+  duplicateOverrideNote?: string;
 }
 
 export type ImagingReportStatus =
@@ -268,6 +292,16 @@ export class ImagingService {
       `${this.baseUrl}/orders/${orderId}/status`,
       statusUpdate,
     );
+  }
+
+  /** Provisional rule 1: the pre-authorisation number obtained after an urgent study. */
+  recordAuthorization(
+    orderId: string,
+    authorizationNumber: string,
+  ): Observable<ImagingOrderResponse> {
+    return this.http.put<ImagingOrderResponse>(`${this.baseUrl}/orders/${orderId}/authorization`, {
+      authorizationNumber,
+    });
   }
 
   getOrder(orderId: string): Observable<ImagingOrderResponse> {

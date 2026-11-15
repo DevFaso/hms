@@ -3512,6 +3512,13 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V297-imaging-preauth-pending-and-duplicate-override" author="hms-team" runOnChange="false">
+        <sqlFile path="V297__imaging_preauth_pending_and_duplicate_override.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
     <changeSet id="V299-vital-sign-organ-damage-symptoms" author="hms-team" runOnChange="false">
         <sqlFile path="V299__vital_sign_organ_damage_symptoms.sql"
                  relativeToChangelogFile="true"
