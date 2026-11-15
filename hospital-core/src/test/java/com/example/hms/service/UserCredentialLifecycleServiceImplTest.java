@@ -2,6 +2,9 @@ package com.example.hms.service;
 
 import com.example.hms.enums.MfaMethodType;
 import com.example.hms.enums.RecoveryContactType;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
+import com.example.hms.exception.NotificationTransportUnavailableException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.User;
 import com.example.hms.model.UserMfaEnrollment;
@@ -11,12 +14,18 @@ import com.example.hms.payload.dto.credential.UserRecoveryContactRequestDTO;
 import com.example.hms.repository.UserMfaEnrollmentRepository;
 import com.example.hms.repository.UserRecoveryContactRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.service.integration.IkoddiGateway;
+import com.example.hms.service.integration.SmsRecipientNotAllowedException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.MessageSource;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Clock;
@@ -24,6 +33,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -65,6 +75,12 @@ class UserCredentialLifecycleServiceImplTest {
 
     @Mock
     private AuditEventLogService auditEventLogService;
+
+    @Mock
+    private IkoddiGateway smsGateway;
+
+    @Mock
+    private MessageSource messageSource;
 
     /** Fixed instant: the recovery-code expiry is written and checked against the injected clock. */
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 1, 10, 0);
@@ -768,5 +784,214 @@ class UserCredentialLifecycleServiceImplTest {
         assertThat(messages).containsExactly("users.recovery.alreadyVerified", "users.verification.noCodeSent",
             "users.verification.tooManyAttempts", "users.verification.invalidCode");
         assertThat(wrongCode.isVerified()).isFalse();
+    }
+
+    // ── D2000: a PHONE recovery contact gets its code by SMS, or a clear refusal ──
+
+    private UserRecoveryContact pendingPhoneContact(UUID userId, String number) {
+        UserRecoveryContact contact = pendingContact(userId);
+        contact.setContactType(RecoveryContactType.PHONE);
+        contact.setContactValue(number);
+        return contact;
+    }
+
+    @Test
+    void phoneRecoveryCodeIsSentBySmsInFrenchToTheGatewayNumber() {
+        UUID userId = UUID.randomUUID();
+        UserRecoveryContact contact = pendingPhoneContact(userId, "70 12 34 56");
+        when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+        when(smsGateway.isConfigured()).thenReturn(true);
+        when(messageSource.getMessage(eq("sms.phoneVerification.code"), any(Object[].class), eq(Locale.FRENCH)))
+            .thenReturn("e-Keneya : votre code");
+        when(smsGateway.sendSms(anyList(), anyString(), anyString()))
+            .thenReturn(new IkoddiGateway.SmsDispatch(true, "{}"));
+
+        String type = service.sendRecoveryContactVerificationCode(userId, contact.getId());
+
+        assertThat(type).isEqualTo("PHONE");
+        verify(smsGateway).sendSms(List.of("+22670123456"), "e-Keneya : votre code",
+            UserCredentialLifecycleServiceImpl.RECOVERY_SMS_CAMPAIGN);
+        // The texted code is the one whose hash was stored, with the 15-minute lifetime.
+        ArgumentCaptor<String> hashed = ArgumentCaptor.forClass(String.class);
+        verify(passwordEncoder).encode(hashed.capture());
+        ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
+        verify(messageSource).getMessage(eq("sms.phoneVerification.code"), args.capture(), eq(Locale.FRENCH));
+        assertThat(args.getValue()).containsExactly(hashed.getValue(), 15);
+        assertThat(hashed.getValue()).matches("\\d{6}");
+        verify(emailService, never()).sendRecoveryContactVerificationEmail(anyString(), anyString());
+    }
+
+    @Test
+    void phoneRecoveryCodeIsRefusedBeforeAnyCodeExistsWhenNoSmsTransportIsConfigured() {
+        UUID userId = UUID.randomUUID();
+        UserRecoveryContact contact = pendingPhoneContact(userId, "+22670123456");
+        when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
+        when(smsGateway.isConfigured()).thenReturn(false);
+
+        assertThatThrownBy(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()))
+            .isInstanceOf(NotificationTransportUnavailableException.class)
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("users.recovery.smsUnavailable"));
+
+        verify(smsGateway, never()).sendSms(anyList(), anyString(), anyString());
+        verify(passwordEncoder, never()).encode(anyString());
+        verify(recoveryContactRepository, never()).save(any());
+        assertThat(contact.getVerificationCodeHash()).isNull();
+    }
+
+    @Test
+    void phoneRecoveryCodeThatTheProviderRefusesIsAnErrorNotASuccess() {
+        UUID userId = UUID.randomUUID();
+        UserRecoveryContact contact = pendingPhoneContact(userId, "+22670123456");
+        when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+        when(smsGateway.isConfigured()).thenReturn(true);
+        when(messageSource.getMessage(anyString(), any(Object[].class), any(Locale.class))).thenReturn("body");
+        when(smsGateway.sendSms(anyList(), anyString(), anyString()))
+            .thenThrow(new IllegalStateException("sms.orange.rejected"))
+            .thenThrow(new SmsRecipientNotAllowedException())
+            .thenReturn(new IkoddiGateway.SmsDispatch(false, "{}"))
+            .thenThrow(new NotificationTransportUnavailableException("Text messaging is unavailable right now."));
+
+        List<String> keys = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            Throwable thrown = catchThrowable(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()));
+            assertThat(thrown).isInstanceOf(BusinessException.class);
+            keys.add(((BusinessException) thrown).getMessageKey());
+        }
+        assertThat(keys).containsExactly("users.recovery.smsFailed", "sms.recipient.notAllowlisted",
+            "users.recovery.smsFailed");
+        assertThatThrownBy(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()))
+            .isInstanceOf(NotificationTransportUnavailableException.class)
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("users.recovery.smsUnavailable"));
+    }
+
+    @Test
+    void phoneRecoveryCodeToANumberWeDoNotTextIsRefusedOnTheField() {
+        UUID userId = UUID.randomUUID();
+        UserRecoveryContact contact = pendingPhoneContact(userId, "+1 202 555 0143");
+        when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
+        when(smsGateway.isConfigured()).thenReturn(true);
+
+        assertThatThrownBy(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()))
+            .isInstanceOfSatisfying(FieldBusinessException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("contactValue");
+                assertThat(ex.getMessageKey()).isEqualTo("users.recovery.phoneInvalid");
+            });
+        verify(smsGateway, never()).sendSms(anyList(), anyString(), anyString());
+        verify(recoveryContactRepository, never()).save(any());
+    }
+
+    @Test
+    void emailRecoveryCodeWithNoMailTransportIsALocalizedRefusal() {
+        UUID userId = UUID.randomUUID();
+        UserRecoveryContact contact = pendingContact(userId);
+        when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+        doThrow(new NotificationTransportUnavailableException("Mail transport is not configured on this deployment"))
+            .when(emailService).sendRecoveryContactVerificationEmail(anyString(), anyString());
+
+        assertThatThrownBy(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()))
+            .isInstanceOf(NotificationTransportUnavailableException.class)
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("users.recovery.emailUnavailable"));
+    }
+
+    /**
+     * D2000 class guard over every contact type: "code sent" is answered only
+     * when exactly one transport was handed the code; any other type is
+     * refused before a code is stored. A new enum value cannot fall through.
+     */
+    @ParameterizedTest
+    @EnumSource(RecoveryContactType.class)
+    void everyContactTypeEitherReallySendsItsCodeOrIsRefusedBeforeOneExists(RecoveryContactType type) {
+        UUID userId = UUID.randomUUID();
+        UserRecoveryContact contact = pendingPhoneContact(userId,
+            type == RecoveryContactType.EMAIL ? "backup@example.com" : "+22670123456");
+        contact.setContactType(type);
+        when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
+        org.mockito.Mockito.lenient().when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+        org.mockito.Mockito.lenient().when(smsGateway.isConfigured()).thenReturn(true);
+        org.mockito.Mockito.lenient().when(messageSource.getMessage(anyString(), any(Object[].class), any(Locale.class)))
+            .thenReturn("body");
+        org.mockito.Mockito.lenient().when(smsGateway.sendSms(anyList(), anyString(), anyString()))
+            .thenReturn(new IkoddiGateway.SmsDispatch(true, "{}"));
+
+        Throwable thrown = catchThrowable(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()));
+
+        int emails = org.mockito.Mockito.mockingDetails(emailService).getInvocations().size();
+        int texts = (int) org.mockito.Mockito.mockingDetails(smsGateway).getInvocations().stream()
+            .filter(inv -> inv.getMethod().getName().equals("sendSms")).count();
+        if (thrown == null) {
+            assertThat(emails + texts).as("%s answered 'code sent'; exactly one transport must carry it", type)
+                .isEqualTo(1);
+        } else {
+            assertThat(thrown).isInstanceOf(BusinessException.class);
+            assertThat(((BusinessException) thrown).getMessageKey()).isEqualTo("users.recovery.typeNotVerifiable");
+            verify(recoveryContactRepository, never()).save(any());
+            assertThat(emails + texts).isZero();
+        }
+        assertThat(thrown == null).as("only EMAIL and PHONE can carry a code")
+            .isEqualTo(type == RecoveryContactType.EMAIL || type == RecoveryContactType.PHONE);
+    }
+
+    // ── D2000 (owner request): a recovery contact is not the sign-in email or phone ──
+
+    @Test
+    void aRecoveryContactEqualToTheSignInEmailOrPhoneIsRefused() {
+        UUID userId = UUID.randomUUID();
+        User user = User.builder().username("u").email("Owner@Example.com").phoneNumber("+226 70 12 34 56").build();
+        user.setId(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(recoveryContactRepository.findByUserId(userId)).thenReturn(List.of());
+
+        for (String[] typed : new String[][] {{"EMAIL", "  owner@EXAMPLE.com "}, {"PHONE", "70123456"},
+            {"PHONE", "0022670123456"}}) {
+            UserRecoveryContactRequestDTO request = new UserRecoveryContactRequestDTO();
+            request.setContactType(RecoveryContactType.valueOf(typed[0]));
+            request.setContactValue(typed[1]);
+            assertThatThrownBy(() -> service.upsertRecoveryContacts(userId, List.of(request)))
+                .as(typed[1])
+                .isInstanceOfSatisfying(FieldBusinessException.class, ex -> {
+                    assertThat(ex.getField()).isEqualTo("contactValue");
+                    assertThat(ex.getMessageKey()).isEqualTo("users.recovery.sameAsSignIn");
+                });
+        }
+        verify(recoveryContactRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void aDifferentContactIsAcceptedAndOneAlreadyOnFileStaysRemovable() {
+        UUID userId = UUID.randomUUID();
+        User user = User.builder().username("u").email("owner@example.com").phoneNumber("+22670123456").build();
+        user.setId(userId);
+        UserRecoveryContact legacy = UserRecoveryContact.builder().user(user)
+            .contactType(RecoveryContactType.EMAIL).contactValue("owner@example.com").build();
+        legacy.setId(UUID.randomUUID());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(recoveryContactRepository.findByUserId(userId)).thenReturn(List.of(legacy));
+        when(recoveryContactRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+
+        UserRecoveryContactRequestDTO keep = new UserRecoveryContactRequestDTO();
+        keep.setContactType(RecoveryContactType.EMAIL);
+        keep.setContactValue("owner@example.com");
+        UserRecoveryContactRequestDTO other = new UserRecoveryContactRequestDTO();
+        other.setContactType(RecoveryContactType.PHONE);
+        other.setContactValue("+22676000000");
+
+        assertThat(service.upsertRecoveryContacts(userId, List.of(keep, other))).hasSize(2);
+    }
+
+    @Test
+    void credentialHealthSaysWhetherAPhoneRecoveryContactCanBeVerifiedHere() {
+        UUID userId = UUID.randomUUID();
+        User user = User.builder().username("u").email("owner@example.com").build();
+        user.setId(userId);
+        when(userRepository.findByIdWithRolesAndProfiles(userId)).thenReturn(Optional.of(user));
+        when(mfaEnrollmentRepository.findByUserId(userId)).thenReturn(List.of());
+        when(recoveryContactRepository.findByUserId(userId)).thenReturn(List.of());
+        when(smsGateway.isConfigured()).thenReturn(false, true);
+
+        assertThat(service.getCredentialHealth(userId).isPhoneRecoveryAvailable()).isFalse();
+        assertThat(service.getCredentialHealth(userId).isPhoneRecoveryAvailable()).isTrue();
     }
 }

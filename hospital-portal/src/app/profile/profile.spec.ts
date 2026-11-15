@@ -10,6 +10,7 @@ import { OidcAuthService } from '../auth/oidc-auth.service';
 import { ToastService } from '../core/toast.service';
 import {
   AuditEvent,
+  CredentialHealth,
   EmailChangeResponse,
   ProfileService,
   UserProfile,
@@ -58,6 +59,8 @@ describe('ProfileComponent — editing the profile', () => {
       'changePassword',
       'requestPasswordReset',
       'requestPasswordResetByPhone',
+      'updateRecoveryContacts',
+      'sendRecoveryVerificationCode',
     ]);
     profiles.getUserProfile.and.returnValue(of(profile('old@example.test')));
     profiles.getCredentialHealth.and.returnValue(throwError(() => new Error('n/a')));
@@ -617,6 +620,90 @@ describe('ProfileComponent — editing the profile', () => {
       expect(profiles.requestPasswordReset).not.toHaveBeenCalled();
       expect(profiles.requestPasswordResetByPhone).not.toHaveBeenCalled();
       expect(toast.error).toHaveBeenCalledWith('PROFILE.NO_EMAIL_ON_FILE');
+    });
+  });
+
+  describe('recovery contacts (D2000)', () => {
+    const health = (phoneRecoveryAvailable: boolean | undefined): CredentialHealth =>
+      ({
+        recoveryContacts: [
+          {
+            id: 'rc1',
+            contactType: 'PHONE',
+            contactValue: '+22676000000',
+            verified: false,
+            primaryContact: false,
+          },
+        ],
+        phoneRecoveryAvailable,
+      }) as CredentialHealth;
+    const typeOptions = (): string[] =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+          '#recovery-type option',
+        ),
+      ).map((o) => o.value);
+
+    beforeEach(() => {
+      component.user.set(profile('awa@example.test'));
+      component.switchTab('security');
+    });
+
+    it('offers PHONE only when the server can text the code', () => {
+      component.credentials.set(health(undefined));
+      component.openAddRecovery();
+      fixture.detectChanges();
+      expect(typeOptions()).toEqual(['EMAIL']);
+      expect(byId('recovery-phone-unavailable')).not.toBeNull();
+
+      component.credentials.set(health(true));
+      fixture.detectChanges();
+      expect(typeOptions()).toEqual(['EMAIL', 'PHONE']);
+      expect(byId('recovery-phone-unavailable')).toBeNull();
+    });
+
+    it('an existing phone contact cannot ask for a code that would never be texted', () => {
+      component.credentials.set(health(false));
+      fixture.detectChanges();
+      const verify = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+        '.recovery-badges .btn-sm-primary',
+      )!;
+      expect(verify.disabled).toBeTrue();
+
+      component.credentials.set(health(true));
+      fixture.detectChanges();
+      expect(verify.disabled).toBeFalse();
+    });
+
+    it('refuses the sign-in email or phone as a recovery contact, on the field', () => {
+      component.credentials.set(health(true));
+      component.openAddRecovery();
+      fixture.detectChanges();
+      for (const [type, value] of [
+        ['EMAIL', '  AWA@example.test '],
+        ['PHONE', '70 00 00 00'],
+        ['PHONE', '0022670000000'],
+      ] as const) {
+        component.newRecoveryType.set(type);
+        component.newRecoveryValue.set(value);
+        component.saveRecoveryContact();
+        expect(component.recoveryError())
+          .withContext(value)
+          .toBe('PROFILE.RECOVERY_SAME_AS_SIGN_IN');
+      }
+      expect(profiles.updateRecoveryContacts).not.toHaveBeenCalled();
+    });
+
+    it('accepts a different contact', () => {
+      profiles.updateRecoveryContacts.and.returnValue(of([]));
+      profiles.getCredentialHealth.and.returnValue(of(health(true)));
+      component.credentials.set(health(true));
+      component.openAddRecovery();
+      component.newRecoveryType.set('EMAIL');
+      component.newRecoveryValue.set('backup@example.test');
+      component.saveRecoveryContact();
+      expect(profiles.updateRecoveryContacts).toHaveBeenCalled();
+      expect(component.recoveryError()).toBe('');
     });
   });
 

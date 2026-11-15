@@ -32,7 +32,10 @@ public class UsernameReminderServiceImpl implements UsernameReminderService {
             if (identifier.contains("@")) {
                 emailService.sendUsernameReminderEmail(user.getEmail(), user.getUsername(), locale);
             } else {
-                if (smsService != null) {
+                // D2000 class: the logging mock is not a transport. Handing it the
+                // reminder wrote the number and the username to the log and sent
+                // nothing; with no real SMS the reminder goes by email instead.
+                if (smsService != null && smsService.deliversRealSms()) {
                     // QA D1123 sibling: the reminder was the English literal
                     // "Hello! Your username is: %s" whatever the reader's language.
                     // The answer must not depend on whether the SMS went out (account
@@ -45,7 +48,9 @@ public class UsernameReminderServiceImpl implements UsernameReminderService {
                         log.warn("Username reminder SMS not sent for userId={}: {}", user.getId(), ex.getMessage());
                     }
                 } else {
-                    // If no SMS service, still send by email when possible
+                    // No real SMS transport: still send by email when possible
+                    log.info("Username reminder SMS not sent for userId={}: no SMS transport is configured",
+                        user.getId());
                     emailService.sendUsernameReminderEmail(user.getEmail(), user.getUsername(), locale);
                 }
             }

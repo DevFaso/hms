@@ -8066,6 +8066,8 @@
     "RECOVERY_REMOVED": "Contact de récupération supprimé.",
     "RECOVERY_REMOVE_FAILED": "Échec de la suppression du contact.",
     "RECOVERY_SAVE_FAILED": "Échec de l'enregistrement du contact de récupération.",
+    "RECOVERY_PHONE_UNAVAILABLE": "Les SMS ne peuvent pas encore être envoyés depuis cette plateforme : un numéro de téléphone ne peut donc pas être vérifié. Utilisez une adresse e-mail.",
+    "RECOVERY_SAME_AS_SIGN_IN": "Un contact de récupération doit être différent de l’adresse e-mail ou du numéro de téléphone avec lequel vous vous connectez.",
     "RECOVERY_VALUE_REQUIRED": "Saisissez une valeur de contact.",
     "RECOVERY_VERIFIED": "Contact de récupération vérifié !",
     "REMOVE_PHOTO": "Supprimer la photo",

@@ -457,6 +457,14 @@ export class ProfileComponent implements OnInit {
   recoverySaving = signal(false);
   recoveryError = signal('');
 
+  /**
+   * D2000: the server can text a PHONE recovery contact its code only when an
+   * SMS transport is configured (the signal the desk's "verify phone" uses).
+   * Without it the phone option is not offered: a code that never leaves the
+   * server must not be promised.
+   */
+  phoneRecoveryAvailable = computed(() => this.credentials()?.phoneRecoveryAvailable === true);
+
   /* ── Recovery Contact Verification ── */
   verifyingContactId = signal<string | null>(null);
   verificationCode = signal('');
@@ -483,6 +491,15 @@ export class ProfileComponent implements OnInit {
       // QA D1303 (D1306 class): the value box is marked and focused, not
       // only the message above it.
       const message = this.translate.instant('PROFILE.RECOVERY_VALUE_REQUIRED');
+      refuseFields(this.host.nativeElement, ['recovery-value'], ['recovery-value'], message);
+      this.recoveryError.set(message);
+      return;
+    }
+    // D2000 (owner request): a recovery contact is a second way in, so it
+    // cannot be the email or phone the user already signs in with. The
+    // server refuses it too; saying so here keeps the typed value in place.
+    if (this.isSignInIdentifier(this.newRecoveryType(), value)) {
+      const message = this.translate.instant('PROFILE.RECOVERY_SAME_AS_SIGN_IN');
       refuseFields(this.host.nativeElement, ['recovery-value'], ['recovery-value'], message);
       this.recoveryError.set(message);
       return;
@@ -522,6 +539,26 @@ export class ProfileComponent implements OnInit {
         );
       },
     });
+  }
+
+  /**
+   * Same rule as the server: an email equal ignoring case and spaces; a
+   * phone with the same last eight digits (the subscriber number, whatever
+   * country code or leading zero was typed).
+   */
+  private isSignInIdentifier(type: 'EMAIL' | 'PHONE', value: string): boolean {
+    const u = this.user();
+    if (!u) return false;
+    if (type === 'EMAIL') {
+      const own = (u.email ?? '').trim().toLowerCase();
+      return own !== '' && own === value.trim().toLowerCase();
+    }
+    const tail = (raw: string | undefined | null): string => {
+      const digits = (raw ?? '').replace(/\D/g, '');
+      return digits.length >= 8 ? digits.slice(-8) : '';
+    };
+    const own = tail(u.phoneNumber);
+    return own !== '' && own === tail(value);
   }
 
   /** QA D1430 sibling: the gate now sees this write; a recovery contact is not removed on one click. */

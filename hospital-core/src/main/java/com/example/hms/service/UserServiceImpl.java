@@ -255,9 +255,11 @@ public class UserServiceImpl implements UserService {
                     java.util.List.of(), java.util.List.of(),
                     "HMS — Your Super Admin Account Is Ready",
                     htmlBody);
-            log.info("[BOOTSTRAP] Welcome email sent to {}", user.getEmail());
+            log.info("[BOOTSTRAP] Welcome email queued for {}",
+                com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()));
         } catch (Exception e) {
-            log.warn("[BOOTSTRAP] Failed to send welcome email to {}: {}", user.getEmail(), e.getMessage());
+            log.warn("[BOOTSTRAP] Failed to send welcome email to {}: {}",
+                com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()), e.getMessage());
         }
 
         return BootstrapSignupResponse.builder()

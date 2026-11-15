@@ -892,8 +892,15 @@
                       (ngModelChange)="newRecoveryType.set($event)"
                     >
                       <option value="EMAIL">{{ 'PROFILE.EMAIL' | translate }}</option>
-                      <option value="PHONE">{{ 'PROFILE.PHONE' | translate }}</option>
+                      @if (phoneRecoveryAvailable()) {
+                        <option value="PHONE">{{ 'PROFILE.PHONE' | translate }}</option>
+                      }
                     </select>
+                    @if (!phoneRecoveryAvailable()) {
+                      <span class="form-hint" id="recovery-phone-unavailable">{{
+                        'PROFILE.RECOVERY_PHONE_UNAVAILABLE' | translate
+                      }}</span>
+                    }
                   </div>
                   <div class="form-row">
                     <label class="form-label" for="recovery-value"
@@ -966,7 +973,15 @@
                               <button
                                 class="btn-sm-primary"
                                 (click)="sendVerificationCode(rc)"
-                                [disabled]="verificationSending()"
+                                [disabled]="
+                                  verificationSending() ||
+                                  (rc.contactType === 'PHONE' && !phoneRecoveryAvailable())
+                                "
+                                [title]="
+                                  rc.contactType === 'PHONE' && !phoneRecoveryAvailable()
+                                    ? ('PROFILE.RECOVERY_PHONE_UNAVAILABLE' | translate)
+                                    : ''
+                                "
                               >
                                 {{ 'PROFILE.VERIFY' | translate }}
                               </button>

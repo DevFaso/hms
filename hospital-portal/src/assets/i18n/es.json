@@ -8066,6 +8066,8 @@
     "RECOVERY_REMOVED": "Contacto de recuperación eliminado.",
     "RECOVERY_REMOVE_FAILED": "Error al eliminar el contacto.",
     "RECOVERY_SAVE_FAILED": "Error al guardar el contacto de recuperación.",
+    "RECOVERY_PHONE_UNAVAILABLE": "Todavía no se pueden enviar SMS desde esta plataforma, por lo que no se puede verificar un número de teléfono. Use un correo electrónico.",
+    "RECOVERY_SAME_AS_SIGN_IN": "Un contacto de recuperación debe ser distinto del correo electrónico o del número de teléfono con el que inicia sesión.",
     "RECOVERY_VALUE_REQUIRED": "Introduzca un valor de contacto.",
     "RECOVERY_VERIFIED": "¡Contacto de recuperación verificado!",
     "REMOVE_PHOTO": "Eliminar foto",

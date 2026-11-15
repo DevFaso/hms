@@ -68,6 +68,7 @@ class UsernameReminderServiceImplTest {
         void sendsSmsWhenIdentifierIsPhone() {
             String phoneIdentifier = "+1234567890";
             when(userRepository.findActiveByEmailOrPhone(phoneIdentifier)).thenReturn(Optional.of(user));
+            when(smsService.deliversRealSms()).thenReturn(true);
 
             when(messageSource.getMessage(org.mockito.ArgumentMatchers.eq("sms.username.reminder"), any(),
                     anyString(), org.mockito.ArgumentMatchers.eq(locale)))
@@ -78,6 +79,19 @@ class UsernameReminderServiceImplTest {
             // QA D1123 sibling: the text comes from the reader's bundle, not an English literal.
             verify(smsService).send("+1234567890", "e-Keneya: your username is johndoe");
             verify(emailService, never()).sendUsernameReminderEmail(anyString(), anyString(), any());
+        }
+
+        @Test
+        @DisplayName("D2000 class: the logging mock is not a transport; falls back to email, never calls send")
+        void fallsBackToEmailWhenOnlyTheMockTransportExists() {
+            String phoneIdentifier = "+1234567890";
+            when(userRepository.findActiveByEmailOrPhone(phoneIdentifier)).thenReturn(Optional.of(user));
+            when(smsService.deliversRealSms()).thenReturn(false);
+
+            service.sendReminder(phoneIdentifier, locale, requestIp);
+
+            verify(emailService).sendUsernameReminderEmail("john@example.com", "johndoe", locale);
+            verify(smsService, never()).send(anyString(), anyString());
         }
 
         @Test
