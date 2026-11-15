@@ -2073,6 +2073,7 @@
       "RESTORE": "restauration"
     },
     "OWN_EMAIL_REFUSAL": {
+      "THE_ACCOUNT_IS_LOCKED_AFTER_REPEATED_WRONG_PASSWORDS": "le compte est verrouillé après plusieurs mots de passe incorrects",
       "NO_EMAIL_CHANGE_IS_WAITING_FOR_A_CODE": "aucun changement d’e-mail n’attend de code",
       "THE_CODE_DID_NOT_MATCH": "le code ne correspond pas",
       "THE_CODE_HAS_EXPIRED": "le code a expiré",

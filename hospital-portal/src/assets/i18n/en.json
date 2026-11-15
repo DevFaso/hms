@@ -2073,6 +2073,7 @@
       "RESTORE": "restoration"
     },
     "OWN_EMAIL_REFUSAL": {
+      "THE_ACCOUNT_IS_LOCKED_AFTER_REPEATED_WRONG_PASSWORDS": "the account is locked after repeated wrong passwords",
       "NO_EMAIL_CHANGE_IS_WAITING_FOR_A_CODE": "no email change is waiting for a code",
       "THE_CODE_DID_NOT_MATCH": "the code did not match",
       "THE_CODE_HAS_EXPIRED": "the code has expired",
