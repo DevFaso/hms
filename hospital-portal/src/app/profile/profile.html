@@ -969,16 +969,17 @@
                             <span class="badge-unverified">{{
                               'PROFILE.UNVERIFIED' | translate
                             }}</span>
-                            @if (verifyingContactId() !== rc.id) {
+                            @if (rc.contactType === 'PHONE' && !phoneRecoveryAvailable()) {
+                              <!-- D2000: no SMS transport, so no code to promise; the reason is shown instead of Verify. -->
+                              {{ ' '
+                              }}<span class="form-hint" data-testid="recovery-phone-unverifiable">{{
+                                'PROFILE.RECOVERY_PHONE_UNAVAILABLE' | translate
+                              }}</span>
+                            } @else if (verifyingContactId() !== rc.id) {
                               <button
                                 class="btn-sm-primary"
                                 (click)="sendVerificationCode(rc)"
                                 [disabled]="verificationSending()"
-                                [appSubmitGuard]="
-                                  rc.contactType === 'PHONE' && !phoneRecoveryAvailable()
-                                    ? ('PROFILE.RECOVERY_PHONE_UNAVAILABLE' | translate)
-                                    : false
-                                "
                               >
                                 {{ 'PROFILE.VERIFY' | translate }}
                               </button>

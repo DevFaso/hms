@@ -663,26 +663,23 @@ describe('ProfileComponent — editing the profile', () => {
     });
 
     it('an existing phone contact cannot ask for a code that would never be texted', () => {
+      const host = fixture.nativeElement as HTMLElement;
       component.credentials.set(health(false));
       fixture.detectChanges();
-      const verify = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
-        '.recovery-badges .btn-sm-primary',
-      )!;
-      profiles.sendRecoveryVerificationCode.and.returnValue(
-        of({ message: 'sent', contactType: 'PHONE' }),
-      );
-      verify.click();
-      fixture.detectChanges();
-      // The click is stopped and the reason is said, not swallowed by a disabled button.
-      expect(profiles.sendRecoveryVerificationCode).not.toHaveBeenCalled();
-      expect((fixture.nativeElement as HTMLElement).textContent).toContain(
-        'PROFILE.RECOVERY_PHONE_UNAVAILABLE',
-      );
+      // No SMS transport: no Verify to press, the reason is said in its place.
+      expect(host.querySelector('.recovery-badges .btn-sm-primary')).toBeNull();
+      expect(
+        host.querySelector('[data-testid="recovery-phone-unverifiable"]')?.textContent,
+      ).toContain('PROFILE.RECOVERY_PHONE_UNAVAILABLE');
 
       component.credentials.set(health(true));
       fixture.detectChanges();
-      verify.click();
+      profiles.sendRecoveryVerificationCode.and.returnValue(
+        of({ message: 'sent', contactType: 'PHONE' }),
+      );
+      host.querySelector<HTMLButtonElement>('.recovery-badges .btn-sm-primary')!.click();
       expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledWith('rc1');
+      expect(host.querySelector('[data-testid="recovery-phone-unverifiable"]')).toBeNull();
     });
 
     it('refuses the sign-in email or phone as a recovery contact, on the field', () => {
