@@ -63,6 +63,10 @@ class OwnEmailChangeServiceTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private EmailService emailService;
     @Mock private AuditEventLogService auditEventLogService;
+    /** D2001: the real sign-in bucket, over a per-test in-memory store. */
+    @org.mockito.Spy private com.example.hms.security.LoginAttemptService loginAttemptService =
+        new com.example.hms.security.LoginAttemptService(
+            new com.example.hms.security.InMemoryLoginAttemptStore(), Mockito.mock(UserRepository.class));
 
     @InjectMocks private OwnEmailChangeService service;
 
@@ -202,6 +206,44 @@ class OwnEmailChangeServiceTest {
             assertThat(state.getPendingEmail()).isNull();
             verify(emailService, never()).sendEmailChangeVerificationEmail(any(), any(), any());
             assertOneFailureRow("thief", "old@example.com", "guess");
+        }
+
+        @Test
+        @DisplayName("D2001: a wrong password here counts in the account's sign-in bucket too")
+        void wrongPasswordCountsInTheSignInBucket() {
+            for (int i = 0; i < 5; i++) {
+                assertThatThrownBy(() -> service.requestChange(userId, "guess", "new@example.com"))
+                    .isInstanceOf(BusinessException.class);
+            }
+            assertThat(loginAttemptService.remainingAccountLockMs(userId)).isPositive();
+        }
+
+        @Test
+        @DisplayName("D2001: an account locked by the sign-in is refused here before the password is compared")
+        void accountLockedElsewhereIsRefusedHere() {
+            for (int i = 0; i < 5; i++) {
+                loginAttemptService.checkPassword(userId, () -> false);
+            }
+            Mockito.clearInvocations(passwordEncoder, auditEventLogService);
+
+            assertThatThrownBy(() -> service.requestChange(userId, "Right-Pass-1", "new@example.com"))
+                .hasMessage(MessageUtil.resolve("user.email.change.locked"));
+            verify(passwordEncoder, never()).matches(any(), any());
+            verify(emailService, never()).sendEmailChangeVerificationEmail(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("D2001: the right password clears the sign-in bucket, as a sign-in does")
+        void rightPasswordClearsTheSignInBucket() {
+            loginAttemptService.checkPassword(userId, () -> false);
+            loginAttemptService.checkPassword(userId, () -> false);
+
+            service.requestChange(userId, "Right-Pass-1", "new@example.com");
+
+            for (int i = 0; i < 4; i++) {
+                loginAttemptService.checkPassword(userId, () -> false);
+            }
+            assertThat(loginAttemptService.remainingAccountLockMs(userId)).isZero();
         }
 
         @Test

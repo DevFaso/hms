@@ -424,6 +424,26 @@ class AuthControllerTest {
         SecurityContextHolder.clearContext();
     }
 
+    /**
+     * D2001: the mocked bucket still runs the comparison it is handed, so the
+     * controller's own answers (200, 401, 400) stay under test here. The real
+     * bucket is under test in LockScreenLockoutIntegrationTest.
+     */
+    @org.junit.jupiter.api.BeforeEach
+    void checkPasswordRunsTheComparison() {
+        when(loginAttemptService.checkPassword(any(), any())).thenAnswer(inv ->
+                ((java.util.function.BooleanSupplier) inv.getArgument(1)).getAsBoolean()
+                        ? LoginAttemptService.PasswordCheck.ACCEPTED
+                        : LoginAttemptService.PasswordCheck.REJECTED);
+    }
+
+    /** The lock screen's account: verify-password looks the signed-in user up. */
+    private void lockScreenAccount(String username) {
+        com.example.hms.model.User u = com.example.hms.model.User.builder().username(username).isActive(true).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(u, "id", java.util.UUID.randomUUID());
+        when(userRepository.findByUsername(username)).thenReturn(java.util.Optional.of(u));
+    }
+
     private void authenticateAs(String username) {
         var auth = new UsernamePasswordAuthenticationToken(
                 username, "jwt-token-placeholder",
@@ -549,6 +569,7 @@ class AuthControllerTest {
     @Test
     void verifyPassword_correctPassword_returns200() throws Exception {
         authenticateAs("drjones");
+        lockScreenAccount("drjones");
 
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(new UsernamePasswordAuthenticationToken("drjones", null));
@@ -565,6 +586,7 @@ class AuthControllerTest {
     @Test
     void verifyPassword_wrongPassword_returns401() throws Exception {
         authenticateAs("drjones");
+        lockScreenAccount("drjones");
 
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(new BadCredentialsException("Bad credentials"));
@@ -581,6 +603,7 @@ class AuthControllerTest {
     @Test
     void verifyPassword_usernameMismatch_returns403() throws Exception {
         authenticateAs("drjones");
+        lockScreenAccount("drjones");
 
         LoginRequest req = new LoginRequest("someoneelse", "AnyPassword1!", null);
 
@@ -594,6 +617,7 @@ class AuthControllerTest {
     @Test
     void verifyPassword_disabledAccount_returns401() throws Exception {
         authenticateAs("drjones");
+        lockScreenAccount("drjones");
 
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(new DisabledException("Account is disabled"));
@@ -610,6 +634,7 @@ class AuthControllerTest {
     @Test
     void verifyPassword_blankPassword_returns400() throws Exception {
         authenticateAs("drjones");
+        lockScreenAccount("drjones");
 
         LoginRequest req = new LoginRequest("drjones", "", null);
 
@@ -622,6 +647,7 @@ class AuthControllerTest {
     @Test
     void verifyPassword_blankUsername_returns400() throws Exception {
         authenticateAs("drjones");
+        lockScreenAccount("drjones");
 
         LoginRequest req = new LoginRequest("", "SomePassword1!", null);
 

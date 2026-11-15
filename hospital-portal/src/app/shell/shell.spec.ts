@@ -166,6 +166,28 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     visit(routes);
   });
 
+  it('D2001: the lock-screen lockout signs out and opens the sign-in page with the reason', () => {
+    const { component } = createComponent({
+      activeRole: 'ROLE_NURSE',
+      roles: ['ROLE_NURSE'],
+      wildcardPermission: false,
+    });
+    const router = TestBed.inject(Router);
+    const navigate = spyOn(router, 'navigate').and.resolveTo(true);
+    const auth = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>;
+    const idle = TestBed.inject(IdleService) as jasmine.SpyObj<IdleService>;
+    const clearPermissions = jasmine.createSpy('clear');
+    Object.assign(TestBed.inject(PermissionService), { clear: clearPermissions });
+
+    component.onLockScreenLockedOut();
+
+    expect(clearPermissions).toHaveBeenCalled();
+
+    expect(idle.stop).toHaveBeenCalled();
+    expect(auth.logout).toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith(['/login'], { queryParams: { reason: 'locked' } });
+  });
+
   describe('sidebar width controls', () => {
     let previousWidth: string | null;
     const make = () =>

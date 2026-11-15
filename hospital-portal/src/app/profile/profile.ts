@@ -1184,6 +1184,14 @@ export class ProfileComponent implements OnInit {
           void this.router.navigateByUrl('/login');
         },
         error: (err: { status?: number }) => {
+          // D2001: a locked account (too many wrong passwords) — the server's
+          // message is the sign-in's, already in the user's language.
+          const locked = err?.status === 423 ? refusalReason(err) : null;
+          if (locked !== null) {
+            refuseFields(this.host.nativeElement, ['pwdCurrent'], ['pwdCurrent'], locked);
+            this.toast.error(locked);
+            return;
+          }
           let key = 'PROFILE.PASSWORD_CHANGE_FAILED';
           if (err?.status === 401) {
             key = 'PROFILE.PASSWORD_CURRENT_WRONG';

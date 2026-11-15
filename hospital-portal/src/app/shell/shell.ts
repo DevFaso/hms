@@ -2117,13 +2117,25 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.tearDownAndRedirect();
   }
 
+  /**
+   * D2001: the lock screen hit the account lockout (423). The server already
+   * revoked the session; sign out here too and say why on the sign-in page.
+   */
+  onLockScreenLockedOut(): void {
+    this.tearDownAndRedirect({ reason: 'locked' });
+  }
+
   /** Shared tear-down: stop idle, log out, redirect to login */
-  private tearDownAndRedirect(): void {
+  private tearDownAndRedirect(queryParams?: { reason: string }): void {
     this.idle.stop();
     this.permissions.clear();
     clearReportedSilent403s();
     this.auth.logout();
-    this.router.navigateByUrl('/login');
+    if (queryParams) {
+      void this.router.navigate(['/login'], { queryParams });
+    } else {
+      this.router.navigateByUrl('/login');
+    }
   }
 
   dismissToast(id: number): void {

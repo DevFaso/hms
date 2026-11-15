@@ -48,6 +48,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "/api/auth/register",
             "/api/auth/token/refresh",
             "/api/auth/mfa/verify",
+            // D2001: the endpoints that check a signed-in user's own password
+            // (the lock screen, the current password of a change, the forced
+            // setup, the e-mail change). Each also counts in the account's
+            // sign-in bucket (LoginAttemptService#checkPassword).
+            "/api/auth/verify-password",
+            "/api/auth/me/change-password",
+            "/api/auth/me/complete-setup",
+            "/api/auth/me/change-email",
             "/api/auth/password",
             // The MFA step-up endpoints (a code in X-Mfa-Token): enrolment or
             // replacement, and rewriting the MFA records. MfaService also locks
