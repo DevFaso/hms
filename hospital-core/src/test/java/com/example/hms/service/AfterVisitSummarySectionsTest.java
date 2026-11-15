@@ -362,7 +362,7 @@ class AfterVisitSummarySectionsTest {
             when(imagingReports.findByImagingOrder_IdIn(any())).thenReturn(List.of(later, original));
 
             assertThat(fill().getOrderedTests()).as(c[0] + "/" + c[1])
-                .extracting(AfterVisitSummaryDTO.OrderedTest::getImpression).containsExactly(c[2]);
+                .extracting(AfterVisitSummaryDTO.OrderedTest::getImpression).containsExactly((String) c[2]);
         }
     }
 
