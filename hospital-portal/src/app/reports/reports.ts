@@ -31,8 +31,13 @@ import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
  */
 const DELIVERABLE_EMAIL = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
-/** QA D1306 (round 28): the fields the create form may refuse when blank. */
-const REPORT_FIELD_IDS = ['rep-name', 'rep-recipients'] as const;
+/** Create-form controls in reading order, including server-validated selects. */
+const REPORT_FIELD_IDS = ['rep-name', 'rep-type', 'rep-period', 'rep-recipients'] as const;
+const SERVER_REPORT_FIELDS = [
+  ['name', 'rep-name'],
+  ['reportType', 'rep-type'],
+  ['period', 'rep-period'],
+] as const;
 
 /**
  * Scheduled reports (P3 #25a): the admin page for aggregate-only CSV
@@ -166,12 +171,42 @@ export class ReportsComponent implements OnInit {
           this.load();
         },
         error: (err) => {
-          const recipientsReason = err?.error?.fieldErrors?.recipients;
-          if (typeof recipientsReason === 'string') {
+          const fieldErrors = err?.error?.fieldErrors;
+          const refused = SERVER_REPORT_FIELDS.flatMap(([field, id]) => {
+            const message = fieldErrors?.[field];
+            return typeof message === 'string' && message.trim() ? [{ id, message }] : [];
+          });
+          refuseFields(
+            root,
+            refused,
+            SERVER_REPORT_FIELDS.map(([, id]) => id),
+          );
+          const recipientsReason = fieldErrors?.recipients;
+          const hasRecipientsReason =
+            typeof recipientsReason === 'string' && recipientsReason.trim() !== '';
+          if (hasRecipientsReason) {
             this.recipientsError.set(recipientsReason);
-          } else {
-            this.toast.error(refusalReason(err) ?? this.translate.instant('REPORTS.CREATE_FAILED'));
           }
+          const handled = new Set<string>([
+            'recipients',
+            ...SERVER_REPORT_FIELDS.map(([field]) => field),
+          ]);
+          const unhandled = Object.entries(fieldErrors ?? {})
+            .filter(([field]) => !handled.has(field))
+            .map(([, reason]) => reason)
+            .filter(
+              (reason): reason is string => typeof reason === 'string' && reason.trim() !== '',
+            );
+          if (unhandled.length > 0 || (refused.length === 0 && !hasRecipientsReason)) {
+            this.toast.error(
+              unhandled.length > 0
+                ? unhandled.join('. ')
+                : (refusalReason(err) ?? this.translate.instant('REPORTS.CREATE_FAILED')),
+            );
+          }
+          const invalidIds: string[] = refused.map(({ id }) => id);
+          if (hasRecipientsReason) invalidIds.push('rep-recipients');
+          focusFirstInvalid(root, invalidIds);
           this.saving.set(false);
         },
       });

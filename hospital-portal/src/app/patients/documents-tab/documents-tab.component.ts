@@ -86,6 +86,12 @@ export class DocumentsTabComponent implements OnInit, OnChanges {
    * change it had never recorded.
    */
   @Input() hospitalScope: string | null = null;
+  /**
+   * QA D1599: the front desk and billing read insurance papers only. The server
+   * narrows them to that type regardless; this hides the type filter and sends
+   * the type, so the tab never offers what the server would answer empty.
+   */
+  @Input() insuranceOnly = false;
 
   private readonly documentsService = inject(PatientDocumentsService);
   private readonly toast = inject(ToastService);
@@ -154,7 +160,10 @@ export class DocumentsTabComponent implements OnInit, OnChanges {
   }
 
   load(): void {
-    this.requests$.next({ type: this.typeFilter() || null, page: this.page() });
+    const type: PatientDocumentType | null = this.insuranceOnly
+      ? 'INSURANCE_DOCUMENT'
+      : this.typeFilter() || null;
+    this.requests$.next({ type, page: this.page() });
   }
 
   onFilterChange(value: PatientDocumentType | ''): void {

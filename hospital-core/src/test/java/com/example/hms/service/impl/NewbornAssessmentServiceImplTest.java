@@ -68,6 +68,8 @@ class NewbornAssessmentServiceImplTest {
     @Mock
     private com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
     @Mock
+    private com.example.hms.repository.DeliveryNewbornRepository deliveryNewbornRepository;
+    @Mock
     private StaffRepository staffRepository;
     @Mock
     private UserRepository userRepository;
@@ -95,6 +97,7 @@ class NewbornAssessmentServiceImplTest {
             registrationRepository,
             hospitalRepository,
             deliveryRecordRepository,
+            deliveryNewbornRepository,
             staffRepository,
             userRepository,
             notificationService,
@@ -102,7 +105,10 @@ class NewbornAssessmentServiceImplTest {
             new NewbornAssessmentMapper(),
             recordAccessPolicy,
             reachRecorder,
-            TestMessageSources.bundles()
+            TestMessageSources.bundles(),
+            new com.example.hms.service.maternity.StillbornNeonatalAlerts(deliveryNewbornRepository,
+                assessmentRepository, org.mockito.Mockito.mock(
+                    com.example.hms.repository.ObstetricAlertEscalationRepository.class))
         );
 
         patientId = UUID.randomUUID();
@@ -702,5 +708,179 @@ class NewbornAssessmentServiceImplTest {
         onTheMothersChart(1);
         previousReading(deliveryRecordAt(hospitalId), 170);
         assertTrue(codesOf(heartRate165()).contains("newborn-heart-rate"));
+    }
+
+    /* ── QA D1592: the baby a delivery registered is assessed on its own chart ── */
+
+    private Patient registeredBaby(com.example.hms.model.labor.DeliveryRecord delivery, int order) {
+        Patient baby = new Patient();
+        baby.setId(UUID.randomUUID());
+        baby.setFirstName("Bébé");
+        baby.setLastName("Traore");
+        baby.setDateOfBirth(delivery.getBirthDateTime().toLocalDate());
+        com.example.hms.model.labor.DeliveryNewborn link = com.example.hms.model.labor.DeliveryNewborn.builder()
+            .deliveryRecord(delivery).newbornPatient(baby).motherPatient(patient).hospital(hospital)
+            .birthOrder(order).build();
+        lenient().when(deliveryNewbornRepository.findByNewbornPatient_Id(baby.getId())).thenReturn(Optional.of(link));
+        return baby;
+    }
+
+    private void babiesOf(com.example.hms.model.labor.DeliveryRecord delivery, Patient... babies) {
+        java.util.List<com.example.hms.model.labor.DeliveryNewborn> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < babies.length; i++) {
+            rows.add(com.example.hms.model.labor.DeliveryNewborn.builder().deliveryRecord(delivery)
+                .newbornPatient(babies[i]).motherPatient(patient).hospital(hospital).birthOrder(i + 1).build());
+        }
+        when(deliveryNewbornRepository.findByDeliveryRecord_IdOrderByBirthOrderAsc(delivery.getId())).thenReturn(rows);
+    }
+
+    @Test
+    void d1592_fromTheMothersChartASingletonsAssessmentIsRecordedOnTheBabysChart() {
+        com.example.hms.model.labor.DeliveryRecord delivery = onTheMothersChart(1);
+        Patient baby = registeredBaby(delivery, 1);
+        babiesOf(delivery, baby);
+
+        service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).apgarOneMinute(8).apgarFiveMinute(9).build(), recorderId);
+
+        ArgumentCaptor<NewbornAssessment> saved = ArgumentCaptor.forClass(NewbornAssessment.class);
+        verify(assessmentRepository).save(saved.capture());
+        assertEquals(baby, saved.getValue().getPatient());
+        assertEquals(delivery, saved.getValue().getDeliveryRecord());
+        verify(patientRegistrationGuard).requireRegisteredAt(baby.getId(), hospitalId);
+    }
+
+    @Test
+    void d1592_twinsMustNameTheBaby() {
+        com.example.hms.model.labor.DeliveryRecord delivery = onTheMothersChart(2);
+        babiesOf(delivery, registeredBaby(delivery, 1), registeredBaby(delivery, 2));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.recordAssessment(patientId,
+            NewbornAssessmentRequestDTO.builder().hospitalId(hospitalId).apgarOneMinute(8).build(), recorderId));
+
+        assertEquals("maternity.newborn.whichBaby", ex.getMessageKey());
+        verify(assessmentRepository, never()).save(any());
+    }
+
+    @Test
+    void d1592_twinsNamedBabyGetsTheRow() {
+        com.example.hms.model.labor.DeliveryRecord delivery = onTheMothersChart(2);
+        Patient second = registeredBaby(delivery, 2);
+        babiesOf(delivery, registeredBaby(delivery, 1), second);
+
+        service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder().hospitalId(hospitalId)
+            .newbornPatientId(second.getId()).apgarOneMinute(8).build(), recorderId);
+
+        ArgumentCaptor<NewbornAssessment> saved = ArgumentCaptor.forClass(NewbornAssessment.class);
+        verify(assessmentRepository).save(saved.capture());
+        assertEquals(second, saved.getValue().getPatient());
+    }
+
+    @Test
+    void d1592_aBabyOfAnotherDeliveryIsRefused() {
+        com.example.hms.model.labor.DeliveryRecord delivery = onTheMothersChart(1);
+        babiesOf(delivery, registeredBaby(delivery, 1));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.recordAssessment(patientId,
+            NewbornAssessmentRequestDTO.builder().hospitalId(hospitalId).newbornPatientId(UUID.randomUUID())
+                .apgarOneMinute(8).build(), recorderId));
+
+        assertEquals("maternity.newborn.notThisDelivery", ex.getMessageKey());
+    }
+
+    @Test
+    void d1592_onTheBabysOwnChartTheDeliveryItWasRegisteredFromIsLinked() {
+        com.example.hms.model.labor.DeliveryRecord delivery = deliveryRecordAt(hospitalId);
+        delivery.setBirthDateTime(java.time.LocalDateTime.now().minusHours(5));
+        com.example.hms.model.labor.DeliveryNewborn link = com.example.hms.model.labor.DeliveryNewborn.builder()
+            .deliveryRecord(delivery).newbornPatient(patient).hospital(hospital).birthOrder(1).build();
+        when(deliveryNewbornRepository.findByNewbornPatient_Id(patientId)).thenReturn(Optional.of(link));
+
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).apgarOneMinute(8).build(), recorderId);
+
+        assertEquals(delivery.getId(), response.getDeliveryRecordId());
+    }
+    // -- Provisional (2026-11-14): no Apgar alert, and so no first URGENT notice, for a confirmed stillborn baby --
+
+    private com.example.hms.model.labor.DeliveryRecord registeredAt(int birthOrder, Integer deliveryApgarOneMinute,
+                                                                  com.example.hms.enums.BabyOutcome... outcomes) {
+        com.example.hms.model.labor.DeliveryRecord delivery = com.example.hms.model.labor.DeliveryRecord.builder()
+            .hospital(hospital).numberOfInfants(outcomes.length).apgarOneMinute(deliveryApgarOneMinute)
+            .birthDateTime(java.time.LocalDateTime.now().minusMinutes(10)).build();
+        delivery.setId(UUID.randomUUID());
+        for (int i = 0; i < outcomes.length; i++) {
+            delivery.putBabyOutcome(i + 1, outcomes[i]);
+        }
+        lenient().when(deliveryNewbornRepository.findByNewbornPatient_Id(patientId)).thenReturn(Optional.of(
+            com.example.hms.model.labor.DeliveryNewborn.builder().deliveryRecord(delivery).newbornPatient(patient)
+                .hospital(hospital).birthOrder(birthOrder).build()));
+        return delivery;
+    }
+
+    private NewbornAssessmentResponseDTO recordApgarZero() {
+        return service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).assessmentTime(java.time.LocalDateTime.now().minusMinutes(5))
+            .apgarOneMinute(0).apgarFiveMinute(0).build(), recorderId);
+    }
+
+    @Test
+    void aConfirmedStillbornBabysApgarZeroRaisesNoApgarAlertOrNotice() {
+        registeredAt(1, null, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        NewbornAssessmentResponseDTO response = recordApgarZero();
+
+        assertTrue(response.getAlerts().stream().noneMatch(a -> a.getType() == NewbornAlertType.APGAR));
+        assertTrue(response.getFollowUpActions() == null
+            || !response.getFollowUpActions().contains(NewbornFollowUpAction.NICU_CONSULT));
+        verify(obstetricAlertEscalation, org.mockito.Mockito.never()).raiseAfterCommit(any());
+        verify(notificationService, org.mockito.Mockito.never()).created(anyString(), anyString(), any());
+    }
+
+    @Test
+    void aLiveTwinOfAStillbornBabyStillGetsItsApgarAlertAndNotice() {
+        registeredAt(1, null, com.example.hms.enums.BabyOutcome.LIVE, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        NewbornAssessmentResponseDTO response = recordApgarZero();
+
+        assertEquals(2, response.getAlerts().stream().filter(a -> a.getType() == NewbornAlertType.APGAR
+            && a.getSeverity() == NewbornAlertSeverity.URGENT).count());
+        verify(obstetricAlertEscalation, times(2)).raiseAfterCommit(any());
+    }
+
+    @Test
+    void anUncertainStillbirthStillAlerts() {
+        // Stillborn, but the delivery's own Apgar shows a sign of life and no baby was born alive: uncertain.
+        registeredAt(1, 4, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        NewbornAssessmentResponseDTO response = recordApgarZero();
+
+        assertEquals(2, response.getAlerts().stream().filter(a -> a.getType() == NewbornAlertType.APGAR
+            && a.getSeverity() == NewbornAlertSeverity.URGENT).count());
+        verify(obstetricAlertEscalation, times(2)).raiseAfterCommit(any());
+    }
+    @Test
+    void onTheMothersChartAnUnregisteredConfirmedStillbornBabysApgarZeroRaisesNoNotice() {
+        com.example.hms.model.labor.DeliveryRecord delivery = onTheMothersChart(1);
+        delivery.putBabyOutcome(1, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        NewbornAssessmentResponseDTO response = recordApgarZero();
+
+        assertTrue(response.getAlerts().stream().noneMatch(a -> a.getType() == NewbornAlertType.APGAR));
+        verify(obstetricAlertEscalation, org.mockito.Mockito.never()).raiseAfterCommit(any());
+    }
+
+    /** Rex on #1152: an earlier sign of life on the mother's chart for this delivery makes the stillbirth uncertain. */
+    @Test
+    void onTheMothersChartAnEarlierSignOfLifeKeepsAnUnregisteredStillbornBabysApgarAlert() {
+        com.example.hms.model.labor.DeliveryRecord delivery = onTheMothersChart(1);
+        delivery.putBabyOutcome(1, com.example.hms.enums.BabyOutcome.STILLBORN);
+        when(assessmentRepository.anyUnattributedSignOfLifeRecorded(delivery.getId())).thenReturn(true);
+
+        NewbornAssessmentResponseDTO response = recordApgarZero();
+
+        assertEquals(2, response.getAlerts().stream().filter(a -> a.getType() == NewbornAlertType.APGAR
+            && a.getSeverity() == NewbornAlertSeverity.URGENT).count());
+        verify(obstetricAlertEscalation, times(2)).raiseAfterCommit(any());
     }
 }

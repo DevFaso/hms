@@ -1377,10 +1377,7 @@ class PatientPortalServiceImplPhase2Test {
                     .current(false)
                     .build();
 
-            when(primaryCareService.getCurrentPrimaryCare(patientId))
-                    .thenReturn(Optional.of(currentPcp));
-            when(primaryCareService.getPrimaryCareHistory(patientId))
-                    .thenReturn(List.of(currentPcp, pastPcp));
+            when(primaryCareService.getOwnPrimaryCareLinks(patientId)).thenReturn(List.of(currentPcp, pastPcp));
 
             CareTeamDTO result = service.getMyCareTeam(auth);
 
@@ -1395,8 +1392,7 @@ class PatientPortalServiceImplPhase2Test {
         @DisplayName("D115 — the clinicians of open visits are on the care team, once each, newest visit first")
         void getCareTeam_openVisitClinicians() {
             stubPatientResolution();
-            when(primaryCareService.getCurrentPrimaryCare(patientId)).thenReturn(Optional.empty());
-            when(primaryCareService.getPrimaryCareHistory(patientId)).thenReturn(List.of());
+            when(primaryCareService.getOwnPrimaryCareLinks(patientId)).thenReturn(List.of());
 
             com.example.hms.model.User doctorUser = new com.example.hms.model.User();
             doctorUser.setId(UUID.randomUUID());
@@ -1433,8 +1429,7 @@ class PatientPortalServiceImplPhase2Test {
         @DisplayName("D115 — a deactivated account or a non-clinical role never reaches the care team (the send would be refused)")
         void getCareTeam_skipsUnreachableClinicians() {
             stubPatientResolution();
-            when(primaryCareService.getCurrentPrimaryCare(patientId)).thenReturn(Optional.empty());
-            when(primaryCareService.getPrimaryCareHistory(patientId)).thenReturn(List.of());
+            when(primaryCareService.getOwnPrimaryCareLinks(patientId)).thenReturn(List.of());
 
             com.example.hms.model.User inactive = visitUser("ROLE_DOCTOR");
             inactive.setActive(false);
@@ -1476,15 +1471,43 @@ class PatientPortalServiceImplPhase2Test {
         @DisplayName("should return null primaryCare when no current PCP exists")
         void getCareTeam_noCurrentPcp() {
             stubPatientResolution();
-            when(primaryCareService.getCurrentPrimaryCare(patientId))
-                    .thenReturn(Optional.empty());
-            when(primaryCareService.getPrimaryCareHistory(patientId))
-                    .thenReturn(List.of());
+            when(primaryCareService.getOwnPrimaryCareLinks(patientId)).thenReturn(List.of());
 
             CareTeamDTO result = service.getMyCareTeam(auth);
 
             assertThat(result.getPrimaryCare()).isNull();
             assertThat(result.getPrimaryCareHistory()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("QA D1850 — a doctor at each of two hospitals: both are current, one entry per hospital, labelled")
+        void getCareTeam_twoHospitals() {
+            stubPatientResolution();
+            UUID hospitalA = UUID.randomUUID();
+            UUID hospitalB = UUID.randomUUID();
+            com.example.hms.model.Hospital a = new com.example.hms.model.Hospital();
+            a.setId(hospitalA);
+            a.setName("CHU Yalgado");
+            com.example.hms.model.Hospital b = new com.example.hms.model.Hospital();
+            b.setId(hospitalB);
+            b.setName("CMA Pissy");
+            PatientPrimaryCareResponseDTO atB = PatientPrimaryCareResponseDTO.builder()
+                    .id(UUID.randomUUID()).hospitalId(hospitalB).doctorDisplay("Dr. B")
+                    .startDate(LocalDate.of(2026, 11, 14)).current(true).build();
+            PatientPrimaryCareResponseDTO atA = PatientPrimaryCareResponseDTO.builder()
+                    .id(UUID.randomUUID()).hospitalId(hospitalA).doctorDisplay("Dr. A")
+                    .startDate(LocalDate.of(2026, 11, 1)).current(true).build();
+            when(primaryCareService.getOwnPrimaryCareLinks(patientId)).thenReturn(List.of(atB, atA));
+            when(hospitalRepository.findAllById(java.util.Set.of(hospitalA, hospitalB))).thenReturn(List.of(a, b));
+
+            CareTeamDTO result = service.getMyCareTeam(auth);
+
+            assertThat(result.getPrimaryCares())
+                    .extracting(CareTeamDTO.PrimaryCareEntry::getDoctorDisplay, CareTeamDTO.PrimaryCareEntry::getHospitalName)
+                    .containsExactly(org.assertj.core.groups.Tuple.tuple("Dr. B", "CMA Pissy"),
+                            org.assertj.core.groups.Tuple.tuple("Dr. A", "CHU Yalgado"));
+            // The single field older apps read is the newest of them.
+            assertThat(result.getPrimaryCare().getDoctorDisplay()).isEqualTo("Dr. B");
         }
 
         @Test
@@ -1499,8 +1522,7 @@ class PatientPortalServiceImplPhase2Test {
                     .id(UUID.randomUUID()).hospitalId(hospitalA).doctorDisplay("Dr. Smith").current(true).build();
             PatientPrimaryCareResponseDTO noHospital = PatientPrimaryCareResponseDTO.builder()
                     .id(UUID.randomUUID()).doctorDisplay("Dr. Jones").current(false).build();
-            when(primaryCareService.getCurrentPrimaryCare(patientId)).thenReturn(Optional.of(currentPcp));
-            when(primaryCareService.getPrimaryCareHistory(patientId)).thenReturn(List.of(currentPcp, noHospital));
+            when(primaryCareService.getOwnPrimaryCareLinks(patientId)).thenReturn(List.of(currentPcp, noHospital));
             when(hospitalRepository.findAllById(java.util.Set.of(hospitalA))).thenReturn(List.of(a));
 
             CareTeamDTO result = service.getMyCareTeam(auth);

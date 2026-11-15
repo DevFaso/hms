@@ -26,4 +26,12 @@ public interface PatientTreatmentConsentRepository extends JpaRepository<Patient
                                                       TreatmentConsentStatus status);
 
     boolean existsByAppointment_IdAndStatus(UUID appointmentId, TreatmentConsentStatus status);
+
+    /** QA D1591: the consent the patient gave at pre-check-in, for the desk's queue. */
+    boolean existsByAppointment_IdAndSourceAndStatus(UUID appointmentId,
+                                                     com.example.hms.enums.TreatmentConsentSource source,
+                                                     TreatmentConsentStatus status);
+
+    /** QA D1591: the visit's consents already given, which its check-in carries onto the encounter. */
+    List<PatientTreatmentConsent> findByAppointment_IdAndStatus(UUID appointmentId, TreatmentConsentStatus status);
 }

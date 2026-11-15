@@ -77,6 +77,14 @@ describe('DocumentsTabComponent', () => {
     expect(text).toContain('47 KB');
   });
 
+  it('QA D1599: the front desk view asks for insurance only and offers no type filter', () => {
+    fixture.componentRef.setInput('insuranceOnly', true);
+    component.load();
+    fixture.detectChanges();
+    expect(serviceSpy.list).toHaveBeenCalledWith('p1', 'INSURANCE_DOCUMENT', 0, PAGE_SIZE);
+    expect((fixture.nativeElement as HTMLElement).querySelector('select')).toBeNull();
+  });
+
   it('reloads from page 0 with the type filter when it changes', () => {
     component.nextPage(); // no-op on a single page
     component.onFilterChange('LAB_RESULT');

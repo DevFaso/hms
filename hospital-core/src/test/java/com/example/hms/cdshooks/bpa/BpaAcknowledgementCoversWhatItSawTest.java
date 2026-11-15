@@ -92,7 +92,31 @@ class BpaAcknowledgementCoversWhatItSawTest {
                     .consciousnessLevel(ConsciousnessLevel.NEW_CONFUSION).recordedAt(at).build(), List.of(), null),
             new Case("PregnancyHypertensionProtocolRule", new PregnancyHypertensionProtocolRule(repo),
                 at -> PatientVitalSign.builder().systolicBpMmHg(165).diastolicBpMmHg(100).recordedAt(at).build(),
-                List.of(), DUE_AT_30_WEEKS));
+                List.of(), DUE_AT_30_WEEKS),
+            // QA D1890 (provisional): severe blood pressure after a recorded birth.
+            new Case("PostpartumSevereHypertensionRule", new PostpartumSevereHypertensionRule(
+                    com.example.hms.service.vitals.SevereHypertensionFixtures.actingHospitalOnly(delivered()),
+                    com.example.hms.cdshooks.CdsCardText.ENGLISH),
+                at -> PatientVitalSign.builder().systolicBpMmHg(164).diastolicBpMmHg(114).recordedAt(at).build(),
+                List.of(), null),
+            // r54 (provisional): severe blood pressure in an adult with no birth on record.
+            new Case("AdultSevereHypertensionRule", new AdultSevereHypertensionRule(
+                    com.example.hms.service.vitals.SevereHypertensionFixtures.actingHospitalOnly(
+                        mock(com.example.hms.repository.DeliveryRecordRepository.class)),
+                    com.example.hms.cdshooks.CdsCardText.ENGLISH),
+                at -> PatientVitalSign.builder().systolicBpMmHg(184).diastolicBpMmHg(100).recordedAt(at).build(),
+                List.of(), null));
+    }
+
+    /** A birth on record for every mother: the postpartum rule's "after birth". */
+    private static com.example.hms.repository.DeliveryRecordRepository delivered() {
+        com.example.hms.repository.DeliveryRecordRepository deliveries =
+            mock(com.example.hms.repository.DeliveryRecordRepository.class);
+        when(deliveries.findFirstByPatient_IdAndHospital_IdInAndBirthDateTimeBetweenOrderByBirthDateTimeDesc(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(
+                com.example.hms.service.vitals.SevereHypertensionFixtures.birth(null, LocalDateTime.now().minusHours(6))));
+        return deliveries;
     }
 
     private static BpaRuleEngine engine(BpaRule rule) {

@@ -60,11 +60,12 @@ public class MalformedRequestBodyAdvice extends RequestBodyAdviceAdapter {
     @Override
     public Object afterBodyRead(Object body, HttpInputMessage inputMessage, MethodParameter parameter,
                                 Type targetType, Class<? extends HttpMessageConverter<?>> converterType) {
+        List<String> notAccepted = RequestBodyProblems.notAccepted();
         List<String> malformed = RequestBodyProblems.finish();
-        if (malformed.isEmpty()) {
+        if (malformed.isEmpty() && notAccepted.isEmpty()) {
             return body;
         }
-        throw new MalformedRequestBodyException(malformed, violations(body, parameter));
+        throw new MalformedRequestBodyException(malformed, notAccepted, violations(body, parameter));
     }
 
     @Override

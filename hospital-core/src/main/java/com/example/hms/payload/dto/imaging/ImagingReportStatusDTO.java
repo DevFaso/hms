@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.imaging;
 
+import com.example.hms.enums.ImagingReportHistoryEvent;
 import com.example.hms.enums.ImagingReportStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,6 +21,9 @@ public class ImagingReportStatusDTO {
     private ImagingReportStatus status;
 
     private String statusReason;
+
+    /** The server-written event this row records (r44); null when a person typed the reason. */
+    private ImagingReportHistoryEvent eventCode;
 
     private LocalDateTime changedAt;
 

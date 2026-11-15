@@ -121,6 +121,22 @@ public interface PatientVitalSignRepository extends JpaRepository<PatientVitalSi
                                            @Param("to") LocalDateTime to,
                                            Pageable pageable);
 
+    /** The AVS observation set is selected before pagination, within the visit's own window. */
+    @Query("""
+        SELECT v FROM PatientVitalSign v
+        WHERE v.patient.id = :patientId AND v.hospital.id = :hospitalId
+          AND v.recordedAt >= :from AND v.recordedAt <= :to
+          AND (v.temperatureCelsius IS NOT NULL OR v.heartRateBpm IS NOT NULL
+               OR v.respiratoryRateBpm IS NOT NULL OR v.systolicBpMmHg IS NOT NULL
+               OR v.diastolicBpMmHg IS NOT NULL OR v.spo2Percent IS NOT NULL)
+        ORDER BY v.recordedAt DESC
+        """)
+    List<PatientVitalSign> findObservationSetsWithinRange(@Param("patientId") UUID patientId,
+                                                         @Param("hospitalId") UUID hospitalId,
+                                                         @Param("from") LocalDateTime from,
+                                                         @Param("to") LocalDateTime to,
+                                                         Pageable pageable);
+
     /**
      * Every row carrying at least one anthropometric value, oldest first —
      * the growth-chart series. Vitals rows are sparse measurement bundles,

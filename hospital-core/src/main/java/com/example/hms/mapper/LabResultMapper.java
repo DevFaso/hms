@@ -54,7 +54,8 @@ public class LabResultMapper {
         if (result == null) return null;
 
         OrderContext context = extractOrderContext(result.getLabOrder());
-        List<LabResultReferenceRangeDTO> referenceRanges = toReferenceRangeDtos(context.referenceRanges());
+        List<LabResultReferenceRangeDTO> referenceRanges = toReferenceRangeDtos(context.referenceRanges(),
+            demographicsOf(result));
         Grading grading = gradingOf(result, context);
         String severityFlag = effectiveSeverityFlag(result, grading.range(), context.expectedResult());
 
@@ -735,13 +736,23 @@ public class LabResultMapper {
         return value == null ? "" : value;
     }
 
-    private List<LabResultReferenceRangeDTO> toReferenceRangeDtos(List<LabTestReferenceRange> referenceRanges) {
+    /**
+     * The test's ranges, each marked with whether this result's patient is in
+     * its age band (r44: the detail screen hides an out-of-band row with no
+     * interval, the neonatal glucose rows on an adult).
+     */
+    private List<LabResultReferenceRangeDTO> toReferenceRangeDtos(List<LabTestReferenceRange> referenceRanges,
+                                                                  LabRangeApplicability.Demographics patient) {
         if (referenceRanges == null || referenceRanges.isEmpty()) {
             return Collections.emptyList();
         }
         return referenceRanges.stream()
             .filter(Objects::nonNull)
-            .map(LabResultMapper::toReferenceRangeDto)
+            .map(range -> {
+                LabResultReferenceRangeDTO dto = toReferenceRangeDto(range);
+                dto.setPatientInAgeBand(LabRangeApplicability.inAgeBand(range, patient));
+                return dto;
+            })
             .toList();
     }
 

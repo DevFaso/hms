@@ -88,6 +88,21 @@ export interface AdmissionRequest {
   customOrders?: Record<string, unknown>[];
 }
 
+/**
+ * QA D1672: what the admission update takes (AdmissionUpdateRequestDTO). The
+ * server refuses any other property by name: the patient, hospital, type, time
+ * and admitting clinician record the admission and are read-only once admitted.
+ */
+export interface AdmissionUpdateRequest {
+  departmentId?: string;
+  roomBed?: string;
+  acuityLevel?: AcuityLevel;
+  expectedDischargeDateTime?: string;
+  admissionNotes?: string;
+  chiefComplaint?: string;
+  attendingPhysicianId?: string;
+}
+
 export interface DischargeApprovalResponse {
   id: string;
   status: string;
@@ -121,7 +136,7 @@ export class AdmissionService {
     return this.http.get<AdmissionResponse>(`${this.baseUrl}/${id}`);
   }
 
-  update(id: string, req: Partial<AdmissionRequest>): Observable<AdmissionResponse> {
+  update(id: string, req: AdmissionUpdateRequest): Observable<AdmissionResponse> {
     return this.http.put<AdmissionResponse>(`${this.baseUrl}/${id}`, req);
   }
 

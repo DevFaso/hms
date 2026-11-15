@@ -160,6 +160,36 @@ describe('CheckinDialogComponent', () => {
       component.consentObtained.set(false);
       expect(component.canSubmit).toBeTrue();
     });
+
+    it('QA D1591: shows the pre-check-in, ticks the consent given there and sends no second one', () => {
+      component.queueItem = {
+        ...sampleQueueItem,
+        preCheckedIn: true,
+        preCheckinTimestamp: '2026-11-12T08:15:00',
+        preCheckInConsent: true,
+      };
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('[data-testid="checkin-precheckin"]')).not.toBeNull();
+      const box = el.querySelector<HTMLInputElement>('[data-testid="checkin-consent"]')!;
+      expect(box.checked).toBeTrue();
+      expect(box.disabled).toBeTrue();
+      expect(el.querySelector('[data-testid="checkin-consent-precheckin"]')).not.toBeNull();
+
+      mockReceptionService.checkInPatient.and.returnValue(of(sampleResponse));
+      component.identityConfirmed.set(true);
+      component.submit();
+      const sent = mockReceptionService.checkInPatient.calls.mostRecent().args[0];
+      expect('consentObtained' in sent).toBeFalse();
+    });
+
+    it('QA D1591: no pre-check-in, no line and the box stays free', () => {
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('[data-testid="checkin-precheckin"]')).toBeNull();
+      const box = el.querySelector<HTMLInputElement>('[data-testid="checkin-consent"]')!;
+      expect(box.checked).toBeFalse();
+      expect(box.disabled).toBeFalse();
+    });
   });
 
   it('QA D975: the copay goes in the chosen method with its reference', () => {

@@ -115,7 +115,8 @@ class PostpartumCareServiceImplTest {
             recordAccessPolicy,
             reachRecorder,
             TestMessageSources.bundles(),
-            deliveryRecordRepository
+            deliveryRecordRepository,
+            com.example.hms.service.vitals.SevereHypertensionFixtures.actingHospitalOnly(deliveryRecordRepository)
         );
 
         patientId = UUID.randomUUID();
@@ -216,6 +217,108 @@ class PostpartumCareServiceImplTest {
         PostpartumObservation savedObservation = observationCaptor.getValue();
         // CR-06 class: the alert stays, but it does not record that anyone activated the protocol.
         assertFalse(savedObservation.isHemorrhageProtocolActivated(), "An alert must not attest the protocol");
+    }
+
+    /**
+     * QA D1890 (provisional, 2026-11-14): systolic >= 160 OR diastolic >= 110 mmHg after birth is an
+     * URGENT obstetric-review warning; the observation is saved either way.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}/{1} -> alert {2}")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "162,112,true", "164,114,true", "160,80,true", "120,110,true", "159,109,false", "200,,true", ",115,true"
+    })
+    void severeBloodPressureAfterBirthIsAnUrgentWarningThatNeverBlocksTheSave_D1890(
+        Integer systolic, Integer diastolic, boolean alerts) {
+        // r54: born within the 42 postpartum days.
+        lenient().when(deliveryRecordRepository
+                .findFirstByPatient_IdAndHospital_IdInAndBirthDateTimeBetweenOrderByBirthDateTimeDesc(
+                    eq(patientId), any(), any(), any()))
+            .thenReturn(Optional.of(com.example.hms.service.vitals.SevereHypertensionFixtures.birth(hospitalId,
+                LocalDateTime.now().minusDays(2))));
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.empty());
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(5))
+            .systolicBpMmHg(systolic)
+            .diastolicBpMmHg(diastolic)
+            .build();
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId, request, recorderId);
+
+        verify(observationRepository).save(any(PostpartumObservation.class));
+        java.util.List<com.example.hms.payload.dto.clinical.postpartum.PostpartumAlertDTO> severe = response.getAlerts().stream()
+            .filter(alert -> "postpartum-severe-hypertension".equals(alert.getCode()))
+            .toList();
+        assertEquals(alerts ? 1 : 0, severe.size());
+        if (alerts) {
+            assertEquals(PostpartumAlertType.HYPERTENSION, severe.get(0).getType());
+            assertEquals(PostpartumAlertSeverity.URGENT, severe.get(0).getSeverity());
+            assertTrue(severe.get(0).getMessage().contains("avis obstétrical urgent"), severe.get(0).getMessage());
+            verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
+                com.example.hms.service.vitals.SevereHypertension.MESSAGE_KEY.equals(a.alertMessageKey())));
+        } else {
+            verify(obstetricAlertEscalation, never()).raiseAfterCommit(any());
+        }
+    }
+
+    /**
+     * r54 (provisional, 2026-11-15): past the 42 postpartum days the adult rule judges the observation:
+     * 164/114 raises nothing, 185/100 a CAUTION recheck warning, never the obstetric URGENT one.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}/{1} after 42 days -> adult warning {2}")
+    @org.junit.jupiter.params.provider.CsvSource({"164,114,false", "179,119,false", "180,80,true", "120,120,true"})
+    void after42DaysTheAdultRuleJudgesTheObservation(Integer systolic, Integer diastolic, boolean warns) {
+        // Born 60 days ago: past the 42 days; an adult mother (1990), so the adult rule judges.
+        com.example.hms.service.vitals.SevereHypertensionFixtures.bornOn(deliveryRecordRepository, patientId,
+            hospitalId, LocalDateTime.now().minusDays(60));
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.empty());
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(5))
+            .systolicBpMmHg(systolic)
+            .diastolicBpMmHg(diastolic)
+            .build();
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId, request, recorderId);
+
+        verify(observationRepository).save(any(PostpartumObservation.class));
+        assertThat(response.getAlerts()).noneMatch(a -> "postpartum-severe-hypertension".equals(a.getCode()));
+        java.util.List<com.example.hms.payload.dto.clinical.postpartum.PostpartumAlertDTO> adult = response.getAlerts().stream()
+            .filter(a -> "adult-severe-hypertension".equals(a.getCode()))
+            .toList();
+        assertEquals(warns ? 1 : 0, adult.size());
+        if (warns) {
+            assertEquals(PostpartumAlertSeverity.CAUTION, adult.get(0).getSeverity());
+            assertTrue(adult.get(0).getMessage().contains("recontrôler la tension au repos"), adult.get(0).getMessage());
+        }
+    }
+
+    /**
+     * r54 review P2 (provisional, coordinator's decision of 2026-11-15): a mother under 18 past the 42
+     * days is covered by the adult thresholds (she has given birth): 200/130 on day 50 warns.
+     */
+    @Test
+    void aTeenMotherPast42DaysIsJudgedByTheAdultThresholds() {
+        patient.setDateOfBirth(LocalDate.now().minusYears(16));
+        com.example.hms.service.vitals.SevereHypertensionFixtures.bornOn(deliveryRecordRepository, patientId,
+            hospitalId, LocalDateTime.now().minusDays(50));
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.empty());
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(5))
+            .systolicBpMmHg(200)
+            .diastolicBpMmHg(130)
+            .build();
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId, request, recorderId);
+
+        assertThat(response.getAlerts()).anySatisfy(a -> {
+            assertEquals("adult-severe-hypertension", a.getCode());
+            assertEquals(PostpartumAlertSeverity.CAUTION, a.getSeverity());
+        });
     }
 
     @Test

@@ -34,5 +34,7 @@ public class DepartmentResponseDTO {
     private String hospitalEmail;
     private String hospitalWebsite;
     private List<String> translations;
+    /** Every translation with its language, so an editor can show and change each one. */
+    private List<DepartmentTranslationResponseDTO> translationEntries;
 }
 

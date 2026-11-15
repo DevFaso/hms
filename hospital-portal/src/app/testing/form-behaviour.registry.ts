@@ -33,6 +33,7 @@ import { PatientDetailComponent } from '../patients/patient-detail';
 import { PatientFormComponent } from '../patients/patient-form';
 import { PatientListComponent } from '../patients/patient-list';
 import { PatientPhotoComponent } from '../patients/patient-photo/patient-photo.component';
+import { SafeguardingBannerComponent } from '../patients/safeguarding-banner/safeguarding-banner.component';
 import { ControlledRegisterComponent } from '../pharmacy/controlled-register';
 import { DispensingComponent } from '../pharmacy/dispensing';
 import { DrugInteractionsComponent } from '../pharmacy/drug-interactions';
@@ -209,6 +210,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'PatientPhotoComponent',
     file: 'patients/patient-photo/patient-photo.component',
     type: PatientPhotoComponent,
+  },
+  {
+    name: 'SafeguardingBannerComponent',
+    file: 'patients/safeguarding-banner/safeguarding-banner.component',
+    type: SafeguardingBannerComponent,
   },
   {
     name: 'ControlledRegisterComponent',

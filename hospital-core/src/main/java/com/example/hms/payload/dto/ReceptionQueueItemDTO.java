@@ -46,4 +46,11 @@ public class ReceptionQueueItemDTO {
     /** QA D1489: a check-in on either is refused, so the row does not offer one. */
     private boolean patientDeceased;
     private boolean registrationInactive;
+    /**
+     * QA D1591: the patient pre-checked in from the portal, when, and whether
+     * they gave their consent to care there; the desk saw none of it.
+     */
+    private boolean preCheckedIn;
+    private java.time.LocalDateTime preCheckinTimestamp;
+    private boolean preCheckInConsent;
 }

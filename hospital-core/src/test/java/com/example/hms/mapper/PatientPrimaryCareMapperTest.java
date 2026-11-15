@@ -97,4 +97,20 @@ class PatientPrimaryCareMapperTest {
         assertThat(dto.getCreatedAt()).isNull();
         assertThat(dto.getUpdatedAt()).isNull();
     }
+
+    @Test
+    @DisplayName("QA D1941: a link stored with its end before its start is shown ending on its start")
+    void anEndBeforeTheStartReadsAsTheStart() {
+        entity.setStartDate(LocalDate.of(2026, 11, 14));
+        entity.setEndDate(LocalDate.of(2026, 11, 13));
+        entity.setCurrent(false);
+
+        assertThat(mapper.toDto(entity).getEndDate()).isEqualTo(LocalDate.of(2026, 11, 14));
+        assertThat(entity.getEndDate()).as("the stored row is left as written").isEqualTo(LocalDate.of(2026, 11, 13));
+
+        entity.setEndDate(LocalDate.of(2026, 12, 1));
+        assertThat(mapper.toDto(entity).getEndDate()).isEqualTo(LocalDate.of(2026, 12, 1));
+        entity.setEndDate(null);
+        assertThat(mapper.toDto(entity).getEndDate()).isNull();
+    }
 }

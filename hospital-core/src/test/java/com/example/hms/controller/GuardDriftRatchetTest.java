@@ -137,6 +137,8 @@ class GuardDriftRatchetTest {
         "Treatment authoring is a physician act";
     private static final String TREATMENTPLANCONTROLLER_REASON =
         "Physician review of a treatment plan";
+    private static final String SAFEGUARDINGREVIEWCONTROLLER_REASON =
+        "Recording the documented safeguarding review is the responsible clinician's act (doctor or surgeon); nurses and midwives read it. Provisional rule 2026-11-14 (r53), pending the obstetric and child-protection leads' approval";
     private static final String ULTRASOUNDCONTROLLER_REASON =
         "Ultrasound ordering and reporting; maternity cluster (c) as found 2026-09-26, pending the clinical decision in tasklist \"Nurse/midwife read drift\"";
 
@@ -145,6 +147,10 @@ class GuardDriftRatchetTest {
         listed.put("AdmissionController.admitPatient",
             "Doctor and midwife only (policy 2: a midwife admits a woman in labour, the service refuses her any other type); nurses never admit, QA D84");
         listed.put("AdmissionController.cancelAdmission", ADMISSIONCONTROLLER_REASON);
+        listed.put("LaborController.transferEpisode",
+            "Labour transfer (provisional rule, 2026-11-12): only those who may admit a labour (doctor, midwife under policy 2) hand one to another hospital; nurses never admit");
+        listed.put("LaborController.recordArrivalWithoutHandover",
+            "Labour transfer (provisional rule, 2026-11-12): recording an arrival without handover opens a labour episode, which only those who may admit a labour (doctor, midwife under policy 2) do");
         listed.put("AdmissionController.createOrderSet", ADMISSIONCONTROLLER_REASON);
         listed.put("AdmissionController.deactivateOrderSet", ADMISSIONCONTROLLER_REASON);
         listed.put("AdmissionController.dischargePatient", ADMISSIONCONTROLLER_REASON);
@@ -189,6 +195,8 @@ class GuardDriftRatchetTest {
         listed.put("GeneralReferralController.scheduleReferral", GENERALREFERRALCONTROLLER_REASON);
         listed.put("GeneralReferralController.startReferral", GENERALREFERRALCONTROLLER_REASON);
         listed.put("ImagingOrderController.captureSignature", IMAGINGORDERCONTROLLER_REASON);
+        // Provisional rule 1: the status endpoint's roles record the pre-authorisation number of a study they may start.
+        listed.put("ImagingOrderController.recordAuthorization", IMAGINGORDERCONTROLLER_REASON);
         listed.put("ImagingOrderController.updateStatus", IMAGINGORDERCONTROLLER_REASON);
         listed.put("ImagingResultController.acknowledgeCriticalResult", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingResultController.createReport", IMAGINGRESULTCONTROLLER_REASON);
@@ -219,6 +227,7 @@ class GuardDriftRatchetTest {
         listed.put("OrderReviewHoldController.stopOrder", ORDER_REVIEW_REASON);
         listed.put("MortalityController.disputeDeath", "The user's ruling: only a doctor at that hospital disputes a recorded death");
         listed.put("MortalityController.recordDeath", MORTALITYCONTROLLER_REASON);
+        listed.put("SafeguardingReviewController.record", SAFEGUARDINGREVIEWCONTROLLER_REASON);
         listed.put("ObgynReferralController.acknowledgeReferral", OBGYNREFERRALCONTROLLER_REASON);
         listed.put("ObgynReferralController.addMessage", OBGYNREFERRALCONTROLLER_REASON);
         // QA D1026: the cancel admits exactly the create's roles (midwife, doctor), so its author may withdraw it.

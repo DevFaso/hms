@@ -7,7 +7,9 @@ import {
   OnInit,
   signal,
   ChangeDetectionStrategy,
+  DestroyRef,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
@@ -16,10 +18,12 @@ import {
   LabService,
   LabOrderResponse,
   LabOrderRequest,
+  LabOrderDuplicateMatch,
   LabTestDefinition,
   LabTestDefinitionApprovalRequest,
   LabSpecimen,
   PerformingLab,
+  LabResultResponse,
 } from '../services/lab.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -40,13 +44,52 @@ import { shortOrderCode } from '../shared/lab/order-code';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import {
+  LabOrderState,
+  isLabOrderFinished,
+  isLabOrderOpen,
+  labOrderState,
+  labOrderStateClass,
+  labOrderStateKey,
+} from './shared/lab-order-state';
+import { labSeverityFlag, labSeverityTone, LabSeverityFlag } from './shared/lab-severity';
+import { formatLabReferenceRange } from './shared/reference-range-text';
+import { LabValuePipe } from './shared/lab-value.pipe';
+import { ResultRangeComponent } from './shared/result-range.component';
+import { LabCorrectionBadgeComponent } from './shared/lab-correction-badge.component';
+import { serverDateOrInstant, serverInstant } from '../shared/date-utils';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+/** One recorded step of a lab order's timeline in the drawer. */
+export interface LabTimelineStep {
+  key: string;
+  at: string;
+  by?: string | null;
+}
+
+/**
+ * One open-and-close of a dialog. A save started in one session must not close,
+ * reset or toast over the next session the user opened before its answer came.
+ */
+class DialogSession {
+  private current = 0;
+  /** Called whenever the dialog opens or closes: every earlier save becomes stale. */
+  renew(): void {
+    this.current++;
+  }
+  capture(): number {
+    return this.current;
+  }
+  isCurrent(token: number): boolean {
+    return token === this.current;
+  }
+}
+
 @Component({
   selector: 'app-lab',
   standalone: true,
@@ -62,6 +105,10 @@ import { DateTimePipe } from '../shared/pipes/date-time.pipe';
     FormsModule,
     TranslateModule,
     EnumLabelPipe,
+    LabValuePipe,
+    ResultRangeComponent,
+    LabCorrectionBadgeComponent,
+    RouterLink,
   ],
   templateUrl: './lab.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -71,6 +118,8 @@ export class LabComponent implements OnInit {
   /** QA D227: a readable order code, not the raw id. */
   readonly shortOrderCode = shortOrderCode;
   private readonly labService = inject(LabService);
+  /** Rex on #1150: the order flow's requests end with the page (no order placed after leaving it). */
+  private readonly destroyRef = inject(DestroyRef);
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
   private readonly activatedRoute = inject(ActivatedRoute);
@@ -106,23 +155,6 @@ export class LabComponent implements OnInit {
     this.roleContext.hasAnyActiveRole(actionRoles('labOrderVoid')),
   );
 
-  /**
-   * Everything the laboratory still owes: from the order being placed,
-   * through the specimen being collected and received, to the analysis.
-   * COLLECTED and RECEIVED are here because the backend now moves an
-   * order through them on the specimen events; without them an order
-   * vanished from both tabs between collection and result entry.
-   */
-  static readonly PENDING_STATUSES: readonly string[] = [
-    'ORDERED',
-    'PENDING',
-    'COLLECTED',
-    'RECEIVED',
-    'IN_PROGRESS',
-  ];
-  /** Results are in: entered, verified, or released and closed. */
-  static readonly COMPLETED_STATUSES: readonly string[] = ['RESULTED', 'VERIFIED', 'COMPLETED'];
-
   orders = signal<LabOrderResponse[]>([]);
   filtered = signal<LabOrderResponse[]>([]);
   searchTerm = '';
@@ -131,7 +163,7 @@ export class LabComponent implements OnInit {
 
   activeTab = signal<'all' | 'pending' | 'completed'>('all');
 
-  stats = signal({ total: 0, pending: 0, completed: 0, cancelled: 0 });
+  stats = signal({ total: 0, pending: 0, awaitingValidation: 0, completed: 0, cancelled: 0 });
 
   hospitals = signal<HospitalResponse[]>([]);
   labTestDefs = signal<LabTestDefinition[]>([]);
@@ -153,6 +185,31 @@ export class LabComponent implements OnInit {
   saving = signal(false);
   editingId = signal<string | null>(null);
   form: LabOrderRequest = this.emptyForm();
+  /**
+   * The duplicate-order warning: active orders of the same test for this
+   * patient here, placed recently. Shown before the order is sent; the
+   * clinician may still order anyway (recorded on the order).
+   */
+  duplicateMatches = signal<LabOrderDuplicateMatch[]>([]);
+  /**
+   * Rex on #1150: the preview is asynchronous. Each check, close, reopen or
+   * dismissal advances this counter, and a reply from an older check is
+   * ignored, so a late reply never places an order or shows a stale warning.
+   */
+  private duplicateCheckSeq = 0;
+  /** The patient, hospital and test the shown warning is about. */
+  private duplicateWarningKey: string | null = null;
+  /**
+   * Rex on #1150: a create or update is on the wire. Closing the dialog
+   * releases a preview, never this, so a reopened form cannot send a second write.
+   */
+  private writeInFlight = false;
+  private readonly orderSession = new DialogSession();
+  private readonly voidSession = new DialogSession();
+  private readonly deleteSession = new DialogSession();
+  private readonly approvalSession = new DialogSession();
+  private readonly specimensSession = new DialogSession();
+  private readonly rejectSession = new DialogSession();
 
   // QA D820: void (entered in error)
   voidingOrder = signal<LabOrderResponse | null>(null);
@@ -177,6 +234,98 @@ export class LabComponent implements OnInit {
   rejectingSpecimen = signal<LabSpecimen | null>(null);
   rejectReason = signal('');
   rejecting = signal(false);
+  /**
+   * Lab requests list: the hospital column is shown only when the list spans
+   * more than one hospital, or when an order was routed to or from another
+   * laboratory (the column carries that routing). A user at one hospital
+   * would read the same name on every row otherwise.
+   */
+  readonly showHospitalColumn = computed(() => {
+    const list = this.orders();
+    if (list.some((o) => !!o.performingHospitalId)) return true;
+    return new Set(list.map((o) => o.hospitalId ?? o.hospitalName ?? '')).size > 1;
+  });
+
+  /** Lab requests drawer: the open order's results, as the server graded them. */
+  detailResults = signal<LabResultResponse[]>([]);
+  detailResultsLoading = signal(false);
+  /**
+   * The results the drawer shows a value for: released (validated) and not
+   * replaced by a released correction. An unreleased value is never shown here,
+   * even to the laboratory: until validation the drawer says so instead.
+   */
+  readonly releasedDetailResults = computed(() =>
+    this.detailResults().filter((r) => r.released && !r.supersededByResultId),
+  );
+  /** The order still waits for a result to be validated (D1743: never "finished" before it). */
+  readonly detailAwaitingValidation = computed(
+    () => labOrderState(this.selectedOrder()?.status) === 'AWAITING_VALIDATION',
+  );
+  /** The specimen the order's timeline follows: the newest one not rejected. */
+  readonly currentDetailSpecimen = computed<LabSpecimen | null>(() => {
+    const live = this.detailSpecimens().filter((sp) => sp.status !== 'REJECTED');
+    return (
+      [...live].sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))[0] ?? null
+    );
+  });
+  /**
+   * The order's timeline: only the steps the backend recorded, in order, each
+   * with its time and, where recorded, who. Nothing is inferred or invented.
+   */
+  readonly detailTimeline = computed<LabTimelineStep[]>(() => {
+    const o = this.selectedOrder();
+    if (!o) return [];
+    const steps: LabTimelineStep[] = [];
+    if (o.orderDatetime) {
+      steps.push({ key: 'LAB.TIMELINE.ORDERED', at: o.orderDatetime, by: o.orderingStaffName });
+    }
+    const specimen = this.currentDetailSpecimen();
+    if (specimen?.collectedAt) {
+      steps.push({
+        key: 'LAB.TIMELINE.COLLECTED',
+        at: specimen.collectedAt,
+        by: specimen.collectedByName,
+      });
+    }
+    if (specimen?.receivedAt) {
+      steps.push({
+        key: 'LAB.TIMELINE.RECEIVED',
+        at: specimen.receivedAt,
+        by: specimen.receivedByName,
+      });
+    }
+    const resultedAt = this.detailResults()
+      .filter((r) => !r.supersededByResultId)
+      .map((r) => r.resultDate)
+      .filter((d): d is string => !!d)
+      .sort()[0];
+    if (resultedAt) {
+      steps.push({ key: 'LAB.TIMELINE.RESULTED', at: resultedAt });
+    }
+    const released = this.lastRelease();
+    if (released?.releasedAt) {
+      steps.push({
+        key: 'LAB.TIMELINE.VALIDATED',
+        at: released.releasedAt,
+        by: released.releasedByFullName,
+      });
+    }
+    return steps;
+  });
+  /**
+   * Turnaround time: from the order to the validation of its last shown
+   * result, only when both are recorded. Null otherwise; never estimated.
+   */
+  readonly detailTurnaround = computed<string | null>(() => {
+    const o = this.selectedOrder();
+    const released = this.lastRelease();
+    if (!o?.orderDatetime || !released?.releasedAt) return null;
+    const ms =
+      serverInstant(released.releasedAt).getTime() - serverInstant(o.orderDatetime).getTime();
+    if (!Number.isFinite(ms) || ms < 0) return null;
+    return this.formatDuration(ms);
+  });
+
   /** QA D962: the specimens of the order open in the detail panel, for their rejection reasons. */
   detailSpecimens = signal<LabSpecimen[]>([]);
   readonly rejectedDetailSpecimens = computed(() =>
@@ -210,12 +359,111 @@ export class LabComponent implements OnInit {
     'OTHER',
   ];
 
+  /** The newest validation among the shown results (the end of the turnaround). */
+  private lastRelease(): LabResultResponse | null {
+    return (
+      [...this.releasedDetailResults()]
+        .filter((r) => !!r.releasedAt)
+        .sort((a, b) => (b.releasedAt ?? '').localeCompare(a.releasedAt ?? ''))[0] ?? null
+    );
+  }
+
+  /** "2 h 05 min", "3 j 4 h", "45 min": the turnaround in the reader's language. */
+  formatDuration(ms: number): string {
+    const totalMinutes = Math.floor(ms / 60000);
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    if (days > 0) return this.translate.instant('LAB.TAT_DAYS_HOURS', { days, hours });
+    if (hours > 0) {
+      return this.translate.instant('LAB.TAT_HOURS_MINUTES', {
+        hours,
+        minutes: String(minutes).padStart(2, '0'),
+      });
+    }
+    return this.translate.instant('LAB.TAT_MINUTES', { minutes });
+  }
+
+  /**
+   * The patient's age on the drawer, from the date of birth the order carries:
+   * days under a month, months under two years, years after. Empty when unknown.
+   */
+  patientAge(dateOfBirth: string | null | undefined, today: Date = new Date()): string {
+    if (!dateOfBirth) return '';
+    const dob = serverDateOrInstant(dateOfBirth);
+    if (Number.isNaN(dob.getTime()) || dob > today) return '';
+    let months = (today.getFullYear() - dob.getFullYear()) * 12 + today.getMonth() - dob.getMonth();
+    if (today.getDate() < dob.getDate()) months--;
+    if (months < 1) {
+      const days = Math.floor((today.getTime() - dob.getTime()) / 86400000);
+      return this.translate.instant(days === 1 ? 'LAB.AGE_DAY' : 'LAB.AGE_DAYS', { count: days });
+    }
+    if (months < 24) {
+      return this.translate.instant(months === 1 ? 'LAB.AGE_MONTH' : 'LAB.AGE_MONTHS', {
+        count: months,
+      });
+    }
+    return this.translate.instant('LAB.AGE_YEARS', { count: Math.floor(months / 12) });
+  }
+
+  /** "R35 — Polyurie" when the label is known, else the code alone. */
+  diagnosisText(o: LabOrderResponse): string {
+    const code = (o.primaryDiagnosisCode ?? '').trim();
+    if (!code) return '—';
+    const label = (o.primaryDiagnosisLabel ?? '').trim();
+    return label ? `${code} — ${label}` : code;
+  }
+
+  /** The state an order status reads as (see lab-order-state.ts). */
+  stateOf(status: string | null | undefined): LabOrderState | null {
+    return labOrderState(status);
+  }
+
+  /** The label key of an order's state; null for a status this page does not know. */
+  stateKey(status: string | null | undefined): string | null {
+    const state = labOrderState(status);
+    return state ? labOrderStateKey(state) : null;
+  }
+
+  /** The result's grade, as every lab screen reads it (shared lab-severity). */
+  resultFlag(r: LabResultResponse): LabSeverityFlag {
+    return labSeverityFlag(r);
+  }
+
+  /** The badge class of a result's grade, as the lab-results page draws it. */
+  resultFlagClass(r: LabResultResponse): string {
+    switch (labSeverityTone(labSeverityFlag(r))) {
+      case 'critical':
+        return 'severity-badge severity-critical';
+      case 'abnormal':
+        return 'severity-badge severity-high';
+      case 'normal':
+        return 'severity-badge severity-normal';
+      default:
+        return 'severity-badge';
+    }
+  }
+
+  /**
+   * The reference text beside a value: the range the server graded it against
+   * (LabResultMapper.gradedReferenceRange), else, for a qualitative test, its
+   * expected answer. Null when neither exists.
+   */
+  resultReference(r: LabResultResponse): string | null {
+    const graded = r.gradedReferenceRange;
+    if (graded && (graded.minValue != null || graded.maxValue != null)) {
+      return formatLabReferenceRange(graded);
+    }
+    return r.expectedResult?.trim() || null;
+  }
+
   /** QA D963: a STAT or URGENT order is flagged wherever the lab reads it. */
   isUrgentPriority(priority: string | null | undefined): boolean {
     return priority === 'STAT' || priority === 'URGENT';
   }
 
   ngOnInit(): void {
+    this.linkedOrderId = this.activatedRoute.snapshot.queryParamMap.get('order');
     this.loadOrders();
     this.loadAssignedHospitals();
     this.initPatientSearch();
@@ -233,6 +481,31 @@ export class LabComponent implements OnInit {
         if (active) this.activeAssignmentId = active.id;
       },
     });
+  }
+
+  /** `/lab?order=<id>`: the order to open once the list has loaded (read once). */
+  private linkedOrderId: string | null = null;
+
+  /**
+   * `/lab?order=<id>` (the lab result drawer links a result to its request):
+   * opens that order's drawer, on a tab that lists it. An order that is not in
+   * this reader's scope, or no longer exists, says so instead of opening nothing.
+   */
+  private openLinkedOrder(list: LabOrderResponse[]): void {
+    const id = this.linkedOrderId;
+    if (!id) return;
+    this.linkedOrderId = null;
+    const order = list.find((o) => o.id === id);
+    if (!order) {
+      this.toast.error(this.translate.instant('LAB.LINKED_ORDER_NOT_FOUND'));
+      return;
+    }
+    if (!this.filtered().some((o) => o.id === id)) {
+      this.searchTerm = '';
+      const tab = this.isPending(order) ? 'pending' : this.isCompleted(order) ? 'completed' : 'all';
+      this.setTab(tab);
+    }
+    this.viewOrder(order);
   }
 
   /**
@@ -475,7 +748,9 @@ export class LabComponent implements OnInit {
   }
 
   openCreate(): void {
+    this.orderSession.renew();
     this.form = this.emptyForm();
+    this.clearDuplicateWarning();
     this.editing.set(false);
     this.editingId.set(null);
     this.selectedPatient.set(null);
@@ -489,6 +764,7 @@ export class LabComponent implements OnInit {
   }
 
   openEdit(o: LabOrderResponse): void {
+    this.orderSession.renew();
     const profile = this.auth.getUserProfile();
     this.form = {
       patientId: '',
@@ -521,10 +797,95 @@ export class LabComponent implements OnInit {
   }
 
   closeModal(): void {
+    this.orderSession.renew();
     this.showModal.set(false);
+    // A preview still in flight is abandoned with the form (its reply is
+    // ignored); a write in flight keeps the lock until it answers.
+    if (!this.writeInFlight) this.saving.set(false);
+    this.clearDuplicateWarning();
   }
 
+  /** What a duplicate is judged on: this patient, this hospital, this test. */
+  private duplicateKey(): string {
+    return [this.form.patientId, this.form.hospitalId, this.form.labTestDefinitionId].join('|');
+  }
+
+  private clearDuplicateWarning(): void {
+    this.duplicateCheckSeq++;
+    this.duplicateWarningKey = null;
+    this.duplicateMatches.set([]);
+  }
+
+  /**
+   * A new order first asks whether the same test is already active for the
+   * patient here; if so the warning is shown and nothing is sent until the
+   * clinician chooses "Order anyway". A failed check never blocks the order.
+   */
   submitForm(): void {
+    if (this.writeInFlight) return;
+    if (this.editing()) {
+      this.saveOrder(null);
+      return;
+    }
+    this.clearDuplicateWarning();
+    const seq = this.duplicateCheckSeq;
+    const key = this.duplicateKey();
+    // A reply counts only for the check that is still current, on the form it was asked about.
+    const current = (): boolean => {
+      if (seq !== this.duplicateCheckSeq) return false;
+      if (!this.showModal() || key !== this.duplicateKey()) {
+        this.saving.set(false);
+        return false;
+      }
+      return true;
+    };
+    this.saving.set(true);
+    this.labService
+      .checkDuplicates(
+        this.form.patientId,
+        this.form.labTestDefinitionId,
+        this.form.hospitalId || undefined,
+      )
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (matches) => {
+          if (!current()) return;
+          if (matches.length > 0) {
+            this.duplicateWarningKey = key;
+            this.duplicateMatches.set(matches);
+            this.saving.set(false);
+            return;
+          }
+          this.saveOrder(null);
+        },
+        error: () => {
+          if (current()) this.saveOrder(null);
+        },
+      });
+  }
+
+  /**
+   * "Order anyway": the order carries the ids of the earlier orders the
+   * clinician was shown. If the form changed since the warning, it is asked
+   * again instead of acknowledging a warning about something else.
+   */
+  orderAnyway(): void {
+    const shown = this.duplicateMatches();
+    if (shown.length === 0 || this.duplicateWarningKey !== this.duplicateKey()) {
+      this.submitForm();
+      return;
+    }
+    this.saveOrder(shown.map((d) => d.orderId));
+  }
+
+  /** Back to the form without ordering. */
+  dismissDuplicateWarning(): void {
+    this.clearDuplicateWarning();
+  }
+
+  private saveOrder(acknowledgedDuplicateOrderIds: string[] | null): void {
+    if (this.writeInFlight) return;
+    this.writeInFlight = true;
     this.saving.set(true);
     // The select is always sent, and "" is an explicit null rather than an
     // absent field: absent tells the API to leave the routing as it is, so
@@ -533,20 +894,32 @@ export class LabComponent implements OnInit {
     const payload: LabOrderRequest = {
       ...this.form,
       performingHospitalId: this.form.performingHospitalId || null,
+      ...(acknowledgedDuplicateOrderIds ? { acknowledgedDuplicateOrderIds } : {}),
     };
-    const op = this.editing()
+    const session = this.orderSession.capture();
+    const wasEditing = this.editing();
+    const op = wasEditing
       ? this.labService.updateOrder(this.editingId()!, payload)
       : this.labService.createOrder(payload);
-    op.subscribe({
-      next: () => {
-        this.toast.success(
-          this.translate.instant(this.editing() ? 'LAB.TOAST.UPDATED' : 'LAB.TOAST.CREATED'),
-        );
-        this.closeModal();
+    op.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (saved) => {
+        this.writeInFlight = false;
         this.saving.set(false);
+        // An answer that outlived its dialog still refreshes the list, but
+        // never closes, resets or toasts over a dialog opened since.
+        if (this.orderSession.isCurrent(session)) {
+          this.toast.success(
+            this.translate.instant(wasEditing ? 'LAB.TOAST.UPDATED' : 'LAB.TOAST.CREATED'),
+          );
+          this.warnOfDuplicateFoundOnPlacing(saved);
+          this.closeModal();
+        }
         this.loadOrders();
       },
       error: (err: unknown) => {
+        this.writeInFlight = false;
+        this.saving.set(false);
+        if (!this.orderSession.isCurrent(session)) return;
         // QA D1094: a refusal the server explains (a closed visit, another
         // patient's visit) is shown in the reader's language; only a failure
         // with no message falls back to the generic toast.
@@ -557,9 +930,22 @@ export class LabComponent implements OnInit {
             ? message
             : this.translate.instant('LAB.TOAST.SAVE_FAILED'),
         );
-        this.saving.set(false);
       },
     });
+  }
+
+  /**
+   * Rex on #1150: the server checks again when the order is placed. A
+   * duplicate it found that the clinician did not acknowledge (another order
+   * placed since the preview, or a preview that failed) is told, not dropped.
+   */
+  private warnOfDuplicateFoundOnPlacing(saved: LabOrderResponse | null | undefined): void {
+    if (!saved?.duplicateOfRecentOrder || saved.duplicateAcknowledged) return;
+    const codes = (saved.duplicateMatches ?? [])
+      .map((d) => d.labOrderCode ?? d.orderId)
+      .filter((c): c is string => !!c)
+      .join(', ');
+    this.toast.warning(this.translate.instant('LAB.DUPLICATE.PLACED_ANYWAY', { codes }));
   }
 
   /**
@@ -574,11 +960,13 @@ export class LabComponent implements OnInit {
   }
 
   openVoid(o: LabOrderResponse): void {
+    this.voidSession.renew();
     this.voidReason.set('');
     this.voidingOrder.set(o);
   }
 
   closeVoid(): void {
+    this.voidSession.renew();
     this.voidingOrder.set(null);
     this.voidReason.set('');
   }
@@ -592,41 +980,51 @@ export class LabComponent implements OnInit {
     const reason = this.voidReason().trim();
     if (!order || !reason) return;
     this.voiding.set(true);
+    const session = this.voidSession.capture();
     this.labService.voidOrder(order.id, reason).subscribe({
       next: () => {
-        this.toast.success(this.translate.instant('LAB.VOID.DONE'));
         this.voiding.set(false);
-        this.closeVoid();
+        if (this.voidSession.isCurrent(session)) {
+          this.toast.success(this.translate.instant('LAB.VOID.DONE'));
+          this.closeVoid();
+        }
         this.loadOrders();
       },
       error: (err: { error?: { message?: string } }) => {
+        this.voiding.set(false);
+        if (!this.voidSession.isCurrent(session)) return;
         // The server's refusal is written for the reader (localised).
         this.toast.error(err?.error?.message ?? this.translate.instant('LAB.VOID.FAILED'));
-        this.voiding.set(false);
       },
     });
   }
 
   confirmDelete(o: LabOrderResponse): void {
+    this.deleteSession.renew();
     this.deletingOrder.set(o);
     this.showDeleteConfirm.set(true);
   }
   cancelDelete(): void {
+    this.deleteSession.renew();
     this.showDeleteConfirm.set(false);
     this.deletingOrder.set(null);
   }
   executeDelete(): void {
     this.deleting.set(true);
+    const session = this.deleteSession.capture();
     this.labService.deleteOrder(this.deletingOrder()!.id).subscribe({
       next: () => {
-        this.toast.success(this.translate.instant('LAB.TOAST.DELETED'));
-        this.cancelDelete();
         this.deleting.set(false);
+        if (this.deleteSession.isCurrent(session)) {
+          this.toast.success(this.translate.instant('LAB.TOAST.DELETED'));
+          this.cancelDelete();
+        }
         this.loadOrders();
       },
       error: (err: unknown) => {
-        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB.TOAST.DELETE_FAILED'));
         this.deleting.set(false);
+        if (!this.deleteSession.isCurrent(session)) return;
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB.TOAST.DELETE_FAILED'));
       },
     });
   }
@@ -641,6 +1039,7 @@ export class LabComponent implements OnInit {
         this.computeStats(list);
         this.applyFilter();
         this.loading.set(false);
+        this.openLinkedOrder(list);
       },
       error: () => {
         this.toast.error(this.translate.instant('LAB.TOAST.LOAD_FAILED'));
@@ -649,18 +1048,22 @@ export class LabComponent implements OnInit {
     });
   }
 
+  /** Still owed by the laboratory, validation included ("En cours"). */
   isPending(order: LabOrderResponse): boolean {
-    return LabComponent.PENDING_STATUSES.includes(order.status ?? '');
+    return isLabOrderOpen(order.status);
   }
 
+  /** Every result validated ("Terminées"); a result awaiting validation is not. */
   isCompleted(order: LabOrderResponse): boolean {
-    return LabComponent.COMPLETED_STATUSES.includes(order.status ?? '');
+    return isLabOrderFinished(order.status);
   }
 
   private computeStats(list: LabOrderResponse[]): void {
     this.stats.set({
       total: list.length,
       pending: list.filter((o) => this.isPending(o)).length,
+      awaitingValidation: list.filter((o) => labOrderState(o.status) === 'AWAITING_VALIDATION')
+        .length,
       completed: list.filter((o) => this.isCompleted(o)).length,
       cancelled: list.filter((o) => o.status === 'CANCELLED').length,
     });
@@ -692,44 +1095,64 @@ export class LabComponent implements OnInit {
     this.filtered.set(list);
   }
 
+  /** Invalidates every drawer request, including a previous opening of the same order. */
+  private detailGeneration = 0;
+
   viewOrder(order: LabOrderResponse): void {
+    const generation = ++this.detailGeneration;
     this.selectedOrder.set(order);
+    this.detailResults.set([]);
+    this.detailResultsLoading.set(false);
+    // The single-order read adds what the list does not carry (the diagnosis label).
+    this.labService.getOrder(order.id).subscribe({
+      next: (detail) => {
+        if (generation === this.detailGeneration && detail?.id === order.id) {
+          this.selectedOrder.set(detail);
+        }
+      },
+      error: () => {
+        /* the row's own fields stay shown */
+      },
+    });
+    const state = labOrderState(order.status);
+    if (state === 'AWAITING_VALIDATION' || state === 'COMPLETED') {
+      this.detailResultsLoading.set(true);
+      this.labService.listOrderResults(order.id).subscribe({
+        next: (list) => {
+          if (generation !== this.detailGeneration) return;
+          this.detailResults.set((list ?? []).filter((r) => r.labOrderId === order.id));
+          this.detailResultsLoading.set(false);
+        },
+        error: () => {
+          if (generation !== this.detailGeneration) return;
+          this.detailResults.set([]);
+          this.detailResultsLoading.set(false);
+        },
+      });
+    }
     // QA D962: a rejected specimen and its reason show on the order, so the
     // ordering doctor sees why a new sample is needed.
     this.detailSpecimens.set([]);
     this.labService.listSpecimens(order.id).subscribe({
       next: (list) => {
-        if (this.selectedOrder()?.id === order.id) this.detailSpecimens.set(list ?? []);
+        if (generation === this.detailGeneration) this.detailSpecimens.set(list ?? []);
       },
-      error: () => this.detailSpecimens.set([]),
+      error: () => {
+        if (generation === this.detailGeneration) this.detailSpecimens.set([]);
+      },
     });
   }
 
   closeDetail(): void {
+    ++this.detailGeneration;
     this.selectedOrder.set(null);
     this.detailSpecimens.set([]);
+    this.detailResults.set([]);
+    this.detailResultsLoading.set(false);
   }
 
   getStatusClass(status: string): string {
-    switch (status) {
-      case 'COMPLETED':
-      case 'VERIFIED':
-      case 'RESULTED':
-        return 'status-badge status-completed';
-      case 'IN_PROGRESS':
-        return 'status-badge status-in_progress';
-      case 'COLLECTED':
-      case 'RECEIVED':
-        return 'status-badge status-collected';
-      case 'PENDING':
-      case 'ORDERED':
-        return 'status-badge status-pending';
-      case 'CANCELLED':
-      case 'ENTERED_IN_ERROR':
-        return 'status-badge status-cancelled';
-      default:
-        return 'status-badge';
-    }
+    return labOrderStateClass(labOrderState(status));
   }
 
   // ── Lab Test Definition Approval Workflow ────────────────────────────
@@ -741,6 +1164,7 @@ export class LabComponent implements OnInit {
   processingApproval = signal(false);
 
   openApprovalModal(def: LabTestDefinition): void {
+    this.approvalSession.renew();
     this.approvalTarget.set(def);
     this.approvalAction.set('');
     this.approvalRejectionReason.set('');
@@ -748,6 +1172,7 @@ export class LabComponent implements OnInit {
   }
 
   closeApprovalModal(): void {
+    this.approvalSession.renew();
     this.showApprovalModal.set(false);
     this.approvalTarget.set(null);
   }
@@ -765,20 +1190,23 @@ export class LabComponent implements OnInit {
     }
 
     this.processingApproval.set(true);
+    const session = this.approvalSession.capture();
     this.labService.submitApprovalAction(def.id, req).subscribe({
       next: (updated) => {
+        this.processingApproval.set(false);
+        this.labService.listTestDefinitions().subscribe((defs) => this.labTestDefs.set(defs));
+        if (!this.approvalSession.isCurrent(session)) return;
         this.toast.success(
           this.translate.instant('LAB.TOAST.DEFINITION_STATUS_UPDATED', {
             status: this.translate.instant(`LAB.APPROVAL_STATUS.${updated.approvalStatus}`),
           }),
         );
-        this.labService.listTestDefinitions().subscribe((defs) => this.labTestDefs.set(defs));
         this.closeApprovalModal();
-        this.processingApproval.set(false);
       },
       error: (err: unknown) => {
-        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB.TOAST.APPROVAL_FAILED'));
         this.processingApproval.set(false);
+        if (!this.approvalSession.isCurrent(session)) return;
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB.TOAST.APPROVAL_FAILED'));
       },
     });
   }
@@ -801,6 +1229,7 @@ export class LabComponent implements OnInit {
   // ── Specimen tracking ────────────────────────────────────────────────
 
   openSpecimens(order: LabOrderResponse): void {
+    this.specimensSession.renew();
     this.specimensOrder.set(order);
     // QA D177: the test's own sample type, so the collector confirms it
     // rather than retyping it (still editable for an unusual specimen).
@@ -819,6 +1248,7 @@ export class LabComponent implements OnInit {
   }
 
   closeSpecimens(): void {
+    this.specimensSession.renew();
     this.showSpecimensModal.set(false);
     this.specimensOrder.set(null);
     this.specimens.set([]);
@@ -843,6 +1273,7 @@ export class LabComponent implements OnInit {
     if (!order || !this.specimensOrderAcceptsSpecimens() || !this.specimenForm.specimenType.trim())
       return;
     this.specimenSaving.set(true);
+    const session = this.specimensSession.capture();
     this.labService
       .createSpecimen(order.id, {
         specimenType: this.specimenForm.specimenType.trim(),
@@ -851,19 +1282,21 @@ export class LabComponent implements OnInit {
       })
       .subscribe({
         next: () => {
+          this.specimenSaving.set(false);
+          if (!this.specimensSession.isCurrent(session)) return;
           this.toast.success(this.translate.instant('LAB.TOAST.SPECIMEN_COLLECTED'));
           this.specimenForm = { specimenType: '', currentLocation: '', notes: '' };
-          this.specimenSaving.set(false);
           this.loadSpecimens(order.id);
         },
         error: (err: { error?: { errors?: Record<string, string>; message?: string } }) => {
           // QA D1050: the server's own reason (a field too long), in the reader's
           // language, instead of a generic failure; the form keeps what was typed.
+          this.specimenSaving.set(false);
+          if (!this.specimensSession.isCurrent(session)) return;
           const fieldMessage = Object.values(err?.error?.errors ?? {})[0];
           this.toast.error(
             fieldMessage ?? this.translate.instant('LAB.TOAST.SPECIMEN_COLLECT_FAILED'),
           );
-          this.specimenSaving.set(false);
         },
       });
   }
@@ -888,17 +1321,20 @@ export class LabComponent implements OnInit {
     const order = this.specimensOrder();
     if (!order) return;
     this.receivingSpecimenId.set(specimen.id);
+    const session = this.specimensSession.capture();
     this.labService.receiveSpecimen(specimen.id).subscribe({
       next: () => {
-        this.toast.success(this.translate.instant('LAB.TOAST.SPECIMEN_RECEIVED'));
         this.receivingSpecimenId.set(null);
+        if (!this.specimensSession.isCurrent(session)) return;
+        this.toast.success(this.translate.instant('LAB.TOAST.SPECIMEN_RECEIVED'));
         this.loadSpecimens(order.id);
       },
       error: (err: unknown) => {
+        this.receivingSpecimenId.set(null);
+        if (!this.specimensSession.isCurrent(session)) return;
         this.toast.error(
           refusalReason(err) ?? this.translate.instant('LAB.TOAST.SPECIMEN_RECEIVE_FAILED'),
         );
-        this.receivingSpecimenId.set(null);
       },
     });
   }
@@ -920,11 +1356,13 @@ export class LabComponent implements OnInit {
   }
 
   openReject(specimen: LabSpecimen): void {
+    this.rejectSession.renew();
     this.rejectReason.set('');
     this.rejectingSpecimen.set(specimen);
   }
 
   closeReject(): void {
+    this.rejectSession.renew();
     this.rejectingSpecimen.set(null);
     this.rejectReason.set('');
   }
@@ -939,21 +1377,25 @@ export class LabComponent implements OnInit {
     const reason = this.rejectReason().trim();
     if (!specimen || !order || !reason) return;
     this.rejecting.set(true);
+    const session = this.rejectSession.capture();
+    const specimens = this.specimensSession.capture();
     this.labService.rejectSpecimen(specimen.id, reason).subscribe({
       next: () => {
-        this.toast.success(this.translate.instant('LAB.REJECT_SPECIMEN.DONE'));
         this.rejecting.set(false);
-        this.closeReject();
-        this.loadSpecimens(order.id);
         // The order is back to awaiting collection: the list must say so.
         this.loadOrders();
+        if (!this.rejectSession.isCurrent(session)) return;
+        this.toast.success(this.translate.instant('LAB.REJECT_SPECIMEN.DONE'));
+        this.closeReject();
+        if (this.specimensSession.isCurrent(specimens)) this.loadSpecimens(order.id);
       },
       error: (err: { error?: { message?: string } }) => {
+        this.rejecting.set(false);
+        if (!this.rejectSession.isCurrent(session)) return;
         // The server's refusal is written for the reader (localised).
         this.toast.error(
           err?.error?.message ?? this.translate.instant('LAB.REJECT_SPECIMEN.FAILED'),
         );
-        this.rejecting.set(false);
       },
     });
   }

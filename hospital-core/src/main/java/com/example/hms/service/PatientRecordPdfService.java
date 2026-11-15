@@ -200,8 +200,8 @@ public class PatientRecordPdfService {
 
         pages.heading(t.get("pdf.record.section.imaging"));
         pages.rows(chart.getImaging(), i -> join(SEPARATOR, t.fmt(i.getOrderedAt()),
-            join(" ", label(t, i.getModality()), i.getStudyType(), i.getBodyRegion(), label(t, i.getLaterality())), label(t, i.getStatus()),
-            i.getReportImpression() != null ? t.get("pdf.record.imaging.impression", i.getReportImpression()) : null));
+            join(" ", label(t, i.getModality()), i.getStudyType(), i.getBodyRegion(), lateralityLabel(t, i.getLaterality())),
+            label(t, i.getStatus()), imagingConclusions(i, t)));
 
         pages.heading(t.get("pdf.record.section.procedures"));
         pages.rows(chart.getProcedures(), pr -> join(SEPARATOR, t.fmt(pr.getOrderedAt()), pr.getProcedureName(),
@@ -275,6 +275,28 @@ public class PatientRecordPdfService {
     static String severityLabel(PdfLabels t, String code) {
         if (code == null || code.isBlank()) return null;
         return t.getOrCode("cds.severity." + code, label(t, code));
+    }
+
+    /** QA D1926 (r53): a laterality marked not applicable is not printed ("Sans objet"). */
+    private static String lateralityLabel(PdfLabels t, String laterality) {
+        return "NOT_APPLICABLE".equals(laterality) ? null : label(t, laterality);
+    }
+
+    /**
+     * QA D1924 (r53): the signed conclusion and each addendum, oldest first;
+     * an addendum printed alone hid the conclusion it adds to.
+     */
+    static String imagingConclusions(ChartReviewDTO.ImagingEntryDTO i, PdfLabels t) {
+        List<ChartReviewDTO.ImagingReportEntryDTO> reports = i.getReports();
+        if (reports == null || reports.isEmpty()) {
+            return i.getReportImpression() != null ? t.get("pdf.record.imaging.impression", i.getReportImpression()) : null;
+        }
+        String joined = reports.stream()
+            .filter(r -> r.getImpression() != null && !r.getImpression().isBlank())
+            .map(r -> t.get("ADDENDUM".equals(r.getReportStatus())
+                ? "pdf.record.imaging.addendum" : "pdf.record.imaging.impression", r.getImpression()))
+            .collect(java.util.stream.Collectors.joining(SEPARATOR));
+        return joined.isEmpty() ? null : joined;
     }
 
     static String label(PdfLabels t, String code) {

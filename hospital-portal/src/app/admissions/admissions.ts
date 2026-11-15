@@ -18,6 +18,7 @@ import {
   AdmissionService,
   AdmissionResponse,
   AdmissionRequest,
+  AdmissionUpdateRequest,
   AdmissionType,
   AdmissionStatus,
   AcuityLevel,
@@ -47,6 +48,7 @@ import {
   toServerDateTime,
 } from '../shared/date-utils';
 import { BedService, BedResponse } from '../services/bed.service';
+import { DischargeService, DischargeSummary } from '../services/discharge.service';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { BackdropCloseDirective } from '../shared/a11y/backdrop-close.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
@@ -116,6 +118,7 @@ export class AdmissionsComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly bedService = inject(BedService);
+  private readonly dischargeService = inject(DischargeService);
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -134,6 +137,15 @@ export class AdmissionsComponent implements OnInit {
   protected readonly midwifeAdmitsLabourOnly = computed(
     // rbac-inline-ok: narrows the form's choices; the admit permission itself is admissionCreate
     () => this.canAdmit() && !this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']),
+  );
+  /**
+   * QA D1634: the admitting-provider field's words. A midwife admitting is not
+   * a "Médecin / Médico"; the label and the empty option are neutral then.
+   */
+  protected readonly admittingProviderKeys = computed(() =>
+    this.midwifeAdmitsLabourOnly()
+      ? { label: 'ADMISSIONS.ADMITTING_CLINICIAN', select: 'ADMISSIONS.SELECT_CLINICIAN' }
+      : { label: 'ADMISSIONS.ADMITTING_PROVIDER', select: 'ADMISSIONS.SELECT_PROVIDER' },
   );
   protected readonly canEditAdmission = computed(() => this.can('admissionUpdate'));
   protected readonly canApplyOrderSets = computed(() => this.can('admissionApplyOrderSets'));
@@ -364,6 +376,12 @@ export class AdmissionsComponent implements OnInit {
   showDischargeModal = signal(false);
   dischargingAdm = signal<AdmissionResponse | null>(null);
   discharging = signal(false);
+  /**
+   * QA D1596: the discharge summary already written for the stay. It is the
+   * one source of the diagnosis (shown, not typed again), and a finalized one
+   * takes no further instructions; a draft gets the dialog's added to it.
+   */
+  staySummary = signal<DischargeSummary | null>(null);
   dischargeForm = {
     dischargeDisposition: 'HOME' as string,
     dischargeSummary: '',
@@ -678,6 +696,7 @@ export class AdmissionsComponent implements OnInit {
   openEdit(a: AdmissionResponse): void {
     // QA D1428: the room of a stay that holds a bed is that bed; it moves by assignment or transfer.
     this.editingHoldsBed.set(!!a.bedId);
+    this.editingHadDepartment.set(!!a.departmentId);
     this.form = {
       patientId: a.patientId ?? '',
       hospitalId: a.hospitalId ?? '',
@@ -720,7 +739,7 @@ export class AdmissionsComponent implements OnInit {
         : this.form.admissionDateTime,
     };
     const op = this.editing()
-      ? this.admissionService.update(this.editingId()!, payload)
+      ? this.admissionService.update(this.editingId()!, this.updatePayload())
       : this.admissionService.create(payload);
     op.subscribe({
       next: () => {
@@ -747,6 +766,29 @@ export class AdmissionsComponent implements OnInit {
 
   /** QA D1428: the stay being edited holds a structured bed. */
   readonly editingHoldsBed = signal(false);
+
+  /**
+   * QA D1672: the update keeps the stay's department when none is sent, so a
+   * stay that has one is moved to another, never back to "any department".
+   */
+  readonly editingHadDepartment = signal(false);
+
+  /**
+   * QA D1672: the edit sent the whole admission form; the update took none of
+   * the complaint, type, time or clinician, answered 200 and kept the old
+   * values behind "Admission updated". It now sends only what the update
+   * takes (the server refuses anything else by name); the patient, hospital,
+   * type, time and admitting clinician are read-only in the dialog.
+   */
+  private updatePayload(): AdmissionUpdateRequest {
+    return {
+      departmentId: this.form.departmentId || undefined,
+      roomBed: this.form.roomBed,
+      acuityLevel: this.form.acuityLevel,
+      admissionNotes: this.form.admissionNotes,
+      chiefComplaint: this.form.chiefComplaint,
+    };
+  }
 
   /**
    * QA D603: only a stay still in progress can be cancelled. A discharged,
@@ -805,12 +847,23 @@ export class AdmissionsComponent implements OnInit {
       // QA D503 class: the server records the caller as the discharging provider.
       dischargingProviderId: this.auth.getUserProfile()?.staffId ?? '',
     };
+    this.staySummary.set(null);
+    const stayEncounterId = a.encounterId;
+    if (stayEncounterId) {
+      this.dischargeService.summaryForEncounter(stayEncounterId).subscribe((summary) => {
+        if (!summary || this.dischargingAdm()?.id !== a.id) return;
+        this.staySummary.set(summary);
+        this.dischargeForm.dischargeDiagnosis = summary.dischargeDiagnosis ?? '';
+        if (summary.isFinalized) this.dischargeForm.dischargeInstructions = '';
+      });
+    }
     this.showDischargeModal.set(true);
   }
 
   cancelDischarge(): void {
     this.showDischargeModal.set(false);
     this.dischargingAdm.set(null);
+    this.staySummary.set(null);
   }
 
   executeDischarge(): void {
@@ -820,8 +873,14 @@ export class AdmissionsComponent implements OnInit {
       .discharge(adm.id, {
         dischargeDisposition: this.dischargeForm.dischargeDisposition,
         dischargeSummary: this.dischargeForm.dischargeSummary,
-        dischargeDiagnosis: this.dischargeForm.dischargeDiagnosis.trim(),
-        dischargeInstructions: this.dischargeForm.dischargeInstructions || undefined,
+        // QA D1596: with a written summary, its diagnosis is the one the server keeps.
+        dischargeDiagnosis: this.staySummary()
+          ? undefined
+          : this.dischargeForm.dischargeDiagnosis.trim(),
+        dischargeInstructions:
+          this.staySummary()?.isFinalized || !this.dischargeForm.dischargeInstructions.trim()
+            ? undefined
+            : this.dischargeForm.dischargeInstructions,
         dischargingProviderId: this.dischargeForm.dischargingProviderId,
       })
       .subscribe({

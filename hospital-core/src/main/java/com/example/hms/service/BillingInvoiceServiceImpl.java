@@ -1730,6 +1730,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // Parse the method first: an unknown one must refuse the payment
         // before the invoice total moves.
         PaymentMethod method = parsePaymentMethod(payment.getPaymentMethod(), "paymentMethod");
+        // QA D1611: an insurer's share is claimed, never declared as paid.
+        com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(method, "paymentMethod");
         requireWholeAmount(payment.getAmount());
         // QA D140: nothing verifies a patient's declaration (no payment
         // provider callback exists), so it settles nothing. It is recorded as
@@ -1914,6 +1916,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         // QA D1293: no method, no payment (it used to be recorded as OTHER).
         PaymentMethod method = parsePaymentMethod(payment.getMethod(), "method");
+        // QA D1611: an insurer's share is claimed, never counted as received at the till.
+        com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(method, "method");
         requireWholeAmount(payment.getAmount());
         if (REFERENCE_REQUIRED.contains(method)
                 && (payment.getReference() == null || payment.getReference().isBlank())) {
@@ -2146,6 +2150,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             throw new FieldBusinessException("copayMethod", MSG_PAYMENT_METHOD_REQUIRED);
         }
         PaymentMethod copayMethod = method;
+        // QA D1611: a copay is money taken at the desk, not an insurer's share.
+        com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(copayMethod, "copayMethod");
         String copayReference = reference == null || reference.isBlank() ? null : reference.trim();
         if (REFERENCE_REQUIRED.contains(copayMethod) && copayReference == null) {
             throw new FieldBusinessException("copayReference", MSG_REFERENCE_REQUIRED);

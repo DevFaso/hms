@@ -21,6 +21,10 @@ public interface ImagingOrderService {
 
     ImagingOrderResponseDTO captureProviderSignature(UUID orderId, ImagingOrderSignatureRequestDTO request, UUID signerUserId);
 
+    /** Provisional rule 1: records the pre-authorisation number, clearing a pending flag and its task. */
+    ImagingOrderResponseDTO recordAuthorization(UUID orderId,
+                                                com.example.hms.payload.dto.imaging.ImagingOrderAuthorizationRequestDTO request);
+
     ImagingOrderResponseDTO getOrder(UUID orderId);
 
     List<ImagingOrderResponseDTO> getOrdersByPatient(UUID patientId, ImagingOrderStatus status);
@@ -29,5 +33,11 @@ public interface ImagingOrderService {
 
     List<ImagingOrderResponseDTO> getAllOrders(ImagingOrderStatus status);
 
-    List<ImagingOrderDuplicateMatchDTO> previewDuplicates(UUID patientId, ImagingModality modality, String bodyRegion, Integer lookbackDays);
+    /**
+     * The possible duplicates of an order about to be placed: this patient's
+     * orders at the caller's hospital only ({@code hospitalId} is honoured for a
+     * super-admin in global view, and must match the caller's hospital
+     * otherwise), inside a window the server caps (QA D1920).
+     */
+    List<ImagingOrderDuplicateMatchDTO> previewDuplicates(UUID patientId, UUID hospitalId, ImagingModality modality, String bodyRegion, Integer lookbackDays);
 }

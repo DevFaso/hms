@@ -108,8 +108,12 @@ class WriteAuditInterceptorTest {
     }
 
     private static void authenticate() {
+        authenticate("ROLE_NURSE");
+    }
+
+    private static void authenticate(String role) {
         CustomUserDetails principal = new CustomUserDetails(
-            NURSE, "nurse.awa", "x", true, List.of(new SimpleGrantedAuthority("ROLE_NURSE")));
+            NURSE, "nurse.awa", "x", true, List.of(new SimpleGrantedAuthority(role)));
         SecurityContextHolder.getContext().setAuthentication(
             new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
     }
@@ -308,12 +312,13 @@ class WriteAuditInterceptorTest {
         Role role = new Role();
         role.setName("Sage-femme");
         role.setCode("ROLE_MIDWIFE");
+        authenticate("ROLE_MIDWIFE");
         UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
         assignment.setId(UUID.randomUUID());
         assignment.setHospital(deadProxy);
         assignment.setRole(role);
-        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(NURSE, hospitalId))
-            .thenReturn(Optional.of(assignment));
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(NURSE, hospitalId))
+            .thenReturn(java.util.List.of(assignment));
         HospitalContextHolder.setContext(HospitalContext.builder()
             .principalUserId(NURSE).activeHospitalId(hospitalId).headerOverridden(true).build());
 
@@ -337,7 +342,38 @@ class WriteAuditInterceptorTest {
         AuditEventRequestDTO row = emitted();
         assertThat(row.getAssignmentId()).isNull();
         assertThat(row.getHospitalName()).isNull();
-        verify(assignmentRepository, never()).findFirstByUser_IdAndHospital_IdAndActiveTrue(
+        verify(assignmentRepository, never()).findAllByUser_IdAndHospital_IdAndActiveTrue(
             org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("QA D1632: a multi-role user's row is filed under the role the token acts under, not the first row")
+    void filesTheRowUnderTheTokensRole() throws Exception {
+        UUID hospitalId = UUID.randomUUID();
+        UserRoleHospitalAssignment doctor = assignmentOf("ROLE_DOCTOR");
+        UserRoleHospitalAssignment labDirector = assignmentOf("ROLE_LAB_DIRECTOR");
+        // The doctor row comes first, as findFirst used to return it.
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(NURSE, hospitalId))
+            .thenReturn(List.of(doctor, labDirector));
+        authenticate("ROLE_LAB_DIRECTOR");
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(NURSE).activeHospitalId(hospitalId).headerOverridden(true).build());
+
+        interceptor.afterCompletion(request("POST", "/lab-results/{id}/release", Map.of("id", RESOURCE.toString())),
+            ok(200), handler(Handlers.class, "plain"), null);
+
+        AuditEventRequestDTO row = emitted();
+        assertThat(row.getAssignmentId()).isEqualTo(labDirector.getId());
+        assertThat(row.getRoleName()).isEqualTo("LAB_DIRECTOR");
+    }
+
+    private static UserRoleHospitalAssignment assignmentOf(String code) {
+        Role role = new Role();
+        role.setCode(code);
+        role.setName(code);
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+        assignment.setRole(role);
+        return assignment;
     }
 }

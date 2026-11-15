@@ -83,6 +83,12 @@ public class DeathRecordRequestDTO {
      */
     private Integer gestationalAgeWeeks;
 
+    /**
+     * QA D1714: the fetal-death event this stillbirth declares, at the acting hospital. Left empty, a stillbirth of a
+     * baby registered from a delivery links to that baby's event when there is one. The register counts it once.
+     */
+    private java.util.UUID fetalDeathEventId;
+
     private Boolean autopsyRequested;
 
     /** The clinician certifying, who is often not the person entering this. */

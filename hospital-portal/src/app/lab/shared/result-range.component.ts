@@ -6,6 +6,8 @@ import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { resultRangePosition } from './result-range';
 import { LabCorrectionBadgeComponent } from './lab-correction-badge.component';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { labSeverityFlag } from './lab-severity';
 
 @Component({
   selector: 'app-result-range',
@@ -15,6 +17,7 @@ import { LabCorrectionBadgeComponent } from './lab-correction-badge.component';
     DateTimePipe,
     ServerTimePipe,
     LabCorrectionBadgeComponent,
+    EnumLabelPipe,
   ],
   template: `
     @if (position(); as point) {
@@ -33,13 +36,15 @@ import { LabCorrectionBadgeComponent } from './lab-correction-badge.component';
         <div class="value-row" [id]="id() + '-value'">
           <strong>{{ result().resultValue | labValue: result().resultUnit }}</strong>
           <app-lab-correction-badge [corrected]="!!result().supersedesResultId" />
-          <span [class]="'range-state ' + point.state">{{ stateLabel() | translate }}</span>
+          <span [class]="'range-state ' + point.state" data-testid="range-state">{{
+            stateFlag() | enumLabel: 'labSeverityFlag'
+          }}</span>
         </div>
         <div class="scale" aria-hidden="true">
           <div class="labels">
-            <span>{{ 'LAB_RANGE.LOW' | translate }}</span
-            ><span>{{ 'LAB_RANGE.NORMAL' | translate }}</span
-            ><span>{{ 'LAB_RANGE.HIGH' | translate }}</span>
+            <span>{{ 'LOW' | enumLabel: 'labSeverityFlag' }}</span
+            ><span>{{ 'NORMAL' | enumLabel: 'labSeverityFlag' }}</span
+            ><span>{{ 'HIGH' | enumLabel: 'labSeverityFlag' }}</span>
           </div>
           <div class="bar">
             <span class="low-band"></span><span class="normal-band"></span
@@ -217,10 +222,17 @@ export class ResultRangeComponent {
   result = input.required<LabResultResponse>();
   position = computed(() => resultRangePosition(this.result()));
   id = computed(() => 'result-range-' + this.result().id);
-  stateLabel = computed(
-    () =>
-      ({ low: 'LAB_RANGE.LOW', normal: 'LAB_RANGE.NORMAL', high: 'LAB_RANGE.HIGH' })[
-        this.position()?.state ?? 'normal'
-      ],
-  );
+  /**
+   * r44: the grade the badge names, in the same words as the drawer's
+   * "Sévérité" and the results list (the labSeverityFlag labels): the
+   * server's own grade when it is one of the range grades (so a critical
+   * value reads "Critique" here too), else the marker's position.
+   */
+  stateFlag = computed(() => {
+    const flag = labSeverityFlag(this.result());
+    if (flag === 'CRITICAL' || flag === 'HIGH' || flag === 'LOW' || flag === 'NORMAL') return flag;
+    return ({ low: 'LOW', normal: 'NORMAL', high: 'HIGH' } as const)[
+      this.position()?.state ?? 'normal'
+    ];
+  });
 }

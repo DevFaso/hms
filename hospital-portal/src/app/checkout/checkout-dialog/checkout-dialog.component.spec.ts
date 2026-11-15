@@ -125,7 +125,28 @@ describe('CheckoutDialogComponent', () => {
     expect(component.avs()).toEqual(sampleAvs);
     expect(component.saving()).toBeFalse();
     expect(toastSpy.success).toHaveBeenCalled();
+    // QA D1742: the host hears of it when the summary is closed, not in the same tick.
+    expect(component.checkoutCompleted.emit).not.toHaveBeenCalled();
+  });
+
+  it('QA D1742: after a check-out the summary step shows, takes focus, and Close reports the check-out', async () => {
+    encounterSpy.checkOut.and.returnValue(of(sampleAvs));
+    spyOn(component.checkoutCompleted, 'emit');
+    spyOn(component.dismissed, 'emit');
+    component.followUpInstructions.set('Return in 7 days');
+
+    component.submit();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    const heading = el.querySelector('[data-testid="checkout-avs-title"]');
+    expect(el.querySelector('.avs-preview')).toBeTruthy();
+    expect(document.activeElement).toBe(heading);
+    (el.querySelector('.avs-preview .btn-primary') as HTMLButtonElement).click();
     expect(component.checkoutCompleted.emit).toHaveBeenCalledWith(sampleAvs);
+    expect(component.dismissed.emit).not.toHaveBeenCalled();
   });
 
   it('should show error toast on checkout failure', () => {
@@ -144,6 +165,20 @@ describe('CheckoutDialogComponent', () => {
     component.dischargeDiagnosesText.set('  ');
     component.followUpInstructions.set('');
     expect(component.checkoutBlockReason()).toBe('CHECKOUT.SUMMARY_REQUIRED');
+    component.submit();
+    expect(encounterSpy.checkOut).not.toHaveBeenCalled();
+  });
+
+  // QA D1671: the lines are stored joined by "; " in a 5000-character column.
+  it('QA D1671: diagnoses longer than the stored 5000 in all are not sent, and say so', () => {
+    const line = 'x'.repeat(2499);
+    component.dischargeDiagnosesText.set(`${line}
+${line}`);
+    expect(component.checkoutBlockReason()).toBeNull();
+    component.dischargeDiagnosesText.set(`${line}
+${line}
+x`);
+    expect(component.checkoutBlockReason()).toBe('CHECKOUT.DIAGNOSES_TOO_LONG');
     component.submit();
     expect(encounterSpy.checkOut).not.toHaveBeenCalled();
   });
@@ -246,6 +281,16 @@ describe('CheckoutDialogComponent', () => {
     expect(avsTitle?.textContent).toContain('CHECKOUT.AVS_TITLE');
     expect(el.textContent).toContain('John Doe');
     expect(el.textContent).toContain('Dr Smith');
+  });
+
+  it('2026-11-12: the preview shows the plan, which has left the follow-up text', () => {
+    encounterSpy.checkOut.and.returnValue(of({ ...sampleAvs, clinicalPlan: 'Plan-cdx' }));
+    component.followUpInstructions.set('Repos');
+    component.submit();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="avs-plan"]')?.textContent).toContain('Plan-cdx');
   });
 
   it('should show form when avs is null', () => {

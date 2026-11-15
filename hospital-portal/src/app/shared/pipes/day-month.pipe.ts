@@ -10,16 +10,25 @@ import { serverDateOrInstant } from '../date-utils';
  * every language ("oct. 31"). Angular's date pipe has no locale-ordered
  * day-month format, so this asks `Intl` for one.
  *
+ * Pass withYear for clinical history whose recency must remain unambiguous.
  * Pure: the language is fixed for the page's life (a switch reloads it).
  */
 @Pipe({ name: 'dayMonth', standalone: true })
 export class DayMonthPipe implements PipeTransform {
-  transform(value: Date | string | null | undefined, locale = currentLocale()): string {
+  transform(
+    value: Date | string | null | undefined,
+    locale = currentLocale(),
+    withYear = false,
+  ): string {
     if (value === null || value === undefined || value === '') return '';
     // A bare calendar date is that local day; a server time is read as UTC
     // (serverDateOrInstant), like every other date on screen.
     const date = value instanceof Date ? value : serverDateOrInstant(value);
     if (Number.isNaN(date.getTime())) return '';
-    return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(date);
+    return new Intl.DateTimeFormat(locale, {
+      day: 'numeric',
+      month: 'short',
+      ...(withYear ? { year: 'numeric' as const } : {}),
+    }).format(date);
   }
 }

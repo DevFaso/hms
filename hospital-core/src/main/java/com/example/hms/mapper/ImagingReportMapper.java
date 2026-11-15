@@ -4,6 +4,7 @@ import com.example.hms.model.ImagingReport;
 import com.example.hms.model.ImagingReportAttachment;
 import com.example.hms.model.ImagingReportMeasurement;
 import com.example.hms.model.ImagingReportStatusHistory;
+import com.example.hms.enums.ImagingReportHistoryEvent;
 import com.example.hms.payload.dto.imaging.ImagingReportAttachmentDTO;
 import com.example.hms.payload.dto.imaging.ImagingReportAttachmentRequestDTO;
 import com.example.hms.payload.dto.imaging.ImagingReportMeasurementDTO;
@@ -58,14 +59,46 @@ public class ImagingReportMapper {
                 .replace("{accessionNumber}", accession != null ? accession : "");
     }
 
+    /** QA D1923: the report's patient is its order's. */
+    private static com.example.hms.model.Patient patientOf(ImagingReport report) {
+        return report.getImagingOrder() != null ? report.getImagingOrder().getPatient() : null;
+    }
+
+    /**
+     * QA D1923: the patient's MRN at the report's hospital (else the order's).
+     * A registration row whose hospital is gone leaves the MRN out rather than
+     * failing the read, as the order mapper does.
+     */
+    private static String patientMrnOf(ImagingReport report) {
+        com.example.hms.model.Patient patient = patientOf(report);
+        if (patient == null) {
+            return null;
+        }
+        com.example.hms.model.Hospital hospital = report.getHospital() != null ? report.getHospital()
+            : report.getImagingOrder().getHospital();
+        if (hospital == null || hospital.getId() == null) {
+            return null;
+        }
+        try {
+            return patient.getMrnForHospital(hospital.getId());
+        } catch (jakarta.persistence.EntityNotFoundException
+                 | org.springframework.orm.jpa.JpaObjectRetrievalFailureException ex) {
+            return null;
+        }
+    }
+
     public ImagingReportResponseDTO toResponseDTO(ImagingReport report) {
         if (report == null) {
             return null;
         }
+        com.example.hms.model.Patient patient = patientOf(report);
 
         return ImagingReportResponseDTO.builder()
             .id(report.getId())
             .imagingOrderId(report.getImagingOrder() != null ? report.getImagingOrder().getId() : null)
+            .patientId(patient != null ? patient.getId() : null)
+            .patientDisplayName(patient != null ? patient.getFullName() : null)
+            .patientMrn(patientMrnOf(report))
             .hospitalId(report.getHospital() != null ? report.getHospital().getId() : null)
             .organizationId(report.getOrganization() != null ? report.getOrganization().getId() : null)
             .departmentId(report.getDepartment() != null ? report.getDepartment().getId() : null)
@@ -156,15 +189,11 @@ public class ImagingReportMapper {
         if (request.getReportNumber() != null) {
             report.setReportNumber(request.getReportNumber());
         }
-        report.setStudyInstanceUid(request.getStudyInstanceUid());
-        report.setSeriesInstanceUid(request.getSeriesInstanceUid());
+        // The authoring form's fields are its to replace, so a blank one clears.
         report.setAccessionNumber(request.getAccessionNumber());
-        report.setPacsViewerUrl(request.getPacsViewerUrl());
         report.setModality(request.getModality());
         report.setBodyRegion(request.getBodyRegion());
         report.setReportTitle(request.getReportTitle());
-        report.setPerformedAt(request.getPerformedAt());
-        report.setCompletedAt(request.getCompletedAt());
         report.setTechnique(request.getTechnique());
         report.setFindings(request.getFindings());
         report.setImpression(request.getImpression());
@@ -172,11 +201,42 @@ public class ImagingReportMapper {
         report.setComparisonStudies(request.getComparisonStudies());
         report.setContrastAdministered(request.getContrastAdministered());
         report.setContrastDetails(request.getContrastDetails());
-        report.setRadiationDoseMgy(request.getRadiationDoseMgy());
-        report.setExternalSystemName(request.getExternalSystemName());
-        report.setExternalReportId(request.getExternalReportId());
+        applyPresentAcquisitionFields(report, request);
         synchronizeMeasurements(report, request.getMeasurements());
         synchronizeAttachments(report, request.getAttachments());
+    }
+
+    /**
+     * QA D1822 class (r51): the study's acquisition and source fields (DICOM
+     * UIDs, PACS link, performed and completed times, dose, the external
+     * system's ids) are on no authoring form, so a revision of the draft
+     * erased them. Absent keeps the stored value; a value sent is applied.
+     */
+    private static void applyPresentAcquisitionFields(ImagingReport report, ImagingReportUpsertRequestDTO request) {
+        if (request.getStudyInstanceUid() != null) {
+            report.setStudyInstanceUid(request.getStudyInstanceUid());
+        }
+        if (request.getSeriesInstanceUid() != null) {
+            report.setSeriesInstanceUid(request.getSeriesInstanceUid());
+        }
+        if (request.getPacsViewerUrl() != null) {
+            report.setPacsViewerUrl(request.getPacsViewerUrl());
+        }
+        if (request.getPerformedAt() != null) {
+            report.setPerformedAt(request.getPerformedAt());
+        }
+        if (request.getCompletedAt() != null) {
+            report.setCompletedAt(request.getCompletedAt());
+        }
+        if (request.getRadiationDoseMgy() != null) {
+            report.setRadiationDoseMgy(request.getRadiationDoseMgy());
+        }
+        if (request.getExternalSystemName() != null) {
+            report.setExternalSystemName(request.getExternalSystemName());
+        }
+        if (request.getExternalReportId() != null) {
+            report.setExternalReportId(request.getExternalReportId());
+        }
     }
 
     public void synchronizeMeasurements(ImagingReport report, List<ImagingReportMeasurementRequestDTO> measurementRequests) {
@@ -324,6 +384,7 @@ public class ImagingReportMapper {
             .id(history.getId())
             .status(history.getStatus())
             .statusReason(history.getStatusReason())
+            .eventCode(ImagingReportHistoryEvent.fromStoredText(history.getStatusReason()))
             .changedAt(history.getChangedAt())
             .changedByStaffId(history.getChangedBy() != null ? history.getChangedBy().getId() : null)
             .changedByName(history.getChangedByName())

@@ -16,11 +16,9 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.model.PatientHospitalRegistration;
-import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientUploadedDocumentRepository;
 import com.example.hms.repository.UserRepository;
-import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.FileUploadService;
@@ -60,7 +58,6 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     private final FileUploadService fileUploadService;
     private final PatientDocumentMapper documentMapper;
     private final PatientHospitalRegistrationRepository registrationRepository;
-    private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogService auditEventLogService;
     private final RecordAccessPolicy recordAccessPolicy;
     private final HospitalRepository hospitalRepository;
@@ -71,6 +68,41 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
      * a registration at the acting hospital (QA D504).
      */
     private record StaffReach(String hospitalName, UUID breakGlassSessionId) {
+    }
+
+    /**
+     * QA D1599: the roles that read every type of a patient's upload. Mirrors
+     * {@code PatientDocumentStaffController.READ_ROLES} minus the front desk (a test pins it).
+     * Any other staff caller the controller admits (reception, billing) reads the insurance
+     * type only; failing closed means a caller with none of these gets the narrow view.
+     */
+    public static final java.util.Set<String> CLINICAL_READERS = java.util.Set.of(
+        "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN");
+
+    /** The only type the front desk may open (QA D1599). */
+    static final PatientDocumentType FRONT_DESK_TYPE = PatientDocumentType.INSURANCE_DOCUMENT;
+
+    private static boolean insuranceOnlyCaller() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            return true;
+        }
+        return auth.getAuthorities().stream().noneMatch(a -> CLINICAL_READERS.contains(a.getAuthority()));
+    }
+
+    /** The patient's free-text note on an upload can say anything clinical: the desk never receives it. */
+    private static PatientDocumentResponseDTO forCaller(PatientDocumentResponseDTO dto) {
+        if (dto != null && insuranceOnlyCaller()) {
+            dto.setNotes(null);
+        }
+        return dto;
+    }
+
+    /** A type the front desk may not open reads as a missing document, never as forbidden. */
+    private static void requireTypeVisible(PatientUploadedDocument doc, UUID documentId) {
+        if (insuranceOnlyCaller() && doc.getDocumentType() != FRONT_DESK_TYPE) {
+            throw new ResourceNotFoundException("patientDocument.notFound", documentId);
+        }
     }
 
     @Override
@@ -181,6 +213,14 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
                                                            PatientDocumentType documentType, Pageable pageable) {
         StaffReach reach = requireRegisteredAt(hospitalId, patientId);
         auditBreakGlassRead(hospitalId, patientId, reach, null);
+        if (insuranceOnlyCaller()) {
+            // QA D1599: the front desk lists insurance documents only; asking for another type is an empty page.
+            if (documentType != null && documentType != FRONT_DESK_TYPE) {
+                return Page.empty(pageable);
+            }
+            return documentRepository.findForStaffByType(patientId, hospitalId, FRONT_DESK_TYPE, pageable)
+                    .map(d -> forCaller(documentMapper.toDto(d)));
+        }
         // QA D961: another hospital's certificate is not listed here
         // (requireRegisteredAt refuses a null hospital, so the scope is always set).
         Page<PatientUploadedDocument> page = documentType == null
@@ -203,8 +243,9 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
         StaffReach reach = requireRegisteredAt(hospitalId, patientId);
         PatientUploadedDocument doc = requireOwnDocument(patientId, documentId);
         requireIssuedHereOrUploaded(doc, hospitalId, documentId);
+        requireTypeVisible(doc, documentId);
         auditBreakGlassRead(hospitalId, patientId, reach, doc);
-        return documentMapper.toDto(doc);
+        return forCaller(documentMapper.toDto(doc));
     }
 
     @Override
@@ -213,6 +254,7 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
         StaffReach reach = requireRegisteredAt(hospitalId, patientId);
         PatientUploadedDocument doc = requireOwnDocument(patientId, documentId);
         requireIssuedHereOrUploaded(doc, hospitalId, documentId);
+        requireTypeVisible(doc, documentId);
         java.nio.file.Path path = fileUploadService.resolveStoredFile(doc.getFilePath(), "patient-documents");
         auditStaffDownload(hospitalId, patientId, reach, doc);
         String contentType = doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream";
@@ -299,18 +341,18 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     private void emitDocumentAudit(UUID hospitalId, UUID patientId, StaffReach reach,
                                    PatientUploadedDocument doc, String what) {
         try {
-            UUID actorId = authUtils.resolveUserId(SecurityContextHolder.getContext().getAuthentication())
-                    .orElse(null);
-            UserRoleHospitalAssignment assignment = actorId == null ? null
-                    : assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actorId, hospitalId)
-                            .orElse(null);
+            var auth = SecurityContextHolder.getContext().getAuthentication();
+            UUID actorId = authUtils.resolveUserId(auth).orElse(null);
+            // Resolve the assignment inside logEvent's REQUIRES_NEW transaction.
+            // A failed best-effort audit lookup must not poison this clinical read.
             String description = reach.breakGlassSessionId() == null ? what
                     : what + " under break-the-glass session " + reach.breakGlassSessionId();
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .userName(SecurityUtils.getCurrentUsername())
                     .userId(actorId)
-                    .assignmentId(assignment != null ? assignment.getId() : null)
-                    .roleName(assignment != null && assignment.getRole() != null ? assignment.getRole().getName() : null)
+                    .hospitalId(hospitalId)
+                    .roleName(com.example.hms.security.audit.ActingAssignments.roleName(null,
+                            com.example.hms.security.audit.ActingAssignments.actingRoles(auth)))
                     .hospitalName(reach.hospitalName())
                     .patientId(patientId)
                     .eventType(AuditEventType.DATA_ACCESS)

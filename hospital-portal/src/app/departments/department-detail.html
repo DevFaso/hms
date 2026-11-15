@@ -19,7 +19,7 @@
       <div class="header-info">
         <h1>{{ dept.name }}</h1>
         <div class="header-meta">
-          <span class="meta-tag code">{{ dept.code }}</span>
+          <span class="meta-tag code">{{ dept.departmentCode }}</span>
           @if (dept.hospitalName) {
             <span class="meta-tag">
               <span class="material-symbols-outlined">local_hospital</span>
@@ -63,7 +63,7 @@
             </div>
             <div class="info-row">
               <span class="label">{{ 'DEPARTMENTS.CODE' | translate }}</span
-              ><span class="value">{{ dept.code }}</span>
+              ><span class="value">{{ dept.departmentCode }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'DEPARTMENTS.DESCRIPTION' | translate }}</span

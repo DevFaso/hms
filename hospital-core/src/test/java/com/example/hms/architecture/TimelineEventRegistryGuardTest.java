@@ -81,6 +81,8 @@ class TimelineEventRegistryGuardTest {
 
     /** Patient-owned entities that are not chronology events, each with why. Decide before adding one. */
     static final Map<String, String> NOT_EVENTS = Map.ofEntries(
+        // r53: never on the chronology, which reception, proxies and other hospitals' shared views can reach.
+        Map.entry("SafeguardingReview", "a confidential child-protection review, read only through SafeguardingReviewController"),
         Map.entry("Admission", "the stay is on the chronology as its INPATIENT encounter row (AdmissionStayEncounterService)"),
         Map.entry("TransferOrder", "a bed/ward move inside the stay; the stay's encounter row carries the stay"),
         Map.entry("DischargeApproval", "the nurse's request to discharge; the outcome is the discharge summary row"),
@@ -92,6 +94,7 @@ class TimelineEventRegistryGuardTest {
         Map.entry("BillingInvoice", "billing, not clinical"),
         Map.entry("OrderReviewHold", "a review of orders already on the chronology; audited, and on the chart's review list"),
         Map.entry("DeathDispute", "a review of the death row already on the chronology; audited, and on the mortality register"),
+        Map.entry("FetalDeathEvent", "QA D1714: a stillborn baby of the mother's delivery, shown on that delivery record and on the mortality register; the delivery is the chronology row"),
         Map.entry("PharmacyClaim", "billing, not clinical"),
         Map.entry("PharmacyPayment", "billing, not clinical"),
         Map.entry("PharmacySale", "a sale; the prescription row is the clinical event"),
@@ -132,6 +135,7 @@ class TimelineEventRegistryGuardTest {
         Map.entry("PatientTreatmentConsent", "consent administration, not care"),
         Map.entry("PatientRecordSharingOptOut", "a privacy preference"),
         Map.entry("PatientProxy", "a family-access grant, not care"),
+        Map.entry("DeliveryNewborn", "links a baby to the delivery that registered it (QA D1592); the birth is the DELIVERY event"),
         Map.entry("PatientPrimaryCare", "an administrative assignment"),
         Map.entry("PanelAssignment", "an administrative assignment"),
         Map.entry("PatientHospitalRegistration", "registration at a hospital, not care"),

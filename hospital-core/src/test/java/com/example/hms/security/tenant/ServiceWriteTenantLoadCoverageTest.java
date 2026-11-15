@@ -131,6 +131,7 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("LabOrderServiceImpl.namedAssignment#findById", ACTOR),
         entry("LabReflexRuleServiceImpl.loadTestDef#findById", SHARED),
         entry("LegacyAllergyTextBackfillWorker.backfillOne#findByIdUnscoped", SYSTEM),
+        entry("FetalDeathEventService.backfillHistorical#findById", SYSTEM + " (QA D1714: the startup backfill re-reads a delivery its own query selected; the event is created at that delivery's hospital)"),
         entry("MllpAllowedSenderServiceImpl.deactivate#findById", SUPER_ADMIN),
         entry("MllpAllowedSenderServiceImpl.update#findById", SUPER_ADMIN),
         entry("MllpInboundAdtServiceImpl.processAdt#findByIdUnscoped", "HL7 inbound: bound to the sender's receiving hospital, not a user scope"),
@@ -167,6 +168,7 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("RecordAccessPolicyImpl.unlessRestricted#findByIdUnscoped", "the access policy itself decides reach"),
         entry("RecordSharingOptOutServiceImpl.requirePatient#findByIdUnscoped", PATIENT),
         entry("ReferralExpiryPersistence.tryExpire#findById", SYSTEM),
+        entry("UnsignedNoteFollowUp.remindOverdue#findById", SYSTEM + " (the note the reminder row names; the reminder stays at that row's hospital, for its author)"),
         entry("SignableReportLocator.owningHospitalId#findById", "resolves the owning hospital FOR the caller's check"),
         entry("StaffSchedulingServiceImpl.findStaff#findById", ACTOR),
         entry("StaffServiceImpl.findStaffOrThrow#findById", CALLER_CHECKS + " (requireHospitalScope)"),
@@ -264,7 +266,9 @@ class ServiceWriteTenantLoadCoverageTest {
             String body = source.substring(method.end(), i);
             if (body.contains("pcpRepo.findByPatient_Id")) {
                 reads++;
-                if (!body.contains("actingHospitalIdOrNullForGlobal") && !body.contains("TenantOwnership.require")) {
+                // QA D1850: the patient's own cross-hospital read is bound to the caller instead.
+                if (!body.contains("actingHospitalIdOrNullForGlobal") && !body.contains("TenantOwnership.require")
+                    && !body.contains("requireCallerIsThePatient(patientId)")) {
                     unscoped.add(method.group(1));
                 }
             }

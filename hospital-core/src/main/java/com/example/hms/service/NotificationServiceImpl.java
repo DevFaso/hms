@@ -107,6 +107,16 @@ public class NotificationServiceImpl implements NotificationService {
         return notificationRepository.markReadForSubject(subjectId, types);
     }
 
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public int withdrawForSubjects(String recipientUsername, String type, java.util.Collection<UUID> subjectIds) {
+        if (recipientUsername == null || recipientUsername.isBlank() || type == null
+                || subjectIds == null || subjectIds.isEmpty()) {
+            return 0;
+        }
+        return notificationRepository.deleteForRecipientAndSubjects(recipientUsername, type, subjectIds);
+    }
+
     /** {@code security.notifications.message} is VARCHAR(255); a longer body fails the INSERT. */
     static final int MAX_MESSAGE_LENGTH = 255;
 

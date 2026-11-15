@@ -100,7 +100,9 @@ public class EligibilityServiceImpl implements EligibilityService {
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
         PatientInsurance insurance = null;
         if (request.getPatientInsuranceId() != null) {
+            // QA D1651 class: another hospital's coverage answers as a missing row.
             insurance = patientInsuranceRepository.findById(request.getPatientInsuranceId())
+                .filter(row -> row.isVisibleAt(hospital.getId()))
                 .orElseThrow(() -> new ResourceNotFoundException("patientinsurance.notfound", request.getPatientInsuranceId()));
             if (insurance.getPatient() != null
                 && !insurance.getPatient().getId().equals(patient.getId())) {

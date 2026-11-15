@@ -411,9 +411,12 @@ public class BreakGlassServiceImpl implements BreakGlassService {
         // The actor's ACTIVE assignment at the session's hospital: without it
         // the audit service took the first user_roles link, and a nurse role
         // from an inactive assignment at another hospital was filed against
-        // a doctor's break-glass (QA D110, D165).
+        // a doctor's break-glass (QA D110, D165). Of those, the one of the role
+        // the token acts under (QA D1632).
         UUID actingAssignmentId = user != null && user.getId() != null && hospital != null && hospital.getId() != null
-            ? assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospital.getId())
+            ? com.example.hms.security.audit.ActingAssignments.resolve(assignmentRepository, user.getId(),
+                    hospital.getId(), org.springframework.security.core.context.SecurityContextHolder.getContext()
+                        .getAuthentication())
                 .map(com.example.hms.model.UserRoleHospitalAssignment::getId)
                 .orElse(null)
             : null;

@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.utility.RoleValidator;
 import com.example.hms.model.Announcement;
 import com.example.hms.model.Hospital;
@@ -9,7 +10,7 @@ import com.example.hms.model.User;
 import com.example.hms.payload.dto.AnnouncementResponseDTO;
 import com.example.hms.repository.AnnouncementRepository;
 import com.example.hms.repository.HospitalRepository;
-import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.context.HospitalContextHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +31,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     private final AnnouncementRepository announcementRepository;
     private final HospitalRepository hospitalRepository;
     private final NotificationService notificationService;
-    private final UserRepository userRepository;
+    private final UserRoleHospitalAssignmentRepository assignmentRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -86,6 +87,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     @Override
     @Transactional
     public AnnouncementResponseDTO createAnnouncement(String text) {
+        requireText(text);
         UUID hospitalId = currentHospitalId();
         if (hospitalId == null && !HospitalContextHolder.getContextOrEmpty().isGlobalView()) {
             // Only a super-admin in global view posts a platform-wide announcement.
@@ -100,18 +102,16 @@ public class AnnouncementServiceImpl implements AnnouncementService {
         AnnouncementResponseDTO saved = toDTO(announcementRepository.save(announcement));
 
         // One key for every recipient, rendered in each reader's language
-        // when read (QA D665); announcements never reach patients (filtered
-        // below). The announcement text itself is shown as typed.
+        // when read (QA D665). The announcement text itself is shown as typed.
+        // QA D1610: a hospital's announcement reaches that hospital's staff
+        // (an active, non-patient assignment there) and nobody else; only a
+        // super-admin's platform-wide one (global view, no hospital) reaches
+        // the staff of every hospital. Patients are never recipients.
         Object[] notificationArgs = {text};
-        List<User> activeUsers = userRepository.findByIsDeletedFalse();
-        for (User user : activeUsers) {
-            // Announcements are internal — skip pure-patient users
-            boolean isOnlyPatient = user.getUserRoles().stream()
-                    .allMatch(ur -> "PATIENT".equalsIgnoreCase(ur.getRole().getCode())
-                            || "ROLE_PATIENT".equalsIgnoreCase(ur.getRole().getCode()));
-            if (user.getUserRoles().isEmpty() || isOnlyPatient) {
-                continue;
-            }
+        List<User> recipients = hospitalId != null
+            ? assignmentRepository.findLiveStaffUsersAtHospital(hospitalId)
+            : assignmentRepository.findLiveStaffUsersPlatformWide();
+        for (User user : recipients) {
             try {
                 notificationService.createNotification("announcement.new.notification", notificationArgs,
                     user.getUsername(), "ANNOUNCEMENT");
@@ -130,6 +130,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
             .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException(ANNOUNCEMENT_NOT_FOUND_KEY, id));
         // QA r5 tenancy sweep: a write loads under the tenant guard.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(announcement.getHospital(), ANNOUNCEMENT_NOT_FOUND_KEY, id);
+        requireText(text);
         announcement.setText(text);
         return toDTO(announcementRepository.save(announcement));
     }
@@ -142,6 +143,13 @@ public class AnnouncementServiceImpl implements AnnouncementService {
             .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException(ANNOUNCEMENT_NOT_FOUND_KEY, id));
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(announcement.getHospital(), ANNOUNCEMENT_NOT_FOUND_KEY, id);
         announcementRepository.delete(announcement);
+    }
+
+    /** QA D1615: a blank announcement is refused, naming the field, before anything is stored or sent. */
+    private static void requireText(String text) {
+        if (text == null || text.isBlank()) {
+            throw new FieldBusinessException("text", "announcement.text.required");
+        }
     }
 
     private AnnouncementResponseDTO toDTO(Announcement announcement) {

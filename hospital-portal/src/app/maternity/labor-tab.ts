@@ -7,6 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -23,10 +24,15 @@ import {
   DeliveryMode,
   InfantSex,
   PerinealTear,
+  LaborTransferRequest,
+  BabyOutcome,
 } from '../services/labor.service';
+import { HospitalService, HospitalDirectoryEntry } from '../services/hospital.service';
+import { actionRoles } from '../core/action-permissions';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
+import { RoleContextService } from '../core/role-context.service';
 import { labelledRefusalReason, refusedFieldReasons } from '../shared/refusal-reason';
 import { FieldLimit, firstOutOfRange, labelKeysOf, rangeMessage } from '../shared/field-limits';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
@@ -90,6 +96,7 @@ const DELIVERY_LABELS: Record<string, string> = {
   birthDateTime: 'LABOR.BIRTH_TIME',
   placentaDeliveredAt: 'LABOR.PLACENTA_TIME',
   recentDeliveryOverrideReason: 'LABOR.RECENT_DELIVERY_OVERRIDE',
+  bornBeforeArrivalReason: 'LABOR.BORN_BEFORE_ARRIVAL_REASON',
 };
 const EPISODE_LABELS: Record<string, string> = {
   ...labelKeysOf(EPISODE_LIMITS),
@@ -128,11 +135,16 @@ const DELIVERY_BIRTH_TIME_ID = 'dl-time';
 const DELIVERY_PLACENTA_TIME_ID = 'dl-placenta-time';
 const DELIVERY_FIELD_IDS: Readonly<Record<string, string>> = {
   numberOfInfants: 'dl-infants',
+  // QA D1714: a refusal of the babies' outcomes marks the first baby's outcome.
+  babies: 'dl-baby-1',
+  liveBirth: 'dl-baby-1',
   birthWeightGrams: 'dl-weight',
   apgarOneMinute: 'dl-apgar1',
   apgarFiveMinute: 'dl-apgar5',
   estimatedBloodLossMl: 'dl-ebl',
   recentDeliveryOverrideReason: 'dl-override',
+  bornBeforeArrivalReason: 'dl-bba-reason',
+  bornBeforeArrival: 'dl-bba',
 };
 
 /**
@@ -152,6 +164,26 @@ const DELIVERY_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
   placentaDeliveredAt: DELIVERY_PLACENTA_TIME_ID,
 };
 const PARTOGRAPH_IDS = Object.values(PARTOGRAPH_SERVER_FIELD_IDS);
+
+/**
+ * Labour transfer (provisional rule, 2026-11-12, pending clinical approval):
+ * the template id of each field the transfer and arrival dialogs, and the
+ * server's refusals of them, may mark.
+ */
+const TRANSFER_FIELD_IDS: Readonly<Record<string, string>> = {
+  destinationHospitalId: 'lt-destination',
+  reason: 'lt-reason',
+};
+const TRANSFER_IDS = Object.values(TRANSFER_FIELD_IDS);
+const TRANSFER_LABELS: Record<string, string> = {
+  destinationHospitalId: 'LABOR.TRANSFER.DESTINATION',
+  reason: 'LABOR.TRANSFER.REASON',
+};
+const ARRIVAL_FIELD_IDS: Readonly<Record<string, string>> = { reason: 'la-reason' };
+const ARRIVAL_IDS = Object.values(ARRIVAL_FIELD_IDS);
+const ARRIVAL_LABELS: Record<string, string> = { reason: 'LABOR.TRANSFER.REASON' };
+/** LaborTransferRequestDTO's bound on the reason. */
+export const TRANSFER_REASON_MAX = 2000;
 const DELIVERY_IDS = [
   DELIVERY_BIRTH_TIME_ID,
   DELIVERY_MODE_ID,
@@ -173,6 +205,7 @@ const DELIVERY_IDS = [
     TranslateModule,
     PatientPickerComponent,
     PartographChartComponent,
+    RouterLink,
   ],
   templateUrl: './labor-tab.html',
   styleUrl: './maternity.scss',
@@ -183,6 +216,8 @@ export class LaborTabComponent {
   private readonly laborService = inject(LaborService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly roleContext = inject(RoleContextService);
+  private readonly hospitalService = inject(HospitalService);
 
   patient = signal<PatientResponse | null>(null);
   episodes = signal<LaborEpisodeResponse[]>([]);
@@ -197,6 +232,68 @@ export class LaborTabComponent {
   );
   /** Newest episode of any status — drives the delivered-summary view. */
   readonly latestEpisode = computed(() => this.episodes()[0] ?? null);
+  /**
+   * QA D1631: the active labour is another hospital's (a shared patient). It
+   * is shown read only, named, with no record button: the server refuses
+   * every write on it, and a second labour while it is open.
+   */
+  readonly activeEpisodeForeign = computed(() => {
+    const episode = this.activeEpisode();
+    return !!episode && this.isForeign(episode);
+  });
+
+  /**
+   * QA D1631, the shared-patient read-only idiom (#1103): a record another
+   * hospital owns is read only here. Judged against the hospital the requests
+   * are pinned to; in global view (no scope) nothing is "elsewhere".
+   */
+  isForeign(record: { hospitalId?: string | null }): boolean {
+    const scope = this.roleContext.effectiveHospitalIdForRequest();
+    return !!record.hospitalId && !!scope && record.hospitalId !== scope;
+  }
+
+  /* ── Labour transfer (provisional rule, 2026-11-12) ───────── */
+
+  /**
+   * "Transférer": the active labour is this hospital's, and the caller may
+   * admit a labour (a doctor; a midwife, #1102). The server also requires the
+   * role at this hospital.
+   */
+  readonly canTransfer = computed(
+    () =>
+      !!this.activeEpisode() &&
+      !this.activeEpisodeForeign() &&
+      this.roleContext.hasAnyActiveRole(actionRoles('laborTransfer')),
+  );
+  /** "Arrivée sans transmission": the active labour is another hospital's, shown read only here. */
+  readonly canRecordArrival = computed(
+    () =>
+      this.activeEpisodeForeign() &&
+      this.roleContext.hasAnyActiveRole(actionRoles('laborArrivalWithoutHandover')),
+  );
+  /** The episode the active one continues (a transfer or an arrival), when this hospital may read it. */
+  readonly previousEpisode = computed(() => {
+    const from = this.activeEpisode()?.transferredFromEpisodeId;
+    return from ? (this.episodes().find((episode) => episode.id === from) ?? null) : null;
+  });
+  /** The partograph of the episode the active one continues: read only. */
+  previousEntries = signal<PartographEntryResponse[]>([]);
+  /** The newest episode when it closed by a transfer or an arrival elsewhere, and none is active. */
+  readonly closedByTransfer = computed(() => {
+    const latest = this.latestEpisode();
+    return !this.activeEpisode() &&
+      latest &&
+      (latest.status === 'TRANSFERRED_OUT' || latest.status === 'LEFT_WITHOUT_HANDOVER')
+      ? latest
+      : null;
+  });
+
+  transferOpen = signal(false);
+  transferForm: Partial<LaborTransferRequest> = {};
+  destinations = signal<HospitalDirectoryEntry[]>([]);
+  arrivalOpen = signal(false);
+  arrivalReason = '';
+  readonly transferReasonMax = TRANSFER_REASON_MAX;
 
   /* ── Forms ─────────────────────────────────────────────── */
   startFormOpen = signal(false);
@@ -204,7 +301,10 @@ export class LaborTabComponent {
   entryFormOpen = signal(false);
   entryForm: PartographEntryRequest = {};
   deliveryFormOpen = signal(false);
-  deliveryForm: Partial<DeliveryRecordRequest> = { liveBirth: true, numberOfInfants: 1 };
+  deliveryForm: Partial<DeliveryRecordRequest> = { numberOfInfants: 1 };
+  /** QA D1714: one outcome per baby, LIVE or STILLBORN, so mixed twins can be recorded. */
+  babyOutcomes: BabyOutcome[] = ['LIVE'];
+  readonly babyOutcomeChoices: readonly BabyOutcome[] = ['LIVE', 'STILLBORN'];
 
   readonly membraneStatuses: MembraneStatus[] = [
     'INTACT',
@@ -241,6 +341,9 @@ export class LaborTabComponent {
     this.patient.set(patient);
     this.episodes.set([]);
     this.entries.set([]);
+    this.previousEntries.set([]);
+    this.transferOpen.set(false);
+    this.arrivalOpen.set(false);
     this.delivery.set(null);
     this.startFormOpen.set(false);
     this.deliveryFormOpen.set(false);
@@ -262,6 +365,7 @@ export class LaborTabComponent {
             this.loadDelivery(patientId, current.id);
           }
         }
+        this.loadPreviousEntries(patientId, current?.transferredFromEpisodeId ?? null);
       },
       error: () => {
         this.toast.error(this.translate.instant('LABOR.LOAD_ERROR'));
@@ -274,6 +378,19 @@ export class LaborTabComponent {
     this.laborService.entries(patientId, episodeId).subscribe({
       next: (entries) => this.entries.set(entries),
       error: () => this.toast.error(this.translate.instant('LABOR.LOAD_ERROR')),
+    });
+  }
+
+  /**
+   * Labour transfer: the partograph charted before the transfer, at the other
+   * hospital, read only. Not readable here (the sharing rule) leaves it empty.
+   */
+  private loadPreviousEntries(patientId: string, episodeId: string | null): void {
+    this.previousEntries.set([]);
+    if (!episodeId) return;
+    this.laborService.entries(patientId, episodeId).subscribe({
+      next: (entries) => this.previousEntries.set(entries),
+      error: () => this.previousEntries.set([]),
     });
   }
 
@@ -468,6 +585,14 @@ export class LaborTabComponent {
     return this.recentDeliveryBefore(new Date(), null);
   }
 
+  /**
+   * QA r46 (provisional, pending clinical sign-off): the active episode continues a labour from
+   * another hospital, so a birth before her arrival (in transit) may be recorded, marked and explained.
+   */
+  bornBeforeArrivalOffered(): boolean {
+    return !!this.activeEpisode()?.transferredFromEpisodeId;
+  }
+
   /** The delivery form's override reason is required: another birth is recent. */
   deliveryOverrideRequired(): boolean {
     const at = localInputInstant(this.deliveryForm.birthDateTime) ?? new Date();
@@ -492,8 +617,38 @@ export class LaborTabComponent {
   /* ── Delivery ──────────────────────────────────────────── */
 
   openDeliveryForm(): void {
-    this.deliveryForm = { liveBirth: true, numberOfInfants: 1 };
+    this.deliveryForm = { numberOfInfants: 1 };
+    this.babyOutcomes = ['LIVE'];
     this.deliveryFormOpen.set(true);
+  }
+
+  /** QA D1714: the birth orders the form asks an outcome for (1 to the number of infants, at most 5). */
+  babyOrders(): number[] {
+    const count = Math.min(
+      Math.max(Math.trunc(Number(this.deliveryForm.numberOfInfants) || 1), 1),
+      5,
+    );
+    return Array.from({ length: count }, (_, i) => i + 1);
+  }
+
+  /** QA D1714: the outcome of each baby, in birth order; a baby not yet set is live. */
+  deliveryBabies(): { birthOrder: number; outcome: BabyOutcome }[] {
+    return this.babyOrders().map((order) => ({
+      birthOrder: order,
+      outcome: this.babyOutcomes[order - 1] ?? 'LIVE',
+    }));
+  }
+
+  setBabyOutcome(order: number, outcome: BabyOutcome): void {
+    const next = [...this.babyOutcomes];
+    for (let i = next.length; i < order; i++) next.push('LIVE');
+    next[order - 1] = outcome;
+    this.babyOutcomes = next;
+  }
+
+  /** QA D1714: a stillborn baby of this delivery has its fetal-death event (counted on the mortality register). */
+  hasFetalDeathEvent(record: DeliveryRecordResponse): boolean {
+    return (record.babies ?? []).some((baby) => !!baby.fetalDeathEventId);
   }
 
   cancelDelivery(): void {
@@ -523,14 +678,32 @@ export class LaborTabComponent {
       .recordDelivery(
         patient.id,
         episode.id,
-        withServerDateTimes(this.deliveryForm as DeliveryRecordRequest, [
-          'birthDateTime',
-          'placentaDeliveredAt',
-        ]),
+        withServerDateTimes(
+          {
+            ...(this.deliveryForm as DeliveryRecordRequest),
+            liveBirth: undefined,
+            numberOfInfants: this.babyOrders().length,
+            babies: this.deliveryBabies(),
+          },
+          ['birthDateTime', 'placentaDeliveredAt'],
+        ),
       )
       .subscribe({
         next: (delivery) => {
           this.toast.success(this.translate.instant('LABOR.DELIVERY_SAVED'));
+          // QA D1592: the babies the birth registered are named with their MRN.
+          if (delivery.newbornRegistrationPending) {
+            this.toast.error(this.translate.instant('LABOR.NEWBORN_REGISTRATION_PENDING'));
+          }
+          const babies = delivery.newborns ?? [];
+          if (babies.length > 0) {
+            this.toast.success(
+              this.translate.instant('LABOR.NEWBORNS_REGISTERED', {
+                count: babies.length,
+                names: babies.map((b) => `${b.displayName ?? '—'} (${b.mrn ?? '—'})`).join(', '),
+              }),
+            );
+          }
           for (const alert of delivery.alerts ?? []) {
             if (alert.severity === 'URGENT') {
               this.toast.error(alert.message);
@@ -573,7 +746,34 @@ export class LaborTabComponent {
       .map((entry) => fromServerDateTime(entry.observationTime))
       .filter((when): when is Date => when !== null)
       .reduce<Date | null>((latest, when) => (!latest || when > latest ? when : latest), null);
-    if (typedBirth && lastObservation && typedBirth < lastObservation) {
+    if (
+      this.deliveryForm.bornBeforeArrival &&
+      !(this.deliveryForm.bornBeforeArrivalReason ?? '').trim()
+    ) {
+      return {
+        id: DELIVERY_FIELD_IDS['bornBeforeArrivalReason'],
+        message: this.translate.instant('LABOR.BORN_BEFORE_ARRIVAL_REASON_REQUIRED'),
+      };
+    }
+    // Rex on #1140: a birth declared before her arrival is bounded by the episodes she came from (the
+    // server checks them), never by what this hospital charted once she was here.
+    const declaredBeforeArrival =
+      this.bornBeforeArrivalOffered() && !!this.deliveryForm.bornBeforeArrival;
+    // Rex on #1140: observed here in labour before the birth means she had arrived; the server refuses the same.
+    const firstObservation = this.entries()
+      .map((entry) => fromServerDateTime(entry.observationTime))
+      .filter((when): when is Date => when !== null)
+      .reduce<Date | null>(
+        (earliest, when) => (!earliest || when < earliest ? when : earliest),
+        null,
+      );
+    if (declaredBeforeArrival && firstObservation && birth >= firstObservation) {
+      return {
+        id: DELIVERY_FIELD_IDS['bornBeforeArrival'],
+        message: this.translate.instant('LABOR.BORN_BEFORE_ARRIVAL_AFTER_OBSERVATION'),
+      };
+    }
+    if (typedBirth && lastObservation && typedBirth < lastObservation && !declaredBeforeArrival) {
       return {
         id: DELIVERY_BIRTH_TIME_ID,
         message: this.translate.instant('LABOR.BIRTH_BEFORE_LAST_ENTRY'),
@@ -587,6 +787,108 @@ export class LaborTabComponent {
       };
     }
     return null;
+  }
+
+  /* ── Labour transfer dialogs ───────────────────────────── */
+
+  openTransfer(): void {
+    this.transferForm = {};
+    this.transferOpen.set(true);
+    if (this.destinations().length === 0) {
+      this.hospitalService.directory().subscribe({
+        next: (hospitals) => {
+          const here = this.roleContext.effectiveHospitalIdForRequest();
+          this.destinations.set((hospitals ?? []).filter((hospital) => hospital.id !== here));
+        },
+        error: () => this.destinations.set([]),
+      });
+    }
+  }
+
+  cancelTransfer(): void {
+    this.transferOpen.set(false);
+  }
+
+  submitTransfer(): void {
+    const patient = this.patient();
+    const episode = this.activeEpisode();
+    if (!patient || !episode || !this.canTransfer()) return;
+    const reason = (this.transferForm.reason ?? '').trim();
+    const missing = [
+      this.transferForm.destinationHospitalId ? null : TRANSFER_FIELD_IDS['destinationHospitalId'],
+      reason ? null : TRANSFER_FIELD_IDS['reason'],
+    ].filter((id): id is string => id !== null);
+    if (missing.length > 0) {
+      const message = this.translate.instant('LABOR.TRANSFER.REQUIRED');
+      refuseFields(this.host.nativeElement, missing, TRANSFER_IDS, message);
+      this.toast.error(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], TRANSFER_IDS, '');
+    this.saving.set(true);
+    this.laborService
+      .transfer(patient.id, episode.id, {
+        destinationHospitalId: this.transferForm.destinationHospitalId,
+        reason,
+      })
+      .subscribe({
+        next: () => {
+          this.toast.success(this.translate.instant('LABOR.TRANSFER.DONE'));
+          this.saving.set(false);
+          this.transferOpen.set(false);
+          this.loadEpisodes(patient.id);
+        },
+        error: (err: unknown) => {
+          this.markServerRefusals(err, TRANSFER_FIELD_IDS, TRANSFER_IDS);
+          this.toast.error(
+            labelledRefusalReason(err, this.translate, TRANSFER_LABELS) ??
+              this.translate.instant('LABOR.TRANSFER.ERROR'),
+          );
+          this.saving.set(false);
+        },
+      });
+  }
+
+  openArrival(): void {
+    this.arrivalReason = '';
+    this.arrivalOpen.set(true);
+  }
+
+  cancelArrival(): void {
+    this.arrivalOpen.set(false);
+  }
+
+  submitArrival(): void {
+    const patient = this.patient();
+    const episode = this.activeEpisode();
+    if (!patient || !episode || !this.canRecordArrival()) return;
+    const reason = this.arrivalReason.trim();
+    if (!reason) {
+      const message = this.translate.instant('LABOR.TRANSFER.REASON_REQUIRED');
+      refuseFields(this.host.nativeElement, [ARRIVAL_FIELD_IDS['reason']], ARRIVAL_IDS, message);
+      this.toast.error(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], ARRIVAL_IDS, '');
+    this.saving.set(true);
+    this.laborService.arrivalWithoutHandover(patient.id, episode.id, { reason }).subscribe({
+      next: () => {
+        this.toast.success(
+          this.translate.instant('LABOR.ARRIVAL.DONE', { hospital: episode.hospitalName || '—' }),
+        );
+        this.saving.set(false);
+        this.arrivalOpen.set(false);
+        this.loadEpisodes(patient.id);
+      },
+      error: (err: unknown) => {
+        this.markServerRefusals(err, ARRIVAL_FIELD_IDS, ARRIVAL_IDS);
+        this.toast.error(
+          labelledRefusalReason(err, this.translate, ARRIVAL_LABELS) ??
+            this.translate.instant('LABOR.ARRIVAL.ERROR'),
+        );
+        this.saving.set(false);
+      },
+    });
   }
 
   /* ── Display helpers ───────────────────────────────────── */

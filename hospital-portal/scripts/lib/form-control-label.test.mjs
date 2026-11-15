@@ -17,13 +17,13 @@ const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 
 
 /** D993 (round 16): unnamed controls left in files this branch does not own. */
 const KNOWN = {
-  'admin-assignments/admin-assignments.html': 3,
-  'admin-governance/matrix-tab.html': 5,
+  'admin-assignments/admin-assignments.html': 1,
+  'admin-governance/matrix-tab.html': 3,
   'admin-governance/users-tab.html': 1,
   'chat/chat.html': 1,
   'consultations/consultations.html': 1,
   'departments/department-list.html': 2,
-  'digital-signatures/digital-signatures.html': 3,
+  'digital-signatures/digital-signatures.html': 1,
   'discharge/discharge.html': 7,
 };
 

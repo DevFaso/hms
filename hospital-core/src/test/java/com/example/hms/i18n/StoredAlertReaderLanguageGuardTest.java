@@ -60,10 +60,18 @@ class StoredAlertReaderLanguageGuardTest {
         Map.entry("service/ImagingCriticalNotificationService.java", "an SMS: the recipient's phone has no session"),
         Map.entry("service/impl/LaborServiceImpl.java", ALERT + "; the override note joins what the user typed"),
         Map.entry("service/impl/NewbornAssessmentServiceImpl.java", ALERT),
+        Map.entry("service/maternity/NewbornRegistrationService.java", STORED_RECORD
+            + ": the baby's provisional name and contact relationship (QA D1592), which the desk edits"),
         Map.entry("service/impl/PostpartumCareServiceImpl.java", ALERT + "; the escalation reason is never returned"),
         Map.entry("service/impl/PatientPortalServiceImpl.java", "the refill e-mail to staff; the bell is keyed (D665)"),
         Map.entry("service/impl/TransfusionServiceImpl.java", NOTICE),
         Map.entry("service/impl/DeathDisputeServiceImpl.java", NOTICE),
+        // QA D1802: the reconciliation task of a contradicted stillbirth certificate; the reader's copy is keyed.
+        Map.entry("service/maternity/StillbirthCertificateConflicts.java", NOTICE),
+        // r53: the safeguarding task and the senior obstetric review request; the reader's copy is keyed.
+        Map.entry("service/safeguarding/SafeguardingReviewWorker.java", NOTICE),
+        // Provisional rule 1 (2026-11-15): the billing task of an urgent study done without its pre-authorisation; keyed.
+        Map.entry("service/imaging/ImagingPreAuthorisationFollowUp.java", NOTICE),
         // QA D1516: the note on an appointment a death entered in error had cancelled, beside the closure's own.
         Map.entry("service/impl/MortalityServiceImpl.java", STORED_RECORD),
         Map.entry("service/impl/OrderReviewAfterCommit.java", NOTICE),
@@ -72,6 +80,7 @@ class StoredAlertReaderLanguageGuardTest {
         Map.entry("service/LabResultServiceImpl.java", NOTICE),
         Map.entry("service/PrescriptionServiceImpl.java", NOTICE),
         Map.entry("service/allergy/CurrentAllergyRecheck.java", NOTICE),
+        Map.entry("service/UnsignedNoteFollowUp.java", NOTICE),
         Map.entry("service/maternity/ObstetricAlertEscalationWorker.java", NOTICE),
         Map.entry("service/NotificationServiceImpl.java", NOTICE),
         Map.entry("service/pro/ProScreeningEscalationService.java", "an SMS: the recipient's phone has no session"));

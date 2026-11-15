@@ -54,6 +54,9 @@ class PartialUniqueReleaseFlushGuardTest {
     /** Table of each partial unique index -> the entity that writes it. */
     private static final Map<String, String> ENTITY_OF_TABLE = Map.ofEntries(
         Map.entry("death_records", "DeathRecord"),
+        Map.entry("fetal_death_events", "FetalDeathEvent"),
+        // r53: one open safeguarding review per patient and hospital; recording it releases the slot.
+        Map.entry("safeguarding_reviews", "SafeguardingReview"),
         Map.entry("death_disputes", "DeathDispute"),
         Map.entry("order_review_holds", "OrderReviewHold"),
         Map.entry("patient_blood_groups", "PatientBloodGroup"),
@@ -76,6 +79,10 @@ class PartialUniqueReleaseFlushGuardTest {
         Map.entry("encounters", "Encounter"),
         Map.entry("user_role_hospital_assignment", "UserRoleHospitalAssignment"),
         Map.entry("billing_invoices", "BillingInvoice"),
+        // QA D1613 (V288): one live claim per dispense; a rejection releases the slot.
+        Map.entry("pharmacy_claims", "PharmacyClaim"),
+        // V290: one active labour per patient; a transfer closes the source before it opens the next.
+        Map.entry("labor_episodes", "LaborEpisode"),
         Map.entry("smart_phrases", "SmartPhrase"));
 
     /** Indexes whose rows no setter can release: the slot is the row's own key, not its state. */

@@ -98,6 +98,14 @@
                     <span class="dv">{{ enc.diagnosisSummary }}</span>
                   </div>
                 }
+                @if (enc.notePendingSignature) {
+                  <div class="detail-item detail-item-wide">
+                    <span class="dl">{{ 'PORTAL.VISITS.ASSESSMENT' | translate }}</span>
+                    <span class="dv note-pending">{{
+                      'PORTAL.VISITS.PENDING_SIGNATURE' | translate
+                    }}</span>
+                  </div>
+                }
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.VISITS.STATUS' | translate }}</span>
                   {{ ' '

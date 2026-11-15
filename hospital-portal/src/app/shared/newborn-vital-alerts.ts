@@ -5,13 +5,18 @@
  */
 export interface NewbornVitalAlert {
   code: string;
-  severity: 'URGENT' | 'CAUTION' | 'INFO';
+  severity: 'URGENT' | 'WARNING' | 'CAUTION' | 'INFO';
   type: string;
   /** Already in the recorder's language. */
   message: string;
 }
 
-const ORDER: Record<NewbornVitalAlert['severity'], number> = { URGENT: 0, CAUTION: 1, INFO: 2 };
+const ORDER: Record<NewbornVitalAlert['severity'], number> = {
+  URGENT: 0,
+  WARNING: 1,
+  CAUTION: 1,
+  INFO: 2,
+};
 
 /** How long the newborn warning stays on screen: it is read after the dialog closes. */
 export const NEWBORN_WARNING_MS = 20000;
@@ -50,5 +55,46 @@ export function announceNewbornWarning(
   if (!warning) return false;
   const heading = String(translate.instant(warning.headingKey));
   toast.push('warning', [heading, ...warning.lines].join(' '), NEWBORN_WARNING_MS);
+  return true;
+}
+
+/**
+ * QA D1890 (provisional, pending the obstetric lead's approval): a mother's severe blood pressure
+ * after a recorded birth. The server judges the set with the one shared rule (the postpartum
+ * observation and the doctor's BPA panel use the same one) and returns the URGENT warning; the
+ * portal holds no threshold of its own. The set is saved either way, and nothing waits on an
+ * acknowledgement. Returns whether a warning was shown.
+ */
+export function announcePostpartumWarning(
+  alerts: NewbornVitalAlert[] | null | undefined,
+  toast: { push(type: 'error', message: string, durationMs?: number): void },
+  translate: Translator,
+): boolean {
+  const lines = (alerts ?? []).map((a) => a.message).filter((m) => !!m);
+  if (!lines.length) return false;
+  const heading = String(translate.instant('VITAL_LIMITS.POSTPARTUM_WARNING_URGENT'));
+  toast.push('error', [heading, ...lines].join(' '), NEWBORN_WARNING_MS);
+  return true;
+}
+
+/**
+ * r54 (provisional, pending the clinical lead's approval): an adult's severe blood pressure. The
+ * server judges the set with the one shared rule (the BPA panel uses the same one) and returns a
+ * WARNING asking for a recheck at rest, URGENT when a sign of organ damage was ticked; the portal
+ * holds no threshold of its own. The set is saved either way, and nothing waits on an
+ * acknowledgement. Returns whether a warning was shown.
+ */
+export function announceHypertensionWarning(
+  alerts: NewbornVitalAlert[] | null | undefined,
+  toast: { push(type: 'warning' | 'error', message: string, durationMs?: number): void },
+  translate: Translator,
+): boolean {
+  const lines = (alerts ?? []).map((a) => a.message).filter((m) => !!m);
+  if (!lines.length) return false;
+  const urgent = (alerts ?? []).some((a) => a.severity === 'URGENT');
+  const heading = String(
+    translate.instant(urgent ? 'VITAL_LIMITS.ADULT_HTN_URGENT' : 'VITAL_LIMITS.ADULT_HTN_WARNING'),
+  );
+  toast.push(urgent ? 'error' : 'warning', [heading, ...lines].join(' '), NEWBORN_WARNING_MS);
   return true;
 }

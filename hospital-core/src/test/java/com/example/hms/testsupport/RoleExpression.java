@@ -75,6 +75,15 @@ public final class RoleExpression {
             return false;
         }
 
+        /**
+         * The caller holding this one authority, for a gate that reads the authentication itself
+         * ({@code T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, ...)}).
+         */
+        public org.springframework.security.core.Authentication getAuthentication() {
+            return new org.springframework.security.authentication.TestingAuthenticationToken(
+                "role-expression", "n/a", authority);
+        }
+
         public boolean isAuthenticated() {
             return true;
         }

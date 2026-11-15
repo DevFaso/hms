@@ -49,6 +49,9 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
     private final PharmacyClaimMapper claimMapper;
+    /** QA D1613: what a dispense costs and what the patient already paid for it. */
+    private final com.example.hms.repository.pharmacy.InventoryItemRepository inventoryItemRepository;
+    private final com.example.hms.repository.pharmacy.PharmacyPaymentRepository paymentRepository;
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
 
@@ -66,7 +69,8 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
             throw new com.example.hms.exception.FieldBusinessException("hospitalId", "pharmacy.claim.hospitalMismatch");
         }
 
-        Dispense dispense = dispenseRepository.findById(dto.getDispenseId())
+        // QA D1613: locked, so two claims for one dispense cannot both pass the live-claim check.
+        Dispense dispense = dispenseRepository.findLockedById(dto.getDispenseId())
                 .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
         if (dispense.getPatient() == null
                 || !dispense.getPatient().getId().equals(dto.getPatientId())) {
@@ -78,15 +82,16 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
             throw new ResourceNotFoundException("dispense.notfound");
         }
 
+        requireClaimableDispense(dispense, dto.getAmount());
+
         Patient patient = patientRepository.findById(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
         Hospital hospital = hospitalRepository.findById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", hospitalId));
 
         PharmacyClaim entity = claimMapper.toEntity(dto, dispense, patient, hospital);
-        if (entity.getClaimStatus() == null) {
-            entity.setClaimStatus(PharmacyClaimStatus.DRAFT);
-        }
+        // QA D1613: a claim reaches SUBMITTED, ACCEPTED or PAID only through its transitions.
+        entity.setClaimStatus(PharmacyClaimStatus.DRAFT);
         PharmacyClaim saved = claimRepository.save(entity);
 
         support.logAudit(AuditEventType.CLAIM_SUBMITTED,
@@ -256,6 +261,46 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
         }
         if (dto.getAmount() == null || dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new com.example.hms.exception.FieldBusinessException("amount", "pharmacy.claim.amountPositive");
+        }
+        // QA D1613: a new claim is a draft; a status sent with it used to be stored as is,
+        // so a claim could be created already ACCEPTED or PAID.
+        if (dto.getClaimStatus() != null && dto.getClaimStatus() != PharmacyClaimStatus.DRAFT) {
+            throw new com.example.hms.exception.FieldBusinessException("claimStatus", "pharmacy.claim.startsAsDraft");
+        }
+    }
+
+    /**
+     * QA D1613 (round 44): a claim asks the payer for part of what a dispense
+     * costs, so it is bounded by it. A 999 999 F CFA claim was accepted for a
+     * 150 F CFA dispense, and one dispense carried two payable claims.
+     *
+     * <ul>
+     *   <li>a cancelled dispense has nothing to claim;</li>
+     *   <li>an unpriced one has no billable amount to bound the claim;</li>
+     *   <li>the claim is at most the charge less what the patient already paid at the checkout;</li>
+     *   <li>one live claim per dispense: a new one replaces only a REJECTED claim.</li>
+     * </ul>
+     * The caller holds the dispense lock, so two concurrent creates are serialised.
+     */
+    private void requireClaimableDispense(Dispense dispense, BigDecimal amount) {
+        if (dispense.getStatus() == com.example.hms.enums.DispenseStatus.CANCELLED) {
+            throw new com.example.hms.exception.FieldBusinessException("dispenseId", "pharmacy.claim.dispenseCancelled");
+        }
+        if (claimRepository.existsByDispenseIdAndClaimStatusNot(dispense.getId(), PharmacyClaimStatus.REJECTED)) {
+            throw new com.example.hms.exception.FieldBusinessException("dispenseId", "pharmacy.claim.liveClaimExists");
+        }
+        BigDecimal charge = DispenseCharge.of(dispense, inventoryItemRepository)
+                .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException("dispenseId",
+                        "pharmacy.claim.noPrice"));
+        BigDecimal paid = java.util.Objects.requireNonNullElse(
+                paymentRepository.sumPostedForDispense(dispense.getId()), BigDecimal.ZERO);
+        BigDecimal billable = charge.subtract(paid).max(BigDecimal.ZERO);
+        if (billable.signum() == 0) {
+            throw new com.example.hms.exception.FieldBusinessException("dispenseId", "pharmacy.claim.nothingBillable");
+        }
+        if (amount.compareTo(billable) > 0) {
+            throw new com.example.hms.exception.FieldBusinessException("amount", "pharmacy.claim.amountAboveBillable",
+                    billable);
         }
     }
 }

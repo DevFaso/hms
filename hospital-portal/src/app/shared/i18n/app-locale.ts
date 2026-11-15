@@ -153,7 +153,9 @@ export function formatMeasure(
   const number = new Intl.NumberFormat(locale, { maximumFractionDigits: maxFractionDigits }).format(
     value,
   );
-  return unit === '%' && locale.startsWith('en') ? `${number}%` : `${number} ${unit}`;
+  if (unit === '%' && locale.startsWith('en')) return `${number}%`;
+  // A rate per unit reads "72/min" in every language, never "72 /min".
+  return unit.startsWith('/') ? `${number}${unit}` : `${number} ${unit}`;
 }
 
 /** Specs that set `localStorage.lang` between cases must drop the cache. */

@@ -33,7 +33,7 @@ import {
   PostpartumSupportStatus,
 } from '../services/postpartum.service';
 import { PatientResponse } from '../services/patient.service';
-import { DeliveryRecordResponse, LaborService } from '../services/labor.service';
+import { DeliveryNewborn, DeliveryRecordResponse, LaborService } from '../services/labor.service';
 import {
   ProAnswers,
   ProInstrumentView,
@@ -122,6 +122,8 @@ const OBSERVATION_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
 const NEWBORN_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
   ...NEWBORN_FIELD_IDS,
   assessmentTime: 'nb-time',
+  // QA D1592: which registered baby of a multiple birth the assessment is for.
+  newbornPatientId: 'nb-baby',
   poorFeeding: 'nb-danger-feeding',
   convulsions: 'nb-danger-convulsions',
   severeChestIndrawing: 'nb-danger-indrawing',
@@ -199,6 +201,7 @@ const NEWBORN_DANGER_SIGNS = [
 const NEWBORN_LABELS: Record<string, string> = {
   ...labelKeysOf(NEWBORN_LIMITS),
   assessmentTime: 'POSTPARTUM.TIME',
+  newbornPatientId: 'POSTPARTUM.NEWBORN_BABY',
   ...Object.fromEntries(NEWBORN_DANGER_SIGNS.map((sign) => [sign.field, sign.label])),
 };
 const OBSERVATION_LABELS: Record<string, string> = {
@@ -567,6 +570,16 @@ export class PostpartumTabComponent {
     }
   }
 
+  /**
+   * QA D1631, the shared-patient read-only idiom (#1103): a row another
+   * hospital recorded is named as theirs. Judged against the hospital the
+   * requests are pinned to; in global view nothing is "elsewhere".
+   */
+  isForeign(record: { hospitalId?: string | null }): boolean {
+    const scope = this.roleContext.effectiveHospitalIdForRequest();
+    return !!record.hospitalId && !!scope && record.hospitalId !== scope;
+  }
+
   private actingHospitalId(): string | undefined {
     return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? undefined;
   }
@@ -669,6 +682,21 @@ export class PostpartumTabComponent {
     }
     this.selectedFollowUps = new Set();
     this.showAssessmentModal.set(true);
+  }
+
+  /**
+   * QA D1592: the babies the chosen delivery (or the only one on file)
+   * registered as patients. A multiple birth names the baby the assessment
+   * is for; it is then recorded on that baby's own chart.
+   */
+  newbornsOfAssessmentDelivery(): DeliveryNewborn[] {
+    const deliveries = this.deliveries();
+    const chosen = this.assessmentForm.deliveryRecordId
+      ? deliveries.find((d) => d.id === this.assessmentForm.deliveryRecordId)
+      : deliveries.length === 1
+        ? deliveries[0]
+        : undefined;
+    return chosen?.newborns ?? [];
   }
 
   closeAssessment(): void {

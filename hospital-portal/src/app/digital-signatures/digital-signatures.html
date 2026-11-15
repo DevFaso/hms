@@ -98,13 +98,21 @@
         (ngModelChange)="search.set($event)"
       />
     </div>
-    <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+    <select
+      [attr.aria-label]="'SIGNATURES.ALL_STATUSES' | translate"
+      [ngModel]="statusFilter()"
+      (ngModelChange)="statusFilter.set($event)"
+    >
       <option value="ALL">{{ 'SIGNATURES.ALL_STATUSES' | translate }}</option>
       @for (s of statuses; track s) {
         <option [value]="s">{{ s | enumLabel: 'signatureStatus' }}</option>
       }
     </select>
-    <select [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
+    <select
+      [attr.aria-label]="'SIGNATURES.ALL_REPORT_TYPES' | translate"
+      [ngModel]="typeFilter()"
+      (ngModelChange)="typeFilter.set($event)"
+    >
       <option value="ALL">{{ 'SIGNATURES.ALL_REPORT_TYPES' | translate }}</option>
       @for (t of reportTypes; track t) {
         <option [value]="t">{{ formatReportType(t) }}</option>

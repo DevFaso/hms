@@ -246,7 +246,15 @@ class PatientRecordPdfServiceTest {
         chart.setImaging(List.of(ChartReviewDTO.ImagingEntryDTO.builder()
             .orderedAt(LocalDateTime.of(2026, 5, 10, 9, 30))
             .modality("CT").studyType("Head").bodyRegion("Cranium").status("FINAL")
-            .reportImpression("No acute intracranial abnormality").build()));
+            .reportImpression("No acute intracranial abnormality").build(),
+            // QA D1924 / D1926 (r53): the conclusion and its addendum; no "Sans objet" laterality.
+            ChartReviewDTO.ImagingEntryDTO.builder()
+                .orderedAt(LocalDateTime.of(2026, 5, 10, 10, 30))
+                .modality("CT").studyType("Abdomen").laterality("NOT_APPLICABLE").status("RESULTS_AVAILABLE")
+                .reportImpression("Appendicite").reports(List.of(
+                    ChartReviewDTO.ImagingReportEntryDTO.builder().reportStatus("FINAL").impression("Appendicite").build(),
+                    ChartReviewDTO.ImagingReportEntryDTO.builder().reportStatus("ADDENDUM").impression("Inchangé").build()))
+                .build()));
         chart.setProcedures(List.of(
             ChartReviewDTO.ProcedureEntryDTO.builder()
                 .orderedAt(LocalDateTime.of(2026, 5, 11, 8, 0))
@@ -267,11 +275,12 @@ class PatientRecordPdfServiceTest {
             .contains("pdf.record.encounter.none",
                 "DNR", "LIVING_WILL", "pdf.record.directive.from", "intubation",
                 "CT", "pdf.record.imaging.impression",
+                "pdf.record.imaging.impression Appendicite", "pdf.record.imaging.addendum Inchangé",
                 "Lumbar puncture", "pdf.record.procedure.consentObtained",
                 "Paracentesis", "pdf.record.procedure.consentNotRecorded",
                 // The count only; never the withheld rows themselves.
                 "pdf.record.heldRows")
-            .doesNotContain("Maternity", "Hospital C");
+            .doesNotContain("Maternity", "Hospital C", "NOT_APPLICABLE");
     }
 
     @Test

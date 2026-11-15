@@ -8,12 +8,12 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { refusalReason } from '../shared/refusal-reason';
 
+/** The backend's DepartmentResponseDTO (guarded by scripts/check-department-dto.test.mjs). */
 interface DepartmentDetail {
   id: string;
   name: string;
-  code: string;
+  departmentCode: string;
   description?: string;
-  headOfDepartment?: string;
   headOfDepartmentName?: string;
   active: boolean;
   hospitalId?: string;

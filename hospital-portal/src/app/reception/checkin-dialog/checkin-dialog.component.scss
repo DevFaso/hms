@@ -111,6 +111,13 @@
           height: 16px;
         }
       }
+
+      /* QA D1591: the consent the patient gave at pre-check-in. */
+      .hint {
+        margin: 4px 0 0 24px;
+        font-size: 0.8rem;
+        color: var(--text-secondary, #5b6472);
+      }
     }
   }
 

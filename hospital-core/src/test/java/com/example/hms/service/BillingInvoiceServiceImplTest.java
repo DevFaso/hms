@@ -674,7 +674,7 @@ class BillingInvoiceServiceImplTest {
 
     @Test
     void recordPatientPayment_acceptsEveryMethodThePatientFormsOffer() {
-        for (String method : List.of("CARD", "BANK_TRANSFER", "MOBILE_MONEY", "CASH", "INSURANCE")) {
+        for (String method : List.of("CARD", "BANK_TRANSFER", "MOBILE_MONEY", "CASH")) {
             UUID patientId = UUID.randomUUID();
             BillingInvoice invoice = payableInvoice(patientId);
             when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
@@ -683,7 +683,44 @@ class BillingInvoiceServiceImplTest {
             billingInvoiceService.recordPatientPayment(invoice.getId(), patientId, UUID.randomUUID(),
                 payment(method), Locale.ENGLISH);
         }
-        verify(paymentTransactionRepository, times(5)).save(any());
+        verify(paymentTransactionRepository, times(4)).save(any());
+    }
+
+    /** QA D1611 (round 44): an insurer's share is claimed, never declared as paid. */
+    @Test
+    void recordPatientPayment_insuranceIsRefusedOnTheMethod_D1611() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = payableInvoice(patientId);
+        UUID invoiceId = invoice.getId();
+        var declaration = payment("insurance");
+
+        com.example.hms.exception.FieldBusinessException refused = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class,
+            () -> billingInvoiceService.recordPatientPayment(invoiceId, patientId, UUID.randomUUID(),
+                declaration, Locale.ENGLISH));
+
+        assertEquals("paymentMethod", refused.getField());
+        assertEquals("billing.payment.insuranceNotAPayment", refused.getMessageKey());
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
+    /** QA D1611 (round 44): the cashier's INSURANCE counted the insurer's share as collected. */
+    @Test
+    void recordStaffPayment_insuranceIsRefusedOnTheMethod_D1611() {
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        UUID invoiceId = invoice.getId();
+        com.example.hms.payload.dto.StaffPaymentRequestDTO insurance =
+            new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("10"), "INSURANCE", "MUT-1", null);
+
+        com.example.hms.exception.FieldBusinessException refused = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class,
+            () -> billingInvoiceService.recordStaffPayment(invoiceId, insurance, null, Locale.ENGLISH));
+
+        assertEquals("method", refused.getField());
+        assertEquals("billing.payment.insuranceNotAPayment", refused.getMessageKey());
+        verify(paymentTransactionRepository, never()).save(any());
+        assertEquals(BigDecimal.ZERO, invoice.getAmountPaid());
     }
 
     @Test
@@ -1264,7 +1301,7 @@ class BillingInvoiceServiceImplTest {
     /** QA D768: a MOBILE_MONEY or INSURANCE payment with no reference was accepted. */
     @Test
     void qaD768_tracedMethodsNeedAReference() {
-        for (String method : List.of("MOBILE_MONEY", "INSURANCE", "BANK_TRANSFER")) {
+        for (String method : List.of("MOBILE_MONEY", "BANK_TRANSFER")) {
             BillingInvoice invoice = payableInvoice(UUID.randomUUID());
             when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
             UUID invoiceId = invoice.getId();
@@ -1282,7 +1319,7 @@ class BillingInvoiceServiceImplTest {
     @Test
     void qaD768_referenceNumberInTheBodyIsTheReference_andAReuseIsRefused() throws Exception {
         com.example.hms.payload.dto.StaffPaymentRequestDTO dto = tools.jackson.databind.json.JsonMapper.builder().build()
-            .readValue("{\"amount\":100,\"method\":\"INSURANCE\",\"referenceNumber\":\"CNAMU-R11-1\"}",
+            .readValue("{\"amount\":100,\"method\":\"MOBILE_MONEY\",\"referenceNumber\":\"CNAMU-R11-1\"}",
                 com.example.hms.payload.dto.StaffPaymentRequestDTO.class);
         assertEquals("CNAMU-R11-1", dto.getReference());
 
@@ -1647,6 +1684,24 @@ class BillingInvoiceServiceImplTest {
 
         assertEquals("copayMethod", refused.getField());
         assertEquals("billing.payment.methodRequired", refused.getMessageKey());
+        verify(invoiceRepository, never()).saveAndFlush(any(BillingInvoice.class));
+    }
+
+    /** QA D1611 (round 44): a copay is money taken at the desk, never an insurer's share. */
+    @Test
+    void recordCheckInCopay_insuranceIsRefusedOnTheMethod_D1611() {
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setId(UUID.randomUUID());
+        UUID receptionist = UUID.randomUUID();
+        BigDecimal copay = new BigDecimal("1500");
+
+        com.example.hms.exception.FieldBusinessException refused = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class,
+            () -> billingInvoiceService.recordCheckInCopay(encounter, copay,
+                com.example.hms.enums.PaymentMethod.INSURANCE, "MUT-1", receptionist));
+
+        assertEquals("copayMethod", refused.getField());
+        assertEquals("billing.payment.insuranceNotAPayment", refused.getMessageKey());
         verify(invoiceRepository, never()).saveAndFlush(any(BillingInvoice.class));
     }
 

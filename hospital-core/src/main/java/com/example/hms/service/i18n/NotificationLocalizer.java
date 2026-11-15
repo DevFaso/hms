@@ -6,6 +6,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Component;
 
+import com.example.hms.utility.DisplayDates;
+
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -32,6 +35,8 @@ public class NotificationLocalizer {
     /** QA D1207: a laboratory value, formatted in the reader's locale when read. */
     private static final String LAB_VALUE = "labValue";
     private static final String UNIT = "unit";
+    /** QA D1710: a calendar day, written the reader's way when read ("13 nov. 2026", "Nov 13, 2026"). */
+    private static final String DATE = "date";
 
     private final MessageSource messageSource;
 
@@ -78,6 +83,42 @@ public class NotificationLocalizer {
         return null;
     }
 
+    /**
+     * QA D1710 (round 46): a calendar day as an argument, kept as ISO and
+     * written in the READER's locale when the text is read. The "note to sign"
+     * item stored {@code LocalDate.toString()}, so a French doctor read
+     * "la visite du 2026-11-13". A {@link LocalDate} handed to {@link #storable}
+     * is stored this way too, so no day can reach a stored text raw.
+     */
+    public static Map<String, String> date(LocalDate day) {
+        return Map.of(DATE, day == null ? "" : day.toString());
+    }
+
+    /** A {@link #date} argument rendered in {@code locale}; {@code null} when {@code arg} is not one. */
+    static String renderDate(Object arg, Locale locale) {
+        if (arg instanceof Map<?, ?> map && map.get(DATE) instanceof String iso) {
+            if (iso.isBlank()) {
+                return DisplayDates.date(null, locale);
+            }
+            try {
+                return DisplayDates.date(LocalDate.parse(iso), locale);
+            } catch (java.time.format.DateTimeParseException ex) {
+                return iso;
+            }
+        }
+        return null;
+    }
+
+    /** {@code arg} as a reader in {@code locale} sees it: a lab value or a day written their way, else itself. */
+    static Object renderValue(Object arg, Locale locale) {
+        String labValue = renderLabValue(arg, locale);
+        if (labValue != null) {
+            return labValue;
+        }
+        String day = renderDate(arg, locale);
+        return day != null ? day : arg;
+    }
+
     /** The arguments as stored: numbers and booleans as is, keys as {@code {"key"}}, anything else as text. */
     public static List<Object> storable(Object[] args) {
         if (args == null || args.length == 0) {
@@ -96,6 +137,12 @@ public class NotificationLocalizer {
         }
         if (arg instanceof Number || arg instanceof Boolean) {
             return arg;
+        }
+        if (arg instanceof LocalDate day) {
+            return date(day);
+        }
+        if (arg instanceof Map<?, ?> map && map.get(DATE) instanceof String iso) {
+            return Map.of(DATE, iso);
         }
         if (arg instanceof Map<?, ?> map && map.get(KEY) instanceof String k) {
             return map.get(ARGS) instanceof List<?> nested ? key(k, nested.toArray()) : key(k);
@@ -122,8 +169,7 @@ public class NotificationLocalizer {
                         ? resolve(list, locale, depth + 1) : null;
                     return messageSource.getMessage(k, nested, k, locale);
                 }
-                String labValue = renderLabValue(arg, locale);
-                return labValue != null ? labValue : arg;
+                return renderValue(arg, locale);
             })
             .toArray();
     }

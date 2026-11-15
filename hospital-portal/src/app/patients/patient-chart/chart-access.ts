@@ -85,6 +85,21 @@ export const STORYBOARD_VIEW_ROLES: string[] = [
   'ROLE_SUPER_ADMIN',
 ];
 
+/**
+ * r53 (provisional rule 2026-11-14): SafeguardingReviewController READERS, GET /safeguarding/patients/{id}/reviews
+ * (the child-protection vigilance banner): the treating clinical team and the hospital administrator only. Never
+ * reception, billing, the lab or the pharmacy; the server also requires the role at the acting hospital.
+ */
+export const SAFEGUARDING_VIEW_ROLES: string[] = [
+  ...DOCTOR_ROLES,
+  'ROLE_MIDWIFE',
+  'ROLE_NURSE',
+  'ROLE_HOSPITAL_ADMIN',
+];
+
+/** SafeguardingReviewController RECORDERS: the responsible clinician records the documented review. */
+export const SAFEGUARDING_RECORD_ROLES: string[] = [...DOCTOR_ROLES];
+
 /** OrderReviewHoldController (class gate): GET /order-review-holds/patient/{id} (the held-orders panel). */
 export const ORDER_REVIEW_VIEW_ROLES: string[] = [
   ...DOCTOR_ROLES,

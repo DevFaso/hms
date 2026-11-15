@@ -234,8 +234,8 @@ class BreakGlassServiceImplTest {
                 });
             com.example.hms.model.UserRoleHospitalAssignment doctorHere = new com.example.hms.model.UserRoleHospitalAssignment();
             doctorHere.setId(UUID.randomUUID());
-            when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
-                .thenReturn(java.util.Optional.of(doctorHere));
+            when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
+                .thenReturn(java.util.List.of(doctorHere));
 
             service.declare(BreakGlassDeclareRequestDTO.builder()
                 .patientId(patientId)

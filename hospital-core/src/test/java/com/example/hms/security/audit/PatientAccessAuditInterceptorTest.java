@@ -118,8 +118,8 @@ class PatientAccessAuditInterceptorTest {
         com.example.hms.model.UserRoleHospitalAssignment assignment = new com.example.hms.model.UserRoleHospitalAssignment();
         assignment.setId(UUID.randomUUID());
         assignment.setRole(role);
-        when(repository.findFirstByUser_IdAndHospital_IdAndActiveTrue(DOCTOR, hospitalId))
-            .thenReturn(java.util.Optional.of(assignment));
+        when(repository.findAllByUser_IdAndHospital_IdAndActiveTrue(DOCTOR, hospitalId))
+            .thenReturn(java.util.List.of(assignment));
         @SuppressWarnings("unchecked")
         ObjectProvider<AuditEventLogService> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(auditService);

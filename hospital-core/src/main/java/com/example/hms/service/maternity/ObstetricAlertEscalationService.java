@@ -36,6 +36,16 @@ public class ObstetricAlertEscalationService {
     public static final String SOURCE_DELIVERY = "DELIVERY";
     public static final String SOURCE_NEWBORN = "NEWBORN_ASSESSMENT";
     public static final String SOURCE_POSTPARTUM = "POSTPARTUM_OBSERVATION";
+    /** QA D1762: the labour transfer and arrival notice (no clinical value behind it to re-measure). */
+    public static final String SOURCE_TRANSFER = "LABOR_TRANSFER";
+
+    /**
+     * Every source type an escalation row may carry. The column's CHECK
+     * constraint (latest: V292) must allow each of them;
+     * ObstetricAlertEscalationSourceTypeGuardTest fails when the two drift.
+     */
+    public static final java.util.Set<String> SOURCE_TYPES = java.util.Set.of(
+        SOURCE_PARTOGRAPH, SOURCE_DELIVERY, SOURCE_NEWBORN, SOURCE_POSTPARTUM, SOURCE_TRANSFER);
 
     /**
      * One URGENT alert, as plain values: the callback runs after the commit,
@@ -78,11 +88,18 @@ public class ObstetricAlertEscalationService {
         if (alert == null || alert.hospitalId() == null || alert.patientId() == null || alert.sourceId() == null) {
             return;
         }
+        if (!SOURCE_TYPES.contains(alert.sourceType())) {
+            // QA D1762: a source the table's CHECK does not know can never be saved.
+            log.error("Urgent obstetric alert for {} {} not escalated: unknown source type",
+                alert.sourceType(), alert.sourceId());
+            return;
+        }
         TransactionCallbacks.afterCommit(() -> {
             try {
                 worker.raise(alert);
             } catch (RuntimeException ex) {
-                log.warn("Urgent obstetric alert for {} {} not escalated: {}",
+                // QA D1762: an urgent alert left without its escalation is a lost safety net, never a WARN.
+                log.error("Urgent obstetric alert for {} {} not escalated: {}",
                     alert.sourceType(), alert.sourceId(), ex.getClass().getSimpleName());
             }
         });
@@ -105,7 +122,7 @@ public class ObstetricAlertEscalationService {
                     sent++;
                 }
             } catch (RuntimeException ex) {
-                log.warn("Obstetric alert escalation failed for {}: {}", id, ex.getClass().getSimpleName());
+                log.error("Obstetric alert escalation failed for {}: {}", id, ex.getClass().getSimpleName());
             }
         }
         return sent;

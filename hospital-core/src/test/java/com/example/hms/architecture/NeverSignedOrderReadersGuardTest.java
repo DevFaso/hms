@@ -66,6 +66,8 @@ class NeverSignedOrderReadersGuardTest {
         // Visit documents: continued at discharge.
         Map.entry("service/DischargeSummaryServiceImpl.java", new Reader("isWithdrawn()",
             "reconciliation lists continued orders: no draft, no withdrawn order")),
+        Map.entry("service/AfterVisitSummarySections.java", new Reader(ISSUED,
+            "the after-visit summary's current medicines: issued and running courses only")),
         Map.entry("service/EncounterServiceImpl.java", new Reader("isWithdrawn()",
             "the after-visit reconciliation lists continued orders: no draft, no withdrawn order")),
         Map.entry("service/AdmissionStayEncounterService.java", new Reader("isWithdrawn()",

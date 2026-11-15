@@ -34,6 +34,7 @@
     <select
       class="filter-select"
       [ngModel]="filterHospitalId()"
+      [attr.aria-label]="'ASSIGN_ADMIN.ALL_HOSPITALS' | translate"
       (ngModelChange)="filterHospitalId.set($event)"
     >
       <option value="">{{ 'ASSIGN_ADMIN.ALL_HOSPITALS' | translate }}</option>
@@ -44,6 +45,7 @@
     <select
       class="filter-select"
       [ngModel]="filterActive()"
+      [attr.aria-label]="'ASSIGN_ADMIN.ALL_STATUSES' | translate"
       (ngModelChange)="filterActive.set($event)"
     >
       <option value="">{{ 'ASSIGN_ADMIN.ALL_STATUSES' | translate }}</option>

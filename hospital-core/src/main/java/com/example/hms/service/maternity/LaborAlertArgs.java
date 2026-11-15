@@ -73,7 +73,7 @@ public final class LaborAlertArgs {
                 known(delivery.getBirthWeightGrams(), delivery.getGestationalAgeWeeksAtBirth());
             case "labor-pph" -> known(delivery.getEstimatedBloodLossMl());
             case "labor-apgar-critical", "labor-apgar-low" -> known(delivery.getApgarFiveMinute());
-            case "labor-retained-placenta", "labor-stillbirth" -> Optional.of(List.of());
+            case "labor-retained-placenta", "labor-stillbirth", "labor-outcome-conflict" -> Optional.of(List.of());
             default -> Optional.empty();
         };
     }

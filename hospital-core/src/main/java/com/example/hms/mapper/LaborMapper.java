@@ -47,6 +47,7 @@ public class LaborMapper {
             .patientId(episode.getPatient() != null ? episode.getPatient().getId() : null)
             .patientName(episode.getPatient() != null ? episode.getPatient().getFullName() : null)
             .hospitalId(episode.getHospital() != null ? episode.getHospital().getId() : null)
+            .hospitalName(episode.getHospital() != null ? episode.getHospital().getName() : null)
             .registrationId(episode.getRegistration() != null ? episode.getRegistration().getId() : null)
             .maternalHistoryId(episode.getMaternalHistory() != null ? episode.getMaternalHistory().getId() : null)
             .admittedByStaffName(episode.getAdmittedByStaff() != null ? episode.getAdmittedByStaff().getFullName() : null)
@@ -57,6 +58,13 @@ public class LaborMapper {
             .gestationalAgeWeeks(episode.getGestationalAgeWeeks())
             .gravida(episode.getGravida())
             .para(episode.getPara())
+            .transferredAt(episode.getTransferredAt())
+            .transferReason(episode.getTransferReason())
+            .transferHospitalId(episode.getTransferHospital() != null ? episode.getTransferHospital().getId() : null)
+            .transferHospitalName(episode.getTransferHospital() != null ? episode.getTransferHospital().getName() : null)
+            .transferredFromEpisodeId(episode.getTransferredFrom() != null ? episode.getTransferredFrom().getId() : null)
+            .transferredFromHospitalName(episode.getTransferredFrom() != null && episode.getTransferredFrom().getHospital() != null
+                ? episode.getTransferredFrom().getHospital().getName() : null)
             .activePhaseStartAt(episode.getActivePhaseStartAt())
             .status(episode.getStatus() != null ? episode.getStatus().name() : null)
             .outcome(episode.getOutcome() != null ? episode.getOutcome().name() : null)
@@ -125,7 +133,10 @@ public class LaborMapper {
             .estimatedBloodLossMl(record.getEstimatedBloodLossMl())
             .perinealTear(record.getPerinealTear() != null ? record.getPerinealTear().name() : null)
             .notes(record.getNotes())
+            .bornBeforeArrival(record.isBornBeforeArrival())
+            .bornBeforeArrivalReason(record.getBornBeforeArrivalReason())
             .alerts(mapAlerts(record.getAlerts(), code -> LaborAlertArgs.ofDelivery(code, record)))
+            .newbornRegistrationPending(record.isNewbornRegistrationPending())
             .build();
     }
 

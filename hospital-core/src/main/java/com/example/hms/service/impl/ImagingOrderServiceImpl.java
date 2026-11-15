@@ -19,6 +19,8 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.service.ImagingOrderService;
 import com.example.hms.service.PatientSubjectReadGuard;
 import com.example.hms.service.PatientSubjectReaderRoles;
+import com.example.hms.service.support.PatientSafeView;
+import com.example.hms.service.support.ImagingPreAuthorisationPolicy;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,6 +49,12 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         List.of(ImagingOrderStatus.COMPLETED, ImagingOrderStatus.RESULTS_AVAILABLE);
 
     private static final int DEFAULT_DUPLICATE_LOOKBACK_DAYS = 30;
+    /**
+     * QA D1920: the longest window a duplicate check reads, whatever the
+     * caller asks for. A product bound, not a clinical rule: a duplicate is a
+     * recent order, and the check is not a way to page through history.
+     */
+    public static final int MAX_DUPLICATE_LOOKBACK_DAYS = 90;
 
     /**
      * Self-reference for proxy-routed internal calls
@@ -86,6 +94,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         requireNotInThePast(request.getScheduledDate(), null);
+        // Provisional rule 2: « Commander quand même » names its reason.
+        com.example.hms.service.imaging.ImagingDuplicateOverride.requireReason(request);
         ImagingOrder imagingOrder = imagingOrderMapper.toEntity(request, patient, hospital);
         imagingOrder.setOrderedAt(LocalDateTime.now());
         // QA D972 (round 18): an order belongs to the visit it was written in,
@@ -98,7 +108,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         imagingOrder.setOrderingProviderUserId(orderingUser != null ? orderingUser.getId() : null);
         imagingOrder.setOrderingProviderName(orderingUser != null ? displayName(orderingUser) : null);
 
-        List<ImagingOrder> duplicateMatches = loadDuplicateMatches(patient.getId(), request.getModality(), request.getBodyRegion(), request.getDuplicateLookbackDays());
+        List<ImagingOrder> duplicateMatches = loadDuplicateMatches(patient.getId(), hospital.getId(), request.getModality(), request.getBodyRegion(), request.getDuplicateLookbackDays());
         if (!duplicateMatches.isEmpty()) {
             imagingOrder.setDuplicateOfRecentOrder(true);
             imagingOrder.setDuplicateReferenceOrderId(duplicateMatches.get(0).getId());
@@ -106,9 +116,40 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             imagingOrder.setDuplicateOfRecentOrder(false);
             imagingOrder.setDuplicateReferenceOrderId(null);
         }
+        com.example.hms.service.imaging.ImagingDuplicateOverride.apply(imagingOrder, duplicateMatches, request,
+            imagingOrder.getOrderingProviderUserId(), imagingOrder.getOrderingProviderName(), LocalDateTime.now());
+        ImagingPreAuthorisationPolicy.FollowUp preAuth = ImagingPreAuthorisationPolicy.reconcile(imagingOrder, LocalDateTime.now());
 
         ImagingOrder saved = imagingOrderRepository.save(imagingOrder);
+        followUp(saved, preAuth);
+        if (duplicateOverride != null) {
+            duplicateOverride.audit(saved, duplicateMatches);
+        }
         return imagingOrderMapper.toResponseDTO(saved, duplicateMatches);
+    }
+
+    /** Provisional rule 1: the billing follow-up of a pending pre-authorisation; null in a hand-built unit test. */
+    private com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp preAuthorisationFollowUp;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setPreAuthorisationFollowUp(
+            com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp preAuthorisationFollowUp) {
+        this.preAuthorisationFollowUp = preAuthorisationFollowUp;
+    }
+
+    /** Provisional rule 2: the audit of a flagged placement; null in a hand-built unit test. */
+    private com.example.hms.service.imaging.ImagingDuplicateOverride duplicateOverride;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setDuplicateOverride(com.example.hms.service.imaging.ImagingDuplicateOverride duplicateOverride) {
+        this.duplicateOverride = duplicateOverride;
+    }
+
+    /** Files or closes the pre-authorisation follow-up the policy's reconcile asked for. */
+    private void followUp(ImagingOrder saved, ImagingPreAuthorisationPolicy.FollowUp followUp) {
+        if (preAuthorisationFollowUp != null) {
+            preAuthorisationFollowUp.apply(saved, followUp);
+        }
     }
 
     /** QA D972: the visits an order can belong to; null in a hand-built unit test. */
@@ -191,6 +232,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         // QA D970 (sibling): the order being edited is not a duplicate of itself.
         List<ImagingOrder> duplicateMatches = loadDuplicateMatches(
             order.getPatient() != null ? order.getPatient().getId() : null,
+            order.getHospital() != null ? order.getHospital().getId() : null,
             order.getModality(),
             order.getBodyRegion(),
             request.getDuplicateLookbackDays()
@@ -202,8 +244,11 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             order.setDuplicateOfRecentOrder(false);
             order.setDuplicateReferenceOrderId(null);
         }
+        // Provisional rule 1: an edit that records the number clears the flag.
+        ImagingPreAuthorisationPolicy.FollowUp preAuth = ImagingPreAuthorisationPolicy.reconcile(order, LocalDateTime.now());
 
         ImagingOrder saved = imagingOrderRepository.save(order);
+        followUp(saved, preAuth);
         return imagingOrderMapper.toResponseDTO(saved, duplicateMatches);
     }
 
@@ -225,6 +270,13 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         if (RESULTED_STATES.contains(order.getStatus()) && request.getStatus() == order.getStatus()) {
             throw new com.example.hms.exception.FieldBusinessException("status", "imaging.order.resulted.locked");
         }
+        // QA D1925 (r53): the steps follow each other; results come from a
+        // signed report. A routine study needing pre-authorisation starts with
+        // its number; an urgent or STAT one starts without it (provisional rule 1).
+        com.example.hms.service.support.ImagingOrderTransitions.require(order.getStatus(), request.getStatus());
+        ImagingPreAuthorisationPolicy.requireStartAllowed(request.getStatus(), order.getPriority(),
+            request.getRequiresAuthorization() != null ? request.getRequiresAuthorization() : order.getRequiresAuthorization(),
+            request.getAuthorizationNumber() != null ? request.getAuthorizationNumber() : order.getAuthorizationNumber());
         if (cancelling) {
             requireCancelAuthor(order);
         }
@@ -234,18 +286,21 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         requireNotInThePast(request.getScheduledDate(), order.getScheduledDate());
         order.setStatus(request.getStatus());
-        order.setScheduledDate(request.getScheduledDate());
-        order.setScheduledTime(request.getScheduledTime());
-        order.setAppointmentLocation(request.getAppointmentLocation());
-        order.setWorkflowNotes(request.getWorkflowNotes());
-        order.setRequiresAuthorization(request.getRequiresAuthorization());
-        order.setAuthorizationNumber(request.getAuthorizationNumber());
+        // QA D1822 (r51): a status write carries the status and its reason. A
+        // field it leaves out is kept: "start", "complete" and "cancel" erased
+        // the schedule, the appointment location, the workflow notes and the
+        // pre-authorisation. A field the caller does send is still applied.
+        applyPresentSchedulingFields(order, request);
         // QA D503 class: who changed the status is the session, never the
         // performedBy fields of the request (kept on the DTO for old clients).
         UUID actorId = com.example.hms.security.CallerIdentity.currentUserId();
         com.example.hms.model.User actor = actorId == null ? null : userRepository.findById(actorId).orElse(null);
         order.setStatusUpdatedAt(LocalDateTime.now());
         order.setStatusUpdatedBy(actorId);
+        if (RESULTED_STATES.contains(request.getStatus())) {
+            // r44: the order drawer's "Completed at" was never filled.
+            order.markCompletedAt(order.getStatusUpdatedAt());
+        }
 
         if (cancelling) {
             order.setCancellationReason(cancellationReason);
@@ -253,8 +308,11 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             order.setCancelledByUserId(actorId);
             order.setCancelledByName(actor != null ? displayName(actor) : null);
         }
+        ImagingPreAuthorisationPolicy.FollowUp preAuth =
+            ImagingPreAuthorisationPolicy.reconcile(order, order.getStatusUpdatedAt());
 
         ImagingOrder saved = imagingOrderRepository.save(order);
+        followUp(saved, preAuth);
         return imagingOrderMapper.toResponseDTO(saved);
     }
 
@@ -346,6 +404,28 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         return name.isBlank() ? user.getUsername() : name;
     }
 
+    /** QA D1822: only the scheduling fields a status write actually carries; null keeps the stored value. */
+    private static void applyPresentSchedulingFields(ImagingOrder order, ImagingOrderStatusUpdateRequestDTO request) {
+        if (request.getScheduledDate() != null) {
+            order.setScheduledDate(request.getScheduledDate());
+        }
+        if (request.getScheduledTime() != null) {
+            order.setScheduledTime(request.getScheduledTime());
+        }
+        if (request.getAppointmentLocation() != null) {
+            order.setAppointmentLocation(request.getAppointmentLocation());
+        }
+        if (request.getWorkflowNotes() != null) {
+            order.setWorkflowNotes(request.getWorkflowNotes());
+        }
+        if (request.getRequiresAuthorization() != null) {
+            order.setRequiresAuthorization(request.getRequiresAuthorization());
+        }
+        if (request.getAuthorizationNumber() != null) {
+            order.setAuthorizationNumber(request.getAuthorizationNumber());
+        }
+    }
+
     static void requireNotInThePast(java.time.LocalDate requested, java.time.LocalDate current) {
         if (requested != null && !requested.equals(current) && requested.isBefore(java.time.LocalDate.now())) {
             throw new com.example.hms.exception.FieldBusinessException("scheduledDate", "imaging.scheduledDate.past");
@@ -394,8 +474,40 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         if (order.getStatus() == ImagingOrderStatus.DRAFT) {
             order.setStatus(ImagingOrderStatus.ORDERED);
         }
+        ImagingPreAuthorisationPolicy.FollowUp preAuth = ImagingPreAuthorisationPolicy.reconcile(order, LocalDateTime.now());
 
         ImagingOrder saved = imagingOrderRepository.save(order);
+        followUp(saved, preAuth);
+        return imagingOrderMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * Provisional rule 1 (2026-11-15): records the pre-authorisation number,
+     * at any status the study reached: an urgent study is often done (and
+     * reported) before the insurer answers. Recording it clears « Préautorisation
+     * en attente » and closes the billing task. A cancelled order is closed
+     * (QA D1066), unless the study was done before it was cancelled.
+     */
+    @Override
+    public ImagingOrderResponseDTO recordAuthorization(UUID orderId,
+            com.example.hms.payload.dto.imaging.ImagingOrderAuthorizationRequestDTO request) {
+        ImagingOrder order = getOrderInScope(orderId);
+        if (order.getAuthorizationPendingSince() == null) {
+            com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
+                IMAGING_ORDER_CANCELLED_LOCKED);
+        }
+        String number = request != null && request.getAuthorizationNumber() != null
+            ? request.getAuthorizationNumber().trim() : "";
+        if (number.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("authorizationNumber",
+                "imaging.order.authorizationNumberBlank");
+        }
+        order.setRequiresAuthorization(true);
+        order.setAuthorizationNumber(number);
+        ImagingPreAuthorisationPolicy.FollowUp preAuth = ImagingPreAuthorisationPolicy.reconcile(order, LocalDateTime.now());
+
+        ImagingOrder saved = imagingOrderRepository.save(order);
+        followUp(saved, preAuth);
         return imagingOrderMapper.toResponseDTO(saved);
     }
 
@@ -425,6 +537,11 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         UUID orderHospitalId = order.getHospital() != null ? order.getHospital().getId() : null;
         if (activeHospitalId == null || orderHospitalId == null || activeHospitalId.equals(orderHospitalId)) {
             return order;
+        }
+        // User decision 2026-11-14: an administrator reads the hospitals they act at, never
+        // across on a patient's treatment relationship (that is the care team's).
+        if (com.example.hms.security.ClinicalActor.isAdministrativeImagingReader()) {
+            throw new ResourceNotFoundException("imaging.order.notFound", orderId);
         }
         UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;
         UUID requesterUserId = roleValidator.getCurrentUserId();
@@ -461,7 +578,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             List<ImagingOrder> own = status != null
                 ? imagingOrderRepository.findByPatient_IdAndStatusOrderByOrderedAtDesc(patientId, status)
                 : imagingOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId);
-            return own.stream().map(imagingOrderMapper::toResponseDTO).toList();
+            // QA D1960: the patient's copy, not the care team's working notes.
+            return own.stream().map(imagingOrderMapper::toResponseDTO).map(PatientSafeView::imagingOrder).toList();
         }
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
@@ -472,7 +590,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             // patient's whole history and keep the acting hospital's rows in
             // memory. Untagged (V158), so every foreign row travels; accounted.
             UUID requesterUserId = roleValidator.getCurrentUserId();
-            Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
+            // User decision 2026-11-14: an administrator reads the acting hospital only.
+            Set<UUID> readable = com.example.hms.security.ClinicalActor.isAdministrativeImagingReader()
+                ? Set.of(activeHospitalId)
+                : recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
             orders = status != null
                 ? imagingOrderRepository.findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedAtDesc(patientId, readable, status)
                 : imagingOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable);
@@ -494,6 +615,13 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     @Override
     @Transactional(readOnly = true)
     public List<ImagingOrderResponseDTO> getOrdersByHospital(UUID hospitalId, ImagingOrderStatus status) {
+        // The path names the hospital: the interceptor has narrowed the scope to it, or refused.
+        // Belt and braces for a caller with no tenant context: never another hospital than the acting one.
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && !activeHospitalId.equals(hospitalId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "Imaging orders can only be listed for your active hospital.");
+        }
         List<ImagingOrder> orders;
         if (status != null) {
             orders = imagingOrderRepository.findByHospital_IdAndStatusInOrderByOrderedAtDesc(hospitalId, List.of(status));
@@ -528,11 +656,30 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ImagingOrderDuplicateMatchDTO> previewDuplicates(UUID patientId, ImagingModality modality, String bodyRegion, Integer lookbackDays) {
+    public List<ImagingOrderDuplicateMatchDTO> previewDuplicates(UUID patientId, UUID hospitalId, ImagingModality modality, String bodyRegion, Integer lookbackDays) {
         if (patientId == null || modality == null) {
             return Collections.emptyList();
         }
-        List<ImagingOrder> matches = loadDuplicateMatches(patientId, modality, bodyRegion, lookbackDays);
+        // QA D1920: the orders the new one would duplicate are those at the
+        // hospital it would be placed at -- the caller's own when pinned (a
+        // different hospital named is answered as a missing one), the named
+        // one for a super-admin in global view, who names none: no list.
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID targetHospitalId;
+        if (activeHospitalId != null) {
+            requireActingHospital(hospitalId != null ? hospitalId : activeHospitalId);
+            targetHospitalId = activeHospitalId;
+        } else if (hospitalId != null) {
+            targetHospitalId = hospitalId;
+        } else {
+            return Collections.emptyList();
+        }
+        // ...and only for a patient registered there, answered as unknown
+        // otherwise, as createOrder refuses to place the order.
+        if (!registrationRepository.existsByPatientIdAndHospitalId(patientId, targetHospitalId)) {
+            throw new ResourceNotFoundException("patient.notFound", patientId);
+        }
+        List<ImagingOrder> matches = loadDuplicateMatches(patientId, targetHospitalId, modality, bodyRegion, lookbackDays);
         return matches.stream()
             .map(imagingOrderMapper::toDuplicateMatchDTO)
             .toList();
@@ -590,14 +737,26 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         }
     }
 
-    private List<ImagingOrder> loadDuplicateMatches(UUID patientId, ImagingModality modality, String bodyRegion, Integer lookbackDays) {
-        if (patientId == null || modality == null) {
+    /**
+     * This patient's possible duplicates at {@code hospitalId} only (QA D1920),
+     * inside the requested window clamped to {@link #MAX_DUPLICATE_LOOKBACK_DAYS}.
+     * No hospital, no matches: an order without one duplicates nothing.
+     */
+    private List<ImagingOrder> loadDuplicateMatches(UUID patientId, UUID hospitalId, ImagingModality modality, String bodyRegion, Integer lookbackDays) {
+        if (patientId == null || hospitalId == null || modality == null) {
             return Collections.emptyList();
         }
-        int window = (lookbackDays == null || lookbackDays <= 0) ? DEFAULT_DUPLICATE_LOOKBACK_DAYS : lookbackDays;
-        LocalDateTime orderedAfter = LocalDateTime.now().minusDays(window);
+        LocalDateTime orderedAfter = LocalDateTime.now().minusDays(duplicateWindowDays(lookbackDays));
         String normalizedBodyRegion = normalizeBodyRegion(bodyRegion);
-        return imagingOrderRepository.findPotentialDuplicates(patientId, modality, normalizedBodyRegion, orderedAfter);
+        return imagingOrderRepository.findPotentialDuplicates(patientId, hospitalId, modality, normalizedBodyRegion, orderedAfter);
+    }
+
+    /** The window in days: the default when none or a non-positive one is asked, never above the cap. */
+    public static int duplicateWindowDays(Integer lookbackDays) {
+        if (lookbackDays == null || lookbackDays <= 0) {
+            return DEFAULT_DUPLICATE_LOOKBACK_DAYS;
+        }
+        return Math.min(lookbackDays, MAX_DUPLICATE_LOOKBACK_DAYS);
     }
 
     private String normalizeBodyRegion(String bodyRegion) {

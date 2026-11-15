@@ -1,3 +1,4 @@
+import { OrganDamageSymptom } from '../shared/organ-damage-symptoms';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, defer, map } from 'rxjs';
@@ -178,6 +179,8 @@ export interface TriageSubmissionRequest {
   fallRisk?: boolean;
   fallRiskScore?: number;
   roomAssignment?: string;
+  /** r54: the organ-damage signs ticked with the blood pressure (optional). */
+  organDamageSymptoms?: OrganDamageSymptom[];
 }
 
 export interface TriageSubmissionResponse {
@@ -192,6 +195,10 @@ export interface TriageSubmissionResponse {
   vitalSignId: string;
   /** QA D1564: the newborn warnings on the triage set; empty for anyone 28 days old or more. */
   newbornAlerts?: NewbornVitalAlert[];
+  /** QA D1890, r54: the obstetric severe-blood-pressure warning (pregnancy, or 42 days after a birth); empty when none. */
+  postpartumAlerts?: NewbornVitalAlert[];
+  /** r54: the adult severe-blood-pressure warning; empty when none. */
+  hypertensionAlerts?: NewbornVitalAlert[];
 }
 
 export interface MedicationReconciliationEntry {
@@ -264,6 +271,14 @@ export interface AfterVisitSummary {
   hospitalName: string;
   patientId?: string;
   patientName?: string;
+  /** Polish 2026-11-13: the identity band. */
+  patientDateOfBirth?: string | null;
+  patientMrn?: string | null;
+  /** A stay: its diagnoses read "at discharge"; an outpatient visit's do not. */
+  inpatientStay?: boolean;
+  /** Who signed the latest signed note, and when; absent while none is signed. */
+  signedByName?: string | null;
+  signedAt?: string | null;
   chiefComplaint?: string;
   dischargeDiagnoses: string[];
   prescriptionSummary?: string;
@@ -273,8 +288,82 @@ export interface AfterVisitSummary {
   encounterStatus: string;
   appointmentStatus?: string;
   checkoutTimestamp: string;
+  /** Provisional platform rule: a note of the visit still waits for its author's signature. */
+  pendingSignature?: boolean;
   followUpAppointmentId?: string;
   followUpAppointmentDate?: string;
+  /** The booked follow-up's time ("HH:mm"), service and clinician, when known. */
+  followUpAppointmentTime?: string | null;
+  followUpDepartmentName?: string | null;
+  followUpClinicianName?: string | null;
+  /* User decision 2026-11-12: the summary's content sections; each is empty when there is nothing to show. */
+  hospitalPhone?: string | null;
+  departmentPhone?: string | null;
+  vitalSigns?: AvsVitalSigns | null;
+  orderedTests?: AvsOrderedTest[] | null;
+  allergies?: AvsAllergy[] | null;
+  currentMedications?: AvsCurrentMedication[] | null;
+  clinicalAssessment?: string | null;
+  clinicalPlan?: string | null;
+  medicalHistory?: { condition: string; status?: string | null }[] | null;
+  surgicalHistory?: { procedure: string; date?: string | null }[] | null;
+  familyHistory?: { relationship?: string | null; condition: string }[] | null;
+  socialHistory?: {
+    tobaccoUse?: boolean | null;
+    alcoholUse?: boolean | null;
+    occupation?: string | null;
+  } | null;
+}
+
+export interface AvsVitalSigns {
+  recordedAt?: string | null;
+  temperatureCelsius?: number | null;
+  heartRateBpm?: number | null;
+  respiratoryRateBpm?: number | null;
+  systolicBpMmHg?: number | null;
+  diastolicBpMmHg?: number | null;
+  spo2Percent?: number | null;
+  bloodGlucoseMgDl?: number | null;
+  weightKg?: number | null;
+  heightCm?: number | null;
+  painScore?: number | null;
+  /** Only when weight and height were both recorded; no threshold is applied to it. */
+  bmi?: number | null;
+  /** Per value, what the existing vital-sign rules judged: LOW, HIGH or ABNORMAL; absent = no rule fired. */
+  valueFlags?: Record<string, 'LOW' | 'HIGH' | 'ABNORMAL'> | null;
+  flagged: boolean;
+}
+
+export interface AvsTestResult {
+  value?: string | null;
+  unit?: string | null;
+  referenceRange?: string | null;
+  abnormalFlag?: string | null;
+  corrected?: boolean;
+}
+
+export interface AvsOrderedTest {
+  kind: 'LAB' | 'IMAGING';
+  name?: string | null;
+  status?: string | null;
+  results?: AvsTestResult[] | null;
+  impression?: string | null;
+}
+
+export interface AvsAllergy {
+  allergen: string;
+  severity?: string | null;
+  reaction?: string | null;
+}
+
+export interface AvsCurrentMedication {
+  name: string;
+  dosage?: string | null;
+  frequency?: string | null;
+  startDate?: string | null;
+  prescriberName?: string | null;
+  /** Lines sharing a key are the same drug (catalogue item, else normalised name). */
+  drugKey?: string | null;
 }
 
 export interface EncounterRequest {

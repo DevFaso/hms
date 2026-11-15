@@ -153,6 +153,11 @@
   "LABOR": {
     "ACTION_LINE": "Action line",
     "ACTIVE_EPISODE": "Active labor",
+    "FOREIGN": {
+      "ORIGIN": "Labour in progress at {{hospital}}, read only here",
+      "HINT": "This labour is charted by the hospital where it was started. You can admit her here for other care; a second labour episode cannot be opened while this one is active.",
+      "HINT_ARRIVAL": "This labour is followed by the hospital where it was opened. You may admit her here for other care; a second labour episode cannot be opened while this one is in progress. If she arrived here without a handover, choose \"Arrived without handover\"."
+    },
     "ACTIVE_PHASE_SINCE": "Active phase since",
     "ADMITTED": "Admitted",
     "ALERTS": "Alerts",
@@ -216,6 +221,15 @@
     "MOULDING_PLUS_ONE": "+1",
     "MOULDING_PLUS_THREE": "+3",
     "MOULDING_PLUS_TWO": "+2",
+    "NEWBORN": "Newborn",
+    "NEWBORNS": "Newborns registered",
+    "NEWBORNS_REGISTERED": "Newborns registered ({{count}}): {{names}}",
+    "NEWBORN_MRN": "MRN {{mrn}}",
+    "NEWBORN_NAME_PROVISIONAL": "The name is provisional: reception can change it on the baby’s chart.",
+    "NEWBORN_NEEDS_REVIEW": "To review",
+    "NEWBORN_REGISTRATION_PENDING": "The baby is not registered as a patient yet: reception must register it and link it to the mother.",
+    "NEWBORN_REVIEW_LIVE_BIRTH_COUNT_LOWERED": "To review: fewer live births are now recorded",
+    "NEWBORN_REVIEW_NO_LONGER_LIVE_BIRTH": "To review: the delivery is no longer recorded as a live birth",
     "NEW_ENTRY": "New Entry",
     "NOTES": "Notes",
     "NO_EPISODES": "No labor episodes",
@@ -241,6 +255,11 @@
     "RISK_NOTES": "Risk notes",
     "RECENT_DELIVERY_OVERRIDE": "Override reason (recent delivery)",
     "RECENT_DELIVERY_OVERRIDE_HINT": "Required only when a birth was recorded for this patient in the last 20 weeks.",
+    "BORN_BEFORE_ARRIVAL": "Birth before arrival",
+    "BORN_BEFORE_ARRIVAL_REASON": "Reason born before arrival",
+    "BORN_BEFORE_ARRIVAL_HINT": "Only when the baby was born before she arrived here (in transit): the birth time may then be earlier than this episode's start.",
+    "BORN_BEFORE_ARRIVAL_REASON_REQUIRED": "Give the reason the baby was born before her arrival.",
+    "BORN_BEFORE_ARRIVAL_AFTER_OBSERVATION": "She was already observed here in labour before this birth time: the birth was not before her arrival.",
     "SAVE_DELIVERY": "Save Delivery Record",
     "SAVE_ENTRY": "Save Entry",
     "SEX_FEMALE": "Female",
@@ -269,7 +288,39 @@
     "APGAR_ONE": "APGAR at 1 min",
     "APGAR_FIVE": "APGAR at 5 min",
     "BIRTH_BEFORE_LAST_ENTRY": "Time of birth: it cannot be earlier than an observation already charted on the partograph.",
-    "PLACENTA_BEFORE_BIRTH": "Placenta delivered at: the placenta cannot be delivered before the birth."
+    "PLACENTA_BEFORE_BIRTH": "Placenta delivered at: the placenta cannot be delivered before the birth.",
+    "STATUS_TRANSFERRED_OUT": "Transferred to another hospital",
+    "STATUS_LEFT_WITHOUT_HANDOVER": "Left without a handover",
+    "TRANSFER": {
+      "ACTION": "Transfer",
+      "TITLE": "Transfer her labour to another hospital",
+      "HINT": "Her labour episode here closes and the hospital you choose gets a new episode linked to it, with her partograph from here shown read only. Its maternity team is alerted. Provisional rule, pending clinical approval.",
+      "DESTINATION": "Receiving hospital",
+      "REASON": "Reason",
+      "SUBMIT": "Transfer",
+      "REQUIRED": "Choose the receiving hospital and give the reason.",
+      "REASON_REQUIRED": "Give the reason.",
+      "DONE": "Labour transferred. The receiving hospital has been alerted.",
+      "ERROR": "The labour could not be transferred.",
+      "CONTINUES": "Continues her labour episode at {{hospital}}",
+      "PREVIOUS_PARTOGRAPH": "Partograph at {{hospital}} before the transfer, read only",
+      "CLOSED_TRANSFERRED": "Labour transferred to {{hospital}}",
+      "CLOSED_LEFT": "She arrived at {{hospital}} without a handover; that hospital took over her labour"
+    },
+    "ARRIVAL": {
+      "ACTION": "Arrived without handover",
+      "TITLE": "She arrived here without a handover",
+      "HINT": "Her labour episode at {{hospital}} closes and a new labour episode opens here, linked to it; {{hospital}} is alerted. Provisional rule, pending clinical approval.",
+      "SUBMIT": "Record the arrival",
+      "DONE": "Arrival recorded. Her labour episode is open here and {{hospital}} has been alerted.",
+      "ERROR": "The arrival could not be recorded."
+    },
+    "BABY_OUTCOME": "Baby {{order}}",
+    "BABY_OUTCOME_LIVE": "Born alive",
+    "BABY_OUTCOME_STILLBORN": "Stillborn (no signs of life)",
+    "BABY_OUTCOME_UNKNOWN": "Not recorded",
+    "BABY_OUTCOMES": "Outcome of each baby",
+    "FETAL_DEATH_EVENT_RECORDED": "Stillbirth recorded as a fetal-death event (no patient record): it is counted in the mortality register."
   },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Back to organizations",
@@ -1133,7 +1184,9 @@
         "POSTPONED": "Postponed"
       }
     },
-    "NURSING_NOTE": "Nursing note"
+    "NURSING_NOTE": "Nursing note",
+    "ADDENDUM": "Addendum",
+    "OPEN_IMAGING_REPORT": "Open the report"
   },
   "ORDER_SETS": {
     "QUANTITY_VALUE": "Quantity: {{value}} {{unit}}",
@@ -1262,6 +1315,7 @@
   },
   "ADMISSIONS": {
     "ROOM_BED_HELD_HINT": "The room follows the bed this stay holds. To move the patient, assign another bed or request a transfer.",
+    "SET_AT_ADMISSION_HINT": "The patient, hospital, admitting clinician, admission type and admission time record the admission itself, so they cannot be changed once the patient is admitted.",
     "ACUITY": "Acuity",
     "ACUITY_CRITICAL": "Critical",
     "ACUITY_LEVEL": "Acuity Level",
@@ -1273,6 +1327,7 @@
     "ADMISSION_NOTES": "Admission Notes",
     "ADMISSION_TYPE": "Admission Type",
     "ADMITTED": "Admitted",
+    "ADMITTING_CLINICIAN": "Admitting clinician",
     "ADMITTING_PROVIDER": "Admitting Provider",
     "ADMIT_DATE": "Admission Date",
     "ADMIT_PATIENT": "Admit Patient",
@@ -1304,7 +1359,6 @@
     "DISCHARGE_SUMMARY_PLACEHOLDER": "Brief summary of hospital stay and outcome...",
     "DISCHARGE_DIAGNOSIS": "Discharge diagnosis",
     "DISCHARGE_DIAGNOSIS_PLACEHOLDER": "Final diagnosis at discharge",
-    "DISCHARGING": "Discharging",
     "DISCHARGING_BTN": "Discharging...",
     "DISCHARGING_PROVIDER": "Discharging Provider",
     "DISPOSITION_AGAINST_MEDICAL_ADVICE": "Against Medical Advice",
@@ -1320,7 +1374,6 @@
     "DISPOSITION_TRANSFERRED_TO_ANOTHER_HOSPITAL": "Transfer to Another Hospital",
     "EDIT": "Edit Admission",
     "EMPTY_MESSAGE": "No admissions yet. Create your first admission.",
-    "FROM_ROOM": "from room",
     "LOADING": "Loading admissions...",
     "LOAD_FAILED": "Failed to load admissions",
     "NEW": "New Admission",
@@ -1334,6 +1387,7 @@
     "SEARCH": "Search admissions...",
     "SELECT_BED": "Select a bed",
     "SELECT_HOSPITAL_FIRST": "Select a hospital first",
+    "SELECT_CLINICIAN": "Select clinician",
     "SELECT_PROVIDER": "Select provider",
     "SUBTITLE": "Manage hospital admissions",
     "TITLE": "Admissions",
@@ -1363,7 +1417,12 @@
     "ROWS_PER_PAGE": "Rows per page",
     "PAGE_OF": "Page {{page}} of {{total}}",
     "PREVIOUS_PAGE": "Previous page",
-    "NEXT_PAGE": "Next page"
+    "NEXT_PAGE": "Next page",
+    "DISCHARGING_PATIENT": "Discharging",
+    "NO_ROOM_ASSIGNED": "No room assigned",
+    "DIAGNOSIS_FROM_SUMMARY": "The diagnosis written in the discharge summary of this stay. Change it on the summary.",
+    "INSTRUCTIONS_IN_SUMMARY": "Already in the discharge summary",
+    "SUMMARY_FINALIZED_NO_INSTRUCTIONS": "The discharge summary of this stay is finalized: its instructions are the ones the patient receives."
   },
   "ANALYTICS": {
     "LOAD_FAILED": "The analytics could not be loaded. Try again.",
@@ -1597,6 +1656,8 @@
     "WRITE_DELETE": "Deleted: {{entity}}",
     "WRITE_ENTITY_UNKNOWN": "record",
     "DESC": {
+      "NEWBORN_REGISTERED_FROM_DELIVERY": "Newborn registered from a recorded delivery",
+      "NEWBORN_REGISTRATION_PENDING": "Newborn registration pending after a recorded delivery",
       "PARTNER_DISPENSE_OF_HELD_RX": "{{what}} confirmed dispensing prescription {{rx}}, which is held for review; the hold stands. A person must check with the patient and the partner.",
       "PARTNER_OFFER_RECALLED": "Partner offer recalled: prescription {{rx}} is held for review",
       "ORDER_REVIEW_DOSE_BEFORE_HOLD": "Dose charted as given before the hold: {{type}} {{order}} at {{at}}, dispute {{dispute}}, by {{actor}}",
@@ -1780,6 +1841,8 @@
       "PRO_RESPONSE": "Patient questionnaire answers recorded ({{instrument}}, {{source}})",
       "PRO_ALERT_ACK": "Questionnaire safety alert acknowledged",
       "LAB_CORRECTION": "Correction: result {{correction}} replaces released result {{original}}",
+      "LAB_DUPLICATE_ACKNOWLEDGED": "Duplicate warning acknowledged (\"Order anyway\"): lab order {{order}} placed while active order {{earlier}} of the same test is open",
+      "LAB_DUPLICATE_UNACKNOWLEDGED": "Duplicate warning not acknowledged: lab order {{order}} placed while active order {{earlier}} of the same test is open",
       "LAB_AUTOVERIFICATION": "Automatic validation (analyser flag N) via {{source}}",
       "HL7_ORU_INGESTED": "Lab result message (ORU^R01) received via {{source}}",
       "HL7_ADT": "Admission message (ADT^{{type}}): {{what}} — {{details}}",
@@ -1865,11 +1928,28 @@
       "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} undone on invoice {{invoice}}, reason recorded",
       "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Obstetric rule skipped for an emergency ultrasound order",
       "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Obstetric rule skipped for an emergency OB/GYN referral",
+      "LABOR_EPISODE_START_REFUSED": "Labour episode start refused: an active labour episode is open at another hospital",
+      "LABOR_ACTIVE_DISCLOSURE_ON_REFUSAL": "Active labour at another hospital disclosed when refusing a second labour episode",
+      "LABOR_EPISODE_START_REFUSED_COORDINATION": "Labour episode start refused: care coordination required",
       "OBSTETRIC_RULE_SKIP_CLEARED_ULTRASOUND": "Obstetric rule skip cleared on an ultrasound order",
       "ALLERGY_ACKNOWLEDGED": "Allergy acknowledged with a reason",
       "ALLERGY_PASSED_UNDER_REVIEW": "Allergy conflict passed under the prescriber's review",
       "ALLERGY_REVIEWED_BY_PRESCRIBER": "Allergy conflict reviewed by the prescriber",
-      "ALLERGY_REVIEWED_AT_SIGNATURE": "Allergy conflict reviewed at signature"
+      "ALLERGY_REVIEWED_AT_SIGNATURE": "Allergy conflict reviewed at signature",
+      "LABOR_EPISODE_TRANSFERRED_OUT": "Labour episode transferred to another hospital with a handover",
+      "LABOR_EPISODE_TRANSFERRED_IN": "Labour episode received from another hospital with a handover",
+      "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Labour episode closed: she arrived at another hospital without a handover",
+      "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Birth recorded as before her arrival from another hospital",
+      "LABOR_EPISODE_HANDOVER_READ": "Labour episode handed over by transfer read at the receiving hospital",
+      "LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER": "Labour episode opened on arrival from another hospital without a handover",
+      "FETAL_DEATH_EVENT_RECORDED": "Fetal-death event recorded for a stillborn baby",
+      "FETAL_DEATH_EVENT_SUPERSEDED": "Fetal-death event superseded by a corrected baby outcome",
+      "DELIVERY_BABY_OUTCOME_CORRECTED": "Baby outcome corrected on a delivery record",
+      "STILLBIRTH_CERTIFICATE_CONFLICT_DEATH": "Death certificate declares a stillbirth the delivery now records as born alive",
+      "STILLBIRTH_CERTIFICATE_CONFLICT_DELIVERY": "Delivery records as born alive a baby a death certificate declares stillborn",
+      "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Stillbirth certificate conflict reconciled",
+      "IMAGING_DUPLICATE_OVERRIDDEN": "Duplicate warning overridden (\"Order anyway\", reason: {{reason}}): imaging order {{order}} placed while recent order {{earlier}} of the same study exists",
+      "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Duplicate warning not overridden: imaging order {{order}} placed while recent order {{earlier}} of the same study exists"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -1976,7 +2056,8 @@
       "REFERRAL": "referral",
       "STORYBOARD": "patient overview",
       "ULTRASOUND_ORDER": "ultrasound order",
-      "VITAL_SIGNS": "vital signs"
+      "VITAL_SIGNS": "vital signs",
+      "OBSTETRIC_RECORD": "obstetric record"
     },
     "CROSS_HOSPITAL_PURPOSE": {
       "TO_OPEN_A_LABOUR_EPISODE": ", to open a labour episode"
@@ -3025,6 +3106,7 @@
     "NO_ACTIVATION_CHANNEL": "No activation message reached this account — it stays inactive until someone delivers the confirmation code.",
     "SMS_FAILED": "The activation SMS could not be delivered.",
     "SMS_NOT_CONFIGURED": "SMS sending is disabled on this server — no activation SMS was sent.",
+    "SMS_RECIPIENT_NOT_ALLOWED": "The activation SMS was not sent: this environment only texts approved test numbers, and this number is not one of them. Give the code in person or add the number to the test list.",
     "WELCOME_EMAIL_FAILED": "The welcome email with login details could not be delivered."
   },
   "DEPARTMENTS": {
@@ -3033,6 +3115,12 @@
     "BACK_TO_LIST": "Back to Departments",
     "CODE": "Code",
     "CODE_HINT": "Uppercase letters, digits, - and _ only",
+    "BED_CAPACITY": "Bed capacity",
+    "NAMES_PER_LANGUAGE": "Names per language",
+    "NAMES_PER_LANGUAGE_HINT": "Leave a language blank to keep its current name.",
+    "NAME_IN_EN": "Name in English",
+    "NAME_IN_ES": "Name in Spanish",
+    "NAME_IN_FR": "Name in French",
     "CREATE": "Create Department",
     "CREATE_FIRST": "Create your first department.",
     "DELETE": "Delete Department",
@@ -3497,6 +3585,10 @@
     "ZIP_CODE": "Zip Code"
   },
   "IMAGING": {
+    "RESULTS_PARTIAL_FAILURE": "The reports of these hospitals could not be loaded, so the list is incomplete: {{hospitals}}.",
+    "ADMIN_READ_ONLY": "Read-only: imaging requests and released reports. Ordering, reporting and signing are done by the clinical team.",
+    "ALL_HOSPITALS": "All hospitals",
+    "HOSPITAL_FILTER": "Hospital",
     "ACCESSION": "Accession number",
     "ACK_CRITICAL": "Acknowledge critical",
     "ACTIVE_ORDERS": "Active Orders",
@@ -3506,13 +3598,15 @@
     "BODY_REGION": "Body Region",
     "BODY_REGION_PLACEHOLDER": "e.g. Chest",
     "CANCELLED": "Cancelled",
+    "CANCELLED_ORDERS": "Cancelled",
     "CANCELLING": "Cancelling...",
     "CANCEL_ORDER": "Cancel Order",
+    "CLEAR_DATES": "Clear dates",
     "CLINICAL_QUESTION": "Clinical Question",
     "CLOSE_DETAIL": "Close detail",
     "COMPARISON": "Comparison studies",
     "COMPLETED": "Completed",
-    "COMPLETED_AT": "Completed At",
+    "COMPLETED_AT": "Completed at",
     "CONFIRM_CANCEL": "Are you sure you want to cancel this order?",
     "CONTRAST_ADMINISTERED": "Contrast administered",
     "CONTRAST_DETAILS": "Contrast details",
@@ -3527,6 +3621,8 @@
     "CRITICAL_ONLY": "Critical only",
     "CRITICAL_UNACKED": "Critical result — acknowledgement required",
     "CT_SCAN": "CT Scan",
+    "DATE_FROM": "Ordered from",
+    "DATE_TO": "Ordered until",
     "EDIT_ORDER": "Edit Order",
     "EDIT_REPORT": "Edit report",
     "FINDINGS": "Findings",
@@ -3541,6 +3637,7 @@
     "LATERALITY_LEFT": "Left",
     "LATERALITY_MIDLINE": "Midline",
     "LATERALITY_NOT_APPLICABLE": "N/A",
+    "LATERALITY_NOT_RECORDED": "Not recorded",
     "LATERALITY_RIGHT": "Right",
     "LOADING": "Loading imaging orders...",
     "MEASUREMENT": "Measurement",
@@ -3594,14 +3691,6 @@
     "REPORT_SAVE_ERROR": "The report could not be saved",
     "REPORT_SIGNED": "Report signed",
     "REPORT_SIGN_ERROR": "The report could not be signed",
-    "REPORT_STATUS_ADDENDUM": "Addendum",
-    "REPORT_STATUS_AMENDED": "Amended",
-    "REPORT_STATUS_CANCELLED": "Cancelled",
-    "REPORT_STATUS_CORRECTED": "Corrected",
-    "REPORT_STATUS_DRAFT": "Draft",
-    "REPORT_STATUS_ERROR": "Error",
-    "REPORT_STATUS_FINAL": "Final",
-    "REPORT_STATUS_PRELIMINARY": "Preliminary",
     "REPORT_TITLE": "Report title",
     "REPORT_UPDATED": "Report updated",
     "REPORT_VERSION": "Version",
@@ -3611,7 +3700,7 @@
     "SCHEDULED": "Scheduled",
     "SEARCH": "Search imaging...",
     "SEARCH_PATIENT_PLACEHOLDER": "Search patient...",
-    "SEARCH_PLACEHOLDER": "Search...",
+    "SEARCH_PLACEHOLDER": "Search patient, MRN or study…",
     "SELECT_HOSPITAL": "Select hospital",
     "SELECT_MODALITY": "Select modality",
     "SELECT_PRIORITY": "Select priority",
@@ -3619,8 +3708,10 @@
     "SHOW_ALL": "Show All",
     "SHOW_CANCELLED": "Show Cancelled",
     "SHOW_COMPLETED": "Show Completed",
+    "SIGNATURE_FINGERPRINT": "Signature fingerprint",
+    "SIGNATURE_FINGERPRINT_HINT": "Technical proof that the signed text has not changed since signing.",
     "SIGNED_BY": "Signed by",
-    "SIGNED_LOCKED": "Signed and locked. Digest",
+    "SIGNED_LOCKED": "Signed and locked",
     "SIGNED_UNVERIFIABLE": "signed outside this system — no digest on record",
     "SIGN_CONFIRM": "Signing is final and closes this report to edits. Corrections must be filed as a new version. Continue?",
     "SIGN_REPORT": "Sign",
@@ -3647,9 +3738,62 @@
     "VOID_HINT": "Cancels an unsigned report. A signed report must be superseded by a corrected version instead.",
     "VOID_REASON_REQUIRED": "A reason is required to void a report",
     "VOID_REPORT": "Void report",
-    "X_RAY": "X-Ray"
+    "X_RAY": "X-Ray",
+    "COMPLETED_ORDERS": "Completed",
+    "START_STUDY": "Start the study",
+    "COMPLETE_STUDY": "Complete the study",
+    "STUDY_STARTED": "Study started",
+    "STUDY_COMPLETED": "Study completed",
+    "STUDY_STATUS_ERROR": "The study status could not be updated",
+    "COMPLETE_STUDY_CONFIRM": "Mark this study as completed? A completed study cannot be reopened.",
+    "CONTRAST_REQUIRED": "Contrast required",
+    "CONTRAST_TYPE": "Contrast type",
+    "CONTRAST_TYPE_PLACEHOLDER": "e.g. IV iodinated",
+    "CONTRAST_ALLERGY": "Contrast allergy",
+    "CONTRAST_ALLERGY_DETAILS": "Allergy details",
+    "CONTRAST_ALLERGY_PLACEHOLDER": "Reaction, premedication given…",
+    "SCHEDULED_DATE": "Exam date",
+    "SCHEDULED_TIME": "Exam time",
+    "LOCATION": "Location",
+    "REQUIRES_AUTHORIZATION": "Pre-authorisation required",
+    "AUTHORIZATION_NUMBER": "Pre-authorisation number",
+    "AUTHORIZATION_NUMBER_HINT": "The study can be started once this number is recorded.",
+    "AUTHORIZATION_NUMBER_MISSING": "Required, number not recorded yet",
+    "PRE_AUTHORIZATION": "Pre-authorisation",
+    "WORKFLOW_NOTES": "Workflow notes",
+    "SCHEDULED_TIME_NEEDS_DATE": "Enter the exam date for this time.",
+    "SCHEDULED_DATE_PAST": "The exam date cannot be in the past.",
+    "ORDER_NOT_FOUND": "This imaging order could not be opened.",
+    "DUPLICATE": {
+      "TITLE": "Possible duplicate order",
+      "BODY": "This patient already has an imaging order for the same modality and region here, placed in the last 30 days. Check that a new order is really needed.",
+      "BACK": "Back to the order",
+      "ORDER_ANYWAY": "Order anyway",
+      "PLACED_ANYWAY": "The order was placed, but this patient already had a recent order for the same modality and region here. Check that each one is needed.",
+      "FLAGGED": "Possible duplicate of a recent order for the same modality and region.",
+      "REASON_LEGEND": "Why order anyway?",
+      "REASON_REQUIRED": "Choose why you are ordering this study despite the recent order.",
+      "NOTE_REQUIRED": "Describe the reason: a note is required with \"Other\".",
+      "NOTE_LABEL": "Detail the reason",
+      "OVERRIDE_LABEL": "Ordered despite a recent order"
+    },
+    "PREAUTH_PENDING": {
+      "FLAG": "Pre-authorisation pending",
+      "BODY": "Urgent study done without its pre-authorisation number. Billing has been asked to obtain it; record the number as soon as it is known.",
+      "RECORD": "Record the number",
+      "RECORDED": "Pre-authorisation number recorded.",
+      "RECORD_ERROR": "The pre-authorisation number could not be recorded.",
+      "NUMBER_REQUIRED": "Enter the pre-authorisation number."
+    }
   },
   "LAB": {
+    "DUPLICATE": {
+      "TITLE": "Possible duplicate order",
+      "BODY": "This patient already has an active order for the same test here, placed in the last 24 hours. Check that a new order is really needed.",
+      "BACK": "Back to the order",
+      "ORDER_ANYWAY": "Order anyway",
+      "PLACED_ANYWAY": "The order was placed, but this patient already had an active order for the same test here: {{codes}}. Check that every one of them is needed."
+    },
     "ABNORMAL": "Abnormal",
     "ACCESSION": "Accession #",
     "ACTIVE_ORDERS": "Active Orders",
@@ -3784,7 +3928,44 @@
       "REJECTED_ON_ORDER": "Specimen rejected by the laboratory: a new sample is needed",
       "TITLE": "Reject the specimen"
     },
-    "SPECIMEN_ORDER_CLOSED": "This order already has a result or is cancelled: it takes no new specimen. A repeat test is a new order."
+    "SPECIMEN_ORDER_CLOSED": "This order already has a result or is cancelled: it takes no new specimen. A repeat test is a new order.",
+    "PRESCRIBER": "Prescriber",
+    "MRN": "MRN",
+    "VIEW_FULL_RESULT": "View full result",
+    "TURNAROUND": "Turnaround time",
+    "TAT_MINUTES": "{{minutes}} min",
+    "TAT_HOURS_MINUTES": "{{hours}} h {{minutes}} min",
+    "TAT_DAYS_HOURS": "{{days}} d {{hours}} h",
+    "AGE_DAY": "{{count}} day",
+    "AGE_DAYS": "{{count}} days",
+    "AGE_MONTH": "{{count}} month",
+    "AGE_MONTHS": "{{count}} months",
+    "AGE_YEARS": "{{count}} years",
+    "STATE": {
+      "TO_COLLECT": "Awaiting collection",
+      "COLLECTED": "Collected",
+      "IN_ANALYSIS": "In analysis",
+      "AWAITING_VALIDATION": "Awaiting validation",
+      "COMPLETED": "Completed",
+      "CANCELLED": "Cancelled",
+      "ENTERED_IN_ERROR": "Entered in error"
+    },
+    "STATE_GROUP": {
+      "OPEN": "In progress",
+      "OPEN_HINT": "Requests awaiting collection, in analysis or awaiting validation",
+      "COMPLETED": "Completed",
+      "COMPLETED_HINT": "Requests whose results are all validated",
+      "CANCELLED": "Cancelled"
+    },
+    "TIMELINE": {
+      "TITLE": "Specimen and timeline",
+      "ORDERED": "Ordered",
+      "COLLECTED": "Collected",
+      "RECEIVED": "Received at the laboratory",
+      "RESULTED": "Result entered",
+      "VALIDATED": "Validated"
+    },
+    "LINKED_ORDER_NOT_FOUND": "This lab request was not found, or you cannot see it from this hospital."
   },
   "LAB_STAFF": {
     "TITLE": "Lab Staff Management",
@@ -3934,6 +4115,7 @@
     "CORRECTED_HINT": "This result corrects a result released earlier; the earlier value stays on record, marked superseded.",
     "TITLE": "Lab Results",
     "SUBTITLE": "Manage laboratory test results",
+    "LAB_COMMENT": "Laboratory comment",
     "LOADING": "Loading lab results…",
     "SEARCH": "Search by order code, patient, or test…",
     "TOTAL": "Total Results",
@@ -4024,11 +4206,19 @@
     "EXPECTED_RESULT": "Expected result",
     "CORRECTED_HINT_PATIENT": "The laboratory corrected this result after first releasing it. This is the value that counts; your care team has been told.",
     "RANGE_APPLIED": "Range applied to this patient",
-    "RANGE_SOURCE": "Source",
+    "RANGE_SOURCE": "Source (as entered)",
     "UNIT_FROM_TEST": "Unit of the test: {{unit}}. A value in another unit may not be graded.",
     "UNGRADED_RELEASE_TITLE": "Release a result that is not graded",
     "UNGRADED_RELEASE_CONFIRM": "I reviewed it, release",
-    "ROW_PENDING_RELEASE": "Pending release"
+    "ROW_PENDING_RELEASE": "Pending release",
+    "RANGE_NOTES_AS_ENTERED": "Note (as entered)",
+    "PREVIOUS_VALUE": "Previous: {{value}} on {{date}}",
+    "CHANGE": "Change: {{delta}}",
+    "CHANGE_WITHHELD": "Change not computed (non-exact value or different units)",
+    "OTHER_RANGES": "Other ranges ({{count}})",
+    "CRITICAL_LIMITS": "Critical values",
+    "NO_INTERVAL": "No interval",
+    "OPEN_REQUEST": "Open request {{code}}"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Abnormal",
@@ -4404,7 +4594,8 @@
     "PROVIDER_STAFF": "Staff",
     "PROVIDER_AUDIT": "Audit trail",
     "DHIS2": "DHIS2 export",
-    "ADT_INTAKE": "ADT intake"
+    "ADT_INTAKE": "ADT intake",
+    "UNSIGNED_NOTES": "Unsigned notes"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Critical alert",
@@ -5730,6 +5921,7 @@
       "PENDING_INTERPRETATION": "In progress — your result will appear here once the laboratory has released it."
     },
     "VISITS": {
+      "PENDING_SIGNATURE": "Not finalised — awaiting the clinician’s signature",
       "ASSESSMENT": "Doctor's assessment",
       "TITLE": "Visit History",
       "LOADING": "Loading visit history...",
@@ -6049,7 +6241,8 @@
       "ADDITIONAL_NOTES": "Additional Notes",
       "FOLLOW_UP": "Follow-Up Appointment",
       "SCHEDULED_FOR": "Scheduled for",
-      "PRINT": "Print Summary"
+      "PRINT": "Print Summary",
+      "PENDING_SIGNATURE": "Not finalised — awaiting the clinician’s signature"
     },
     "ENUM": {
       "LAB_ORDER_CHANNEL": {
@@ -6385,7 +6578,7 @@
         "ORDERED": "Ordered",
         "PENDING": "Pending",
         "RECEIVED": "Received",
-        "RESULTED": "Resulted",
+        "RESULTED": "Awaiting validation",
         "VERIFIED": "Verified",
         "ENTERED_IN_ERROR": "Entered in error"
       },
@@ -6641,6 +6834,7 @@
         "PROVIDER_VERIFIED": "Provider Verified",
         "EMERGENCY_BLOOD_RELEASED": "Emergency blood released uncrossmatched",
         "OBSTETRIC_RULE_SKIPPED_EMERGENCY": "Obstetric rule skipped for an emergency",
+        "LABOR_EPISODE_START_REFUSED": "Labour episode start refused",
         "PRO_ALERT_ACKNOWLEDGED": "PRO Alert Acknowledged",
         "PRO_INSTRUMENT_IMPORTED": "PRO Instrument Imported",
         "PRO_RESPONSE_RECORDED": "PRO Response Recorded",
@@ -6695,6 +6889,7 @@
         "LAB_ORDER_CANCELLED": "Lab Order Cancelled",
         "LAB_RESULT_SELF_RELEASED": "Lab Result Self-Released",
         "LAB_ORDER_ENTERED_IN_ERROR": "Lab Order Entered in Error",
+        "LAB_ORDER_DUPLICATE_PLACED": "Duplicate lab order placed",
         "MEDICATION_DOSE_LIMITS_UPDATED": "Paediatric dose limits updated",
         "PRESCRIPTION_CDS_OVERRIDDEN": "Prescription decision-support alert overridden",
         "PRESCRIPTION_SIGN_REAUTHENTICATION": "Re-authentication to sign a controlled-drug prescription",
@@ -6702,7 +6897,17 @@
         "ADMISSION_BED_RELEASED": "Inpatient bed released",
         "MAR_ALLERGY_ACKNOWLEDGED": "Allergy conflict passed at a dose",
         "DISPENSE_ALLERGY_ACKNOWLEDGED": "Allergy conflict passed at the pharmacy",
-        "PRESCRIPTION_ALLERGY_REVIEWED": "Allergy conflict reviewed by a prescriber"
+        "PRESCRIPTION_ALLERGY_REVIEWED": "Allergy conflict reviewed by a prescriber",
+        "LABOR_EPISODE_TRANSFERRED_OUT": "Labour transferred out",
+        "LABOR_EPISODE_TRANSFERRED_IN": "Labour transferred in",
+        "LABOR_EPISODE_LEFT_WITHOUT_HANDOVER": "Labour left without a handover",
+        "LABOR_DELIVERY_BORN_BEFORE_ARRIVAL": "Birth before arrival",
+        "FETAL_DEATH_EVENT_RECORDED": "Fetal-death event recorded",
+        "FETAL_DEATH_EVENT_SUPERSEDED": "Fetal-death event superseded",
+        "DELIVERY_BABY_OUTCOME_CORRECTED": "Baby outcome corrected",
+        "STILLBIRTH_CERTIFICATE_CONFLICT": "Stillbirth certificate conflict",
+        "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Stillbirth certificate conflict reconciled",
+        "IMAGING_ORDER_DUPLICATE_PLACED": "Duplicate imaging order placed"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -6833,7 +7038,8 @@
         "PRO_CRITICAL_ITEM": "Critical PRO Item",
         "PRO_CRITICAL_ITEM_ESCALATION": "Critical PRO Item Escalation",
         "PRO_SCREEN_POSITIVE": "Positive PRO Screen",
-        "REORDER_ALERT": "Reorder Alert"
+        "REORDER_ALERT": "Reorder Alert",
+        "SEVERE_HYPERTENSION": "Severe hypertension"
       },
       "ORGANIZATION_TYPE": {
         "ACADEMIC_CENTER": "Academic Center",
@@ -6858,6 +7064,7 @@
         "EDUCATION": "Education",
         "FOLLOW_UP": "Follow-Up",
         "HEMORRHAGE": "Hemorrhage",
+        "HYPERTENSION": "Severe hypertension",
         "INFECTION": "Infection",
         "PAIN": "Pain",
         "PSYCHOSOCIAL": "Psychosocial"
@@ -7083,6 +7290,8 @@
         "GENERAL": "General"
       },
       "AUDIT_ENTITY_TYPE": {
+        "SAFEGUARDING": "Child-protection vigilance review",
+        "DELIVERY_RECORD": "Delivery record",
         "ORDER_REVIEW_HOLD": "Order review hold",
         "DEATH_DISPUTE": "Death dispute",
         "DEATH_RECORD": "Death record",
@@ -7226,7 +7435,9 @@
         "ULTRASOUND": "Ultrasound",
         "VISIT_TYPE": "Visit type",
         "WARD": "Ward",
-        "WEBHOOK": "Partner webhook"
+        "WEBHOOK": "Partner webhook",
+        "FETAL_DEATH_EVENT": "Fetal-death event",
+        "IMAGING_ORDER": "Imaging order"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -7352,6 +7563,17 @@
         "DNR": "Do not resuscitate (DNR)",
         "DNI": "Do not intubate (DNI)",
         "COMFORT_ONLY": "Comfort care only"
+      },
+      "IMAGING_REPORT_HISTORY_EVENT": {
+        "AUTHORED": "Report written",
+        "SIGNED": "Report signed",
+        "CRITICAL_ACKNOWLEDGED": "Critical finding acknowledged"
+      },
+      "IMAGING_DUPLICATE_OVERRIDE_REASON": {
+        "CLINICAL_CHANGE": "Clinical change",
+        "PRIOR_INADEQUATE_OR_UNAVAILABLE": "Previous study inadequate or unavailable",
+        "DIFFERENT_REGION_OR_QUESTION": "Different region or clinical question",
+        "OTHER": "Other"
       }
     },
     "DOCUMENTS": {
@@ -8216,7 +8438,13 @@
     "NO_MATCHES": "No patients match these filters",
     "VISIBLE_QUEUE": "Shown: {{shown}} / {{loaded}} loaded queue entries",
     "SUMMARY_UNAVAILABLE": "The daily overview is unavailable. Refresh to retry.",
-    "PANEL_UNAVAILABLE": "This worklist is unavailable. Please retry."
+    "PANEL_UNAVAILABLE": "This worklist is unavailable. Please retry.",
+    "PRE_CHECK_IN": "Pre-check-in",
+    "PRE_CHECKED_IN": "Pre-checked in",
+    "PRE_CHECKED_IN_CONSENTED": "Pre-checked in from the patient portal, consent to care given",
+    "PRE_CHECKED_IN_AT": "Done in the patient portal on {{when}}",
+    "PRE_CHECKED_IN_AT_CONSENTED": "Done in the patient portal on {{when}}, consent to care given",
+    "CONSENT_GIVEN_AT_PRE_CHECK_IN": "Given by the patient at pre-check-in; it is carried onto this visit."
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",
@@ -9227,7 +9455,7 @@
     "AVS_FOLLOWUP": "Follow-Up Instructions",
     "AVS_EDUCATION": "Education Materials",
     "AVS_FOLLOWUP_DATE": "Follow-Up Appointment",
-    "DONE": "Done",
+    "DONE": "Close",
     "SUCCESS": "Patient checked out successfully",
     "ERROR": "Check-out failed. Please try again.",
     "DIAGNOSES_PLACEHOLDER": "e.g. Upper respiratory infection",
@@ -9236,7 +9464,8 @@
     "INSTRUCTIONS_PLACEHOLDER": "e.g. Return to clinic if symptoms worsen",
     "EDUCATION_PLACEHOLDER": "e.g. Medication management handout",
     "FOLLOWUP_REASON_PLACEHOLDER": "e.g. Recheck in 2 weeks",
-    "SUMMARY_REQUIRED": "Enter a discharge diagnosis or instructions for the patient: the after-visit summary cannot be empty."
+    "SUMMARY_REQUIRED": "Enter a discharge diagnosis or instructions for the patient: the after-visit summary cannot be empty.",
+    "DIAGNOSES_TOO_LONG": "The discharge diagnoses must not exceed {{max}} characters in all (each line break counts as two)."
   },
   "inBasket": {
     "acknowledge": "Acknowledge",
@@ -9278,7 +9507,8 @@
     "tasks": "Tasks",
     "title": "In-Basket",
     "unreadCount": "Unread count",
-    "urgent": "Urgent"
+    "urgent": "Urgent",
+    "openVisitToSign": "Open the visit to sign"
   },
   "common": {
     "loading": "Loading…"
@@ -10495,6 +10725,9 @@
     "RETRY": "Retry",
     "NO_DOCUMENTS": "The patient has not uploaded any documents.",
     "NO_DOCUMENTS_OF_TYPE": "No documents of this type.",
+    "INSURANCE_TITLE": "Insurance documents",
+    "INSURANCE_HINT": "Insurance papers the patient added from their portal (insurance card, coverage letters). Read-only here; every download is recorded in the audit log.",
+    "NO_INSURANCE_DOCUMENTS": "The patient has not uploaded any insurance documents.",
     "COL_DOCUMENT": "Document",
     "COL_TYPE": "Type",
     "COL_COLLECTED": "Collected",
@@ -10645,6 +10878,7 @@
     "SOCIAL_EMPTY": "Record at least one item (habits, occupation, living situation or notes) before saving a new version."
   },
   "MATERNITY": {
+    "FOREIGN_RECORDED_AT": "Recorded at {{hospital}}, read only here",
     "GA": "Gestational age",
     "GA_SHORT": "{{weeks}} wk {{days}} d",
     "GA_TODAY": "Gestational age today: {{weeks}} weeks {{days}} days",
@@ -11096,6 +11330,8 @@
     "GLUCOSE_UNIT_REQUIRED": "Choose the unit of this glucose value (mg/dL or mmol/L).",
     "CHECK_VALUE": "Check this value and remeasure: it is above what the other vitals forms accept. It can still be saved.",
     "MOTHER_TAB": "Mother",
+    "NEWBORN_BABY": "Baby",
+    "NEWBORN_BABY_CHOOSE": "Choose the baby",
     "NEWBORN_TAB": "Newborn",
     "OBSERVATIONS": "Postpartum observations",
     "NEW_OBSERVATION": "New observation",
@@ -12339,12 +12575,12 @@
     "TIMING_DURING_LABOUR_OR_DELIVERY": "During labour or delivery",
     "TIMING_WITHIN_42_DAYS_POSTPARTUM": "Within 42 days postpartum",
     "TIMING_LATE_MATERNAL": "42 days to one year (late maternal)",
-    "PERINATAL_DEFINITION": "WHO: stillbirths and deaths on days 0–6, from 22 weeks of gestation",
+    "PERINATAL_DEFINITION": "WHO (provisional): stillbirths at {{weeks}} or more completed weeks and early neonatal deaths (days 0–6)",
     "EARLY_NEONATAL_DEATHS": "Early neonatal, days 0–6",
     "LATE_NEONATAL_DEATHS": "Late neonatal deaths",
     "LATE_NEONATAL_NOTE": "days 7–27: reported separately, not in the perinatal count",
-    "PERINATAL_ELIGIBILITY_UNKNOWN_COUNT": "in the perinatal count on the clinician's classification, unconfirmed: gestation, birth status or age is missing or undecided.",
-    "PERINATAL_BELOW_GESTATION_COUNT": "with a gestation under 22 weeks: listed as stillbirths or early neonatal above, but not in the perinatal count.",
+    "PERINATAL_ELIGIBILITY_UNKNOWN_COUNT": "early neonatal deaths in the perinatal count on the clinician's classification, unconfirmed: gestation, birth status or age is missing or undecided.",
+    "PERINATAL_BELOW_GESTATION_COUNT": "early neonatal deaths with a gestation under 22 weeks: listed above, but not in the perinatal count.",
     "BIRTH_STATUS": "Birth status",
     "BIRTH_STATUS_UNKNOWN": "Unknown",
     "BIRTH_STATUS_LIVE_BIRTH": "Live birth",
@@ -12370,7 +12606,29 @@
       "STAY_LINE": "admitted {{admitted}}, closed {{closed}}",
       "VISITS": "Visits it closed:",
       "APPOINTMENTS": "Appointments it cancelled:"
-    }
+    },
+    "DEATHS_AFTER_LIVE_BIRTH_NOTE": "Deaths after a live birth; stillbirths are counted in their own section below",
+    "STILLBIRTH_SECTION": "Stillbirths",
+    "STILLBIRTH_SECTION_HINT": "Stillbirths recorded at delivery (fetal-death events, with no patient record) and stillbirth death records. Each is counted once. The thresholds are provisional, pending approval by the obstetric lead and the coding authority.",
+    "STILLBIRTHS_RECORDED": "Stillbirths recorded",
+    "STILLBIRTHS_RECORDED_DEFINITION": "Every stillbirth recorded, whatever the gestation",
+    "STILLBIRTHS_WHO": "WHO stillbirths",
+    "STILLBIRTHS_WHO_DEFINITION": "WHO indicator: no signs of life at {{weeks}} or more completed weeks (provisional)",
+    "STILLBIRTHS_ICD": "Fetal deaths (ICD)",
+    "STILLBIRTHS_ICD_DEFINITION": "ICD level: from {{weeks}} completed weeks (provisional)",
+    "CLASSIFICATION_INCOMPLETE": "Classification incomplete",
+    "CLASSIFICATION_INCOMPLETE_DEFINITION": "Gestation not recorded: counted here, in no statistic until it is known",
+    "STILLBIRTH_MOTHER": "Mother",
+    "STILLBIRTH_DATE": "Date and time",
+    "STILLBIRTH_GESTATION": "Gestation",
+    "GESTATION_WEEKS": "{{weeks}} weeks",
+    "STILLBIRTH_SOURCE": "Source",
+    "STILLBIRTH_SOURCE_DELIVERY": "Delivery record",
+    "STILLBIRTH_SOURCE_DELIVERY_HISTORICAL": "Delivery record (recorded before per-baby outcomes)",
+    "STILLBIRTH_SOURCE_DEATH_RECORD": "Death record",
+    "STILLBIRTH_DECLARED": "Also declared by a death record (counted once)",
+    "STILLBIRTH_UNRESOLVED": "Unresolved",
+    "STILLBIRTH_UNRESOLVED_HINT": "The delivery now records this baby as born alive, but this death certificate still declares a stillbirth. Counted once until reconciled: amend the certificate (a baby born alive who then died is a neonatal death), open a death-record dispute if the baby is alive, or correct the outcome back."
   },
   "BED_BOARD": {
     "TITLE": "Ward board",
@@ -12979,6 +13237,9 @@
   "VITAL_LIMITS": {
     "NEWBORN_WARNING": "Newborn (under 28 days): the reading is saved and was judged against the newborn ranges (provisional, pending the neonatal lead's approval).",
     "NEWBORN_WARNING_URGENT": "Newborn (under 28 days): the reading is saved, judged against the newborn ranges (provisional, pending the neonatal lead's approval), and the care team has been notified.",
+    "POSTPARTUM_WARNING_URGENT": "Pregnancy or after birth: the reading is saved and the care team has been notified. Provisional rule, pending the obstetric lead's approval.",
+    "ADULT_HTN_WARNING": "Severe blood pressure: the reading is saved. Provisional rule, pending the clinical lead's approval.",
+    "ADULT_HTN_URGENT": "Severe blood pressure with a sign of organ damage: the reading is saved and the care team has been notified. Provisional rule, pending the clinical lead's approval.",
     "BP_ORDER": "The diastolic pressure must be lower than the systolic pressure.",
     "TEMPERATURE": "Temperature must be between {{min}} and {{max}} °C.",
     "HEART_RATE": "Heart rate must be between {{min}} and {{max}} bpm.",
@@ -12990,6 +13251,14 @@
     "WEIGHT": "Weight must be between {{min}} and {{max}} kg.",
     "HEIGHT": "Height must be between {{min}} and {{max}} cm.",
     "HEAD_CIRCUMFERENCE": "Head circumference must be between {{min}} and {{max}} cm."
+  },
+  "ORGAN_DAMAGE": {
+    "LEGEND": "Signs of organ damage (optional, with a high blood pressure)",
+    "CHEST_PAIN": "Chest pain",
+    "NEUROLOGICAL_SIGNS": "Neurological signs",
+    "DYSPNEA": "Shortness of breath",
+    "VISUAL_DISTURBANCE": "Visual disturbance",
+    "SEVERE_HEADACHE": "Severe headache"
   },
   "FIELD_LIMITS": {
     "RANGE": "{{field}}: the value must be between {{min}} and {{max}}.",
@@ -13215,7 +13484,68 @@
     "NOT_PROVIDED": "Not provided",
     "PROVIDER": "Clinician",
     "DEPARTMENT": "Department",
-    "NO_SECTIONS": "No additional visit-summary sections were returned."
+    "NO_SECTIONS": "No additional visit-summary sections were returned.",
+    "CONTACT": "Whom to contact",
+    "VITALS": "Vital signs of the visit",
+    "VITALS_FLAGGED": "Values flagged for attention",
+    "RECORDED_AT": "Recorded on",
+    "TEMPERATURE": "Temperature",
+    "BLOOD_PRESSURE": "Blood pressure",
+    "HEART_RATE": "Heart rate",
+    "RESPIRATORY_RATE": "Respiratory rate",
+    "SPO2": "Oxygen saturation",
+    "GLUCOSE": "Blood glucose",
+    "WEIGHT": "Weight",
+    "HEIGHT": "Height",
+    "PAIN": "Pain",
+    "TESTS": "Tests ordered",
+    "REFERENCE": "reference",
+    "TESTS_RELEASE_NOTE": "A result appears here once the laboratory or the radiologist has validated it.",
+    "LAB_AWAITING_RELEASE": "Awaiting validation",
+    "ALLERGIES": "Known allergies",
+    "CURRENT_MEDICATIONS": "Current medications",
+    "ASSESSMENT": "Clinician's assessment",
+    "PLAN": "Plan and advice",
+    "AS_ENTERED": "As entered by the clinician",
+    "HISTORY": "Medical history",
+    "MEDICAL_HISTORY": "Medical",
+    "SURGICAL_HISTORY": "Surgical",
+    "FAMILY_HISTORY": "Family (hereditary)",
+    "SOCIAL_HISTORY": "Lifestyle",
+    "TOBACCO": "Tobacco",
+    "ALCOHOL": "Alcohol",
+    "OCCUPATION": "Occupation",
+    "YES": "Yes",
+    "NO": "No",
+    "SEVERITY_MILD": "Mild",
+    "SEVERITY_MODERATE": "Moderate",
+    "SEVERITY_SEVERE": "Severe",
+    "SEVERITY_LIFE_THREATENING": "Life-threatening",
+    "FLAG_ABNORMAL": "Abnormal",
+    "FLAG_LOW": "Low",
+    "FLAG_HIGH": "High",
+    "FLAG_CRITICAL": "Critical",
+    "PROBLEM_ACTIVE": "Active",
+    "PROBLEM_RECURRENCE": "Recurrence",
+    "PROBLEM_RESOLVED": "Resolved",
+    "PROBLEM_INACTIVE": "Inactive",
+    "PENDING_SIGNATURE": "Not finalised — awaiting the clinician’s signature",
+    "DIAGNOSES": "Diagnosis(es)",
+    "BORN_ON": "Born",
+    "MRN": "MRN",
+    "AGE_YEARS": "{{n}} years",
+    "AGE_MONTHS": "{{n}} months",
+    "AGE_DAYS": "{{n}} days",
+    "SIGNED_BY": "Signed by {{name}} on {{date}}",
+    "SIGNED_ON": "Signed on {{date}}",
+    "BMI": "BMI",
+    "TIME": "Time",
+    "SINCE": "since {{date}}",
+    "PRESCRIBED_BY": "prescribed by {{name}}",
+    "REACTION_UNSPECIFIED": "reaction not specified",
+    "DUPLICATE_MEDICINE_PATIENT": "Several prescriptions of the same medicine — check with your doctor before taking them together",
+    "DUPLICATE_MEDICINE_STAFF": "Duplicate active prescriptions for this medicine — to review",
+    "PRINT": "Print"
   },
   "PHARMACY_DASH": {
     "WORKSPACE": "Pharmacy workspace",
@@ -13297,10 +13627,9 @@
     "UNIT": "Unit",
     "LOADING": "Loading result history…",
     "ERROR": "History could not be loaded. Close and reopen the details to retry.",
-    "NOTE": "Exact numeric observations are plotted separately by unit. Dates are spaced to scale. Historical records may include earlier versions; corrected records are marked. No clinical interpretation is inferred.",
     "TIME_AXIS": "Time",
     "CHART_LABEL": "Historical observations; exact values are available in the observations table.",
-    "INSUFFICIENT": "At least two dated numeric observations in the same known unit are needed.",
+    "INSUFFICIENT": "At least two dated numeric observations in the same known unit, or a convertible one, are needed.",
     "OBSERVATIONS": "All observations",
     "PAGINATION": "Results pagination",
     "RANGE": "{{start}}–{{end}} of {{total}} results",
@@ -13309,13 +13638,16 @@
     "PAGE": "Page {{page}} of {{pages}}",
     "NEXT": "Next page",
     "AUDIT_TITLE": "Recorded result versions",
-    "CORRECTION_NOTE": "This history includes corrections. Superseded versions cannot be identified in this history. Points show recorded values only; connecting lines and deltas are withheld. Consult the observations and correction records before interpreting changes."
+    "CORRECTION_NOTE": "This history includes corrections. Superseded versions cannot be identified in this history. Points show recorded values only; connecting lines and deltas are withheld. Consult the observations and correction records before interpreting changes.",
+    "CONVERTED_FROM": "converted, recorded value: {{value}}",
+    "CONVERTED_TO": "converted: {{value}}",
+    "NOTE_SHORT": "Converted values are marked “converted” and corrections are flagged; no clinical interpretation is drawn.",
+    "NOTE_INFO": "How the chart is built",
+    "NOTE_DETAIL": "Only exact numeric values are plotted, in one unit{{unit}}. A value recorded in another unit is converted using a decimal factor between compatible units or the analyte’s known molar mass; the recorded value and unit stay visible. Dates are spaced to scale.",
+    "BAND_NOTE": "The shaded band is the reference range applied to the selected result; it may not apply to older observations."
   },
   "LAB_RANGE": {
     "TITLE": "Result position",
-    "LOW": "Low",
-    "NORMAL": "Normal",
-    "HIGH": "High",
     "REFERENCE": "Reference range",
     "OUTSIDE_SCALE": "The result is beyond the displayed scale; the marker is at the edge.",
     "UNAVAILABLE": "Position requires an exact numeric result and a compatible reference interval."
@@ -13354,5 +13686,28 @@
     "SUBMIT": "Record the review",
     "RECORDED": "Allergy review recorded.",
     "FAILED": "The allergy review could not be recorded."
+  },
+  "UNSIGNED_NOTES": {
+    "TITLE": "Notes unsigned for more than 72 hours",
+    "SUBTITLE": "Clinical notes at this hospital that their author has not signed 72 hours after writing them. Follow up with the author: only they can sign.",
+    "EMPTY": "No note has been left unsigned for more than 72 hours.",
+    "LOAD_ERROR": "The list of unsigned notes could not be loaded.",
+    "AUTHOR": "Author",
+    "PATIENT": "Patient",
+    "VISIT_DATE": "Visit date",
+    "AGE": "Unsigned for",
+    "AGE_VALUE": "{{days}} d {{hours}} h"
+  },
+  "SAFEGUARDING": {
+    "TITLE": "Child-protection vigilance — review required",
+    "BODY": "Patient aged {{age}} admitted in labour (provisional threshold: under {{threshold}}). A documented review by the responsible clinician or the safeguarding team is required. Care is not blocked or delayed; a senior obstetric review has been requested.",
+    "CONFIDENTIAL": "Visible only to the treating team and this hospital's administrators. Do not notify relatives automatically.",
+    "RAISED": "Opened on {{date}}",
+    "PROVISIONAL": "Provisional rule, pending approval by the obstetric lead and the child-protection lead.",
+    "NOTE_LABEL": "Documented review",
+    "RECORD": "Record the review",
+    "RECORD_BY_PHYSICIAN": "The review is recorded by a doctor or surgeon of this hospital.",
+    "RECORDED": "Review recorded",
+    "RECORD_FAILED": "The review could not be recorded."
   }
 }

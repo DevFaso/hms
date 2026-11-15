@@ -326,6 +326,15 @@ public class UserAccountAccess {
         private final boolean asRegistrar;
         private final Set<UUID> registrarHospitals;
 
+        /**
+         * QA D1592: PATIENT at the delivering hospital only, for the baby a
+         * recorded delivery registers (UserService.createNewbornPatientAccount).
+         */
+        public static Grant newbornPatientAt(UUID deliveringHospitalId) {
+            Objects.requireNonNull(deliveringHospitalId, "deliveringHospitalId");
+            return new Grant(false, false, Set.of(), true, Set.of(deliveringHospitalId));
+        }
+
         private Grant(boolean anywhere, boolean asAdmin, Set<UUID> adminHospitals,
                       boolean asRegistrar, Set<UUID> registrarHospitals) {
             this.anywhere = anywhere;

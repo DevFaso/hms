@@ -48,6 +48,13 @@ public interface UserService {
     // ✅ Admin/staff/hospital-specific registration
     UserResponseDTO createUserWithRolesAndHospital(@Valid AdminSignupRequest adminSignupRequest);
 
+    /**
+     * QA D1592: the PATIENT account of a baby a recorded delivery registers, at
+     * the delivering hospital only. Not a registration entry point: only
+     * NewbornRegistrationService calls it (NewbornRegistrationGuardTest).
+     */
+    UserResponseDTO createNewbornPatientAccount(AdminSignupRequest request, java.util.UUID deliveringHospitalId);
+
     // ✅ Bootstrap first user (Super Admin) when system has no users
     BootstrapSignupResponse bootstrapFirstUser(BootstrapSignupRequest request);
 

@@ -307,7 +307,7 @@ export class EnumLabelService implements OnDestroy {
       COLLECTED: 'Collected',
       RECEIVED: 'Received',
       IN_PROGRESS: 'In Progress',
-      RESULTED: 'Resulted',
+      RESULTED: 'Awaiting validation',
       VERIFIED: 'Verified',
       COMPLETED: 'Completed',
       CANCELLED: 'Cancelled',
@@ -462,6 +462,13 @@ export class EnumLabelService implements OnDestroy {
       URGENT: 'Urgent',
       STAT: 'STAT (immediate)',
     },
+    // Provisional rule 2 (2026-11-15): why an imaging order was placed despite the duplicate warning.
+    imagingDuplicateOverrideReason: {
+      CLINICAL_CHANGE: 'Clinical change',
+      PRIOR_INADEQUATE_OR_UNAVAILABLE: 'Previous study inadequate or unavailable',
+      DIFFERENT_REGION_OR_QUESTION: 'Different region or clinical question',
+      OTHER: 'Other',
+    },
     admissionType: {
       EMERGENCY: 'Emergency',
       ELECTIVE: 'Elective',
@@ -508,6 +515,11 @@ export class EnumLabelService implements OnDestroy {
       COMPLETED: 'Completed',
       RESULTS_AVAILABLE: 'Results Available',
       CANCELLED: 'Cancelled',
+    },
+    imagingReportHistoryEvent: {
+      AUTHORED: 'Report written',
+      SIGNED: 'Report signed',
+      CRITICAL_ACKNOWLEDGED: 'Critical finding acknowledged',
     },
     imagingReportStatus: {
       DRAFT: 'Draft',
@@ -655,6 +667,8 @@ export class EnumLabelService implements OnDestroy {
       LAB_ORDER_UPDATED: 'Lab Order Updated',
       LAB_ORDER_CANCELLED: 'Lab Order Cancelled',
       LAB_ORDER_ENTERED_IN_ERROR: 'Lab Order Entered in Error',
+      LAB_ORDER_DUPLICATE_PLACED: 'Duplicate Lab Order Placed',
+      IMAGING_ORDER_DUPLICATE_PLACED: 'Duplicate Imaging Order Placed',
       LAB_SPECIMEN_UPDATED: 'Lab Specimen Updated',
       LAB_RESULT_CREATED: 'Lab Result Created',
       LAB_RESULT_ACKNOWLEDGED: 'Lab Result Acknowledged',
@@ -904,6 +918,7 @@ export class EnumLabelService implements OnDestroy {
       PRO_CRITICAL_ITEM_ESCALATION: 'Critical PRO Item Escalation',
       PRO_SCREEN_POSITIVE: 'Positive PRO Screen',
       REORDER_ALERT: 'Reorder Alert',
+      SEVERE_HYPERTENSION: 'Severe hypertension',
     },
 
     /* ── Order source (snapshot drawer + nurse station board) ─── */
@@ -978,6 +993,7 @@ export class EnumLabelService implements OnDestroy {
       EDUCATION: 'Education',
       FOLLOW_UP: 'Follow-Up',
       HEMORRHAGE: 'Hemorrhage',
+      HYPERTENSION: 'Severe hypertension',
       INFECTION: 'Infection',
       PAIN: 'Pain',
       PSYCHOSOCIAL: 'Psychosocial',

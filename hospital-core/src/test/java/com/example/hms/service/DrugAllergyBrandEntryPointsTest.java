@@ -60,6 +60,7 @@ class DrugAllergyBrandEntryPointsTest {
         "service/EncounterServiceImpl.java", "the nursing intake records allergies and medications side by side",
         "service/PatientRecordPdfService.java", "the record PDF prints both lists",
         "service/PatientServiceImpl.java", "the chart summary lists both",
+        "service/AfterVisitSummarySections.java", "the visit summary prints independent allergy and medication lists without comparing them",
         "service/PatientSnapshotServiceImpl.java", "the snapshot lists both");
 
     @ParameterizedTest(name = "{1} typed, allergy {0}: the prescription check blocks")
@@ -203,6 +204,10 @@ class DrugAllergyBrandEntryPointsTest {
         Map.entry("mapper/PrescriptionMapper.java", "copies the link and reads the controlled flag of a SAVED order,"
             + " whose name and item agree since the prescription service refuses a contradiction (an older row"
             + " is refused at signature and fails the dispense DRUG check)"),
+        Map.entry("service/AfterVisitSummarySections.java", "user decision 2026-11-13 (option a): groups the"
+            + " patient's SAVED active orders of one drug on the visit summary, whose name and item agree since the"
+            + " prescription service refuses a contradiction; a shared item only ADDS a duplicate warning, it"
+            + " never clears a check"),
         Map.entry("service/pharmacy/PrescriptionControlledResolver.java", "the controlled flag of a SAVED order, as"
             + " for the mapper"),
         Map.entry("service/orderset/OrderSetItemQuantityRules.java", "asks whether a set's item must state a quantity,"

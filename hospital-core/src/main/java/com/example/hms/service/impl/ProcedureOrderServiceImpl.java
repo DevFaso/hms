@@ -17,6 +17,7 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.ProcedureOrderRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.service.support.PatientSafeView;
 import com.example.hms.service.ProcedureOrderService;
 import com.example.hms.service.PatientSubjectReadGuard;
 import com.example.hms.service.PatientSubjectReaderRoles;
@@ -147,10 +148,14 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             if (!subjectReadGuard.callerOwns(order.getPatient())) {
                 throw procedureOrderNotFound(orderId);
             }
-            return toResponseDTO(order);
+            // QA D1960: the patient's copy, not the clinical notes or why it was cancelled.
+            return PatientSafeView.procedureOrder(toResponseDTO(order));
         }
-        if (!inScope(order) && !subjectReadGuard.ownsAsItsPatient(order.getPatient())) {
-            throw procedureOrderNotFound(orderId);
+        if (!inScope(order)) {
+            if (!subjectReadGuard.ownsAsItsPatient(order.getPatient())) {
+                throw procedureOrderNotFound(orderId);
+            }
+            return PatientSafeView.procedureOrder(toResponseDTO(order));
         }
         return toResponseDTO(order);
     }
@@ -170,6 +175,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             // Reading one's own record is not a disclosure: no reach recorded.
             return procedureOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId).stream()
                 .map(this::toResponseDTO)
+                .map(PatientSafeView::procedureOrder)
                 .toList();
         }
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();

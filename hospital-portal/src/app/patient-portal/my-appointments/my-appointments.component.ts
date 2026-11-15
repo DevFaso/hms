@@ -29,7 +29,7 @@ import { currentLocale } from '../../shared/i18n/app-locale';
 import { PreCheckinFormComponent } from './pre-checkin-form/pre-checkin-form.component';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../../shared/pipes/clock-time.pipe';
-import { missingRequiredMessage } from '../../shared/required-fields';
+import { LiveRequiredMessage } from '../../shared/required-fields';
 
 /** Sort key of a visit: its wire date and 24 h start time (QA D642). */
 function visitKey(a: PortalAppointment): string {
@@ -102,6 +102,25 @@ export class MyAppointmentsComponent implements OnInit {
   rescheduleDate = '';
   rescheduleStartTime = '';
   rescheduleReason = '';
+  /** QA D1940: the banners name only the fields still blank, as the reader fills them. */
+  private readonly bookingMissing = new LiveRequiredMessage(
+    this.translate,
+    () => [
+      { labelKey: 'PORTAL.APPOINTMENTS.BOOKING.HOSPITAL', value: this.selectedHospitalId },
+      { labelKey: 'PORTAL.APPOINTMENTS.DEPARTMENT', value: this.selectedDepartmentId },
+      { labelKey: 'PORTAL.APPOINTMENTS.DATE', value: this.selectedDate },
+      { labelKey: 'PORTAL.APPOINTMENTS.TIME', value: this.selectedTime },
+    ],
+    this.bookingError,
+  );
+  private readonly rescheduleMissing = new LiveRequiredMessage(
+    this.translate,
+    () => [
+      { labelKey: 'PORTAL.APPOINTMENTS.RESCHEDULE.NEW_DATE', value: this.rescheduleDate },
+      { labelKey: 'PORTAL.APPOINTMENTS.RESCHEDULE.NEW_START', value: this.rescheduleStartTime },
+    ],
+    this.rescheduleError,
+  );
   /** QA D1093: the published, free slots the visit can move to on the chosen day. */
   rescheduleSlots = signal<PortalOpenSlot[]>([]);
   rescheduleSlotsLoaded = signal(false);
@@ -355,13 +374,10 @@ export class MyAppointmentsComponent implements OnInit {
         RESCHEDULE_FIELD_IDS,
         this.translate.instant('COMMON.FIELD_REQUIRED'),
       );
-      // QA D1358: name the blank fields, not a fixed list.
-      this.rescheduleError.set(
-        missingRequiredMessage(this.translate, [
-          { labelKey: 'PORTAL.APPOINTMENTS.RESCHEDULE.NEW_DATE', value: this.rescheduleDate },
-          { labelKey: 'PORTAL.APPOINTMENTS.RESCHEDULE.NEW_START', value: this.rescheduleStartTime },
-        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
-      );
+      // QA D1358: name the blank fields, not a fixed list; D1940: kept current as they are filled.
+      if (this.rescheduleMissing.check(this.host.nativeElement) === null) {
+        this.rescheduleError.set(this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'));
+      }
       return;
     }
     if (this.rescheduleDate < this.todayDate) {
@@ -500,7 +516,11 @@ export class MyAppointmentsComponent implements OnInit {
         ['hospital', 'department', 'apptDate', 'apptTime'],
         this.translate.instant('COMMON.FIELD_REQUIRED'),
       );
-      this.bookingError.set(this.translate.instant('PORTAL.APPOINTMENTS.BOOKING.MISSING_FIELDS'));
+      // QA D1913: the banner names the blank fields, as the reschedule dialog does (D1358);
+      // D1940: kept current as they are filled.
+      if (this.bookingMissing.check(this.host.nativeElement) === null) {
+        this.bookingError.set(this.translate.instant('PORTAL.APPOINTMENTS.BOOKING.MISSING_FIELDS'));
+      }
       return;
     }
 

@@ -69,6 +69,8 @@ public enum AuditEventType {
     LAB_ORDER_CANCELLED,
     /** QA D820: a lab order voided as entered in error, with its stated reason on the order. */
     LAB_ORDER_ENTERED_IN_ERROR,
+    /** A lab order placed while an active order of the same test was open (warned, never blocked). */
+    LAB_ORDER_DUPLICATE_PLACED,
     /** QA D429: a specimen collected or received. */
     LAB_SPECIMEN_UPDATED,
     /** QA D429: a lab result entered. */
@@ -80,6 +82,8 @@ public enum AuditEventType {
     /** QA D638: a result released by the person who entered it, without a second reviewer. */
     LAB_RESULT_SELF_RELEASED,
     IMAGING_ORDER_CREATED,
+    /** An imaging order placed while a recent order of the same study exists (warned, never blocked; provisional rule 2026-11-15). */
+    IMAGING_ORDER_DUPLICATE_PLACED,
     IMAGING_RESULT_UPDATED,
     // Disease-programme registries (Tier 2 item 35). Care-management
     // writes, not disclosures: none is whitelisted in DisclosureCategory,
@@ -256,6 +260,26 @@ public enum AuditEventType {
     // obstetric rule would refuse (recorded male, or a child). The row carries the rule, the priority,
     // the recorded sex and age at the time; the order itself is flagged for review.
     OBSTETRIC_RULE_SKIPPED_EMERGENCY,
+    /** QA D1631: a labour episode refused because one is already active at another hospital. */
+    LABOR_EPISODE_START_REFUSED,
+    /** Labour transfer (provisional rule, 2026-11-12): the episode's hospital handed an active labour to another. */
+    LABOR_EPISODE_TRANSFERRED_OUT,
+    /** Labour transfer: the receiving hospital's new episode, with or without a handover. */
+    LABOR_EPISODE_TRANSFERRED_IN,
+    /** Labour transfer: she arrived at another hospital without a handover, which closed this episode. */
+    LABOR_EPISODE_LEFT_WITHOUT_HANDOVER,
+    /** QA r46 (provisional): a birth recorded as before her arrival, earlier than the receiving episode's start. */
+    LABOR_DELIVERY_BORN_BEFORE_ARRIVAL,
+    /** QA D1714: a fetal-death event created for a stillborn baby of a delivery (no patient account). */
+    FETAL_DEATH_EVENT_RECORDED,
+    /** QA D1714: a fetal-death event superseded by a correction of the baby's outcome (never deleted). */
+    FETAL_DEATH_EVENT_SUPERSEDED,
+    /** QA D1714: a baby's recorded outcome corrected (live to stillborn or back), with the reason. */
+    DELIVERY_BABY_OUTCOME_CORRECTED,
+    /** QA D1802 (provisional): a baby corrected to born alive while a death certificate declares its stillbirth. */
+    STILLBIRTH_CERTIFICATE_CONFLICT,
+    /** QA D1802 (provisional): that contradiction ended (certificate amended or voided, or outcome corrected back). */
+    STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED,
 
     OTHER
 }

@@ -57,7 +57,8 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
-@ToString(exclude = {"patient", "hospital", "registration", "maternalHistory", "admittedByStaff", "documentedBy"})
+@ToString(exclude = {"patient", "hospital", "registration", "maternalHistory", "admittedByStaff", "documentedBy",
+    "transferHospital", "transferredBy", "transferredFrom", "transferReason"})
 public class LaborEpisode extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -129,7 +130,7 @@ public class LaborEpisode extends BaseEntity {
     private LocalDateTime activePhaseStartAt;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "status", nullable = false, length = 30)
     @Builder.Default
     private LaborStatus status = LaborStatus.ACTIVE;
 
@@ -140,6 +141,35 @@ public class LaborEpisode extends BaseEntity {
 
     @Column(name = "risk_notes", columnDefinition = "TEXT")
     private String riskNotes;
+
+    /*
+     * Labour transfer between hospitals (V290, provisional rule of 2026-11-12).
+     * On the episode that closed (TRANSFERRED_OUT or LEFT_WITHOUT_HANDOVER):
+     * when, why and the hospital that took her over. On the episode that took
+     * over: the episode it continues.
+     */
+
+    @Column(name = "transferred_at")
+    private LocalDateTime transferredAt;
+
+    @jakarta.persistence.Convert(converter = com.example.hms.security.EncryptedStringConverter.class)
+    @Column(name = "transfer_reason", columnDefinition = "TEXT")
+    private String transferReason;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "transfer_hospital_id",
+        foreignKey = @ForeignKey(name = "fk_labor_episode_transfer_hospital"))
+    private Hospital transferHospital;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "transferred_by_user_id",
+        foreignKey = @ForeignKey(name = "fk_labor_episode_transferred_by"))
+    private User transferredBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "transferred_from_episode_id",
+        foreignKey = @ForeignKey(name = "fk_labor_episode_transferred_from"))
+    private LaborEpisode transferredFrom;
 
     @PrePersist
     @PreUpdate

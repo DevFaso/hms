@@ -22,6 +22,12 @@ public class LabOrderResponseDTO {
     private String patientId;
     private String patientFullName;
     private String patientEmail;
+    /** Lab requests drawer: the patient's MRN at the order's hospital (null when unregistered there). */
+    private String patientMrn;
+    /** Lab requests drawer: the patient's date of birth, from which the drawer shows the age. */
+    private java.time.LocalDate patientDateOfBirth;
+    /** Lab requests list and drawer: the clinician who placed the order. */
+    private String orderingStaffName;
     private String hospitalId;
     private String hospitalName;
     /** Null when the ordering hospital performs the test itself. */
@@ -44,6 +50,12 @@ public class LabOrderResponseDTO {
     /** QA D673: why the order was cancelled (null unless CANCELLED). */
     private String cancellationReason;
     private String primaryDiagnosisCode;
+    /**
+     * Lab requests drawer: the label the patient's own diagnosis record gives
+     * {@link #primaryDiagnosisCode} at the order's hospital ("Polyurie" for R35).
+     * Resolved on the single-order read only; null when no record names the code.
+     */
+    private String primaryDiagnosisLabel;
     @Builder.Default
     private List<String> additionalDiagnosisCodes = new ArrayList<>();
     private String orderChannel;
@@ -60,6 +72,18 @@ public class LabOrderResponseDTO {
     private LocalDateTime standingOrderReviewDueAt;
     private Integer standingOrderReviewIntervalDays;
     private String standingOrderReviewNotes;
+    /**
+     * The duplicate-order warning (shape of the imaging order's): set on the
+     * create response when the same patient already had an active order of
+     * the same test at this hospital within {@code LabOrderDuplicateCheck.WINDOW}.
+     * The order is placed either way; a warning never blocks.
+     */
+    private Boolean duplicateOfRecentOrder;
+    private java.util.UUID duplicateReferenceOrderId;
+    @Builder.Default
+    private List<LabOrderDuplicateMatchDTO> duplicateMatches = new ArrayList<>();
+    /** Whether the orderer acknowledged the warning ("Order anyway") before placing it. */
+    private Boolean duplicateAcknowledged;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

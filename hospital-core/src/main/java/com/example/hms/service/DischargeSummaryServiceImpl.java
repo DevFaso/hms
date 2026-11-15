@@ -353,9 +353,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         } else {
             summaries = dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId);
         }
-        return summaries.stream()
-            .map(this::toDto)
-            .toList();
+        return toDtos(summaries);
     }
 
     @Override
@@ -369,9 +367,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<DischargeSummary> summaries = dischargeSummaryRepository.findByHospitalAndDateRange(effectiveHospitalId, startDate, endDate);
-        return summaries.stream()
-            .map(this::toDto)
-            .toList();
+        return toDtos(summaries);
     }
 
     @Override
@@ -380,9 +376,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<DischargeSummary> summaries = dischargeSummaryRepository.findUnfinalizedByHospital(effectiveHospitalId);
-        return summaries.stream()
-            .map(this::toDto)
-            .toList();
+        return toDtos(summaries);
     }
 
     @Override
@@ -391,9 +385,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<DischargeSummary> summaries = dischargeSummaryRepository.findWithPendingTestResults(effectiveHospitalId);
-        return summaries.stream()
-            .map(this::toDto)
-            .toList();
+        return toDtos(summaries);
     }
 
     @Override
@@ -406,9 +398,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         } else {
             summaries = dischargeSummaryRepository.findByDischargingProvider_IdOrderByDischargeDateDesc(providerId);
         }
-        return summaries.stream()
-            .map(this::toDto)
-            .toList();
+        return toDtos(summaries);
     }
 
     @Override
@@ -521,11 +511,34 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     }
 
     private DischargeSummaryResponseDTO toDto(DischargeSummary summary) {
+        return toDto(summary, encountersAwaitingSignature(List.of(summary)));
+    }
+
+    /** QA D1711: a list answers its notes awaiting a signature in one read, as the portal list does. */
+    private List<DischargeSummaryResponseDTO> toDtos(List<DischargeSummary> summaries) {
+        java.util.Set<UUID> pendingSignature = encountersAwaitingSignature(summaries);
+        return summaries.stream()
+            .map(summary -> toDto(summary, pendingSignature))
+            .toList();
+    }
+
+    /**
+     * QA D1711 (round 46): every staff summary answers {@code pendingSignature} with the patient list's own
+     * computation (a note of the visit still waits for its author's signature); it was false on every staff
+     * path, so an API client read an unsigned visit as finalised.
+     */
+    private DischargeSummaryResponseDTO toDto(DischargeSummary summary, java.util.Set<UUID> pendingSignature) {
         DischargeSummaryResponseDTO dto = dischargeSummaryMapper.toResponseDTO(summary);
         if (dto != null) {
             dto.setEditableByCaller(editableByCaller(summary));
+            dto.setPendingSignature(awaitsSignature(summary, pendingSignature));
         }
         return dto;
+    }
+
+    private static boolean awaitsSignature(DischargeSummary summary, java.util.Set<UUID> pendingSignature) {
+        return summary.getEncounter() != null && summary.getEncounter().getId() != null
+            && pendingSignature.contains(summary.getEncounter().getId());
     }
 
     private void enforceHospitalScope(DischargeSummary summary, UUID summaryId) {
@@ -567,8 +580,17 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                 .filter(r -> !isPrescriptionAnchor(r.getEncounter()))
                 .filter(DischargeSummaryServiceImpl::publishedToPatient)
                 .toList();
+        // Provisional platform rule: a visit with a note still waiting for its author's
+        // signature is shown "not finalised" to the patient. One read for the whole list.
+        java.util.Set<UUID> pendingSignature = encountersAwaitingSignature(rows);
         List<DischargeSummaryResponseDTO> result = rows.stream()
-                .map(dischargeSummaryMapper::toResponseDTO)
+                .map(row -> {
+                    DischargeSummaryResponseDTO dto = dischargeSummaryMapper.toResponseDTO(row);
+                    if (dto != null) {
+                        dto.setPendingSignature(awaitsSignature(row, pendingSignature));
+                    }
+                    return dto;
+                })
                 .toList();
 
         long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
@@ -880,6 +902,23 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         if (treating.getUser() != null && isPhysician(treating.getUser().getId(), hospitalId)) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_ENCOUNTER_ID, "dischargeSummary.encounter.notTreatingClinician");
         }
+    }
+
+    /** The visits of {@code rows} with a note still waiting for its author's signature. */
+    private java.util.Set<UUID> encountersAwaitingSignature(List<DischargeSummary> rows) {
+        java.util.Set<UUID> ids = rows.stream()
+                .map(DischargeSummary::getEncounter)
+                .filter(java.util.Objects::nonNull)
+                .map(Encounter::getId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        if (ids.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return encounterNoteRepository.findByEncounter_IdIn(ids).stream()
+                .filter(com.example.hms.model.encounter.EncounterNote::awaitsSignature)
+                .map(note -> note.getEncounter().getId())
+                .collect(java.util.stream.Collectors.toSet());
     }
 
     /**

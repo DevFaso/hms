@@ -2,6 +2,7 @@ package com.example.hms.service.impl;
 
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.enums.ImagingOrderStatus;
+import com.example.hms.enums.ImagingReportHistoryEvent;
 import com.example.hms.enums.ImagingReportStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.FieldBusinessException;
@@ -21,6 +22,7 @@ import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.ImagingReportRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.service.support.PatientSafeView;
 import com.example.hms.service.ImagingCriticalNotificationService;
 import com.example.hms.service.ImagingReportService;
 import com.example.hms.service.PatientSubjectReadGuard;
@@ -99,6 +101,15 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     private final ImagingCriticalNotificationService criticalNotificationService;
     private final PatientSubjectReadGuard subjectReadGuard;
 
+    /** Provisional rule 1: the billing follow-up of a pending pre-authorisation; null in a hand-built unit test. */
+    private com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp preAuthorisationFollowUp;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setPreAuthorisationFollowUp(
+            com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp preAuthorisationFollowUp) {
+        this.preAuthorisationFollowUp = preAuthorisationFollowUp;
+    }
+
     // ── Authoring ────────────────────────────────────────────────────────
 
     @Override
@@ -139,7 +150,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         report.setUpdatedBy(actor);
 
         ImagingReport saved = imagingReportRepository.save(report);
-        appendStatusHistory(saved, saved.getReportStatus(), "Report authored", currentStaff(hospital), null);
+        appendStatusHistory(saved, saved.getReportStatus(), ImagingReportHistoryEvent.AUTHORED.storedText(), currentStaff(hospital), null);
         saved = imagingReportRepository.save(saved);
         // Item 27: raising the flag is what calls someone. Best-effort by
         // contract — a notification failure must not roll back the report.
@@ -246,19 +257,23 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         if (report.getInterpretingProvider() == null) {
             report.setInterpretingProvider(signer);
         }
-        report.setReportStatus(ImagingReportStatus.FINAL);
+        // QA D1930 (r54): a signature attests a report, it does not change its
+        // kind. A signed addendum (or correction) stays one, so the signed
+        // original stays the study's conclusion everywhere it is read.
+        ImagingReportStatus signedStatus = signedStatusOf(report.getReportStatus());
+        report.setReportStatus(signedStatus);
         report.setLockedForEditing(Boolean.TRUE);
         report.setLockReason("Signed by " + displayName(signer));
         report.setSignatureAlgorithm(SIGNATURE_ALGORITHM);
         report.setSignatureValue(computeSignatureDigest(canonicalSignaturePayload(report, signedAt)));
         report.setUpdatedBy(roleValidator.getCurrentUserId());
 
-        appendStatusHistory(report, ImagingReportStatus.FINAL, "Report signed", signer, null);
+        appendStatusHistory(report, signedStatus, ImagingReportHistoryEvent.SIGNED.storedText(), signer, null);
 
         // Close the loop for the ordering clinician: a signed read is what
         // makes results available. Without this the order sits at COMPLETED
         // forever and the requester has no signal that the read landed.
-        promoteOrderToResultsAvailable(report.getImagingOrder());
+        promoteOrderToResultsAvailable(report.getImagingOrder(), report);
 
         ImagingReport saved = imagingReportRepository.save(report);
         // Backstop for the case that matters most: a critical finding flagged
@@ -289,7 +304,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         report.setCriticalResultAcknowledgedAt(LocalDateTime.now());
         report.setUpdatedBy(roleValidator.getCurrentUserId());
 
-        appendStatusHistory(report, report.getReportStatus(), "Critical finding acknowledged", acknowledger, null);
+        appendStatusHistory(report, report.getReportStatus(), ImagingReportHistoryEvent.CRITICAL_ACKNOWLEDGED.storedText(), acknowledger, null);
 
         return imagingReportMapper.toResponseDTO(imagingReportRepository.save(report));
     }
@@ -342,9 +357,19 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             if (!releasedToCaller(report)) {
                 throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
             }
-            return imagingReportMapper.toResponseDTO(report);
+            // QA D1960: the patient's copy, not the trail, the lock or the escalation.
+            return PatientSafeView.imagingReport(imagingReportMapper.toResponseDTO(report));
         }
-        if (!reportInScope(report) && !releasedToCallerAsItsPatient(report)) {
+        if (!reportInScope(report)) {
+            if (!releasedToCallerAsItsPatient(report)) {
+                throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
+            }
+            // Staff reading their own report elsewhere read it as its patient (#754's rule).
+            return PatientSafeView.imagingReport(imagingReportMapper.toResponseDTO(report));
+        }
+        // User decision 2026-11-14: an administrator reads released reports only;
+        // a draft or a preliminary read answers as a missing id.
+        if (adminReader() && !report.isReleasedToPatient()) {
             throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
         }
         return imagingReportMapper.toResponseDTO(report);
@@ -371,6 +396,14 @@ public class ImagingReportServiceImpl implements ImagingReportService {
                 throw new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, imagingOrderId);
             }
         }
+        if (!asPatient && adminReader()) {
+            // An administrator reads the newest RELEASED version; work in progress is not theirs.
+            return imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId).stream()
+                .filter(ImagingReport::isReleasedToPatient)
+                .findFirst()
+                .map(imagingReportMapper::toResponseDTO)
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId));
+        }
         ImagingReport report = imagingReportRepository.findFirstByImagingOrder_IdAndLatestVersionIsTrue(imagingOrderId)
             .orElseGet(() -> imagingReportRepository.findTopByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId)
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId)));
@@ -379,14 +412,18 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         if (asPatient && !report.isReleasedToPatient()) {
             throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId);
         }
-        return imagingReportMapper.toResponseDTO(report);
+        // QA D1960: a patient reads the patient's copy.
+        return asPatient ? PatientSafeView.imagingReport(imagingReportMapper.toResponseDTO(report))
+            : imagingReportMapper.toResponseDTO(report);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ImagingReportResponseDTO> getReportsForOrder(UUID imagingOrderId) {
         loadOrderScoped(imagingOrderId);
+        boolean releasedOnly = adminReader();
         return imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId).stream()
+            .filter(report -> !releasedOnly || report.isReleasedToPatient())
             .map(imagingReportMapper::toResponseDTO)
             .toList();
     }
@@ -399,6 +436,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
         return imagingReportRepository
             .findByHospital_IdAndReportStatusOrderByPerformedAtDesc(requireReadableHospital(hospitalId), status).stream()
+            .filter(releasedFilter())
             .map(imagingReportMapper::toResponseDTO)
             .toList();
     }
@@ -411,8 +449,26 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
         return imagingReportRepository
             .findByHospital_IdAndModalityOrderByPerformedAtDesc(requireReadableHospital(hospitalId), modality).stream()
+            .filter(releasedFilter())
             .map(imagingReportMapper::toResponseDTO)
             .toList();
+    }
+
+    // ── Administrative readers (user decision 2026-11-14) ───────────────
+
+    /**
+     * The caller reads imaging as an administrator only (super-admin, hospital
+     * admin, admin, with no clinical imaging role of their own): released
+     * reports only — signed, not cancelled or in error — never a draft or a
+     * preliminary read.
+     */
+    boolean adminReader() {
+        return com.example.hms.security.ClinicalActor.isAdministrativeImagingReader();
+    }
+
+    private java.util.function.Predicate<ImagingReport> releasedFilter() {
+        boolean releasedOnly = adminReader();
+        return report -> !releasedOnly || report.isReleasedToPatient();
     }
 
     // ── Tenancy ──────────────────────────────────────────────────────────
@@ -509,6 +565,11 @@ public class ImagingReportServiceImpl implements ImagingReportService {
                                      boolean creating) {
         ImagingReportStatus requested = request.getReportStatus();
         if (requested == null) {
+            // QA D1930 class: a read written on a signed study with no status
+            // named is not a second original (it would sign FINAL).
+            if (creating && hasSignedReport(imagingOrder.getId())) {
+                throw new com.example.hms.exception.FieldBusinessException("reportStatus", "imaging.report.studyAlreadySigned");
+            }
             if (creating && report.getReportStatus() == null) {
                 report.setReportStatus(ImagingReportStatus.PRELIMINARY);
             }
@@ -525,7 +586,23 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             && hasSignedReport(imagingOrder.getId())) {
             throw new com.example.hms.exception.FieldBusinessException("reportStatus", "imaging.report.studyAlreadySigned");
         }
+        // QA D1930 class: an edit keeps the report's kind. An addendum saved
+        // back as PRELIMINARY would sign as a second FINAL conclusion.
+        if (!creating && report.getReportStatus() != null
+                && REVISION_STATUSES.contains(report.getReportStatus()) != REVISION_STATUSES.contains(requested)) {
+            throw new com.example.hms.exception.FieldBusinessException("reportStatus", "imaging.report.kindFixed");
+        }
         report.setReportStatus(requested);
+    }
+
+    /**
+     * QA D1930 (r54): the status a signature gives a report. A revision
+     * (ADDENDUM, CORRECTED, AMENDED) keeps its kind; an original read becomes
+     * FINAL. The one place a signed status is chosen
+     * ({@code ImagingReportKindGuardTest}).
+     */
+    static ImagingReportStatus signedStatusOf(ImagingReportStatus current) {
+        return current != null && REVISION_STATUSES.contains(current) ? current : ImagingReportStatus.FINAL;
     }
 
     /** QA D1428 class: a voided read stays voided; a status write moved it back to PRELIMINARY. */
@@ -563,19 +640,47 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
     }
 
-    private void promoteOrderToResultsAvailable(ImagingOrder order) {
+    private void promoteOrderToResultsAvailable(ImagingOrder order, ImagingReport signedReport) {
         if (order == null) {
             return;
         }
         ImagingOrderStatus status = order.getStatus();
+        if (status == ImagingOrderStatus.CANCELLED) {
+            return;
+        }
+        // r44: a signed read means the study is done. The order's completion
+        // time is the study's own (completed, else performed) when the report
+        // records it, else the signature; one already recorded is kept.
+        boolean completionRecorded = order.getCompletedAt() == null;
+        order.markCompletedAt(firstNonNull(signedReport.getCompletedAt(),
+            signedReport.getPerformedAt(), signedReport.getSignedAt()));
         // Never walk a terminal order backwards into an active state.
-        if (status == ImagingOrderStatus.CANCELLED || status == ImagingOrderStatus.RESULTS_AVAILABLE) {
+        if (status == ImagingOrderStatus.RESULTS_AVAILABLE) {
+            if (completionRecorded) {
+                imagingOrderRepository.save(order);
+            }
             return;
         }
         order.setStatus(ImagingOrderStatus.RESULTS_AVAILABLE);
         order.setStatusUpdatedAt(LocalDateTime.now());
         order.setStatusUpdatedBy(roleValidator.getCurrentUserId());
+        // Provisional rule 1: a study reported without its required
+        // pre-authorisation number is flagged, never refused.
+        com.example.hms.service.support.ImagingPreAuthorisationPolicy.FollowUp preAuth =
+            com.example.hms.service.support.ImagingPreAuthorisationPolicy.reconcile(order, order.getStatusUpdatedAt());
         imagingOrderRepository.save(order);
+        if (preAuthorisationFollowUp != null) {
+            preAuthorisationFollowUp.apply(order, preAuth);
+        }
+    }
+
+    private static LocalDateTime firstNonNull(LocalDateTime... candidates) {
+        for (LocalDateTime candidate : candidates) {
+            if (candidate != null) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private Organization resolveOrganization(Hospital hospital) {

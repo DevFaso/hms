@@ -108,7 +108,9 @@ public class DeliveryChargeService {
             .notes(MessageUtil.resolve("maternity.delivery.charge.note",
                 MessageUtil.resolveOrRaw(caesarean
                     ? "maternity.delivery.charge.caesarean" : "maternity.delivery.charge.vaginal"),
-                delivery.getBirthDateTime() != null ? delivery.getBirthDateTime().toLocalDate().toString() : today.toString()))
+                // QA D1710 class: the day written the reader's way, not ISO.
+                com.example.hms.utility.DisplayDates.date(delivery.getBirthDateTime() != null
+                    ? delivery.getBirthDateTime().toLocalDate() : today)))
             .build();
         InvoiceItem line = InvoiceItem.builder()
             .itemDescription(MessageUtil.resolveOrRaw(caesarean

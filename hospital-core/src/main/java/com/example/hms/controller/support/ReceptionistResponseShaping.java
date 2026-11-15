@@ -69,9 +69,12 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
         Map.entry(PatientResponseDTO.class, Set.of("bloodType", "allergies", "chronicConditions", "flags", "risks",
             "medicalHistorySummary", "careTeamNotes", "hr", "bp", "spo2", "lastVitals", "chartRestrictionReason")),
         Map.entry(EncounterResponseDTO.class, Set.of("notes", "esiScore", "urgency", "followUpInstructions",
-            "dischargeDiagnoses", "extraFields", "note", "noteEntries")),
+            "dischargeDiagnoses", "extraFields", "note", "noteEntries", "notePendingSignature")),
         Map.entry(AfterVisitSummaryDTO.class, Set.of("chiefComplaint", "dischargeDiagnoses", "prescriptionSummary",
-            "referralSummary", "followUpInstructions", "patientEducationMaterials")),
+            "referralSummary", "followUpInstructions", "patientEducationMaterials",
+            // User decision 2026-11-12: the summary's content sections; the contact numbers stay.
+            "vitalSigns", "orderedTests", "allergies", "currentMedications", "clinicalAssessment", "clinicalPlan",
+            "medicalHistory", "surgicalHistory", "familyHistory", "socialHistory")),
         Map.entry(BedBoardDTO.OccupantDTO.class, Set.of("primaryDiagnosis")),
         Map.entry(TransferOrderResponseDTO.class, Set.of("reason", "notes", "cancellationReason", "isolationOverrideReason")),
         Map.entry(IsolationPrecautionResponseDTO.class, Set.of("reason", "suspectedOrganism", "notes", "discontinuationReason")),
@@ -172,6 +175,7 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
         encounter.setExtraFields(null);
         encounter.setNote(null);
         encounter.setNoteEntries(null);
+        encounter.setNotePendingSignature(null);
     }
 
     /** The lists stay lists: the check-out dialog reads their length. */
@@ -182,6 +186,16 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
         summary.setReferralSummary(null);
         summary.setFollowUpInstructions(null);
         summary.setPatientEducationMaterials(null);
+        summary.setVitalSigns(null);
+        summary.setOrderedTests(null);
+        summary.setAllergies(null);
+        summary.setCurrentMedications(null);
+        summary.setClinicalAssessment(null);
+        summary.setClinicalPlan(null);
+        summary.setMedicalHistory(null);
+        summary.setSurgicalHistory(null);
+        summary.setFamilyHistory(null);
+        summary.setSocialHistory(null);
     }
 
     private static void shapeBoard(BedBoardDTO board) {

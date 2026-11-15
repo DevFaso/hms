@@ -56,6 +56,7 @@ import static org.mockito.Mockito.times;
 class PharmacyPaymentServiceImplTest {
 
     @Mock private PharmacyPaymentRepository paymentRepository;
+    @Mock private com.example.hms.repository.pharmacy.PharmacyClaimRepository claimRepository;
     @Mock private DispenseRepository dispenseRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private HospitalRepository hospitalRepository;
@@ -129,6 +130,58 @@ class PharmacyPaymentServiceImplTest {
                 .currency("XOF")
                 .receivedBy(userId)
                 .build();
+    }
+
+    @Test
+    @DisplayName("QA D1611: an insurer's share is refused on paymentMethod, never stored as paid")
+    void d1611_insuranceIsNotAPayment() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.INSURANCE);
+        dto.setReferenceNumber("MUT-R44-001");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                        .isEqualTo("paymentMethod"))
+                .extracting("messageKey").isEqualTo("billing.payment.insuranceNotAPayment");
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D1613 (Rex on #1130): the full charge is refused on amount once an insurer claim covers part of it")
+    void d1613_fullChargeRefusedOverALiveClaim() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH); // 2 500, the whole charge
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(new BigDecimal("1000"));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .satisfies(e -> {
+                    com.example.hms.exception.FieldBusinessException fe =
+                            (com.example.hms.exception.FieldBusinessException) e;
+                    assertThat(fe.getField()).isEqualTo("amount");
+                    assertThat(fe.getMessageKey()).isEqualTo("pharmacy.payment.claimCoversCharge");
+                });
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D1613: a replayed receipt still answers with the recorded payment when a claim exists")
+    void d1613_replayStaysIdempotentWithAClaim() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        PharmacyPayment prior = new PharmacyPayment();
+        prior.setId(UUID.randomUUID());
+        prior.setAmount(new BigDecimal("2500"));
+        prior.setPaymentMethod(PharmacyPaymentMethod.CASH);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(paymentRepository.findFirstByDispense_IdOrderByCreatedAtAsc(dispenseId)).thenReturn(Optional.of(prior));
+        lenient().when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(new BigDecimal("1000"));
+        when(paymentMapper.toResponseDTO(any())).thenReturn(PharmacyPaymentResponseDTO.builder().build());
+
+        assertThat(service.createPayment(dto)).isNotNull();
+        verify(paymentRepository, never()).save(any());
     }
 
     @Test

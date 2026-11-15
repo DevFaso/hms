@@ -1672,6 +1672,13 @@
             (input)="updateVitalsField('painScale', $any($event.target).value)"
           />
         </div>
+        <!-- r54 (provisional): optional organ-damage signs, read by the server's severe-pressure rule. -->
+        <div class="vitals-field vitals-field-full">
+          <app-organ-damage-symptoms
+            [selected]="vitalsForm().organDamageSymptoms ?? []"
+            (selectedChange)="updateVitalsOrganDamage($event)"
+          />
+        </div>
         <div class="vitals-field vitals-field-full">
           <label for="vf-notes">{{ 'NURSE.NOTES' | translate }}</label>
           <textarea

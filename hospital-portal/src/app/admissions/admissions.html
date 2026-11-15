@@ -523,6 +523,12 @@
         </button>
       </div>
       <div class="modal-body">
+        @if (editing()) {
+          <!-- QA D1672: what the update cannot change is read-only, and says why. -->
+          <p class="no-beds-hint" id="adm-set-at-admission">
+            {{ 'ADMISSIONS.SET_AT_ADMISSION_HINT' | translate }}
+          </p>
+        }
         <div class="form-row">
           <div class="field">
             <label for="adm-patientSearch">{{ 'PATIENTS.PATIENT_NAME' | translate }} *</label>
@@ -535,15 +541,17 @@
                     {{ ' ' }}<span class="chip-sub">{{ sub }}</span>
                   }
                 </div>
-                <button
-                  [attr.aria-label]="'COMMON.CHANGE_PATIENT' | translate"
-                  type="button"
-                  class="chip-clear"
-                  (click)="clearPatient()"
-                  [title]="'COMMON.CHANGE_PATIENT' | translate"
-                >
-                  <span class="material-symbols-outlined" aria-hidden="true">close</span>
-                </button>
+                @if (!editing()) {
+                  <button
+                    [attr.aria-label]="'COMMON.CHANGE_PATIENT' | translate"
+                    type="button"
+                    class="chip-clear"
+                    (click)="clearPatient()"
+                    [title]="'COMMON.CHANGE_PATIENT' | translate"
+                  >
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                  </button>
+                }
               </div>
             } @else {
               <div class="patient-picker-wrap">
@@ -604,6 +612,7 @@
             } @else {
               <select
                 id="adm-hospitalId"
+                [disabled]="editing()"
                 [value]="form.hospitalId"
                 (change)="onHospitalChange($any($event.target).value)"
                 required
@@ -622,9 +631,15 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="adm-providerId">{{ 'ADMISSIONS.ADMITTING_PROVIDER' | translate }} *</label>
-            <select id="adm-providerId" [(ngModel)]="form.admittingProviderId" required>
-              <option value="">{{ 'ADMISSIONS.SELECT_PROVIDER' | translate }}</option>
+            <!-- QA D1634: a midwife admitting is not a "Médecin"; the label is neutral then. -->
+            <label for="adm-providerId">{{ admittingProviderKeys().label | translate }} *</label>
+            <select
+              id="adm-providerId"
+              [(ngModel)]="form.admittingProviderId"
+              [disabled]="editing()"
+              required
+            >
+              <option value="">{{ admittingProviderKeys().select | translate }}</option>
               @for (s of staffMembers(); track s.id) {
                 <option [value]="s.id">{{ s.name }}</option>
               }
@@ -634,6 +649,7 @@
             <label for="adm-roomBed">{{ 'ADMISSIONS.ROOM_BED' | translate }}</label>
             <input
               id="adm-roomBed"
+              maxlength="50"
               type="text"
               [(ngModel)]="form.roomBed"
               [placeholder]="'ADMISSIONS.ROOM_BED_PLACEHOLDER' | translate"
@@ -647,7 +663,7 @@
         <div class="form-row">
           <div class="field">
             <label for="adm-type">{{ 'ADMISSIONS.ADMISSION_TYPE' | translate }} *</label>
-            <select id="adm-type" [(ngModel)]="form.admissionType" required>
+            <select id="adm-type" [(ngModel)]="form.admissionType" [disabled]="editing()" required>
               @for (t of formAdmissionTypes(); track t) {
                 <option [value]="t">{{ t | enumLabel: 'admissionType' }}</option>
               }
@@ -669,13 +685,14 @@
               id="adm-dateTime"
               type="datetime-local"
               [(ngModel)]="form.admissionDateTime"
+              [readonly]="editing()"
               required
             />
           </div>
           <div class="field">
             <label for="adm-deptId">{{ 'STAFF.DEPARTMENT' | translate }}</label>
             <select id="adm-deptId" [(ngModel)]="form.departmentId">
-              <option value="">
+              <option value="" [disabled]="editing() && editingHadDepartment()">
                 {{
                   form.hospitalId
                     ? ('ADMISSIONS.ANY_DEPARTMENT' | translate)
@@ -702,6 +719,7 @@
           <label for="adm-complaint">{{ 'ADMISSIONS.CHIEF_COMPLAINT' | translate }} *</label>
           <textarea
             id="adm-complaint"
+            maxlength="500"
             [(ngModel)]="form.chiefComplaint"
             rows="2"
             [placeholder]="'ADMISSIONS.CHIEF_COMPLAINT_PLACEHOLDER' | translate"
@@ -712,6 +730,7 @@
           <label for="adm-notes">{{ 'ADMISSIONS.ADMISSION_NOTES' | translate }}</label>
           <textarea
             id="adm-notes"
+            maxlength="2000"
             [(ngModel)]="form.admissionNotes"
             rows="2"
             [placeholder]="'COMMON.ADDITIONAL_NOTES' | translate"
@@ -911,11 +930,20 @@
         </button>
       </div>
       <div class="modal-body">
+        <!-- QA D1597: a patient with no bed reads "no room assigned", never "N/A";
+             the sentence is built with a colon, so French never needs "de"/"d'". -->
         <p class="discharge-info">
-          {{ 'ADMISSIONS.DISCHARGING' | translate }}
+          {{ 'ADMISSIONS.DISCHARGING_PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
           <strong>{{ dischargingAdm()?.patientName }}</strong>
-          {{ 'ADMISSIONS.FROM_ROOM' | translate }}
-          <strong>{{ dischargingAdm()?.roomBed || 'N/A' }}</strong>
+          ·
+          @if (dischargingAdm()?.roomBed) {
+            {{ 'ADMISSIONS.ROOM' | translate }}{{ 'COMMON.COLON' | translate }}
+            <strong>{{ dischargingAdm()?.roomBed }}</strong>
+          } @else {
+            <strong data-testid="discharge-no-room">{{
+              'ADMISSIONS.NO_ROOM_ASSIGNED' | translate
+            }}</strong>
+          }
         </p>
 
         <div class="form-row">
@@ -961,10 +989,17 @@
             id="discharge-diagnosis"
             maxlength="2000"
             [(ngModel)]="dischargeForm.dischargeDiagnosis"
+            [readonly]="!!staySummary()"
             class="form-textarea"
             rows="2"
             [placeholder]="'ADMISSIONS.DISCHARGE_DIAGNOSIS_PLACEHOLDER' | translate"
           ></textarea>
+          <!-- QA D1596: one diagnosis, the written summary's; it is changed there. -->
+          @if (staySummary()) {
+            <p class="field-hint" data-testid="discharge-diagnosis-from-summary">
+              {{ 'ADMISSIONS.DIAGNOSIS_FROM_SUMMARY' | translate }}
+            </p>
+          }
         </div>
 
         <div class="field">
@@ -972,6 +1007,7 @@
           <textarea
             required
             id="discharge-summary"
+            maxlength="5000"
             [(ngModel)]="dischargeForm.dischargeSummary"
             class="form-textarea"
             rows="4"
@@ -983,13 +1019,27 @@
           <label for="discharge-instructions">{{
             'ADMISSIONS.DISCHARGE_INSTRUCTIONS' | translate
           }}</label>
-          <textarea
-            id="discharge-instructions"
-            [(ngModel)]="dischargeForm.dischargeInstructions"
-            class="form-textarea"
-            rows="3"
-            [placeholder]="'ADMISSIONS.DISCHARGE_INSTRUCTIONS_PLACEHOLDER' | translate"
-          ></textarea>
+          <!-- QA D1596: these reach the patient through the stay's summary. -->
+          @if (staySummary()?.followUpInstructions; as written) {
+            <p class="field-hint" data-testid="discharge-instructions-in-summary">
+              {{ 'ADMISSIONS.INSTRUCTIONS_IN_SUMMARY' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ written }}
+            </p>
+          }
+          @if (staySummary()?.isFinalized) {
+            <p class="field-hint" data-testid="discharge-summary-finalized">
+              {{ 'ADMISSIONS.SUMMARY_FINALIZED_NO_INSTRUCTIONS' | translate }}
+            </p>
+          } @else {
+            <textarea
+              id="discharge-instructions"
+              maxlength="2000"
+              [(ngModel)]="dischargeForm.dischargeInstructions"
+              class="form-textarea"
+              rows="3"
+              [placeholder]="'ADMISSIONS.DISCHARGE_INSTRUCTIONS_PLACEHOLDER' | translate"
+            ></textarea>
+          }
         </div>
       </div>
       <div class="modal-actions">

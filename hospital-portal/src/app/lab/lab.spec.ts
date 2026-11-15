@@ -91,6 +91,7 @@ describe('LabComponent — performing laboratory', () => {
       'listOrders',
       'listTestDefinitions',
       'listPerformingLabs',
+      'checkDuplicates',
       'createOrder',
       'updateOrder',
       'deleteOrder',
@@ -100,11 +101,18 @@ describe('LabComponent — performing laboratory', () => {
       'receiveSpecimen',
       'rejectSpecimen',
       'submitApprovalAction',
+      'getOrder',
+      'listOrderResults',
     ]);
     labService.listOrders.and.returnValue(of(orders));
     labService.listSpecimens.and.returnValue(of([]));
+    labService.getOrder.and.callFake((id: string) =>
+      of(orders.find((o) => o.id === id) ?? order({ id })),
+    );
+    labService.listOrderResults.and.returnValue(of([]));
     labService.listTestDefinitions.and.returnValue(of([]));
     labService.listPerformingLabs.and.returnValue(of(labs));
+    labService.checkDuplicates.and.returnValue(of([]));
     labService.createOrder.and.returnValue(of(orders[0] ?? order({})));
     labService.updateOrder.and.returnValue(of(orders[0] ?? order({})));
 
@@ -124,7 +132,12 @@ describe('LabComponent — performing laboratory', () => {
       'getAssignments',
     ]);
     profileService.getAssignments.and.returnValue(of([]));
-    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
+    toast = jasmine.createSpyObj<ToastService>('ToastService', [
+      'success',
+      'error',
+      'info',
+      'warning',
+    ]);
     const printService = jasmine.createSpyObj<PrintLabelService>('PrintLabelService', [
       'getSpecimenLabelPdf',
       'openForPrint',
@@ -165,6 +178,22 @@ describe('LabComponent — performing laboratory', () => {
     expect(component.showModal()).toBeTrue();
     expect(patientService.getById).toHaveBeenCalledWith('pat-awa', jasmine.anything());
     expect(component.form.patientId).toBe('pat-awa');
+  });
+
+  it('/lab?order=<id> opens the drawer of that order once the list has loaded', async () => {
+    const linked = order({ id: 'o-linked', status: 'COMPLETED' });
+    await setup(['ROLE_DOCTOR'], [order({ id: 'o-other' }), linked], HOSPITAL_A, {
+      order: 'o-linked',
+    });
+    expect(component.selectedOrder()?.id).toBe('o-linked');
+    expect(component.filtered().some((o) => o.id === 'o-linked')).toBeTrue();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('/lab?order=<id> for an order out of scope says so and opens nothing', async () => {
+    await setup(['ROLE_DOCTOR'], [order({ id: 'o-other' })], HOSPITAL_A, { order: 'o-missing' });
+    expect(component.selectedOrder()).toBeNull();
+    expect(toast.error).toHaveBeenCalledWith('LAB.LINKED_ORDER_NOT_FOUND');
   });
 
   it('QA D956: a plain /lab opens no form', async () => {
@@ -375,14 +404,22 @@ describe('LabComponent — performing laboratory', () => {
       const routine = order({ id: 'o-routine', priority: 'ROUTINE' });
       await setup(['ROLE_LAB_TECHNICIAN'], [stat, routine]);
       const host = fixture.nativeElement as HTMLElement;
-      expect(host.querySelector('[data-testid="lab-priority-o-stat"]')).not.toBeNull();
-      expect(host.querySelector('[data-testid="lab-priority-o-routine"]')).toBeNull();
+      const statBadge = host.querySelector('[data-testid="lab-priority-o-stat"]');
+      expect(statBadge?.classList.contains('priority-stat')).toBeTrue();
+      // Lab requests: ROUTINE is the same badge on every row, neutral.
+      const routineBadge = host.querySelector('[data-testid="lab-priority-o-routine"]');
+      expect(routineBadge?.classList.contains('priority-routine')).toBeTrue();
+      expect(routineBadge?.classList.contains('priority-stat')).toBeFalse();
 
       component.viewOrder(stat);
       fixture.detectChanges();
-      const priority = host.querySelector('[data-testid="detail-priority"] .field-value');
+      const priority = host.querySelector('[data-testid="detail-priority"] .priority-badge');
       expect(priority?.classList.contains('priority-stat')).toBeTrue();
+      // Sized to its text, not stretched across the field.
+      expect(priority?.classList.contains('fit-content')).toBeTrue();
       expect(host.querySelector('.detail-panel')?.textContent).not.toContain('PORTAL');
+      // The channel is a secondary detail, not a main field.
+      expect(host.querySelector('[data-testid="detail-secondary"]')).not.toBeNull();
     });
   });
 
@@ -517,6 +554,205 @@ describe('LabComponent — performing laboratory', () => {
     expect('performingHospitalId' in payload).toBeTrue();
   });
 
+  describe('the duplicate-order warning', () => {
+    const earlier = {
+      orderId: 'o-earlier',
+      labOrderCode: 'LAB-000023',
+      labTestName: 'Fasting glucose',
+      status: 'ORDERED',
+    };
+
+    it('shows the warning and sends nothing until "Order anyway"', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.checkDuplicates.and.returnValue(of([earlier]));
+
+      component.openCreate();
+      component.form.patientId = 'p-1';
+      component.form.labTestDefinitionId = 'def-glu';
+      component.submitForm();
+
+      expect(labService.checkDuplicates).toHaveBeenCalledWith('p-1', 'def-glu', jasmine.anything());
+      expect(labService.createOrder).not.toHaveBeenCalled();
+      expect(component.duplicateMatches()).toEqual([earlier]);
+      fixture.detectChanges();
+      const warning = fixture.nativeElement.querySelector('[data-testid="lab-duplicate-warning"]');
+      expect(warning?.textContent).toContain('LAB-000023');
+
+      component.orderAnyway();
+      expect(labService.createOrder).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ acknowledgedDuplicateOrderIds: ['o-earlier'] }),
+      );
+      expect(component.duplicateMatches()).toEqual([]);
+    });
+
+    it('sends the order without an acknowledgement when there is no duplicate', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+
+      component.openCreate();
+      component.submitForm();
+
+      const payload = labService.createOrder.calls.mostRecent().args[0];
+      expect('acknowledgedDuplicateOrderIds' in payload).toBeFalse();
+    });
+
+    it('never blocks the order when the check itself fails', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.checkDuplicates.and.returnValue(throwError(() => new Error('down')));
+
+      component.openCreate();
+      component.submitForm();
+
+      expect(labService.createOrder).toHaveBeenCalledTimes(1);
+    });
+
+    // Rex on #1150: a late preview reply never places an order.
+    it('ignores a preview reply that arrives after the form was closed', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<(typeof earlier)[]>();
+      labService.checkDuplicates.and.returnValue(reply);
+
+      component.openCreate();
+      component.submitForm();
+      component.closeModal();
+      reply.next([]);
+
+      expect(labService.createOrder).not.toHaveBeenCalled();
+      expect(component.saving()).toBeFalse();
+    });
+
+    it('ignores a preview reply about a patient or test no longer on the form', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<(typeof earlier)[]>();
+      labService.checkDuplicates.and.returnValue(reply);
+
+      component.openCreate();
+      component.form.labTestDefinitionId = 'def-glu';
+      component.submitForm();
+      component.form.labTestDefinitionId = 'def-hgb';
+      reply.next([]);
+
+      expect(labService.createOrder).not.toHaveBeenCalled();
+      expect(component.duplicateMatches()).toEqual([]);
+      expect(component.saving()).toBeFalse();
+    });
+
+    it('keeps the write lock when the dialog is closed and reopened during a save', async () => {
+      // Rex on #1150: closing released the lock, so a reopened form sent a second order.
+      await setup(['ROLE_DOCTOR'], []);
+      const written = new Subject<LabOrderResponse>();
+      labService.createOrder.and.returnValue(written);
+
+      component.openCreate();
+      component.submitForm();
+      expect(labService.createOrder).toHaveBeenCalledTimes(1);
+      component.closeModal();
+      expect(component.saving()).toBeTrue();
+      component.openCreate();
+      component.submitForm();
+      component.orderAnyway();
+      expect(labService.createOrder).toHaveBeenCalledTimes(1);
+
+      written.next(order({}));
+      expect(component.saving()).toBeFalse();
+      component.openCreate();
+      component.submitForm();
+      expect(labService.createOrder).toHaveBeenCalledTimes(2);
+    });
+
+    it('tells the clinician about a duplicate the server found when placing the order', async () => {
+      // Rex on #1150: the preview saw none (or failed); the server's own check is not dropped.
+      await setup(['ROLE_DOCTOR'], []);
+      labService.createOrder.and.returnValue(
+        of(
+          order({
+            duplicateOfRecentOrder: true,
+            duplicateAcknowledged: false,
+            duplicateMatches: [{ orderId: 'o-earlier', labOrderCode: 'LAB-000023' }],
+          }),
+        ),
+      );
+
+      component.openCreate();
+      component.submitForm();
+
+      expect(toast.warning).toHaveBeenCalledTimes(1);
+    });
+
+    it('says nothing more when the duplicate the server found was the one acknowledged', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.createOrder.and.returnValue(
+        of(order({ duplicateOfRecentOrder: true, duplicateAcknowledged: true })),
+      );
+
+      component.openCreate();
+      component.submitForm();
+
+      expect(toast.warning).not.toHaveBeenCalled();
+    });
+
+    it('places no order from a preview reply that arrives after leaving the page', async () => {
+      // Rex on #1150: the preview's subscription ends with the component.
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<(typeof earlier)[]>();
+      labService.checkDuplicates.and.returnValue(reply);
+
+      component.openCreate();
+      component.submitForm();
+      fixture.destroy();
+      reply.next([]);
+      reply.error(new Error('late'));
+
+      expect(reply.observed).toBeFalse();
+      expect(labService.createOrder).not.toHaveBeenCalled();
+    });
+
+    it('ignores the reply of an older check once a newer one was asked', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const first = new Subject<(typeof earlier)[]>();
+      const second = new Subject<(typeof earlier)[]>();
+      labService.checkDuplicates.and.returnValues(first, second);
+
+      component.openCreate();
+      component.submitForm();
+      component.submitForm();
+      first.next([]);
+      expect(labService.createOrder).not.toHaveBeenCalled();
+
+      second.next([earlier]);
+      expect(component.duplicateMatches()).toEqual([earlier]);
+      expect(labService.createOrder).not.toHaveBeenCalled();
+    });
+
+    it('asks again instead of acknowledging a warning about another test', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.checkDuplicates.and.returnValue(of([earlier]));
+
+      component.openCreate();
+      component.form.labTestDefinitionId = 'def-glu';
+      component.submitForm();
+      component.form.labTestDefinitionId = 'def-hgb';
+      labService.checkDuplicates.and.returnValue(of([]));
+      component.orderAnyway();
+
+      expect(labService.checkDuplicates).toHaveBeenCalledTimes(2);
+      const payload = labService.createOrder.calls.mostRecent().args[0];
+      expect(payload.labTestDefinitionId).toBe('def-hgb');
+      expect('acknowledgedDuplicateOrderIds' in payload).toBeFalse();
+    });
+
+    it('goes back to the form without ordering', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.checkDuplicates.and.returnValue(of([earlier]));
+
+      component.openCreate();
+      component.submitForm();
+      component.dismissDuplicateWarning();
+
+      expect(component.duplicateMatches()).toEqual([]);
+      expect(labService.createOrder).not.toHaveBeenCalled();
+    });
+  });
+
   it('brings an outsourced order back in-house from the edit form', async () => {
     const outgoing = order({
       performingHospitalId: LAB_B,
@@ -554,7 +790,7 @@ describe('LabComponent — performing laboratory', () => {
     // Each hospital once: the primary line is this laboratory, the hint is
     // who sent the order. Naming the ordering hospital on both lines left
     // the laboratory unnamed and told the reader nothing twice.
-    const cell: HTMLElement = fixture.nativeElement.querySelector('.data-row td:nth-child(4)');
+    const cell: HTMLElement = fixture.nativeElement.querySelector('.data-row td:nth-child(5)');
     expect(cell.querySelector('.cell-primary')!.textContent).toContain('Central Laboratory B');
     expect(cell.textContent!.match(/Ordering Hospital A/g)!.length).toBe(1);
     expect(component.actingHospitalName(incoming)).toBe('Central Laboratory B');
@@ -579,7 +815,7 @@ describe('LabComponent — performing laboratory', () => {
 
     // The other side of the same relationship: our hospital on the primary
     // line, the laboratory it went to on the hint, each named once.
-    const cell: HTMLElement = fixture.nativeElement.querySelector('.data-row td:nth-child(4)');
+    const cell: HTMLElement = fixture.nativeElement.querySelector('.data-row td:nth-child(5)');
     expect(cell.querySelector('.cell-primary')!.textContent).toContain('Ordering Hospital A');
     expect(cell.textContent!.match(/Central Laboratory B/g)!.length).toBe(1);
     expect(component.counterpartLabelKey(outgoing)).toBe('LAB.SENT_TO');
@@ -631,6 +867,159 @@ describe('LabComponent — performing laboratory', () => {
     await setup(['ROLE_SUPER_ADMIN'], [order({})]);
 
     expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
+  });
+
+  describe('a save answered after its dialog was closed and another opened (Rex P2 on #1150)', () => {
+    it('does not close, reset or toast over the dialog opened since, yet refreshes the list', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<LabOrderResponse>();
+      labService.createOrder.and.returnValue(reply);
+
+      component.openCreate();
+      component.submitForm();
+      expect(component.saving()).toBeTrue();
+      component.closeModal();
+      component.openCreate();
+      component.form.testName = 'typed in the new dialog';
+      labService.listOrders.calls.reset();
+
+      reply.next(order({}));
+
+      expect(component.showModal()).toBeTrue();
+      expect(component.form.testName).toBe('typed in the new dialog');
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(component.saving()).withContext('the write lock is released').toBeFalse();
+      expect(labService.listOrders).toHaveBeenCalled();
+    });
+
+    it('names the operation that finished, not the one now open', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<LabOrderResponse>();
+      labService.updateOrder.and.returnValue(reply);
+
+      component.openEdit(order({ id: 'o-1' }));
+      component.submitForm();
+      reply.next(order({ id: 'o-1' }));
+
+      expect(toast.success).toHaveBeenCalledOnceWith('LAB.TOAST.UPDATED');
+      expect(component.showModal()).toBeFalse();
+    });
+
+    it('does not show an old failure over the dialog opened since', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<LabOrderResponse>();
+      labService.createOrder.and.returnValue(reply);
+
+      component.openCreate();
+      component.submitForm();
+      component.closeModal();
+      component.openEdit(order({ id: 'o-1' }));
+      reply.error({ status: 500 });
+
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(component.showModal()).toBeTrue();
+      expect(component.saving()).toBeFalse();
+    });
+
+    it('a void answered late leaves the next void dialog open and silent', async () => {
+      await setup(['ROLE_LAB_DIRECTOR'], []);
+      const reply = new Subject<LabOrderResponse>();
+      labService.voidOrder.and.returnValue(reply);
+      const a = order({ id: 'o-a', status: 'COMPLETED' });
+      const b = order({ id: 'o-b', status: 'COMPLETED' });
+
+      component.openVoid(a);
+      component.voidReason.set('Wrong patient');
+      component.executeVoid();
+      component.closeVoid();
+      component.openVoid(b);
+      reply.next(order({ id: 'o-a' }));
+
+      expect(component.voidingOrder()).toBe(b);
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(component.voiding()).toBeFalse();
+    });
+
+    it('a delete answered late leaves the next confirmation open and silent', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<void>();
+      labService.deleteOrder.and.returnValue(reply);
+      const a = order({ id: 'o-a' });
+      const b = order({ id: 'o-b' });
+
+      component.confirmDelete(a);
+      component.executeDelete();
+      component.cancelDelete();
+      component.confirmDelete(b);
+      reply.next();
+
+      expect(component.deletingOrder()).toBe(b);
+      expect(component.showDeleteConfirm()).toBeTrue();
+      expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('an approval answered late leaves the next approval dialog open and silent', async () => {
+      await setup(['ROLE_LAB_DIRECTOR'], []);
+      const reply = new Subject<LabTestDefinition>();
+      labService.submitApprovalAction.and.returnValue(reply);
+      const a = { id: 'def-a' } as LabTestDefinition;
+      const b = { id: 'def-b' } as LabTestDefinition;
+
+      component.openApprovalModal(a);
+      component.approvalAction.set('APPROVE');
+      component.submitApprovalAction();
+      component.closeApprovalModal();
+      component.openApprovalModal(b);
+      reply.next({ id: 'def-a', approvalStatus: 'APPROVED' } as LabTestDefinition);
+
+      expect(component.approvalTarget()).toBe(b);
+      expect(component.showApprovalModal()).toBeTrue();
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(component.processingApproval()).toBeFalse();
+    });
+
+    it('a specimen collected late does not reset or reload another order specimens', async () => {
+      await setup(['ROLE_LAB_TECH'], []);
+      const reply = new Subject<LabSpecimen>();
+      labService.createSpecimen.and.returnValue(reply);
+
+      component.openSpecimens(order({ id: 'o-a', status: 'ORDERED' }));
+      component.specimenForm.specimenType = 'BLOOD';
+      component.collectSpecimen();
+      component.closeSpecimens();
+      component.openSpecimens(order({ id: 'o-b', status: 'ORDERED' }));
+      component.specimenForm.specimenType = 'typed for b';
+      labService.listSpecimens.calls.reset();
+
+      reply.next({ id: 's-1' } as LabSpecimen);
+
+      expect(component.specimenForm.specimenType).toBe('typed for b');
+      expect(labService.listSpecimens).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(component.specimenSaving()).toBeFalse();
+    });
+
+    it('a rejection answered late leaves the next rejection dialog open and silent', async () => {
+      await setup(['ROLE_LAB_TECH'], []);
+      const reply = new Subject<LabSpecimen>();
+      labService.rejectSpecimen.and.returnValue(reply);
+      const sa = { id: 's-a', status: 'COLLECTED' } as LabSpecimen;
+      const sb = { id: 's-b', status: 'COLLECTED' } as LabSpecimen;
+
+      component.openSpecimens(order({ id: 'o-a', status: 'COLLECTED' }));
+      component.openReject(sa);
+      component.rejectReason.set('Hemolysed');
+      component.executeReject();
+      component.closeReject();
+      component.openReject(sb);
+      labService.listOrders.calls.reset();
+      reply.next(sa);
+
+      expect(component.rejectingSpecimen()).toBe(sb);
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(component.rejecting()).toBeFalse();
+      expect(labService.listOrders).toHaveBeenCalled();
+    });
   });
 
   describe('QA D820: void a COMPLETED order as entered in error', () => {
@@ -962,30 +1351,29 @@ describe('LabComponent worklist tabs', () => {
     }
   });
 
-  it('keeps an order on the Pending tab while its specimen is collected and received', () => {
+  it('keeps an order In progress until its results are validated', () => {
     component.orders.set(lifecycle.map(order));
 
     component.setTab('pending');
 
+    // Lab requests: a result entered but not validated (RESULTED, VERIFIED) is not finished.
     expect(component.filtered().map((o) => o.status)).toEqual([
       'ORDERED',
       'PENDING',
       'COLLECTED',
       'RECEIVED',
       'IN_PROGRESS',
+      'RESULTED',
+      'VERIFIED',
     ]);
   });
 
-  it('shows resulted, verified and completed orders on the Completed tab', () => {
+  it('shows only validated (COMPLETED) orders on the Completed tab', () => {
     component.orders.set(lifecycle.map(order));
 
     component.setTab('completed');
 
-    expect(component.filtered().map((o) => o.status)).toEqual([
-      'RESULTED',
-      'VERIFIED',
-      'COMPLETED',
-    ]);
+    expect(component.filtered().map((o) => o.status)).toEqual(['COMPLETED']);
   });
 
   it('places every lifecycle state on exactly one tab, cancelled on neither', () => {
@@ -996,9 +1384,22 @@ describe('LabComponent worklist tabs', () => {
     }
   });
 
-  it('badges COLLECTED and RECEIVED as specimen states and VERIFIED as done', () => {
-    expect(component.getStatusClass('RECEIVED')).toBe('status-badge status-collected');
+  it('badges each state once: RESULTED and VERIFIED await validation, never the finished green', () => {
     expect(component.getStatusClass('COLLECTED')).toBe('status-badge status-collected');
-    expect(component.getStatusClass('VERIFIED')).toBe('status-badge status-completed');
+    expect(component.getStatusClass('RECEIVED')).toBe('status-badge status-in_progress');
+    expect(component.getStatusClass('RESULTED')).toBe('status-badge status-awaiting');
+    expect(component.getStatusClass('VERIFIED')).toBe('status-badge status-awaiting');
+    expect(component.getStatusClass('COMPLETED')).toBe('status-badge status-completed');
+  });
+
+  it('labels every backend status through one state vocabulary', () => {
+    for (const status of lifecycle) {
+      expect(component.stateKey(status))
+        .withContext(status)
+        .toMatch(/^LAB\.STATE\./);
+    }
+    expect(component.stateKey('RESULTED')).toBe('LAB.STATE.AWAITING_VALIDATION');
+    expect(component.stateKey('VERIFIED')).toBe('LAB.STATE.AWAITING_VALIDATION');
+    expect(component.stateKey('COMPLETED')).toBe('LAB.STATE.COMPLETED');
   });
 });

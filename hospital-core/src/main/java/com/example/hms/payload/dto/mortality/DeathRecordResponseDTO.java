@@ -53,6 +53,8 @@ public class DeathRecordResponseDTO {
     private LocalDateTime bornAt;
     private PerinatalBirthStatus birthStatus;
     private Integer gestationalAgeWeeks;
+    /** QA D1714: the fetal-death event this stillbirth declares, if linked. */
+    private java.util.UUID fetalDeathEventId;
     /** What the age at death rests on: elapsed time, dates only, or unknown. */
     private PerinatalAgeBasis perinatalAgeBasis;
     /** Measured against WHO's perinatal definition. Null with no perinatal classification. */

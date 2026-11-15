@@ -125,8 +125,9 @@ class PatientChartUpdateServiceImplTest {
         when(patientRepository.existsById(patientId)).thenReturn(true);
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(false);
         Pageable pageable = PageRequest.of(0, 10);
+        // QA D1870: "not here" is "not found", like GET /patients/{id}.
         assertThatThrownBy(() -> service.listPatientChartUpdates(patientId, hospitalId, pageable))
-                .isInstanceOf(BusinessException.class);
+                .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
     }    @Test
     void getPatientChartUpdate_success() {
         when(patientRepository.existsById(patientId)).thenReturn(true);

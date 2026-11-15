@@ -62,6 +62,7 @@ public class DepartmentRequestDTO {
 
     private Integer floorNumber;
     private String wing;
+    @jakarta.validation.constraints.Min(value = 0, message = "{department.bedCapacity.min}")
     private Integer bedCapacity;
 
     // Emergency contact information

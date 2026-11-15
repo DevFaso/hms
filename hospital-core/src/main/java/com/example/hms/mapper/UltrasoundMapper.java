@@ -136,6 +136,11 @@ public class UltrasoundMapper {
         if (dto.getSpecialInstructions() != null) {
             order.setSpecialInstructions(dto.getSpecialInstructions());
         }
+        // QA D1672 class (r44 sweep): the edit dialog offers the scan count and the
+        // update validated it, then dropped it behind a success.
+        if (dto.getScanCountForPregnancy() != null) {
+            order.setScanCountForPregnancy(dto.getScanCountForPregnancy());
+        }
     }
 
     /**
@@ -393,34 +398,13 @@ public class UltrasoundMapper {
 
     /**
      * Resolve patient display name from Patient entity.
-     * Returns "LastName, FirstName" or components available.
+     * Returns "First Middle Last", the app's shared name format.
      */
     private String resolvePatientDisplayName(Patient patient) {
-        if (patient == null) {
-            return null;
-        }
-
-        // QA D1036: "Last, First Middle" - the given names whole, middle name included.
-        String firstName = safeTrim(java.util.stream.Stream.of(patient.getFirstName(), patient.getMiddleName())
-            .filter(part -> part != null && !part.isBlank())
-            .map(String::trim)
-            .collect(java.util.stream.Collectors.joining(" ")));
-        if (firstName != null && firstName.isEmpty()) {
-            firstName = null;
-        }
-        String lastName = safeTrim(patient.getLastName());
-
-        if (lastName != null && firstName != null) {
-            return lastName + ", " + firstName;
-        }
-        if (lastName != null) {
-            return lastName;
-        }
-        if (firstName != null) {
-            return firstName;
-        }
-
-        return null;
+        // r44: the app's one name format, "First Middle Last" (QA D1036), not
+        // "Last, First": the imaging list read "Traoré, Seydou" where every
+        // other screen reads "Seydou Traoré".
+        return patient == null ? null : patient.getFullName();
     }
 
     /**
@@ -433,16 +417,5 @@ public class UltrasoundMapper {
         }
         // Future: Use Patient.mrn field if available
         return patient.getId().toString();
-    }
-
-    /**
-     * Safely trim a string, returning null if input is null or blank.
-     */
-    private String safeTrim(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
     }
 }

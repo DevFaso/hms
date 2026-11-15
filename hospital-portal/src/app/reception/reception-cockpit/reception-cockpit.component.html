@@ -288,6 +288,21 @@
                           >{{ 'RECEPTION.OUTSTANDING_BALANCE' | translate }}</span
                         >
                       }
+                      <!-- QA D1591: the desk sees the patient pre-checked in from the portal. -->
+                      @if (item.preCheckedIn) {
+                        {{ ' '
+                        }}<span
+                          class="flag-chip info"
+                          data-testid="queue-prechecked-in"
+                          [title]="
+                            (item.preCheckInConsent
+                              ? 'RECEPTION.PRE_CHECKED_IN_CONSENTED'
+                              : 'RECEPTION.PRE_CHECKED_IN'
+                            ) | translate
+                          "
+                          >{{ 'RECEPTION.PRE_CHECKED_IN' | translate }}</span
+                        >
+                      }
                     </td>
                     <td>
                       <button

@@ -97,7 +97,13 @@ import { offersHeadCircumference } from '../shared/patient-measures';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
-import { announceNewbornWarning } from '../shared/newborn-vital-alerts';
+import {
+  announceHypertensionWarning,
+  announceNewbornWarning,
+  announcePostpartumWarning,
+} from '../shared/newborn-vital-alerts';
+import { OrganDamageSymptomsComponent } from '../shared/organ-damage-symptoms/organ-damage-symptoms.component';
+import { OrganDamageSymptom } from '../shared/organ-damage-symptoms';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { MarDoseHistoryComponent } from './mar-dose-history/mar-dose-history.component';
 import { earlyDoseDialogKeys, earlyDoseRefusal } from './early-dose';
@@ -145,6 +151,7 @@ export function localInputToUtcIso(value: string | undefined | null): string | u
     RouterLink,
     TranslateModule,
     TriageFormComponent,
+    OrganDamageSymptomsComponent,
     CloseUnseenDialogComponent,
     NursingIntakeFormComponent,
     EnumLabelPipe,
@@ -912,6 +919,14 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     'UNRESPONSIVE',
   ];
 
+  /** r54: the optional organ-damage signs; none ticked is sent as nothing, never as an answer. */
+  updateVitalsOrganDamage(symptoms: OrganDamageSymptom[]): void {
+    this.vitalsForm.update((f) => ({
+      ...f,
+      organDamageSymptoms: symptoms.length ? symptoms : undefined,
+    }));
+  }
+
   updateVitalsOnOxygen(value: boolean): void {
     this.vitalsForm.update((f) => ({ ...f, onOxygen: value }));
   }
@@ -928,8 +943,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
    * yes/no answered by leaving it unticked, so it is not one).
    */
   vitalsHasReading(): boolean {
+    // r54: a ticked organ-damage sign is not a reading either.
     return Object.entries(this.vitalsForm()).some(
-      ([field, v]) => field !== 'onOxygen' && v !== undefined && v !== '',
+      ([field, v]) =>
+        field !== 'onOxygen' && field !== 'organDamageSymptoms' && v !== undefined && v !== '',
     );
   }
 
@@ -985,6 +1002,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         );
         // QA D1564: a newborn's set is judged against the newborn bands; saved, and warned.
         announceNewbornWarning(response?.newbornAlerts, this.toast, this.translate);
+        // QA D1890: a mother's severe pressure after birth; saved, and warned (URGENT).
+        announcePostpartumWarning(response?.postpartumAlerts, this.toast, this.translate);
+        // r54: an adult's severe pressure; saved, and warned (a recheck; URGENT with a sign of organ damage).
+        announceHypertensionWarning(response?.hypertensionAlerts, this.toast, this.translate);
         this.vitalsCapturing.set(false);
         this.closeVitalsDialog();
         this.loadAll();

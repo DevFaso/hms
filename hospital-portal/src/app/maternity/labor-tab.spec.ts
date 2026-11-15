@@ -11,12 +11,16 @@ import {
   fieldErrorsResponse,
 } from '../testing/form-refusal-behaviour';
 import {
+  DeliveryRecordResponse,
   LaborService,
   LaborEpisodeResponse,
   PartographEntryResponse,
 } from '../services/labor.service';
+import { provideRouter } from '@angular/router';
 import { ToastService } from '../core/toast.service';
+import { RoleContextService } from '../core/role-context.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
+import { HospitalService } from '../services/hospital.service';
 import fr from '../../assets/i18n/fr.json';
 import es from '../../assets/i18n/es.json';
 
@@ -138,6 +142,40 @@ describe('LaborTabComponent', () => {
     expect(component.entries().length).toBe(1);
   });
 
+  it("D1631: another hospital's active labour is shown read only, named, with no record button", () => {
+    TestBed.inject(RoleContextService).activeHospitalId = 'hA';
+    laborSpy.episodes.and.returnValue(
+      of([{ ...episode('eB', 'ACTIVE'), hospitalId: 'hB', hospitalName: 'Hôpital B' }]),
+    );
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(fixture.componentInstance.activeEpisodeForeign()).toBeTrue();
+    expect(host.querySelector('[data-testid="labor-foreign-episode"]')).not.toBeNull();
+    const buttons = Array.from(host.querySelectorAll('button')).map((b) => b.textContent ?? '');
+    expect(buttons.some((t) => t.includes('LABOR.NEW_ENTRY'))).toBeFalse();
+    expect(buttons.some((t) => t.includes('LABOR.RECORD_DELIVERY'))).toBeFalse();
+    expect(buttons.some((t) => t.includes('LABOR.START_EPISODE'))).toBeFalse();
+    // Its partograph is still read.
+    expect(laborSpy.entries).toHaveBeenCalledWith('p1', 'eB');
+  });
+
+  it("D1631: the own hospital's active labour keeps its record buttons", () => {
+    TestBed.inject(RoleContextService).activeHospitalId = 'h1';
+    laborSpy.episodes.and.returnValue(of([episode('e1', 'ACTIVE')]));
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(fixture.componentInstance.activeEpisodeForeign()).toBeFalse();
+    expect(host.querySelector('[data-testid="labor-foreign-episode"]')).toBeNull();
+    const buttons = Array.from(host.querySelectorAll('button')).map((b) => b.textContent ?? '');
+    expect(buttons.some((t) => t.includes('LABOR.NEW_ENTRY'))).toBeTrue();
+  });
+
   it('startEpisode posts and reloads on success', () => {
     component.patient.set({ id: 'p1' } as PatientResponse);
     laborSpy.startEpisode.and.returnValue(of(episode('e2', 'ACTIVE')));
@@ -247,6 +285,67 @@ describe('LaborTabComponent', () => {
     component.submitDelivery();
 
     expect(toastSpy.error).toHaveBeenCalledWith('Cette heure ne peut pas être dans le futur.');
+  });
+
+  it('QA r46: born before arrival is offered only on a continued episode and needs its reason', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([episode('e1', 'ACTIVE')]);
+    expect(component.bornBeforeArrivalOffered()).toBeFalse();
+
+    component.episodes.set([{ ...episode('e1', 'ACTIVE'), transferredFromEpisodeId: 'eB' }]);
+    expect(component.bornBeforeArrivalOffered()).toBeTrue();
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.deliveryForm.bornBeforeArrival = true;
+    component.submitDelivery();
+    expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalled();
+
+    laborSpy.recordDelivery.and.returnValue(throwError(() => ({ status: 400, error: {} })));
+    component.deliveryForm.bornBeforeArrivalReason = 'Née pendant le trajet';
+    component.submitDelivery();
+    expect(laborSpy.recordDelivery).toHaveBeenCalledWith(
+      'p1',
+      'e1',
+      jasmine.objectContaining({
+        bornBeforeArrival: true,
+        bornBeforeArrivalReason: 'Née pendant le trajet',
+      }),
+    );
+  });
+
+  it('Rex on #1140: an admission entry here never blocks a birth declared before arrival', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([{ ...episode('e1', 'ACTIVE'), transferredFromEpisodeId: 'eB' }]);
+    component.entries.set([{ observationTime: '2026-11-13T23:00:00' } as PartographEntryResponse]);
+    laborSpy.recordDelivery.and.returnValue(throwError(() => ({ status: 400, error: {} })));
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.deliveryForm.birthDateTime = '2026-11-13T00:30';
+
+    component.submitDelivery();
+    expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
+
+    component.deliveryForm.bornBeforeArrival = true;
+    component.deliveryForm.bornBeforeArrivalReason = 'Née pendant le trajet';
+    component.submitDelivery();
+    expect(laborSpy.recordDelivery).toHaveBeenCalled();
+  });
+
+  it('Rex on #1140: an observation here before the birth refuses the declaration', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([{ ...episode('e1', 'ACTIVE'), transferredFromEpisodeId: 'eB' }]);
+    component.entries.set([{ observationTime: '2026-11-12T00:00:00' } as PartographEntryResponse]);
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.deliveryForm.birthDateTime = '2026-11-13T12:00';
+    component.deliveryForm.bornBeforeArrival = true;
+    component.deliveryForm.bornBeforeArrivalReason = 'Née pendant le trajet';
+
+    component.submitDelivery();
+
+    expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalled();
   });
 
   it('submitDelivery posts and closes the form', () => {
@@ -831,5 +930,424 @@ describe('LaborTabComponent recent-delivery override (rendered, QA D1339 / D1340
     // The time reads in the runner's locale ("15:00" in FR, "3:00 PM" in CI's EN).
     expect(text).toMatch(/2026, \d{1,2}:\d{2}/);
     expect(text).not.toMatch(/\d{1,2}:\d{2}:\d{2}/);
+  });
+});
+
+describe('LaborTabComponent labour transfer (provisional rule, 2026-11-12)', () => {
+  let laborSpy: jasmine.SpyObj<LaborService>;
+  let hospitalSpy: jasmine.SpyObj<HospitalService>;
+  let attached: HTMLElement | null = null;
+
+  beforeEach(async () => {
+    laborSpy = jasmine.createSpyObj('LaborService', [
+      'startEpisode',
+      'episodes',
+      'addEntry',
+      'entries',
+      'recordDelivery',
+      'delivery',
+      'transfer',
+      'arrivalWithoutHandover',
+    ]);
+    laborSpy.entries.and.returnValue(of([]));
+    laborSpy.delivery.and.returnValue(throwError(() => ({ status: 404 })));
+    hospitalSpy = jasmine.createSpyObj('HospitalService', ['directory']);
+    hospitalSpy.directory.and.returnValue(
+      of([
+        { id: 'h1', name: 'Hôpital B', city: null },
+        { id: 'hA', name: 'Hôpital A', city: null },
+      ]),
+    );
+    const patientSpy = jasmine.createSpyObj('PatientService', ['search', 'lookup']);
+    patientSpy.search.and.returnValue(of([]));
+    patientSpy.lookup.and.returnValue(of([]));
+    await TestBed.configureTestingModule({
+      imports: [LaborTabComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: LaborService, useValue: laborSpy },
+        { provide: HospitalService, useValue: hospitalSpy },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'info']),
+        },
+        { provide: PatientService, useValue: patientSpy },
+      ],
+    }).compileComponents();
+  });
+
+  afterEach(() => {
+    attached?.remove();
+    attached = null;
+  });
+
+  function render(hospital: string, roles: string[], episodes: LaborEpisodeResponse[]) {
+    const roleContext = TestBed.inject(RoleContextService);
+    roleContext.setRoles(roles);
+    roleContext.activeHospitalId = hospital;
+    laborSpy.episodes.and.returnValue(of(episodes));
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    attached = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(attached);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  function buttons(fixture: { nativeElement: unknown }): string[] {
+    return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).map(
+      (b) => b.textContent ?? '',
+    );
+  }
+
+  const atB = (): LaborEpisodeResponse => ({
+    ...episode('eB', 'ACTIVE'),
+    hospitalId: 'hB',
+    hospitalName: 'Hôpital B',
+  });
+
+  it("offers 'Transférer' on the hospital's own active labour to a midwife, and sends the reason", async () => {
+    laborSpy.transfer.and.returnValue(of({ ...episode('eA', 'ACTIVE'), hospitalId: 'hA' }));
+    const fixture = render('h1', ['ROLE_MIDWIFE'], [episode('e1', 'ACTIVE')]);
+    const cmp = fixture.componentInstance;
+    expect(cmp.canTransfer()).toBeTrue();
+    expect(buttons(fixture).some((t) => t.includes('LABOR.TRANSFER.ACTION'))).toBeTrue();
+
+    cmp.openTransfer();
+    fixture.detectChanges();
+    // The hospital the requests are pinned to is not a destination.
+    expect(cmp.destinations().map((h) => h.id)).toEqual(['hA']);
+    cmp.transferForm = { destinationHospitalId: 'hA', reason: '  Bloc opératoire  ' };
+    cmp.submitTransfer();
+    expect(laborSpy.transfer).toHaveBeenCalledWith('p1', 'e1', {
+      destinationHospitalId: 'hA',
+      reason: 'Bloc opératoire',
+    });
+  });
+
+  it('the transfer dialog refuses an empty submit on its marked fields, nothing sent', async () => {
+    const fixture = render('h1', ['ROLE_DOCTOR'], [episode('e1', 'ACTIVE')]);
+    fixture.componentInstance.openTransfer();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="labor-transfer-submit"]',
+      sent: laborSpy.transfer,
+    });
+    expect(marked).toEqual(jasmine.arrayContaining(['lt-destination', 'lt-reason']));
+  });
+
+  it('the server naming the destination marks it with its reason', async () => {
+    laborSpy.transfer.and.returnValue(
+      throwError(() =>
+        fieldErrorsResponse({
+          destinationHospitalId: 'Elle n’est pas inscrite dans cet hôpital.',
+        }),
+      ),
+    );
+    const fixture = render('h1', ['ROLE_MIDWIFE'], [episode('e1', 'ACTIVE')]);
+    const cmp = fixture.componentInstance;
+    cmp.openTransfer();
+    cmp.transferForm = { destinationHospitalId: 'hA', reason: 'Bloc' };
+    fixture.detectChanges();
+    await fixture.whenStable();
+    cmp.submitTransfer();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, {
+      'lt-destination': 'Elle n’est pas inscrite dans cet hôpital.',
+    });
+  });
+
+  it("a nurse is not offered 'Transférer' nor the arrival", () => {
+    const own = render('h1', ['ROLE_NURSE'], [episode('e1', 'ACTIVE')]);
+    expect(own.componentInstance.canTransfer()).toBeFalse();
+    expect(buttons(own).some((t) => t.includes('LABOR.TRANSFER.ACTION'))).toBeFalse();
+    own.destroy();
+    attached?.remove();
+    const foreign = render('hA', ['ROLE_NURSE'], [atB()]);
+    expect(foreign.componentInstance.canRecordArrival()).toBeFalse();
+    expect(buttons(foreign).some((t) => t.includes('LABOR.ARRIVAL.ACTION'))).toBeFalse();
+  });
+
+  it("offers 'Arrivée sans transmission' on another hospital's active labour, never 'Transférer'", () => {
+    laborSpy.arrivalWithoutHandover.and.returnValue(
+      of({ ...episode('eA', 'ACTIVE'), hospitalId: 'hA', transferredFromEpisodeId: 'eB' }),
+    );
+    const fixture = render('hA', ['ROLE_DOCTOR'], [atB()]);
+    const cmp = fixture.componentInstance;
+    expect(cmp.canRecordArrival()).toBeTrue();
+    expect(cmp.canTransfer()).toBeFalse();
+    const labels = buttons(fixture);
+    expect(labels.some((t) => t.includes('LABOR.ARRIVAL.ACTION'))).toBeTrue();
+    expect(labels.some((t) => t.includes('LABOR.TRANSFER.ACTION'))).toBeFalse();
+
+    cmp.openArrival();
+    cmp.arrivalReason = 'Arrivée par ses propres moyens';
+    cmp.submitArrival();
+    expect(laborSpy.arrivalWithoutHandover).toHaveBeenCalledWith('p1', 'eB', {
+      reason: 'Arrivée par ses propres moyens',
+    });
+  });
+
+  it('the arrival dialog refuses an empty reason on its field, nothing sent', async () => {
+    const fixture = render('hA', ['ROLE_MIDWIFE'], [atB()]);
+    fixture.componentInstance.openArrival();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="labor-arrival-submit"]',
+      sent: laborSpy.arrivalWithoutHandover,
+    });
+    expect(marked).toContain('la-reason');
+  });
+
+  it("after a transfer, A's episode names where it continues from and shows B's partograph read only", () => {
+    laborSpy.entries.and.callFake((_patient: string, episodeId: string) =>
+      of(episodeId === 'eB' ? [{ ...entry('peB'), episodeId: 'eB' }] : []),
+    );
+    const continued: LaborEpisodeResponse = {
+      ...episode('eA', 'ACTIVE'),
+      hospitalId: 'hA',
+      admittedAt: '2026-08-20T09:00:00',
+      transferredFromEpisodeId: 'eB',
+      transferredFromHospitalName: 'Hôpital B',
+    };
+    const closed: LaborEpisodeResponse = {
+      ...atB(),
+      status: 'TRANSFERRED_OUT',
+      transferHospitalName: 'Hôpital A',
+    };
+    const fixture = render('hA', ['ROLE_MIDWIFE'], [continued, closed]);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(laborSpy.entries).toHaveBeenCalledWith('p1', 'eB');
+    expect(fixture.componentInstance.previousEntries().length).toBe(1);
+    expect(host.querySelector('[data-testid="labor-continues"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="labor-previous-partograph"]')).not.toBeNull();
+    // A records on its own episode.
+    expect(buttons(fixture).some((t) => t.includes('LABOR.NEW_ENTRY'))).toBeTrue();
+  });
+
+  it('B, once it no longer sees an active labour, shows where she went and why', () => {
+    const fixture = render(
+      'hB',
+      ['ROLE_MIDWIFE'],
+      [
+        {
+          ...atB(),
+          status: 'TRANSFERRED_OUT',
+          transferHospitalName: 'Hôpital A',
+          transferReason: 'Bloc opératoire',
+          transferredAt: '2026-08-20T09:00:00',
+        },
+      ],
+    );
+    const section = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="labor-transferred-out"]',
+    );
+    expect(section?.textContent).toContain('Bloc opératoire');
+    expect(section?.textContent).toContain('LABOR.TRANSFER.CLOSED_TRANSFERRED');
+  });
+
+  it('Rex on #1134: only whoever may record the arrival is told about it', () => {
+    const hint = (f: { nativeElement: unknown }) =>
+      (f.nativeElement as HTMLElement).textContent ?? '';
+    const nurse = render('hA', ['ROLE_NURSE'], [atB()]);
+    expect(hint(nurse)).toContain('LABOR.FOREIGN.HINT');
+    expect(hint(nurse)).not.toContain('LABOR.FOREIGN.HINT_ARRIVAL');
+    nurse.destroy();
+    attached?.remove();
+    const midwife = render('hA', ['ROLE_MIDWIFE'], [atB()]);
+    expect(hint(midwife)).toContain('LABOR.FOREIGN.HINT_ARRIVAL');
+  });
+
+  it('every new transfer text reads in French and Spanish', () => {
+    const labor = (fr as unknown as { LABOR: Record<string, Record<string, string>> }).LABOR;
+    const laborEs = (es as unknown as { LABOR: Record<string, Record<string, string>> }).LABOR;
+    expect(labor['TRANSFER']['ACTION']).toBe('Transférer');
+    expect(labor['ARRIVAL']['ACTION']).toBe('Arrivée sans transmission');
+    expect(laborEs['ARRIVAL']['ACTION']).toBe('Llegada sin traspaso');
+    expect(Object.keys(labor['TRANSFER']).sort()).toEqual(Object.keys(laborEs['TRANSFER']).sort());
+  });
+});
+
+/* ── QA D1592: a recorded live birth registers each baby as a patient ── */
+describe('LaborTabComponent newborns (QA D1592)', () => {
+  let laborSpy: jasmine.SpyObj<LaborService>;
+  let toastSpy: jasmine.SpyObj<ToastService>;
+
+  const record = (newborns: DeliveryRecordResponse['newborns']): DeliveryRecordResponse => ({
+    id: 'd1',
+    episodeId: 'e1',
+    patientId: 'p1',
+    deliveredByStaffName: null,
+    birthDateTime: '2026-11-12T03:40:00',
+    deliveryMode: 'SPONTANEOUS_VAGINAL',
+    liveBirth: true,
+    numberOfInfants: newborns?.length ?? 0,
+    infantSex: 'FEMALE',
+    birthWeightGrams: 3150,
+    gestationalAgeWeeksAtBirth: 39,
+    apgarOneMinute: 8,
+    apgarFiveMinute: 9,
+    placentaDeliveredAt: null,
+    placentaComplete: null,
+    uterotonicGiven: null,
+    estimatedBloodLossMl: null,
+    perinealTear: null,
+    notes: null,
+    alerts: [],
+    newborns,
+  });
+
+  beforeEach(async () => {
+    laborSpy = jasmine.createSpyObj('LaborService', [
+      'startEpisode',
+      'episodes',
+      'addEntry',
+      'entries',
+      'recordDelivery',
+      'delivery',
+    ]);
+    laborSpy.entries.and.returnValue(of([]));
+    toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info']);
+    const patientSpy = jasmine.createSpyObj('PatientService', ['search', 'lookup']);
+    patientSpy.search.and.returnValue(of([]));
+    patientSpy.lookup.and.returnValue(of([]));
+    await TestBed.configureTestingModule({
+      imports: [LaborTabComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: LaborService, useValue: laborSpy },
+        { provide: ToastService, useValue: toastSpy },
+        { provide: PatientService, useValue: patientSpy },
+      ],
+    }).compileComponents();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+  });
+
+  it('the delivery summary lists each baby with its MRN and a link to its chart', () => {
+    laborSpy.episodes.and.returnValue(
+      of([{ ...episode('e1', 'DELIVERED'), deliveryRecorded: true }]),
+    );
+    laborSpy.delivery.and.returnValue(
+      of(
+        record([
+          {
+            patientId: 'b1',
+            displayName: 'Bébé 1 Traore',
+            mrn: 'MRN-001',
+            birthOrder: 1,
+            needsReview: false,
+          },
+          {
+            patientId: 'b2',
+            displayName: 'Bébé 2 Traore',
+            mrn: 'MRN-002',
+            birthOrder: 2,
+            needsReview: true,
+            reviewReason: 'LIVE_BIRTH_COUNT_LOWERED',
+          },
+        ]),
+      ),
+    );
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const links = Array.from(
+      el.querySelectorAll<HTMLAnchorElement>('[data-testid="delivery-newborn-link"]'),
+    );
+    expect(links.map((a) => a.textContent?.trim())).toEqual(['Bébé 1 Traore', 'Bébé 2 Traore']);
+    expect(links[0].getAttribute('href')).toBe('/patients/b1');
+    const text = (el.querySelector('[data-testid="delivery-newborns"]')?.textContent ?? '').replace(
+      /\s+/g,
+      ' ',
+    );
+    expect(text).toContain('N° de dossier MRN-001');
+    expect(text).toContain('À vérifier : moins de naissances vivantes sont désormais enregistrées');
+    expect(text).toContain('Le nom est provisoire');
+  });
+
+  it('a stillbirth shows no newborn list', () => {
+    laborSpy.episodes.and.returnValue(
+      of([{ ...episode('e1', 'DELIVERED'), deliveryRecorded: true }]),
+    );
+    laborSpy.delivery.and.returnValue(of({ ...record([]), liveBirth: false }));
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="delivery-newborns"]'),
+    ).toBeNull();
+  });
+
+  it('QA D1714: each baby has its own outcome, so mixed twins are sent per baby', () => {
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    const component = fixture.componentInstance;
+    component.deliveryForm = { numberOfInfants: 2 };
+    component.setBabyOutcome(2, 'STILLBORN');
+
+    expect(component.babyOrders()).toEqual([1, 2]);
+    expect(component.deliveryBabies()).toEqual([
+      { birthOrder: 1, outcome: 'LIVE' },
+      { birthOrder: 2, outcome: 'STILLBORN' },
+    ]);
+    component.deliveryForm = { numberOfInfants: 1 };
+    expect(component.deliveryBabies()).toEqual([{ birthOrder: 1, outcome: 'LIVE' }]);
+  });
+
+  it('QA D1803: each baby outcome select has a full row of its own, so its label is never cut', () => {
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    const component = fixture.componentInstance;
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([episode('e1', 'ACTIVE')]);
+    fixture.detectChanges();
+    component.openDeliveryForm();
+    component.deliveryForm.numberOfInfants = 2;
+    fixture.detectChanges();
+    const page = fixture.nativeElement as HTMLElement;
+
+    const fields = Array.from(page.querySelectorAll('.baby-outcome-field')) as HTMLElement[];
+    expect(fields.length).toBe(2);
+    fields.forEach((field) => {
+      expect(getComputedStyle(field).gridColumnStart).toBe('1');
+      expect(getComputedStyle(field).gridColumnEnd).toBe('-1');
+      const select = field.querySelector('select') as HTMLSelectElement;
+      expect(select.getBoundingClientRect().width).toBeGreaterThanOrEqual(
+        field.getBoundingClientRect().width - 1,
+      );
+    });
+  });
+
+  it('QA D1714: the delivery summary shows each baby and the fetal-death event', () => {
+    laborSpy.episodes.and.returnValue(
+      of([{ ...episode('e1', 'DELIVERED'), deliveryRecorded: true }]),
+    );
+    laborSpy.delivery.and.returnValue(
+      of({
+        ...record([]),
+        numberOfInfants: 2,
+        babies: [
+          { birthOrder: 1, outcome: 'LIVE' },
+          { birthOrder: 2, outcome: 'STILLBORN', fetalDeathEventId: 'fd1' },
+        ],
+      }),
+    );
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    const page = fixture.nativeElement as HTMLElement;
+
+    const outcomes = (
+      page.querySelector('[data-testid="delivery-baby-outcomes"]')?.textContent ?? ''
+    ).replace(/\s+/g, ' ');
+    expect(outcomes).toContain('Bébé 1 : Né(e) vivant(e)');
+    expect(outcomes).toContain('Bébé 2 : Mort-né(e) (sans signe de vie)');
+    expect(page.querySelector('[data-testid="delivery-fetal-death-event"]')).not.toBeNull();
   });
 });

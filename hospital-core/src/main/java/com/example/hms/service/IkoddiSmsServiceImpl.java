@@ -1,24 +1,27 @@
 package com.example.hms.service;
 
 import com.example.hms.service.integration.IkoddiGateway;
+import com.example.hms.service.integration.SmsProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 /**
- * Real {@link SmsService} backed by the IKODDI gateway. Registered only when
- * {@code app.ikoddi.enabled=true} and marked {@code @Primary} so it wins over
- * {@link MockSmsServiceImpl} — every existing consumer (prescription dispatch,
- * username reminders, partner notifications, assignment confirmations) starts
- * sending real SMS the moment the flag and credentials are set.
+ * Real {@link SmsService} backed by the active {@link IkoddiGateway}: Orange by
+ * default, IKODDI when {@code app.sms.provider=ikoddi} (see {@link SmsProvider}).
+ * Registered only when that provider has its credentials, and marked
+ * {@code @Primary} so it wins over {@link MockSmsServiceImpl}: every existing
+ * consumer (prescription dispatch, username reminders, partner notifications,
+ * assignment confirmations) starts sending real SMS the moment the credentials
+ * are set. The class keeps its historical name.
  */
 @Service
 @Primary
-@ConditionalOnProperty(name = "app.ikoddi.enabled", havingValue = "true")
+@Conditional(SmsProvider.TransportConfigured.class)
 @RequiredArgsConstructor
 @Slf4j
 public class IkoddiSmsServiceImpl implements SmsService {
@@ -28,7 +31,7 @@ public class IkoddiSmsServiceImpl implements SmsService {
     @Override
     public void send(String phoneNumber, String message) {
         IkoddiGateway.SmsDispatch dispatch = ikoddiGateway.sendSms(List.of(phoneNumber), message, null);
-        log.info("📲 IKODDI SMS dispatched to {} (delivered={})", maskPhone(phoneNumber), dispatch.delivered());
+        log.info("📲 SMS accepted by the provider for {} (accepted={})", maskPhone(phoneNumber), dispatch.delivered());
     }
 
     @Override

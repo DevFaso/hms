@@ -229,7 +229,21 @@ public class AdmissionServiceImpl implements AdmissionService {
         stayEncounters.openStayEncounter(admission);
         // QA D712: the emergency visit / same-day consultation ends with the admission.
         encounterAutoCompletion.completeVisitsThatLedToAdmission(admission);
+        // r53 (provisional, pending approval): a minor's labour admission opens a safeguarding review after the
+        // commit. It never blocks or delays this admission.
+        if (admission.getAdmissionType() == AdmissionType.LABOR_DELIVERY && minorLabourSafeguarding != null) {
+            minorLabourSafeguarding.onLabourAdmission(patient, hospital.getId(), admission.getAdmissionDateTime(),
+                com.example.hms.model.safeguarding.SafeguardingReview.SOURCE_ADMISSION, admission.getId(), callerId);
+        }
         return admissionMapper.toResponseDTO(admission);
+    }
+
+    /** r53: the safeguarding screen of a labour admission (setter-injected, like the audit service below). */
+    private com.example.hms.service.safeguarding.MinorLabourSafeguarding minorLabourSafeguarding;
+
+    @Autowired
+    void setMinorLabourSafeguarding(com.example.hms.service.safeguarding.MinorLabourSafeguarding minorLabourSafeguarding) {
+        this.minorLabourSafeguarding = minorLabourSafeguarding;
     }
 
     @Override
@@ -270,6 +284,8 @@ public class AdmissionServiceImpl implements AdmissionService {
         if (request.getAcuityLevel() != null) admission.setAcuityLevel(request.getAcuityLevel());
         if (request.getExpectedDischargeDateTime() != null) admission.setExpectedDischargeDateTime(request.getExpectedDischargeDateTime());
         if (request.getAdmissionNotes() != null) admission.setAdmissionNotes(request.getAdmissionNotes());
+        // QA D1672: the corrected complaint was dropped behind a 200.
+        if (request.getChiefComplaint() != null) admission.setChiefComplaint(request.getChiefComplaint().strip());
         if (request.getMetadata() != null) admission.setMetadata(request.getMetadata());
 
         if (request.getSecondaryDiagnosesToAdd() != null) {
@@ -303,7 +319,7 @@ public class AdmissionServiceImpl implements AdmissionService {
             && request.getDepartmentId() == null && request.getRoomBed() == null
             && request.getAcuityLevel() == null && request.getExpectedDischargeDateTime() == null
             && request.getAdmissionNotes() == null && request.getAttendingPhysicianId() == null
-            && request.getConsultingPhysiciansToAdd() == null && request.getMetadata() == null;
+            && request.getChiefComplaint() == null && request.getMetadata() == null;
     }
 
     /**
@@ -362,6 +378,10 @@ public class AdmissionServiceImpl implements AdmissionService {
             "admission.dischargingProvider.physician.required");
         // QA D503 class: the discharging provider is the caller, not a colleague named in the body.
         com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(dischargingProvider);
+        // QA D1596: a discharge summary already written for the stay is the one
+        // source of its diagnosis, and the dialog's instructions go into it.
+        String dischargeDiagnosis = stayEncounters.dischargeDiagnosisOfStay(admission,
+            request.getDischargeDiagnosis(), request.getDischargeInstructions());
 
         admission.discharge(
             request.getDischargeDisposition(),
@@ -378,7 +398,7 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         // The stay's encounter carries the discharge (D151), then it and only
         // it is completed (D134).
-        stayEncounters.recordDischarge(admission, request.getDischargeDiagnosis());
+        stayEncounters.recordDischarge(admission, dischargeDiagnosis);
         completeActiveEncounters(admission);
 
         // Free the structured bed (the admission keeps bed/roomBed as history)

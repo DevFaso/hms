@@ -17,7 +17,6 @@ import java.time.LocalTime;
 import java.time.format.DateTimeParseException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -69,6 +68,14 @@ public class ImagingOrderMapper {
             .build();
     }
 
+    /**
+     * An edit of the order. The fields of the portal's edit form (modality,
+     * study, region, laterality, priority, clinical question) are the form's
+     * to replace, so a blank one clears. QA D1822 class (r51): every other
+     * field - the safety flags, the schedule, the appointment, the
+     * pre-authorisation, the workflow notes, the visit - is kept when the
+     * request leaves it out; an edit erased them all.
+     */
     public void updateEntityFromRequest(ImagingOrder order, ImagingOrderRequestDTO dto) {
         if (order == null || dto == null) {
             return;
@@ -79,28 +86,72 @@ public class ImagingOrderMapper {
         order.setLaterality(dto.getLaterality());
         order.setPriority(dto.getPriority());
         order.setClinicalQuestion(dto.getClinicalQuestion());
-        order.setContrastRequired(dto.getContrastRequired());
-        order.setContrastType(dto.getContrastType());
-        order.setHasContrastAllergy(dto.getHasContrastAllergy());
-        order.setContrastAllergyDetails(dto.getContrastAllergyDetails());
-        order.setSedationRequired(dto.getSedationRequired());
-        order.setSedationType(dto.getSedationType());
-        order.setSedationNotes(dto.getSedationNotes());
-        order.setRequiresNpo(dto.getRequiresNpo());
-        order.setHasImplantedDevice(dto.getHasImplantedDevice());
-        order.setImplantedDeviceDetails(dto.getImplantedDeviceDetails());
-        order.setRequiresPregnancyTest(dto.getRequiresPregnancyTest());
-        order.setNeedsInterpreter(dto.getNeedsInterpreter());
-        order.setAdditionalProtocols(dto.getAdditionalProtocols());
-        order.setSpecialInstructions(dto.getSpecialInstructions());
-        order.setScheduledDate(dto.getScheduledDate());
-        order.setScheduledTime(dto.getScheduledTime());
-        order.setAppointmentLocation(dto.getAppointmentLocation());
-        order.setPortableStudy(dto.getPortableStudy());
-        order.setRequiresAuthorization(dto.getRequiresAuthorization());
-        order.setAuthorizationNumber(dto.getAuthorizationNumber());
-        order.setWorkflowNotes(dto.getWorkflowNotes());
-        order.setEncounterId(dto.getEncounterId());
+        if (dto.getContrastRequired() != null) {
+            order.setContrastRequired(dto.getContrastRequired());
+        }
+        if (dto.getContrastType() != null) {
+            order.setContrastType(dto.getContrastType());
+        }
+        if (dto.getHasContrastAllergy() != null) {
+            order.setHasContrastAllergy(dto.getHasContrastAllergy());
+        }
+        if (dto.getContrastAllergyDetails() != null) {
+            order.setContrastAllergyDetails(dto.getContrastAllergyDetails());
+        }
+        if (dto.getSedationRequired() != null) {
+            order.setSedationRequired(dto.getSedationRequired());
+        }
+        if (dto.getSedationType() != null) {
+            order.setSedationType(dto.getSedationType());
+        }
+        if (dto.getSedationNotes() != null) {
+            order.setSedationNotes(dto.getSedationNotes());
+        }
+        if (dto.getRequiresNpo() != null) {
+            order.setRequiresNpo(dto.getRequiresNpo());
+        }
+        if (dto.getHasImplantedDevice() != null) {
+            order.setHasImplantedDevice(dto.getHasImplantedDevice());
+        }
+        if (dto.getImplantedDeviceDetails() != null) {
+            order.setImplantedDeviceDetails(dto.getImplantedDeviceDetails());
+        }
+        if (dto.getRequiresPregnancyTest() != null) {
+            order.setRequiresPregnancyTest(dto.getRequiresPregnancyTest());
+        }
+        if (dto.getNeedsInterpreter() != null) {
+            order.setNeedsInterpreter(dto.getNeedsInterpreter());
+        }
+        if (dto.getAdditionalProtocols() != null) {
+            order.setAdditionalProtocols(dto.getAdditionalProtocols());
+        }
+        if (dto.getSpecialInstructions() != null) {
+            order.setSpecialInstructions(dto.getSpecialInstructions());
+        }
+        if (dto.getScheduledDate() != null) {
+            order.setScheduledDate(dto.getScheduledDate());
+        }
+        if (dto.getScheduledTime() != null) {
+            order.setScheduledTime(dto.getScheduledTime());
+        }
+        if (dto.getAppointmentLocation() != null) {
+            order.setAppointmentLocation(dto.getAppointmentLocation());
+        }
+        if (dto.getPortableStudy() != null) {
+            order.setPortableStudy(dto.getPortableStudy());
+        }
+        if (dto.getRequiresAuthorization() != null) {
+            order.setRequiresAuthorization(dto.getRequiresAuthorization());
+        }
+        if (dto.getAuthorizationNumber() != null) {
+            order.setAuthorizationNumber(dto.getAuthorizationNumber());
+        }
+        if (dto.getWorkflowNotes() != null) {
+            order.setWorkflowNotes(dto.getWorkflowNotes());
+        }
+        if (dto.getEncounterId() != null) {
+            order.setEncounterId(dto.getEncounterId());
+        }
     }
 
     public ImagingOrderResponseDTO toResponseDTO(ImagingOrder order) {
@@ -167,7 +218,15 @@ public class ImagingOrderMapper {
             .duplicateOfRecentOrder(order.getDuplicateOfRecentOrder())
             .duplicateReferenceOrderId(order.getDuplicateReferenceOrderId())
             .duplicateMatches(toDuplicateMatchDTOs(duplicateMatches))
+            .duplicateOverride(order.getDuplicateOverride())
+            .duplicateOverrideReason(order.getDuplicateOverrideReason())
+            .duplicateOverrideNote(order.getDuplicateOverrideNote())
+            .duplicateOverrideByName(order.getDuplicateOverrideByName())
+            .duplicateOverrideAt(order.getDuplicateOverrideAt())
+            .authorizationPending(order.getAuthorizationPendingSince() != null)
+            .authorizationPendingSince(order.getAuthorizationPendingSince())
             .cancelledAt(order.getCancelledAt())
+            .completedAt(order.getCompletedAt())
             .cancellationReason(order.getCancellationReason())
             .cancelledByName(order.getCancelledByName())
             .workflowNotes(order.getWorkflowNotes())
@@ -217,22 +276,10 @@ public class ImagingOrderMapper {
     }
 
     private String resolvePatientDisplayName(Patient patient) {
-        if (patient == null) {
-            return null;
-        }
-        // QA D1036: "Last, First Middle" - the given names whole, middle name included.
-        String first = java.util.stream.Stream.of(patient.getFirstName(), patient.getMiddleName())
-            .filter(part -> part != null && !part.isBlank())
-            .map(String::trim)
-            .collect(java.util.stream.Collectors.joining(" "));
-        String last = Optional.ofNullable(patient.getLastName()).orElse("").trim();
-        if (!last.isEmpty() && !first.isEmpty()) {
-            return last + ", " + first;
-        }
-        if (!last.isEmpty()) {
-            return last;
-        }
-        return !first.isEmpty() ? first : null;
+        // r44: the app's one name format, "First Middle Last" (QA D1036), not
+        // "Last, First": the imaging list read "Traoré, Seydou" where every
+        // other screen reads "Seydou Traoré".
+        return patient == null ? null : patient.getFullName();
     }
 
     /**

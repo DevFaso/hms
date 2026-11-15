@@ -1028,6 +1028,19 @@ export const routes: Routes = [
         loadComponent: () => import('./reports/reports').then((m) => m.ReportsComponent),
       },
 
+      // Provisional platform rule: notes unsigned for more than 72 hours at the
+      // acting hospital. Mirrors UnsignedNoteController's @PreAuthorize.
+      {
+        path: 'unsigned-notes',
+        canActivate: [RoleGuard],
+        data: {
+          requiresHospitalScope: true,
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./unsigned-notes/unsigned-notes-page').then((m) => m.UnsignedNotesPageComponent),
+      },
+
       // Disease surveillance — top diagnoses per month. Mirrors
       // MorbidityDashboardController's @PreAuthorize exactly. The BACKEND
       // decides scope from the caller's authorities (own hospital vs
@@ -1167,6 +1180,10 @@ export const routes: Routes = [
             'ROLE_PHYSICIAN',
             'ROLE_SURGEON',
             'ROLE_HOSPITAL_ADMIN',
+            // QA D1592: a newborn a delivery could not register waits here for reception.
+            'ROLE_RECEPTIONIST',
+            // Provisional rule 1 (2026-11-15): the pre-authorisation to obtain after an urgent imaging study.
+            'ROLE_BILLING_SPECIALIST',
             'ROLE_SUPER_ADMIN',
           ],
         },
@@ -1186,6 +1203,9 @@ export const routes: Routes = [
             // order creation and listing — the guard was the outlier.
             'ROLE_MIDWIFE',
             'ROLE_RADIOLOGIST',
+            // User decision 2026-11-14: the admin roles read Imagerie
+            // (orders and released reports of their hospitals), read-only.
+            'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],

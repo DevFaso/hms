@@ -110,6 +110,19 @@ describe('SubmitGuardDirective (QA D1124 / D1089)', () => {
     expect(reason()?.textContent).toBe("Champs obligatoires manquants : J'accepte");
   });
 
+  it('names a sentence label without its own period (QA D1600: "soins.. Cochez")', () => {
+    const ack = el.querySelector('#ack') as HTMLInputElement;
+    ack.parentElement!.lastChild!.textContent = ' Je confirme mon consentement pour mes soins.';
+    ack.required = true;
+    host.fields.set(['ack']);
+    host.guard.set('Cochez la case de consentement pour envoyer.');
+    fixture.detectChanges();
+    button().click();
+    expect(reason()?.textContent).toBe(
+      'Champs obligatoires manquants : Je confirme mon consentement pour mes soins. Cochez la case de consentement pour envoyer.',
+    );
+  });
+
   it('without listed fields it marks nothing (a secondary action never flags the whole form)', () => {
     host.fields.set(null);
     fixture.detectChanges();
@@ -282,6 +295,29 @@ describe('SubmitGuardDirective submitGuardRequired (QA D1193)', () => {
       'Champs obligatoires manquants : Nom, N° de série',
     );
     expect(el.querySelector('textarea')?.getAttribute('aria-invalid')).toBeNull();
+  }));
+
+  it('QA D1940: the reason follows the edits: a filled field leaves it, and it goes once nothing is missing', fakeAsync(() => {
+    el.querySelector<HTMLButtonElement>('#create')!.click();
+    fixture.detectChanges();
+    tick();
+    const reason = () =>
+      el.querySelector('[data-testid="submit-guard-reason"]')?.textContent?.trim() ?? null;
+    expect(reason()).toBe('Champs obligatoires manquants : Nom, N° de série');
+    const [name, serial] = Array.from(el.querySelectorAll<HTMLInputElement>('input[required]'));
+
+    name.value = 'Automate Mindray';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges();
+    tick();
+    expect(reason()).toBe('Champs obligatoires manquants : N° de série');
+
+    serial.value = 'SN-001';
+    serial.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges();
+    tick();
+    expect(reason()).toBeNull();
+    expect(fixture.componentInstance.submitted).toBe(0);
   }));
 
   it('once every required field is filled the form is sent and the refusal goes away', fakeAsync(() => {

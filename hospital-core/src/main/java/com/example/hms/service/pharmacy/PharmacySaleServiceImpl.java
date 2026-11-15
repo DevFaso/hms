@@ -78,8 +78,9 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         if (dto.getLines() == null || dto.getLines().isEmpty()) {
             throw new com.example.hms.exception.FieldBusinessException("lines", "pharmacy.sale.linesRequired");
         }
-        // QA D1129: the same mobile-money transaction is not counted at two tills
-        // (an insurance authorisation can cover several sales, so it is not checked).
+        // QA D1611: a counter sale is paid at the till; an insurer's share is never counted as paid.
+        com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(dto.getPaymentMethod(), "paymentMethod");
+        // QA D1129: the same mobile-money transaction is not counted at two tills.
         if (dto.getPaymentMethod() == com.example.hms.enums.PharmacyPaymentMethod.MOBILE_MONEY) {
             referenceRegistry.requireUnused(activeHospitalId, dto.getReferenceNumber(), "referenceNumber");
         }

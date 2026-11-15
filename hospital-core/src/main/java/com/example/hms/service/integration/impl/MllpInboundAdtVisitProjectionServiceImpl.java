@@ -460,6 +460,13 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         Admission admission = buildAdmission(ctx, ac.config(), ac.provider(), ac.department());
         admission = admissionRepository.save(admission);
         emitAutoCreateAudit(admission, ctx);
+        // r53 (provisional): an intake configured to admit as labour screens a minor like any labour admission.
+        if (admission.getAdmissionType() == com.example.hms.enums.AdmissionType.LABOR_DELIVERY
+                && minorLabourSafeguarding != null) {
+            minorLabourSafeguarding.onLabourAdmission(ctx.patient, ctx.receivingHospital.getId(),
+                admission.getAdmissionDateTime(), com.example.hms.model.safeguarding.SafeguardingReview.SOURCE_ADMISSION,
+                admission.getId(), null);
+        }
 
         log.info("ADT visit-sync auto-created admission={} visit={} sender={}/{} hospital={} patient={} provider={} msgCtrlId={}",
             admission.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
@@ -546,6 +553,14 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             return Optional.empty();
         }
         return Optional.of(department);
+    }
+
+    /** r53: the safeguarding screen of a labour admission (setter-injected: never part of the constructor). */
+    private com.example.hms.service.safeguarding.MinorLabourSafeguarding minorLabourSafeguarding;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setMinorLabourSafeguarding(com.example.hms.service.safeguarding.MinorLabourSafeguarding minorLabourSafeguarding) {
+        this.minorLabourSafeguarding = minorLabourSafeguarding;
     }
 
     private Admission buildAdmission(

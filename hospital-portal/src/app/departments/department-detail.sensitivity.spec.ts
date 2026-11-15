@@ -40,7 +40,7 @@ describe('DepartmentDetailComponent — default sensitive category', () => {
     fixture.detectChanges();
     http
       .expectOne('/departments/d-1')
-      .flush({ id: 'd-1', name: 'Psychiatrie', code: 'PSY', active: true });
+      .flush({ id: 'd-1', name: 'Psychiatrie', departmentCode: 'PSY', active: true });
     http.expectOne('/departments/d-1/with-staff').flush({ staffMembers: [] });
     http
       .expectOne('/departments/d-1/stats')

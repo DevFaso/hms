@@ -15,7 +15,6 @@ import com.example.hms.repository.StaffRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -44,12 +43,17 @@ class PatientFlowServiceImplTest {
     @Mock private EncounterRepository encounterRepository;
     @Mock private AdmissionRepository admissionRepository;
 
-    @InjectMocks
     private PatientFlowServiceImpl service;
+
+    /** The service reading the wall clock, as in production. */
+    private PatientFlowServiceImpl serviceAt(java.time.Clock clock) {
+        return new PatientFlowServiceImpl(staffRepository, encounterRepository, admissionRepository, clock);
+    }
 
     /** Default stub: no active admissions. Overridden per-test as needed. */
     @BeforeEach
     void stubNoAdmissions() {
+        service = serviceAt(java.time.Clock.systemDefaultZone());
         lenient().when(admissionRepository.findActiveByAdmittingProvider(any(UUID.class)))
                 .thenReturn(Collections.emptyList());
     }
@@ -182,8 +186,14 @@ class PatientFlowServiceImplTest {
             "waits from arrival, not midnight: " + item.getElapsedMinutes());
     }
 
-    @Test
-    void reviewOf971_aVisitWithNoArrivalWaitsFromItsEntryNotFromMidnight() {
+    /** Either side of midnight: the wait must not depend on when the suite runs. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"2026-11-13T23:59:59", "2026-11-14T00:00:01", "2026-11-14T12:00:00"})
+    void reviewOf971_aVisitWithNoArrivalWaitsFromItsEntryNotFromMidnight(String at) {
+        java.time.ZoneId zone = java.time.ZoneId.of("UTC");
+        LocalDateTime now = LocalDateTime.parse(at);
+        PatientFlowServiceImpl service = serviceAt(java.time.Clock.fixed(now.atZone(zone).toInstant(), zone));
+        LocalDateTime entered = now.minusMinutes(5);
         UUID userId = UUID.randomUUID();
         UUID staffId = UUID.randomUUID();
         givenStaffFor(userId, stubStaff(staffId));
@@ -193,9 +203,9 @@ class PatientFlowServiceImplTest {
         when(enc.getId()).thenReturn(UUID.randomUUID());
         when(enc.getPatient()).thenReturn(patient);
         org.mockito.Mockito.lenient().when(enc.getEncounterDate())
-            .thenReturn(java.time.LocalDate.now().atStartOfDay());
+            .thenReturn(entered.toLocalDate().atStartOfDay());
         when(enc.getArrivalTimestamp()).thenReturn(null);
-        when(enc.getCreatedAt()).thenReturn(LocalDateTime.now().minusMinutes(5));
+        when(enc.getCreatedAt()).thenReturn(entered);
         when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any(EncounterStatus.class)))
                 .thenReturn(Collections.emptyList());
         when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))

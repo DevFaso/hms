@@ -47,6 +47,17 @@ class PatientAllergySummarySyncTest {
     }
 
     @Test
+    @DisplayName("QA round 54: an allergy marked entered in error leaves the patient's summary")
+    void anEnteredInErrorAllergyIsNotSummarised() {
+        PatientAllergy voided = row("Penicillin", AllergySeverity.SEVERE, true);
+        voided.setVerificationStatus(com.example.hms.enums.AllergyVerificationStatus.ENTERED_IN_ERROR);
+
+        assertThat(PatientAllergySummarySync.summarize(List.of(voided, row("Garlic", null, true))))
+            .isEqualTo("Garlic");
+        assertThat(PatientAllergySummarySync.summarize(List.of(voided))).isNull();
+    }
+
+    @Test
     @DisplayName("refresh rewrites the patient column only when it changed")
     void refreshWritesOnlyOnChange() {
         Patient patient = new Patient();

@@ -3,6 +3,7 @@ import { currentLocale } from '../shared/i18n/app-locale';
 import { HttpClient, HttpResponse } from '@angular/common/http';
 import { Observable, map, catchError, of, defer } from 'rxjs';
 import { allRows, PageSlice } from '../shared/all-pages';
+import type { AfterVisitSummary as EncounterAfterVisitSummary } from './encounter.service';
 
 /* ── DTOs matching backend PatientPortalController ── */
 
@@ -517,6 +518,11 @@ export interface PortalEncounter {
   department: string;
   chiefComplaint: string;
   diagnosisSummary: string;
+  /**
+   * QA D1910: a note of the visit waits for its author's signature; the
+   * patient reads "not finalised" instead of a draft (the server never sends it).
+   */
+  notePendingSignature: boolean;
   status: string;
   notes: string;
   hospitalName: string;
@@ -540,7 +546,14 @@ interface EncounterApiResponse {
   note?: {
     chiefComplaint?: string;
     assessment?: string;
+    signedAt?: string | null;
   };
+  notePendingSignature?: boolean | null;
+}
+
+/** QA D1910: the visit's note when it is signed, else nothing. */
+function signedNote(e: EncounterApiResponse): EncounterApiResponse['note'] | undefined {
+  return e.note?.signedAt ? e.note : undefined;
 }
 
 /**
@@ -682,9 +695,12 @@ export interface VisitClinicianEntry {
   visitDate: string | null;
 }
 
-/** GET /me/patient/care-team — CareTeamDTO { primaryCare, primaryCareHistory, visitClinicians }. */
+/** GET /me/patient/care-team — CareTeamDTO { primaryCare, primaryCares, primaryCareHistory, visitClinicians }. */
 export interface CareTeamDTO {
+  /** The newest current link (one of `primaryCares`), kept for older clients. */
   primaryCare: PrimaryCareEntry | null;
+  /** Every current link, one per hospital that registers the patient, newest first (QA D1850). */
+  primaryCares?: PrimaryCareEntry[];
   /** Newest first; includes the current link. */
   primaryCareHistory: PrimaryCareEntry[];
   /** Newest visit first, one entry per clinician. */
@@ -752,6 +768,8 @@ interface PrescriptionApiResponse {
 
 export interface AfterVisitSummary {
   id: string;
+  /** The visit the summary closed: its content sections are read from it (2026-11-12). */
+  encounterId?: string | null;
   encounterDate: string;
   encounterType: string;
   providerName: string;
@@ -770,6 +788,8 @@ export interface AfterVisitSummary {
   followUpDate: string | null;
   medications: { name: string; dosage: string; frequency: string }[];
   status: string;
+  /** Provisional platform rule: a note of the visit still waits for its author's signature. */
+  pendingSignature?: boolean;
 }
 
 /** Raw shape returned by backend DischargeSummaryResponseDTO */
@@ -802,6 +822,7 @@ interface DischargeSummaryApiResponse {
   }[];
   isFinalized: boolean;
   additionalNotes: string;
+  pendingSignature?: boolean;
 }
 
 /**
@@ -1394,9 +1415,13 @@ export class PatientPortalService {
           department: e.departmentName ?? '',
           // QA D981: the note's complaint, else the visit's own reason (an
           // admission's reason lives there), else the booking reason.
-          chiefComplaint: e.note?.chiefComplaint || e.chiefComplaint || e.appointmentReason || '',
+          // QA D1910: a note's text only once it is signed (the server sends
+          // no draft; this is the second line of the same rule).
+          chiefComplaint:
+            signedNote(e)?.chiefComplaint || e.chiefComplaint || e.appointmentReason || '',
           // The doctor's assessment, labelled as such (it is not a coded diagnosis).
-          diagnosisSummary: e.note?.assessment ?? '',
+          diagnosisSummary: signedNote(e)?.assessment ?? '',
+          notePendingSignature: e.notePendingSignature === true,
           status: e.status ?? '',
           notes: e.notes ?? '',
           hospitalName: e.hospitalName ?? '',
@@ -1492,6 +1517,8 @@ export class PatientPortalService {
     return this.http.get<ApiWrapper<CareTeamDTO>>(`${this.base}/care-team`).pipe(
       map((r) => ({
         primaryCare: r.data?.primaryCare ?? null,
+        // An older server sends only `primaryCare`.
+        primaryCares: r.data?.primaryCares ?? (r.data?.primaryCare ? [r.data.primaryCare] : []),
         primaryCareHistory: r.data?.primaryCareHistory ?? [],
         visitClinicians: r.data?.visitClinicians ?? [],
       })),
@@ -1508,6 +1535,7 @@ export class PatientPortalService {
       map((r) => {
         const team = r.data;
         const entries = [
+          ...(team?.primaryCares ?? []),
           ...(team?.primaryCare ? [team.primaryCare] : []),
           ...(team?.primaryCareHistory ?? []),
         ];
@@ -1590,6 +1618,7 @@ export class PatientPortalService {
           const summaries = this.unwrapData(response) ?? [];
           return summaries.map((d) => ({
             id: d.id,
+            encounterId: d.encounterId ?? null,
             encounterDate: d.dischargeDate ?? '',
             encounterType: d.encounterType ?? '',
             providerName: d.dischargingProviderName ?? '',
@@ -1617,10 +1646,20 @@ export class PatientPortalService {
               frequency: m.frequency ?? '',
             })),
             status: d.isFinalized ? 'FINALIZED' : 'DRAFT',
+            pendingSignature: d.pendingSignature === true,
           }));
         }),
         catchError(() => of([])),
       );
+  }
+
+  /**
+   * User decision 2026-11-12: the visit's summary sections (vital signs,
+   * tests, allergies, current medicines, assessment and plan, history), read
+   * from the patient's own visit. The server answers only for their own visit.
+   */
+  getVisitSummaryDetail(encounterId: string): Observable<EncounterAfterVisitSummary> {
+    return this.http.get<EncounterAfterVisitSummary>(`/encounters/${encounterId}/avs`);
   }
 
   // ── Record-sharing opt-out (E9 #66) ─────────────────────────────────

@@ -211,4 +211,25 @@ class LabRangeDemographicGradingTest {
         noDate.setResultDate(LocalDateTime.now());
         assertThat(mapper.severityFlagOf(noDate)).isEqualTo("LOW");
     }
+
+    /** r44 result drawer: each listed range says whether the patient is in its age band. */
+    @Test
+    void eachListedRangeSaysWhetherThePatientIsInItsAgeBand() {
+        List<LabTestReferenceRange> ranges = List.of(
+            range(0.70, 0.99, "g/L", "ALL", 18, 150, "YEARS", 0.45, 5.00),
+            range(null, null, "g/L", "ALL", 0, 27, "DAYS", 0.40, null),
+            range(0.70, 0.99, "g/L", "ALL", null, null, null, null, null));
+
+        List<LabResultReferenceRangeDTO> adult = mapper
+            .toResponseDTO(result("1.05", "g/L", ranges, "MALE", LocalDate.of(1970, 5, 5))).getReferenceRanges();
+        List<LabResultReferenceRangeDTO> newborn = mapper
+            .toResponseDTO(result("0.50", "g/L", ranges, "MALE", RESULT_DAY.minusDays(5))).getReferenceRanges();
+        List<LabResultReferenceRangeDTO> unknownAge = mapper
+            .toResponseDTO(result("1.05", "g/L", ranges, "MALE", null)).getReferenceRanges();
+
+        assertThat(adult).extracting(LabResultReferenceRangeDTO::getPatientInAgeBand).containsExactly(true, false, true);
+        assertThat(newborn).extracting(LabResultReferenceRangeDTO::getPatientInAgeBand).containsExactly(false, true, true);
+        // An unknown age is never "outside": the screen keeps showing the band.
+        assertThat(unknownAge).extracting(LabResultReferenceRangeDTO::getPatientInAgeBand).containsExactly(null, null, true);
+    }
 }

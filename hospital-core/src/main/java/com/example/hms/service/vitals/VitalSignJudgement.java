@@ -46,6 +46,14 @@ import java.util.UUID;
  *
  * <p>Every other age keeps the rules it had: the nurse station's per-vital limits and a NEWS2
  * total of 5 or more (NEWS2 itself only applies from 16 years).
+ *
+ * <p>QA D1890 and r54 (PROVISIONAL, 2026-11-14/15, pending the obstetric and clinical leads'
+ * approval): a severe blood pressure under the shared rule ({@link SevereHypertension}, the rule the
+ * postpartum observation and the BPA panel also use) marks the set significant. The obstetric rule
+ * (pregnancy, 42 days after a birth) comes back as an URGENT {@code postpartumAlerts} warning and
+ * notifies the same people; the adult rule comes back in {@code hypertensionAlerts}, a WARNING that
+ * asks for a recheck, URGENT (and notified) only when the recorder ticked a sign of organ damage.
+ * It never refuses the set.
  */
 @Slf4j
 @Service
@@ -65,11 +73,45 @@ public class VitalSignJudgement {
     private final News2EscalationService news2EscalationService;
     private final NotificationService notificationService;
     private final MessageSource messageSource;
+    /** QA D1592: a baby registered from a delivery knows its birth before any assessment is recorded. */
+    private final com.example.hms.repository.DeliveryNewbornRepository deliveryNewbornRepository;
+    /** QA D1890, r54 (provisional): the shared severe-blood-pressure rule. */
+    private final SevereHypertension severeHypertension;
 
-    /** What the judgement found: whether the newborn rules applied, and their findings. */
-    public record Judgement(boolean newborn, List<NewbornAlertRules.Finding> newbornFindings) {
+    /** The postpartum warning's notice and type label (the postpartum observation's own). */
+    static final String POSTPARTUM_NOTICE_KEY = "postpartum.alert.notification";
+    static final String POSTPARTUM_TYPE_KEY = "postpartum.alert.type.HYPERTENSION";
+    /** r54 review: a pregnant patient's notice is headed as a pregnancy alert, never "postpartum". */
+    static final String PREGNANCY_NOTICE_KEY = "vitals.alert.notification.pregnancy";
+
+    /** The adult URGENT warning's notice and type label (r54). */
+    static final String HYPERTENSION_NOTICE_KEY = "vitals.alert.notification";
+    static final String HYPERTENSION_TYPE_KEY = "vitals.alert.type.HYPERTENSION";
+    static final String HYPERTENSION_NOTIFICATION_TYPE = "SEVERE_HYPERTENSION";
+
+    /**
+     * What the judgement found: whether the newborn rules applied, and their findings; and the
+     * shared severe-blood-pressure verdict (QA D1890, r54).
+     */
+    public record Judgement(boolean newborn, List<NewbornAlertRules.Finding> newbornFindings,
+                            SevereHypertension.Verdict bloodPressure) {
         public Judgement {
             newbornFindings = newbornFindings == null ? List.of() : List.copyOf(newbornFindings);
+            bloodPressure = bloodPressure == null ? SevereHypertension.Verdict.NONE : bloodPressure;
+        }
+
+        public Judgement(boolean newborn, List<NewbornAlertRules.Finding> newbornFindings) {
+            this(newborn, newbornFindings, SevereHypertension.Verdict.NONE);
+        }
+
+        /** The obstetric rule raised (pregnancy, or 42 days after a birth): URGENT. */
+        public boolean postpartumSevereHypertension() {
+            return bloodPressure.obstetric();
+        }
+
+        /** The adult rule raised: WARNING, or URGENT with a sign of organ damage. */
+        public boolean adultSevereHypertension() {
+            return bloodPressure.adult();
         }
 
         static Judgement notNewborn() {
@@ -108,8 +150,15 @@ public class VitalSignJudgement {
             judgement = new Judgement(true, NewbornAlertRules.evaluate(reading));
             significant = judgement.newbornSignificant();
         } else {
-            judgement = Judgement.notNewborn();
-            significant = outsideAgeRanges(vital);
+            // QA D1890, r54: a severe pressure under the shared rule is significant and warns; never refuses.
+            SevereHypertension.Verdict bloodPressure = severeHypertension == null || patient == null
+                ? SevereHypertension.Verdict.NONE
+                : severeHypertension.evaluate(patient,
+                    com.example.hms.service.recordaccess.CrossHospitalReachRecorder.hospitalIdOf(vital.getHospital()),
+                    vital.getSystolicBpMmHg(), vital.getDiastolicBpMmHg(), at,
+                    !com.example.hms.enums.OrganDamageSymptom.parse(vital.getOrganDamageSymptoms()).isEmpty());
+            judgement = new Judgement(false, List.of(), bloodPressure);
+            significant = judgement.bloodPressure().raised() || outsideAgeRanges(vital);
         }
         if (significant) {
             vital.setClinicallySignificant(true);
@@ -125,6 +174,10 @@ public class VitalSignJudgement {
                          String recorderUsername, String visitPhysicianUsername) {
         news2EscalationService.escalateIfNeeded(saved, patientId, hospitalId, recorderUsername,
             visitPhysicianUsername);
+        if (judgement != null && patientId != null && hospitalId != null) {
+            escalateBloodPressure(saved, judgement.bloodPressure(), patientId, hospitalId, recorderUsername,
+                visitPhysicianUsername);
+        }
         if (judgement == null || !judgement.newborn() || patientId == null || hospitalId == null) {
             return;
         }
@@ -151,6 +204,83 @@ public class VitalSignJudgement {
                 }
             }
         }
+    }
+
+    /** Obstetric: always URGENT, notified. Adult: only the URGENT one (a sign of organ damage) is notified. */
+    private void escalateBloodPressure(PatientVitalSign saved, SevereHypertension.Verdict bloodPressure, UUID patientId,
+                                       UUID hospitalId, String recorderUsername, String visitPhysicianUsername) {
+        if (bloodPressure.obstetric()) {
+            notifySevereHypertension(saved, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
+                bloodPressure.scope(), bloodPressure.messageKey());
+        } else if (bloodPressure.adult() && bloodPressure.level() == SevereHypertension.Level.URGENT) {
+            notifySevereHypertension(saved, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
+                bloodPressure.scope(), bloodPressure.messageKey());
+        }
+    }
+
+    /**
+     * QA D1890, r54: the notice (type, patient, warning) to the recorder, the stay's responsible
+     * physician and the visit's clinician, each in her language. Never throws.
+     */
+    private void notifySevereHypertension(PatientVitalSign saved, UUID patientId, UUID hospitalId,
+                                          String recorderUsername, String visitPhysicianUsername,
+                                          SevereHypertension.Scope scope, String messageKey) {
+        Set<String> recipients = news2EscalationService.recipients(patientId, hospitalId, recorderUsername,
+            visitPhysicianUsername);
+        String fullName = saved != null && saved.getPatient() != null
+            ? Objects.toString(saved.getPatient().getFullName(), "") : "";
+        Object patientArg = fullName.isBlank() ? NotificationLocalizer.key("patient.fallback.generic") : fullName;
+        // Postpartum: the postpartum observation's own notice; pregnancy: a pregnancy notice (r54
+        // review: never headed "postpartum" for a woman still pregnant); adult: the vitals notice.
+        Object[] args = {NotificationLocalizer.key(scope == SevereHypertension.Scope.ADULT
+                ? HYPERTENSION_TYPE_KEY : POSTPARTUM_TYPE_KEY), patientArg,
+            ObstetricAlertEscalationWorker.alertMessageArg(messageKey, null, "")};
+        for (String recipient : recipients) {
+            try {
+                if (scope == SevereHypertension.Scope.POSTPARTUM) {
+                    notificationService.createNotification(POSTPARTUM_NOTICE_KEY, args, recipient, NOTIFICATION_TYPE);
+                } else if (scope == SevereHypertension.Scope.PREGNANT) {
+                    notificationService.createNotification(PREGNANCY_NOTICE_KEY, args, recipient, NOTIFICATION_TYPE);
+                } else {
+                    notificationService.createNotification(HYPERTENSION_NOTICE_KEY, args, recipient,
+                        HYPERTENSION_NOTIFICATION_TYPE);
+                }
+            } catch (RuntimeException ex) {
+                log.warn("Severe blood-pressure notice not created: {}", ex.getClass().getSimpleName());
+            }
+        }
+    }
+
+    /**
+     * QA D1890, r54: the obstetric severe-blood-pressure warning (pregnancy, or 42 days after a
+     * birth) as the recorder reads it, in her language. Empty when the set raised none.
+     */
+    public List<NewbornVitalAlertDTO> postpartumAlerts(Judgement judgement) {
+        if (judgement == null || !judgement.postpartumSevereHypertension()) {
+            return List.of();
+        }
+        return List.of(bloodPressureAlert(judgement.bloodPressure()));
+    }
+
+    /**
+     * r54: the adult severe-blood-pressure warning (WARNING, or URGENT with a sign of organ damage)
+     * as the recorder reads it, in her language. Empty when the set raised none.
+     */
+    public List<NewbornVitalAlertDTO> hypertensionAlerts(Judgement judgement) {
+        if (judgement == null || !judgement.adultSevereHypertension()) {
+            return List.of();
+        }
+        return List.of(bloodPressureAlert(judgement.bloodPressure()));
+    }
+
+    private NewbornVitalAlertDTO bloodPressureAlert(SevereHypertension.Verdict verdict) {
+        java.util.Locale locale = LocaleContextHolder.getLocale();
+        return NewbornVitalAlertDTO.builder()
+            .code(verdict.alertCode())
+            .severity(verdict.level().name())
+            .type(com.example.hms.enums.PostpartumAlertType.HYPERTENSION.name())
+            .message(messageSource.getMessage(verdict.messageKey(), null, verdict.alertCode(), locale))
+            .build();
     }
 
     /** The findings as the recorder reads them, in her language. Empty for anyone not a newborn. */
@@ -191,6 +321,10 @@ public class VitalSignJudgement {
                 patient.getId(), hospitalId);
         return birth
             .map(NewbornAssessment::getDeliveryRecord)
+            .or(() -> deliveryNewbornRepository.findByNewbornPatient_Id(patient.getId())
+                .filter(link -> hospitalId == null
+                    || (link.getHospital() != null && hospitalId.equals(link.getHospital().getId())))
+                .map(com.example.hms.model.labor.DeliveryNewborn::getDeliveryRecord))
             .map(DeliveryRecord::getGestationalAgeWeeksAtBirth)
             .filter(weeks -> weeks < NewbornAlertRules.PRETERM_BELOW_WEEKS)
             .isPresent();
@@ -201,29 +335,85 @@ public class VitalSignJudgement {
      * or a NEWS2 total of 5 or more where NEWS2 applies (P3 #25b).
      */
     static boolean outsideAgeRanges(PatientVitalSign v) {
-        return isOutOfRange(v.getHeartRateBpm(), 40, 150)
-            || isBelow(v.getSpo2Percent(), 90)
-            || isOutOfRange(v.getRespiratoryRateBpm(), 8, 30)
-            || isOutOfRange(v.getSystolicBpMmHg(), 80, 200)
-            || isAbove(v.getDiastolicBpMmHg(), 120)
-            || isOutOfDoubleRange(v.getTemperatureCelsius(), 35.0, 40.0)
-            || isOutOfRange(v.getBloodGlucoseMgDl(), 50, 400)
+        return !perVitalFlags(v).isEmpty()
             || (NewsScoreCalculator.applies(v) && NewsScoreCalculator.score(v).total() >= 5);
     }
 
-    private static boolean isOutOfRange(Integer value, int min, int max) {
-        return value != null && (value < min || value > max);
+    /** A value below its rule's floor. */
+    public static final String LOW = "LOW";
+    /** A value above its rule's ceiling. */
+    public static final String HIGH = "HIGH";
+    /** A newborn finding: the newborn rules give no direction to show. */
+    public static final String ABNORMAL = "ABNORMAL";
+
+    /**
+     * Polish 2026-11-13: which values of a set the rules above judge out of range, for a reader
+     * that shows each value (the after-visit summary). Keyed by the vital's field name. The same
+     * rules as {@link #judge}: the newborn rules' URGENT and CAUTION findings under 28 days of life,
+     * else the per-vital limits. A value no rule judges (a weight, a height, a pain score, a
+     * diastolic below any limit) never gets an entry; a NEWS2 total flags the set, not a value.
+     */
+    public static java.util.Map<String, String> valueFlags(PatientVitalSign v, LocalDate dateOfBirth) {
+        if (v == null) {
+            return java.util.Map.of();
+        }
+        LocalDateTime at = v.getRecordedAt() != null ? v.getRecordedAt() : LocalDateTime.now();
+        if (!isNewborn(dateOfBirth, at)) {
+            return perVitalFlags(v);
+        }
+        // Preterm and a persistent rate only change reference notices (INFO), which flag nothing here.
+        NewbornAlertRules.Reading reading = new NewbornAlertRules.Reading(v.getTemperatureCelsius(),
+            v.getHeartRateBpm(), v.getRespiratoryRateBpm(), v.getSpo2Percent(), v.getBloodGlucoseMgDl(), null,
+            v.getSystolicBpMmHg(), v.getDiastolicBpMmHg(), NewbornAlertRules.hoursSinceBirth(null, dateOfBirth, at),
+            false, false);
+        java.util.Map<String, String> flags = new java.util.LinkedHashMap<>();
+        for (NewbornAlertRules.Finding f : NewbornAlertRules.evaluate(reading)) {
+            if (f.severity() != NewbornAlertSeverity.URGENT && f.severity() != NewbornAlertSeverity.CAUTION) {
+                continue;
+            }
+            for (String field : newbornFields(f)) {
+                flags.put(field, ABNORMAL);
+            }
+        }
+        return flags;
     }
 
-    private static boolean isBelow(Integer value, int min) {
-        return value != null && value < min;
+    /** The value(s) a newborn finding is about, from its type and, for the heart, its code. */
+    private static List<String> newbornFields(NewbornAlertRules.Finding f) {
+        return switch (f.type()) {
+            case THERMOREGULATION -> List.of("temperatureCelsius");
+            case RESPIRATORY -> List.of("respiratoryRateBpm");
+            case OXYGENATION -> List.of("spo2Percent");
+            case GLUCOSE -> List.of("bloodGlucoseMgDl");
+            case CARDIOVASCULAR -> f.code() != null && f.code().contains("pressure")
+                ? List.of("systolicBpMmHg", "diastolicBpMmHg") : List.of("heartRateBpm");
+            default -> List.of();
+        };
     }
 
-    private static boolean isAbove(Integer value, int max) {
-        return value != null && value > max;
+    /** The nurse station's per-vital limits, one entry per value outside them. */
+    private static java.util.Map<String, String> perVitalFlags(PatientVitalSign v) {
+        java.util.Map<String, String> flags = new java.util.LinkedHashMap<>();
+        range(flags, "heartRateBpm", v.getHeartRateBpm(), 40, 150);
+        if (v.getSpo2Percent() != null && v.getSpo2Percent() < 90) {
+            flags.put("spo2Percent", LOW);
+        }
+        range(flags, "respiratoryRateBpm", v.getRespiratoryRateBpm(), 8, 30);
+        range(flags, "systolicBpMmHg", v.getSystolicBpMmHg(), 80, 200);
+        if (v.getDiastolicBpMmHg() != null && v.getDiastolicBpMmHg() > 120) {
+            flags.put("diastolicBpMmHg", HIGH);
+        }
+        Double temperature = v.getTemperatureCelsius();
+        if (temperature != null && (temperature < 35.0 || temperature > 40.0)) {
+            flags.put("temperatureCelsius", temperature < 35.0 ? LOW : HIGH);
+        }
+        range(flags, "bloodGlucoseMgDl", v.getBloodGlucoseMgDl(), 50, 400);
+        return flags;
     }
 
-    private static boolean isOutOfDoubleRange(Double value, double min, double max) {
-        return value != null && (value < min || value > max);
+    private static void range(java.util.Map<String, String> flags, String field, Integer value, int min, int max) {
+        if (value != null && (value < min || value > max)) {
+            flags.put(field, value < min ? LOW : HIGH);
+        }
     }
 }

@@ -536,8 +536,12 @@ class RequiredRequestIdGuardTest {
      */
     private static final Map<String, String> CONDITIONALLY_REQUIRED = Map.ofEntries(
         Map.entry("StaffPaymentRequestDTO.reference", "only for mobile money, insurance or transfer"),
+        Map.entry("ImagingOrderRequestDTO.duplicateOverrideReason",
+            "only when « Commander quand même » is claimed over a duplicate warning (provisional rule 2)"),
         Map.entry("OrderReviewDecisionDTO.orderVersion", "only to continue an order, not to stop it or assess a treatment"),
         Map.entry("CrossmatchRequestDTO.incompatibilityReason", "only when the verdict is incompatible (QA D1507)"),
+        Map.entry("DeliveryRecordRequestDTO.bornBeforeArrivalReason",
+            "only when a birth marked born before arrival precedes the continued episode's start (QA r46)"),
         Map.entry("DeathRecordRequestDTO.maternalDeathTiming", "only when the death is a maternal death"),
         Map.entry("DeathRecordRequestDTO.perinatalType", "only when the death is a perinatal death"),
         Map.entry("ObgynReferralCreateRequestDTO.attachments", "only for an urgent referral"),
@@ -597,8 +601,6 @@ class RequiredRequestIdGuardTest {
 
     /** Duplicate-shaped keys that do not refuse a value the user typed, each with why. Shrinks only. */
     private static final Map<String, String> NOT_A_TYPED_VALUE = Map.ofEntries(
-        Map.entry("lab.order.duplicate",
-            "the same test for the same patient at the same minute: the order as a whole, not a field"),
         Map.entry("slot.justTaken",
             "the slot was booked by someone else meanwhile: a state of the slot, not a typed value"),
         Map.entry("provider.licence.duplicate",
@@ -1417,9 +1419,7 @@ class RequiredRequestIdGuardTest {
                 + " (the round-29 rule reads COSIGN_REQUIRED the same way)"),
         Map.entry("ControlledSubstanceGuard#requireDispensable:PrescriptionId:prescription.safeguard.PEDIATRIC_DOSE_REVIEW.dispense",
             "a safeguard the prescription still awaits (2FA, co-signature, paediatric review): a state of the order"
-                + " (the round-29 rule reads COSIGN_REQUIRED the same way)"),
-        Map.entry("LabOrderServiceImpl#buildLabOrder:OrderDatetime:lab.order.duplicate",
-            "the same test for the same patient at the same minute: the order as a whole (the D1301 rule excuses the same key)"));
+                + " (the round-29 rule reads COSIGN_REQUIRED the same way)"));
 
     /**
      * QA D1369 (round 31): {@code BirthPlanRequestDTO.introduction} was

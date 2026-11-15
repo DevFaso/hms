@@ -43,9 +43,9 @@
     "CHART.ALLERGIES": "Allergies",
     "CHART.LAB_STATUS_NORMAL": "Normal",
     "CHART.SECTIONS": "Sections",
+    "CHART_REVIEW.ADDENDUM": "Addendum",
     "CHART_REVIEW.COL.DATE": "Date",
     "CHART_REVIEW.COL.TYPE": "Type",
-    "CHART_REVIEW.IMPRESSION": "Impression",
     "CHART_REVIEW.SECTION.NOTE": "Note",
     "CHART_REVIEW.TABS.NOTES": "Notes",
     "CHAT.CONVERSATIONS": "Conversations",
@@ -130,7 +130,6 @@
     "HOSPITALS.PROVINCE": "Province",
     "IMAGING.NOTES": "Notes",
     "IMAGING.PATIENT": "Patient",
-    "IMAGING.REPORT_STATUS_ADDENDUM": "Addendum",
     "IMAGING.REPORT_VERSION": "Version",
     "IMAGING.TECHNIQUE": "Technique",
     "INTAKE.ALLERGIES": "Allergies",
@@ -142,6 +141,8 @@
     "LAB.NORMAL": "Normal",
     "LAB.NOTES": "Notes",
     "LAB.PATIENT": "Patient",
+    "LAB.TAT_HOURS_MINUTES": "{{hours}} h {{minutes}} min",
+    "LAB.TAT_MINUTES": "{{minutes}} min",
     "LAB.TEST": "Test",
     "LABOR.CONTRACTIONS": "Contractions",
     "LABOR.CONTRACTIONS_TEN": "Contractions /10 min",
@@ -166,7 +167,6 @@
     "LAB_RELEASE.COL_ACTIONS": "Actions",
     "LAB_RELEASE.COL_PATIENT": "Patient",
     "LAB_RELEASE.FLAG_NORMAL": "Normal",
-    "LAB_RESULTS.RANGE_SOURCE": "Source",
     "LAB_RESULTS.SIGNATURE": "Signature",
     "LAB_RESULTS.SIGNATURE_NOTES": "Notes",
     "LAB_RESULTS.SIGNIFICANCE_STABLE": "Stable",
@@ -326,7 +326,7 @@
     "PORTAL.ENUM.ENCOUNTER_TYPE.CONSULTATION": "Consultation",
     "PORTAL.ENUM.IMAGING_ORDER_PRIORITY.ROUTINE": "Routine",
     "PORTAL.ENUM.IMAGING_ORDER_PRIORITY.URGENT": "Urgent",
-    "PORTAL.ENUM.IMAGING_REPORT_STATUS.FINAL": "Final",
+    "PORTAL.ENUM.IMAGING_REPORT_STATUS.ADDENDUM": "Addendum",
     "PORTAL.ENUM.ISOLATION_PRECAUTION_TYPE.CONTACT": "Contact",
     "PORTAL.ENUM.LAB_ORDER_CHANNEL.FAX": "Fax",
     "PORTAL.ENUM.LAB_ORDER_PRIORITY.ROUTINE": "Routine",
@@ -459,6 +459,7 @@
     "ULTRASOUND.FINDING_URGENT": "Urgent",
     "ULTRASOUND.OBSERVATIONS": "Observations",
     "ULTRASOUND.WORKLIST_ANOMALIES": "Anomalies",
+    "UNSIGNED_NOTES.PATIENT": "Patient",
     "USERS.TOTAL": "Total",
     "WEBHOOKS.DESCRIPTION": "Description",
     "WEBHOOKS.EVENT_PING": "Ping",
@@ -469,8 +470,7 @@
     "inBasket.labNormal": "Normal",
     "inBasket.messages": "Messages",
     "inBasket.urgent": "Urgent",
-    "ULTRASOUND.FLAG_TONE_NORMAL": "Normal",
-    "LAB_RANGE.NORMAL": "Normal"
+    "ULTRASOUND.FLAG_TONE_NORMAL": "Normal"
   },
   "es": {
     "CHART.LAB_STATUS_NORMAL": "Normal",
@@ -495,7 +495,6 @@
     "PROVIDER.COMMON.NO": "No",
     "PROVIDER.STAFF.COL_ROLES": "Roles",
     "SHELL.AVATAR_ALT": "Avatar",
-    "inBasket.labNormal": "Normal",
-    "LAB_RANGE.NORMAL": "Normal"
+    "inBasket.labNormal": "Normal"
   }
 }

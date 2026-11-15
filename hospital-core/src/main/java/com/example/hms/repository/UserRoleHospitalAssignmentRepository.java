@@ -93,6 +93,13 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
 
     Optional<UserRoleHospitalAssignment> findFirstByUser_IdAndHospital_IdAndActiveTrue(UUID userId, UUID hospitalId);
 
+    /**
+     * QA D1632: every active assignment the user holds at one hospital, so the
+     * caller can pick the one whose role the request is ACTING under
+     * ({@code ActingAssignments}). The role is EAGER; nothing else is read.
+     */
+    List<UserRoleHospitalAssignment> findAllByUser_IdAndHospital_IdAndActiveTrue(UUID userId, UUID hospitalId);
+
     /** QA D516: an active assignment at the hospital holding one of these role codes (oldest first). */
     Optional<UserRoleHospitalAssignment> findFirstByHospital_IdAndRole_CodeInAndActiveTrueOrderByCreatedAtAsc(
         UUID hospitalId, Collection<String> roleCodes);
@@ -222,6 +229,33 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
     """)
     List<com.example.hms.model.User> findLiveUsersAtHospitalWithRoleCodes(@Param("hospitalId") UUID hospitalId,
                                                                           @Param("roleCodes") Set<String> roleCodes);
+
+    /**
+     * QA D1610: the staff of ONE hospital, each once: an active, non-patient assignment there on an
+     * undeleted account. An announcement made at a hospital notifies these people and nobody else.
+     */
+    @Query("""
+        SELECT DISTINCT a.user
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.user.isDeleted = FALSE
+          AND a.hospital.id = :hospitalId
+          AND UPPER(a.role.code) NOT IN ('ROLE_PATIENT', 'PATIENT')
+    """)
+    List<com.example.hms.model.User> findLiveStaffUsersAtHospital(@Param("hospitalId") UUID hospitalId);
+
+    /**
+     * QA D1610: the staff of EVERY hospital, each once. Only a platform-wide announcement, posted by a
+     * super-admin in global view, may fan out to them; {@code NotificationFanOutScopeGuardTest} holds that.
+     */
+    @Query("""
+        SELECT DISTINCT a.user
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.user.isDeleted = FALSE
+          AND UPPER(a.role.code) NOT IN ('ROLE_PATIENT', 'PATIENT')
+    """)
+    List<com.example.hms.model.User> findLiveStaffUsersPlatformWide();
 
     /* ------------ Fetch graphs for DTO mapping ------------ */
 

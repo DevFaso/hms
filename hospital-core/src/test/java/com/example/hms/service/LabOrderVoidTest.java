@@ -48,6 +48,7 @@ class LabOrderVoidTest {
     @Mock private LabResultRepository labResultRepository;
     @Mock private LabOrderMapper labOrderMapper;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.service.lab.LabResultReleaseNotifier resultReleaseNotifier;
 
     @InjectMocks
     private LabOrderServiceImpl service;
@@ -87,6 +88,24 @@ class LabOrderVoidTest {
         assertThat(dto.getStatus()).isEqualTo("ENTERED_IN_ERROR");
         verify(labOrderRepository).save(order);
         verify(labOrderRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void d1912_theVoidWithdrawsThePatientsNewResultNotifications() {
+        // QA D1912 (round 53): the voided result left the portal, its "new result" notification stayed.
+        when(roleValidator.isLabManager(managerId, ordering.getId())).thenReturn(true);
+        com.example.hms.model.LabResult released = new com.example.hms.model.LabResult();
+        released.setId(UUID.randomUUID());
+        // QA D1912 (round 54): like LabResult's @SQLRestriction, the finder sees
+        // no result of an order already marked ENTERED_IN_ERROR (pinned against
+        // a real database by LabResultPatientReadableQueryTest), so the ids
+        // must be read before the status flips.
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenAnswer(inv ->
+            order.getStatus() == LabOrderStatus.ENTERED_IN_ERROR ? java.util.List.of() : java.util.List.of(released));
+
+        service.voidLabOrder(order.getId(), "Wrong patient", Locale.FRENCH);
+
+        verify(resultReleaseNotifier).patientResultsWithdrawn(order, java.util.List.of(released.getId()));
     }
 
     @ParameterizedTest

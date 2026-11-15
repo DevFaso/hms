@@ -1,6 +1,10 @@
 import {
   Component,
+  ElementRef,
   EventEmitter,
+  Injector,
+  afterNextRender,
+  viewChild,
   Input,
   Output,
   inject,
@@ -34,10 +38,13 @@ import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { VisitSummarySectionsComponent } from '../../encounters/visit-summary-sections/visit-summary-sections.component';
+
 @Component({
   selector: 'app-checkout-dialog',
   standalone: true,
   imports: [
+    VisitSummarySectionsComponent,
     DateTimePipe,
     SubmitGuardDirective,
     ModalDialogDirective,
@@ -78,6 +85,9 @@ export class CheckoutDialogComponent {
   private readonly prescriptionService = inject(PrescriptionService);
   private readonly referralService = inject(ReferralService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
+  /** The summary step's heading: focus lands on it when the form gives way (QA D1742, D1004). */
+  private readonly avsHeading = viewChild<ElementRef<HTMLElement>>('avsHeading');
 
   /** Roles all three reads admit (diagnoses, prescriptions, referrals by patient). */
   private static readonly PREFILL_ROLES = ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'];
@@ -119,7 +129,28 @@ export class CheckoutDialogComponent {
     if (!this.dischargeDiagnosesText().trim() && !this.followUpInstructions().trim()) {
       return this.translate.instant('CHECKOUT.SUMMARY_REQUIRED');
     }
+    // QA D1671: the summary stores the lines joined by "; ", in a column of
+    // DIAGNOSES_MAX (the server's CheckOutRequestDTO.DIAGNOSES_MAX).
+    if (this.joinedDiagnosesLength() > CheckoutDialogComponent.DIAGNOSES_MAX) {
+      return this.translate.instant('CHECKOUT.DIAGNOSES_TOO_LONG', {
+        max: CheckoutDialogComponent.DIAGNOSES_MAX,
+      });
+    }
     return null;
+  }
+
+  /** The discharge diagnosis the server stores: the non-blank lines joined by "; ". */
+  private static readonly DIAGNOSES_MAX = 5000;
+
+  private joinedDiagnosesLength(): number {
+    return this.diagnosisLines().join('; ').length;
+  }
+
+  private diagnosisLines(): string[] {
+    return this.dischargeDiagnosesText()
+      .split('\n')
+      .map((d) => d.trim())
+      .filter((d) => d.length > 0);
   }
 
   submit(): void {
@@ -127,10 +158,7 @@ export class CheckoutDialogComponent {
 
     this.saving.set(true);
 
-    const diagnoses = this.dischargeDiagnosesText()
-      .split('\n')
-      .map((d) => d.trim())
-      .filter((d) => d.length > 0);
+    const diagnoses = this.diagnosisLines();
 
     const request: CheckOutRequest = {
       followUpInstructions: this.followUpInstructions() || undefined,
@@ -150,12 +178,18 @@ export class CheckoutDialogComponent {
 
     this.encounterService.checkOut(this.encounter.id, request).subscribe({
       next: (summary) => {
+        // QA D1742: the dialog now shows the summary; the host hears of the
+        // check-out when the reader closes it (close()), not in this tick,
+        // which closed the dialog before anyone saw the summary.
         this.avs.set(summary);
         this.saving.set(false);
         this.toast.success(
           this.translate.instant('checkout.success') || 'Patient checked out successfully',
         );
-        this.checkoutCompleted.emit(summary);
+        // QA D1004: the submit button that had focus is gone with the form.
+        afterNextRender(() => this.avsHeading()?.nativeElement.focus(), {
+          injector: this.injector,
+        });
       },
       error: (err: unknown) => {
         this.saving.set(false);
@@ -168,8 +202,14 @@ export class CheckoutDialogComponent {
     });
   }
 
+  /** Closing after a check-out (Done, ×, Escape, the backdrop) reports it; before, it is a cancel. */
   close(): void {
-    this.dismissed.emit();
+    const summary = this.avs();
+    if (summary) {
+      this.checkoutCompleted.emit(summary);
+    } else {
+      this.dismissed.emit();
+    }
   }
 
   private prefill(enc: EncounterResponse): void {

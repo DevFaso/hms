@@ -55,6 +55,7 @@ public class MortalityMapper {
             .bornAt(deathRecord.getBornAt())
             .birthStatus(deathRecord.getBirthStatus())
             .gestationalAgeWeeks(deathRecord.getGestationalAgeWeeks())
+            .fetalDeathEventId(deathRecord.getFetalDeathEventId())
             .perinatalAgeBasis(deathRecord.getPerinatalAgeBasis())
             .perinatalEligibility(deathRecord.getPerinatalEligibility())
             .autopsyRequested(deathRecord.getAutopsyRequested())

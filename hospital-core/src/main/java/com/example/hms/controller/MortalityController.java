@@ -163,8 +163,11 @@ public class MortalityController {
     @PreAuthorize(READER)
     @Operation(summary = "The mortality register for a period",
                description = "Total deaths with maternal (WHO definition), late maternal, perinatal "
-                   + "(WHO definition: stillbirths and days 0-6, from 22 weeks of gestation), stillbirth, "
-                   + "early neonatal and late neonatal counts broken out — the numbers the facility is "
+                   + "(provisional: WHO stillbirths plus early neonatal deaths, days 0-6), early neonatal and late "
+                   + "neonatal counts broken out, and the stillbirths in their own section (QA D1714: fetal-death "
+                   + "events recorded at delivery plus stillbirth death records, each counted once; WHO indicator, "
+                   + "ICD level and classification incomplete, thresholds in StillbirthClassification) — the "
+                   + "numbers the facility is "
                    + "measured on. Late neonatal deaths are outside the perinatal count. "
                    + "Late maternal deaths are counted separately because including them would "
                    + "overstate the maternal mortality ratio.")

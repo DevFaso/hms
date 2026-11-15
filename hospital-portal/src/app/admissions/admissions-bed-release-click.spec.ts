@@ -5,6 +5,7 @@ import { of } from 'rxjs';
 
 import { AdmissionsComponent } from './admissions';
 import { AdmissionResponse, AdmissionService } from '../services/admission.service';
+import { DischargeService } from '../services/discharge.service';
 import { HospitalResponse, HospitalService } from '../services/hospital.service';
 import { StaffService } from '../services/staff.service';
 import { PatientService } from '../services/patient.service';
@@ -58,6 +59,7 @@ describe('AdmissionsComponent "Libérer le lit" by mouse (QA D1122)', () => {
       imports: [AdmissionsComponent, TranslateModule.forRoot()],
       providers: [
         { provide: AdmissionService, useValue: admissions },
+        { provide: DischargeService, useValue: { summaryForEncounter: () => of(null) } },
         { provide: HospitalService, useValue: hospitals },
         { provide: StaffService, useValue: staff },
         { provide: PatientService, useValue: jasmine.createSpyObj('PatientService', ['list']) },

@@ -735,7 +735,8 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
 
     private static Object[] defaultReminderArgs(Appointment appointment, int daysBefore) {
         return new Object[]{
-            String.valueOf(appointment.getAppointmentDate()),
+            // QA D1710 class: the day is written the reader's way when the notice is read.
+            com.example.hms.service.i18n.NotificationLocalizer.date(appointment.getAppointmentDate()),
             String.valueOf(appointment.getStartTime()),
             String.valueOf(daysBefore)
         };

@@ -165,4 +165,8 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
         @Param("hospitalId") UUID hospitalId,
         @Param("referenceType") String referenceType,
         @Param("status") InBasketItemStatus status);
+
+    /** The unsigned-note workflow's items still at their first notice, filed before {@code before}. */
+    List<InBasketItem> findByReferenceTypeAndTitleKeyAndCreatedAtBefore(
+        String referenceType, String titleKey, java.time.LocalDateTime before);
 }

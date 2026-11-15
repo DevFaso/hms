@@ -198,6 +198,25 @@ public class EncounterNote extends BaseEntity {
         return signedAt != null;
     }
 
+    /**
+     * Provisional platform rule (unsigned-note workflow): a note that still waits for its author's
+     * signature. A blank row (D1151: older rows may be empty) cannot be signed, so it never waits:
+     * it would hold a visit "not finalised" for ever.
+     */
+    public boolean awaitsSignature() {
+        if (signedAt != null || signatureValue != null) {
+            return false;
+        }
+        for (String section : new String[] {chiefComplaint, historyOfPresentIllness, reviewOfSystems, physicalExam,
+                diagnosticResults, subjective, objective, assessment, plan, implementation, evaluation,
+                patientInstructions, summary}) {
+            if (section != null && !section.isBlank()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Builder.Default
     @OneToMany(mappedBy = "note", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("documentedAt ASC")

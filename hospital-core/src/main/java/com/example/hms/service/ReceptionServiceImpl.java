@@ -119,6 +119,8 @@ public class ReceptionServiceImpl implements ReceptionService {
     private final AuditEventLogService auditEventLogService;
     private final com.example.hms.repository.UserRepository userRepo;
     private final com.example.hms.service.TreatmentConsentService treatmentConsentService;
+    /** QA D1591: the consent the patient gave at pre-check-in, read by the queue and the check-in. */
+    private final com.example.hms.repository.PatientTreatmentConsentRepository consentRepo;
     private final AppointmentSlotRepository slotRepo;
     private final SlotInventoryService slotInventoryService;
     private final PatientOutreachNotifier outreachNotifier;
@@ -456,6 +458,13 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .patientDeceased(com.example.hms.service.support.DeceasedPatientGuard.careBlocked(p))
                 .registrationInactive(ReceptionQueueFilters.expectedAtTheDesk(row.status())
                         && registrationRepo.existsByPatientIdAndHospitalIdAndActiveFalse(pid, hospitalId))
+                // QA D1591: what the patient did at pre-check-in, consent included.
+                .preCheckedIn(Boolean.TRUE.equals(appt.getPreCheckedIn()))
+                .preCheckinTimestamp(Boolean.TRUE.equals(appt.getPreCheckedIn()) ? appt.getPreCheckinTimestamp() : null)
+                .preCheckInConsent(Boolean.TRUE.equals(appt.getPreCheckedIn())
+                        && consentRepo.existsByAppointment_IdAndSourceAndStatus(appt.getId(),
+                                com.example.hms.enums.TreatmentConsentSource.PRE_CHECK_IN,
+                                com.example.hms.enums.TreatmentConsentStatus.ACTIVE))
                 .build();
     }
 
@@ -1033,6 +1042,18 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     // ── MVP 11: Encounter status update (flow board drag-and-drop) ────────────
 
+    /**
+     * Provisional platform rule (unsigned-note workflow): a closed visit's unsigned notes go to their authors'
+     * in-basket (UnsignedNoteHookGuardTest). Setter-injected; null in hand-built unit tests.
+     */
+    private com.example.hms.service.UnsignedNoteFollowUp unsignedNotes;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setUnsignedNotes(com.example.hms.service.UnsignedNoteFollowUp unsignedNotes) {
+        this.unsignedNotes = unsignedNotes;
+    }
+
+
     @Override
     @Transactional
     public void updateEncounterStatus(UUID encounterId, EncounterStatus status, UUID hospitalId, String callerUsername) {
@@ -1077,6 +1098,10 @@ public class ReceptionServiceImpl implements ReceptionService {
         } else {
             encounter.setStatus(status);
             encounterRepo.save(encounter);
+            // The rules above send every close elsewhere; should one ever pass here, its notes are still followed.
+            if (unsignedNotes != null) {
+                unsignedNotes.visitClosed(encounter);
+            }
         }
 
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
@@ -1121,6 +1146,11 @@ public class ReceptionServiceImpl implements ReceptionService {
             // QA D1293: a copay taken needs its method, refused before anything is written.
             if (copay.signum() > 0 && request.getCopayMethod() == null) {
                 throw new FieldBusinessException("copayMethod", "billing.payment.methodRequired");
+            }
+            // QA D1611: refused before anything is written, as the missing method is.
+            if (copay.signum() > 0) {
+                com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(
+                    request.getCopayMethod(), "copayMethod");
             }
         }
 
@@ -1189,10 +1219,21 @@ public class ReceptionServiceImpl implements ReceptionService {
 
         encounterRepo.save(encounter);
 
+        // 3a. QA D1591: the consent the patient already gave for this visit (at
+        // pre-check-in) carries onto its encounter, and is not recorded twice.
+        List<com.example.hms.model.PatientTreatmentConsent> givenConsents = consentRepo
+                .findByAppointment_IdAndStatus(appointment.getId(), com.example.hms.enums.TreatmentConsentStatus.ACTIVE);
+        for (com.example.hms.model.PatientTreatmentConsent given : givenConsents) {
+            if (given.getEncounter() == null) {
+                given.setEncounter(encounter);
+                consentRepo.save(given);
+            }
+        }
+
         // 3b. Consent-to-treat capture (P3 #21) — recorded, never gating.
         // Best effort by policy: a consent-recording failure must not roll
         // back the check-in the patient is standing at the desk for.
-        if (Boolean.TRUE.equals(request.getConsentObtained())) {
+        if (Boolean.TRUE.equals(request.getConsentObtained()) && givenConsents.isEmpty()) {
             try {
                 UUID actorUserId = userRepo.findByUsername(actorUsername)
                     .map(u -> u.getId()).orElse(null);

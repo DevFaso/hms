@@ -105,6 +105,10 @@ class MaternityPregnancyLinkIT extends BaseIT {
             .build());
         hospital = saveHospital();
         midwife = midwifeAt(hospital);
+        // QA D1592: a real hospital has the PATIENT role (Liquibase seeds it): a recorded
+        // live birth registers the baby as a patient.
+        roleRepository.findByCode("ROLE_PATIENT").orElseGet(() -> roleRepository.save(Role.builder()
+            .name("PATIENT").code("ROLE_PATIENT").description("ROLE_PATIENT").build()));
         patient = createPatient();
     }
 

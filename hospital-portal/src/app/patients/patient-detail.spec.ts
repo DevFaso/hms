@@ -597,15 +597,21 @@ describe('PatientDetailComponent', () => {
     }
   });
 
-  it('hides the Documents tab from the front desk and the pharmacy (QA D112)', () => {
-    for (const role of ['ROLE_RECEPTIONIST', 'ROLE_PHARMACIST']) {
+  it('hides the Documents tab from the pharmacy, and gives the front desk the insurance-only view (QA D112, D1599)', () => {
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_PHARMACIST'),
+    );
+    expect(component.canViewDocuments()).toBeFalse();
+    for (const role of ['ROLE_RECEPTIONIST']) {
       roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) => roles.includes(role));
-      expect(component.canViewDocuments()).withContext(role).toBeFalse();
+      expect(component.canViewDocuments()).withContext(role).toBeTrue();
+      expect(component.documentsInsuranceOnly()).withContext(role).toBeTrue();
     }
     roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
       roles.includes('ROLE_DOCTOR'),
     );
     expect(component.canViewDocuments()).toBeTrue();
+    expect(component.documentsInsuranceOnly()).toBeFalse();
   });
 
   it('routes consulting clinicians to Chart Review for labs and imaging', () => {

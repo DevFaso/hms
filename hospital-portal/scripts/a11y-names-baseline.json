@@ -10,14 +10,6 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/admin-assignments/admin-assignments.html::field-label::select filterActive()": {
-      "count": 1,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/admin-assignments/admin-assignments.html::field-label::select filterHospitalId()": {
-      "count": 1,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
     "src/app/admin-governance/matrix-tab.html::field-label::input row.actions": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
@@ -27,14 +19,6 @@
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
     "src/app/admin-governance/matrix-tab.html::field-label::input row.owners": {
-      "count": 1,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/admin-governance/matrix-tab.html::field-label::select auditFilter()": {
-      "count": 1,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/admin-governance/matrix-tab.html::field-label::select environment()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -71,14 +55,6 @@
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
     "src/app/digital-signatures/digital-signatures.html::field-label::input lookupReportId()": {
-      "count": 1,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/digital-signatures/digital-signatures.html::field-label::select statusFilter()": {
-      "count": 1,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/digital-signatures/digital-signatures.html::field-label::select typeFilter()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },

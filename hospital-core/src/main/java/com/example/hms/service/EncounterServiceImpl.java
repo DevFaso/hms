@@ -319,9 +319,46 @@ public class EncounterServiceImpl implements EncounterService {
      */
     private com.example.hms.service.scheduling.PatientRecallService recallService;
 
+    /**
+     * Provisional platform rule (unsigned-note workflow): a closed visit's notes still waiting for a signature go
+     * to their authors' in-basket. Every close path calls it (UnsignedNoteHookGuardTest). Setter-injected like
+     * {@link #recallService}; null in constructor-built unit tests.
+     */
+    private UnsignedNoteFollowUp unsignedNotes;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setUnsignedNotes(UnsignedNoteFollowUp unsignedNotes) {
+        this.unsignedNotes = unsignedNotes;
+    }
+
     @org.springframework.beans.factory.annotation.Autowired
     void setRecallService(com.example.hms.service.scheduling.PatientRecallService recallService) {
         this.recallService = recallService;
+    }
+
+    /**
+     * User decision 2026-11-12: the after-visit summary's content sections.
+     * Setter-injected like {@link #recallService}; null in constructor-built
+     * unit tests, where the summary keeps its original sections.
+     */
+    private AfterVisitSummarySections afterVisitSummarySections;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setAfterVisitSummarySections(AfterVisitSummarySections afterVisitSummarySections) {
+        this.afterVisitSummarySections = afterVisitSummarySections;
+    }
+
+    /**
+     * The summary's content sections. A receptionist reads none of the
+     * clinical ones (RCPT-CLIN), so they are not even read, but keeps the
+     * contact numbers (QA D1741).
+     */
+    private void fillSummarySections(Encounter encounter,
+                                     com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO avs) {
+        if (afterVisitSummarySections != null) {
+            afterVisitSummarySections.fill(encounter, avs,
+                com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly());
+        }
     }
 
     /**
@@ -593,6 +630,9 @@ public class EncounterServiceImpl implements EncounterService {
             // or the notification above failed (they are best effort).
             publishCheckedOutOnCompletion(saved);
         }
+        if (unsignedNotes != null) {
+            unsignedNotes.visitClosed(saved);
+        }
 
         recordHistory(saved, "UPDATED", resolveHistoryActor(request.getUpdatedBy(), ctx.staff()), previousValues);
 
@@ -618,6 +658,10 @@ public class EncounterServiceImpl implements EncounterService {
         // QA D1151 class: an empty note here would lock the real one out for good (D513).
         requireNoteContent(upsertEncounterNoteInternal(closed, resolveSessionNoteAuthor(closed, note.getAuthorStaffId(),
             note.getAuthorUserId(), note.getAuthorName(), locale), note, locale, request.getUpdatedBy(), closed.getStatus(), false));
+        // A note written after the close waits for its signature like one written before it.
+        if (unsignedNotes != null) {
+            unsignedNotes.visitClosed(closed);
+        }
         return encounterMapper.toEncounterResponseDTO(closed);
     }
 
@@ -696,6 +740,10 @@ public class EncounterServiceImpl implements EncounterService {
         // note as saved (an edit sends only the sections it changes); thrown
         // inside the transaction, so nothing is written.
         requireNoteContent(note);
+        // A note written on a closed visit (late documentation) goes to its author's in-basket too.
+        if (unsignedNotes != null) {
+            unsignedNotes.visitClosed(encounter);
+        }
         // QA D513: updatedAt is stamped at flush; the response was mapped
         // before it and reported the previous edit's time.
         encounterNoteRepository.flush();
@@ -846,6 +894,13 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterNote saved = encounterNoteRepository.save(note);
         // QA D751: the same actor format as every other history row, never a raw id.
         recordNoteHistory(saved.getEncounter(), saved, NOTE_HISTORY_SIGNED, userActor(note.getAuthor()));
+        // The "note to sign" item has done its work.
+        if (unsignedNotes != null) {
+            // Acquire the note's database write lock before task cleanup. A concurrent close callback
+            // holds the same lock while filing; cleanup must see its committed task, or filing our signature.
+            encounterNoteRepository.flush();
+            unsignedNotes.noteSigned(saved.getId());
+        }
         return encounterMapper.toEncounterNoteResponseDTO(saved);
     }
 
@@ -1813,7 +1868,19 @@ public class EncounterServiceImpl implements EncounterService {
 
         requireEncounterReadable(e, scope);
 
-        return encounterMapper.toEncounterResponseDTO(e);
+        // QA D1960 (the D1910 class on the by-id read): a patient, or staff reading their own visit
+        // outside their hospital, read the patient's copy: the signed note only, never a draft entry.
+        return readsAsItsPatient(e, scope) ? encounterMapper.toPatientPortalEncounterResponseDTO(e)
+            : encounterMapper.toEncounterResponseDTO(e);
+    }
+
+    /** After {@link #requireEncounterReadable}: was the encounter readable only because the caller is its patient? */
+    private static boolean readsAsItsPatient(Encounter encounter, EncounterReadScope scope) {
+        if (scope.subject()) {
+            return true;
+        }
+        UUID encounterHospitalId = encounter.getHospital() != null ? encounter.getHospital().getId() : null;
+        return !scope.crossTenant() && !isAtCallerHospital(encounterHospitalId, scope.hospitalId());
     }
 
     /**
@@ -2274,6 +2341,8 @@ public class EncounterServiceImpl implements EncounterService {
                 .chiefComplaint(saved.getChiefComplaint())
                 .vitalSignId(savedVital.getId())
                 .newbornAlerts(vitalSignJudgement.alerts(judgement))
+                .postpartumAlerts(vitalSignJudgement.postpartumAlerts(judgement))
+                .hypertensionAlerts(vitalSignJudgement.hypertensionAlerts(judgement))
                 .build();
     }
 
@@ -2344,6 +2413,8 @@ public class EncounterServiceImpl implements EncounterService {
                 // rendered in the reader's language when read (VitalSignNotes).
                 .painScore(req.getPainScale())
                 .fundalHeightCm(req.getFundalHeightCm())
+                // r54: the organ-damage signs the shared severe-blood-pressure rule reads.
+                .organDamageSymptoms(com.example.hms.enums.OrganDamageSymptom.join(req.getOrganDamageSymptoms()))
                 .build();
     }
 
@@ -2667,6 +2738,10 @@ public class EncounterServiceImpl implements EncounterService {
         trackerEventPublisher.publishStatusTransition(encounter,
                 previousStatus != null ? previousStatus.name() : null,
                 EncounterStatus.COMPLETED.name());
+        // The desk never waits for the doctor: an unsigned note goes to its author's in-basket.
+        if (unsignedNotes != null) {
+            unsignedNotes.visitClosed(encounter);
+        }
         upsertDischargeSummaryForCheckout(encounter, request, now);
         notifyPatientAfterVisitSummary(encounter);
 
@@ -2709,6 +2784,7 @@ public class EncounterServiceImpl implements EncounterService {
                 avs.setPrescriptionSummary(medicationsAtDischarge(summary));
             }
         });
+        fillSummarySections(encounter, avs);
         publishCheckedOut(encounter, now);
         return avs;
     }
@@ -2776,6 +2852,9 @@ public class EncounterServiceImpl implements EncounterService {
         encounter.setExtraFields(extra);
         Encounter saved = encounterRepository.save(encounter);
         voidUnpaidCopays(saved.getId(), request.getReason().trim(), now);
+        if (unsignedNotes != null) {
+            unsignedNotes.visitClosed(saved);
+        }
         trackerEventPublisher.publishStatusTransition(saved,
             previous != null ? previous.name() : null, closedAs.name());
 
@@ -2828,9 +2907,9 @@ public class EncounterServiceImpl implements EncounterService {
                             .encounter(encounter)
                             .source(com.example.hms.enums.RecallSource.CHECKOUT)
                             .dueDate(dueDate)
-                            .reason(reason.length() > 500 ? reason.substring(0, 500) : reason)
-                            .notes(followUp.getNotes() != null && followUp.getNotes().length() > 500
-                                    ? followUp.getNotes().substring(0, 500) : followUp.getNotes())
+                            // QA D1670: the request holds both to this column's 500; never cut.
+                            .reason(reason)
+                            .notes(followUp.getNotes())
                             .createdBy(actorUsername)
                             .build());
             return dueDate;
@@ -2906,8 +2985,8 @@ public class EncounterServiceImpl implements EncounterService {
                 .status(com.example.hms.enums.AppointmentStatus.PENDING)
                 // QA D1073: the clinician who checked the patient out booked the follow-up.
                 .createdBy(followUpCreator())
-                .reason(reason.length() > 2048 ? reason.substring(0, 2048) : reason)
-                .notes(notes != null && notes.length() > 2048 ? notes.substring(0, 2048) : notes)
+                .reason(reason)
+                .notes(notes)
                 .build());
         // QA D1139: the published slot is BOOKED by this follow-up, so the
         // patient portal and the desk no longer offer it.
@@ -3032,7 +3111,6 @@ public class EncounterServiceImpl implements EncounterService {
         var followUp = request.getFollowUpAppointment();
         java.time.LocalDate due = checkoutFollowUpDueDate(encounter, followUp);
         String reason = checkoutFollowUpReason(followUp);
-        String purpose = reason.length() > 1000 ? reason.substring(0, 1000) : reason;
         boolean already = summary.getFollowUpAppointments() != null && summary.getFollowUpAppointments().stream()
             .anyMatch(f -> CHECKOUT_FOLLOW_UP_TYPE.equals(f.getAppointmentType()) && due.equals(f.getAppointmentDate()));
         if (already) {
@@ -3043,8 +3121,9 @@ public class EncounterServiceImpl implements EncounterService {
             .appointmentType(CHECKOUT_FOLLOW_UP_TYPE)
             .appointmentDate(due)
             .providerName(encounter.getStaff() != null ? encounter.getStaff().getName() : null)
-            .purpose(purpose)
-            .specialInstructions(notes != null && notes.length() > 1000 ? notes.substring(0, 1000) : notes)
+            // QA D1670: the purpose was cut to 1000 without a word; the request is held to 500.
+            .purpose(reason)
+            .specialInstructions(notes)
             .isConfirmed(false)
             .build());
     }
@@ -3125,9 +3204,9 @@ public class EncounterServiceImpl implements EncounterService {
         // QA D224: the AVS texts the clinician wrote at checkout outlive the request.
         // A synthetic checkout (PUT to COMPLETED) carries none and keeps what is there.
         if (request != null) {
-            keepIfGiven(request.getPrescriptionSummary(), 3000, summary::setPrescriptionSummary);
-            keepIfGiven(request.getReferralSummary(), 3000, summary::setReferralSummary);
-            keepIfGiven(request.getPatientEducationMaterials(), 2000, summary::setPatientEducationProvided);
+            keepIfGiven(request.getPrescriptionSummary(), summary::setPrescriptionSummary);
+            keepIfGiven(request.getReferralSummary(), summary::setReferralSummary);
+            keepIfGiven(request.getPatientEducationMaterials(), summary::setPatientEducationProvided);
             addCheckoutFollowUp(summary, encounter, request);
         }
 
@@ -3374,6 +3453,7 @@ public class EncounterServiceImpl implements EncounterService {
                 .filter(r -> r.getDueDate() != null)
                 .ifPresent(r -> avs.setFollowUpAppointmentDate(r.getDueDate().toString()));
         }
+        fillSummarySections(encounter, avs);
         return avs;
     }
 
@@ -3405,10 +3485,10 @@ public class EncounterServiceImpl implements EncounterService {
             && java.util.Objects.equals(stay.getHospital().getId(), encounter.getHospital().getId());
     }
 
-    private static void keepIfGiven(String value, int max, java.util.function.Consumer<String> setter) {
+    /** QA D1670 class: the request DTO holds each text to its column, so nothing is cut here. */
+    private static void keepIfGiven(String value, java.util.function.Consumer<String> setter) {
         if (value != null && !value.isBlank()) {
-            String trimmed = value.trim();
-            setter.accept(trimmed.length() <= max ? trimmed : trimmed.substring(0, max));
+            setter.accept(value.trim());
         }
     }
 

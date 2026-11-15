@@ -71,6 +71,8 @@ class DeceasedPatientCareGuardTest {
         LabSpecimen#collectSpecimen | LabSpecimenServiceImpl#createSpecimen
         Labor#startEpisode | LaborServiceImpl#startEpisode
         Labor#addEntry | LaborServiceImpl#addEntry
+        Labor#transferEpisode | LaborServiceImpl#transferEpisode
+        Labor#recordArrivalWithoutHandover | LaborServiceImpl#recordArrivalWithoutHandover
         MaternalHistory#createMaternalHistory | MaternalHistoryServiceImpl#createMaternalHistory
         MedicalHistory#createImmunization | ImmunizationServiceImpl#createImmunization
         MtmReview#start | MtmReviewServiceImpl#startReview
@@ -145,6 +147,7 @@ class DeceasedPatientCareGuardTest {
         GeneralReferral#acknowledgeReferral,completeReferral,rejectReferral,cancelReferral,expireOverdueReferrals | closes or follows a referral made before the death; submitting one is refused
         HighRiskPregnancyCarePlan#updatePlan,addCareTeamNote,markMilestoneComplete | late documentation
         ImagingOrder#updateOrder,updateStatus,captureSignature | closes or documents an order made before the death
+        ImagingOrder#recordAuthorization | administrative: the insurer's pre-authorisation number of a study already done (provisional rule 1)
         Isolation#discontinuePrecaution | lifting a precaution
         LabOrder#updateLabOrder,deleteLabOrder,transitionLabOrderStatus,voidLabOrder | closes or corrects an order made before the death; results of its samples stay open
         LabSpecimen#receiveSpecimen,rejectSpecimen | a sample collected before the death
@@ -174,6 +177,7 @@ class DeceasedPatientCareGuardTest {
         Reception#declineWaitlistOffer,closeWaitlistEntry,updateEncounterStatus | closes; a closed visit refuses the desk's status write
         Reception#attestEligibility | billing and payments
         RefillApproval#reject,pause | refuses a refill
+        SafeguardingReview#record | r53: documents the review a past labour admission opened; never new care
         SlotInventory#generate,hold,release,block | the schedule, no patient
         StockOutRouting#partnerRespond,confirmPartnerDispense,partnerNoShow | a partner's outcome of a routing made before the death
         Transfer#requestTransfer,completeTransfer,cancelTransfer | a stay the death closed refuses it (TRANSFERABLE_STATUSES)

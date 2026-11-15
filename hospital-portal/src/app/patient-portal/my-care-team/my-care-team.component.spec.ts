@@ -78,6 +78,29 @@ describe('MyCareTeamComponent', () => {
     expect(host().querySelector('[data-testid="care-team-history"]')).toBeNull();
   });
 
+  it('QA D1850: shows one current provider per hospital, each labelled with its hospital', () => {
+    const atA = entry();
+    const atB = entry({
+      id: 'pcp-b',
+      hospitalId: 'h-2',
+      hospitalName: 'CMA Pissy',
+      doctorUserId: 'd-2',
+      doctorDisplay: 'Dr Idrissa Sawadogo',
+    });
+    create({ primaryCare: atA, primaryCares: [atA, atB], primaryCareHistory: [atA, atB] });
+
+    expect(texts('[data-testid="care-team-current"] .ct-name')).toEqual([
+      'Dr Awa Traoré',
+      'Dr Idrissa Sawadogo',
+    ]);
+    expect(texts('[data-testid="care-team-current"] .ct-role')).toEqual([
+      'CHU Yalgado',
+      'CMA Pissy',
+    ]);
+    // Neither current link is repeated as an earlier one.
+    expect(host().querySelector('[data-testid="care-team-history"]')).toBeNull();
+  });
+
   it('lists the earlier providers with their dates under a translated heading', () => {
     const current = entry();
     const earlier = entry({
@@ -97,6 +120,25 @@ describe('MyCareTeamComponent', () => {
     const period = history.querySelector('.ct-contact')?.textContent ?? '';
     expect(period).toContain('2024');
     expect(period).toContain('2026');
+  });
+
+  it('QA D1941: an earlier link stored with its end before its start never reads backwards', () => {
+    const current = entry({ id: 'pcp-now', startDate: '2026-11-14' });
+    const backwards = entry({
+      id: 'pcp-old',
+      startDate: '2026-11-14',
+      endDate: '2026-11-13',
+      current: false,
+    });
+    create({ primaryCare: current, primaryCareHistory: [current, backwards] });
+
+    const range = host()
+      .querySelector('[data-testid="care-team-history"] .ct-contact')!
+      .textContent!.replace(/\s+/g, ' ')
+      .trim();
+    const [from, to] = range.split(' – ');
+    expect(to).toBe(from);
+    expect(fixture.componentInstance.shownEnd(entry({ endDate: '2026-12-01' }))).toBe('2026-12-01');
   });
 
   it('shows the history alone when there is no current provider', () => {

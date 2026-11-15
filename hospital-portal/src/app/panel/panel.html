@@ -7,17 +7,19 @@
         <p class="page-subtitle">{{ 'CARE_DASH.PANEL_SUBTITLE' | translate }}</p>
       }
     </div>
-    <div class="header-actions">
-      <button
-        type="button"
-        class="btn-primary"
-        data-testid="open-assign"
-        (click)="openAssign($event)"
-      >
-        <span class="material-symbols-outlined">person_add</span>
-        {{ 'PANEL.ASSIGN' | translate }}
-      </button>
-    </div>
+    @if (canEmpanel()) {
+      <div class="header-actions">
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="open-assign"
+          (click)="openAssign($event)"
+        >
+          <span class="material-symbols-outlined">person_add</span>
+          {{ 'PANEL.ASSIGN' | translate }}
+        </button>
+      </div>
+    }
   </header>
   @if (isAdmin()) {
     <section class="care-overview">
@@ -101,9 +103,11 @@
                 <td>{{ roleKey(row.panelRole) | translate }}</td>
                 <td>{{ row.assignedOn | serverTime | date: 'mediumDate' }}</td>
                 <td>
-                  <button type="button" class="btn-link danger" (click)="openEnd(row, $event)">
-                    {{ 'PANEL.END' | translate }}
-                  </button>
+                  @if (canEmpanel()) {
+                    <button type="button" class="btn-link danger" (click)="openEnd(row, $event)">
+                      {{ 'PANEL.END' | translate }}
+                    </button>
+                  }
                 </td>
               </tr>
             }
@@ -223,9 +227,16 @@
                   </td>
                   <td>{{ row.assignedOn | serverTime | date: 'mediumDate' }}</td>
                   <td>
-                    <button type="button" class="btn-link danger" (click)="openEnd(row, $event)">
-                      {{ 'PANEL.END' | translate }}
-                    </button>
+                    @if (canEmpanel()) {
+                      <button
+                        type="button"
+                        class="btn-link danger"
+                        data-testid="drilldown-end"
+                        (click)="openEnd(row, $event)"
+                      >
+                        {{ 'PANEL.END' | translate }}
+                      </button>
+                    }
                   </td>
                 </tr>
               }

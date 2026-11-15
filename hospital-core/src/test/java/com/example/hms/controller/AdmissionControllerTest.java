@@ -39,7 +39,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -274,6 +273,55 @@ class AdmissionControllerTest {
 
             verify(admissionService).updateAdmission(eq(id), any(AdmissionUpdateRequestDTO.class));
         }
+
+        /**
+         * QA D1672 (r44): the edit dialog sent the type, time and clinician, the
+         * update took none of them, answered 200 and kept the old values. Each
+         * property the update does not take is now refused by name.
+         */
+        @Test
+        @WithMockUser(authorities = "ROLE_DOCTOR")
+        @DisplayName("QA D1672: refuses, by name, every property the update does not take")
+        void updateAdmission_refusesWhatItDoesNotTake() throws Exception {
+            UUID id = UUID.randomUUID();
+            String body = "{\"chiefComplaint\":\"Complainte corrigée\",\"admissionType\":\"EMERGENCY\","
+                + "\"admissionDateTime\":\"2026-11-12T08:00:00\",\"admittingProviderId\":\"" + UUID.randomUUID()
+                + "\",\"consultingPhysiciansToAdd\":[{\"id\":\"x\"}]}";
+
+            mockMvc.perform(put(BASE + "/{admissionId}", id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.admissionType").exists())
+                .andExpect(jsonPath("$.fieldErrors.admissionDateTime").exists())
+                .andExpect(jsonPath("$.fieldErrors.admittingProviderId").exists())
+                .andExpect(jsonPath("$.fieldErrors.consultingPhysiciansToAdd").exists())
+                .andExpect(jsonPath("$.fieldErrors.chiefComplaint").doesNotExist());
+
+            Mockito.verifyNoInteractions(admissionService);
+        }
+
+        @Test
+        @WithMockUser(authorities = "ROLE_DOCTOR")
+        @DisplayName("QA D1672: takes the corrected chief complaint, never a blank one")
+        void updateAdmission_takesTheChiefComplaint() throws Exception {
+            UUID id = UUID.randomUUID();
+            when(admissionService.updateAdmission(eq(id), any(AdmissionUpdateRequestDTO.class)))
+                .thenReturn(buildAdmissionResponse(id));
+
+            mockMvc.perform(put(BASE + "/{admissionId}", id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"chiefComplaint\":\"Complainte corrigée\"}"))
+                .andExpect(status().isOk());
+            verify(admissionService).updateAdmission(eq(id),
+                org.mockito.ArgumentMatchers.argThat(r -> "Complainte corrigée".equals(r.getChiefComplaint())));
+
+            mockMvc.perform(put(BASE + "/{admissionId}", id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"chiefComplaint\":\"   \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.chiefComplaint").exists());
+        }
     }
 
     @Nested
@@ -325,22 +373,19 @@ class AdmissionControllerTest {
 
         @Test
         @WithMockUser(authorities = "ROLE_DOCTOR")
-        @DisplayName("QA D766: a discharge with no discharge diagnosis is refused with 400")
+        @DisplayName("QA D766 / D1596: a discharge with no diagnosis (and no written summary) is refused with 400")
         void dischargeWithoutDiagnosisIsRefused_D766() throws Exception {
+            // QA D1596: the service decides, as a written discharge summary supplies the diagnosis.
             UUID id = UUID.randomUUID();
             AdmissionDischargeRequestDTO request = buildDischargeRequest();
             request.setDischargeDiagnosis(null);
+            when(admissionService.dischargePatient(eq(id), any(AdmissionDischargeRequestDTO.class)))
+                .thenThrow(new com.example.hms.exception.FieldBusinessException("dischargeDiagnosis",
+                    "admissionDischarge.dischargeDiagnosis.required"));
             mockMvc.perform(post(BASE + "/{admissionId}/discharge", id)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
-            request.setDischargeDiagnosis("   ");
-            mockMvc.perform(post(BASE + "/{admissionId}/discharge", id)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
-
-            verify(admissionService, never()).dischargePatient(any(), any());
         }
     }
 

@@ -49,6 +49,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
@@ -270,6 +272,29 @@ class FhirTenantBoundaryIT {
     }
 
     // ------------------------------------------------------------------ reads
+
+    @ParameterizedTest
+    @ValueSource(strings = {"missing", "tampered"})
+    @DisplayName("every clinical provider refuses unauthenticated read and search through the real filter chain")
+    void everyClinicalProviderRequiresAnAuthenticBearer(String mode) {
+        String valid = legacyToken(doctorA, ROLE_DOCTOR);
+        assertThat(get("/fhir/Patient/" + patientP.getId(), valid, null).getStatusCode().value())
+            .as("positive control using a persisted in-tenant patient").isEqualTo(200);
+        int signatureStart = valid.lastIndexOf('.') + 1;
+        char replacement = valid.charAt(signatureStart) == 'A' ? 'B' : 'A';
+        String bearer = "missing".equals(mode) ? null
+            : valid.substring(0, signatureStart) + replacement + valid.substring(signatureStart + 1);
+        assertThat(providers).hasSize(11);
+        for (IResourceProvider provider : providers) {
+            String type = provider.getResourceType().getSimpleName();
+            String id = TYPES.contains(type) ? atA.idOf(type) : UUID.randomUUID().toString();
+            for (String path : List.of("/fhir/" + type + "/" + id, "/fhir/" + type)) {
+                ResponseEntity<String> response = get(path, bearer, hospitalA.getId().toString());
+                assertThat(response.getStatusCode().value()).as("%s %s", mode, path).isEqualTo(401);
+                assertThat(response.getBody()).doesNotContain(mrnOfPAtA);
+            }
+        }
+    }
 
     @Test
     @DisplayName("an in-tenant read works on every provider the boundary covers")

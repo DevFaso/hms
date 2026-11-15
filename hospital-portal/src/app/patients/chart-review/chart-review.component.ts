@@ -21,6 +21,7 @@ import {
   ChartReviewNote,
   ChartReviewSection,
   ChartReviewService,
+  ChartReviewImagingReport,
 } from '../../services/chart-review.service';
 import { RangePagerComponent } from '../../shared/range-pager/range-pager.component';
 import { EnumLabelService } from '../../core/enum-label.service';
@@ -30,6 +31,9 @@ import { MedicationRoutePipe } from '../../shared/pipes/medication-route.pipe';
 import { LabValuePipe } from '../../lab/shared/lab-value.pipe';
 import { CredentialsLabelPipe } from '../../shared/pipes/credentials-label.pipe';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { Router } from '@angular/router';
+import { RoleContextService } from '../../core/role-context.service';
+import { IMAGING_PAGE_ROLES } from '../../shared/imaging-access';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -168,10 +172,46 @@ export class ChartReviewComponent implements OnChanges, OnDestroy {
   private readonly chartReviewService = inject(ChartReviewService);
   private readonly translate = inject(TranslateService);
   private readonly enumLabels = inject(EnumLabelService);
+  /** QA D1924 (r53): the study's reports open on Imagerie, for the roles it admits. */
+  private readonly router = inject(Router, { optional: true });
+  private readonly roleContext = inject(RoleContextService);
+  protected readonly canOpenImaging =
+    !!this.router && this.roleContext.hasAnyActiveRole([...IMAGING_PAGE_ROLES]);
   private readonly destroyed$ = new Subject<void>();
   private inFlight?: Subscription;
   /** QA D1380: the in-flight read of a further tab page. */
   private pageInFlight?: Subscription;
+
+  /** QA D1924 (r53): the order's drawer on Imagerie, with every version of its report. */
+  protected openImagingOrder(orderId: string): void {
+    void this.router?.navigate(['/imaging'], { queryParams: { order: orderId } });
+  }
+
+  /** QA D1926 (r53): a laterality marked not applicable is not shown ("Sans objet"). */
+  protected lateralityApplies(laterality: string | null | undefined): boolean {
+    return !!laterality && laterality !== 'NOT_APPLICABLE';
+  }
+
+  /**
+   * QA D1926 (r53): the appointment as a clinic wall time (a day, and its
+   * time when one was typed), never a server instant.
+   */
+  protected scheduledAt(i: ChartReviewImaging): Date | null {
+    const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(i.scheduledFor ?? '');
+    if (!m) return null;
+    const [y, mo, d] = [Number(m[1]), Number(m[2]) - 1, Number(m[3])];
+    return i.scheduledTime && m[4]
+      ? new Date(y, mo, d, Number(m[4]), Number(m[5]))
+      : new Date(y, mo, d);
+  }
+
+  /** QA D1924 (r53): what the chart shows of a study's reports, oldest first. */
+  protected imagingReports(i: ChartReviewImaging): ChartReviewImagingReport[] {
+    if (i.reports && i.reports.length > 0) return i.reports;
+    return i.reportImpression
+      ? [{ id: i.id, reportStatus: i.reportStatus, impression: i.reportImpression }]
+      : [];
+  }
 
   ngOnChanges(_changes: SimpleChanges): void {
     const id = this.patientId();

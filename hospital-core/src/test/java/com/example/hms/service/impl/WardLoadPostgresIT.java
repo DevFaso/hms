@@ -10,9 +10,6 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.NurseTaskService;
 import com.example.hms.service.PrescriptionService;
-import jakarta.persistence.EntityManagerFactory;
-import org.hibernate.SessionFactory;
-import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -132,7 +129,6 @@ class WardLoadPostgresIT {
     private static int wardRowsExpected;
 
     @Autowired private JdbcTemplate jdbc;
-    @Autowired private EntityManagerFactory emf;
     @Autowired private NurseTaskService nurseTasks;
     @Autowired private PrescriptionService prescriptions;
     @Autowired private com.example.hms.service.NurseDashboardService nurseDashboard;
@@ -154,8 +150,27 @@ class WardLoadPostgresIT {
         static final Map<String, java.util.concurrent.atomic.LongAdder> SEEN = new java.util.concurrent.ConcurrentHashMap<>();
         private static final java.util.regex.Pattern FROM = java.util.regex.Pattern.compile("\\bfrom\\s++([\\w.\"]++)");
 
+        /** The one thread being measured: schedulers and other threads share this JVM and must not be counted. */
+        private static volatile Thread measuring;
+        private static final java.util.concurrent.atomic.LongAdder COUNTED = new java.util.concurrent.atomic.LongAdder();
+
+        static void begin() {
+            SEEN.clear();
+            COUNTED.reset();
+            measuring = Thread.currentThread();
+        }
+
+        static long end() {
+            measuring = null;
+            return COUNTED.sum();
+        }
+
         @Override
         public String inspect(String sql) {
+            if (Thread.currentThread() != measuring) {
+                return sql;
+            }
+            COUNTED.increment();
             java.util.regex.Matcher from = FROM.matcher(sql);
             SEEN.computeIfAbsent(from.find() ? from.group(1) : sql.substring(0, Math.min(40, sql.length())),
                 k -> new java.util.concurrent.atomic.LongAdder()).increment();
@@ -180,18 +195,22 @@ class WardLoadPostgresIT {
     /** The second of two runs: the first pays for the JIT and the plan caches. */
     private Measured measure(String name, Supplier<Long> read) {
         read.get();
-        Statistics stats = emf.unwrap(SessionFactory.class).getStatistics();
-        stats.clear();
-        StatementShapes.SEEN.clear();
+        StatementShapes.begin();
         com.sun.management.ThreadMXBean threads =
             (com.sun.management.ThreadMXBean) ManagementFactory.getThreadMXBean();
         long thread = Thread.currentThread().threadId();
         long allocatedBefore = threads.getThreadAllocatedBytes(thread);
         long started = System.nanoTime();
-        long rows = read.get();
+        long rows;
+        long counted;
+        try {
+            rows = read.get();
+        } finally {
+            counted = StatementShapes.end();
+        }
         long millis = (System.nanoTime() - started) / 1_000_000;
         long allocated = threads.getThreadAllocatedBytes(thread) - allocatedBefore;
-        Measured measured = new Measured(name, stats.getPrepareStatementCount(), millis, allocated / (1024 * 1024), rows);
+        Measured measured = new Measured(name, counted, millis, allocated / (1024 * 1024), rows);
         measured.print();
         StatementShapes.printTop(name);
         return measured;

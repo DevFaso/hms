@@ -106,6 +106,7 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("EncounterResponseDTO#appointmentReason", "the booked visit reason"),
         Map.entry("EncounterResponseDTO#appointmentNotes", "booking notes the desk writes"),
         Map.entry("RecallResponseDTO#reason", "the desk phones the patient about the recall"),
+        Map.entry("PatientDocumentResponseDTO#notes", "QA D1599: the patient's note on an upload, blanked by PatientDocumentServiceImpl for the desk"),
         Map.entry("RecallResponseDTO#notes", "the desk's own recall notes"),
         Map.entry("RecallResponseDTO#closeReason", "the desk closes recalls"),
         Map.entry("WaitlistEntryResponseDTO#reason", "the visit reason of the waitlist entry"),
@@ -131,8 +132,6 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("PatientEducationProgressResponseDTO#providerNotes", "the answer to a progress the desk itself just posted"),
         Map.entry("PatientEducationQuestionResponseDTO#providerNotes", "the answer to a question the desk itself just posted"),
         Map.entry("PatientResponseDTO#allergiesWithheld", "a flag, no allergy in it"),
-        Map.entry("PatientResponseDTO.VitalSnapshot#clinicallySignificant", "inside lastVitals, which is removed whole"),
-        Map.entry("PatientResponseDTO.VitalSnapshot#notes", "inside lastVitals, which is removed whole"),
         Map.entry("PaymentTransactionResponseDTO#reversalReason", "why a payment was reversed"),
         Map.entry("PrenatalAppointmentSummaryDTO#gestationalWeek", "user decision 2026-11-06: the desk books prenatal visits by the week"),
         Map.entry("PrenatalAppointmentSummaryDTO#reason", "the visit reason of a booked prenatal appointment"),
@@ -552,7 +551,12 @@ class ReceptionistClinicalReadGuardTest {
                     continue;
                 }
                 judge(raw, field, handler, found, used);
-                walk(field.getGenericType(), seen, handler, found, used);
+                // A field the shaping removes leaves nothing nested for the desk to read (2026-11-12: the
+                // after-visit summary's sections); ReceptionistResponseShapingTest proves each one empty.
+                Set<String> removedHere = ReceptionistResponseShaping.REMOVED.get(raw);
+                if (removedHere == null || !removedHere.contains(field.getName())) {
+                    walk(field.getGenericType(), seen, handler, found, used);
+                }
             }
         }
     }

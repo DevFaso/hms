@@ -11,7 +11,7 @@ import {
   PostpartumSchedule,
   PostpartumService,
 } from '../services/postpartum.service';
-import { LaborService } from '../services/labor.service';
+import { DeliveryRecordResponse, LaborService } from '../services/labor.service';
 import {
   ProInstrumentView,
   ProResponse,
@@ -172,6 +172,37 @@ describe('PostpartumTabComponent — screening', () => {
     component.submitObservation();
     const body = postpartumSpy.createObservation.calls.mostRecent().args[1];
     expect(body.hospitalId).toBe('h1');
+  });
+
+  it('QA D1592: twins name the baby the assessment is for; a single birth asks nothing', () => {
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    const cmp = fixture.componentInstance;
+    cmp.onPatientPicked({ id: 'p1' } as PatientResponse);
+    const baby = (id: string, order: number) => ({
+      patientId: id,
+      displayName: `Bébé ${order} Traore`,
+      mrn: null,
+      birthOrder: order,
+      needsReview: false,
+    });
+    cmp.deliveries.set([
+      { id: 'd1', newborns: [baby('b1', 1), baby('b2', 2)] } as unknown as DeliveryRecordResponse,
+    ]);
+    cmp.openAssessment();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const options = Array.from(host.querySelectorAll('#nb-baby option')).map((o) =>
+      o.textContent?.trim(),
+    );
+    expect(options).toEqual(['POSTPARTUM.NEWBORN_BABY_CHOOSE', 'Bébé 1 Traore', 'Bébé 2 Traore']);
+
+    cmp.closeAssessment();
+    cmp.deliveries.set([
+      { id: 'd1', newborns: [baby('b1', 1)] } as unknown as DeliveryRecordResponse,
+    ]);
+    cmp.openAssessment();
+    fixture.detectChanges();
+    expect(host.querySelector('#nb-baby')).toBeNull();
   });
 
   it('QA D1151: an empty observation and an empty newborn assessment are refused, the missing finding marked', () => {

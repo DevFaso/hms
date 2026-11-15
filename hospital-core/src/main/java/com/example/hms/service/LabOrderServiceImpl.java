@@ -107,16 +107,31 @@ public class LabOrderServiceImpl implements LabOrderService {
     private final com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
     private final com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
     private final com.example.hms.repository.LabResultRepository labResultRepository;
+    private final com.example.hms.service.lab.LabOrderDuplicateCheck duplicateCheck;
+    private final com.example.hms.repository.PatientDiagnosisRepository patientDiagnosisRepository;
+    /** QA D1912: a void withdraws the patient's "new result" notifications. */
+    private final com.example.hms.service.lab.LabResultReleaseNotifier resultReleaseNotifier;
     private static final HexFormat HEX_FORMAT = HexFormat.of();
 
     @Override
     @Transactional
     public LabOrderResponseDTO createLabOrder(LabOrderRequestDTO request, Locale locale) {
         LabOrder newLabOrder = buildLabOrder(null, request, true);
+        // The duplicate warning: an active order of the same test for this
+        // patient here, placed recently. It warns, never blocks.
+        List<LabOrder> duplicates = duplicateCheck.find(newLabOrder);
         LabOrder saved = labOrderRepository.save(newLabOrder);
         // B1: the performing laboratory learns about the order (after commit, best-effort).
         routingNotifier.notifyPerformingLab(saved);
-        return labOrderMapper.toLabOrderResponseDTO(saved);
+        LabOrderResponseDTO response = labOrderMapper.toLabOrderResponseDTO(saved);
+        // The acknowledgement names the earlier orders the orderer was shown;
+        // it counts only when it covers every duplicate found now, so a stale
+        // warning (another order placed since) is recorded as unacknowledged.
+        duplicateCheck.report(saved, duplicates,
+            com.example.hms.service.lab.LabOrderDuplicateCheck.acknowledges(
+                request.getAcknowledgedDuplicateOrderIds(), duplicates),
+            response, callerUserId());
+        return response;
     }
 
     @Override
@@ -148,6 +163,44 @@ public class LabOrderServiceImpl implements LabOrderService {
             routingNotifier.notifyPerformingLab(saved);
         }
         return labOrderMapper.toLabOrderResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.LabOrderDuplicateMatchDTO> previewDuplicates(
+            UUID patientId, UUID hospitalId, UUID labTestDefinitionId) {
+        if (patientId == null || labTestDefinitionId == null) {
+            return List.of();
+        }
+        // The hospital the order would be placed at: the caller's own when
+        // pinned (another hospital's orders are not theirs to see), the named
+        // one for a super-admin in global view.
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID targetHospitalId;
+        if (activeHospitalId != null) {
+            if (hospitalId != null && !hospitalId.equals(activeHospitalId)) {
+                return List.of();
+            }
+            targetHospitalId = activeHospitalId;
+        } else {
+            if (hospitalId == null || !roleValidator.isSuperAdminFromJwtClaim()) {
+                return List.of();
+            }
+            targetHospitalId = hospitalId;
+        }
+        // Only someone who may order tests here sees what is already ordered.
+        UUID callerId = callerUserId();
+        boolean mayOrderHere = roleValidator.isSuperAdminFromJwtClaim()
+            || (callerId != null && roleValidator.canOrderLabTests(callerId, targetHospitalId));
+        if (!mayOrderHere
+                || !patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, targetHospitalId)) {
+            return List.of();
+        }
+        LabTestDefinition definition = labTestDefinitionRepository.findById(labTestDefinitionId).orElse(null);
+        String testCode = definition != null ? definition.getTestCode() : null;
+        return duplicateCheck.find(patientId, targetHospitalId, labTestDefinitionId, testCode, null).stream()
+            .map(labOrderMapper::toDuplicateMatchDTO)
+            .toList();
     }
 
     /** 404-not-403: an ordering-side write from any other hospital does not exist. */
@@ -360,11 +413,6 @@ public class LabOrderServiceImpl implements LabOrderService {
         requireOrderableHere(testDefinition, hospital, base);
 
         UserRoleHospitalAssignment assignment = resolveOrderingAssignment(base, request.getAssignmentId(), staff, hospital);
-
-        if (isNew && labOrderRepository.existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(
-            patient.getId(), testDefinition.getId(), request.getOrderDatetime())) {
-            throw new BusinessException("lab.order.duplicate");
-        }
 
         LabOrder labOrder = (base != null) ? base : new LabOrder();
 
@@ -777,7 +825,32 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         recordPerformedHereReach(List.of(labOrder), hospitalId);
 
-        return labOrderMapper.toLabOrderResponseDTO(labOrder);
+        LabOrderResponseDTO dto = labOrderMapper.toLabOrderResponseDTO(labOrder);
+        dto.setPrimaryDiagnosisLabel(primaryDiagnosisLabelOf(labOrder, hospitalId));
+        return dto;
+    }
+
+    /**
+     * The label of the order's diagnosis code: the description of the patient's
+     * own diagnosis recorded under that code at the ordering hospital. Only for a
+     * reader AT the ordering hospital: a laboratory the order was sent to reads
+     * the code it was sent, not the ordering hospital's chart. There is no ICD-10
+     * catalogue to resolve a code nobody recorded, so that stays null.
+     */
+    private String primaryDiagnosisLabelOf(LabOrder labOrder, UUID readerHospitalId) {
+        String code = labOrder.getPrimaryDiagnosisCode();
+        UUID orderingHospitalId = labOrder.getHospital() != null ? labOrder.getHospital().getId() : null;
+        if (code == null || code.isBlank() || labOrder.getPatient() == null || orderingHospitalId == null
+                || (readerHospitalId != null && !readerHospitalId.equals(orderingHospitalId))) {
+            return null;
+        }
+        return patientDiagnosisRepository
+            .findFirstByPatient_IdAndHospital_IdAndIcdCodeIgnoreCaseOrderByDiagnosedAtDesc(
+                labOrder.getPatient().getId(), orderingHospitalId, code.trim())
+            .map(com.example.hms.model.PatientDiagnosis::getDescription)
+            .filter(d -> !d.isBlank())
+            .map(String::trim)
+            .orElse(null);
     }
 
     @Override
@@ -1067,11 +1140,20 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         requireOrderDecisionAuthority(roleValidator.getCurrentUserId(), labOrder.getHospital().getId(),
             "lab.order.voidForbidden");
+        // QA D1912 (round 54): the result ids are read BEFORE the status flips.
+        // LabResult's @SQLRestriction hides every result of an ENTERED_IN_ERROR
+        // order, and the finder auto-flushes the dirty order, so read after the
+        // flip it returned nothing and the withdraw below was a no-op.
+        List<UUID> voidedResultIds = labResultRepository.findByLabOrder_Id(labOrder.getId()).stream()
+            .map(com.example.hms.model.LabResult::getId).filter(java.util.Objects::nonNull).toList();
         // The one reason column on the order: for a voided order it says why it
         // was entered in error. Who voided it and when is the audit row.
         labOrder.setCancellationReason(voidReason);
         labOrder.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
         LabOrder saved = labOrderRepository.save(labOrder);
+        // QA D1912 (round 53): the voided results leave the portal; their
+        // "new result available" notifications leave with them.
+        resultReleaseNotifier.patientResultsWithdrawn(saved, voidedResultIds);
         log.info("Lab order {} voided as entered in error", saved.getId());
         return labOrderMapper.toLabOrderResponseDTO(saved);
     }

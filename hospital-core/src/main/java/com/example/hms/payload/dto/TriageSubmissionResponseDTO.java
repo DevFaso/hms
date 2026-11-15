@@ -31,4 +31,10 @@ public class TriageSubmissionResponseDTO {
 
     /** QA D1564: the newborn warnings on the triage set; empty for anyone 28 days old or more. */
     private java.util.List<NewbornVitalAlertDTO> newbornAlerts;
+
+    /** QA D1890, r54 (provisional): the obstetric severe-blood-pressure warning (pregnancy, or 42 days after a birth); empty when none. */
+    private java.util.List<NewbornVitalAlertDTO> postpartumAlerts;
+
+    /** r54 (provisional): the adult severe-blood-pressure warning (WARNING, or URGENT with a sign of organ damage); empty when none. */
+    private java.util.List<NewbornVitalAlertDTO> hypertensionAlerts;
 }

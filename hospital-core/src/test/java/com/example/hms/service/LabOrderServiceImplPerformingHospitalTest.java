@@ -84,6 +84,9 @@ class LabOrderServiceImplPerformingHospitalTest {
     @Mock private com.example.hms.controller.support.ControllerAuthUtils authUtils;
     @Mock private com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
     @Mock private com.example.hms.repository.LabResultRepository labResultRepository;
+    @Mock private com.example.hms.repository.PatientDiagnosisRepository patientDiagnosisRepository;
+
+    @Mock private com.example.hms.service.lab.LabOrderDuplicateCheck labOrderDuplicateCheck;
 
     @InjectMocks
     private LabOrderServiceImpl service;
@@ -235,6 +238,38 @@ class LabOrderServiceImplPerformingHospitalTest {
         when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(mapped);
 
         assertThat(service.getLabOrderById(order.getId(), Locale.ENGLISH)).isSameAs(mapped);
+    }
+
+    /** Lab requests drawer: "R35 — Polyurie", from the patient's diagnosis at the ordering hospital. */
+    @Test
+    void getLabOrderByIdLabelsTheDiagnosisCodeFromThePatientsDiagnosis() {
+        order.setPrimaryDiagnosisCode("R35");
+        com.example.hms.model.PatientDiagnosis diagnosis = new com.example.hms.model.PatientDiagnosis();
+        diagnosis.setDescription(" Polyurie ");
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        LabOrderResponseDTO dto = LabOrderResponseDTO.builder().id("d").build();
+        when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(dto);
+        when(patientDiagnosisRepository
+            .findFirstByPatient_IdAndHospital_IdAndIcdCodeIgnoreCaseOrderByDiagnosedAtDesc(
+                patient.getId(), ordering.getId(), "R35"))
+            .thenReturn(Optional.of(diagnosis));
+
+        assertThat(service.getLabOrderById(order.getId(), Locale.ENGLISH).getPrimaryDiagnosisLabel())
+            .isEqualTo("Polyurie");
+    }
+
+    /** The laboratory an order was sent to reads the code, never the ordering hospital's chart. */
+    @Test
+    void getLabOrderByIdNeverReadsTheOrderingChartForThePerformingHospital() {
+        order.setPrimaryDiagnosisCode("R35");
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        LabOrderResponseDTO dto = LabOrderResponseDTO.builder().id("d").build();
+        when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(dto);
+
+        assertThat(service.getLabOrderById(order.getId(), Locale.ENGLISH).getPrimaryDiagnosisLabel()).isNull();
+        verifyNoInteractions(patientDiagnosisRepository);
     }
 
     @Test
@@ -854,8 +889,6 @@ class LabOrderServiceImplPerformingHospitalTest {
         when(labTestDefinitionRepository.findById(definition.getId())).thenReturn(Optional.of(definition));
         // Lenient: an edit that keeps the ordering clinician and the assignment never looks it up.
         lenient().when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
-        lenient().when(labOrderRepository.existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(
-            eq(patient.getId()), eq(definition.getId()), any(LocalDateTime.class))).thenReturn(false);
     }
 
     private LabOrderRequestDTO.LabOrderRequestDTOBuilder request() {

@@ -11,6 +11,7 @@ import {
 } from '../../services/in-basket.service';
 import { TranslateModule } from '@ngx-translate/core';
 import { RoleContextService } from '../../core/role-context.service';
+import { Router, provideRouter } from '@angular/router';
 
 import { resetStoredLangForTests } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
@@ -65,6 +66,7 @@ describe('InBasketPanelComponent', () => {
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: InBasketService, useValue: inBasketSpy },
+        provideRouter([]),
       ],
     }).compileComponents();
 
@@ -239,5 +241,30 @@ describe('InBasketPanelComponent', () => {
     component.refresh();
     expect(inBasketSpy.getItems).toHaveBeenCalled();
     expect(inBasketSpy.getSummary).toHaveBeenCalled();
+  });
+
+  // Provisional platform rule: a closed visit's unsigned note opens the visit, where its author signs.
+  it('offers the visit of a note to sign, and only for that item', () => {
+    inBasketSpy.getItems.and.returnValue(
+      of(
+        mockPage([
+          mockItem({
+            id: 'sign-1',
+            itemType: 'TASK',
+            referenceType: 'ENCOUNTER_NOTE_SIGNATURE',
+            encounterId: 'enc-42',
+          }),
+          mockItem({ id: 'lab-1' }),
+        ]),
+      ),
+    );
+    const router = TestBed.inject(Router);
+    spyOn(router, 'navigate').and.resolveTo(true);
+    fixture.detectChanges();
+
+    const buttons = fixture.nativeElement.querySelectorAll('[data-testid="in-basket-open-visit"]');
+    expect(buttons.length).toBe(1);
+    (buttons[0] as HTMLButtonElement).click();
+    expect(router.navigate).toHaveBeenCalledWith(['/encounters', 'enc-42']);
   });
 });

@@ -102,6 +102,8 @@ export interface PostpartumObservationResponse {
   id: string;
   patientId: string;
   hospitalId?: string;
+  /** QA D1631: the hospital that recorded it, named when it is not this one. */
+  hospitalName?: string | null;
   carePlanId?: string;
   observationTime?: string;
   documentedAt?: string;
@@ -163,6 +165,11 @@ export interface NewbornAssessmentRequest {
    * Delivery. Optional — a newborn may be transferred in already born.
    */
   deliveryRecordId?: string;
+  /**
+   * QA D1592: the registered baby the assessment is for (required for a
+   * multiple birth); the assessment is recorded on that baby's own chart.
+   */
+  newbornPatientId?: string;
   assessmentTime?: string;
   apgarOneMinute?: number;
   apgarFiveMinute?: number;
@@ -201,6 +208,8 @@ export interface NewbornAssessmentResponse {
   id: string;
   patientId: string;
   hospitalId?: string;
+  /** QA D1631: the hospital that recorded it, named when it is not this one. */
+  hospitalName?: string | null;
   deliveryRecordId?: string | null;
   assessmentTime?: string;
   documentedAt?: string;

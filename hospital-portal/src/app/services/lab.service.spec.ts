@@ -323,4 +323,32 @@ describe('LabService', () => {
       expect(qc).toBe(1);
     });
   });
+
+  describe('checkDuplicates (the duplicate-order warning)', () => {
+    it('asks for the patient and test, and the hospital when named', () => {
+      let matches: unknown[] = [];
+      service.checkDuplicates('p-1', 'def-glu', 'h-1').subscribe((m) => (matches = m));
+
+      const req = httpMock.expectOne(
+        (r) =>
+          r.url === '/lab-orders/duplicates' &&
+          r.params.get('patientId') === 'p-1' &&
+          r.params.get('labTestDefinitionId') === 'def-glu' &&
+          r.params.get('hospitalId') === 'h-1',
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush({ data: [{ orderId: 'o-1' }] });
+      expect(matches).toEqual([{ orderId: 'o-1' }]);
+    });
+
+    it('omits the hospital when none is named, and reads an empty body as no duplicate', () => {
+      let matches: unknown[] | undefined;
+      service.checkDuplicates('p-1', 'def-glu').subscribe((m) => (matches = m));
+
+      const req = httpMock.expectOne((r) => r.url === '/lab-orders/duplicates');
+      expect(req.request.params.has('hospitalId')).toBeFalse();
+      req.flush(null);
+      expect(matches).toEqual([]);
+    });
+  });
 });

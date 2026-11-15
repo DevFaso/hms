@@ -123,16 +123,21 @@ export interface BillingInvoiceRequest {
   confirmUnpricedLines?: boolean;
 }
 
-/** Backend PaymentMethod values the staff modal offers. */
+/**
+ * Backend PaymentMethod values the staff modal offers. QA D1611 (round 44):
+ * never INSURANCE: an insurer's share is claimed from the payer, not money
+ * received, and no till creates that claim yet (the server refuses it,
+ * `billing.payment.insuranceNotAPayment`). Rows recorded before still read
+ * through `BILLING.PAYMENT_METHODS.INSURANCE`.
+ */
 export type StaffPaymentMethod =
-  'CASH' | 'MOBILE_MONEY' | 'CARD' | 'BANK_TRANSFER' | 'CHECK' | 'INSURANCE' | 'OTHER';
+  'CASH' | 'MOBILE_MONEY' | 'CARD' | 'BANK_TRANSFER' | 'CHECK' | 'OTHER';
 export const STAFF_PAYMENT_METHODS: StaffPaymentMethod[] = [
   'CASH',
   'MOBILE_MONEY',
   'CARD',
   'BANK_TRANSFER',
   'CHECK',
-  'INSURANCE',
   'OTHER',
 ];
 

@@ -185,7 +185,10 @@ class NurseTaskServiceImplTest {
             fiveRightsService, objectMapper, new com.example.hms.service.vitals.VitalSignJudgement(
             org.mockito.Mockito.mock(com.example.hms.repository.NewbornAssessmentRepository.class), news2EscalationService,
             org.mockito.Mockito.mock(com.example.hms.service.NotificationService.class),
-            com.example.hms.i18n.TestMessageSources.bundles()),
+            com.example.hms.i18n.TestMessageSources.bundles(),
+            org.mockito.Mockito.mock(com.example.hms.repository.DeliveryNewbornRepository.class),
+            com.example.hms.service.vitals.SevereHypertensionFixtures.actingHospitalOnly(
+                org.mockito.Mockito.mock(com.example.hms.repository.DeliveryRecordRepository.class))),
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
             assignmentRepository, patientAllergyRepository, administrationWitness, notificationLocalizer, marWardReader));
 
@@ -2859,8 +2862,8 @@ class NurseTaskServiceImplTest {
             .heartRateBpm(72).build();
 
         assertThatThrownBy(() -> service.captureVitals(patientId, UUID.randomUUID(), nurseHospitalId, req))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not registered at this hospital");
+            // QA D1870: "not here" is "not found", like GET /patients/{id}, never a distinct refusal.
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
     }
 
     /* ════════════════════════════════════════════════════════════════════
@@ -3859,7 +3862,10 @@ class NurseTaskServiceImplTest {
             fiveRightsService, failingMapper, new com.example.hms.service.vitals.VitalSignJudgement(
             org.mockito.Mockito.mock(com.example.hms.repository.NewbornAssessmentRepository.class), news2EscalationService,
             org.mockito.Mockito.mock(com.example.hms.service.NotificationService.class),
-            com.example.hms.i18n.TestMessageSources.bundles()),
+            com.example.hms.i18n.TestMessageSources.bundles(),
+            org.mockito.Mockito.mock(com.example.hms.repository.DeliveryNewbornRepository.class),
+            com.example.hms.service.vitals.SevereHypertensionFixtures.actingHospitalOnly(
+                org.mockito.Mockito.mock(com.example.hms.repository.DeliveryRecordRepository.class))),
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
             assignmentRepository, patientAllergyRepository, administrationWitness, notificationLocalizer, marWardReader);
 

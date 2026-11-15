@@ -617,6 +617,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
+        icon: 'pending_actions',
+        label: 'Unsigned notes',
+        translationKey: 'NAV.UNSIGNED_NOTES',
+        route: '/unsigned-notes',
+        // Mirrors UnsignedNoteController's @PreAuthorize (provisional platform rule).
+        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+      },
+      {
         icon: 'monitoring',
         label: 'Disease Surveillance',
         translationKey: 'NAV.MORBIDITY',
@@ -796,9 +804,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'In-Basket',
         translationKey: 'NAV.IN_BASKET',
         route: '/in-basket',
-        permission: 'View Patient Records',
+        // Roles only (no permission key): billing staff, who do not get
+        // 'View Patient Records', read the pre-authorisation follow-up here
+        // (provisional rule 1, 2026-11-15). The route guard uses the same roles.
         roles: [
           'ROLE_HOSPITAL_ADMIN',
+          'ROLE_RECEPTIONIST',
           'ROLE_DOCTOR',
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
@@ -809,6 +820,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_PHARMACY_VERIFIER',
           'ROLE_PHYSICIAN',
           'ROLE_SURGEON',
+          'ROLE_BILLING_SPECIALIST',
           'ROLE_SUPER_ADMIN',
         ],
       },
@@ -824,6 +836,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_RADIOLOGIST',
+          // User decision 2026-11-14: read-only Imagerie for the admin roles.
+          'ROLE_HOSPITAL_ADMIN',
           'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],

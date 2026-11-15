@@ -38,6 +38,7 @@
           }}</label>
           <textarea
             id="checkout-diagnoses"
+            maxlength="5000"
             class="form-control"
             rows="3"
             [ngModel]="dischargeDiagnosesText()"
@@ -52,6 +53,7 @@
           <label for="checkout-rx" class="form-label">{{ 'CHECKOUT.RX_LABEL' | translate }}</label>
           <textarea
             id="checkout-rx"
+            maxlength="3000"
             class="form-control"
             rows="2"
             [ngModel]="prescriptionSummary()"
@@ -65,6 +67,7 @@
           }}</label>
           <textarea
             id="checkout-referrals"
+            maxlength="3000"
             class="form-control"
             rows="2"
             [ngModel]="referralSummary()"
@@ -81,6 +84,7 @@
           }}</label>
           <textarea
             id="checkout-instructions"
+            maxlength="3000"
             class="form-control"
             rows="3"
             [ngModel]="followUpInstructions()"
@@ -94,6 +98,7 @@
           }}</label>
           <input
             id="checkout-education"
+            maxlength="2000"
             class="form-control"
             type="text"
             [ngModel]="patientEducationMaterials()"
@@ -110,6 +115,7 @@
           }}</label>
           <input
             id="checkout-fu-reason"
+            maxlength="500"
             class="form-control"
             type="text"
             [ngModel]="followUpReason()"
@@ -153,81 +159,19 @@
     } @else {
       <!-- AVS Preview -->
       <div class="dialog-body avs-preview">
-        <h3 class="avs-title">{{ 'CHECKOUT.AVS_TITLE' | translate }}</h3>
+        <h3 class="avs-title" #avsHeading tabindex="-1" data-testid="checkout-avs-title">
+          {{ 'CHECKOUT.AVS_TITLE' | translate }}
+        </h3>
 
-        <dl class="avs-details">
-          <div>
-            <dt>{{ 'CHECKOUT.AVS_PATIENT' | translate }}</dt>
-            <dd>{{ avs()!.patientName }}</dd>
-          </div>
-          <div>
-            <dt>{{ 'CHECKOUT.AVS_VISIT_DATE' | translate }}</dt>
-            <dd>{{ avs()!.visitDate | serverTime | dateTime }}</dd>
-          </div>
-          <div>
-            <dt>{{ 'CHECKOUT.AVS_PROVIDER' | translate }}</dt>
-            <dd>{{ avs()!.providerName }}</dd>
-          </div>
-          <div>
-            <dt>{{ 'CHECKOUT.AVS_DEPARTMENT' | translate }}</dt>
-            <dd>{{ avs()!.departmentName }}</dd>
-          </div>
-
-          @if (avs()!.chiefComplaint) {
-            <div>
-              <dt>{{ 'CHECKOUT.AVS_CHIEF_COMPLAINT' | translate }}</dt>
-              <dd>{{ avs()!.chiefComplaint }}</dd>
-            </div>
-          }
-
-          @if (avs()!.dischargeDiagnoses.length) {
-            <div>
-              <dt>{{ 'CHECKOUT.AVS_DIAGNOSES' | translate }}</dt>
-              <dd>
-                <ul class="avs-list">
-                  @for (dx of avs()!.dischargeDiagnoses; track dx) {
-                    <li>{{ dx }}</li>
-                  }
-                </ul>
-              </dd>
-            </div>
-          }
-
-          @if (avs()!.prescriptionSummary) {
-            <div>
-              <dt>{{ 'CHECKOUT.AVS_PRESCRIPTIONS' | translate }}</dt>
-              <dd>{{ avs()!.prescriptionSummary }}</dd>
-            </div>
-          }
-
-          @if (avs()!.referralSummary) {
-            <div>
-              <dt>{{ 'CHECKOUT.AVS_REFERRALS' | translate }}</dt>
-              <dd>{{ avs()!.referralSummary }}</dd>
-            </div>
-          }
-
-          @if (avs()!.followUpInstructions) {
-            <div>
-              <dt>{{ 'CHECKOUT.AVS_FOLLOWUP' | translate }}</dt>
-              <dd>{{ avs()!.followUpInstructions }}</dd>
-            </div>
-          }
-
-          @if (avs()!.patientEducationMaterials) {
-            <div>
-              <dt>{{ 'CHECKOUT.AVS_EDUCATION' | translate }}</dt>
-              <dd>{{ avs()!.patientEducationMaterials }}</dd>
-            </div>
-          }
-
-          @if (avs()!.followUpAppointmentDate) {
-            <div>
-              <dt>{{ 'CHECKOUT.AVS_FOLLOWUP_DATE' | translate }}</dt>
-              <dd>{{ avs()!.followUpAppointmentDate | serverTime | date: 'mediumDate' }}</dd>
-            </div>
-          }
-        </dl>
+        <!-- Polish 2026-11-13: the one shared summary document, as the visit-summary dialog shows it. -->
+        @if (avs()!.pendingSignature) {
+          <p class="avs-pending-signature" role="status" data-testid="avs-pending-signature">
+            {{ 'VISIT_SUMMARY.PENDING_SIGNATURE' | translate }}
+          </p>
+        }
+        <div class="avs-content-sections">
+          <app-visit-summary-sections [summary]="avs()!" audience="staff" />
+        </div>
 
         <footer class="dialog-footer">
           <button type="button" class="btn btn-primary" (click)="close()">

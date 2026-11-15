@@ -63,6 +63,8 @@ class AllergyActiveReadersGuardTest {
             new Reader("ActiveAllergyDuplicates.find", "a duplicate check, which counts active rows only")),
         Map.entry("service/allergy/LegacyAllergyTextImporter.java",
             new Reader("allergyRepository.save", "an import's dedupe, shows nothing to a reader")),
+        Map.entry("service/AfterVisitSummarySections.java",
+            new Reader("filter(PatientAllergy::isActive)", "the after-visit summary's known allergies: active rows only")),
         Map.entry("service/allergy/AllergySharingVisibility.java",
             new Reader("repository.findVisibleAt", "the shared read itself: every row, for the callers above")));
 

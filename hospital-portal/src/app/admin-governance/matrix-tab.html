@@ -6,6 +6,7 @@
       <select
         class="filter-select"
         [ngModel]="environment()"
+        [attr.aria-label]="'ADMIN_GOV.MATRIX_LATEST' | translate"
         (ngModelChange)="onEnvironmentChange($event)"
       >
         @for (env of environments; track env) {
@@ -133,6 +134,7 @@
     <select
       class="filter-select"
       [ngModel]="auditFilter()"
+      [attr.aria-label]="'ADMIN_GOV.ALL_ACTIONS' | translate"
       (ngModelChange)="onAuditFilterChange($event)"
     >
       <option value="">{{ 'ADMIN_GOV.ALL_ACTIONS' | translate }}</option>

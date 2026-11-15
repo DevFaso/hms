@@ -125,6 +125,18 @@ class PharmacySaleServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D1611: a counter sale paid by insurance is refused on paymentMethod")
+    void d1611_insuranceIsNotAPayment() {
+        PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ONE, BigDecimal.TEN)));
+        dto.setPaymentMethod(PharmacyPaymentMethod.INSURANCE);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("billing.payment.insuranceNotAPayment");
+    }
+
+    @Test
     @DisplayName("QA D1129: a mobile-money sale whose reference is already recorded is refused")
     void d1129_aReusedReferenceIsRefused() {
         PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ONE, BigDecimal.TEN)));

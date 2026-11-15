@@ -145,6 +145,73 @@ class CheckOutMapperTest {
             assertThat(avs.getFollowUpInstructions()).isEqualTo("Fluids, review in 7 days");
         }
 
+        /** Provisional platform rule: "not finalised" while a note waits for its signature, normal once signed. */
+        @Test
+        void theSummaryIsNotFinalisedWhileANoteIsUnsignedAndNormalOnceSigned() {
+            Encounter encounter = buildEncounter();
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setAssessment("Acute bronchitis");
+            encounter.setEncounterNote(note);
+
+            assertThat(mapper.toAfterVisitSummary(encounter, CheckOutRequestDTO.builder().build(), null)
+                .isPendingSignature()).isTrue();
+
+            note.setSignedAt(java.time.LocalDateTime.of(2025, 7, 1, 11, 0));
+            assertThat(mapper.toAfterVisitSummary(encounter, CheckOutRequestDTO.builder().build(), null)
+                .isPendingSignature()).isFalse();
+        }
+
+        /** Polish 2026-11-13: the identity band, the signature line and the diagnosis wording. */
+        @Test
+        void theIdentityBandAndTheSignature() {
+            Encounter encounter = buildEncounter();
+            encounter.getPatient().setDateOfBirth(java.time.LocalDate.of(1970, 3, 15));
+            com.example.hms.model.PatientHospitalRegistration here = new com.example.hms.model.PatientHospitalRegistration();
+            here.setHospital(encounter.getHospital());
+            here.setMrn("MRN-0042");
+            encounter.getPatient().getHospitalRegistrations().add(here);
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setAssessment("HTA");
+            note.setSignedAt(java.time.LocalDateTime.of(2025, 7, 1, 11, 0));
+            note.setSignedByName("Dr Kaboré");
+            encounter.setEncounterNote(note);
+
+            AfterVisitSummaryDTO avs = mapper.toAfterVisitSummary(encounter, CheckOutRequestDTO.builder().build(), null);
+
+            assertThat(avs.getPatientDateOfBirth()).isEqualTo(java.time.LocalDate.of(1970, 3, 15));
+            assertThat(avs.getPatientMrn()).isEqualTo("MRN-0042");
+            assertThat(avs.getSignedByName()).isEqualTo("Dr Kaboré");
+            assertThat(avs.getSignedAt()).isEqualTo(java.time.LocalDateTime.of(2025, 7, 1, 11, 0));
+            assertThat(avs.isInpatientStay()).isFalse();
+
+            encounter.setAdmissionId(UUID.randomUUID());
+            assertThat(mapper.toAfterVisitSummary(encounter, null, null).isInpatientStay()).isTrue();
+        }
+
+        @Test
+        void anUnsignedNoteSignsNothing() {
+            Encounter encounter = buildEncounter();
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setAssessment("HTA");
+            note.setSignedByName("Dr Kaboré");
+            encounter.setEncounterNote(note);
+
+            AfterVisitSummaryDTO avs = mapper.toAfterVisitSummary(encounter, CheckOutRequestDTO.builder().build(), null);
+
+            assertThat(avs.getSignedAt()).isNull();
+            assertThat(avs.getSignedByName()).isNull();
+        }
+
+        @Test
+        void aBlankUnsignedRowNeverHoldsTheSummaryNotFinalised() {
+            // D1151: a blank row cannot be signed, so it must not hold the visit open for ever.
+            Encounter encounter = buildEncounter();
+            encounter.setEncounterNote(new com.example.hms.model.encounter.EncounterNote());
+
+            assertThat(mapper.toAfterVisitSummary(encounter, CheckOutRequestDTO.builder().build(), null)
+                .isPendingSignature()).isFalse();
+        }
+
         @Test
         void checkoutTextWinsAndTheNoteAddsInstructionsAndPlan() {
             Encounter encounter = buildEncounter();

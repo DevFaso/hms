@@ -130,7 +130,6 @@ class SwallowedNestedTransactionGuardTest {
         "service/impl/HospitalLifecycleStatusServiceImpl.java: HospitalRepository.findIdsByLifecycleStateIn", 1, REPO_READ,
         "service/impl/MicroCultureServiceImpl.java: MicroIsolateRepository.findByCultureResult_IdOrderByIsolateNumberAscCreatedAtAsc", 1, REPO_READ,
         "service/impl/OrganizationLifecycleStatusServiceImpl.java: OrganizationRepository.findIdsByLifecycleStateIn", 1, REPO_READ,
-        "service/impl/PatientDocumentServiceImpl.java: UserRoleHospitalAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue", 1, REPO_READ,
         "service/impl/ReferralExpiryPersistence.java: GeneralReferralRepository.saveAndFlush", 1, REPO_WRITE,
         "service/impl/SuperAdminLabOrderServiceImpl.java: LabTestDefinitionRepository.findById", 1, REPO_READ,
         "service/integration/InstrumentOutboxDispatchService.java: InstrumentOutboxRepository.save", 1, REPO_WRITE,

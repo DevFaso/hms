@@ -34,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
+@org.springframework.context.annotation.Import(com.example.hms.security.EncryptionKeyHolder.class)
 class DeathRecordEnteredInErrorPostgresIT {
 
     @Container

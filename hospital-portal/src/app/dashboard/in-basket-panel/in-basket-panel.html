@@ -129,6 +129,16 @@
                 {{ 'ALLERGY_REVIEW.OPEN' | translate }}
               </button>
             }
+            @if (isNoteToSign(item)) {
+              <button
+                type="button"
+                class="btn-review"
+                data-testid="in-basket-open-visit"
+                (click)="openVisit(item)"
+              >
+                {{ 'inBasket.openVisitToSign' | translate }}
+              </button>
+            }
             @if (item.status !== 'ACKNOWLEDGED') {
               <button
                 class="btn-acknowledge"

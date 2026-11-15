@@ -87,8 +87,26 @@ export interface ChartReviewImaging {
   orderedAt?: string | null;
   scheduledFor?: string | null;
   clinicalQuestion?: string | null;
+  /** QA D1926 (r53): the appointment's typed time ("10:00"); absent = a day with no time. */
+  scheduledTime?: string | null;
+  /** The report the study's conclusion comes from (QA D1924: the signed one, not an addendum). */
   reportStatus?: string | null;
   reportImpression?: string | null;
+  /** QA D1924 (r53): the signed conclusion and each addendum, oldest first. */
+  reports?: ChartReviewImagingReport[] | null;
+  /** Provisional rule 1 (2026-11-15): the study was done without its pre-authorisation number. */
+  authorizationPending?: boolean | null;
+}
+
+/** One version of an imaging study's report, as the chart shows it. */
+export interface ChartReviewImagingReport {
+  id: string;
+  reportStatus?: string | null;
+  reportVersion?: number | null;
+  impression?: string | null;
+  signedAt?: string | null;
+  signedByName?: string | null;
+  createdAt?: string | null;
 }
 
 export interface ChartReviewProcedure {

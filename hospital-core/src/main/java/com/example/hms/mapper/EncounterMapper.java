@@ -106,10 +106,17 @@ public class EncounterMapper {
     }
 
     /**
-     * The encounter as the patient reads it (GET /me/patient/encounters).
-     * #965 review: the staff list of a stay's earlier entries carries other
-     * clinicians' unsigned drafts and their user ids; none of it reaches the
-     * patient. The entries are withheld and the note carries no user id.
+     * The encounter as the patient reads it (GET /me/patient/encounters, the
+     * patient apps). #965 review: the staff list of a stay's earlier entries
+     * carries other clinicians' unsigned drafts and their user ids; none of it
+     * reaches the patient. The entries are withheld and the note carries no
+     * user id.
+     *
+     * <p>QA D1910 (round 53): the note itself was the LATEST entry, signed or
+     * not, so a doctor's unsigned draft (assessment, plan) reached the patient
+     * during the visit and after checkout. The patient now reads the latest
+     * SIGNED entry only, the rule the after-visit summary already follows
+     * (#1138), and {@code notePendingSignature} says a draft is waiting.
      */
     public EncounterResponseDTO toPatientPortalEncounterResponseDTO(Encounter e) {
         EncounterResponseDTO dto = toEncounterResponseDTO(e);
@@ -117,11 +124,13 @@ public class EncounterMapper {
             return null;
         }
         dto.setNoteEntries(null);
-        EncounterNoteResponseDTO note = dto.getNote();
+        EncounterNoteResponseDTO note = toEncounterNoteResponseDTO(e.getLatestSignedEncounterNote());
         if (note != null) {
             note.setAuthorUserId(null);
             note.setSignedByUserId(null);
         }
+        dto.setNote(note);
+        dto.setNotePendingSignature(e.hasNoteAwaitingSignature());
         return dto;
     }
 

@@ -22,11 +22,24 @@ public class MalformedRequestBodyException extends RuntimeException {
 
     private final transient List<String> malformedPaths;
     private final transient List<BodyViolation> violations;
+    private final transient List<String> notAcceptedPaths;
 
     public MalformedRequestBodyException(List<String> malformedPaths, List<BodyViolation> violations) {
-        super("malformed request body: " + malformedPaths);
+        this(malformedPaths, List.of(), violations);
+    }
+
+    /** QA D1672: with the properties a {@code @RejectsUnknownFields} request does not take. */
+    public MalformedRequestBodyException(List<String> malformedPaths, List<String> notAcceptedPaths,
+                                         List<BodyViolation> violations) {
+        super("malformed request body: " + malformedPaths + ", not accepted: " + notAcceptedPaths);
         this.malformedPaths = List.copyOf(malformedPaths);
+        this.notAcceptedPaths = List.copyOf(notAcceptedPaths);
         this.violations = List.copyOf(violations);
+    }
+
+    /** The properties the request does not take (a change that would have been dropped). */
+    public List<String> getNotAcceptedPaths() {
+        return notAcceptedPaths;
     }
 
     public List<String> getMalformedPaths() {

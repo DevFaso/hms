@@ -853,6 +853,27 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^PRO safety alert acknowledged$/,
   },
   {
+    key: 'AUDIT.DESC.LAB_DUPLICATE_ACKNOWLEDGED',
+    re: /^Duplicate warning acknowledged \(order anyway\): lab order (\S+) placed while active order (\S+) of the same test is open$/,
+    params: ['order', 'earlier'],
+  },
+  {
+    key: 'AUDIT.DESC.LAB_DUPLICATE_UNACKNOWLEDGED',
+    re: /^Duplicate warning not acknowledged: lab order (\S+) placed while active order (\S+) of the same test is open$/,
+    params: ['order', 'earlier'],
+  },
+  {
+    key: 'AUDIT.DESC.IMAGING_DUPLICATE_OVERRIDDEN',
+    re: /^Duplicate warning overridden \((\S+)\): imaging order (\S+) placed while recent order (\S+) of the same study exists$/,
+    params: ['reason', 'order', 'earlier'],
+    localise: { reason: 'enum' },
+  },
+  {
+    key: 'AUDIT.DESC.IMAGING_DUPLICATE_NOT_OVERRIDDEN',
+    re: /^Duplicate warning not overridden: imaging order (\S+) placed while recent order (\S+) of the same study exists$/,
+    params: ['order', 'earlier'],
+  },
+  {
     key: 'AUDIT.DESC.LAB_CORRECTION',
     re: /^Correction: result (\S+) supersedes released result (\S+)$/,
     params: ['correction', 'original'],
@@ -1402,6 +1423,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['unit', 'request'],
   },
   {
+    key: 'AUDIT.DESC.NEWBORN_REGISTRATION_PENDING',
+    re: /^Newborn registration pending after a recorded delivery$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.NEWBORN_REGISTERED_FROM_DELIVERY',
+    re: /^Newborn registered from a recorded delivery$/,
+    params: [],
+  },
+  {
     key: 'AUDIT.DESC.APPOINTMENT_OVERBOOKED',
     re: /^Appointment overbooked outside the published slots$/,
     params: [],
@@ -1439,6 +1470,85 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   {
     key: 'AUDIT.DESC.OBSTETRIC_RULE_SKIPPED_REFERRAL',
     re: /^Obstetric rule skipped for an emergency OB\/GYN referral$/,
+    params: [],
+  },
+  {
+    // QA D1631: a second labour refused while one is active at another hospital.
+    key: 'AUDIT.DESC.LABOR_EPISODE_START_REFUSED',
+    re: /^Labour episode start refused: an active labour episode is open at another hospital$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.LABOR_ACTIVE_DISCLOSURE_ON_REFUSAL',
+    re: /^Cross-hospital active labour disclosed when refusing a second labour episode$/,
+    params: [],
+  },
+  {
+    re: /^Labour episode start refused: care coordination required$/,
+    key: 'AUDIT.DESC.LABOR_EPISODE_START_REFUSED_COORDINATION',
+    params: [],
+  },
+  {
+    // Labour transfer between hospitals (provisional rule, 2026-11-12).
+    key: 'AUDIT.DESC.LABOR_EPISODE_TRANSFERRED_OUT',
+    re: /^Labour episode transferred to another hospital with a handover$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.LABOR_EPISODE_TRANSFERRED_IN',
+    re: /^Labour episode received from another hospital with a handover$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.LABOR_EPISODE_LEFT_WITHOUT_HANDOVER',
+    re: /^Labour episode closed: she arrived at another hospital without a handover$/,
+    params: [],
+  },
+  {
+    // QA r46 (provisional): a birth recorded as before her arrival from another hospital.
+    key: 'AUDIT.DESC.LABOR_DELIVERY_BORN_BEFORE_ARRIVAL',
+    re: /^Birth recorded as before her arrival from another hospital$/,
+    params: [],
+  },
+  {
+    // QA D1714: a stillborn baby's fetal-death event, and a corrected baby outcome.
+    key: 'AUDIT.DESC.FETAL_DEATH_EVENT_RECORDED',
+    re: /^Fetal-death event recorded for a stillborn baby$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.FETAL_DEATH_EVENT_SUPERSEDED',
+    re: /^Fetal-death event superseded by a corrected baby outcome$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.DELIVERY_BABY_OUTCOME_CORRECTED',
+    re: /^Baby outcome corrected on a delivery record$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.STILLBIRTH_CERTIFICATE_CONFLICT_DEATH',
+    re: /^Death certificate declares a stillbirth the delivery now records as born alive$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.STILLBIRTH_CERTIFICATE_CONFLICT_DELIVERY',
+    re: /^Delivery records as born alive a baby a death certificate declares stillborn$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED',
+    re: /^Stillbirth certificate conflict reconciled$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.LABOR_EPISODE_HANDOVER_READ',
+    re: /^Labour episode handed over by transfer read at the receiving hospital$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.LABOR_EPISODE_ARRIVAL_WITHOUT_HANDOVER',
+    re: /^Labour episode opened on arrival from another hospital without a handover$/,
     params: [],
   },
   {

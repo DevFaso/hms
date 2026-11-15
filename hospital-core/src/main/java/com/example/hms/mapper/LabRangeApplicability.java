@@ -136,6 +136,19 @@ public final class LabRangeApplicability {
         return inside ? 2 : -1;
     }
 
+    /**
+     * Whether the patient is inside the range's age band: TRUE inside or when
+     * the range has no band, FALSE outside, null when the patient or their age
+     * is unknown. The same band test as the grading's age rank.
+     */
+    public static Boolean inAgeBand(LabTestReferenceRange range, Demographics patient) {
+        if (range == null || patient == null) {
+            return null;
+        }
+        int rank = ageRank(range, patient);
+        return rank == 0 ? null : rank > 0;
+    }
+
     /** Completed age in the unit (YEARS when null or unrecognised), or null when it cannot be known. */
     public static Long ageIn(String unit, LocalDate dateOfBirth, LocalDate onDate) {
         if (dateOfBirth == null || onDate == null || onDate.isBefore(dateOfBirth)) {

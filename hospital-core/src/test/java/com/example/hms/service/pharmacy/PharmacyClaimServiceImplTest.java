@@ -53,6 +53,8 @@ class PharmacyClaimServiceImplTest {
     @Mock private PharmacyClaimMapper claimMapper;
     @Mock private RoleValidator roleValidator;
     @Mock private PharmacyServiceSupport support;
+    @Mock private com.example.hms.repository.pharmacy.InventoryItemRepository inventoryItemRepository;
+    @Mock private com.example.hms.repository.pharmacy.PharmacyPaymentRepository paymentRepository;
 
     @InjectMocks private PharmacyClaimServiceImpl service;
 
@@ -79,12 +81,23 @@ class PharmacyClaimServiceImplTest {
         patient.setId(patientId);
 
         Pharmacy pharmacy = new Pharmacy();
+        pharmacy.setId(UUID.randomUUID());
         pharmacy.setHospital(hospital);
 
         dispense = new Dispense();
         dispense.setId(dispenseId);
         dispense.setPatient(patient);
         dispense.setPharmacy(pharmacy);
+        // QA D1613: 10 units at 600 XOF, so the dispense costs 6 000 (the request claims 5 000).
+        com.example.hms.model.medication.MedicationCatalogItem catalogItem =
+                new com.example.hms.model.medication.MedicationCatalogItem();
+        catalogItem.setId(UUID.randomUUID());
+        dispense.setMedicationCatalogItem(catalogItem);
+        dispense.setQuantityDispensed(new BigDecimal("10"));
+        com.example.hms.model.pharmacy.InventoryItem item = new com.example.hms.model.pharmacy.InventoryItem();
+        item.setUnitPrice(new BigDecimal("600.00"));
+        org.mockito.Mockito.lenient().when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(
+                pharmacy.getId(), catalogItem.getId())).thenReturn(Optional.of(item));
 
         user = new User();
         user.setId(userId);
@@ -104,7 +117,7 @@ class PharmacyClaimServiceImplTest {
     @DisplayName("createClaim: persists DRAFT and audits")
     void createDraftSucceeds() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         PharmacyClaim entity = PharmacyClaim.builder()
@@ -136,7 +149,7 @@ class PharmacyClaimServiceImplTest {
         dispense.getPharmacy().setHospital(other);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         PharmacyClaimRequestDTO dto = request();
 
         assertThatThrownBy(() -> service.createClaim(dto))
@@ -295,7 +308,7 @@ class PharmacyClaimServiceImplTest {
     @DisplayName("createClaim: rejects dispense not found")
     void rejectsDispenseNotFound() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.empty());
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.empty());
         PharmacyClaimRequestDTO dto = request();
 
         assertThatThrownBy(() -> service.createClaim(dto))
@@ -309,7 +322,7 @@ class PharmacyClaimServiceImplTest {
         other.setId(UUID.randomUUID());
         dispense.setPatient(other);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         PharmacyClaimRequestDTO dto = request();
 
         assertThatThrownBy(() -> service.createClaim(dto))
@@ -322,7 +335,7 @@ class PharmacyClaimServiceImplTest {
     void rejectsNullPatient() {
         dispense.setPatient(null);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         PharmacyClaimRequestDTO dto = request();
 
         assertThatThrownBy(() -> service.createClaim(dto))
@@ -334,7 +347,7 @@ class PharmacyClaimServiceImplTest {
     void rejectsNullPharmacy() {
         dispense.setPharmacy(null);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         PharmacyClaimRequestDTO dto = request();
 
         assertThatThrownBy(() -> service.createClaim(dto))
@@ -345,7 +358,7 @@ class PharmacyClaimServiceImplTest {
     @DisplayName("createClaim: rejects when patient record is missing")
     void rejectsPatientRepoMissing() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
         PharmacyClaimRequestDTO dto = request();
 
@@ -357,7 +370,7 @@ class PharmacyClaimServiceImplTest {
     @DisplayName("createClaim: rejects when hospital record is missing")
     void rejectsHospitalRepoMissing() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
         PharmacyClaimRequestDTO dto = request();
@@ -370,7 +383,7 @@ class PharmacyClaimServiceImplTest {
     @DisplayName("createClaim: defaults claim status to DRAFT when mapper returns null status")
     void defaultsStatusToDraft() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         PharmacyClaim entity = PharmacyClaim.builder()
@@ -558,5 +571,106 @@ class PharmacyClaimServiceImplTest {
 
         assertThat(service.listByPatient(UUID.randomUUID(),
                 org.springframework.data.domain.PageRequest.of(0, 10))).isNotNull();
+    }
+
+    // ── QA D1613 (round 44): a claim is bounded by its dispense ─────────────
+
+    private void inScope() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+    }
+
+    @Test
+    @DisplayName("D1613: a claim above the dispense charge is refused on amount, naming what is billable")
+    void refusesClaimAboveCharge() {
+        inScope();
+        PharmacyClaimRequestDTO dto = request();
+        dto.setAmount(new BigDecimal("999999"));
+
+        assertThatThrownBy(() -> service.createClaim(dto))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .satisfies(e -> {
+                    com.example.hms.exception.FieldBusinessException fe =
+                            (com.example.hms.exception.FieldBusinessException) e;
+                    assertThat(fe.getField()).isEqualTo("amount");
+                    assertThat(fe.getMessageKey()).isEqualTo("pharmacy.claim.amountAboveBillable");
+                });
+        verify(claimRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("D1613: the claim is bounded by the charge less what the patient already paid at the checkout")
+    void boundIsChargeLessPaid() {
+        inScope();
+        when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("2000"));
+        PharmacyClaimRequestDTO dto = request(); // 5 000 > 6 000 - 2 000
+
+        assertThatThrownBy(() -> service.createClaim(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.claim.amountAboveBillable");
+    }
+
+    @Test
+    @DisplayName("D1613: a dispense paid in full at the checkout has nothing left to claim")
+    void paidDispenseHasNothingToClaim() {
+        inScope();
+        when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("6000"));
+        PharmacyClaimRequestDTO dto = request();
+
+        assertThatThrownBy(() -> service.createClaim(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.claim.nothingBillable");
+    }
+
+    @Test
+    @DisplayName("D1613: an unpriced dispense has no billable amount, so no claim")
+    void unpricedDispenseRefused() {
+        dispense.setMedicationCatalogItem(null);
+        inScope();
+        PharmacyClaimRequestDTO dto = request();
+
+        assertThatThrownBy(() -> service.createClaim(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.claim.noPrice");
+    }
+
+    @Test
+    @DisplayName("D1613: a cancelled dispense has nothing to claim")
+    void cancelledDispenseRefused() {
+        dispense.setStatus(com.example.hms.enums.DispenseStatus.CANCELLED);
+        inScope();
+        PharmacyClaimRequestDTO dto = request();
+
+        assertThatThrownBy(() -> service.createClaim(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.claim.dispenseCancelled");
+    }
+
+    @Test
+    @DisplayName("D1613: a second live claim for one dispense is refused on dispenseId")
+    void secondLiveClaimRefused() {
+        inScope();
+        when(claimRepository.existsByDispenseIdAndClaimStatusNot(dispenseId, PharmacyClaimStatus.REJECTED))
+                .thenReturn(true);
+        PharmacyClaimRequestDTO dto = request();
+
+        assertThatThrownBy(() -> service.createClaim(dto))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                        .isEqualTo("dispenseId"))
+                .extracting("messageKey").isEqualTo("pharmacy.claim.liveClaimExists");
+        verify(claimRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("D1613: a claim cannot be created already accepted or paid")
+    void createdStatusMustBeDraft() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        PharmacyClaimRequestDTO dto = request();
+        dto.setClaimStatus(PharmacyClaimStatus.ACCEPTED);
+
+        assertThatThrownBy(() -> service.createClaim(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.claim.startsAsDraft");
     }
 }

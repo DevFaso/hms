@@ -861,6 +861,30 @@ class ConsultationServiceImplTest {
     // ── getConsultationsForPatient ───────────────────────────────────────────
 
     @Test
+    @DisplayName("QA D1910 class: the patient reads the consultant's text only once the consultation is completed")
+    void d1910_thePatientReadsNoUnfinishedConsultantText() {
+        Consultation open = buildConsultation(ConsultationStatus.IN_PROGRESS);
+        open.setConsultantNote("NOTE-INTERNE en cours");
+        open.setRecommendations("RECO-INTERNE en cours");
+        open.setFollowUpInstructions("SUIVI-INTERNE en cours");
+        Consultation done = buildConsultation(ConsultationStatus.COMPLETED);
+        done.setId(UUID.randomUUID());
+        done.setConsultantNote("Avis final");
+        done.setRecommendations("Recommandation finale");
+        when(consultationRepository.findByPatient_IdOrderByRequestedAtDesc(patientId)).thenReturn(List.of(open, done));
+
+        List<ConsultationResponseDTO> result = service.getConsultationsForPortalPatient(patientId);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getConsultantNote()).isNull();
+        assertThat(result.get(0).getRecommendations()).isNull();
+        assertThat(result.get(0).getFollowUpInstructions()).isNull();
+        assertThat(result.get(0).getReasonForConsult()).as("the request itself stays").isNotNull();
+        assertThat(result.get(1).getConsultantNote()).isEqualTo("Avis final");
+        assertThat(result.get(1).getRecommendations()).isEqualTo("Recommandation finale");
+    }
+
+    @Test
     @DisplayName("getConsultationsForPatient delegates to repository")
     void getConsultationsForPatient() {
         Consultation c = buildConsultation(ConsultationStatus.REQUESTED);

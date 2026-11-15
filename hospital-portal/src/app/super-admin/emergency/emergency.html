@@ -146,7 +146,7 @@
           [appListEscape]="mfaResults().length > 0"
           (listEscape)="mfaResults.set([])"
           [attr.aria-busy]="mfaSearching()"
-          aria-controls="mfa-search-results"
+          [attr.aria-controls]="mfaResults().length > 0 ? 'mfa-search-results' : null"
         />
       </label>
       @if (mfaResults().length > 0) {

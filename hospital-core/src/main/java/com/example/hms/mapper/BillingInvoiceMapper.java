@@ -23,7 +23,8 @@ public class BillingInvoiceMapper {
         dto.setId(invoice.getId() != null ? invoice.getId().toString() : null);
 
         // Patient info
-        populatePatientInfo(dto, invoice.getPatient());
+        populatePatientInfo(dto, invoice.getPatient(),
+            invoice.getHospital() != null ? invoice.getHospital().getId() : null);
 
         // Hospital info
         populateHospitalInfo(dto, invoice.getHospital());
@@ -37,7 +38,7 @@ public class BillingInvoiceMapper {
         return dto;
     }
 
-    private void populatePatientInfo(BillingInvoiceResponseDTO dto, Patient patient) {
+    private void populatePatientInfo(BillingInvoiceResponseDTO dto, Patient patient, java.util.UUID invoiceHospitalId) {
         if (patient == null) return;
 
         String fullName = buildPatientName(patient);
@@ -52,8 +53,11 @@ public class BillingInvoiceMapper {
         }
 
         // Insurance information
+        // QA D1651 class: only the coverage the invoice's hospital holds, plus
+        // legacy rows tagged to no hospital; never another hospital's policy.
         if (patient.getPatientInsurances() != null && !patient.getPatientInsurances().isEmpty()) {
             List<PatientInsuranceSummaryDTO> insuranceSummaries = patient.getPatientInsurances().stream()
+                .filter(insurance -> insurance.isVisibleAt(invoiceHospitalId))
                 .map(this::toPatientInsuranceSummaryDTO)
                 .toList();
             dto.setPatientInsurances(insuranceSummaries);

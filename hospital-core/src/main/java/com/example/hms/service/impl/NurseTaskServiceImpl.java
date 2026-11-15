@@ -2252,7 +2252,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("nurse.patient.notRegisteredHere");
+            // QA D1870 (round 53): a patient not registered here is "not found", like GET /patients/{id};
+            // a distinct answer told a caller holding the id that the patient exists at another hospital.
+            throw new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId);
         }
         com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(patient, null, "recordedAt");
         requireNotDischargedWithoutVisit(patientId, hospitalId);
@@ -2281,6 +2283,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             // QA D1169: the score is a number, rendered in the reader's language when read.
             .notes(request.getNotes() != null && !request.getNotes().isBlank() ? request.getNotes().strip() : null)
             .painScore(request.getPainScale())
+            // r54: the organ-damage signs the shared severe-blood-pressure rule reads.
+            .organDamageSymptoms(com.example.hms.enums.OrganDamageSymptom.join(request.getOrganDamageSymptoms()))
             .build();
 
         // QA D1564: the shared judgement - a newborn's set against the newborn bands, every
@@ -2331,6 +2335,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .vitalSignId(vital.getId())
             .clinicallySignificant(clinicallySig)
             .newbornAlerts(vitalSignJudgement.alerts(judgement))
+            .postpartumAlerts(vitalSignJudgement.postpartumAlerts(judgement))
+            .hypertensionAlerts(vitalSignJudgement.hypertensionAlerts(judgement))
             .build();
     }
 
@@ -2548,7 +2554,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             careNoteParts(request));
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("nurse.patient.notRegisteredHere");
+            // QA D1870 (round 53): a patient not registered here is "not found", like GET /patients/{id};
+            // a distinct answer told a caller holding the id that the patient exists at another hospital.
+            throw new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId);
         }
 
         User author = userRepository.findById(nurseUserId)

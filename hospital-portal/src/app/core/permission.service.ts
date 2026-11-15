@@ -479,7 +479,14 @@ export class PermissionService {
     // operations (users, front desk oversight, patient lookup, audit
     // trail), NOT platform config and NOT clinical surfaces. Mirrors
     // DashboardConfigService's ROLE_ADMIN defaults.
-    ROLE_ADMIN: ['View Dashboard', 'View Patient Records', 'View Audit Logs', 'View Notifications'],
+    ROLE_ADMIN: [
+      'View Dashboard',
+      'View Patient Records',
+      'View Audit Logs',
+      'View Notifications',
+      // User decision 2026-11-14: read-only Imagerie (orders, released reports).
+      'View Imaging Studies',
+    ],
   };
 
   /**

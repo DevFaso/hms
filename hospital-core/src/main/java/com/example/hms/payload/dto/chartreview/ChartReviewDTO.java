@@ -217,11 +217,46 @@ public class ChartReviewDTO {
         private String status;
         private LocalDateTime orderedAt;
         private LocalDateTime scheduledFor;
+        /**
+         * QA D1926 (r53): the appointment time as the orderer typed it
+         * ("10:00"), set only when one was; {@link #scheduledFor} then carries
+         * it too. Absent, the appointment is a day with no time.
+         */
+        private String scheduledTime;
         private String clinicalQuestion;
-        /** Latest report status if any (PRELIMINARY / FINAL / AMENDED). */
+        /**
+         * The report the study's conclusion comes from: the latest signed
+         * report that is not an addendum (QA D1924), else the latest report.
+         */
         private String reportStatus;
-        /** Latest report impression preview (first ~280 chars). */
+        /** That report's conclusion (first ~280 chars). */
         private String reportImpression;
+        /**
+         * QA D1924 (r53): the signed conclusion and every addendum, oldest
+         * first. An addendum hid the conclusion it adds to. Without any signed
+         * report, the latest report alone.
+         */
+        private List<ImagingReportEntryDTO> reports;
+        /** Provisional rule 1 (V297): the study was done without its required pre-authorisation number. */
+        private Boolean authorizationPending;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(description = "One version of an imaging study's report, as the chart shows it.")
+    public static class ImagingReportEntryDTO {
+        private UUID id;
+        private String reportStatus;
+        private Integer reportVersion;
+        /** The version's conclusion (first ~280 chars). */
+        private String impression;
+        private LocalDateTime signedAt;
+        private String signedByName;
+        private LocalDateTime createdAt;
     }
 
     @Getter

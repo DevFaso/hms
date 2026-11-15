@@ -38,29 +38,89 @@
       </div>
     </div>
   }
+  @if (canPickHospital) {
+    <!-- User decision 2026-11-14: the super-admin reads every hospital, or one. -->
+    <div class="filter-bar hospital-filter">
+      <label for="imaging-hospital-filter">{{ 'IMAGING.HOSPITAL_FILTER' | translate }}</label>
+      <select
+        id="imaging-hospital-filter"
+        data-testid="imaging-hospital-filter"
+        [ngModel]="hospitalFilter()"
+        (ngModelChange)="setHospitalFilter($event)"
+      >
+        <option value="">{{ 'IMAGING.ALL_HOSPITALS' | translate }}</option>
+        @for (h of hospitals(); track h.id) {
+          <option [value]="h.id">{{ h.name }}</option>
+        }
+      </select>
+    </div>
+  }
+  @if (isAdminReader) {
+    <p class="admin-reader-note" data-testid="imaging-admin-reader-note">
+      {{ 'IMAGING.ADMIN_READ_ONLY' | translate }}
+    </p>
+  }
   @if (view() === 'orders') {
-    <div class="summary-cards">
-      <div class="summary-card">
-        <span class="material-symbols-outlined card-icon active">radiology</span>
-        <div class="card-info">
+    <!-- r44: each card counts exactly what its tab lists (search and dates applied). -->
+    <div class="summary-cards" data-testid="imaging-stat-cards">
+      <button
+        type="button"
+        class="summary-card"
+        data-testid="imaging-card-ordered"
+        [class.selected]="activeTab() === 'ordered'"
+        [attr.aria-pressed]="activeTab() === 'ordered'"
+        (click)="setTab('ordered')"
+      >
+        <span class="material-symbols-outlined card-icon active" aria-hidden="true">radiology</span>
+        <span class="card-info">
           <span class="card-value">{{ activeOrderCount() }}</span
           ><span class="card-label">{{ 'IMAGING.ACTIVE_ORDERS' | translate }}</span>
-        </div>
-      </div>
-      <div class="summary-card">
-        <span class="material-symbols-outlined card-icon completed">check_circle</span>
-        <div class="card-info">
+        </span>
+      </button>
+      <button
+        type="button"
+        class="summary-card"
+        data-testid="imaging-card-completed"
+        [class.selected]="activeTab() === 'completed'"
+        [attr.aria-pressed]="activeTab() === 'completed'"
+        (click)="setTab('completed')"
+      >
+        <span class="material-symbols-outlined card-icon completed" aria-hidden="true"
+          >check_circle</span
+        >
+        <span class="card-info">
           <span class="card-value">{{ completedOrderCount() }}</span
-          ><span class="card-label">{{ 'IMAGING.COMPLETED' | translate }}</span>
-        </div>
-      </div>
-      <div class="summary-card">
-        <span class="material-symbols-outlined card-icon total">bar_chart</span>
-        <div class="card-info">
-          <span class="card-value">{{ orders().length }}</span
+          ><span class="card-label">{{ 'IMAGING.COMPLETED_ORDERS' | translate }}</span>
+        </span>
+      </button>
+      <button
+        type="button"
+        class="summary-card"
+        data-testid="imaging-card-cancelled"
+        [class.selected]="activeTab() === 'cancelled'"
+        [attr.aria-pressed]="activeTab() === 'cancelled'"
+        (click)="setTab('cancelled')"
+      >
+        <span class="material-symbols-outlined card-icon cancelled" aria-hidden="true">cancel</span>
+        <span class="card-info">
+          <span class="card-value">{{ cancelledOrderCount() }}</span
+          ><span class="card-label">{{ 'IMAGING.CANCELLED_ORDERS' | translate }}</span>
+        </span>
+      </button>
+      <button
+        type="button"
+        class="summary-card"
+        data-testid="imaging-card-all"
+        [class.selected]="activeTab() === 'all'"
+        [attr.aria-pressed]="activeTab() === 'all'"
+        (click)="setTab('all')"
+      >
+        <span class="material-symbols-outlined card-icon total" aria-hidden="true">bar_chart</span>
+        <span class="card-info">
+          <span class="card-value">{{ matched().length }}</span
           ><span class="card-label">{{ 'IMAGING.TOTAL_ORDERS' | translate }}</span>
-        </div>
-      </div>
+        </span>
+      </button>
     </div>
     <div class="filter-bar">
       <div class="tabs">
@@ -111,6 +171,30 @@
           (input)="applyFilter()"
         />
       </div>
+      <!-- r44: the ordered-on range, as the reader's calendar dates. -->
+      <div class="date-filters">
+        <label for="imaging-date-from">{{ 'IMAGING.DATE_FROM' | translate }}</label>
+        <input
+          id="imaging-date-from"
+          type="date"
+          [max]="dateTo || null"
+          [(ngModel)]="dateFrom"
+          (ngModelChange)="applyFilter()"
+        />
+        <label for="imaging-date-to">{{ 'IMAGING.DATE_TO' | translate }}</label>
+        <input
+          id="imaging-date-to"
+          type="date"
+          [min]="dateFrom || null"
+          [(ngModel)]="dateTo"
+          (ngModelChange)="applyFilter()"
+        />
+        @if (dateFrom || dateTo) {
+          <button type="button" class="btn-link" (click)="clearDates()">
+            {{ 'IMAGING.CLEAR_DATES' | translate }}
+          </button>
+        }
+      </div>
     </div>
     @if (loading()) {
       <div class="loading-state">
@@ -136,12 +220,19 @@
           <thead>
             <tr>
               <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+              @if (showHospitalColumn()) {
+                <th scope="col" data-testid="imaging-hospital-header">
+                  {{ 'ENCOUNTERS.HOSPITAL' | translate }}
+                </th>
+              }
+              <th scope="col" data-testid="imaging-status-header">
+                {{ 'COMMON.STATUS' | translate }}
+              </th>
               <th scope="col">{{ 'IMAGING.MODALITY' | translate }}</th>
               <th scope="col">{{ 'IMAGING.STUDY' | translate }}</th>
               <th scope="col">{{ 'IMAGING.BODY_REGION' | translate }}</th>
               <th scope="col">{{ 'IMAGING.PRIORITY' | translate }}</th>
               <th scope="col">{{ 'IMAGING.ORDERED' | translate }}</th>
-              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
               <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
             </tr>
           </thead>
@@ -153,6 +244,26 @@
                     {{ o.patientDisplayName || ('COMMON.UNKNOWN' | translate) }}
                   </div>
                   <div class="cell-secondary">{{ o.patientMrn }}</div>
+                </td>
+                @if (showHospitalColumn()) {
+                  <td data-testid="imaging-row-hospital">
+                    {{ hospitalNameOf(o.hospitalId, o.hospitalName) }}
+                  </td>
+                }
+                <td>
+                  <span
+                    class="status-badge {{ getStatusClass(o.status) }}"
+                    data-testid="imaging-row-status"
+                    >{{ o.status | enumLabel: 'imagingOrderStatus' }}</span
+                  >
+                  @if (o.authorizationPending) {
+                    {{ ' '
+                    }}<span
+                      class="status-badge status-preliminary"
+                      data-testid="imaging-row-preauth-pending"
+                      >{{ 'IMAGING.PREAUTH_PENDING.FLAG' | translate }}</span
+                    >
+                  }
                 </td>
                 <td>
                   <span class="modality-badge">{{
@@ -167,11 +278,6 @@
                   }}</span>
                 </td>
                 <td>{{ o.orderedAt ? (o.orderedAt | serverTime | date: 'mediumDate') : '—' }}</td>
-                <td>
-                  <span class="status-badge {{ getStatusClass(o.status) }}">{{
-                    o.status | enumLabel: 'imagingOrderStatus'
-                  }}</span>
-                </td>
                 <td>
                   <div class="action-group">
                     <button
@@ -192,9 +298,37 @@
                         <span class="material-symbols-outlined">description</span>
                       </button>
                     }
+                    <!-- QA D1821: the study is started, then completed, from the list. -->
+                    @if (canStartStudy(o)) {
+                      <button
+                        type="button"
+                        class="action-link"
+                        [attr.data-testid]="'imaging-start-' + o.id"
+                        [disabled]="!!studyStatusSavingId()"
+                        (click)="startStudy(o)"
+                        [title]="'IMAGING.START_STUDY' | translate"
+                        [attr.aria-label]="'IMAGING.START_STUDY' | translate"
+                      >
+                        <span class="material-symbols-outlined">play_arrow</span>
+                      </button>
+                    }
+                    @if (canCompleteStudy(o)) {
+                      <button
+                        type="button"
+                        class="action-link"
+                        [attr.data-testid]="'imaging-complete-' + o.id"
+                        [disabled]="!!studyStatusSavingId()"
+                        (click)="completeStudy(o)"
+                        [title]="'IMAGING.COMPLETE_STUDY' | translate"
+                        [attr.aria-label]="'IMAGING.COMPLETE_STUDY' | translate"
+                      >
+                        <span class="material-symbols-outlined">task_alt</span>
+                      </button>
+                    }
                     @if (canAuthorForOrder(o)) {
                       <button
                         class="action-link"
+                        [attr.data-testid]="'imaging-author-' + o.id"
                         (click)="openAuthorReport(o, o.status === 'RESULTS_AVAILABLE')"
                         [title]="'IMAGING.AUTHOR_REPORT' | translate"
                         [attr.aria-label]="'IMAGING.AUTHOR_REPORT' | translate"
@@ -245,7 +379,7 @@
             (click)="setReportStatusFilter(st)"
             [attr.aria-pressed]="reportStatusFilter() === st"
           >
-            {{ 'IMAGING.REPORT_STATUS_' + st | translate }}
+            {{ st | enumLabel: 'imagingReportStatus' }}
           </button>
         }
       </div>
@@ -267,6 +401,14 @@
       </div>
     </div>
 
+    @if (!reportsLoading() && reportsFailedHospitals().length > 0) {
+      <p class="partial-failure" role="alert" data-testid="imaging-results-partial-failure">
+        {{
+          'IMAGING.RESULTS_PARTIAL_FAILURE'
+            | translate: { hospitals: reportsFailedHospitals().join(', ') }
+        }}
+      </p>
+    }
     @if (reportsLoading()) {
       <div class="loading-state">
         <div class="spinner"></div>
@@ -291,6 +433,13 @@
           <thead>
             <tr>
               <th scope="col">{{ 'IMAGING.REPORT_NUMBER' | translate }}</th>
+              <!-- QA D1923 (r53): whose report it is, before it is opened, revised or signed. -->
+              <th scope="col" data-testid="imaging-report-patient-header">
+                {{ 'PATIENTS.PATIENT_NAME' | translate }}
+              </th>
+              @if (showHospitalColumn()) {
+                <th scope="col">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</th>
+              }
               <th scope="col">{{ 'IMAGING.MODALITY' | translate }}</th>
               <th scope="col">{{ 'IMAGING.BODY_REGION' | translate }}</th>
               <th scope="col">{{ 'IMAGING.INTERPRETED_BY' | translate }}</th>
@@ -306,6 +455,15 @@
                   <div class="cell-primary">{{ r.reportNumber || '—' }}</div>
                   <div class="cell-secondary">{{ r.reportTitle }}</div>
                 </td>
+                <td data-testid="imaging-report-patient">
+                  <div class="cell-primary">
+                    {{ r.patientDisplayName || ('COMMON.UNKNOWN' | translate) }}
+                  </div>
+                  <div class="cell-secondary">{{ r.patientMrn }}</div>
+                </td>
+                @if (showHospitalColumn()) {
+                  <td data-testid="imaging-report-hospital">{{ hospitalNameOf(r.hospitalId) }}</td>
+                }
                 <td>
                   <span class="modality-badge">{{
                     r.modality | enumLabel: 'imagingModality'
@@ -316,7 +474,7 @@
                 <td>{{ r.createdAt ? (r.createdAt | serverTime | date: 'mediumDate') : '—' }}</td>
                 <td>
                   <span class="status-badge {{ getReportStatusClass(r.reportStatus) }}">{{
-                    'IMAGING.REPORT_STATUS_' + r.reportStatus | translate
+                    r.reportStatus | enumLabel: 'imagingReportStatus'
                   }}</span>
                   @if (isCriticalUnacked(r)) {
                     {{ ' '
@@ -404,14 +562,29 @@
               <span class="material-symbols-outlined">verified</span>
               <span>
                 {{ 'IMAGING.SIGNED_LOCKED' | translate }}
-                @if (rep.signatureValue) {
-                  <code class="signature-digest" [title]="rep.signatureValue">{{
-                    rep.signatureValue.slice(0, 16)
-                  }}</code>
-                } @else {
-                  <em>{{ 'IMAGING.SIGNED_UNVERIFIABLE' | translate }}</em>
+                @if (!rep.signatureValue) {
+                  · <em>{{ 'IMAGING.SIGNED_UNVERIFIABLE' | translate }}</em>
                 }
               </span>
+              <!-- r44: the digest is technical proof, not clinical content: behind a toggle. -->
+              @if (rep.signatureValue) {
+                <details class="signature-details" data-testid="imaging-signature-details">
+                  <summary
+                    [title]="'IMAGING.SIGNATURE_FINGERPRINT_HINT' | translate"
+                    [attr.aria-label]="'IMAGING.SIGNATURE_FINGERPRINT' | translate"
+                  >
+                    <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                  </summary>
+                  <small
+                    >{{ 'IMAGING.SIGNATURE_FINGERPRINT' | translate
+                    }}{{ 'COMMON.COLON' | translate }}</small
+                  >
+                  <code class="signature-digest">{{ rep.signatureValue }}</code>
+                  <small class="muted">{{
+                    'IMAGING.SIGNATURE_FINGERPRINT_HINT' | translate
+                  }}</small>
+                </details>
+              }
             </div>
           }
           @if (isCriticalUnacked(rep)) {
@@ -426,7 +599,7 @@
                   @if (rep.criticalNotifiedAt) {
                     {{
                       'IMAGING.CRITICAL_NOTIFIED_AT'
-                        | translate: { time: rep.criticalNotifiedAt | serverTime | date: 'short' }
+                        | translate: { time: rep.criticalNotifiedAt | serverTime | dateTime }
                     }}
                   } @else {
                     {{ 'IMAGING.CRITICAL_NOT_YET_NOTIFIED' | translate }}
@@ -454,15 +627,25 @@
           @if (rep.criticalResultAcknowledgedAt) {
             <p class="muted">
               {{ 'IMAGING.CRITICAL_ACKED_BY' | translate }} {{ rep.criticalResultAckByName }} —
-              {{ rep.criticalResultAcknowledgedAt | serverTime | date: 'short' }}
+              {{ rep.criticalResultAcknowledgedAt | serverTime | dateTime }}
             </p>
           }
           <div class="detail-grid">
+            <div class="detail-field" data-testid="imaging-report-drawer-patient">
+              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span
+              ><span class="field-value">{{
+                rep.patientDisplayName || ('COMMON.UNKNOWN' | translate)
+              }}</span>
+            </div>
+            <div class="detail-field" data-testid="imaging-report-drawer-mrn">
+              <span class="field-label">{{ 'IMAGING.MRN' | translate }}</span
+              ><span class="field-value">{{ rep.patientMrn || '—' }}</span>
+            </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="field-value"
                 ><span class="status-badge {{ getReportStatusClass(rep.reportStatus) }}">{{
-                  'IMAGING.REPORT_STATUS_' + rep.reportStatus | translate
+                  rep.reportStatus | enumLabel: 'imagingReportStatus'
                 }}</span></span
               >
             </div>
@@ -482,9 +665,7 @@
               <span class="field-label">{{ 'IMAGING.SIGNED_BY' | translate }}</span
               ><span class="field-value"
                 >{{ rep.signedByName || '—' }}
-                {{
-                  rep.signedAt ? '(' + (rep.signedAt | serverTime | date: 'short') + ')' : ''
-                }}</span
+                {{ rep.signedAt ? '(' + (rep.signedAt | serverTime | dateTime) + ')' : '' }}</span
               >
             </div>
             <div class="detail-field">
@@ -545,10 +726,15 @@
               <ul class="status-history">
                 @for (h of rep.statusHistory; track h.id) {
                   <li>
-                    {{ h.changedAt | serverTime | date: 'short' }} —
-                    {{ 'IMAGING.REPORT_STATUS_' + h.status | translate }}
+                    {{ h.changedAt | serverTime | dateTime }} —
+                    {{ h.status | enumLabel: 'imagingReportStatus' }}
                     {{ h.changedByName ? '(' + h.changedByName + ')' : '' }}
-                    {{ h.statusReason ? '· ' + h.statusReason : '' }}
+                    <!-- r44: an event the server wrote is translated; a typed reason shows as typed. -->
+                    @if (h.eventCode) {
+                      · {{ h.eventCode | enumLabel: 'imagingReportHistoryEvent' }}
+                    } @else if (h.statusReason) {
+                      · {{ h.statusReason }}
+                    }
                   </li>
                 }
               </ul>
@@ -589,7 +775,7 @@
           <label for="report-status">{{ 'COMMON.STATUS' | translate }}</label>
           <select id="report-status" [(ngModel)]="statusForm.status">
             @for (st of voidStatuses; track st) {
-              <option [value]="st">{{ 'IMAGING.REPORT_STATUS_' + st | translate }}</option>
+              <option [value]="st">{{ st | enumLabel: 'imagingReportStatus' }}</option>
             }
           </select>
         </div>
@@ -648,6 +834,15 @@
         </button>
       </div>
       <div class="modal-body">
+        <!-- QA D1923 (r53): the report is written for this patient. -->
+        <p class="report-patient" data-testid="imaging-report-form-patient">
+          <strong>{{ 'PATIENTS.PATIENT_NAME' | translate }}{{ 'COMMON.COLON' | translate }}</strong>
+          {{ reportPatient()?.name || ('COMMON.UNKNOWN' | translate) }}
+          @if (reportPatient()?.mrn) {
+            · {{ 'IMAGING.MRN' | translate }}{{ 'COMMON.COLON' | translate }}
+            {{ reportPatient()?.mrn }}
+          }
+        </p>
         <div class="field-row">
           <div class="field">
             <label for="rep-title">{{ 'IMAGING.REPORT_TITLE' | translate }}</label>
@@ -657,7 +852,7 @@
             <label for="rep-status">{{ 'COMMON.STATUS' | translate }}</label>
             <select id="rep-status" [(ngModel)]="reportForm.reportStatus">
               @for (st of authorableStatuses; track st) {
-                <option [value]="st">{{ 'IMAGING.REPORT_STATUS_' + st | translate }}</option>
+                <option [value]="st">{{ st | enumLabel: 'imagingReportStatus' }}</option>
               }
             </select>
           </div>
@@ -789,10 +984,17 @@
               <span class="field-label">{{ 'IMAGING.BODY_REGION' | translate }}</span
               ><span class="field-value">{{ ord.bodyRegion || '—' }}</span>
             </div>
-            <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.LATERALITY' | translate }}</span
-              ><span class="field-value">{{ ord.laterality || '—' }}</span>
-            </div>
+            <!-- r44: a laterality marked not applicable is not shown. -->
+            @if (lateralityApplies(ord)) {
+              <div class="detail-field" data-testid="imaging-order-laterality">
+                <span class="field-label">{{ 'IMAGING.LATERALITY' | translate }}</span
+                ><span class="field-value">{{
+                  ord.laterality
+                    ? (ord.laterality | enumLabel: 'imagingLaterality')
+                    : ('IMAGING.LATERALITY_NOT_RECORDED' | translate)
+                }}</span>
+              </div>
+            }
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.PRIORITY' | translate }}</span
               ><span class="field-value"
@@ -819,26 +1021,187 @@
                 ord.orderedAt ? (ord.orderedAt | serverTime | dateTime) : '—'
               }}</span>
             </div>
-            <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.SCHEDULED' | translate }}</span
-              ><span class="field-value"
-                >{{
-                  ord.scheduledDate ? (ord.scheduledDate | serverTime | date: 'mediumDate') : '—'
-                }}
-                {{ ord.scheduledTime || '' }}</span
-              >
-            </div>
-            <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.COMPLETED_AT' | translate }}</span
-              ><span class="field-value">{{
-                ord.completedAt ? (ord.completedAt | serverTime | dateTime) : '—'
-              }}</span>
-            </div>
+            <!-- r44: "Planifié" with its time when one was set; absent when never scheduled. -->
+            @if (scheduledAt(ord); as sched) {
+              <div class="detail-field" data-testid="imaging-order-scheduled">
+                <span class="field-label">{{ 'IMAGING.SCHEDULED' | translate }}</span
+                ><span class="field-value">{{
+                  sched.withTime
+                    ? (sched.scheduledAt | dateTime)
+                    : (sched.scheduledAt | date: 'mediumDate')
+                }}</span>
+              </div>
+            }
+            @if (isResulted(ord)) {
+              <div class="detail-field" data-testid="imaging-order-completed">
+                <span class="field-label">{{ 'IMAGING.COMPLETED_AT' | translate }}</span
+                ><span class="field-value">{{
+                  ord.completedAt ? (ord.completedAt | serverTime | dateTime) : '—'
+                }}</span>
+              </div>
+            }
           </div>
           @if (ord.clinicalQuestion) {
             <div class="detail-notes">
               <span class="field-label">{{ 'IMAGING.CLINICAL_QUESTION' | translate }}</span>
               <p>{{ ord.clinicalQuestion }}</p>
+            </div>
+          }
+          <!-- QA D1922 (r53): the contrast, the allergy, where, and the pre-authorisation. -->
+          @if (ord.hasContrastAllergy) {
+            <div class="contrast-allergy-banner" role="alert" data-testid="imaging-order-allergy">
+              <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+              <span>
+                <strong>{{ 'IMAGING.CONTRAST_ALLERGY' | translate }}</strong>
+                @if (ord.contrastAllergyDetails) {
+                  {{ 'COMMON.COLON' | translate }} {{ ord.contrastAllergyDetails }}
+                }
+              </span>
+            </div>
+          }
+          <div class="detail-grid" data-testid="imaging-order-logistics">
+            <div class="detail-field" data-testid="imaging-order-contrast">
+              <span class="field-label">{{ 'IMAGING.CONTRAST_REQUIRED' | translate }}</span
+              ><span class="field-value">{{
+                ord.contrastRequired
+                  ? ('COMMON.YES' | translate) + (ord.contrastType ? ' · ' + ord.contrastType : '')
+                  : ('COMMON.NO' | translate)
+              }}</span>
+            </div>
+            @if (ord.appointmentLocation) {
+              <div class="detail-field" data-testid="imaging-order-location">
+                <span class="field-label">{{ 'IMAGING.LOCATION' | translate }}</span
+                ><span class="field-value">{{ ord.appointmentLocation }}</span>
+              </div>
+            }
+            @if (ord.requiresAuthorization) {
+              <div class="detail-field" data-testid="imaging-order-authorization">
+                <span class="field-label">{{ 'IMAGING.PRE_AUTHORIZATION' | translate }}</span
+                ><span class="field-value">{{
+                  awaitsAuthorizationNumber(ord)
+                    ? ('IMAGING.AUTHORIZATION_NUMBER_MISSING' | translate)
+                    : ord.authorizationNumber
+                }}</span>
+              </div>
+            }
+          </div>
+          <!-- Provisional rule 1 (2026-11-15): an urgent study done without its pre-authorisation number. -->
+          @if (ord.authorizationPending) {
+            <div class="duplicate-warning" role="note" data-testid="imaging-order-preauth-pending">
+              <p class="duplicate-warning-title">
+                {{ 'IMAGING.PREAUTH_PENDING.FLAG' | translate }}
+              </p>
+              <p>
+                {{ 'IMAGING.PREAUTH_PENDING.BODY' | translate }}
+                @if (ord.authorizationPendingSince) {
+                  ({{ ord.authorizationPendingSince | serverTime | dateTime }})
+                }
+              </p>
+              @if (canRecordAuthorization(ord)) {
+                <div class="field">
+                  <label for="img-record-authNumber">{{
+                    'IMAGING.AUTHORIZATION_NUMBER' | translate
+                  }}</label>
+                  <input
+                    id="img-record-authNumber"
+                    type="text"
+                    maxlength="120"
+                    data-testid="imaging-record-auth-number"
+                    [ngModel]="authorizationNumberDraft()"
+                    (ngModelChange)="authorizationNumberDraft.set($event)"
+                  />
+                </div>
+                <button
+                  type="button"
+                  class="btn-primary"
+                  data-testid="imaging-record-auth"
+                  [disabled]="authorizationSaving()"
+                  (click)="recordAuthorization(ord)"
+                >
+                  {{ 'IMAGING.PREAUTH_PENDING.RECORD' | translate }}
+                </button>
+              }
+            </div>
+          }
+          <!-- Provisional rule 2 (2026-11-15): « Commander quand même », with its reason. -->
+          @if (ord.duplicateOverride) {
+            <div class="detail-notes" data-testid="imaging-order-duplicate-override">
+              <span class="field-label">{{ 'IMAGING.DUPLICATE.OVERRIDE_LABEL' | translate }}</span>
+              <p>
+                {{ ord.duplicateOverrideReason | enumLabel: 'imagingDuplicateOverrideReason' }}
+                @if (ord.duplicateOverrideNote) {
+                  — {{ ord.duplicateOverrideNote }}
+                }
+              </p>
+              @if (ord.duplicateOverrideByName || ord.duplicateOverrideAt) {
+                <p class="field-hint">
+                  {{ ord.duplicateOverrideByName }}
+                  @if (ord.duplicateOverrideAt) {
+                    · {{ ord.duplicateOverrideAt | serverTime | dateTime }}
+                  }
+                </p>
+              }
+            </div>
+          }
+          @if (ord.workflowNotes) {
+            <div class="detail-notes" data-testid="imaging-order-workflow-notes">
+              <span class="field-label">{{ 'IMAGING.WORKFLOW_NOTES' | translate }}</span>
+              <p>{{ ord.workflowNotes }}</p>
+            </div>
+          }
+          <!-- QA D1921 (r53): the server found a recent order of the same study when this one was placed. -->
+          @if (ord.duplicateOfRecentOrder) {
+            <div class="duplicate-warning" role="note" data-testid="imaging-order-duplicate">
+              <p class="duplicate-warning-title">{{ 'IMAGING.DUPLICATE.FLAGGED' | translate }}</p>
+              @if (duplicateReference(ord); as ref) {
+                <p>
+                  {{ ref.studyType || (ref.modality | enumLabel: 'imagingModality') }} ·
+                  {{ ref.status | enumLabel: 'imagingOrderStatus' }}
+                  @if (ref.orderedAt) {
+                    · {{ ref.orderedAt | serverTime | dateTime }}
+                  }
+                </p>
+              }
+            </div>
+          }
+          <!-- QA D1821: start, complete, then write the report, from the request drawer too. -->
+          @if (canStartStudy(ord) || canCompleteStudy(ord) || canAuthorForOrder(ord)) {
+            <div class="detail-actions" data-testid="imaging-drawer-actions">
+              @if (canStartStudy(ord)) {
+                <button
+                  type="button"
+                  class="btn-primary"
+                  data-testid="imaging-drawer-start"
+                  [disabled]="!!studyStatusSavingId()"
+                  (click)="startStudy(ord)"
+                >
+                  <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span>
+                  {{ 'IMAGING.START_STUDY' | translate }}
+                </button>
+              }
+              @if (canCompleteStudy(ord)) {
+                <button
+                  type="button"
+                  class="btn-primary"
+                  data-testid="imaging-drawer-complete"
+                  [disabled]="!!studyStatusSavingId()"
+                  (click)="completeStudy(ord)"
+                >
+                  <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
+                  {{ 'IMAGING.COMPLETE_STUDY' | translate }}
+                </button>
+              }
+              @if (canAuthorForOrder(ord)) {
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  data-testid="imaging-drawer-author"
+                  (click)="authorFromDrawer(ord)"
+                >
+                  <span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
+                  {{ 'IMAGING.AUTHOR_REPORT' | translate }}
+                </button>
+              }
             </div>
           }
 
@@ -848,7 +1211,7 @@
               @for (rep of selectedOrderReports(); track rep.id) {
                 <div class="report-card" [attr.data-testid]="'imaging-report-' + rep.id">
                   <div class="report-meta">
-                    <span class="status-badge {{ getStatusClass(rep.reportStatus) }}">{{
+                    <span class="status-badge {{ getReportStatusClass(rep.reportStatus) }}">{{
                       rep.reportStatus | enumLabel: 'imagingReportStatus'
                     }}</span>
                     <span class="report-author">{{
@@ -866,17 +1229,18 @@
                       </button>
                     }
                   </div>
-                  @if (rep.impression) {
-                    <p class="report-impression">
-                      <strong
-                        >{{ 'IMAGING.IMPRESSION' | translate
-                        }}{{ 'COMMON.COLON' | translate }}</strong
-                      >
-                      {{ rep.impression }}
-                    </p>
-                  }
+                  <!-- r44: the report drawer's order and labels: Findings, then Conclusion. -->
                   @if (rep.findings) {
-                    <p class="report-findings">{{ rep.findings }}</p>
+                    <div class="detail-notes report-findings">
+                      <span class="field-label">{{ 'IMAGING.FINDINGS' | translate }}</span>
+                      <p>{{ rep.findings }}</p>
+                    </div>
+                  }
+                  @if (rep.impression) {
+                    <div class="detail-notes report-impression">
+                      <span class="field-label">{{ 'IMAGING.IMPRESSION' | translate }}</span>
+                      <p>{{ rep.impression }}</p>
+                    </div>
                   }
                 </div>
               }
@@ -1018,7 +1382,186 @@
             />
           </div>
         </div>
+        <!-- QA D1922 (r53): contrast and the patient's contrast allergy. -->
+        <div class="form-row" data-testid="imaging-form-contrast">
+          <div class="field">
+            <label class="checkbox-field">
+              <input
+                id="img-contrastRequired"
+                type="checkbox"
+                [(ngModel)]="form.contrastRequired"
+              />
+              {{ 'IMAGING.CONTRAST_REQUIRED' | translate }}
+            </label>
+            @if (form.contrastRequired) {
+              <label for="img-contrastType">{{ 'IMAGING.CONTRAST_TYPE' | translate }}</label>
+              <input
+                id="img-contrastType"
+                type="text"
+                maxlength="120"
+                [(ngModel)]="form.contrastType"
+                [placeholder]="'IMAGING.CONTRAST_TYPE_PLACEHOLDER' | translate"
+              />
+            }
+          </div>
+          <div class="field">
+            <label class="checkbox-field">
+              <input
+                id="img-hasContrastAllergy"
+                type="checkbox"
+                [(ngModel)]="form.hasContrastAllergy"
+              />
+              {{ 'IMAGING.CONTRAST_ALLERGY' | translate }}
+            </label>
+            @if (form.hasContrastAllergy) {
+              <label for="img-contrastAllergy">{{
+                'IMAGING.CONTRAST_ALLERGY_DETAILS' | translate
+              }}</label>
+              <input
+                id="img-contrastAllergy"
+                type="text"
+                maxlength="500"
+                [(ngModel)]="form.contrastAllergyDetails"
+                [placeholder]="'IMAGING.CONTRAST_ALLERGY_PLACEHOLDER' | translate"
+              />
+            }
+          </div>
+        </div>
+        <!-- QA D1922 (r53): when and where the study is booked. -->
+        <div class="form-row" data-testid="imaging-form-schedule">
+          <div class="field">
+            <label for="img-scheduledDate">{{ 'IMAGING.SCHEDULED_DATE' | translate }}</label>
+            <input
+              id="img-scheduledDate"
+              type="date"
+              [min]="editing() ? null : today"
+              [(ngModel)]="form.scheduledDate"
+            />
+          </div>
+          <div class="field">
+            <label for="img-scheduledTime">{{ 'IMAGING.SCHEDULED_TIME' | translate }}</label>
+            <input id="img-scheduledTime" type="time" [(ngModel)]="form.scheduledTime" />
+          </div>
+          <div class="field">
+            <label for="img-location">{{ 'IMAGING.LOCATION' | translate }}</label>
+            <input
+              id="img-location"
+              type="text"
+              maxlength="255"
+              [(ngModel)]="form.appointmentLocation"
+              [placeholder]="'SCHEDULING.OPTIONAL' | translate"
+            />
+          </div>
+        </div>
+        <!-- QA D1922 (r53): the pre-authorisation; the study starts once it is numbered (D1925). -->
+        <div class="form-row" data-testid="imaging-form-authorization">
+          <div class="field">
+            <label class="checkbox-field">
+              <input
+                id="img-requiresAuthorization"
+                type="checkbox"
+                [(ngModel)]="form.requiresAuthorization"
+              />
+              {{ 'IMAGING.REQUIRES_AUTHORIZATION' | translate }}
+            </label>
+          </div>
+          @if (form.requiresAuthorization) {
+            <div class="field">
+              <label for="img-authNumber">{{ 'IMAGING.AUTHORIZATION_NUMBER' | translate }}</label>
+              <input
+                id="img-authNumber"
+                type="text"
+                maxlength="120"
+                [(ngModel)]="form.authorizationNumber"
+              />
+              @if (awaitsAuthorizationNumber(form)) {
+                <small class="field-hint">{{
+                  'IMAGING.AUTHORIZATION_NUMBER_HINT' | translate
+                }}</small>
+              }
+            </div>
+          }
+        </div>
       </div>
+      <!-- QA D1921 (r53): a recent order of the same study, shown before anything is sent. -->
+      @if (duplicateMatches().length > 0) {
+        <!-- Escape here goes back to the form (it asks before dropping a typed note). -->
+        <div
+          class="duplicate-warning"
+          role="alert"
+          data-testid="imaging-duplicate-warning"
+          appInlineSubForm
+          (dismissed)="dismissDuplicateWarning()"
+        >
+          <p class="duplicate-warning-title">{{ 'IMAGING.DUPLICATE.TITLE' | translate }}</p>
+          <p>{{ 'IMAGING.DUPLICATE.BODY' | translate }}</p>
+          <ul>
+            @for (d of duplicateMatches(); track d.orderId) {
+              <li>
+                {{ d.studyType || (d.modality | enumLabel: 'imagingModality') }}
+                @if (d.bodyRegion) {
+                  · {{ d.bodyRegion }}
+                }
+                · {{ d.status | enumLabel: 'imagingOrderStatus' }}
+                @if (d.orderedAt) {
+                  · {{ d.orderedAt | serverTime | dateTime }}
+                }
+              </li>
+            }
+          </ul>
+          <fieldset class="duplicate-override-reasons" data-testid="imaging-duplicate-reasons">
+            <legend>{{ 'IMAGING.DUPLICATE.REASON_LEGEND' | translate }}</legend>
+            @for (r of overrideReasons; track r) {
+              <label class="checkbox-label">
+                <input
+                  type="radio"
+                  name="img-duplicate-reason"
+                  [id]="'img-duplicate-reason-' + r"
+                  [attr.data-testid]="'imaging-duplicate-reason-' + r"
+                  [value]="r"
+                  [checked]="overrideReason() === r"
+                  (change)="overrideReason.set(r); overrideError.set(null)"
+                />
+                {{ r | enumLabel: 'imagingDuplicateOverrideReason' }}
+              </label>
+            }
+            @if (overrideReason() === 'OTHER') {
+              <div class="field">
+                <label for="img-duplicate-note">{{
+                  'IMAGING.DUPLICATE.NOTE_LABEL' | translate
+                }}</label>
+                <textarea
+                  id="img-duplicate-note"
+                  rows="2"
+                  maxlength="500"
+                  data-testid="imaging-duplicate-note"
+                  [ngModel]="overrideNote()"
+                  (ngModelChange)="overrideNote.set($event); overrideError.set(null)"
+                ></textarea>
+              </div>
+            }
+            @if (overrideError()) {
+              <p class="modal-error" role="alert" data-testid="imaging-duplicate-reason-error">
+                {{ overrideError() }}
+              </p>
+            }
+          </fieldset>
+          <div class="duplicate-warning-actions">
+            <button type="button" class="btn-secondary" (click)="dismissDuplicateWarning()">
+              {{ 'IMAGING.DUPLICATE.BACK' | translate }}
+            </button>
+            <button
+              type="button"
+              class="btn-primary"
+              data-testid="imaging-duplicate-order-anyway"
+              (click)="orderAnyway()"
+              [disabled]="saving()"
+            >
+              {{ 'IMAGING.DUPLICATE.ORDER_ANYWAY' | translate }}
+            </button>
+          </div>
+        </div>
+      }
       @if (formError()) {
         <p class="modal-error" role="alert" data-testid="imaging-form-error">{{ formError() }}</p>
       }

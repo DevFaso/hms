@@ -28,4 +28,11 @@ public interface PatientDiagnosisRepository extends JpaRepository<PatientDiagnos
         UUID patientId, String status);
 
     List<PatientDiagnosis> findByPatient_IdOrderByDiagnosedAtDesc(UUID patientId);
+
+    /**
+     * Lab requests drawer: the newest diagnosis the patient has at {@code hospitalId}
+     * under {@code icdCode}, whose description labels a lab order's diagnosis code.
+     */
+    java.util.Optional<PatientDiagnosis> findFirstByPatient_IdAndHospital_IdAndIcdCodeIgnoreCaseOrderByDiagnosedAtDesc(
+        UUID patientId, UUID hospitalId, String icdCode);
 }

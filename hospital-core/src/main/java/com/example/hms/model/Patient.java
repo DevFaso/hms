@@ -23,7 +23,6 @@ import jakarta.persistence.Transient;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -73,7 +72,8 @@ public class Patient extends BaseEntity implements TenantScoped {
     @Column(name = "middle_name", length = 100)
     private String middleName;
 
-    @NotNull @Past
+    /** QA D1592: today is a possible birth date - a baby a delivery registers is born today. */
+    @NotNull @jakarta.validation.constraints.PastOrPresent
     @Column(name = "date_of_birth", nullable = false)
     private LocalDate dateOfBirth;
 

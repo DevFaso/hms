@@ -27,6 +27,7 @@ public class CheckInRequestDTO {
     private UUID patientId;
 
     /** Chief complaint text captured at check-in. */
+    @jakarta.validation.constraints.Size(max = 2000, message = "{reception.checkin.chiefComplaint.size}")
     private String chiefComplaint;
 
     /** Co-pay amount collected at check-in (nullable — not all visits have a co-pay). */
@@ -39,7 +40,7 @@ public class CheckInRequestDTO {
     private com.example.hms.enums.PaymentMethod copayMethod;
 
     /** QA D975: the operator or terminal reference of a non-cash copay. */
-    @jakarta.validation.constraints.Size(max = 100)
+    @jakarta.validation.constraints.Size(max = 100, message = "{reception.checkin.copayReference.size}")
     private String copayReference;
 
     /** Whether the receptionist confirmed patient identity (photo ID, DOB, etc.). */
@@ -52,6 +53,7 @@ public class CheckInRequestDTO {
     private boolean insuranceVerified = false;
 
     /** Optional notes entered by the receptionist at check-in. */
+    @jakarta.validation.constraints.Size(max = 2000, message = "{reception.checkin.notes.size}")
     private String notes;
 
     /* ── Consent-to-treat capture (P3 #21). RECORDED, never gating: the
@@ -67,5 +69,6 @@ public class CheckInRequestDTO {
     private com.example.hms.enums.TreatmentConsentMethod consentMethod;
 
     /** The name as signed/typed at the desk. */
+    @jakarta.validation.constraints.Size(max = 200, message = "{reception.checkin.consentSignedName.size}")
     private String consentSignedName;
 }

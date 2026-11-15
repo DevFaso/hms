@@ -292,6 +292,16 @@
   }
 }
 
+// QA D1803: each baby's outcome select takes a full row, so « Mort-né(e) (sans signe de vie) » is never cut.
+.baby-outcome-field {
+  grid-column: 1 / -1;
+  min-width: 0;
+  select {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
 .field {
   display: flex;
   flex-direction: column;

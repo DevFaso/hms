@@ -31,6 +31,9 @@ describe('AuditLogsComponent (QA D330)', () => {
         WRITE_POST: 'Création : {{entity}}',
         WRITE_ENTITY_UNKNOWN: 'enregistrement',
         DESC: {
+          LABOR_ACTIVE_DISCLOSURE_ON_REFUSAL: 'Travail actif divulgué',
+          LABOR_EPISODE_START_REFUSED_COORDINATION:
+            'Ouverture d’un épisode de travail refusée : coordination des soins nécessaire',
           PATIENT_RECORD_VIEWED: 'Dossier patient consulté',
           ROLE_ASSIGNED: 'Rôle {{role}} attribué à {{name}}',
           LAB_DEFINITION_STEP: 'Examen {{code}} : étape {{step}}, statut {{status}}.',
@@ -55,6 +58,25 @@ describe('AuditLogsComponent (QA D330)', () => {
   });
 
   const row = (over: Partial<AuditEventLog>) => ({ ...over }) as AuditEventLog;
+
+  it('translates the non-disclosing labour refusal without naming a source hospital', () => {
+    expect(
+      component.describe(
+        row({ eventDescription: 'Labour episode start refused: care coordination required' }),
+      ),
+    ).toBe('Ouverture d’un épisode de travail refusée : coordination des soins nécessaire');
+  });
+
+  it('translates the active labour disclosure on refusal', () => {
+    expect(
+      component.describe(
+        row({
+          eventDescription:
+            'Cross-hospital active labour disclosed when refusing a second labour episode',
+        }),
+      ),
+    ).toBe('Travail actif divulgué');
+  });
 
   it('reads a class-name or enum entity type in the reader language', () => {
     expect(component.entityLabel('LabTestDefinition')).toBe('Définition d’examen de laboratoire');

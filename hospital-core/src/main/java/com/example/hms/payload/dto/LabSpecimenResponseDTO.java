@@ -25,8 +25,12 @@ public class LabSpecimenResponseDTO {
     private String specimenType;
     private LocalDateTime collectedAt;
     private UUID collectedById;
+    /** Lab requests drawer timeline: who collected it (set on the per-order specimen list). */
+    private String collectedByName;
     private LocalDateTime receivedAt;
     private UUID receivedById;
+    /** Lab requests drawer timeline: who received it in the laboratory (per-order specimen list). */
+    private String receivedByName;
     private String currentLocation;
     private String status;
     private String notes;

@@ -73,7 +73,58 @@ public class PhiTextEncryptionBackfill {
             "SELECT id, payload AS val FROM clinical.integration_message_event"
                 + " WHERE payload IS NOT NULL AND payload <> '' AND payload NOT LIKE 'gcm1:%' LIMIT 500",
             "UPDATE clinical.integration_message_event SET payload = ?"
-                + " WHERE id = ? AND payload NOT LIKE 'gcm1:%'"));
+                + " WHERE id = ? AND payload NOT LIKE 'gcm1:%'"),
+        // V300: the death family's narratives (death disputes, death records, fetal-death events).
+        new Target("clinical.death_disputes.reason",
+            "SELECT id, reason AS val FROM clinical.death_disputes"
+                + " WHERE reason IS NOT NULL AND reason <> '' AND reason NOT LIKE 'gcm1:%' LIMIT 500",
+            "UPDATE clinical.death_disputes SET reason = ?"
+                + " WHERE id = ? AND reason NOT LIKE 'gcm1:%'"),
+        new Target("clinical.death_disputes.resolution_reason",
+            "SELECT id, resolution_reason AS val FROM clinical.death_disputes"
+                + " WHERE resolution_reason IS NOT NULL AND resolution_reason <> '' AND resolution_reason NOT LIKE 'gcm1:%' LIMIT 500",
+            "UPDATE clinical.death_disputes SET resolution_reason = ?"
+                + " WHERE id = ? AND resolution_reason NOT LIKE 'gcm1:%'"),
+        new Target("clinical.death_records.immediate_cause",
+            "SELECT id, immediate_cause AS val FROM clinical.death_records"
+                + " WHERE immediate_cause IS NOT NULL AND immediate_cause <> '' AND immediate_cause NOT LIKE 'gcm1:%' LIMIT 500",
+            "UPDATE clinical.death_records SET immediate_cause = ?"
+                + " WHERE id = ? AND immediate_cause NOT LIKE 'gcm1:%'"),
+        new Target("clinical.death_records.underlying_cause",
+            "SELECT id, underlying_cause AS val FROM clinical.death_records"
+                + " WHERE underlying_cause IS NOT NULL AND underlying_cause <> '' AND underlying_cause NOT LIKE 'gcm1:%' LIMIT 500",
+            "UPDATE clinical.death_records SET underlying_cause = ?"
+                + " WHERE id = ? AND underlying_cause NOT LIKE 'gcm1:%'"),
+        new Target("clinical.death_records.contributing_causes",
+            "SELECT id, contributing_causes AS val FROM clinical.death_records"
+                + " WHERE contributing_causes IS NOT NULL AND contributing_causes <> '' AND contributing_causes NOT LIKE 'gcm1:%' LIMIT 500",
+            "UPDATE clinical.death_records SET contributing_causes = ?"
+                + " WHERE id = ? AND contributing_causes NOT LIKE 'gcm1:%'"),
+        new Target("clinical.death_records.amendment_reason",
+            "SELECT id, amendment_reason AS val FROM clinical.death_records"
+                + " WHERE amendment_reason IS NOT NULL AND amendment_reason <> '' AND amendment_reason NOT LIKE 'gcm1:%' LIMIT 500",
+            "UPDATE clinical.death_records SET amendment_reason = ?"
+                + " WHERE id = ? AND amendment_reason NOT LIKE 'gcm1:%'"),
+        new Target("clinical.death_records.notes",
+            "SELECT id, notes AS val FROM clinical.death_records"
+                + " WHERE notes IS NOT NULL AND notes <> '' AND notes NOT LIKE 'gcm1:%' LIMIT 500",
+            "UPDATE clinical.death_records SET notes = ?"
+                + " WHERE id = ? AND notes NOT LIKE 'gcm1:%'"),
+        new Target("clinical.death_records.entered_in_error_reason",
+            "SELECT id, entered_in_error_reason AS val FROM clinical.death_records"
+                + " WHERE entered_in_error_reason IS NOT NULL AND entered_in_error_reason <> '' AND entered_in_error_reason NOT LIKE 'gcm1:%' LIMIT 500",
+            "UPDATE clinical.death_records SET entered_in_error_reason = ?"
+                + " WHERE id = ? AND entered_in_error_reason NOT LIKE 'gcm1:%'"),
+        new Target("clinical.fetal_death_events.creation_reason",
+            "SELECT id, creation_reason AS val FROM clinical.fetal_death_events"
+                + " WHERE creation_reason IS NOT NULL AND creation_reason <> '' AND creation_reason NOT LIKE 'gcm1:%' LIMIT 500",
+            "UPDATE clinical.fetal_death_events SET creation_reason = ?"
+                + " WHERE id = ? AND creation_reason NOT LIKE 'gcm1:%'"),
+        new Target("clinical.fetal_death_events.supersede_reason",
+            "SELECT id, supersede_reason AS val FROM clinical.fetal_death_events"
+                + " WHERE supersede_reason IS NOT NULL AND supersede_reason <> '' AND supersede_reason NOT LIKE 'gcm1:%' LIMIT 500",
+            "UPDATE clinical.fetal_death_events SET supersede_reason = ?"
+                + " WHERE id = ? AND supersede_reason NOT LIKE 'gcm1:%'"));
 
     /** Rows per transaction; the SELECTs' literal LIMIT says the same. */
     static final int BATCH_SIZE = 500;

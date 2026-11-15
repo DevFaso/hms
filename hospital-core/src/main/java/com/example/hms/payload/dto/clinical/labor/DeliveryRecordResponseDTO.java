@@ -37,5 +37,24 @@ public class DeliveryRecordResponseDTO {
     private String perinealTear;
 
     private String notes;
+    /** QA r46: the birth was recorded as before her arrival here (in transit), with its reason. */
+    private boolean bornBeforeArrival;
+    private String bornBeforeArrivalReason;
     private List<LaborAlertDTO> alerts;
+
+    /** QA D1592: the babies this delivery registered as patients (empty for a stillbirth). */
+    private List<DeliveryNewbornDTO> newborns;
+    /** QA D1714: each baby's outcome, in birth order, with the fetal-death event of a stillborn one. */
+    private List<DeliveryBabyDTO> babies;
+    /** QA D1714: every fetal-death event of this delivery, superseded ones included, with their reasons. */
+    private List<com.example.hms.payload.dto.mortality.FetalDeathEventDTO> fetalDeathEvents;
+
+    /** QA D1592: the babies are not registered yet (registration failed or still to run): reception registers them. */
+    private boolean newbornRegistrationPending;
+
+    /**
+     * QA D1802 (provisional): after a correction to born alive, the death certificates that still declare that
+     * baby's stillbirth. They were left unchanged; a reconciliation task went to the certificate reviewers.
+     */
+    private java.util.List<java.util.UUID> contradictedDeathCertificates;
 }

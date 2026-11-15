@@ -28,4 +28,41 @@ describe('ResultRangeComponent', () => {
       .split(' ');
     expect(descriptionIds.every((id) => host.querySelector(`[id="${id}"]`))).toBeTrue();
   });
+
+  describe('r44: one severity word', () => {
+    function render(severityFlag: string | null, value = '1.05') {
+      TestBed.configureTestingModule({
+        imports: [ResultRangeComponent, TranslateModule.forRoot()],
+      });
+      const fixture = TestBed.createComponent(ResultRangeComponent);
+      fixture.componentRef.setInput('result', {
+        id: 'r44',
+        resultValue: value,
+        resultUnit: 'g/L',
+        resultDate: '2026-11-13T09:00:00Z',
+        severityFlag,
+        gradedReferenceRange: { minValue: 0.7, maxValue: 0.99, unit: 'g/L' },
+      } as LabResultResponse);
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    }
+    const badge = (host: HTMLElement) =>
+      host.querySelector('[data-testid="range-state"]')?.textContent?.trim();
+
+    it('names the position with the labSeverityFlag labels the drawer and the list use', () => {
+      const host = render('HIGH');
+      // No locale is loaded here, so the curated English labels show.
+      expect(badge(host)).toBe('High');
+      const scale = [...host.querySelectorAll('.labels span')].map((e) => e.textContent?.trim());
+      expect(scale).toEqual(['Low', 'Normal', 'High']);
+    });
+
+    it("shows the server's critical grade rather than a second word for it", () => {
+      expect(badge(render('CRITICAL', '5.5'))).toBe('Critical');
+    });
+
+    it('falls back to the marker position when the server gave no range grade', () => {
+      expect(badge(render(null, '0.5'))).toBe('Low');
+    });
+  });
 });

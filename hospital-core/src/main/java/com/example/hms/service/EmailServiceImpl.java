@@ -513,10 +513,15 @@ public class EmailServiceImpl implements EmailService {
                 + CLOSE_DIV
                 + "<p style=\"color:#666;font-size:13px;\">" + text(l, "email.patient.welcome.body.expiry") + CLOSE_PARAGRAPH;
         } else {
-            subject = text(l, KEY_ROLE_ASSIGNMENT_SUBJECT);
+            // QA D1840: a platform-wide assignment (no hospital) is worded as such,
+            // never "at GLOBAL" under a subject about a hospital.
+            boolean platformWide = !hasText(hospitalDisplayName);
+            subject = platformWide ? text(l, "email.role.assignment.subject.platform") : text(l, KEY_ROLE_ASSIGNMENT_SUBJECT);
             body = heading(text(l, "email.role.assignment.heading"))
                 + paragraph(greeting)
-                + paragraph(text(l, "email.role.assignment.body.assigned", roleHtml, hospitalHtml))
+                + paragraph(platformWide
+                    ? text(l, "email.role.assignment.body.assigned.platform", roleHtml)
+                    : text(l, "email.role.assignment.body.assigned", roleHtml, hospitalHtml))
                 + paragraph(text(l, "email.role.assignment.body.instructions"))
                 + "<p style=\"font-size: 24px; font-weight: bold; letter-spacing: 4px;\">" + codeHtml + CLOSE_PARAGRAPH
                 + paragraph(text(l, "email.role.assignment.body.reference", escapeHtml(assignmentCode)))
