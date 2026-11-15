@@ -37,9 +37,9 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
     private static final int MAX_ATTEMPTS = 5;
     private static final int MIN_DIGITS = 8;
     /** A fresh code for the same number can only be requested after this delay. */
-    private static final int RESEND_COOLDOWN_SECONDS = 60;
+    static final int RESEND_COOLDOWN_SECONDS = 60;
     /** Per-staff hourly dispatch cap — SMS sends cost money and can harass. */
-    private static final int MAX_SENDS_PER_USER_PER_HOUR = 10;
+    static final int MAX_SENDS_PER_USER_PER_HOUR = 10;
     /**
      * Codes are generated, hashed and checked here: Orange sends plain SMS and
      * has no OTP service. {@code verification_key} stores

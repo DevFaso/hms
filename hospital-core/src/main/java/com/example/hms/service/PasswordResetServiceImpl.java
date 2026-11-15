@@ -181,12 +181,17 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             try {
                 smsService.send(to, body);
             } catch (RuntimeException ex) {
-                log.warn("🔑 Password reset SMS for user {} failed: {}", requesterId, ex.getClass().getSimpleName());
+                // D2000 class: a refused send is said as such, and nothing claims the link went out.
+                log.warn("🔑 Password reset SMS NOT sent for user {}: the provider refused it ({}); no link was delivered",
+                    requesterId, ex.getClass().getSimpleName());
                 return;
             }
+            // D2000 class: "issued by SMS" only once the provider accepted the text. It used
+            // to be logged when the send was merely scheduled, so a refused send (Orange 401
+            // on the token, prod 2026-11-15) read "failed" and then "issued by SMS".
+            log.info("🔑 Password reset link issued by SMS for user {}", requesterId);
             audit(AuditEventType.PASSWORD_RESET_REQUEST, "Password reset link issued by SMS", requesterId);
         });
-        log.info("🔑 Password reset link issued by SMS for user {}", requesterId);
     }
 
     private void handleResetRequest(String email, String requestIp) {

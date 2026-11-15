@@ -3,6 +3,10 @@ package com.example.hms.service;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.MfaMethodType;
+import com.example.hms.enums.RecoveryContactType;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
+import com.example.hms.exception.NotificationTransportUnavailableException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.User;
 import com.example.hms.model.UserMfaEnrollment;
@@ -16,10 +20,19 @@ import com.example.hms.payload.dto.credential.UserRecoveryContactRequestDTO;
 import com.example.hms.repository.UserMfaEnrollmentRepository;
 import com.example.hms.repository.UserRecoveryContactRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.service.integration.IkoddiGateway;
+import com.example.hms.service.integration.SmsRecipientAllowlist;
+import com.example.hms.service.integration.SmsRecipientNotAllowedException;
+import com.example.hms.utility.MessageUtil;
+import com.example.hms.utility.PhoneNumbers;
+import com.example.hms.utility.SmsCountryPolicy;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.MessageSource;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -27,8 +40,10 @@ import org.springframework.stereotype.Service;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -36,6 +51,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,6 +63,9 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
     private static final int VERIFICATION_CODE_LENGTH = 6;
     private static final int VERIFICATION_CODE_EXPIRY_MINUTES = 15;
     private static final int MAX_VERIFICATION_ATTEMPTS = 5;
+    /** Campaign tag of the recovery-phone code SMS (provider-side reporting only). */
+    static final String RECOVERY_SMS_CAMPAIGN = "recovery-contact-code";
+    private static final String CONTACT_VALUE_FIELD = "contactValue";
 
     private final UserRepository userRepository;
     private final UserMfaEnrollmentRepository mfaEnrollmentRepository;
@@ -55,6 +74,16 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
     private final EmailService emailService;
     private final MfaService mfaService;
     private final AuditEventLogService auditEventLogService;
+    /**
+     * The SMS transport the phone-verification codes use (Orange, or IKODDI
+     * when selected). Its {@code isConfigured()} is the same signal the desk's
+     * "verify phone" availability reads (D2000).
+     */
+    private final IkoddiGateway smsGateway;
+    private final MessageSource messageSource;
+    /** Country code a local number takes, exactly as the SMS gateway applies it. */
+    @Value("${app.ikoddi.country-number-code:226}")
+    private String smsCountryNumberCode;
     /** The same switch as the other super-admin step-ups (emergency controls, impersonation). */
     @Value("${hms.support-impersonation.require-mfa-strict:false}")
     private boolean requireMfaStrict;
@@ -63,6 +92,13 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
      * {@code lastLoginAt}/{@code verifiedAt}, which nothing compares in time.
      */
     private final Clock clock;
+    /**
+     * D2000: when each user's recovery codes were sent in the last hour, for the
+     * hourly cap. In memory per instance, like the {@code RateLimitFilter}
+     * buckets in front of the route; the per-contact cooldown is read from the
+     * stored code's expiry instead, so it holds across instances.
+     */
+    private final Map<UUID, Deque<LocalDateTime>> recoverySendsByUser = new ConcurrentHashMap<>();
 
     @Override
     @Transactional
@@ -259,6 +295,16 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             .map(this::recoveryKey)
             .collect(Collectors.toSet());
 
+        // D2000 (owner request): a NEW recovery contact must not be the email or
+        // phone the user signs in with; losing that one is what recovery is for.
+        // Contacts already on file are left alone so they stay removable.
+        Set<String> keysOnFile = Set.copyOf(existingByKey.keySet());
+        for (UserRecoveryContactRequestDTO dto : sanitizedPayload) {
+            if (!keysOnFile.contains(recoveryKey(dto)) && isSignInIdentifier(user, dto)) {
+                throw new FieldBusinessException(CONTACT_VALUE_FIELD, "users.recovery.sameAsSignIn");
+            }
+        }
+
         List<UserRecoveryContact> toPersist = new ArrayList<>(sanitizedPayload.size());
         for (UserRecoveryContactRequestDTO dto : sanitizedPayload) {
             String key = recoveryKey(dto);
@@ -307,21 +353,39 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.recovery.alreadyVerified"));
         }
 
+        // D2000: a code costs money (SMS) and can harass, so the limits of the
+        // desk's phone verification apply: one per contact per cooldown, and an
+        // hourly cap per user. Checked before a code exists.
+        requireRecoverySendAllowed(userId, contact);
+
+        // D2000: every channel either really sends or refuses BEFORE a code is
+        // stored. A type with no channel used to fall through silently and the
+        // caller was told "code sent" for a code that never left the server.
+        RecoveryContactType type = contact.getContactType();
+        String smsTarget = null;
+        if (type == RecoveryContactType.PHONE) {
+            smsTarget = requireTextablePhone(contact.getContactValue());
+        } else if (type != RecoveryContactType.EMAIL) {
+            throw new BusinessException("users.recovery.typeNotVerifiable");
+        }
+
         // Generate 6-digit code
         String code = generateVerificationCode();
 
-        // Store hashed code with expiry
+        // Store hashed code with expiry; a failed send below rolls this back.
         contact.setVerificationCodeHash(passwordEncoder.encode(code));
         contact.setVerificationCodeExpiresAt(LocalDateTime.now(clock).plusMinutes(VERIFICATION_CODE_EXPIRY_MINUTES));
         contact.setVerificationAttempts(0);
         recoveryContactRepository.save(contact);
 
-        // Send verification email
-        if (contact.getContactType() == com.example.hms.enums.RecoveryContactType.EMAIL) {
-            emailService.sendRecoveryContactVerificationEmail(contact.getContactValue(), code);
+        if (type == RecoveryContactType.PHONE) {
+            sendRecoverySms(contactId, smsTarget, code);
+        } else {
+            sendRecoveryEmail(contact.getContactValue(), code);
         }
 
-        log.info("Verification code sent for recovery contact {} (type={})", contactId, contact.getContactType());
+        recordRecoverySend(userId);
+        log.info("Verification code sent for recovery contact {} (type={})", contactId, type);
         return contact.getContactType().name();
     }
 
@@ -422,6 +486,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             .recoveryContactCount(contactCount)
             .verifiedRecoveryContacts(verifiedContacts)
             .hasPrimaryRecoveryContact(hasPrimaryContact)
+            .phoneRecoveryAvailable(smsGateway.isConfigured())
             .mfaEnrollments(enrollments.stream().map(this::toDto).toList())
             .recoveryContacts(contacts.stream().map(this::toDto).toList())
             .build();
@@ -505,6 +570,117 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             boolean keepPrimary = i == items.size() - 1;
             setter.accept(items.get(i), keepPrimary);
         }
+    }
+
+    /**
+     * 429 when this contact was sent a code less than the desk's cooldown ago
+     * (its stored code's expiry minus the code lifetime is when it was sent; a
+     * failed send rolled that back), or when the user reached the desk's
+     * hourly cap of sends. The limits are PhoneVerificationServiceImpl's.
+     */
+    private void requireRecoverySendAllowed(UUID userId, UserRecoveryContact contact) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime expiresAt = contact.getVerificationCodeExpiresAt();
+        if (expiresAt != null) {
+            LocalDateTime sentAt = expiresAt.minusMinutes(VERIFICATION_CODE_EXPIRY_MINUTES);
+            if (now.isBefore(sentAt.plusSeconds(PhoneVerificationServiceImpl.RESEND_COOLDOWN_SECONDS))) {
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "users.recovery.cooldown");
+            }
+        }
+        Deque<LocalDateTime> sends = recoverySendsByUser.get(userId);
+        if (sends == null) {
+            return;
+        }
+        synchronized (sends) {
+            sends.removeIf(at -> !at.isAfter(now.minusHours(1)));
+            if (sends.size() >= PhoneVerificationServiceImpl.MAX_SENDS_PER_USER_PER_HOUR) {
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "users.recovery.limitReached");
+            }
+        }
+    }
+
+    private void recordRecoverySend(UUID userId) {
+        Deque<LocalDateTime> sends = recoverySendsByUser.computeIfAbsent(userId, id -> new ArrayDeque<>());
+        synchronized (sends) {
+            sends.addLast(LocalDateTime.now(clock));
+        }
+    }
+
+    /**
+     * The number in the wire form the SMS gateway uses ({@code +} and the
+     * international digits, a local number taking the configured country
+     * code). Refuses, before any code exists, when no SMS transport is
+     * configured or the number is not one we text.
+     */
+    private String requireTextablePhone(String raw) {
+        if (!smsGateway.isConfigured()) {
+            throw new NotificationTransportUnavailableException(MessageUtil.resolveOrRaw("users.recovery.smsUnavailable"));
+        }
+        String digits = PhoneNumbers.toInternationalDigits(raw, smsCallingCode());
+        String e164 = digits.isEmpty() ? "" : "+" + digits;
+        if (!SmsCountryPolicy.allows(e164)) {
+            throw new FieldBusinessException(CONTACT_VALUE_FIELD, "users.recovery.phoneInvalid");
+        }
+        return e164;
+    }
+
+    /** The code by SMS, in French like every verification code; never logs the code or the full number. */
+    private void sendRecoverySms(UUID contactId, String e164, String code) {
+        String body = messageSource.getMessage("sms.phoneVerification.code",
+            new Object[] {code, VERIFICATION_CODE_EXPIRY_MINUTES}, Locale.FRENCH);
+        IkoddiGateway.SmsDispatch dispatch;
+        try {
+            dispatch = smsGateway.sendSms(List.of(e164), body, RECOVERY_SMS_CAMPAIGN);
+        } catch (SmsRecipientNotAllowedException ex) {
+            log.warn("Recovery code SMS for contact {} not sent: {} is not on this environment's allowlist",
+                contactId, maskPhone(e164));
+            throw new BusinessException(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
+        } catch (NotificationTransportUnavailableException ex) {
+            throw new NotificationTransportUnavailableException(MessageUtil.resolveOrRaw("users.recovery.smsUnavailable"));
+        } catch (IllegalStateException | IllegalArgumentException ex) {
+            log.warn("Recovery code SMS for contact {} to {} not accepted: {}", contactId, maskPhone(e164), ex.getMessage());
+            throw new BusinessException("users.recovery.smsFailed");
+        }
+        if (dispatch == null || !dispatch.delivered()) {
+            log.warn("Recovery code SMS for contact {} to {} not accepted by the provider", contactId, maskPhone(e164));
+            throw new BusinessException("users.recovery.smsFailed");
+        }
+    }
+
+    /** The code by email; "no mail transport" is said in the reader's language, not the transport's English. */
+    private void sendRecoveryEmail(String to, String code) {
+        try {
+            emailService.sendRecoveryContactVerificationEmail(to, code);
+        } catch (NotificationTransportUnavailableException ex) {
+            throw new NotificationTransportUnavailableException(MessageUtil.resolveOrRaw("users.recovery.emailUnavailable"));
+        }
+    }
+
+    /** Whether a requested contact is the email or phone this user signs in with. */
+    private boolean isSignInIdentifier(User user, UserRecoveryContactRequestDTO dto) {
+        String value = dto.getContactValue().trim();
+        if (dto.getContactType() == RecoveryContactType.EMAIL) {
+            return user.getEmail() != null && user.getEmail().trim().equalsIgnoreCase(value);
+        }
+        if (dto.getContactType() == RecoveryContactType.PHONE) {
+            return PhoneNumbers.isSameSubscriber(user.getPhoneNumber(), value, smsCallingCode());
+        }
+        return false;
+    }
+
+    private String smsCallingCode() {
+        return smsCountryNumberCode == null || smsCountryNumberCode.isBlank()
+            ? PhoneNumbers.DEFAULT_CALLING_CODE : smsCountryNumberCode.trim();
+    }
+
+    /** Display-safe form for logs: a leading '+' and the last two digits. */
+    private static String maskPhone(String phone) {
+        if (phone == null || phone.length() <= 4) {
+            return "••••";
+        }
+        boolean plus = phone.startsWith("+");
+        return (plus ? "+" : "") + "•".repeat(phone.length() - 2 - (plus ? 1 : 0))
+            + phone.substring(phone.length() - 2);
     }
 
     private boolean isValidContactRequest(UserRecoveryContactRequestDTO dto) {

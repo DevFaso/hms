@@ -8066,6 +8066,8 @@
     "RECOVERY_REMOVED": "Recovery contact removed.",
     "RECOVERY_REMOVE_FAILED": "Failed to remove contact.",
     "RECOVERY_SAVE_FAILED": "Failed to save recovery contact.",
+    "RECOVERY_PHONE_UNAVAILABLE": "Text messages cannot be sent from this platform yet, so a phone number cannot be verified. Use an email address.",
+    "RECOVERY_SAME_AS_SIGN_IN": "A recovery contact must be different from the email address or phone number you sign in with.",
     "RECOVERY_VALUE_REQUIRED": "Please enter a contact value.",
     "RECOVERY_VERIFIED": "Recovery contact verified!",
     "REMOVE_PHOTO": "Remove Photo",

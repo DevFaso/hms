@@ -54,6 +54,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
             // the step-up per user after repeated wrong codes.
             "/api/auth/mfa/enroll",
             "/api/auth/credentials/mfa",
+            // D2000: the recovery-contact routes, whose send-code texts or mails a
+            // code (a paid SMS for a phone). The service adds a per-contact
+            // cooldown and an hourly cap per user on top of this bucket.
+            "/api/auth/credentials/recovery",
             // Anonymous and able to send an SMS or an e-mail (QA D418): per IP
             // here, per assignment in AuthController.
             "/api/auth/resend-verification",

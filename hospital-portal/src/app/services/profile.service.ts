@@ -48,6 +48,11 @@ export interface CredentialHealth {
   recoveryContactCount: number;
   verifiedRecoveryContacts: number;
   hasPrimaryRecoveryContact: boolean;
+  /**
+   * D2000: an SMS transport is configured, so a PHONE recovery contact can
+   * receive its code. Absent or false: the portal does not offer PHONE.
+   */
+  phoneRecoveryAvailable?: boolean;
   mfaEnrollments: MfaEnrollment[];
   recoveryContacts: RecoveryContact[];
 }

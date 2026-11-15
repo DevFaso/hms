@@ -31,6 +31,12 @@ public class UserCredentialHealthDTO {
     private long verifiedRecoveryContacts;
     private boolean hasPrimaryRecoveryContact;
 
+    /**
+     * D2000: whether a PHONE recovery contact can receive its code here (an SMS
+     * transport is configured). The portal offers the phone option only when true.
+     */
+    private boolean phoneRecoveryAvailable;
+
     private List<UserMfaEnrollmentDTO> mfaEnrollments;
     private List<UserRecoveryContactDTO> recoveryContacts;
 }
