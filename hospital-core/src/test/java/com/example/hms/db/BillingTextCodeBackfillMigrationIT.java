@@ -153,6 +153,48 @@ class BillingTextCodeBackfillMigrationIT {
         }
     }
 
+    /**
+     * Rex P2 on #1176: a note matching the delivery template but holding a day
+     * that does not exist (typed, or damaged) once reached make_date(), which
+     * raised, aborted Liquibase and stopped the app starting. Such a row now
+     * keeps no code and the migration completes; a real 29 February still gets one.
+     */
+    @Test
+    void anImpossibleBirthDayLeavesTheNoteUncodedAndNeverStopsTheMigration() throws Exception {
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            invoice(conn, 21, false, false, frenchDeliveryNote("2026-02-31"), null);  // 31/02
+            invoice(conn, 22, false, false, frenchDeliveryNote("30 févr. 2026"), null); // 30/02
+            invoice(conn, 23, false, false, frenchDeliveryNote("2026-01-00"), null);  // 00/01
+            invoice(conn, 24, false, false, frenchDeliveryNote("2026-13-01"), null);  // 01/13
+            invoice(conn, 25, false, false, "Birth charge: Delivery (vaginal birth), born Feb 29, 2026. "
+                + "Price it if the hospital has no priced delivery service.", null);    // 29/02, common year
+            invoice(conn, 26, false, false, frenchDeliveryNote("0000-01-01"), null);  // year 0
+            invoice(conn, 27, false, false, "Cargo de nacimiento: Parto (cesárea), nacido el 0 ene 2026. "
+                + "Tarifíquelo si el establecimiento no tiene un servicio de parto con precio.", null); // day 0
+            invoice(conn, 28, false, false, frenchDeliveryNote("29 févr. 2028"), null); // 29/02, leap year
+            invoice(conn, 29, false, false, frenchDeliveryNote("2000-02-29"), null);  // 29/02, 400-year leap
+            invoice(conn, 30, false, false, frenchDeliveryNote("1900-02-29"), null);  // 29/02, century, not leap
+            String textsBefore = texts(stmt);
+
+            List<String> notices = runV301(stmt);
+
+            assertThat(texts(stmt)).as("no stored text is rewritten").isEqualTo(textsBefore);
+            for (int impossible : new int[] {21, 22, 23, 24, 25, 26, 27, 30}) {
+                assertThat(notesCode(stmt, impossible)).as("invoice %s", impossible).containsExactly(null, null);
+            }
+            assertThat(notesCode(stmt, 28)).containsExactly("maternity.delivery.charge.note",
+                "[{\"code\" : \"maternity.delivery.charge.vaginal\"}, {\"date\" : \"2028-02-29\"}]");
+            assertThat(notesCode(stmt, 29)).containsExactly("maternity.delivery.charge.note",
+                "[{\"code\" : \"maternity.delivery.charge.vaginal\"}, {\"date\" : \"2000-02-29\"}]");
+            assertThat(notices).contains("V301: 2 delivery charge note(s) coded");
+        }
+    }
+
+    private static String frenchDeliveryNote(String day) {
+        return "Frais de naissance : Accouchement (voie basse), né(e) le " + day
+            + ". À tarifer si l'établissement n'a pas de prestation d'accouchement tarifée.";
+    }
+
     @Test
     void aSecondRunChangesNothing() throws Exception {
         try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {

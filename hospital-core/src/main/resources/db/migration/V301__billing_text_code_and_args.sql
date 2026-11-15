@@ -121,7 +121,8 @@ BEGIN
     -- 6. The delivery charge note: mode label and birth day, in the recorder's
     --    language. The day was written ISO (before QA D1710) or in that
     --    language's medium style ("5 nov. 2026", "Nov 5, 2026", "5 nov 2026");
-    --    a day that cannot be read back leaves the note as it is.
+    --    a day that cannot be read back, or that does not exist on the
+--    calendar, leaves the note as it is, with no code (never an error).
     WITH delivery_notes AS (
         SELECT bi.id, t.lang, t.parts
           FROM billing.billing_invoices bi
@@ -142,23 +143,47 @@ BEGIN
                ('es', 'ene', 1), ('es', 'feb', 2), ('es', 'mar', 3), ('es', 'abr', 4),
                ('es', 'may', 5), ('es', 'jun', 6), ('es', 'jul', 7), ('es', 'ago', 8),
                ('es', 'sept', 9), ('es', 'oct', 10), ('es', 'nov', 11), ('es', 'dic', 12)
-    ), dated AS (
+    ), parsed AS (
+        -- The day's parts as integers, never yet a date. Every cast is on a
+        -- regex capture of 1 to 4 digits, so it cannot throw.
         SELECT dn.id,
                CASE WHEN dn.parts[1] IN ('Accouchement (césarienne)', 'Delivery (caesarean section)', 'Parto (cesárea)')
                     THEN 'maternity.delivery.charge.caesarean'
                     ELSE 'maternity.delivery.charge.vaginal' END AS mode_code,
-               CASE
-                   WHEN dn.parts[2] ~ '^\d{4}-\d{2}-\d{2}$' THEN dn.parts[2]
-                   WHEN dn.lang = 'en' THEN (
-                       SELECT to_char(make_date(d[3]::int, mo.month, d[2]::int), 'YYYY-MM-DD')
-                         FROM regexp_match(dn.parts[2], '^(\S+) (\d{1,2}), (\d{4})$') AS d
-                         JOIN months mo ON mo.lang = 'en' AND mo.token = d[1])
-                   ELSE (
-                       SELECT to_char(make_date(d[3]::int, mo.month, d[1]::int), 'YYYY-MM-DD')
-                         FROM regexp_match(dn.parts[2], '^(\d{1,2}) (\S+) (\d{4})$') AS d
-                         JOIN months mo ON mo.lang = dn.lang AND mo.token = d[2])
-               END AS birth_day
+               COALESCE(iso.y, loc.y) AS y,
+               COALESCE(iso.m, loc.m) AS m,
+               COALESCE(iso.d, loc.d) AS d
           FROM delivery_notes dn
+          LEFT JOIN LATERAL (
+              SELECT x[1]::int AS y, x[2]::int AS m, x[3]::int AS d
+                FROM regexp_match(dn.parts[2], '^(\d{4})-(\d{2})-(\d{2})$') AS x
+               WHERE x IS NOT NULL) iso ON TRUE
+          LEFT JOIN LATERAL (
+              SELECT x[3]::int AS y, mo.month AS m, x[2]::int AS d
+                FROM regexp_match(dn.parts[2], '^(\S+) (\d{1,2}), (\d{4})$') AS x
+                JOIN months mo ON mo.lang = 'en' AND mo.token = x[1]
+               WHERE dn.lang = 'en'
+              UNION ALL
+              SELECT x[3]::int, mo.month, x[1]::int
+                FROM regexp_match(dn.parts[2], '^(\d{1,2}) (\S+) (\d{4})$') AS x
+                JOIN months mo ON mo.lang = dn.lang AND mo.token = x[2]
+               WHERE dn.lang <> 'en') loc ON TRUE
+    ), dated AS (
+        -- A day is kept only when it exists on the calendar (31 Feb, day 0,
+        -- month 13, year 0, 29 Feb of a common year are not), checked with
+        -- integer arithmetic and written with lpad: no make_date, no ::date,
+        -- nothing here can raise, so stored text can never stop the deploy.
+        -- A day that does not exist leaves the note with no code, as typed.
+        SELECT p.id, p.mode_code,
+               CASE WHEN p.y BETWEEN 1 AND 9999 AND p.m BETWEEN 1 AND 12
+                         AND p.d BETWEEN 1 AND CASE
+                             WHEN p.m IN (4, 6, 9, 11) THEN 30
+                             WHEN p.m = 2 AND (p.y % 4 = 0 AND (p.y % 100 <> 0 OR p.y % 400 = 0)) THEN 29
+                             WHEN p.m = 2 THEN 28
+                             ELSE 31 END
+                    THEN lpad(p.y::text, 4, '0') || '-' || lpad(p.m::text, 2, '0') || '-' || lpad(p.d::text, 2, '0')
+               END AS birth_day
+          FROM parsed p
     )
     UPDATE billing.billing_invoices bi
        SET notes_code = 'maternity.delivery.charge.note',
