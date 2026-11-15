@@ -401,6 +401,41 @@ describe('MyBillingComponent', () => {
       ).toBe('true');
     });
 
+    it('shows each line exactly as the server sent it, never translated in the browser (QA D1901)', () => {
+      // The server renders its own words in the reader's language and sends a
+      // typed line as typed; the page must not touch either.
+      portal.getMyInvoiceDetail.and.returnValue(
+        of({
+          ...detail,
+          lines: [
+            {
+              id: 'l1',
+              itemDescription: 'Hospital stay (days)',
+              quantity: 2,
+              unitPrice: 0,
+              totalPrice: 0,
+            },
+            {
+              id: 'l2',
+              itemDescription: 'Pansement simple',
+              quantity: 1,
+              unitPrice: 500,
+              totalPrice: 500,
+            },
+          ],
+        }),
+      );
+      create([invoice({ pending: 500 })]);
+      (host().querySelector('[data-testid="detail-btn-inv1"]') as HTMLElement).click();
+      fixture.detectChanges();
+
+      const cells = Array.from(
+        host().querySelectorAll('[data-testid="invoice-detail-inv1"] td:first-child'),
+      ).map((td) => td.textContent?.trim());
+      expect(cells).toContain('Hospital stay (days)');
+      expect(cells).toContain('Pansement simple');
+    });
+
     it('downloads the invoice and a receipt under the server names', () => {
       portal.getMyInvoiceDetail.and.returnValue(of(detail));
       const pdf = (name: string) =>

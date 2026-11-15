@@ -219,8 +219,15 @@ final class ComputedKeys {
             "UserServiceImpl.java|users.identifier.deletedAccount.");
         site(r, d, "com/example/hms/service/UserServiceImpl.java|\"users.identifier.taken.\" + field",
             "UserServiceImpl.java|users.identifier.taken.");
-        site(r, d, "com/example/hms/service/billing/TransfusionChargeSource.java|\"transfusion.productType.\" + request.getProductType().name()",
+        site(r, d, "com/example/hms/service/billing/TransfusionChargeSource.java|String productCode = \"transfusion.productType.\" + request.getProductType().name()",
             "TransfusionChargeSource.java|transfusion.productType.");
+        // QA D1901: renders a stored billing code; every code is written by a BillingText.of literal site of
+        // its own (or by the V301 backfill, whose codes BillingTextRendererTest renders in FR/EN/ES), and an
+        // unknown code falls back to the stored text, never a raw key.
+        r.put("com/example/hms/service/billing/BillingTextRenderer.java|key",
+            new Open("a stored billing text code; each is written by a BillingText.of literal site (QA D1901)"));
+        r.put("com/example/hms/service/billing/BillingTextRenderer.java|key #2",
+            new Open("a stored billing text code; each is written by a BillingText.of literal site (QA D1901)"));
         r.put("com/example/hms/service/credentialing/LicenseExpirySweepService.java|message.key()",
             new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
         site(r, d, "com/example/hms/service/emar/MedicationRoutes.java|\"medication.route.\" + code",

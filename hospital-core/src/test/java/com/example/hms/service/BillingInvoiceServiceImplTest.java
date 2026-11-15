@@ -919,6 +919,72 @@ class BillingInvoiceServiceImplTest {
         assertEquals("QA-R9RT2", invoice.getNotes());
     }
 
+    /** QA D1901: a checkout draft's note, stored as its code, as an English edit form echoes it. */
+    private BillingInvoice codedDraftNote(InvoiceStatus status) {
+        BillingInvoice invoice = existingInvoice(status, "0");
+        invoice.setNotes("Visite ENC-42 clôturée : brouillon à vérifier, tarifer et émettre par la caisse.");
+        invoice.setNotesCode("billing.checkout.draftNote");
+        invoice.setNotesArgs("[{\"value\":\"ENC-42\"}]");
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        return invoice;
+    }
+
+    private static final String ENGLISH_DRAFT_NOTE =
+        "Visit ENC-42 checked out: draft for the cashier to check, price and issue.";
+
+    @Test
+    void updateInvoice_aDraftsEchoedServerNoteKeepsItsCode_D1901() {
+        BillingInvoice invoice = codedDraftNote(InvoiceStatus.DRAFT);
+        try {
+            billingInvoiceService.updateInvoice(invoice.getId(),
+                editOf().notes(ENGLISH_DRAFT_NOTE).status(InvoiceStatus.DRAFT).build(), Locale.ENGLISH);
+        } finally {
+            com.example.hms.utility.MessageUtil.setMessageSource(null);
+        }
+        assertEquals("billing.checkout.draftNote", invoice.getNotesCode());
+        assertEquals("Visite ENC-42 clôturée : brouillon à vérifier, tarifer et émettre par la caisse.",
+            invoice.getNotes());
+    }
+
+    @Test
+    void updateInvoice_notesTypedOnADraftReplaceTheServerNoteAndItsCode_D1901() {
+        BillingInvoice invoice = codedDraftNote(InvoiceStatus.DRAFT);
+        try {
+            billingInvoiceService.updateInvoice(invoice.getId(),
+                editOf().notes("Patient rappellera").status(InvoiceStatus.DRAFT).build(), Locale.ENGLISH);
+        } finally {
+            com.example.hms.utility.MessageUtil.setMessageSource(null);
+        }
+        assertEquals("Patient rappellera", invoice.getNotes());
+        assertNull(invoice.getNotesCode());
+        assertNull(invoice.getNotesArgs());
+    }
+
+    @Test
+    void updateInvoice_anIssuedInvoiceAcceptsItsServerNoteEchoedInEnglish_D1901() {
+        BillingInvoice invoice = codedDraftNote(InvoiceStatus.SENT);
+        try {
+            billingInvoiceService.updateInvoice(invoice.getId(),
+                editOf().notes(ENGLISH_DRAFT_NOTE).status(InvoiceStatus.SENT).build(), Locale.ENGLISH);
+        } finally {
+            com.example.hms.utility.MessageUtil.setMessageSource(null);
+        }
+        assertEquals("billing.checkout.draftNote", invoice.getNotesCode());
+    }
+
+    @Test
+    void updateInvoice_aTypedCancelReasonHasNoCode_D1901() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        invoice.setCancelReasonCode("billing.invoice.copayCreditedReason");
+        invoice.setCancelReasonArgs("[{\"value\":\"X\"}]");
+        billingInvoiceService.updateInvoice(invoice.getId(),
+            editOf().status(InvoiceStatus.CANCELLED).cancelReason("Erreur de saisie").build(), Locale.ENGLISH);
+        assertEquals("Erreur de saisie", invoice.getCancelReason());
+        assertNull(invoice.getCancelReasonCode());
+        assertNull(invoice.getCancelReasonArgs());
+    }
+
     /** QA D656: PUT invoiceDate on SENT invoice ae8e18f2 returned 200 and moved the date. */
     @Test
     void updateInvoice_anIssuedInvoiceKeepsItsDate_D656() {
@@ -2007,6 +2073,45 @@ class BillingInvoiceServiceImplTest {
         assertEquals(visit.getId(), String.valueOf(row.getInvoice().getId()));
         // QA D428: the copay says where it went instead of only "cancelled".
         assertEquals(visit.getId(), String.valueOf(copay.getCreditedToInvoice().getId()));
+    }
+
+    /**
+     * QA D1901: the copay's reason was written in the issuing clerk's language;
+     * it is stored as its code and the invoice number, with the French copy.
+     */
+    @Test
+    void createInvoice_theCarriedCopaysReasonIsStoredAsACode_D1901() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        try {
+            pinnedHospital();
+            Patient patient = registeredPatient();
+            com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+            encounter.setId(UUID.randomUUID());
+            Hospital acting = new Hospital();
+            acting.setId(HOSPITAL_ID);
+            encounter.setHospital(acting);
+            when(encounterRepository.findByCode("ENC-1")).thenReturn(Optional.of(encounter));
+            BillingInvoice copay = BillingInvoice.builder().patient(patient).encounter(encounter)
+                .totalAmount(new BigDecimal("2500")).amountPaid(new BigDecimal("2500"))
+                .status(InvoiceStatus.PAID).checkInCopay(true).build();
+            copay.setId(UUID.randomUUID());
+            when(invoiceRepository.findByEncounter_IdAndCheckInCopayTrueAndStatus(encounter.getId(),
+                InvoiceStatus.PAID)).thenReturn(List.of(copay));
+            when(invoiceRepository.findById(copay.getId())).thenReturn(Optional.of(copay));
+            when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            BillingInvoiceResponseDTO visit = billingInvoiceService.createInvoice(
+                requestFor(patient).encounterReference("ENC-1").totalAmount(new BigDecimal("7450"))
+                    .status(InvoiceStatus.SENT).build(), Locale.ENGLISH);
+
+            assertEquals("billing.invoice.copayCreditedReason", copay.getCancelReasonCode());
+            assertEquals("[{\"value\":\"" + visit.getInvoiceNumber() + "\"}]", copay.getCancelReasonArgs());
+            assertEquals("Ticket modérateur reporté sur la facture " + visit.getInvoiceNumber() + ".",
+                copay.getCancelReason());
+        } finally {
+            com.example.hms.utility.MessageUtil.setMessageSource(null);
+        }
     }
 
     @Test

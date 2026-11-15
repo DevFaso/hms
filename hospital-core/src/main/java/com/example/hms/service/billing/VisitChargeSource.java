@@ -32,18 +32,31 @@ public interface VisitChargeSource {
     /**
      * One line. A null {@code unitPrice} posts the line at zero for the
      * cashier to price: never a guessed price (QA D516).
+     *
+     * <p>QA D1901: {@code text} is set when the server words the line (the
+     * default consultation, the bed days, a transfusion); the line then
+     * stores its code and arguments and {@code description} is the French
+     * copy. A hospital's own service name, an order's test or study name is
+     * shown as written and has no {@code text}.
      */
-    record VisitCharge(String description, ItemCategory category, int quantity, BigDecimal unitPrice,
-                       Treatment service) {
+    record VisitCharge(String description, BillingText text, ItemCategory category, int quantity,
+                       BigDecimal unitPrice, Treatment service) {
 
         public VisitCharge {
             quantity = Math.max(quantity, 1);
         }
 
-        /** A line priced by the hospital's service, when one matched. */
+        /** A line named as written (a hospital's service, an order), priced by its service when one matched. */
         public static VisitCharge of(String description, ItemCategory category, int quantity,
                                      java.util.Optional<Treatment> service) {
-            return new VisitCharge(description, category, quantity,
+            return new VisitCharge(description, null, category, quantity,
+                service.map(Treatment::getPrice).orElse(null), service.orElse(null));
+        }
+
+        /** A line the server words (QA D1901): its code and arguments, the French copy as description. */
+        public static VisitCharge worded(BillingText text, ItemCategory category, int quantity,
+                                         java.util.Optional<Treatment> service) {
+            return new VisitCharge(text.french(), text, category, quantity,
                 service.map(Treatment::getPrice).orElse(null), service.orElse(null));
         }
     }

@@ -170,9 +170,12 @@ public class PdfInvoiceService {
      */
     private static void cancellationBlock(Writer w, PdfLabels t, BillingInvoice invoice) throws IOException {
         boolean printed = false;
+        // QA D1901: a reason the server wrote, in the paper's language; a typed one as typed.
+        String reason = t.billingText(invoice.getCancelReasonCode(), invoice.getCancelReasonArgs(),
+            invoice.getCancelReason());
         if (invoice.getStatus() == com.example.hms.enums.InvoiceStatus.CANCELLED
-                && invoice.getCancelReason() != null && !invoice.getCancelReason().isBlank()) {
-            w.paragraph(BODY, 11, MARGIN, t.get("pdf.invoice.cancelReason", invoice.getCancelReason().strip()));
+                && reason != null && !reason.isBlank()) {
+            w.paragraph(BODY, 11, MARGIN, t.get("pdf.invoice.cancelReason", reason.strip()));
             w.down(15);
             printed = true;
         }
@@ -322,7 +325,8 @@ public class PdfInvoiceService {
 
     /** The line's own description; the category label only when the line has none. */
     private static String designation(PdfLabels t, InvoiceItem it) {
-        String d = it.getItemDescription();
+        // QA D1901: a line the server worded, in the paper's language; a typed one as typed.
+        String d = t.billingText(it.getTextCode(), it.getTextArgs(), it.getItemDescription());
         if (d != null && !d.isBlank()) {
             return d;
         }

@@ -79,6 +79,18 @@ public class MessageUtil {
     }
 
     /**
+     * QA D1901: the message for {@code key} with {@code args} in
+     * {@code locale}, or null when there is no source or no bundle carries
+     * the key.
+     */
+    public static String resolveOrNull(java.util.Locale locale, String key, Object[] args) {
+        if (messageSource == null || key == null) {
+            return null;
+        }
+        return messageSource.getMessage(key, args, null, locale != null ? locale : LocaleContextHolder.getLocale());
+    }
+
+    /**
      * Resolves {@code text} as a message key in the caller's locale (the
      * request's {@code Accept-Language}, via {@link LocaleContextHolder}) when
      * it is one, and returns it unchanged otherwise.

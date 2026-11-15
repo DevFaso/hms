@@ -11,7 +11,7 @@ import com.example.hms.model.labor.DeliveryRecord;
 import com.example.hms.repository.BillingInvoiceRepository;
 import com.example.hms.repository.TreatmentRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
-import com.example.hms.utility.MessageUtil;
+import com.example.hms.service.billing.BillingText;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -92,6 +92,13 @@ public class DeliveryChargeService {
             .setScale(2, RoundingMode.HALF_UP);
 
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
+        // QA D1901: the note and the line are kept as codes (the mode, the
+        // birth day as an ISO date), shown in each reader's language; the text
+        // columns hold the French copy, never the recorder's language.
+        String modeCode = caesarean ? "maternity.delivery.charge.caesarean" : "maternity.delivery.charge.vaginal";
+        BillingText note = BillingText.of("maternity.delivery.charge.note", BillingText.code(modeCode),
+            BillingText.date(delivery.getBirthDateTime() != null ? delivery.getBirthDateTime().toLocalDate() : today));
+        BillingText label = BillingText.of(modeCode);
         BillingInvoice invoice = BillingInvoice.builder()
             .patient(delivery.getPatient())
             .hospital(delivery.getHospital())
@@ -105,16 +112,11 @@ public class DeliveryChargeService {
             // QA D608: the draft said nothing (no notes, no total when the
             // hospital has no priced delivery service), so billing could not
             // tell it was the birth's charge. It names the delivery and its date.
-            .notes(MessageUtil.resolve("maternity.delivery.charge.note",
-                MessageUtil.resolveOrRaw(caesarean
-                    ? "maternity.delivery.charge.caesarean" : "maternity.delivery.charge.vaginal"),
-                // QA D1710 class: the day written the reader's way, not ISO.
-                com.example.hms.utility.DisplayDates.date(delivery.getBirthDateTime() != null
-                    ? delivery.getBirthDateTime().toLocalDate() : today)))
+            // QA D1710 class: the day is written the reader's way when rendered.
+            .notes(note.french()).notesCode(note.code()).notesArgs(note.argsJson())
             .build();
         InvoiceItem line = InvoiceItem.builder()
-            .itemDescription(MessageUtil.resolveOrRaw(caesarean
-                ? "maternity.delivery.charge.caesarean" : "maternity.delivery.charge.vaginal"))
+            .itemDescription(label.french()).textCode(label.code()).textArgs(label.argsJson())
             .quantity(1)
             .itemCategory(ItemCategory.SERVICE)
             .unitPrice(price)

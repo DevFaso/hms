@@ -4,8 +4,6 @@ import com.example.hms.enums.ItemCategory;
 import com.example.hms.model.EncounterTreatment;
 import com.example.hms.model.Treatment;
 import com.example.hms.repository.EncounterTreatmentRepository;
-import com.example.hms.service.i18n.NotificationLocales;
-import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +23,8 @@ public class ConsultationChargeSource implements VisitChargeSource {
     /** Words a hospital's priced-service name uses for a consultation (EN/FR/ES). */
     static final List<String> CONSULTATION_WORDS = List.of("consultation", "consulta");
 
+    static final String CONSULTATION_CODE = "billing.checkout.consultation";
+
     private final EncounterTreatmentRepository encounterTreatmentRepository;
 
     @Override
@@ -39,14 +39,17 @@ public class ConsultationChargeSource implements VisitChargeSource {
         for (EncounterTreatment given : services) {
             Treatment treatment = given.getTreatment();
             if (treatment != null && treatment.getName() != null) {
-                lines.add(new VisitCharge(treatment.getName(), ItemCategory.SERVICE, 1, treatment.getPrice(), treatment));
+                lines.add(new VisitCharge(treatment.getName(), null, ItemCategory.SERVICE, 1, treatment.getPrice(),
+                    treatment));
             }
         }
         if (services.isEmpty()) {
             Optional<Treatment> consultation = visit.prices().naming(CONSULTATION_WORDS);
-            lines.add(VisitCharge.of(consultation.map(Treatment::getName)
-                    .orElseGet(() -> MessageUtil.resolve(NotificationLocales.STAFF, "billing.checkout.consultation")),
-                ItemCategory.SERVICE, 1, consultation));
+            // QA D1901: the hospital's own service name as written; else the
+            // server's word for it, shown in each reader's language.
+            lines.add(consultation.isPresent()
+                ? VisitCharge.of(consultation.get().getName(), ItemCategory.SERVICE, 1, consultation)
+                : VisitCharge.worded(BillingText.of(CONSULTATION_CODE), ItemCategory.SERVICE, 1, consultation));
         }
         return lines;
     }
