@@ -169,10 +169,14 @@ public class SevereHypertension {
         return switch (scope) {
             case PREGNANT, POSTPARTUM -> isObstetricSevere(systolic, diastolic)
                 ? new Verdict(scope, Level.URGENT) : Verdict.NONE;
-            case ADULT -> isAdultSevere(systolic, diastolic)
-                ? new Verdict(scope, organDamageSign ? Level.URGENT : Level.WARNING) : Verdict.NONE;
+            case ADULT -> isAdultSevere(systolic, diastolic) ? new Verdict(scope, adultLevel(organDamageSign)) : Verdict.NONE;
             case NONE -> Verdict.NONE;
         };
+    }
+
+    /** The adult level: URGENT with a ticked sign of organ damage, else a WARNING. */
+    private static Level adultLevel(boolean organDamageSign) {
+        return organDamageSign ? Level.URGENT : Level.WARNING;
     }
 
     /**
@@ -184,7 +188,7 @@ public class SevereHypertension {
         if (patient == null || !isObstetricSevere(systolic, diastolic)) {
             return Verdict.NONE;
         }
-        LocalDateTime at = takenAt != null ? takenAt : LocalDateTime.now();
+        LocalDateTime at = takenAt != null ? takenAt : LocalDateTime.now(java.time.ZoneId.systemDefault());
         return judge(scopeOf(patient, at), systolic, diastolic, organDamageSign);
     }
 

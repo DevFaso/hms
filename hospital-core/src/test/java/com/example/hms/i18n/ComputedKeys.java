@@ -375,7 +375,6 @@ final class ComputedKeys {
         return r;
     }
 
-    /** {@code MessageUtil.resolve(reason.code())}: the code of every step-up refusal reason. */
     /** Every sentence the severe-blood-pressure verdict can name: each raised scope at each level. */
     private static Domain severeHypertensionMessages() {
         return () -> {
@@ -392,6 +391,7 @@ final class ComputedKeys {
         };
     }
 
+    /** {@code MessageUtil.resolve(reason.code())}: the code of every step-up refusal reason. */
     private static Domain mfaStepUpReasons() {
         return () -> {
             Set<String> keys = new TreeSet<>();

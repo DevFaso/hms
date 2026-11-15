@@ -58,14 +58,14 @@ public class AdultSevereHypertensionRule implements BpaRule {
             "Blood pressure {0}/{1} mmHg ({2}).",
             dash(r.systolic()), dash(r.diastolic()), BpaCardText.when(text, r.takenAt(), zone));
         String summary = urgent
-            ? text.get("cds.bpa." + PROTOCOL_CODE + ".summaryUrgent",
+            ? text.get("cds.bpa.ADULT_SEVERE_HYPERTENSION.summaryUrgent",
                 "Severe hypertension with a sign of organ damage (systolic >= 180 mmHg or diastolic >= 120 mmHg): "
                     + "urgent medical review required.")
-            : text.get("cds.bpa." + PROTOCOL_CODE + ".summary",
+            : text.get("cds.bpa.ADULT_SEVERE_HYPERTENSION.summary",
                 "Severe hypertension (systolic >= 180 mmHg or diastolic >= 120 mmHg): recheck the blood pressure "
                     + "at rest and look for signs of organ damage.");
         return new CdsCard(
-            text.get("cds.bpa." + PROTOCOL_CODE + ".name", "Severe hypertension"),
+            text.get("cds.bpa.ADULT_SEVERE_HYPERTENSION.name", "Severe hypertension"),
             summary + "\n\n" + reading,
             urgent ? CdsCard.Indicator.CRITICAL : CdsCard.Indicator.WARNING,
             new Source(text.get("cds.bpa.source", "HMS Best-Practice Advisory"), null, null),

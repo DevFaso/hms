@@ -575,11 +575,6 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     }
 
     /**
-     * Alert text in the staff locale (QA D226), like the labor alerts: never
-     * composed in English in code. QA D1427: this is the stored copy; a reader of
-     * the alert gets the sentence in her own language from the mapper.
-     */
-    /**
      * r54: the observation's pressure under the shared rule, at the observation's time. This path is
      * after a birth by construction, so without the evaluator (a unit built outside Spring) the
      * reading is judged as postpartum.
@@ -596,6 +591,11 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         return verdict == null ? com.example.hms.service.vitals.SevereHypertension.Verdict.NONE : verdict;
     }
 
+    /**
+     * Alert text in the staff locale (QA D226), like the labor alerts: never
+     * composed in English in code. QA D1427: this is the stored copy; a reader of
+     * the alert gets the sentence in her own language from the mapper.
+     */
     private String alertText(String code) {
         return messageSource.getMessage(ALERT_MSG_PREFIX + code, null, NotificationLocales.STAFF);
     }

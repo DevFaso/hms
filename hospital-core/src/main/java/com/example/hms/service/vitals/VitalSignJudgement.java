@@ -171,15 +171,8 @@ public class VitalSignJudgement {
         news2EscalationService.escalateIfNeeded(saved, patientId, hospitalId, recorderUsername,
             visitPhysicianUsername);
         if (judgement != null && patientId != null && hospitalId != null) {
-            SevereHypertension.Verdict bloodPressure = judgement.bloodPressure();
-            // Obstetric: always URGENT. Adult: only the URGENT one (a sign of organ damage) is notified.
-            if (bloodPressure.obstetric()) {
-                notifySevereHypertension(saved, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
-                    true, bloodPressure.messageKey());
-            } else if (bloodPressure.adult() && bloodPressure.level() == SevereHypertension.Level.URGENT) {
-                notifySevereHypertension(saved, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
-                    false, bloodPressure.messageKey());
-            }
+            escalateBloodPressure(saved, judgement.bloodPressure(), patientId, hospitalId, recorderUsername,
+                visitPhysicianUsername);
         }
         if (judgement == null || !judgement.newborn() || patientId == null || hospitalId == null) {
             return;
@@ -206,6 +199,18 @@ public class VitalSignJudgement {
                     log.warn("Newborn vitals notice not created: {}", ex.getClass().getSimpleName());
                 }
             }
+        }
+    }
+
+    /** Obstetric: always URGENT, notified. Adult: only the URGENT one (a sign of organ damage) is notified. */
+    private void escalateBloodPressure(PatientVitalSign saved, SevereHypertension.Verdict bloodPressure, UUID patientId,
+                                       UUID hospitalId, String recorderUsername, String visitPhysicianUsername) {
+        if (bloodPressure.obstetric()) {
+            notifySevereHypertension(saved, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
+                true, bloodPressure.messageKey());
+        } else if (bloodPressure.adult() && bloodPressure.level() == SevereHypertension.Level.URGENT) {
+            notifySevereHypertension(saved, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
+                false, bloodPressure.messageKey());
         }
     }
 

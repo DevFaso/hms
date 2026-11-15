@@ -47,7 +47,7 @@ class SevereHypertensionGuardTest {
         Pattern.compile("SevereHypertension\\s*\\.\\s*isObstetricSevere\\("),
         "service/impl/LaborServiceImpl.java", Pattern.compile("SevereHypertension\\s*\\.\\s*isObstetricSevere\\("));
 
-    private static final String PRESSURE = "(?i)(?:systolic|diastolic|\\bsys\\b|\\bdia\\b|\\bsbp\\b|\\bdbp\\b)[\\w.()?!]*\\s*";
+    private static final String PRESSURE = "(?i)(?:systolic|diastolic|\\bsys\\b|\\bdia\\b|\\bsbp\\b|\\bdbp\\b)[\\w.()?!]*+\\s*+";
     /**
      * A pressure compared with a severe number written out, either side of either threshold. A strict
      * {@code > 120} is not the adult rule (it is the nurse station's older per-vital ceiling, D1564),
@@ -55,9 +55,22 @@ class SevereHypertensionGuardTest {
      */
     private static final Pattern LITERAL_SEVERE_BP = Pattern.compile(PRESSURE
         + "(?:(?:>=|<)\\s*(?:160|110|180|120)\\b|>\\s*(?:160|110)\\b|(?:>|<=)\\s*(?:159|109|179|119)\\b)");
-    /** A blood-pressure constant set to a severe number written out. */
-    private static final Pattern LITERAL_SEVERE_CONSTANT = Pattern.compile(
-        "(?i)\\b\\w*(?:systolic|diastolic|sbp|dbp|htn)\\w*\\s*=\\s*(?:160|110|180|120)\\s*;");
+    /** A constant set to a severe number written out; {@link #isPressureName} decides if it is a pressure. */
+    private static final Pattern LITERAL_SEVERE_CONSTANT =
+        Pattern.compile("\\b(\\w++)\\s*+=\\s*+(?:160|110|180|120)\\s*+;");
+    private static final Pattern PRESSURE_NAME = Pattern.compile("(?i)systolic|diastolic|sbp|dbp|htn");
+
+    private static boolean isPressureName(String name) {
+        return PRESSURE_NAME.matcher(name).find();
+    }
+
+    private static boolean declaresASevereConstant(String source) {
+        java.util.regex.Matcher m = LITERAL_SEVERE_CONSTANT.matcher(source);
+        while (m.find()) {
+            if (isPressureName(m.group(1))) return true;
+        }
+        return false;
+    }
 
     // Unrolled loops (a group repeats only per escape): a long template literal must not overflow the
     // regex stack.
@@ -100,7 +113,7 @@ class SevereHypertensionGuardTest {
                 if (relative.equals(EVALUATOR)) continue;
                 // Card and message text may quote the rule; only code compares.
                 String withoutText = STRING_LITERAL.matcher(code(relative)).replaceAll("\"\"");
-                if (LITERAL_SEVERE_BP.matcher(withoutText).find() || LITERAL_SEVERE_CONSTANT.matcher(withoutText).find()) {
+                if (LITERAL_SEVERE_BP.matcher(withoutText).find() || declaresASevereConstant(withoutText)) {
                     copies.add(relative);
                 }
             }
