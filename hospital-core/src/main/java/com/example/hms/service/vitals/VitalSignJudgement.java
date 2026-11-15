@@ -151,7 +151,9 @@ public class VitalSignJudgement {
             // QA D1890, r54: a severe pressure under the shared rule is significant and warns; never refuses.
             SevereHypertension.Verdict bloodPressure = severeHypertension == null || patient == null
                 ? SevereHypertension.Verdict.NONE
-                : severeHypertension.evaluate(patient, vital.getSystolicBpMmHg(), vital.getDiastolicBpMmHg(), at,
+                : severeHypertension.evaluate(patient,
+                    com.example.hms.service.recordaccess.CrossHospitalReachRecorder.hospitalIdOf(vital.getHospital()),
+                    vital.getSystolicBpMmHg(), vital.getDiastolicBpMmHg(), at,
                     !com.example.hms.enums.OrganDamageSymptom.parse(vital.getOrganDamageSymptoms()).isEmpty());
             judgement = new Judgement(false, List.of(), bloodPressure);
             significant = judgement.bloodPressure().raised() || outsideAgeRanges(vital);

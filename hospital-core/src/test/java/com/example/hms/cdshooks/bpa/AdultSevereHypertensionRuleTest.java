@@ -30,8 +30,10 @@ import static org.mockito.Mockito.when;
  */
 class AdultSevereHypertensionRuleTest {
 
+    /** The hospital the chart is read at. */
+    private static final UUID HERE = UUID.randomUUID();
     private final DeliveryRecordRepository deliveries = mock(DeliveryRecordRepository.class);
-    private final SevereHypertension evaluator = new SevereHypertension(deliveries);
+    private final SevereHypertension evaluator = com.example.hms.service.vitals.SevereHypertensionFixtures.actingHospitalOnly(deliveries);
     private final AdultSevereHypertensionRule rule = new AdultSevereHypertensionRule(evaluator, CdsCardText.ENGLISH);
     private final PostpartumSevereHypertensionRule postpartumRule =
         new PostpartumSevereHypertensionRule(evaluator, CdsCardText.ENGLISH);
@@ -45,7 +47,10 @@ class AdultSevereHypertensionRuleTest {
     }
 
     private void delivered(Patient p, boolean delivered) {
-        when(deliveries.existsByPatient_IdAndBirthDateTimeBetween(eq(p.getId()), any(), any())).thenReturn(delivered);
+        if (delivered) {
+            com.example.hms.service.vitals.SevereHypertensionFixtures.bornOn(deliveries, p.getId(), HERE,
+                LocalDateTime.now().minusHours(6));
+        }
     }
 
     private static PatientVitalSign vital(Integer sys, Integer dia, int minutesAgo, String organDamage) {
@@ -54,7 +59,7 @@ class AdultSevereHypertensionRuleTest {
     }
 
     private static BpaRuleContext context(Patient p, List<PatientVitalSign> vitals, List<Reading> postpartum) {
-        return new BpaRuleContext(p, UUID.randomUUID(), vitals, List.of(), List.of(), null, postpartum);
+        return new BpaRuleContext(p, HERE, vitals, List.of(), List.of(), null, postpartum);
     }
 
     @ParameterizedTest(name = "adult {0}/{1} -> card {2}")

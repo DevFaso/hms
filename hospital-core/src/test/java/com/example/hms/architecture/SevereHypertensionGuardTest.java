@@ -104,6 +104,29 @@ class SevereHypertensionGuardTest {
             .contains("service.vitals.SevereHypertension severeHypertension;");
     }
 
+    /**
+     * r54 review P1: the rule read pregnancy, labour and birth records at every hospital, past a
+     * patient's sharing opt-out. Every obstetric read goes through the record-access policy's readable
+     * hospitals; no unscoped finder is called, and a foreign record behind a warning is audited.
+     */
+    @Test
+    void theRuleReadsObstetricRecordsOnlyThroughTheRecordAccessPolicy() throws IOException {
+        String evaluator = code(EVALUATOR);
+        assertThat(evaluator).contains("recordAccessPolicy.readableHospitalIds(").contains("reachRecorder.recordReach(");
+        assertThat(evaluator)
+            .doesNotContain("findCurrentByPatientId(")
+            .doesNotContain("existsByPatient_IdAndStatus(")
+            .doesNotContain("findFirstByPatient_IdAndStatusOrderByAdmittedAtDesc(")
+            .doesNotContain("existsByPatient_IdAndBirthDateTime");
+        java.util.regex.Matcher finder = Pattern.compile("Repository\\s*+\\.\\s*+(\\w++)\\(").matcher(evaluator);
+        int finders = 0;
+        while (finder.find()) {
+            finders++;
+            assertThat(finder.group(1)).as("an obstetric read scoped to the readable hospitals").contains("Hospital_IdIn");
+        }
+        assertThat(finders).as("the three obstetric finders were found").isGreaterThanOrEqualTo(3);
+    }
+
     @Test
     void noBackendSourceComparesABloodPressureWithTheSevereNumbersItself() throws IOException {
         Set<String> copies = new TreeSet<>();

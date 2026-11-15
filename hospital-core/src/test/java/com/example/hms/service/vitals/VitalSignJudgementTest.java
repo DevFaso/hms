@@ -51,7 +51,7 @@ class VitalSignJudgementTest {
         mock(com.example.hms.repository.DeliveryNewbornRepository.class);
     private final VitalSignJudgement judgement = new VitalSignJudgement(assessments, news2, notifications,
         com.example.hms.i18n.TestMessageSources.bundles(), deliveryNewborns,
-        new com.example.hms.service.vitals.SevereHypertension(deliveries));
+        com.example.hms.service.vitals.SevereHypertensionFixtures.actingHospitalOnly(deliveries));
 
     @AfterEach
     void resetLocale() {
@@ -69,6 +69,15 @@ class VitalSignJudgementTest {
 
     private static PatientVitalSign.PatientVitalSignBuilder set(Patient patient) {
         return PatientVitalSign.builder().patient(patient).recordedAt(NOW);
+    }
+
+    /** The hospital a blood-pressure set is taken at (the rule reads obstetric records there). */
+    private static final UUID HERE = UUID.randomUUID();
+
+    private static PatientVitalSign.PatientVitalSignBuilder bpSet(Patient patient) {
+        Hospital hospital = Hospital.builder().build();
+        hospital.setId(HERE);
+        return set(patient).hospital(hospital);
     }
 
     private static List<String> codes(VitalSignJudgement.Judgement j) {
@@ -305,8 +314,9 @@ class VitalSignJudgementTest {
         mother.setFirstName("Awa");
         mother.setLastName("Sawadogo");
         mother.setDateOfBirth(LocalDate.of(1995, 3, 1));
-        when(deliveries.existsByPatient_IdAndBirthDateTimeBetween(eq(mother.getId()), any(), eq(NOW)))
-            .thenReturn(delivered);
+        if (delivered) {
+            SevereHypertensionFixtures.bornOn(deliveries, mother.getId(), HERE, NOW.minusDays(3));
+        }
         return mother;
     }
 
@@ -317,7 +327,7 @@ class VitalSignJudgementTest {
     @DisplayName("D1890: a nurse-station set after birth is judged by the shared postpartum rule")
     void aSevereSetAfterBirthIsSignificantAndWarns(int systolic, int diastolic, boolean warns) {
         LocaleContextHolder.setLocale(Locale.FRENCH);
-        PatientVitalSign vital = set(motherDeliveredBefore(true)).systolicBpMmHg(systolic).diastolicBpMmHg(diastolic).build();
+        PatientVitalSign vital = bpSet(motherDeliveredBefore(true)).systolicBpMmHg(systolic).diastolicBpMmHg(diastolic).build();
 
         VitalSignJudgement.Judgement j = judgement.judge(vital);
 
@@ -339,7 +349,7 @@ class VitalSignJudgementTest {
 
     @Test
     void withNoRecordedBirthTheSameSetRaisesNoPostpartumWarning() {
-        PatientVitalSign vital = set(motherDeliveredBefore(false)).systolicBpMmHg(164).diastolicBpMmHg(114).build();
+        PatientVitalSign vital = bpSet(motherDeliveredBefore(false)).systolicBpMmHg(164).diastolicBpMmHg(114).build();
         VitalSignJudgement.Judgement j = judgement.judge(vital);
         assertThat(j.postpartumSevereHypertension()).isFalse();
         assertThat(judgement.postpartumAlerts(j)).isEmpty();
@@ -351,7 +361,7 @@ class VitalSignJudgementTest {
         UUID hospitalId = UUID.randomUUID();
         when(news2.recipients(mother.getId(), hospitalId, "nurse_a", null))
             .thenReturn(new LinkedHashSet<>(List.of("nurse_a", "dr_a")));
-        PatientVitalSign vital = set(mother).systolicBpMmHg(164).diastolicBpMmHg(114).build();
+        PatientVitalSign vital = bpSet(mother).systolicBpMmHg(164).diastolicBpMmHg(114).build();
 
         judgement.escalate(vital, judgement.judge(vital), mother.getId(), hospitalId, "nurse_a", null);
 
@@ -370,7 +380,7 @@ class VitalSignJudgementTest {
     @DisplayName("r54: an adult woman with no delivery is judged by the adult rule (the QA observation: 164/114)")
     void anAdultWithNoDeliveryIsJudgedByTheAdultRule(int systolic, int diastolic, boolean warns) {
         LocaleContextHolder.setLocale(Locale.FRENCH);
-        PatientVitalSign vital = set(motherDeliveredBefore(false)).systolicBpMmHg(systolic).diastolicBpMmHg(diastolic)
+        PatientVitalSign vital = bpSet(motherDeliveredBefore(false)).systolicBpMmHg(systolic).diastolicBpMmHg(diastolic)
             .build();
 
         VitalSignJudgement.Judgement j = judgement.judge(vital);
@@ -399,7 +409,7 @@ class VitalSignJudgementTest {
         UUID hospitalId = UUID.randomUUID();
         when(news2.recipients(adult.getId(), hospitalId, "nurse_a", null))
             .thenReturn(new LinkedHashSet<>(List.of("nurse_a", "dr_a")));
-        PatientVitalSign vital = set(adult).systolicBpMmHg(190).diastolicBpMmHg(100)
+        PatientVitalSign vital = bpSet(adult).systolicBpMmHg(190).diastolicBpMmHg(100)
             .organDamageSymptoms("CHEST_PAIN").build();
 
         VitalSignJudgement.Judgement j = judgement.judge(vital);
@@ -414,7 +424,7 @@ class VitalSignJudgementTest {
     @Test
     void aPlainAdultWarningNotifiesNoOne() {
         Patient adult = motherDeliveredBefore(false);
-        PatientVitalSign vital = set(adult).systolicBpMmHg(185).diastolicBpMmHg(100).build();
+        PatientVitalSign vital = bpSet(adult).systolicBpMmHg(185).diastolicBpMmHg(100).build();
         judgement.escalate(vital, judgement.judge(vital), adult.getId(), UUID.randomUUID(), "nurse_a", null);
         verify(notifications, never()).createNotification(eq("vitals.alert.notification"), any(), anyString(), anyString());
     }
@@ -423,7 +433,7 @@ class VitalSignJudgementTest {
     void underEighteenTheAdultRuleIsSilent() {
         Patient teen = bornDaysAgo(16 * 365);
         teen.setId(UUID.randomUUID());
-        PatientVitalSign vital = set(teen).systolicBpMmHg(185).diastolicBpMmHg(125).build();
+        PatientVitalSign vital = bpSet(teen).systolicBpMmHg(185).diastolicBpMmHg(125).build();
         VitalSignJudgement.Judgement j = judgement.judge(vital);
         assertThat(j.adultSevereHypertension()).isFalse();
         assertThat(judgement.hypertensionAlerts(j)).isEmpty();

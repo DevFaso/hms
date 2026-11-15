@@ -45,7 +45,7 @@ public class AdultSevereHypertensionRule implements BpaRule {
         if (context == null || !context.hasPatient() || evaluator == null) return List.of();
         Reading latest = PostpartumSevereHypertensionRule.latest(context);
         if (latest == null) return List.of();
-        SevereHypertension.Verdict verdict = evaluator.evaluate(context.patient(), latest);
+        SevereHypertension.Verdict verdict = evaluator.evaluate(context.patient(), context.hospitalId(), latest);
         if (verdict == null || !verdict.adult()) {
             return List.of();
         }

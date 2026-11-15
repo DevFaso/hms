@@ -48,7 +48,7 @@ public class PostpartumSevereHypertensionRule implements BpaRule {
         if (context == null || !context.hasPatient() || evaluator == null) return List.of();
         Reading latest = latest(context);
         if (latest == null) return List.of();
-        SevereHypertension.Verdict verdict = evaluator.evaluate(context.patient(), latest);
+        SevereHypertension.Verdict verdict = evaluator.evaluate(context.patient(), context.hospitalId(), latest);
         if (verdict == null || !verdict.raised() || verdict.scope() != Scope.POSTPARTUM) {
             return List.of();
         }

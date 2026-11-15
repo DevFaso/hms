@@ -2056,7 +2056,8 @@
       "REFERRAL": "orientation",
       "STORYBOARD": "vue d’ensemble du patient",
       "ULTRASOUND_ORDER": "demande d’échographie",
-      "VITAL_SIGNS": "constantes vitales"
+      "VITAL_SIGNS": "constantes vitales",
+      "OBSTETRIC_RECORD": "dossier obstétrical"
     },
     "CROSS_HOSPITAL_PURPOSE": {
       "TO_OPEN_A_LABOUR_EPISODE": ", pour ouvrir un travail obstétrical"

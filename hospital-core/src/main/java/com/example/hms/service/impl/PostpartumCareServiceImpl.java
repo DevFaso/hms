@@ -575,9 +575,11 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     }
 
     /**
-     * r54: the observation's pressure under the shared rule, at the observation's time. This path is
-     * after a birth by construction, so without the evaluator (a unit built outside Spring) the
-     * reading is judged as postpartum.
+     * r54: the observation's pressure under the shared rule, at the observation's time and hospital.
+     * This path is after a birth by construction, so without the evaluator (a unit built outside
+     * Spring) the reading is judged as postpartum; and a mother the rule finds in no scope (under 18,
+     * her birth not readable here) is judged by the adult thresholds, which cover anyone who has
+     * given birth once past the 42 days (r54 review, provisional).
      */
     private com.example.hms.service.vitals.SevereHypertension.Verdict judgeBloodPressure(PostpartumObservation observation) {
         Integer systolic = observation.getSystolicBpMmHg();
@@ -587,8 +589,14 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
                 com.example.hms.service.vitals.SevereHypertension.Scope.POSTPARTUM, systolic, diastolic, false);
         }
         com.example.hms.service.vitals.SevereHypertension.Verdict verdict = severeHypertension.evaluate(
-            observation.getPatient(), systolic, diastolic, observation.getObservationTime(), false);
-        return verdict == null ? com.example.hms.service.vitals.SevereHypertension.Verdict.NONE : verdict;
+            observation.getPatient(),
+            com.example.hms.service.recordaccess.CrossHospitalReachRecorder.hospitalIdOf(observation.getHospital()),
+            systolic, diastolic, observation.getObservationTime(), false);
+        if (verdict == null || verdict.scope() == com.example.hms.service.vitals.SevereHypertension.Scope.NONE) {
+            return com.example.hms.service.vitals.SevereHypertension.judge(
+                com.example.hms.service.vitals.SevereHypertension.Scope.ADULT, systolic, diastolic, false);
+        }
+        return verdict;
     }
 
     /**

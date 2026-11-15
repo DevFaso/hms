@@ -116,7 +116,7 @@ class PostpartumCareServiceImplTest {
             reachRecorder,
             TestMessageSources.bundles(),
             deliveryRecordRepository,
-            new com.example.hms.service.vitals.SevereHypertension(deliveryRecordRepository)
+            com.example.hms.service.vitals.SevereHypertensionFixtures.actingHospitalOnly(deliveryRecordRepository)
         );
 
         patientId = UUID.randomUUID();
@@ -230,8 +230,11 @@ class PostpartumCareServiceImplTest {
     void severeBloodPressureAfterBirthIsAnUrgentWarningThatNeverBlocksTheSave_D1890(
         Integer systolic, Integer diastolic, boolean alerts) {
         // r54: born within the 42 postpartum days.
-        lenient().when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeBetween(eq(patientId), any(), any()))
-            .thenReturn(true);
+        lenient().when(deliveryRecordRepository
+                .findFirstByPatient_IdAndHospital_IdInAndBirthDateTimeBetweenOrderByBirthDateTimeDesc(
+                    eq(patientId), any(), any(), any()))
+            .thenReturn(Optional.of(com.example.hms.service.vitals.SevereHypertensionFixtures.birth(hospitalId,
+                LocalDateTime.now().minusDays(2))));
         when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
             .thenReturn(Optional.empty());
         PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
@@ -266,8 +269,9 @@ class PostpartumCareServiceImplTest {
     @org.junit.jupiter.params.ParameterizedTest(name = "{0}/{1} after 42 days -> adult warning {2}")
     @org.junit.jupiter.params.provider.CsvSource({"164,114,false", "179,119,false", "180,80,true", "120,120,true"})
     void after42DaysTheAdultRuleJudgesTheObservation(Integer systolic, Integer diastolic, boolean warns) {
-        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeBetween(eq(patientId), any(), any()))
-            .thenReturn(false);
+        // Born 60 days ago: past the 42 days; an adult mother (1990), so the adult rule judges.
+        com.example.hms.service.vitals.SevereHypertensionFixtures.bornOn(deliveryRecordRepository, patientId,
+            hospitalId, LocalDateTime.now().minusDays(60));
         when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
             .thenReturn(Optional.empty());
         PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
@@ -289,6 +293,32 @@ class PostpartumCareServiceImplTest {
             assertEquals(PostpartumAlertSeverity.CAUTION, adult.get(0).getSeverity());
             assertTrue(adult.get(0).getMessage().contains("recontrôler la tension au repos"), adult.get(0).getMessage());
         }
+    }
+
+    /**
+     * r54 review P2 (provisional, coordinator's decision of 2026-11-15): a mother under 18 past the 42
+     * days is covered by the adult thresholds (she has given birth): 200/130 on day 50 warns.
+     */
+    @Test
+    void aTeenMotherPast42DaysIsJudgedByTheAdultThresholds() {
+        patient.setDateOfBirth(LocalDate.now().minusYears(16));
+        com.example.hms.service.vitals.SevereHypertensionFixtures.bornOn(deliveryRecordRepository, patientId,
+            hospitalId, LocalDateTime.now().minusDays(50));
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.empty());
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(5))
+            .systolicBpMmHg(200)
+            .diastolicBpMmHg(130)
+            .build();
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId, request, recorderId);
+
+        assertThat(response.getAlerts()).anySatisfy(a -> {
+            assertEquals("adult-severe-hypertension", a.getCode());
+            assertEquals(PostpartumAlertSeverity.CAUTION, a.getSeverity());
+        });
     }
 
     @Test

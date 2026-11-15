@@ -2056,7 +2056,8 @@
       "REFERRAL": "referral",
       "STORYBOARD": "patient overview",
       "ULTRASOUND_ORDER": "ultrasound order",
-      "VITAL_SIGNS": "vital signs"
+      "VITAL_SIGNS": "vital signs",
+      "OBSTETRIC_RECORD": "obstetric record"
     },
     "CROSS_HOSPITAL_PURPOSE": {
       "TO_OPEN_A_LABOUR_EPISODE": ", to open a labour episode"

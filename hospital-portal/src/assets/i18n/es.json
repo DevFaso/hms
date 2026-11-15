@@ -2056,7 +2056,8 @@
       "REFERRAL": "derivación",
       "STORYBOARD": "vista general del paciente",
       "ULTRASOUND_ORDER": "solicitud de ecografía",
-      "VITAL_SIGNS": "signos vitales"
+      "VITAL_SIGNS": "signos vitales",
+      "OBSTETRIC_RECORD": "registro obstétrico"
     },
     "CROSS_HOSPITAL_PURPOSE": {
       "TO_OPEN_A_LABOUR_EPISODE": ", para abrir un trabajo de parto"
