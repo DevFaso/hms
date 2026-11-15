@@ -212,6 +212,8 @@ public class PrescriptionResponseDTO {
         this.clarificationRequestedAt = null;
         this.clarificationResponse = null;
         this.clarificationResolvedAt = null;
+        // QA D1960: the pharmacist's verification note is written for the prescriber.
+        this.pharmacistVerificationNote = null;
         // The pharmacy-event pair restates the exchange when the exchange is
         // what the pharmacy last did: lastPharmacyEventAt IS the instant the
         // pharmacist asked. Stripping the narrative while leaving its

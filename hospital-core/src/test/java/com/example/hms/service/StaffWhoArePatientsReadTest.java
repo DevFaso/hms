@@ -289,7 +289,8 @@ class StaffWhoArePatientsReadTest {
 
         private final UUID reportId = UUID.randomUUID();
         private final UUID orderId = UUID.randomUUID();
-        private final ImagingReportResponseDTO dto = new ImagingReportResponseDTO();
+        private final ImagingReportResponseDTO dto = ImagingReportResponseDTO.builder().id(UUID.randomUUID())
+            .lockReason("relecture").build();
 
         @BeforeEach
         void actingAtA() {
@@ -324,8 +325,10 @@ class StaffWhoArePatientsReadTest {
         void ownSignedReads() {
             nurseWhoIsAPatient();
             reportAtB(ownPatientId, true);
-            assertThat(service.getReport(reportId)).isSameAs(dto);
-            assertThat(service.getLatestReportForOrder(orderId)).isSameAs(dto);
+            // QA D1960: read as its patient, so the patient's copy of the same report.
+            assertThat(service.getReport(reportId)).extracting("id", "lockReason").containsExactly(dto.getId(), null);
+            assertThat(service.getLatestReportForOrder(orderId)).extracting("id", "lockReason")
+                .containsExactly(dto.getId(), null);
         }
 
         @Test
@@ -357,8 +360,10 @@ class StaffWhoArePatientsReadTest {
         void purePatientOwnElsewhere() {
             login("ROLE_PATIENT");
             reportAtB(ownPatientId, true);
-            assertThat(service.getReport(reportId)).isSameAs(dto);
-            assertThat(service.getLatestReportForOrder(orderId)).isSameAs(dto);
+            // QA D1960: read as its patient, so the patient's copy of the same report.
+            assertThat(service.getReport(reportId)).extracting("id", "lockReason").containsExactly(dto.getId(), null);
+            assertThat(service.getLatestReportForOrder(orderId)).extracting("id", "lockReason")
+                .containsExactly(dto.getId(), null);
         }
     }
 

@@ -621,7 +621,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public Page<PatientConsentResponseDTO> getMyConsents(Authentication auth, Pageable pageable) {
         UUID patientId = resolvePatientId(auth);
-        return consentService.getConsentsByPatient(patientId, pageable);
+        // QA D1960: the embedded chart without the care team's notes or why it is restricted.
+        return consentService.getConsentsByPatient(patientId, pageable)
+                .map(com.example.hms.service.support.PatientSafeView::consent);
     }
 
     // ── Immunizations ────────────────────────────────────────────────────

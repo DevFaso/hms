@@ -250,7 +250,8 @@ public class ConsultationServiceImpl implements ConsultationService {
             dto.setRecommendations(null);
             dto.setFollowUpInstructions(null);
         }
-        return dto;
+        // QA D1960: why it was declined or cancelled stays between the clinicians.
+        return com.example.hms.service.support.PatientSafeView.consultation(dto);
     }
 
     @Override
