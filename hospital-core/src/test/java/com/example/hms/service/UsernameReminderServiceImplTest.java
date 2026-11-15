@@ -95,6 +95,37 @@ class UsernameReminderServiceImplTest {
         }
 
         @Test
+        @DisplayName("D2000: a known phone whose email fallback fails answers exactly like an unknown identifier")
+        void aFailedFallbackNeverTellsTheCallerTheAccountExists() {
+            String phoneIdentifier = "+22670202020";
+            when(userRepository.findActiveByEmailOrPhone(phoneIdentifier)).thenReturn(Optional.of(user));
+            when(userRepository.findActiveByEmailOrPhone("+22670000001")).thenReturn(Optional.empty());
+            when(smsService.deliversRealSms()).thenReturn(false);
+            org.mockito.Mockito.doThrow(new com.example.hms.exception.NotificationTransportUnavailableException(
+                    "Mail transport is not configured on this deployment"))
+                .when(emailService).sendUsernameReminderEmail(anyString(), anyString(), any());
+
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> service.sendReminder(phoneIdentifier, locale, requestIp));
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> service.sendReminder("+22670000001", locale, requestIp));
+
+            // No address on the account, a failing provider, a failing mail by email identifier: all silent too.
+            user.setEmail(null);
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> service.sendReminder(phoneIdentifier, locale, requestIp));
+            when(smsService.deliversRealSms()).thenReturn(true);
+            org.mockito.Mockito.doThrow(new IllegalStateException("sms.orange.authFailed"))
+                .when(smsService).send(any(), any());
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> service.sendReminder(phoneIdentifier, locale, requestIp));
+            user.setEmail("john@example.com");
+            when(userRepository.findActiveByEmailOrPhone("john@example.com")).thenReturn(Optional.of(user));
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> service.sendReminder("john@example.com", locale, requestIp));
+        }
+
+        @Test
         @DisplayName("falls back to email when identifier is phone but smsService is null")
         void fallsBackToEmailWhenSmsServiceNull() {
             // Construct service with null smsService manually

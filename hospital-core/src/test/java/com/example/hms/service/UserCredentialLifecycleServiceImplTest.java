@@ -855,12 +855,14 @@ class UserCredentialLifecycleServiceImplTest {
 
         List<String> keys = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
+            contact.setVerificationCodeExpiresAt(null); // what the rollback of the refused send restores
             Throwable thrown = catchThrowable(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()));
             assertThat(thrown).isInstanceOf(BusinessException.class);
             keys.add(((BusinessException) thrown).getMessageKey());
         }
         assertThat(keys).containsExactly("users.recovery.smsFailed", "sms.recipient.notAllowlisted",
             "users.recovery.smsFailed");
+        contact.setVerificationCodeExpiresAt(null);
         assertThatThrownBy(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()))
             .isInstanceOf(NotificationTransportUnavailableException.class)
             .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("users.recovery.smsUnavailable"));
@@ -932,6 +934,67 @@ class UserCredentialLifecycleServiceImplTest {
         }
         assertThat(thrown == null).as("only EMAIL and PHONE can carry a code")
             .isEqualTo(type == RecoveryContactType.EMAIL || type == RecoveryContactType.PHONE);
+    }
+
+    // ── D2000 (review): a paid code is throttled like the desk's phone verification ──
+
+    private void stubAcceptedSms() {
+        org.mockito.Mockito.lenient().when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+        org.mockito.Mockito.lenient().when(smsGateway.isConfigured()).thenReturn(true);
+        org.mockito.Mockito.lenient().when(messageSource.getMessage(anyString(), any(Object[].class), any(Locale.class)))
+            .thenReturn("body");
+        org.mockito.Mockito.lenient().when(smsGateway.sendSms(anyList(), anyString(), anyString()))
+            .thenReturn(new IkoddiGateway.SmsDispatch(true, "{}"));
+    }
+
+    @Test
+    void aSecondCodeForTheSameContactWithinTheCooldownIs429AndNotSent() {
+        UUID userId = UUID.randomUUID();
+        UserRecoveryContact contact = pendingPhoneContact(userId, "+22670123456");
+        when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
+        stubAcceptedSms();
+
+        service.sendRecoveryContactVerificationCode(userId, contact.getId());
+        Throwable again = catchThrowable(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()));
+
+        assertThat(again).isInstanceOfSatisfying(org.springframework.web.server.ResponseStatusException.class, ex -> {
+            assertThat(ex.getStatusCode().value()).isEqualTo(429);
+            assertThat(ex.getReason()).isEqualTo("users.recovery.cooldown");
+        });
+        verify(smsGateway, org.mockito.Mockito.times(1)).sendSms(anyList(), anyString(), anyString());
+
+        // Past the desk's cooldown (60 s) the contact can be sent a fresh code.
+        contact.setVerificationCodeExpiresAt(NOW.plusMinutes(15)
+            .minusSeconds(PhoneVerificationServiceImpl.RESEND_COOLDOWN_SECONDS));
+        service.sendRecoveryContactVerificationCode(userId, contact.getId());
+        verify(smsGateway, org.mockito.Mockito.times(2)).sendSms(anyList(), anyString(), anyString());
+    }
+
+    @Test
+    void theHourlyCapPerUserIsTheDesksAndAnswers429() {
+        UUID userId = UUID.randomUUID();
+        stubAcceptedSms();
+        int cap = PhoneVerificationServiceImpl.MAX_SENDS_PER_USER_PER_HOUR;
+        for (int i = 0; i <= cap; i++) {
+            UserRecoveryContact contact = pendingPhoneContact(userId, "+2267012345" + (i % 10));
+            when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
+            Throwable thrown = catchThrowable(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()));
+            if (i < cap) {
+                assertThat(thrown).as("send %d", i + 1).isNull();
+            } else {
+                assertThat(thrown).isInstanceOfSatisfying(org.springframework.web.server.ResponseStatusException.class,
+                    ex -> {
+                        assertThat(ex.getStatusCode().value()).isEqualTo(429);
+                        assertThat(ex.getReason()).isEqualTo("users.recovery.limitReached");
+                    });
+            }
+        }
+        verify(smsGateway, org.mockito.Mockito.times(cap)).sendSms(anyList(), anyString(), anyString());
+        // Another user is not held by this one's cap.
+        UUID other = UUID.randomUUID();
+        UserRecoveryContact theirs = pendingPhoneContact(other, "+22670999999");
+        when(recoveryContactRepository.findById(theirs.getId())).thenReturn(Optional.of(theirs));
+        service.sendRecoveryContactVerificationCode(other, theirs.getId());
     }
 
     // ── D2000 (owner request): a recovery contact is not the sign-in email or phone ──

@@ -93,6 +93,18 @@ class RateLimitFilterTest {
         }
     }
 
+    /** D2000: the recovery-contact routes send a code (a paid SMS for a phone). */
+    @Test
+    void rateLimitsTheRecoveryContactRoutes() {
+        for (String path : new String[] {"/api/auth/credentials/recovery",
+                "/api/auth/credentials/recovery/" + java.util.UUID.randomUUID() + "/send-code",
+                "/api/auth/credentials/recovery/" + java.util.UUID.randomUUID() + "/verify"}) {
+            MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
+            request.setRequestURI(path);
+            assertThat(filter.shouldNotFilter(request)).as(path).isFalse();
+        }
+    }
+
     /** QA D787: every anonymous path that sends a reset message, the legacy one included. */
     @Test
     void rateLimitsEveryPasswordResetPath() {

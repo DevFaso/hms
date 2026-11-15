@@ -31,6 +31,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.MessageSource;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -38,8 +40,10 @@ import org.springframework.stereotype.Service;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -47,6 +51,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -87,6 +92,13 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
      * {@code lastLoginAt}/{@code verifiedAt}, which nothing compares in time.
      */
     private final Clock clock;
+    /**
+     * D2000: when each user's recovery codes were sent in the last hour, for the
+     * hourly cap. In memory per instance, like the {@code RateLimitFilter}
+     * buckets in front of the route; the per-contact cooldown is read from the
+     * stored code's expiry instead, so it holds across instances.
+     */
+    private final Map<UUID, Deque<LocalDateTime>> recoverySendsByUser = new ConcurrentHashMap<>();
 
     @Override
     @Transactional
@@ -341,6 +353,11 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.recovery.alreadyVerified"));
         }
 
+        // D2000: a code costs money (SMS) and can harass, so the limits of the
+        // desk's phone verification apply: one per contact per cooldown, and an
+        // hourly cap per user. Checked before a code exists.
+        requireRecoverySendAllowed(userId, contact);
+
         // D2000: every channel either really sends or refuses BEFORE a code is
         // stored. A type with no channel used to fall through silently and the
         // caller was told "code sent" for a code that never left the server.
@@ -367,6 +384,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             sendRecoveryEmail(contact.getContactValue(), code);
         }
 
+        recordRecoverySend(userId);
         log.info("Verification code sent for recovery contact {} (type={})", contactId, type);
         return contact.getContactType().name();
     }
@@ -551,6 +569,40 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
         for (int i = 0; i < items.size(); i++) {
             boolean keepPrimary = i == items.size() - 1;
             setter.accept(items.get(i), keepPrimary);
+        }
+    }
+
+    /**
+     * 429 when this contact was sent a code less than the desk's cooldown ago
+     * (its stored code's expiry minus the code lifetime is when it was sent; a
+     * failed send rolled that back), or when the user reached the desk's
+     * hourly cap of sends. The limits are PhoneVerificationServiceImpl's.
+     */
+    private void requireRecoverySendAllowed(UUID userId, UserRecoveryContact contact) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime expiresAt = contact.getVerificationCodeExpiresAt();
+        if (expiresAt != null) {
+            LocalDateTime sentAt = expiresAt.minusMinutes(VERIFICATION_CODE_EXPIRY_MINUTES);
+            if (now.isBefore(sentAt.plusSeconds(PhoneVerificationServiceImpl.RESEND_COOLDOWN_SECONDS))) {
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "users.recovery.cooldown");
+            }
+        }
+        Deque<LocalDateTime> sends = recoverySendsByUser.get(userId);
+        if (sends == null) {
+            return;
+        }
+        synchronized (sends) {
+            sends.removeIf(at -> !at.isAfter(now.minusHours(1)));
+            if (sends.size() >= PhoneVerificationServiceImpl.MAX_SENDS_PER_USER_PER_HOUR) {
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "users.recovery.limitReached");
+            }
+        }
+    }
+
+    private void recordRecoverySend(UUID userId) {
+        Deque<LocalDateTime> sends = recoverySendsByUser.computeIfAbsent(userId, id -> new ArrayDeque<>());
+        synchronized (sends) {
+            sends.addLast(LocalDateTime.now(clock));
         }
     }
 
