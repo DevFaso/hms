@@ -518,6 +518,11 @@ export interface PortalEncounter {
   department: string;
   chiefComplaint: string;
   diagnosisSummary: string;
+  /**
+   * QA D1910: a note of the visit waits for its author's signature; the
+   * patient reads "not finalised" instead of a draft (the server never sends it).
+   */
+  notePendingSignature: boolean;
   status: string;
   notes: string;
   hospitalName: string;
@@ -541,7 +546,14 @@ interface EncounterApiResponse {
   note?: {
     chiefComplaint?: string;
     assessment?: string;
+    signedAt?: string | null;
   };
+  notePendingSignature?: boolean | null;
+}
+
+/** QA D1910: the visit's note when it is signed, else nothing. */
+function signedNote(e: EncounterApiResponse): EncounterApiResponse['note'] | undefined {
+  return e.note?.signedAt ? e.note : undefined;
 }
 
 /**
@@ -1403,9 +1415,13 @@ export class PatientPortalService {
           department: e.departmentName ?? '',
           // QA D981: the note's complaint, else the visit's own reason (an
           // admission's reason lives there), else the booking reason.
-          chiefComplaint: e.note?.chiefComplaint || e.chiefComplaint || e.appointmentReason || '',
+          // QA D1910: a note's text only once it is signed (the server sends
+          // no draft; this is the second line of the same rule).
+          chiefComplaint:
+            signedNote(e)?.chiefComplaint || e.chiefComplaint || e.appointmentReason || '',
           // The doctor's assessment, labelled as such (it is not a coded diagnosis).
-          diagnosisSummary: e.note?.assessment ?? '',
+          diagnosisSummary: signedNote(e)?.assessment ?? '',
+          notePendingSignature: e.notePendingSignature === true,
           status: e.status ?? '',
           notes: e.notes ?? '',
           hospitalName: e.hospitalName ?? '',

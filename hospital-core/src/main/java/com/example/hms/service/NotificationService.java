@@ -46,6 +46,14 @@ public interface NotificationService {
     int markReadForSubject(java.util.UUID subjectId, java.util.Collection<String> types);
 
     /**
+     * QA D1912 (round 53): withdraws {@code recipientUsername}'s notifications
+     * of {@code type} about any of {@code subjectIds}: the record they announce
+     * no longer exists for that reader (a voided lab result), so the
+     * announcement goes with it. Returns how many were removed.
+     */
+    int withdrawForSubjects(String recipientUsername, String type, java.util.Collection<java.util.UUID> subjectIds);
+
+    /**
      * Free text somebody TYPED (an administrator's message, an announcement, a
      * chat line): there is nothing to translate, so it is stored and shown as
      * written. Never for text the system composes: that goes through

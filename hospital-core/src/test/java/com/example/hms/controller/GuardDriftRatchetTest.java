@@ -137,6 +137,8 @@ class GuardDriftRatchetTest {
         "Treatment authoring is a physician act";
     private static final String TREATMENTPLANCONTROLLER_REASON =
         "Physician review of a treatment plan";
+    private static final String SAFEGUARDINGREVIEWCONTROLLER_REASON =
+        "Recording the documented safeguarding review is the responsible clinician's act (doctor or surgeon); nurses and midwives read it. Provisional rule 2026-11-14 (r53), pending the obstetric and child-protection leads' approval";
     private static final String ULTRASOUNDCONTROLLER_REASON =
         "Ultrasound ordering and reporting; maternity cluster (c) as found 2026-09-26, pending the clinical decision in tasklist \"Nurse/midwife read drift\"";
 
@@ -223,6 +225,7 @@ class GuardDriftRatchetTest {
         listed.put("OrderReviewHoldController.stopOrder", ORDER_REVIEW_REASON);
         listed.put("MortalityController.disputeDeath", "The user's ruling: only a doctor at that hospital disputes a recorded death");
         listed.put("MortalityController.recordDeath", MORTALITYCONTROLLER_REASON);
+        listed.put("SafeguardingReviewController.record", SAFEGUARDINGREVIEWCONTROLLER_REASON);
         listed.put("ObgynReferralController.acknowledgeReferral", OBGYNREFERRALCONTROLLER_REASON);
         listed.put("ObgynReferralController.addMessage", OBGYNREFERRALCONTROLLER_REASON);
         // QA D1026: the cancel admits exactly the create's roles (midwife, doctor), so its author may withdraw it.

@@ -68,6 +68,8 @@ class StoredAlertReaderLanguageGuardTest {
         Map.entry("service/impl/DeathDisputeServiceImpl.java", NOTICE),
         // QA D1802: the reconciliation task of a contradicted stillbirth certificate; the reader's copy is keyed.
         Map.entry("service/maternity/StillbirthCertificateConflicts.java", NOTICE),
+        // r53: the safeguarding task and the senior obstetric review request; the reader's copy is keyed.
+        Map.entry("service/safeguarding/SafeguardingReviewWorker.java", NOTICE),
         // QA D1516: the note on an appointment a death entered in error had cancelled, beside the closure's own.
         Map.entry("service/impl/MortalityServiceImpl.java", STORED_RECORD),
         Map.entry("service/impl/OrderReviewAfterCommit.java", NOTICE),

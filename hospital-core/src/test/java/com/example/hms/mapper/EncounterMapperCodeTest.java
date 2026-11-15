@@ -57,6 +57,56 @@ class EncounterMapperCodeTest {
     }
 
     @Test
+    void d1910_anUnsignedNoteNeverReachesThePatient() {
+        // QA D1910 (round 53): /me/patient/encounters returned the doctor's
+        // unsigned SOAP note, during the visit and after checkout.
+        Encounter visit = new Encounter();
+        visit.setId(UUID.randomUUID());
+        com.example.hms.model.encounter.EncounterNote draft = com.example.hms.model.encounter.EncounterNote.builder()
+            .subjective("NOTE-CLINIQUE-INTERNE").assessment("Diabète déséquilibré NOTE-CLINIQUE-INTERNE")
+            .plan("NOTE-CLINIQUE-INTERNE").patientInstructions("NOTE-CLINIQUE-INTERNE").build();
+        draft.setId(UUID.randomUUID());
+        draft.setCreatedAt(java.time.LocalDateTime.now());
+        visit.setEncounterNote(draft);
+        EncounterMapper mapper = new EncounterMapper();
+
+        // Path re-verified: the clinician reads the draft.
+        assertThat(mapper.toEncounterResponseDTO(visit).getNote().getAssessment()).contains("NOTE-CLINIQUE-INTERNE");
+
+        EncounterResponseDTO portal = mapper.toPatientPortalEncounterResponseDTO(visit);
+        assertThat(portal.getNote()).isNull();
+        assertThat(portal.getNotePendingSignature()).isTrue();
+        assertThat(portal.toString()).doesNotContain("NOTE-CLINIQUE-INTERNE");
+    }
+
+    @Test
+    void d1910_theSignedNoteIsReadWhileANewerDraftWaits() {
+        Encounter visit = new Encounter();
+        visit.setId(UUID.randomUUID());
+        com.example.hms.model.encounter.EncounterNote signed = com.example.hms.model.encounter.EncounterNote.builder()
+            .assessment("Angine signée").signedAt(java.time.LocalDateTime.now().minusHours(2)).build();
+        signed.setId(UUID.randomUUID());
+        signed.setCreatedAt(java.time.LocalDateTime.now().minusHours(3));
+        com.example.hms.model.encounter.EncounterNote draft = com.example.hms.model.encounter.EncounterNote.builder()
+            .assessment("Brouillon du lendemain").build();
+        draft.setId(UUID.randomUUID());
+        draft.setCreatedAt(java.time.LocalDateTime.now());
+        visit.setEncounterNote(signed);
+        visit.setEncounterNote(draft);
+
+        EncounterResponseDTO portal = new EncounterMapper().toPatientPortalEncounterResponseDTO(visit);
+
+        assertThat(portal.getNote().getId()).isEqualTo(signed.getId());
+        assertThat(portal.getNotePendingSignature()).isTrue();
+        assertThat(portal.toString()).doesNotContain("Brouillon du lendemain");
+
+        draft.setSignedAt(java.time.LocalDateTime.now());
+        EncounterResponseDTO afterSigning = new EncounterMapper().toPatientPortalEncounterResponseDTO(visit);
+        assertThat(afterSigning.getNote().getId()).isEqualTo(draft.getId());
+        assertThat(afterSigning.getNotePendingSignature()).isFalse();
+    }
+
+    @Test
     void whatTheDeskTypedIsKeptApartFromTheClinicalComplaint() {
         EncounterMapper mapper = new EncounterMapper();
         com.example.hms.payload.dto.EncounterRequestDTO body = new com.example.hms.payload.dto.EncounterRequestDTO();

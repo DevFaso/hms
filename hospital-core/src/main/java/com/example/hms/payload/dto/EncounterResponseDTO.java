@@ -125,6 +125,13 @@ public class EncounterResponseDTO {
          */
         private java.util.List<EncounterNoteResponseDTO> noteEntries;
 
+        /**
+         * QA D1910 (round 53): set on the patient's read only. True while a note
+         * of the visit still waits for its author's signature; the patient then
+         * reads "not finalised" instead of the draft, which is never sent.
+         */
+        private Boolean notePendingSignature;
+
     /** Optional derived full name so clients don't concatenate */
     @JsonProperty("patientFullName")
     public String getPatientFullName() {

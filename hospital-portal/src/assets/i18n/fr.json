@@ -5905,6 +5905,7 @@
       "PENDING_INTERPRETATION": "Analyse en cours — votre résultat s’affichera ici dès que le laboratoire l’aura validé."
     },
     "VISITS": {
+      "PENDING_SIGNATURE": "Non finalisé — en attente de signature du praticien",
       "ASSESSMENT": "Évaluation du médecin",
       "TITLE": "Historique des visites",
       "LOADING": "Chargement de l’historique…",
@@ -7237,6 +7238,7 @@
         "GENERAL": "Général"
       },
       "AUDIT_ENTITY_TYPE": {
+        "SAFEGUARDING": "Revue de vigilance protection de l’enfance",
         "DELIVERY_RECORD": "Compte rendu d’accouchement",
         "ORDER_REVIEW_HOLD": "Blocage pour revue de prescription",
         "DEATH_DISPUTE": "Contestation de décès",
@@ -13660,5 +13662,17 @@
     "VISIT_DATE": "Date de la visite",
     "AGE": "Non signée depuis",
     "AGE_VALUE": "{{days}} j {{hours}} h"
+  },
+  "SAFEGUARDING": {
+    "TITLE": "Vigilance protection de l'enfance — revue requise",
+    "BODY": "Patiente de {{age}} ans admise en travail (seuil provisoire : moins de {{threshold}} ans). Une revue documentée par le clinicien responsable ou l'équipe de protection de l'enfance est requise. Les soins ne sont ni bloqués ni retardés ; une revue obstétricale senior a été demandée.",
+    "CONFIDENTIAL": "Visible uniquement par l'équipe soignante et les administrateurs de cet hôpital. Ne pas prévenir automatiquement la famille.",
+    "RAISED": "Ouverte le {{date}}",
+    "PROVISIONAL": "Règle provisoire, en attente d'approbation du responsable d'obstétrique et du responsable de la protection de l'enfance.",
+    "NOTE_LABEL": "Revue documentée",
+    "RECORD": "Consigner la revue",
+    "RECORD_BY_PHYSICIAN": "La revue est consignée par un médecin ou un chirurgien de cet hôpital.",
+    "RECORDED": "Revue consignée",
+    "RECORD_FAILED": "La revue n'a pas pu être consignée."
   }
 }

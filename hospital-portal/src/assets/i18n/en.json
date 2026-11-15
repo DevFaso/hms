@@ -5905,6 +5905,7 @@
       "PENDING_INTERPRETATION": "In progress — your result will appear here once the laboratory has released it."
     },
     "VISITS": {
+      "PENDING_SIGNATURE": "Not finalised — awaiting the clinician’s signature",
       "ASSESSMENT": "Doctor's assessment",
       "TITLE": "Visit History",
       "LOADING": "Loading visit history...",
@@ -7271,6 +7272,7 @@
         "GENERAL": "General"
       },
       "AUDIT_ENTITY_TYPE": {
+        "SAFEGUARDING": "Child-protection vigilance review",
         "DELIVERY_RECORD": "Delivery record",
         "ORDER_REVIEW_HOLD": "Order review hold",
         "DEATH_DISPUTE": "Death dispute",
@@ -13660,5 +13662,17 @@
     "VISIT_DATE": "Visit date",
     "AGE": "Unsigned for",
     "AGE_VALUE": "{{days}} d {{hours}} h"
+  },
+  "SAFEGUARDING": {
+    "TITLE": "Child-protection vigilance — review required",
+    "BODY": "Patient aged {{age}} admitted in labour (provisional threshold: under {{threshold}}). A documented review by the responsible clinician or the safeguarding team is required. Care is not blocked or delayed; a senior obstetric review has been requested.",
+    "CONFIDENTIAL": "Visible only to the treating team and this hospital's administrators. Do not notify relatives automatically.",
+    "RAISED": "Opened on {{date}}",
+    "PROVISIONAL": "Provisional rule, pending approval by the obstetric lead and the child-protection lead.",
+    "NOTE_LABEL": "Documented review",
+    "RECORD": "Record the review",
+    "RECORD_BY_PHYSICIAN": "The review is recorded by a doctor or surgeon of this hospital.",
+    "RECORDED": "Review recorded",
+    "RECORD_FAILED": "The review could not be recorded."
   }
 }

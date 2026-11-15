@@ -26,6 +26,13 @@ public interface TreatmentPlanRepository extends JpaRepository<TreatmentPlan, UU
     @EntityGraph(attributePaths = {"patient", "hospital", "encounter", "assignment", "author", "author.user", "supervisingStaff", "supervisingStaff.user", "signOffBy", "signOffBy.user"})
     Page<TreatmentPlan> findAllByPatientIdAndHospitalId(UUID patientId, UUID hospitalId, Pageable pageable);
 
+    /** QA D1910 class: the patient's plans, only in the statuses the patient may read. */
+    @EntityGraph(attributePaths = {"patient", "hospital", "encounter", "assignment", "author", "author.user", "author.user.patientProfile", "author.user.staffProfile",
+        "supervisingStaff", "supervisingStaff.user", "supervisingStaff.user.patientProfile", "supervisingStaff.user.staffProfile",
+        "signOffBy", "signOffBy.user", "signOffBy.user.patientProfile", "signOffBy.user.staffProfile"})
+    Page<TreatmentPlan> findAllByPatientIdAndStatusIn(UUID patientId, java.util.Collection<TreatmentPlanStatus> statuses,
+                                                      Pageable pageable);
+
     @EntityGraph(attributePaths = {"patient", "hospital", "encounter", "assignment", "author", "author.user", "supervisingStaff", "supervisingStaff.user", "signOffBy", "signOffBy.user"})
     Page<TreatmentPlan> findAllByStatus(TreatmentPlanStatus status, Pageable pageable);
 

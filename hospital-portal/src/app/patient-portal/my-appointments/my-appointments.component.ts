@@ -500,7 +500,15 @@ export class MyAppointmentsComponent implements OnInit {
         ['hospital', 'department', 'apptDate', 'apptTime'],
         this.translate.instant('COMMON.FIELD_REQUIRED'),
       );
-      this.bookingError.set(this.translate.instant('PORTAL.APPOINTMENTS.BOOKING.MISSING_FIELDS'));
+      // QA D1913: the banner names the blank fields, as the reschedule dialog does (D1358).
+      this.bookingError.set(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'PORTAL.APPOINTMENTS.BOOKING.HOSPITAL', value: this.selectedHospitalId },
+          { labelKey: 'PORTAL.APPOINTMENTS.DEPARTMENT', value: this.selectedDepartmentId },
+          { labelKey: 'PORTAL.APPOINTMENTS.DATE', value: this.selectedDate },
+          { labelKey: 'PORTAL.APPOINTMENTS.TIME', value: this.selectedTime },
+        ]) ?? this.translate.instant('PORTAL.APPOINTMENTS.BOOKING.MISSING_FIELDS'),
+      );
       return;
     }
 

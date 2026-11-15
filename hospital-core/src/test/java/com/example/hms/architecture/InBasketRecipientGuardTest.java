@@ -93,6 +93,11 @@ class InBasketRecipientGuardTest {
         // QA D1802: a death certificate a corrected birth outcome contradicts, for whoever may amend a certificate.
         Map.entry("StillbirthCertificateConflicts.java", codes(setConstant(
             com.example.hms.service.maternity.StillbirthCertificateConflicts.class, "REVIEWER_ROLE_CODES"))),
+        // r53 (provisional rule 2026-11-14): a minor's labour admission, for the hospital's doctors, surgeons and
+        // midwives (the safeguarding task) and its doctors and surgeons (the senior obstetric review).
+        Map.entry("SafeguardingReviewWorker.java", union(
+            codes(setConstant(com.example.hms.service.safeguarding.SafeguardingReviewWorker.class, "SAFEGUARDING_ROLE_CODES")),
+            codes(setConstant(com.example.hms.service.safeguarding.SafeguardingReviewWorker.class, "SENIOR_REVIEW_ROLE_CODES")))),
         // The store itself: every sender above reaches it through createItem.
         Map.entry("InBasketServiceImpl.java", Set.of()));
 

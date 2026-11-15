@@ -56,6 +56,9 @@ class ChartSidePanelRoleGuardTest {
         return List.of(
             new Panel("app-voided-death-closures-banner", list("VOIDED_CLOSURES_VIEW_ROLES"),
                 rolesOf(gate(MortalityController.class, "getVoidedClosures"))),
+            // r53: the child-protection vigilance banner (provisional rule 2026-11-14).
+            new Panel("app-safeguarding-banner", list("SAFEGUARDING_VIEW_ROLES"),
+                rolesOf(gate(com.example.hms.controller.SafeguardingReviewController.class, "forPatient"))),
             new Panel("app-storyboard-banner", list("STORYBOARD_VIEW_ROLES"),
                 rolesOf(gate(PatientStoryboardController.class, "getStoryboard"))),
             new Panel("app-order-review-panel", list("ORDER_REVIEW_VIEW_ROLES"),
@@ -105,12 +108,17 @@ class ChartSidePanelRoleGuardTest {
         assertThat(guardOf(html, "<app-voided-death-closures-banner")).contains("canSeeVoidedClosures()")
             .doesNotContain("canSeeBpaPanel()");
         assertThat(guardOf(html, "<app-storyboard-banner")).contains("canSeeStoryboard()");
+        assertThat(guardOf(html, "<app-safeguarding-banner")).contains("canSeeSafeguarding()");
         assertThat(guardOf(html, "<app-bpa-panel")).contains("canSeeBpaPanel()");
         String detail = read(DETAIL_TS);
         assertThat(between(detail, "canSeeVoidedClosures(): boolean {", "}"))
             .contains("hasAnyActiveRole(VOIDED_CLOSURES_VIEW_ROLES)");
         assertThat(between(detail, "canSeeStoryboard(): boolean {", "}"))
             .contains("hasAnyActiveRole(STORYBOARD_VIEW_ROLES)");
+        assertThat(between(detail, "canSeeSafeguarding(): boolean {", "}"))
+            .contains("hasAnyActiveRole(SAFEGUARDING_VIEW_ROLES)");
+        assertThat(between(read(APP.resolve("services/safeguarding.service.ts")), "forPatient(", "\n  }"))
+            .contains("backgroundRequestOptions()");
         assertThat(read(APP.resolve("patients/order-review-panel/order-review-panel.component.ts")))
             .contains("hasAnyActiveRole(ORDER_REVIEW_VIEW_ROLES)");
 

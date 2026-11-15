@@ -197,6 +197,7 @@ public class ConsultationServiceImpl implements ConsultationService {
             // the hospital she works at. Not a disclosure: no reach recorded.
             return consultationRepository.findByPatient_IdOrderByRequestedAtDesc(patientId).stream()
                 .map(this::toResponseDTO)
+                .map(ConsultationServiceImpl::asReadByPatient)
                 .toList();
         }
         // ── Tenant isolation ──
@@ -231,7 +232,25 @@ public class ConsultationServiceImpl implements ConsultationService {
     public List<ConsultationResponseDTO> getConsultationsForPortalPatient(UUID patientId) {
         return consultationRepository.findByPatient_IdOrderByRequestedAtDesc(patientId).stream()
             .map(this::toResponseDTO)
+            .map(ConsultationServiceImpl::asReadByPatient)
             .toList();
+    }
+
+    /**
+     * QA D1910 class (round 53): the consultant's note, recommendations and
+     * follow-up are written while the consultation is still open (the update,
+     * the assignment and the scheduling notes are clinician-to-clinician
+     * working text). The patient reads them once the consultant has completed
+     * the consultation, never before: an unfinished opinion is not the
+     * patient's yet.
+     */
+    static ConsultationResponseDTO asReadByPatient(ConsultationResponseDTO dto) {
+        if (dto != null && dto.getStatus() != ConsultationStatus.COMPLETED) {
+            dto.setConsultantNote(null);
+            dto.setRecommendations(null);
+            dto.setFollowUpInstructions(null);
+        }
+        return dto;
     }
 
     @Override

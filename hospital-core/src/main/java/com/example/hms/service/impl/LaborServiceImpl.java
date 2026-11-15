@@ -277,6 +277,7 @@ public class LaborServiceImpl implements LaborService {
             .build();
 
         LaborEpisode saved = episodeRepository.save(episode);
+        screenMinorLabour(saved, recorderUserId);
         return laborMapper.toEpisodeResponse(saved, 0, false);
     }
 
@@ -477,6 +478,7 @@ public class LaborServiceImpl implements LaborService {
         close(source, LaborStatus.TRANSFERRED_OUT, now, reason, destination, caller);
         LaborEpisode continued = episodeRepository.save(continuation(source, destination, destinationRegistration,
             null, caller, now));
+        screenMinorLabour(continued, callerUserId);
 
         auditTransfer(com.example.hms.enums.AuditEventType.LABOR_EPISODE_TRANSFERRED_OUT, source, sourceHospitalId,
             callerUserId, "Labour episode transferred to another hospital with a handover", destination.getId());
@@ -528,6 +530,7 @@ public class LaborServiceImpl implements LaborService {
         close(source, LaborStatus.LEFT_WITHOUT_HANDOVER, now, reason, acting, caller);
         LaborEpisode continued = episodeRepository.save(continuation(source, acting, registration,
             callerStaffAt(acting, callerUserId), caller, now));
+        screenMinorLabour(continued, callerUserId);
 
         auditTransfer(com.example.hms.enums.AuditEventType.LABOR_EPISODE_LEFT_WITHOUT_HANDOVER, source, sourceHospitalId,
             callerUserId, "Labour episode closed: she arrived at another hospital without a handover", actingHospitalId);
@@ -570,6 +573,28 @@ public class LaborServiceImpl implements LaborService {
         source.setTransferHospital(takenOverBy);
         source.setTransferredBy(by);
         episodeRepository.saveAndFlush(source);
+    }
+
+    /** r53: the safeguarding screen of a labour admission (setter-injected: never part of the constructor). */
+    private com.example.hms.service.safeguarding.MinorLabourSafeguarding minorLabourSafeguarding;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setMinorLabourSafeguarding(com.example.hms.service.safeguarding.MinorLabourSafeguarding minorLabourSafeguarding) {
+        this.minorLabourSafeguarding = minorLabourSafeguarding;
+    }
+
+    /**
+     * r53 (provisional, pending approval): a labour episode opened at a hospital, new or continued there, is a labour
+     * admission at that hospital. A minor's opens that hospital's own safeguarding review after the commit; another
+     * hospital's review is never carried over or shown. Never blocks the episode.
+     */
+    private void screenMinorLabour(LaborEpisode episode, UUID actorUserId) {
+        if (minorLabourSafeguarding == null || episode == null || episode.getHospital() == null) {
+            return;
+        }
+        minorLabourSafeguarding.onLabourAdmission(episode.getPatient(), episode.getHospital().getId(),
+            episode.getAdmittedAt(), com.example.hms.model.safeguarding.SafeguardingReview.SOURCE_LABOR_EPISODE,
+            episode.getId(), actorUserId);
     }
 
     /** The receiving hospital's episode: the source's admission facts, active, linked to it. */

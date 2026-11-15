@@ -55,6 +55,8 @@ class PartialUniqueReleaseFlushGuardTest {
     private static final Map<String, String> ENTITY_OF_TABLE = Map.ofEntries(
         Map.entry("death_records", "DeathRecord"),
         Map.entry("fetal_death_events", "FetalDeathEvent"),
+        // r53: one open safeguarding review per patient and hospital; recording it releases the slot.
+        Map.entry("safeguarding_reviews", "SafeguardingReview"),
         Map.entry("death_disputes", "DeathDispute"),
         Map.entry("order_review_holds", "OrderReviewHold"),
         Map.entry("patient_blood_groups", "PatientBloodGroup"),

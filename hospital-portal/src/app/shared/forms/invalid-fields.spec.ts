@@ -46,6 +46,37 @@ describe('invalid-fields (QA D1072)', () => {
     expect(root.querySelector(`#${invalidMessageId('last')}`)).toBeNull();
   });
 
+  it('QA D1913: a refused field loses its mark as soon as it is filled, without a new submit', () => {
+    refuseFields(
+      root,
+      ['last', 'gender'],
+      ['first', 'last', 'gender'],
+      'Ce champ est obligatoire.',
+    );
+    const last = root.querySelector<HTMLInputElement>('#last')!;
+
+    last.value = '   ';
+    last.dispatchEvent(new Event('input'));
+    expect(last.getAttribute('aria-invalid')).withContext('still blank').toBe('true');
+
+    last.value = 'Traoré';
+    last.dispatchEvent(new Event('input'));
+    expect(last.hasAttribute('aria-invalid')).toBeFalse();
+    expect(last.getAttribute('aria-describedby')).toBe('last-hint');
+    expect(root.querySelector(`#${invalidMessageId('last')}`)).toBeNull();
+    expect(root.querySelector('#gender')!.getAttribute('aria-invalid'))
+      .withContext('the other field keeps its mark')
+      .toBe('true');
+
+    // A later refusal marks it again, and the mark clears again once filled.
+    last.value = '';
+    refuseFields(root, ['last'], ['first', 'last', 'gender'], 'Ce champ est obligatoire.');
+    expect(last.getAttribute('aria-invalid')).toBe('true');
+    last.value = 'Ouédraogo';
+    last.dispatchEvent(new Event('change'));
+    expect(last.hasAttribute('aria-invalid')).toBeFalse();
+  });
+
   it('a second refusal does not duplicate the message', () => {
     refuseFields(root, ['first'], ['first'], 'a');
     refuseFields(root, ['first'], ['first'], 'b');

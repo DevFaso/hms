@@ -41,6 +41,7 @@ class LabResultReleaseNotifierTest {
     @Mock private NotificationService notificationService;
     @Mock private NotificationPreferenceRepository preferenceRepository;
     @Mock private PlatformTransactionManager transactionManager;
+    @Mock private com.example.hms.repository.LabOrderRepository labOrderRepository;
 
     @InjectMocks
     private LabResultReleaseNotifier notifier;
@@ -64,6 +65,8 @@ class LabResultReleaseNotifierTest {
         order.setId(UUID.randomUUID());
         order.setPatient(patient);
         order.setLabTestDefinition(definition);
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(java.util.Optional.of(order));
     }
 
     private LabResult released(String value, String unit) {
@@ -185,5 +188,77 @@ class LabResultReleaseNotifierTest {
             .contains("10,4 g/dL").contains("6,5 g/dL");
         assertThat(localizer.render("lab.result.correction.notification", stored, java.util.Locale.ENGLISH))
             .contains("10.4 g/dL").contains("6.5 g/dL");
+    }
+
+    @Test
+    @DisplayName("QA D1912 — a voided order withdraws the patient's own LAB_RESULT notifications, writing nothing new")
+    void d1912_aVoidWithdrawsThePatientsNotifications() {
+        LabResult result = released("1.45", "g/L");
+
+        notifier.patientResultsWithdrawn(order, List.of(result.getId()));
+
+        verify(notificationService).withdrawForSubjects("awa.patient", "LAB_RESULT", List.of(result.getId()));
+        verify(notificationService, never()).createNotification(anyString(), any(), anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("QA D1912 — no portal account, nothing to withdraw")
+    void d1912_noPortalAccountIsANoOp() {
+        order.getPatient().setUser(null);
+
+        notifier.patientResultsWithdrawn(order, List.of(UUID.randomUUID()));
+
+        verifyNoInteractions(notificationService);
+    }
+
+    @Test
+    @DisplayName("QA D1912 review — a void that commits before the delivery: the delivery writes nothing")
+    void d1912_aVoidBeforeTheDeliveryWins() {
+        LabResult result = released("1.45", "g/L");
+        java.util.List<Runnable> afterCommit = new java.util.ArrayList<>();
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            notifier.patientResultReleased(result);
+            org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+                .forEach(sync -> afterCommit.add(sync::afterCommit));
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+        // The void commits between the release's commit and the delivery.
+        order.setStatus(com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR);
+        notifier.patientResultsWithdrawn(order, List.of(result.getId()));
+
+        afterCommit.forEach(Runnable::run);
+
+        verify(labOrderRepository).findWithLockById(order.getId());
+        verify(notificationService, never()).createNotification(anyString(), any(), anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("QA D1912 review — a delivery before the void: written under the order lock, then withdrawn")
+    void d1912_aDeliveryBeforeTheVoidIsWithdrawn() {
+        LabResult result = released("1.45", "g/L");
+        when(preferenceRepository.findByUser_IdAndNotificationType(portalUser.getId(), NotificationType.LAB_RESULT))
+            .thenReturn(List.of());
+
+        notifier.patientResultReleased(result);
+        order.setStatus(com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR);
+        notifier.patientResultsWithdrawn(order, List.of(result.getId()));
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(labOrderRepository, notificationService);
+        inOrder.verify(labOrderRepository).findWithLockById(order.getId());
+        inOrder.verify(notificationService).createNotification(eq("lab.result.patient.available"), any(),
+            eq("awa.patient"), eq("LAB_RESULT"), eq(result.getId()));
+        inOrder.verify(notificationService).withdrawForSubjects("awa.patient", "LAB_RESULT", List.of(result.getId()));
+    }
+
+    @Test
+    @DisplayName("QA D1912 review — an order deleted before the delivery: nothing is announced")
+    void d1912_aDeletedOrderIsNotAnnounced() {
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(java.util.Optional.empty());
+
+        notifier.patientResultReleased(released("1.45", "g/L"));
+
+        verify(notificationService, never()).createNotification(anyString(), any(), anyString(), anyString(), any());
     }
 }

@@ -198,9 +198,20 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     @Override
     @Transactional(readOnly = true)
     public Page<TreatmentPlanResponseDTO> listForPortalPatient(UUID patientId, Pageable pageable) {
-        return treatmentPlanRepository.findAllByPatientId(patientId, pageable)
+        return treatmentPlanRepository.findAllByPatientIdAndStatusIn(patientId, PATIENT_VISIBLE_STATUSES, pageable)
             .map(treatmentPlanMapper::toResponseDTO);
     }
+
+    /**
+     * QA D1910 class (round 53): a plan in DRAFT, IN_REVIEW or
+     * REVISIONS_REQUIRED is the author's unfinished work, not yet approved by
+     * the reviewing clinician (QA D1127), and a cancelled plan may never have
+     * been approved; the patient read every one of them. The patient reads an
+     * approved plan only. ARCHIVED is left out too: an archived plan may never
+     * have been approved, and nothing on the row says whether it was.
+     */
+    static final java.util.Set<com.example.hms.enums.TreatmentPlanStatus> PATIENT_VISIBLE_STATUSES =
+        java.util.EnumSet.of(com.example.hms.enums.TreatmentPlanStatus.APPROVED);
 
     @Override
     @Transactional(readOnly = true)
