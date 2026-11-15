@@ -537,8 +537,11 @@
               <div class="detail-field" data-testid="read-back-evidence">
                 <span class="field-label">{{ 'LAB_RESULTS.READ_BACK_RECORDED' | translate }}</span>
                 <span class="field-value"
-                  >“{{ r.criticalReadBackValue }}” —
-                  {{ r.criticalReadBackAt | serverTime | dateTime }} —
+                  >{{
+                    'LAB_RESULTS.QUOTED_READ_BACK_VALUE'
+                      | translate: { value: r.criticalReadBackValue }
+                  }}
+                  — {{ r.criticalReadBackAt | serverTime | dateTime }} —
                   {{ r.criticalReadBackBy || '—' }}</span
                 >
               </div>
@@ -551,7 +554,11 @@
               <div class="detail-field detail-mismatch" data-testid="read-back-mismatch">
                 <span class="field-label">{{ 'LAB_RESULTS.READ_BACK_MISMATCH' | translate }}</span>
                 <span class="field-value"
-                  >“{{ r.criticalReadBackValue }}” — {{ r.criticalReadBackBy || '—' }}</span
+                  >{{
+                    'LAB_RESULTS.QUOTED_READ_BACK_VALUE'
+                      | translate: { value: r.criticalReadBackValue }
+                  }}
+                  — {{ r.criticalReadBackBy || '—' }}</span
                 >
               </div>
             }

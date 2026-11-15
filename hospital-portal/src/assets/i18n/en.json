@@ -4110,6 +4110,7 @@
     "VERSION_ERROR": "The new version could not be created."
   },
   "LAB_RESULTS": {
+    "QUOTED_READ_BACK_VALUE": "“{{value}}”",
     "ALL_AGES": "All ages",
     "CORRECTED": "Corrected",
     "CORRECTED_HINT": "This result corrects a result released earlier; the earlier value stays on record, marked superseded.",
@@ -13661,6 +13662,7 @@
     "WHAT_NOW_STOP": "The prescriber reviewed this allergy conflict and stopped the order. Do not give or dispense it; contact the prescriber. You can still record the dose as held or refused."
   },
   "ALLERGY_REVIEW_STATE": {
+    "VALUE_SEPARATOR": ": ",
     "TITLE_AWAITING": "Awaiting prescriber review",
     "TITLE_CONTINUE": "Prescriber reviewed: continue under the plan",
     "TITLE_STOP": "Prescriber decided to stop: contact the prescriber",
