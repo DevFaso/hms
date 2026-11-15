@@ -257,7 +257,8 @@
                     >{{ o.status | enumLabel: 'imagingOrderStatus' }}</span
                   >
                   @if (o.authorizationPending) {
-                    <span
+                    {{ ' '
+                    }}<span
                       class="status-badge status-preliminary"
                       data-testid="imaging-row-preauth-pending"
                       >{{ 'IMAGING.PREAUTH_PENDING.FLAG' | translate }}</span

@@ -47,6 +47,7 @@ import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive
 import { AuthorshipService } from '../shared/authorship.service';
 import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { joinReasons } from '../shared/required-fields';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { localDateString, serverLocalDate } from '../shared/date-utils';
@@ -780,19 +781,25 @@ export class ImagingComponent implements OnInit {
     const reason = this.overrideReason();
     const reasonIds = this.overrideReasons.map((r) => `img-duplicate-reason-${r}`);
     const allIds = [...reasonIds, DUPLICATE_NOTE_ID];
+    // A reason, and with « Autre » its note: every missing part said at once.
+    const refused: { id: string; message: string }[] = [];
     if (!reason) {
-      const message = this.translate.instant('IMAGING.DUPLICATE.REASON_REQUIRED');
+      refused.push({
+        id: reasonIds[0],
+        message: this.translate.instant('IMAGING.DUPLICATE.REASON_REQUIRED'),
+      });
+    } else if (reason === 'OTHER' && !this.overrideNote().trim()) {
+      refused.push({
+        id: DUPLICATE_NOTE_ID,
+        message: this.translate.instant('IMAGING.DUPLICATE.NOTE_REQUIRED'),
+      });
+    }
+    const message = joinReasons(refused.map((r) => r.message));
+    refuseFields(this.host.nativeElement, refused, allIds, message ?? '');
+    if (message) {
       this.overrideError.set(message);
-      refuseFields(this.host.nativeElement, [reasonIds[0]], allIds, message);
       return;
     }
-    if (reason === 'OTHER' && !this.overrideNote().trim()) {
-      const message = this.translate.instant('IMAGING.DUPLICATE.NOTE_REQUIRED');
-      this.overrideError.set(message);
-      refuseFields(this.host.nativeElement, [DUPLICATE_NOTE_ID], allIds, message);
-      return;
-    }
-    refuseFields(this.host.nativeElement, [], allIds, '');
     this.overrideError.set(null);
     this.saveOrder(true);
   }

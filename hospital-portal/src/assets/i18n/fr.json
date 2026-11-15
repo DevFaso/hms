@@ -3773,7 +3773,7 @@
       "REASON_LEGEND": "Pourquoi commander quand même ?",
       "REASON_REQUIRED": "Choisissez pourquoi vous commandez cet examen malgré la demande récente.",
       "NOTE_REQUIRED": "Précisez le motif : une note est obligatoire avec « Autre ».",
-      "NOTE_LABEL": "Note (obligatoire)",
+      "NOTE_LABEL": "Précisez le motif",
       "OVERRIDE_LABEL": "Commandée malgré une demande récente"
     },
     "PREAUTH_PENDING": {

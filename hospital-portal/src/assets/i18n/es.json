@@ -3773,7 +3773,7 @@
       "REASON_LEGEND": "¿Por qué solicitar de todos modos?",
       "REASON_REQUIRED": "Elija por qué solicita este estudio a pesar de la solicitud reciente.",
       "NOTE_REQUIRED": "Describa el motivo: la nota es obligatoria con «Otro».",
-      "NOTE_LABEL": "Nota (obligatoria)",
+      "NOTE_LABEL": "Precise el motivo",
       "OVERRIDE_LABEL": "Solicitada a pesar de una solicitud reciente"
     },
     "PREAUTH_PENDING": {

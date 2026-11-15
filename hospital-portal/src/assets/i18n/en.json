@@ -3773,7 +3773,7 @@
       "REASON_LEGEND": "Why order anyway?",
       "REASON_REQUIRED": "Choose why you are ordering this study despite the recent order.",
       "NOTE_REQUIRED": "Describe the reason: a note is required with \"Other\".",
-      "NOTE_LABEL": "Note (required)",
+      "NOTE_LABEL": "Detail the reason",
       "OVERRIDE_LABEL": "Ordered despite a recent order"
     },
     "PREAUTH_PENDING": {
