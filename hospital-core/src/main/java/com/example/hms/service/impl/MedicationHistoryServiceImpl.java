@@ -20,6 +20,7 @@ import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.repository.PharmacyFillRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.service.MedicationHistoryService;
+import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -92,8 +93,8 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
 
         // Convert to timeline entries
         List<MedicationTimelineEntryDTO> timeline = new ArrayList<>();
-        timeline.addAll(convertPrescriptionsToTimelineEntries(prescriptions));
-        timeline.addAll(convertFillsToTimelineEntries(pharmacyFills));
+        timeline.addAll(convertPrescriptionsToTimelineEntries(prescriptions, locale));
+        timeline.addAll(convertFillsToTimelineEntries(pharmacyFills, locale));
 
         // Sort by start date
         timeline.sort((e1, e2) -> {
@@ -132,7 +133,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         boolean polypharmacy = concurrent >= 5;
 
         // Build warnings
-        List<String> warnings = buildWarnings(withInteractions, withOverlaps, polypharmacy, concurrent);
+        List<String> warnings = buildWarnings(withInteractions, withOverlaps, polypharmacy, concurrent, locale);
 
         log.info("Timeline generated: {} total meds, {} active, {} interactions, {} overlaps",
             total, active, withInteractions, withOverlaps);
@@ -267,9 +268,9 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         return endDate == null || !date.isAfter(endDate);
     }
 
-    private List<MedicationTimelineEntryDTO> convertPrescriptionsToTimelineEntries(List<Prescription> prescriptions) {
+    private List<MedicationTimelineEntryDTO> convertPrescriptionsToTimelineEntries(List<Prescription> prescriptions, Locale locale) {
         return prescriptions.stream()
-            .map(this::prescriptionToTimelineEntry)
+            .map(rx -> prescriptionToTimelineEntry(rx, locale))
             .toList();
     }
 
@@ -289,7 +290,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         return controlledResolver != null ? controlledResolver.isControlled(p) : p.isControlledSubstance();
     }
 
-    private MedicationTimelineEntryDTO prescriptionToTimelineEntry(Prescription rx) {
+    private MedicationTimelineEntryDTO prescriptionToTimelineEntry(Prescription rx, Locale locale) {
         LocalDate startDate = rx.getCreatedAt() != null ? rx.getCreatedAt().toLocalDate() : null;
         LocalDate endDate = calculateEndDate(startDate, rx.getDuration());
 
@@ -309,7 +310,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .route(rx.getRoute())
             .quantityDispensed(rx.getQuantity())
             .quantityUnit(rx.getQuantityUnit())
-            .source("Internal Prescription")
+            .source(MessageUtil.resolve(locale, "medication.timeline.source.prescription"))
             .prescriberName(rx.getStaff() != null ? rx.getStaff().getFullName() : null)
             .pharmacyName(rx.getPharmacyName())
             .status(rx.getStatus() != null ? rx.getStatus().name() : null)
@@ -326,19 +327,19 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .build();
     }
 
-    private List<MedicationTimelineEntryDTO> convertFillsToTimelineEntries(List<PharmacyFill> fills) {
+    private List<MedicationTimelineEntryDTO> convertFillsToTimelineEntries(List<PharmacyFill> fills, Locale locale) {
         return fills.stream()
-            .map(this::fillToTimelineEntry)
+            .map(fill -> fillToTimelineEntry(fill, locale))
             .toList();
     }
 
-    private MedicationTimelineEntryDTO fillToTimelineEntry(PharmacyFill fill) {
+    private MedicationTimelineEntryDTO fillToTimelineEntry(PharmacyFill fill, Locale locale) {
         LocalDate endDate = null;
         if (fill.getFillDate() != null && fill.getDaysSupply() != null) {
             endDate = fill.getFillDate().plusDays(fill.getDaysSupply());
         }
 
-        String source = "Pharmacy Fill";
+        String source = MessageUtil.resolve(locale, "medication.timeline.source.fill");
         if (fill.getSourceSystem() != null) {
             source = fill.getSourceSystem();
         }
@@ -353,7 +354,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .startDate(fill.getFillDate())
             .endDate(endDate)
             .daysSupply(fill.getDaysSupply())
-            .duration(fill.getDaysSupply() != null ? fill.getDaysSupply() + " days" : null)
+            .duration(fill.getDaysSupply() != null ? MessageUtil.resolve(locale, "medication.timeline.duration.days", fill.getDaysSupply()) : null)
             .dosage(fill.getStrength())
             .frequency(null) // Extracted from directions if needed
             .route(null) // Not in PharmacyFill
@@ -567,19 +568,19 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         return !endDate.isBefore(date);
     }
 
-    private List<String> buildWarnings(int interactions, int overlaps, boolean polypharmacy, int concurrent) {
+    private List<String> buildWarnings(int interactions, int overlaps, boolean polypharmacy, int concurrent, Locale locale) {
         List<String> warnings = new ArrayList<>();
         
         if (interactions > 0) {
-            warnings.add("Patient has " + interactions + " drug-drug interaction" + (interactions > 1 ? "s" : "") + " detected");
+            warnings.add(MessageUtil.resolve(locale, "medication.timeline.warning.interactions", interactions));
         }
         
         if (overlaps > 0) {
-            warnings.add(overlaps + " medication" + (overlaps > 1 ? "s have" : " has") + " overlapping therapy");
+            warnings.add(MessageUtil.resolve(locale, "medication.timeline.warning.overlaps", overlaps));
         }
         
         if (polypharmacy) {
-            warnings.add("Polypharmacy detected: Patient is taking " + concurrent + " concurrent medications");
+            warnings.add(MessageUtil.resolve(locale, "medication.timeline.warning.polypharmacy", concurrent));
         }
         
         return warnings;

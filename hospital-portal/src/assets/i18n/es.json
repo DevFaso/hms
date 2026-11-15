@@ -4110,6 +4110,7 @@
     "VERSION_ERROR": "No se pudo crear la nueva versión."
   },
   "LAB_RESULTS": {
+    "QUOTED_READ_BACK_VALUE": "«{{value}}»",
     "ALL_AGES": "Todas las edades",
     "CORRECTED": "Corregido",
     "CORRECTED_HINT": "Este resultado corrige un resultado validado anteriormente; el valor anterior se conserva en el expediente, marcado como sustituido.",
@@ -13659,6 +13660,7 @@
     "WHAT_NOW_STOP": "El prescriptor revisó este conflicto alérgico y detuvo la orden. No la administre ni la dispense; contacte al prescriptor. Aún puede registrar la dosis como suspendida o rechazada."
   },
   "ALLERGY_REVIEW_STATE": {
+    "VALUE_SEPARATOR": ": ",
     "TITLE_AWAITING": "Pendiente de revisión por el prescriptor",
     "TITLE_CONTINUE": "Revisado por el prescriptor: continuar según el plan",
     "TITLE_STOP": "El prescriptor decidió detenerla: contacte al prescriptor",

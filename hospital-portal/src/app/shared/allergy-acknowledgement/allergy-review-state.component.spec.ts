@@ -1,5 +1,8 @@
+import en from '../../../assets/i18n/en.json';
+import fr from '../../../assets/i18n/fr.json';
+import es from '../../../assets/i18n/es.json';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { AllergyHold, AllergyReviewState, allergyHoldRefusal } from './allergy-acknowledgement';
 import { AllergyHoldDialogComponent } from './allergy-hold-dialog.component';
@@ -28,6 +31,30 @@ describe('AllergyReviewStateComponent (QA D1584)', () => {
     }).compileComponents();
     fixture = TestBed.createComponent(AllergyReviewStateComponent);
   });
+
+  for (const [language, dictionary, planLabel, rationaleLabel] of [
+    ['en', en, 'Plan: ', 'Rationale: '],
+    ['fr', fr, 'Conduite à tenir : ', 'Justification : '],
+    ['es', es, 'Plan: ', 'Justificación: '],
+  ] as const) {
+    for (const state of ['CONTINUE', 'STOP'] as const) {
+      it(`D1883: spaces labels and preserves authored text for ${state} in ${language}`, () => {
+        const translate = TestBed.inject(TranslateService);
+        translate.setTranslation(language, dictionary);
+        translate.use(language);
+        const authored = 'Clinical text : unchanged {{example}}';
+        show({ state, plan: authored, rationale: authored });
+        expect(el('allergy-review-state-rationale')?.textContent?.trim()).toBe(
+          rationaleLabel + authored,
+        );
+        if (state === 'CONTINUE') {
+          expect(el('allergy-review-state-plan')?.textContent?.trim()).toBe(planLabel + authored);
+        } else {
+          expect(el('allergy-review-state-plan')).toBeNull();
+        }
+      });
+    }
+  }
 
   it('says nothing when no card stops the drug', () => {
     show(null);

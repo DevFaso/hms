@@ -886,7 +886,7 @@ export class LabResultsComponent implements OnInit {
   }): string {
     const ageMin = range.ageMin;
     const ageMax = range.ageMax;
-    // Round 18: a band in days or months says so ("0–7 jours"); years stay as before.
+    // D1881: every bounded age band names its unit, including default years.
     const unit = (range.ageUnit ?? 'YEARS').toUpperCase();
     // Round 18: free-text source and the unit word come from fixed keys.
     const suffix =
@@ -894,7 +894,7 @@ export class LabResultsComponent implements OnInit {
         ? ' ' + this.translate.instant('LAB_TEST_CONFIG.AGE_UNIT_DAYS')
         : unit === 'MONTHS'
           ? ' ' + this.translate.instant('LAB_TEST_CONFIG.AGE_UNIT_MONTHS')
-          : '';
+          : ' ' + this.translate.instant('LAB_TEST_CONFIG.AGE_UNIT_YEARS');
     if (ageMin != null && ageMax != null) return `${ageMin}–${ageMax}${suffix}`;
     if (ageMin != null) return `${ageMin}+${suffix}`;
     if (ageMax != null) return `0–${ageMax}${suffix}`;
