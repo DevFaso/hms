@@ -702,8 +702,9 @@ public class UltrasoundServiceImpl implements UltrasoundService {
      */
     private UltrasoundReportResponseDTO asReadBy(UltrasoundReport report) {
         UltrasoundReportResponseDTO dto = ultrasoundMapper.toReportResponseDTO(report);
+        Hospital at = report != null ? report.getHospital() : null;
         boolean asPatient = subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.ULTRASOUND_READS)
-            || !inStaffScope(report.getHospital());
+            || !inStaffScope(at);
         return asPatient ? PatientSafeView.ultrasoundReport(dto) : dto;
     }
 

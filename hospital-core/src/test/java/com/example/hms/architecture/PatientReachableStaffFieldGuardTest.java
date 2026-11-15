@@ -60,9 +60,16 @@ class PatientReachableStaffFieldGuardTest {
     private static final Path ROOT = Path.of("src/main/java/com/example/hms");
 
     /** A field name that reads like the care team's working text. */
-    static final Pattern STAFF_ONLY = Pattern.compile(
-        "(?i).*(notes?|reason|override.*|authori[sz]ation.*|allergyDetails|workflow.*|internal.*|statusHistory"
-            + "|signatureValue|escalat.*|clarification.*|lockReason)$");
+    private static final Pattern STAFF_ONLY_ENDING = Pattern.compile(
+        "(?i)(?:notes?|reason|allergyDetails|statusHistory|signatureValue)$");
+
+    /** ... or that names an override, an authorisation, the workflow, an escalation or a clarification. */
+    private static final Pattern STAFF_ONLY_PART = Pattern.compile(
+        "(?i)override|authori[sz]ation|workflow|internal|escalat|clarification");
+
+    static boolean isStaffOnly(String fieldName) {
+        return STAFF_ONLY_ENDING.matcher(fieldName).find() || STAFF_ONLY_PART.matcher(fieldName).find();
+    }
 
     private record Site(String file, String method, String token) {
     }
@@ -265,7 +272,7 @@ class PatientReachableStaffFieldGuardTest {
                     if (Modifier.isStatic(field.getModifiers())) {
                         continue;
                     }
-                    if (STAFF_ONLY.matcher(field.getName()).matches()) {
+                    if (isStaffOnly(field.getName())) {
                         found.add(nameOf(raw));
                     }
                     walk(field.getGenericType(), seen, found);
@@ -355,7 +362,7 @@ class PatientReachableStaffFieldGuardTest {
                 }
                 field.setAccessible(true);
                 Object value = field.get(dto);
-                if (STAFF_ONLY.matcher(field.getName()).matches() && !kept.contains(field.getName())
+                if (isStaffOnly(field.getName()) && !kept.contains(field.getName())
                         && present(value)) {
                     leaks.add(view + " leaves " + nameOf(c) + "#" + field.getName() + " on the patient's copy");
                 }
