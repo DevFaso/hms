@@ -99,7 +99,7 @@
                 }
                 <span class="ct-contact">
                   {{ e.startDate ? (e.startDate | serverTime | date: 'mediumDate') : '—' }} –
-                  {{ e.endDate ? (e.endDate | serverTime | date: 'mediumDate') : '—' }}
+                  {{ shownEnd(e) ? (shownEnd(e) | serverTime | date: 'mediumDate') : '—' }}
                 </span>
               </div>
             </div>

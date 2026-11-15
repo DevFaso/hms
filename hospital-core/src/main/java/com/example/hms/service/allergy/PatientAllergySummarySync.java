@@ -1,6 +1,7 @@
 package com.example.hms.service.allergy;
 
 import com.example.hms.enums.AllergySeverity;
+import com.example.hms.enums.AllergyVerificationStatus;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientAllergy;
 import com.example.hms.repository.PatientAllergyRepository;
@@ -74,6 +75,9 @@ public class PatientAllergySummarySync {
         Map<String, PatientAllergy> distinct = new LinkedHashMap<>();
         rows.stream()
             .filter(PatientAllergy::isActive)
+            // QA (round 54, the D1910/D1912 class): an allergy marked entered in
+            // error is not the patient's; the summary is what the portal shows.
+            .filter(a -> a.getVerificationStatus() != AllergyVerificationStatus.ENTERED_IN_ERROR)
             .filter(a -> a.getAllergenDisplay() != null && !a.getAllergenDisplay().isBlank())
             .sorted(Comparator.comparingInt(PatientAllergySummarySync::severityRank).reversed()
                 .thenComparing(PatientAllergy::getAllergenDisplay, String.CASE_INSENSITIVE_ORDER))

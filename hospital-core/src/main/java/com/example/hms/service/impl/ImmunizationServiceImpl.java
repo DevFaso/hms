@@ -146,9 +146,19 @@ public class ImmunizationServiceImpl implements ImmunizationService {
     public List<ImmunizationResponseDTO> getImmunizationsForPatientPortal(UUID patientId) {
         Patient patient = patientRepository.findByIdUnscoped(patientId)
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+        // QA (round 54, the D1910/D1912 class): a dose removed or marked entered
+        // in error is not part of the patient's record; the portal, the apps and
+        // the health summary all read through here.
         return immunizationRepository.findByPatient_IdOrderByAdministrationDateDesc(patient.getId()).stream()
+                .filter(ImmunizationServiceImpl::isLiveRecord)
                 .map(immunizationMapper::toResponseDTO)
                 .toList();
+    }
+
+    /** A dose still on the record: neither removed nor marked entered in error. */
+    static boolean isLiveRecord(PatientImmunization immunization) {
+        return !Boolean.FALSE.equals(immunization.getActive())
+            && !"ENTERED_IN_ERROR".equalsIgnoreCase(immunization.getStatus());
     }
 
     @Override
@@ -323,7 +333,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         }
         boolean duplicate = immunizationRepository.findByPatient_IdAndActiveTrue(candidate.getPatient().getId()).stream()
             .filter(other -> selfId == null || !selfId.equals(other.getId()))
-            .filter(other -> !"ENTERED_IN_ERROR".equalsIgnoreCase(other.getStatus()))
+            .filter(ImmunizationServiceImpl::isLiveRecord)
             .anyMatch(other -> sameDose(candidate, other));
         if (duplicate) {
             // QA D1365 (round 31): named on the date, so the dialog marks the field.

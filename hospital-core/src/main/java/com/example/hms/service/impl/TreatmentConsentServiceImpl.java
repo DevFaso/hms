@@ -77,7 +77,9 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("consent.patientNotRegistered");
+            // QA D1870 (round 53): a patient not registered here is "not found", like GET /patients/{id};
+            // a distinct answer told a caller holding the id that the patient exists at another hospital.
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
 
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
