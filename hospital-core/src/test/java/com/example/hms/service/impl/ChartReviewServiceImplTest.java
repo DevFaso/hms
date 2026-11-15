@@ -666,40 +666,66 @@ class ChartReviewServiceImplTest {
     }
 
     /**
-     * QA D1930 (r54): before the fix a signed addendum was stored FINAL, so
-     * dev order O1 carries two FINAL reports. The first stays the conclusion
-     * (card, timeline, PDF) and the later one is listed as the addendum it was.
+     * QA D1930 (r54) and Rex on #1171: before the fix every signed revision was
+     * stored FINAL (dev order O1 carries two). Provenance decides, never the
+     * position: the kind recorded on the report's history before its signature.
+     * An addendum adds to the original; a correction replaces it; a later FINAL
+     * with no history is a newer read and replaces it (an obsolete conclusion is
+     * never brought back).
      */
     @Test
-    void aLaterFinalIsReadAsAnAddendumAndTheOriginalStaysTheConclusion_D1930() {
-        LocalDateTime now = LocalDateTime.now();
-        ImagingOrder img = imagingOrder(now.minusDays(1), ImagingModality.CT, "Scanner abdominal");
-        img.setStatus(ImagingOrderStatus.RESULTS_AVAILABLE);
-        when(imagingOrderRepo.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(
-            any(UUID.class), any(), any(Pageable.class)))
-            .thenReturn(new PageImpl<>(List.of(img)));
-        ImagingReport original = imagingReport(img, "Appendicite aiguë non compliquée");
-        original.setReportVersion(1);
-        original.setLatestVersion(Boolean.FALSE);
-        original.setSignedAt(now.minusHours(3));
-        ImagingReport legacyAddendum = imagingReport(img, "Inchangé");
-        legacyAddendum.setReportStatus(ImagingReportStatus.FINAL);
-        legacyAddendum.setReportVersion(2);
-        legacyAddendum.setSignedAt(now.minusHours(1));
-        when(imagingReportRepo.findByImagingOrder_IdInAndLatestVersionIsTrue(any())).thenReturn(List.of(legacyAddendum));
-        when(imagingReportRepo.findByImagingOrder_IdIn(any())).thenReturn(List.of(legacyAddendum, original));
+    void aLaterFinalIsReadByItsRecordedKind_D1930() {
+        Object[][] cases = {
+            // authored as, shown as, the conclusion
+            {ImagingReportStatus.ADDENDUM, "ADDENDUM", "Appendicite aiguë non compliquée"},
+            {ImagingReportStatus.CORRECTED, "CORRECTED", "Inchangé"},
+            {null, "FINAL", "Inchangé"},
+        };
+        for (Object[] c : cases) {
+            LocalDateTime now = LocalDateTime.now();
+            ImagingOrder img = imagingOrder(now.minusDays(1), ImagingModality.CT, "Scanner abdominal");
+            img.setStatus(ImagingOrderStatus.RESULTS_AVAILABLE);
+            when(imagingOrderRepo.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(
+                any(UUID.class), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(img)));
+            ImagingReport original = imagingReport(img, "Appendicite aiguë non compliquée");
+            original.setReportVersion(1);
+            original.setLatestVersion(Boolean.FALSE);
+            original.setSignedAt(now.minusHours(3));
+            ImagingReport legacy = imagingReport(img, "Inchangé");
+            legacy.setReportStatus(ImagingReportStatus.FINAL);
+            legacy.setReportVersion(2);
+            legacy.setSignedAt(now.minusHours(1));
+            if (c[0] != null) {
+                legacy.setStatusHistory(new java.util.ArrayList<>(List.of(
+                    historyRow(legacy, (ImagingReportStatus) c[0], now.minusHours(2)),
+                    historyRow(legacy, ImagingReportStatus.FINAL, now.minusHours(1)))));
+            }
+            when(imagingReportRepo.findByImagingOrder_IdInAndLatestVersionIsTrue(any())).thenReturn(List.of(legacy));
+            when(imagingReportRepo.findByImagingOrder_IdIn(any())).thenReturn(List.of(legacy, original));
 
-        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+            ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
 
-        ChartReviewDTO.ImagingEntryDTO entry = dto.getImaging().get(0);
-        assertThat(entry.getReports())
-            .extracting(ChartReviewDTO.ImagingReportEntryDTO::getReportStatus, ChartReviewDTO.ImagingReportEntryDTO::getImpression)
-            .containsExactly(
-                org.assertj.core.groups.Tuple.tuple("FINAL", "Appendicite aiguë non compliquée"),
-                org.assertj.core.groups.Tuple.tuple("ADDENDUM", "Inchangé"));
-        assertThat(entry.getReportImpression()).isEqualTo("Appendicite aiguë non compliquée");
-        assertThat(dto.getTimeline()).filteredOn(e -> e.getSection() == Section.IMAGING)
-            .extracting("summary").containsExactly("Appendicite aiguë non compliquée");
+            String label = String.valueOf(c[0]);
+            ChartReviewDTO.ImagingEntryDTO entry = dto.getImaging().get(0);
+            assertThat(entry.getReports()).as(label)
+                .extracting(ChartReviewDTO.ImagingReportEntryDTO::getReportStatus, ChartReviewDTO.ImagingReportEntryDTO::getImpression)
+                .containsExactly(
+                    org.assertj.core.groups.Tuple.tuple("FINAL", "Appendicite aiguë non compliquée"),
+                    org.assertj.core.groups.Tuple.tuple(c[1], "Inchangé"));
+            assertThat(entry.getReportImpression()).as(label).isEqualTo(c[2]);
+            assertThat(dto.getTimeline()).as(label).filteredOn(e -> e.getSection() == Section.IMAGING)
+                .extracting("summary").containsExactly(c[2]);
+        }
+    }
+
+    private static com.example.hms.model.ImagingReportStatusHistory historyRow(ImagingReport report,
+            ImagingReportStatus status, LocalDateTime at) {
+        com.example.hms.model.ImagingReportStatusHistory h = new com.example.hms.model.ImagingReportStatusHistory();
+        h.setImagingReport(report);
+        h.setStatus(status);
+        h.setChangedAt(at);
+        return h;
     }
 
     /** QA D1930: a correction still replaces the conclusion; an addendum after it does not. */

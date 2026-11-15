@@ -331,25 +331,38 @@ class AfterVisitSummarySectionsTest {
 
     /**
      * QA D1930 (r54) class: the summary read the latest version alone, so a
-     * signed addendum ("Inchangé") hid the conclusion. The signed original
-     * stays the conclusion, also when the addendum was stored FINAL before the fix.
+     * signed addendum ("Inchangé") hid the conclusion. Provenance decides (Rex
+     * on #1171): an addendum, also one stored FINAL before the fix whose history
+     * says ADDENDUM, never replaces the conclusion; a correction stored FINAL,
+     * or a later FINAL with no history, does.
      */
     @Test
-    @DisplayName("D1930: the conclusion, not an addendum, is the study's impression")
-    void theConclusionNotAnAddendumIsTheImpression_D1930() {
+    @DisplayName("D1930: the conclusion is decided by each version's recorded kind")
+    void theConclusionFollowsTheRecordedKind_D1930() {
         ImagingOrder order = imagingOrder("Scanner abdominal", ImagingOrderStatus.RESULTS_AVAILABLE);
         when(imagingOrders.findByEncounterIdAndStatusNotIn(eq(encounter.getId()), any())).thenReturn(List.of(order));
-        for (com.example.hms.enums.ImagingReportStatus addendumKind : List.of(
-                com.example.hms.enums.ImagingReportStatus.ADDENDUM, com.example.hms.enums.ImagingReportStatus.FINAL)) {
+        Object[][] cases = {
+            {ImagingReportStatus.ADDENDUM, null, "Appendicite aiguë"},
+            {ImagingReportStatus.FINAL, ImagingReportStatus.ADDENDUM, "Appendicite aiguë"},
+            {ImagingReportStatus.FINAL, ImagingReportStatus.CORRECTED, "Inchangé"},
+            {ImagingReportStatus.FINAL, null, "Inchangé"},
+        };
+        for (Object[] c : cases) {
             ImagingReport original = imagingReport(order, "Appendicite aiguë", LocalDateTime.now().minusHours(3));
             original.setReportVersion(1);
-            ImagingReport addendum = imagingReport(order, "Inchangé", LocalDateTime.now());
-            addendum.setReportVersion(2);
-            addendum.setReportStatus(addendumKind);
-            when(imagingReports.findByImagingOrder_IdIn(any())).thenReturn(List.of(addendum, original));
+            ImagingReport later = imagingReport(order, "Inchangé", LocalDateTime.now());
+            later.setReportVersion(2);
+            later.setReportStatus((ImagingReportStatus) c[0]);
+            if (c[1] != null) {
+                com.example.hms.model.ImagingReportStatusHistory authored = new com.example.hms.model.ImagingReportStatusHistory();
+                authored.setStatus((ImagingReportStatus) c[1]);
+                authored.setChangedAt(LocalDateTime.now().minusHours(1));
+                later.setStatusHistory(new java.util.ArrayList<>(List.of(authored)));
+            }
+            when(imagingReports.findByImagingOrder_IdIn(any())).thenReturn(List.of(later, original));
 
-            assertThat(fill().getOrderedTests()).as(addendumKind.name())
-                .extracting(AfterVisitSummaryDTO.OrderedTest::getImpression).containsExactly("Appendicite aiguë");
+            assertThat(fill().getOrderedTests()).as(c[0] + "/" + c[1])
+                .extracting(AfterVisitSummaryDTO.OrderedTest::getImpression).containsExactly(c[2]);
         }
     }
 

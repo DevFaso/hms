@@ -569,7 +569,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
 
     /** QA D1930 (r54): how the chart names each shown version. */
     static String shownKind(ImagingReport r, List<ImagingReport> shown) {
-        return com.example.hms.service.support.ImagingReportConclusion.kindOf(r, shown);
+        return com.example.hms.service.support.ImagingReportConclusion.kindOf(r);
     }
 
     private static int compareVersion(Integer a, Integer b) {
