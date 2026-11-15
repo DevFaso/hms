@@ -109,6 +109,8 @@ public class LabOrderServiceImpl implements LabOrderService {
     private final com.example.hms.repository.LabResultRepository labResultRepository;
     private final com.example.hms.service.lab.LabOrderDuplicateCheck duplicateCheck;
     private final com.example.hms.repository.PatientDiagnosisRepository patientDiagnosisRepository;
+    /** QA D1912: a void withdraws the patient's "new result" notifications. */
+    private final com.example.hms.service.lab.LabResultReleaseNotifier resultReleaseNotifier;
     private static final HexFormat HEX_FORMAT = HexFormat.of();
 
     @Override
@@ -1143,6 +1145,10 @@ public class LabOrderServiceImpl implements LabOrderService {
         labOrder.setCancellationReason(voidReason);
         labOrder.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
         LabOrder saved = labOrderRepository.save(labOrder);
+        // QA D1912 (round 53): the voided results leave the portal; their
+        // "new result available" notifications leave with them.
+        resultReleaseNotifier.patientResultsWithdrawn(saved, labResultRepository.findByLabOrder_Id(saved.getId())
+            .stream().map(com.example.hms.model.LabResult::getId).filter(java.util.Objects::nonNull).toList());
         log.info("Lab order {} voided as entered in error", saved.getId());
         return labOrderMapper.toLabOrderResponseDTO(saved);
     }

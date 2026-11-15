@@ -607,12 +607,34 @@ describe('PatientPortalService encounters (QA D981)', () => {
           encounterDate: '2026-10-20T08:00:00',
           encounterType: 'INPATIENT',
           chiefComplaint: 'Paludisme grave, admis pour artésunate IV',
-          note: { assessment: 'Stable' },
+          note: { assessment: 'Stable', signedAt: '2026-10-20T09:00:00' },
         },
       ],
     });
     expect(reason).toBe('Paludisme grave, admis pour artésunate IV');
     expect(assessment).toBe('Stable');
+  });
+
+  it('QA D1910: never shows an unsigned note, and says the visit is not finalised', () => {
+    let first:
+      | { chiefComplaint: string; diagnosisSummary: string; notePendingSignature: boolean }
+      | undefined;
+    service.getMyEncounters().subscribe((list) => (first = list[0]));
+    httpMock.expectOne('/me/patient/encounters').flush({
+      data: [
+        {
+          id: 'e1',
+          encounterDate: '2026-11-14T08:00:00',
+          encounterType: 'CONSULTATION',
+          chiefComplaint: 'Soif, polyurie',
+          note: { chiefComplaint: 'NOTE-INTERNE', assessment: 'NOTE-INTERNE', signedAt: null },
+          notePendingSignature: true,
+        },
+      ],
+    });
+    expect(first?.diagnosisSummary).toBe('');
+    expect(first?.chiefComplaint).toBe('Soif, polyurie');
+    expect(first?.notePendingSignature).toBeTrue();
   });
 });
 

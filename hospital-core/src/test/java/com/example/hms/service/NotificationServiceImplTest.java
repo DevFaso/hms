@@ -457,4 +457,22 @@ class NotificationServiceImplTest {
                     .isInstanceOf(ResourceNotFoundException.class);
         }
     }
+
+    @org.junit.jupiter.api.Test
+    void d1912_withdrawRemovesTheRecipientsNotificationsAboutTheSubjects() {
+        java.util.List<UUID> ids = java.util.List.of(UUID.randomUUID());
+        when(notificationRepository.deleteForRecipientAndSubjects(username, "LAB_RESULT", ids)).thenReturn(2);
+
+        assertThat(service.withdrawForSubjects(username, "LAB_RESULT", ids)).isEqualTo(2);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(value = {"NULL,LAB_RESULT,true", "' ',LAB_RESULT,true",
+        "john.doe,NULL,true", "john.doe,LAB_RESULT,false"}, nullValues = "NULL")
+    void d1912_nothingToWithdrawWritesNothing(String recipient, String type, boolean withIds) {
+        java.util.List<UUID> ids = withIds ? java.util.List.of(UUID.randomUUID()) : java.util.List.of();
+
+        assertThat(service.withdrawForSubjects(recipient, type, ids)).isZero();
+        verifyNoInteractions(notificationRepository);
+    }
 }

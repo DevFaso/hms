@@ -353,6 +353,9 @@ class ReceptionistResponseShapingTest {
         if (type == Integer.class) {
             return 1;
         }
+        if (type == Boolean.class) {
+            return Boolean.TRUE;
+        }
         if (java.util.List.class.isAssignableFrom(type)) {
             return List.of();
         }

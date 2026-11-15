@@ -281,8 +281,29 @@ describe('MyAppointmentsComponent', () => {
     it('should set error when required fields are missing', () => {
       component.submitBooking();
       // No translations are loaded in TranslateModule.forRoot(); instant() returns the key.
-      expect(component.bookingError()).toBe('PORTAL.APPOINTMENTS.BOOKING.MISSING_FIELDS');
+      expect(component.bookingError()).toBe('COMMON.MISSING_REQUIRED_FIELDS');
       expect(portalService.bookAppointment).not.toHaveBeenCalled();
+    });
+
+    it('QA D1913: the banner names the blank fields, as the reschedule dialog does', () => {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('fr', {
+        COMMON: { MISSING_REQUIRED_FIELDS: 'Champs obligatoires manquants : {{fields}}' },
+        PORTAL: {
+          APPOINTMENTS: {
+            DEPARTMENT: 'Service',
+            DATE: 'Date',
+            TIME: 'Heure',
+            BOOKING: { HOSPITAL: 'Hôpital' },
+          },
+        },
+      });
+      translate.use('fr');
+      component.selectedHospitalId = 'h1';
+
+      component.submitBooking();
+
+      expect(component.bookingError()).toBe('Champs obligatoires manquants : Service, Date, Heure');
     });
 
     it('should call bookAppointment and set success on valid submit', () => {

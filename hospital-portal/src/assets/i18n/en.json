@@ -5877,6 +5877,7 @@
       "PENDING_INTERPRETATION": "In progress — your result will appear here once the laboratory has released it."
     },
     "VISITS": {
+      "PENDING_SIGNATURE": "Not finalised — awaiting the clinician’s signature",
       "ASSESSMENT": "Doctor's assessment",
       "TITLE": "Visit History",
       "LOADING": "Loading visit history...",

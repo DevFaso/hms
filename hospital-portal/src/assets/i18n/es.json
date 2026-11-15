@@ -5877,6 +5877,7 @@
       "PENDING_INTERPRETATION": "Análisis en curso: su resultado aparecerá aquí en cuanto el laboratorio lo valide."
     },
     "VISITS": {
+      "PENDING_SIGNATURE": "No finalizado — pendiente de la firma del profesional",
       "ASSESSMENT": "Valoración del médico",
       "TITLE": "Historial de visitas",
       "LOADING": "Cargando historial de visitas…",

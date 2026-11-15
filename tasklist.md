@@ -6590,3 +6590,8 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Vitals alert DTO name:** `NewbornVitalAlertDTO` now also carries the postpartum warning (`postpartumAlerts`); rename it to a neutral `VitalAlertDTO` (backend + portal `NewbornVitalAlert`) in a style-only PR.
 - **Vitals-path warning has no reminder escalation:** the nurse-station/triage/API warning notifies the recorder and physicians once; only the postpartum observation path raises the obstetric escalation with reminders. Decide with the obstetric lead whether a vitals-path reading should escalate too.
 - **Patient vitals API caller does not show the warning:** `PatientVitalSignResponseDTO.postpartumAlerts` is returned but no portal screen reads it yet (same as `newbornAlerts`).
+## Standing debt — unsigned content in patient reads (fix/patient-portal-unsigned-note-r53)
+- **Immunizations entered in error reach the patient:** `getImmunizationsForPatientPortal` lists every row, `ENTERED_IN_ERROR` included (a voided record, not a draft); filter it as the voided lab result is filtered.
+- **Patient apps do not say "not finalised":** the server no longer sends an unsigned note to the apps; they show no assessment and do not read the new `notePendingSignature` flag yet (Android/iOS parity).
+- **Treatment plans, ARCHIVED:** the patient now reads APPROVED plans only; an archived plan that had been approved is hidden too, because nothing on the row says it was approved (`signOffAt` is never written). Record the approval to show it again.
+- **Voided lab result, clinician notifications:** the void withdraws the PATIENT's LAB_RESULT notifications only; the ordering clinician's correction or critical-value notifications about the voided result stay.

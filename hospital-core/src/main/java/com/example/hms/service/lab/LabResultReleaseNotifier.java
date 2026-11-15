@@ -61,6 +61,8 @@ public class LabResultReleaseNotifier {
     private final NotificationService notificationService;
     private final NotificationPreferenceRepository preferenceRepository;
     private final PlatformTransactionManager transactionManager;
+    /** QA D1912 review: the delivery takes the void's lock on the order row. */
+    private final com.example.hms.repository.LabOrderRepository labOrderRepository;
 
     /**
      * Tell the patient a result is ready. Call it inside the transaction that
@@ -79,11 +81,29 @@ public class LabResultReleaseNotifier {
             return;
         }
         UUID resultId = result.getId();
+        UUID orderId = order.getId();
         UUID userId = portalUser.getId();
         String username = portalUser.getUsername();
         Object testName = testNameOf(order);
         String messageKey = LabResultCorrections.isCorrection(result) ? PATIENT_CORRECTION_MESSAGE_KEY : PATIENT_MESSAGE_KEY;
-        TransactionCallbacks.afterCommit(() -> deliverToPatient(resultId, userId, username, testName, messageKey));
+        TransactionCallbacks.afterCommit(() -> deliverToPatient(orderId, resultId, userId, username, testName,
+            messageKey));
+    }
+
+    /**
+     * QA D1912 (round 53): a voided order's results leave every patient view,
+     * but the "new result available" notifications stayed, so the patient
+     * looked for a result that no longer exists. They are withdrawn with the
+     * result, in the void's transaction; nothing new is written, so no
+     * clinical detail is sent. A patient with no portal account is a no-op.
+     */
+    public void patientResultsWithdrawn(LabOrder order, java.util.Collection<UUID> resultIds) {
+        Patient patient = order != null ? order.getPatient() : null;
+        User portalUser = patient != null ? patient.getUser() : null;
+        if (portalUser == null || resultIds == null || resultIds.isEmpty()) {
+            return;
+        }
+        notificationService.withdrawForSubjects(portalUser.getUsername(), NOTIFICATION_TYPE, resultIds);
     }
 
     /**
@@ -127,10 +147,17 @@ public class LabResultReleaseNotifier {
             CriticalValueNotificationService.localizedValue(result.getResultValue(), NotificationLocales.STAFF), result);
     }
 
-    private void deliverToPatient(UUID resultId, UUID userId, String username, Object testName, String messageKey) {
+    private void deliverToPatient(UUID orderId, UUID resultId, UUID userId, String username, Object testName,
+                                  String messageKey) {
         try {
             ownTransaction().executeWithoutResult(status -> {
-                if (!inAppEnabled(userId)) {
+                // QA D1912 review: the notice is written after the release
+                // commits, so a void could withdraw the notices first and this
+                // one would then announce a voided result. The delivery takes
+                // the order row's lock, the one the void takes: a void that
+                // committed first is seen here and nothing is written; a void
+                // that comes after waits for this insert, then withdraws it.
+                if (!orderStillStands(orderId) || !inAppEnabled(userId)) {
                     return;
                 }
                 notificationService.createNotification(messageKey, new Object[] {testName}, username,
@@ -140,6 +167,13 @@ public class LabResultReleaseNotifier {
             log.warn("Patient notification not written for released lab result {}: {}", resultId,
                 ex.getClass().getSimpleName());
         }
+    }
+
+    /** The order exists and is not voided, read under the void's row lock. */
+    private boolean orderStillStands(UUID orderId) {
+        return orderId != null && labOrderRepository.findWithLockById(orderId)
+            .map(o -> o.getStatus() != com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR)
+            .orElse(false);
     }
 
     /** Explicit disabled row turns the channel off; no row means enabled (AppointmentReminderService). */
