@@ -3519,4 +3519,19 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V300 - the death family's free-text narratives are encrypted at rest.
+         DeathDispute reason/resolution_reason, DeathRecord causes, amendment,
+         notes and entered-in-error reason, FetalDeathEvent creation/supersede
+         reasons widen to TEXT for their ciphertext. Plain idempotent ALTERs;
+         legacy rows are encrypted by PhiTextEncryptionBackfill, not SQL.
+         V298 and V295 are reserved by other branches; V299 left free.
+         ================================================================= -->
+    <changeSet id="V300-encrypt-death-narratives" author="hms-team" runOnChange="false">
+        <sqlFile path="V300__encrypt_death_narratives.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -94,9 +94,10 @@ class PhiTextEncryptionBackfillTest {
 
         new PhiTextEncryptionBackfill(jdbc, txm).backfill();
 
-        // merge notes: 2 batches + the empty one; payload: 1 + the empty one.
-        verify(txm, times(5)).getTransaction(any());
-        verify(txm, times(5)).commit(any());
+        // merge notes: 2 batches + the empty one; payload: 1 + the empty one; each of the ten V300 death-family
+        // columns: its empty one.
+        verify(txm, times(15)).getTransaction(any());
+        verify(txm, times(15)).commit(any());
     }
 
     private static List<PhiTextEncryptionBackfill.LegacyValue> legacyRows(int n) {

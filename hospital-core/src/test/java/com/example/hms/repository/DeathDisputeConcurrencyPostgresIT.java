@@ -61,6 +61,7 @@ import static org.mockito.Mockito.when;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
+@org.springframework.context.annotation.Import(com.example.hms.security.EncryptionKeyHolder.class)
 @org.junit.jupiter.api.Timeout(120)
 class DeathDisputeConcurrencyPostgresIT {
 
@@ -183,6 +184,43 @@ class DeathDisputeConcurrencyPostgresIT {
 
     private List<UUID> dueIds(LocalDateTime before) {
         return disputes.findDueForEscalation(before);
+    }
+
+    @Test
+    @DisplayName("the dispute's reasons and the record's narratives are ciphertext at rest and read back whole")
+    void narrativesAreEncryptedAtRest() {
+        String reason = "Patient retrouvé vivant, pouls perçu, réponse à la voix. ".repeat(18).substring(0, 999) + ".";
+        String resolution = "Décès confirmé après réexamen par le médecin-chef, identité vérifiée. ".repeat(15)
+            .substring(0, 999) + ".";
+        DeathDisputeResponseDTO opened = tx.execute(status -> service.dispute(patient,
+            DeathDisputeRequestDTO.builder().reason(reason).assessedAlive(true).identityVerified(true).build()));
+        tx.executeWithoutResult(status -> service.uphold(opened.getId(),
+            DeathDisputeOutcomeDTO.builder().reason(resolution).build()));
+
+        java.util.Map<String, Object> raw = jdbc.queryForMap(
+            "SELECT reason, resolution_reason FROM clinical.death_disputes WHERE id = ?", opened.getId());
+        assertThat((String) raw.get("reason")).startsWith("gcm1:").doesNotContain("vivant").hasSizeGreaterThan(1000);
+        assertThat((String) raw.get("resolution_reason")).startsWith("gcm1:").doesNotContain("réexamen");
+        DeathDispute read = disputes.findById(opened.getId()).orElseThrow();
+        assertThat(read.getReason()).isEqualTo(reason);
+        assertThat(read.getResolutionReason()).isEqualTo(resolution);
+
+        // The seeded record's cause was written in the clear, as a row from before V300: it still reads.
+        assertThat(records.findById(record).orElseThrow().getImmediateCause()).isEqualTo("Cause");
+        String notes = "Notes : famille prévenue, corps transféré à la morgue.";
+        tx.executeWithoutResult(status -> {
+            com.example.hms.model.DeathRecord death = records.findById(record).orElseThrow();
+            death.setNotes(notes);
+            death.setContributingCauses("Paludisme grave, anémie sévère");
+        });
+        java.util.Map<String, Object> rawRecord = jdbc.queryForMap(
+            "SELECT immediate_cause, notes, contributing_causes FROM clinical.death_records WHERE id = ?", record);
+        assertThat((String) rawRecord.get("notes")).startsWith("gcm1:").doesNotContain("morgue");
+        assertThat((String) rawRecord.get("contributing_causes")).startsWith("gcm1:").doesNotContain("Paludisme");
+        com.example.hms.model.DeathRecord death = records.findById(record).orElseThrow();
+        assertThat(death.getNotes()).isEqualTo(notes);
+        assertThat(death.getContributingCauses()).isEqualTo("Paludisme grave, anémie sévère");
+        assertThat(death.getImmediateCause()).isEqualTo("Cause");
     }
 
     @Test

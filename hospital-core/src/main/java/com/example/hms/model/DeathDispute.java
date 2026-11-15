@@ -1,7 +1,9 @@
 package com.example.hms.model;
 
 import com.example.hms.enums.DeathDisputeStatus;
+import com.example.hms.security.EncryptedStringConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -67,7 +69,8 @@ public class DeathDispute extends BaseEntity {
     private LocalDateTime disputedAt;
 
     @Size(max = 1000)
-    @Column(name = "reason", nullable = false, length = 1000)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "reason", nullable = false, columnDefinition = "TEXT")
     private String reason;
 
     @Column(name = "assessed_alive", nullable = false)
@@ -92,7 +95,8 @@ public class DeathDispute extends BaseEntity {
     private String resolvedByName;
 
     @Size(max = 1000)
-    @Column(name = "resolution_reason", length = 1000)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "resolution_reason", columnDefinition = "TEXT")
     private String resolutionReason;
 
     /** Null until an urgent review item has reached somebody: the sweep keeps trying. */
