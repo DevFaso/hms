@@ -376,18 +376,24 @@ public class AfterVisitSummarySections {
             .build();
     }
 
-    /** The visit's imaging orders, a draft left out; the impression only once the report is signed. */
+    /**
+     * The visit's imaging orders, a draft left out; the impression only once
+     * the report is signed. QA D1930 class: the study's conclusion, never an
+     * addendum read alone ({@code ImagingReportConclusion}).
+     */
     private List<AfterVisitSummaryDTO.OrderedTest> imagingTests(UUID encounterId) {
         List<ImagingOrder> orders = imagingOrderRepository.findByEncounterIdAndStatusNotIn(encounterId,
             List.of(ImagingOrderStatus.DRAFT));
         if (orders.isEmpty()) {
             return List.of();
         }
-        Map<UUID, ImagingReport> reports = imagingReportRepository.findByImagingOrder_IdInAndLatestVersionIsTrue(
+        Map<UUID, ImagingReport> reports = imagingReportRepository.findByImagingOrder_IdIn(
                 orders.stream().map(ImagingOrder::getId).toList()).stream()
             .filter(ImagingReport::isReleasedToPatient)
             .filter(r -> r.getImagingOrder() != null)
-            .collect(Collectors.toMap(r -> r.getImagingOrder().getId(), r -> r, (a, b) -> a));
+            .collect(Collectors.groupingBy(r -> r.getImagingOrder().getId())).entrySet().stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> com.example.hms.service.support.ImagingReportConclusion.of(
+                e.getValue().stream().sorted(com.example.hms.service.support.ImagingReportConclusion.VERSION_ORDER).toList())));
         return orders.stream()
             .map(order -> {
                 ImagingReport report = reports.get(order.getId());

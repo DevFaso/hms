@@ -95,6 +95,7 @@ describe('ImagingComponent — r53 imaging', () => {
       'checkDuplicates',
       'getReportsForOrder',
       'getReportsByHospital',
+      'recordAuthorization',
     ]);
     const list = opts.orders ?? [order()];
     imaging.getAllOrders.and.returnValue(of(list));
@@ -185,6 +186,8 @@ describe('ImagingComponent — r53 imaging', () => {
       expect(warning.textContent).toContain('Radiographie bassin');
       expect(warning.textContent).toContain('Revenir à la demande');
 
+      // Provisional rule 2 (2026-11-15): « Commander quand même » names its reason.
+      (q('[data-testid="imaging-duplicate-reason-CLINICAL_CHANGE"]') as HTMLInputElement).click();
       (q('[data-testid="imaging-duplicate-order-anyway"]') as HTMLButtonElement).click();
       fixture.detectChanges();
 
@@ -519,6 +522,158 @@ describe('ImagingComponent — r53 imaging', () => {
         if (k.startsWith('IMAGING_')) walk(v, `AUDIT_EVENT_TYPE.${k}`);
       }
       expect(offending).toEqual([]);
+    });
+  });
+  describe('Provisional rule 2 (2026-11-15): « Commander quand même » records a reason', () => {
+    function warned(): void {
+      setUp(['ROLE_DOCTOR']);
+      imaging.checkDuplicates.and.returnValue(of([MATCH]));
+      fillNewOrder();
+      component.submitForm();
+      fixture.detectChanges();
+    }
+
+    it('offers the four reasons, in French', () => {
+      warned();
+      const reasons = q('[data-testid="imaging-duplicate-reasons"]')!;
+      expect(reasons.textContent).toContain('Pourquoi commander quand même ?');
+      expect(reasons.textContent).toContain('Changement clinique');
+      expect(reasons.textContent).toContain('Examen précédent inadéquat ou indisponible');
+      expect(reasons.textContent).toContain('Région ou question clinique différente');
+      expect(reasons.textContent).toContain('Autre');
+    });
+
+    it('a missing reason is refused, and nothing is sent', () => {
+      warned();
+      (q('[data-testid="imaging-duplicate-order-anyway"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(imaging.createOrder).not.toHaveBeenCalled();
+      expect(q('[data-testid="imaging-duplicate-reason-error"]')!.textContent).toContain(
+        'Choisissez pourquoi',
+      );
+      expect(q('#img-duplicate-reason-CLINICAL_CHANGE')!.getAttribute('aria-invalid')).toBe('true');
+    });
+
+    for (const reason of [
+      'CLINICAL_CHANGE',
+      'PRIOR_INADEQUATE_OR_UNAVAILABLE',
+      'DIFFERENT_REGION_OR_QUESTION',
+    ] as const) {
+      it(`${reason} is sent with the order`, () => {
+        warned();
+        (q(`[data-testid="imaging-duplicate-reason-${reason}"]`) as HTMLInputElement).click();
+        (q('[data-testid="imaging-duplicate-order-anyway"]') as HTMLButtonElement).click();
+        expect(imaging.createOrder).toHaveBeenCalledTimes(1);
+        const sent = imaging.createOrder.calls.mostRecent().args[0];
+        expect(sent.duplicateOverride).toBeTrue();
+        expect(sent.duplicateOverrideReason).toBe(reason);
+        expect(sent.duplicateOverrideNote).toBeUndefined();
+      });
+    }
+
+    it('« Autre » needs a note, then sends it', () => {
+      warned();
+      (q('[data-testid="imaging-duplicate-reason-OTHER"]') as HTMLInputElement).click();
+      fixture.detectChanges();
+      (q('[data-testid="imaging-duplicate-order-anyway"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(imaging.createOrder).not.toHaveBeenCalled();
+      expect(q('[data-testid="imaging-duplicate-reason-error"]')!.textContent).toContain(
+        'une note est obligatoire',
+      );
+      component.overrideNote.set('  Bilan préopératoire ');
+      component.orderAnyway();
+      const sent = imaging.createOrder.calls.mostRecent().args[0];
+      expect(sent.duplicateOverrideReason).toBe('OTHER');
+      expect(sent.duplicateOverrideNote).toBe('Bilan préopératoire');
+    });
+
+    it('"back" forgets the chosen reason', () => {
+      warned();
+      component.overrideReason.set('OTHER');
+      component.overrideNote.set('x');
+      component.dismissDuplicateWarning();
+      expect(component.overrideReason()).toBeNull();
+      expect(component.overrideNote()).toBe('');
+    });
+
+    it('the drawer shows the override: reason, note, who and when', () => {
+      const overridden = order({
+        id: 'o2',
+        duplicateOfRecentOrder: true,
+        duplicateOverride: true,
+        duplicateOverrideReason: 'OTHER',
+        duplicateOverrideNote: 'Bilan préopératoire',
+        duplicateOverrideByName: 'Awa Traoré',
+        duplicateOverrideAt: '2026-11-15T09:30:00',
+      });
+      setUp(['ROLE_DOCTOR'], { orders: [overridden] });
+      component.viewDetail(overridden);
+      fixture.detectChanges();
+      const shown = q('[data-testid="imaging-order-duplicate-override"]')!;
+      expect(shown.textContent).toContain('Commandée malgré une demande récente');
+      expect(shown.textContent).toContain('Autre');
+      expect(shown.textContent).toContain('Bilan préopératoire');
+      expect(shown.textContent).toContain('Awa Traoré');
+    });
+  });
+
+  describe('Provisional rule 1 (2026-11-15): « Préautorisation en attente »', () => {
+    const pending = (): ImagingOrderResponse =>
+      order({
+        id: 'o3',
+        priority: 'STAT',
+        status: 'IN_PROGRESS',
+        requiresAuthorization: true,
+        authorizationNumber: null,
+        authorizationPending: true,
+        authorizationPendingSince: '2026-11-15T02:10:00',
+      });
+
+    it('the list and the drawer show the flag', () => {
+      setUp(['ROLE_RADIOLOGIST'], { orders: [pending()] });
+      fixture.detectChanges();
+      expect(q('[data-testid="imaging-row-preauth-pending"]')!.textContent).toContain(
+        'Préautorisation en attente',
+      );
+      component.viewDetail(pending());
+      fixture.detectChanges();
+      expect(q('[data-testid="imaging-order-preauth-pending"]')!.textContent).toContain(
+        'Préautorisation en attente',
+      );
+    });
+
+    it('a radiologist records the number; the flag clears', () => {
+      setUp(['ROLE_RADIOLOGIST'], { orders: [pending()] });
+      imaging.recordAuthorization.and.returnValue(
+        of({ ...pending(), authorizationNumber: 'PA-1', authorizationPending: false }),
+      );
+      component.viewDetail(pending());
+      fixture.detectChanges();
+      (q('[data-testid="imaging-record-auth"]') as HTMLButtonElement).click();
+      expect(imaging.recordAuthorization).not.toHaveBeenCalled();
+      expect(q('#img-record-authNumber')!.getAttribute('aria-invalid')).toBe('true');
+
+      component.authorizationNumberDraft.set(' PA-1 ');
+      component.recordAuthorization(pending());
+      fixture.detectChanges();
+      expect(imaging.recordAuthorization).toHaveBeenCalledOnceWith('o3', 'PA-1');
+      expect(q('[data-testid="imaging-order-preauth-pending"]')).toBeNull();
+    });
+
+    it('a nurse sees the flag but records nothing (the status endpoint roles only)', () => {
+      setUp(['ROLE_NURSE'], { orders: [pending()] });
+      component.viewDetail(pending());
+      fixture.detectChanges();
+      expect(q('[data-testid="imaging-order-preauth-pending"]')).not.toBeNull();
+      expect(q('[data-testid="imaging-record-auth"]')).toBeNull();
+    });
+
+    it('a hospital administrator (read-only, #1163) records nothing', () => {
+      setUp(['ROLE_HOSPITAL_ADMIN'], { orders: [pending()] });
+      component.viewDetail(pending());
+      fixture.detectChanges();
+      expect(q('[data-testid="imaging-record-auth"]')).toBeNull();
     });
   });
 });

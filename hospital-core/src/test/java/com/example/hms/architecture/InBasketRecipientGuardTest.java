@@ -98,6 +98,10 @@ class InBasketRecipientGuardTest {
         Map.entry("SafeguardingReviewWorker.java", union(
             codes(setConstant(com.example.hms.service.safeguarding.SafeguardingReviewWorker.class, "SAFEGUARDING_ROLE_CODES")),
             codes(setConstant(com.example.hms.service.safeguarding.SafeguardingReviewWorker.class, "SENIOR_REVIEW_ROLE_CODES")))),
+        // Provisional rule 1 (2026-11-15): an urgent imaging study done without its pre-authorisation number,
+        // for the hospital's billing staff, who obtain the authorisation afterwards.
+        Map.entry("ImagingPreAuthorisationFollowUp.java", codes(setConstant(
+            com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp.class, "BILLING_ROLE_CODES"))),
         // The store itself: every sender above reaches it through createItem.
         Map.entry("InBasketServiceImpl.java", Set.of()));
 

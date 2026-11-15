@@ -19,6 +19,7 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.service.ImagingOrderService;
 import com.example.hms.service.PatientSubjectReadGuard;
 import com.example.hms.service.PatientSubjectReaderRoles;
+import com.example.hms.service.support.ImagingPreAuthorisationPolicy;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -92,6 +93,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         requireNotInThePast(request.getScheduledDate(), null);
+        // Provisional rule 2: « Commander quand même » names its reason.
+        com.example.hms.service.imaging.ImagingDuplicateOverride.requireReason(request);
         ImagingOrder imagingOrder = imagingOrderMapper.toEntity(request, patient, hospital);
         imagingOrder.setOrderedAt(LocalDateTime.now());
         // QA D972 (round 18): an order belongs to the visit it was written in,
@@ -112,9 +115,40 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             imagingOrder.setDuplicateOfRecentOrder(false);
             imagingOrder.setDuplicateReferenceOrderId(null);
         }
+        com.example.hms.service.imaging.ImagingDuplicateOverride.apply(imagingOrder, duplicateMatches, request,
+            imagingOrder.getOrderingProviderUserId(), imagingOrder.getOrderingProviderName(), LocalDateTime.now());
+        ImagingPreAuthorisationPolicy.FollowUp preAuth = ImagingPreAuthorisationPolicy.reconcile(imagingOrder, LocalDateTime.now());
 
         ImagingOrder saved = imagingOrderRepository.save(imagingOrder);
+        followUp(saved, preAuth);
+        if (duplicateOverride != null) {
+            duplicateOverride.audit(saved, duplicateMatches);
+        }
         return imagingOrderMapper.toResponseDTO(saved, duplicateMatches);
+    }
+
+    /** Provisional rule 1: the billing follow-up of a pending pre-authorisation; null in a hand-built unit test. */
+    private com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp preAuthorisationFollowUp;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setPreAuthorisationFollowUp(
+            com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp preAuthorisationFollowUp) {
+        this.preAuthorisationFollowUp = preAuthorisationFollowUp;
+    }
+
+    /** Provisional rule 2: the audit of a flagged placement; null in a hand-built unit test. */
+    private com.example.hms.service.imaging.ImagingDuplicateOverride duplicateOverride;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setDuplicateOverride(com.example.hms.service.imaging.ImagingDuplicateOverride duplicateOverride) {
+        this.duplicateOverride = duplicateOverride;
+    }
+
+    /** Files or closes the pre-authorisation follow-up the policy's reconcile asked for. */
+    private void followUp(ImagingOrder saved, ImagingPreAuthorisationPolicy.FollowUp followUp) {
+        if (preAuthorisationFollowUp != null) {
+            preAuthorisationFollowUp.apply(saved, followUp);
+        }
     }
 
     /** QA D972: the visits an order can belong to; null in a hand-built unit test. */
@@ -209,8 +243,11 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             order.setDuplicateOfRecentOrder(false);
             order.setDuplicateReferenceOrderId(null);
         }
+        // Provisional rule 1: an edit that records the number clears the flag.
+        ImagingPreAuthorisationPolicy.FollowUp preAuth = ImagingPreAuthorisationPolicy.reconcile(order, LocalDateTime.now());
 
         ImagingOrder saved = imagingOrderRepository.save(order);
+        followUp(saved, preAuth);
         return imagingOrderMapper.toResponseDTO(saved, duplicateMatches);
     }
 
@@ -233,9 +270,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             throw new com.example.hms.exception.FieldBusinessException("status", "imaging.order.resulted.locked");
         }
         // QA D1925 (r53): the steps follow each other; results come from a
-        // signed report, and a study needing pre-authorisation starts with its number.
+        // signed report. A routine study needing pre-authorisation starts with
+        // its number; an urgent or STAT one starts without it (provisional rule 1).
         com.example.hms.service.support.ImagingOrderTransitions.require(order.getStatus(), request.getStatus());
-        com.example.hms.service.support.ImagingOrderTransitions.requireAuthorisationToStart(request.getStatus(),
+        ImagingPreAuthorisationPolicy.requireStartAllowed(request.getStatus(), order.getPriority(),
             request.getRequiresAuthorization() != null ? request.getRequiresAuthorization() : order.getRequiresAuthorization(),
             request.getAuthorizationNumber() != null ? request.getAuthorizationNumber() : order.getAuthorizationNumber());
         if (cancelling) {
@@ -269,8 +307,11 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             order.setCancelledByUserId(actorId);
             order.setCancelledByName(actor != null ? displayName(actor) : null);
         }
+        ImagingPreAuthorisationPolicy.FollowUp preAuth =
+            ImagingPreAuthorisationPolicy.reconcile(order, order.getStatusUpdatedAt());
 
         ImagingOrder saved = imagingOrderRepository.save(order);
+        followUp(saved, preAuth);
         return imagingOrderMapper.toResponseDTO(saved);
     }
 
@@ -432,8 +473,40 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         if (order.getStatus() == ImagingOrderStatus.DRAFT) {
             order.setStatus(ImagingOrderStatus.ORDERED);
         }
+        ImagingPreAuthorisationPolicy.FollowUp preAuth = ImagingPreAuthorisationPolicy.reconcile(order, LocalDateTime.now());
 
         ImagingOrder saved = imagingOrderRepository.save(order);
+        followUp(saved, preAuth);
+        return imagingOrderMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * Provisional rule 1 (2026-11-15): records the pre-authorisation number,
+     * at any status the study reached: an urgent study is often done (and
+     * reported) before the insurer answers. Recording it clears « Préautorisation
+     * en attente » and closes the billing task. A cancelled order is closed
+     * (QA D1066), unless the study was done before it was cancelled.
+     */
+    @Override
+    public ImagingOrderResponseDTO recordAuthorization(UUID orderId,
+            com.example.hms.payload.dto.imaging.ImagingOrderAuthorizationRequestDTO request) {
+        ImagingOrder order = getOrderInScope(orderId);
+        if (order.getAuthorizationPendingSince() == null) {
+            com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
+                IMAGING_ORDER_CANCELLED_LOCKED);
+        }
+        String number = request != null && request.getAuthorizationNumber() != null
+            ? request.getAuthorizationNumber().trim() : "";
+        if (number.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("authorizationNumber",
+                "imaging.order.authorizationNumberBlank");
+        }
+        order.setRequiresAuthorization(true);
+        order.setAuthorizationNumber(number);
+        ImagingPreAuthorisationPolicy.FollowUp preAuth = ImagingPreAuthorisationPolicy.reconcile(order, LocalDateTime.now());
+
+        ImagingOrder saved = imagingOrderRepository.save(order);
+        followUp(saved, preAuth);
         return imagingOrderMapper.toResponseDTO(saved);
     }
 

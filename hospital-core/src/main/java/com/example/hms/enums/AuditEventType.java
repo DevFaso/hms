@@ -82,6 +82,8 @@ public enum AuditEventType {
     /** QA D638: a result released by the person who entered it, without a second reviewer. */
     LAB_RESULT_SELF_RELEASED,
     IMAGING_ORDER_CREATED,
+    /** An imaging order placed while a recent order of the same study exists (warned, never blocked; provisional rule 2026-11-15). */
+    IMAGING_ORDER_DUPLICATE_PLACED,
     IMAGING_RESULT_UPDATED,
     // Disease-programme registries (Tier 2 item 35). Care-management
     // writes, not disclosures: none is whitelisted in DisclosureCategory,

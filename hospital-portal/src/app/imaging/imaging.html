@@ -256,6 +256,14 @@
                     data-testid="imaging-row-status"
                     >{{ o.status | enumLabel: 'imagingOrderStatus' }}</span
                   >
+                  @if (o.authorizationPending) {
+                    {{ ' '
+                    }}<span
+                      class="status-badge status-preliminary"
+                      data-testid="imaging-row-preauth-pending"
+                      >{{ 'IMAGING.PREAUTH_PENDING.FLAG' | translate }}</span
+                    >
+                  }
                 </td>
                 <td>
                   <span class="modality-badge">{{
@@ -1077,6 +1085,64 @@
               </div>
             }
           </div>
+          <!-- Provisional rule 1 (2026-11-15): an urgent study done without its pre-authorisation number. -->
+          @if (ord.authorizationPending) {
+            <div class="duplicate-warning" role="note" data-testid="imaging-order-preauth-pending">
+              <p class="duplicate-warning-title">
+                {{ 'IMAGING.PREAUTH_PENDING.FLAG' | translate }}
+              </p>
+              <p>
+                {{ 'IMAGING.PREAUTH_PENDING.BODY' | translate }}
+                @if (ord.authorizationPendingSince) {
+                  ({{ ord.authorizationPendingSince | serverTime | dateTime }})
+                }
+              </p>
+              @if (canRecordAuthorization(ord)) {
+                <div class="field">
+                  <label for="img-record-authNumber">{{
+                    'IMAGING.AUTHORIZATION_NUMBER' | translate
+                  }}</label>
+                  <input
+                    id="img-record-authNumber"
+                    type="text"
+                    maxlength="120"
+                    data-testid="imaging-record-auth-number"
+                    [ngModel]="authorizationNumberDraft()"
+                    (ngModelChange)="authorizationNumberDraft.set($event)"
+                  />
+                </div>
+                <button
+                  type="button"
+                  class="btn-primary"
+                  data-testid="imaging-record-auth"
+                  [disabled]="authorizationSaving()"
+                  (click)="recordAuthorization(ord)"
+                >
+                  {{ 'IMAGING.PREAUTH_PENDING.RECORD' | translate }}
+                </button>
+              }
+            </div>
+          }
+          <!-- Provisional rule 2 (2026-11-15): « Commander quand même », with its reason. -->
+          @if (ord.duplicateOverride) {
+            <div class="detail-notes" data-testid="imaging-order-duplicate-override">
+              <span class="field-label">{{ 'IMAGING.DUPLICATE.OVERRIDE_LABEL' | translate }}</span>
+              <p>
+                {{ ord.duplicateOverrideReason | enumLabel: 'imagingDuplicateOverrideReason' }}
+                @if (ord.duplicateOverrideNote) {
+                  — {{ ord.duplicateOverrideNote }}
+                }
+              </p>
+              @if (ord.duplicateOverrideByName || ord.duplicateOverrideAt) {
+                <p class="field-hint">
+                  {{ ord.duplicateOverrideByName }}
+                  @if (ord.duplicateOverrideAt) {
+                    · {{ ord.duplicateOverrideAt | serverTime | dateTime }}
+                  }
+                </p>
+              }
+            </div>
+          }
           @if (ord.workflowNotes) {
             <div class="detail-notes" data-testid="imaging-order-workflow-notes">
               <span class="field-label">{{ 'IMAGING.WORKFLOW_NOTES' | translate }}</span>
@@ -1419,7 +1485,14 @@
       </div>
       <!-- QA D1921 (r53): a recent order of the same study, shown before anything is sent. -->
       @if (duplicateMatches().length > 0) {
-        <div class="duplicate-warning" role="alert" data-testid="imaging-duplicate-warning">
+        <!-- Escape here goes back to the form (it asks before dropping a typed note). -->
+        <div
+          class="duplicate-warning"
+          role="alert"
+          data-testid="imaging-duplicate-warning"
+          appInlineSubForm
+          (dismissed)="dismissDuplicateWarning()"
+        >
           <p class="duplicate-warning-title">{{ 'IMAGING.DUPLICATE.TITLE' | translate }}</p>
           <p>{{ 'IMAGING.DUPLICATE.BODY' | translate }}</p>
           <ul>
@@ -1436,6 +1509,43 @@
               </li>
             }
           </ul>
+          <fieldset class="duplicate-override-reasons" data-testid="imaging-duplicate-reasons">
+            <legend>{{ 'IMAGING.DUPLICATE.REASON_LEGEND' | translate }}</legend>
+            @for (r of overrideReasons; track r) {
+              <label class="checkbox-label">
+                <input
+                  type="radio"
+                  name="img-duplicate-reason"
+                  [id]="'img-duplicate-reason-' + r"
+                  [attr.data-testid]="'imaging-duplicate-reason-' + r"
+                  [value]="r"
+                  [checked]="overrideReason() === r"
+                  (change)="overrideReason.set(r); overrideError.set(null)"
+                />
+                {{ r | enumLabel: 'imagingDuplicateOverrideReason' }}
+              </label>
+            }
+            @if (overrideReason() === 'OTHER') {
+              <div class="field">
+                <label for="img-duplicate-note">{{
+                  'IMAGING.DUPLICATE.NOTE_LABEL' | translate
+                }}</label>
+                <textarea
+                  id="img-duplicate-note"
+                  rows="2"
+                  maxlength="500"
+                  data-testid="imaging-duplicate-note"
+                  [ngModel]="overrideNote()"
+                  (ngModelChange)="overrideNote.set($event); overrideError.set(null)"
+                ></textarea>
+              </div>
+            }
+            @if (overrideError()) {
+              <p class="modal-error" role="alert" data-testid="imaging-duplicate-reason-error">
+                {{ overrideError() }}
+              </p>
+            }
+          </fieldset>
           <div class="duplicate-warning-actions">
             <button type="button" class="btn-secondary" (click)="dismissDuplicateWarning()">
               {{ 'IMAGING.DUPLICATE.BACK' | translate }}

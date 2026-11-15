@@ -6608,6 +6608,12 @@ CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the pe
 - **Patient apps do not say "not finalised":** the server no longer sends an unsigned note to the apps; they show no assessment and do not read the new `notePendingSignature` flag yet (Android/iOS parity).
 - **Treatment plans, ARCHIVED:** the patient now reads APPROVED plans only; an archived plan that had been approved is hidden too, because nothing on the row says it was approved (`signOffAt` is never written). Record the approval to show it again.
 - **Voided lab result, clinician notifications:** the void withdraws the PATIENT's LAB_RESULT notifications only; the ordering clinician's correction or critical-value notifications about the voided result stay.
+## Standing debt — imaging provisional rules 1 and 2, D1930 (feat/imaging-stat-preauth-override-reason)
+- **Billing cannot record the pre-authorisation number itself:** the billing task tells them to obtain it; a doctor or radiologist records it in the Imagerie drawer (`PUT /imaging/orders/{id}/authorization`). A billing-side entry (from the in-basket task) needs a decision on billing's access to imaging orders.
+- **No billing staff, no task:** a hospital with no `ROLE_BILLING_SPECIALIST` gets no follow-up task (the order flag stays visible); decide on a fallback recipient with the radiology lead (hospital admins are excluded by E9 #67).
+- **Urgent start without pre-authorisation is not its own audit event:** the flag and the task are the trail; add an audit event if the CNAMU rule needs one.
+- **Patient read of imaging orders carries staff-only fields:** `GET /imaging/orders/patient/{id}` admits PATIENT and returns `workflowNotes` and the new `duplicateOverrideNote`; strip staff-only fields from the patient's view.
+- **Report status select offers kind changes the server refuses (D1930):** editing an addendum still lists PRELIMINARY/DRAFT; restrict the options to the report's kind in the portal.
 ## Standing debt — patient-facing lows r54 (fix/patient-facing-lows-r54)
 - **D1912 backfill:** the r53/r54 "Nouveau résultat" notifications for orders voided before this fix stay; a one-off withdraw for LAB_RESULT notifications whose subject is a result of an ENTERED_IN_ERROR order would clear them (no migration taken).
 - **Allergy summary of existing patients:** `patients.allergies` is recomputed on the next allergy write only; a patient whose summary already holds an allergy marked ENTERED_IN_ERROR keeps it until then (no data repair).

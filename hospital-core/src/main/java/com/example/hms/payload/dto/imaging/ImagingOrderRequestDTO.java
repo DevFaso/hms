@@ -144,4 +144,18 @@ public class ImagingOrderRequestDTO {
     @Size(max = 1000)
     @Schema(description = "Workflow or scheduling notes not surfaced to patient")
     private String workflowNotes;
+
+    /**
+     * Provisional rule 2 (2026-11-15): the orderer chose « Commander quand
+     * même » on the duplicate warning. A claimed override carries its reason.
+     */
+    @Schema(description = "The orderer placed this order despite the duplicate warning (order anyway); requires duplicateOverrideReason")
+    private Boolean duplicateOverride;
+
+    @Schema(description = "Why the order was placed despite the duplicate warning; OTHER requires duplicateOverrideNote")
+    private com.example.hms.enums.ImagingDuplicateOverrideReason duplicateOverrideReason;
+
+    @Size(max = 500)
+    @Schema(description = "Free-text detail of the override reason (required with OTHER)")
+    private String duplicateOverrideNote;
 }

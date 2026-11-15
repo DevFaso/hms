@@ -536,6 +536,8 @@ class RequiredRequestIdGuardTest {
      */
     private static final Map<String, String> CONDITIONALLY_REQUIRED = Map.ofEntries(
         Map.entry("StaffPaymentRequestDTO.reference", "only for mobile money, insurance or transfer"),
+        Map.entry("ImagingOrderRequestDTO.duplicateOverrideReason",
+            "only when « Commander quand même » is claimed over a duplicate warning (provisional rule 2)"),
         Map.entry("OrderReviewDecisionDTO.orderVersion", "only to continue an order, not to stop it or assess a treatment"),
         Map.entry("CrossmatchRequestDTO.incompatibilityReason", "only when the verdict is incompatible (QA D1507)"),
         Map.entry("DeliveryRecordRequestDTO.bornBeforeArrivalReason",

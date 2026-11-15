@@ -75,6 +75,21 @@ public class ImagingOrderController {
 		return ResponseEntity.ok(responseDTO);
 	}
 
+	/**
+	 * Provisional rule 1 (2026-11-15): the pre-authorisation number obtained
+	 * after an urgent study, at any status the study reached. The status
+	 * endpoint's roles: whoever may start a study records its number.
+	 */
+	@PutMapping("/orders/{orderId}/authorization")
+	@PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','RADIOLOGIST')")
+	@Operation(summary = "Record the pre-authorisation number of an imaging order")
+	public ResponseEntity<ImagingOrderResponseDTO> recordAuthorization(
+		@PathVariable UUID orderId,
+		@Valid @RequestBody com.example.hms.payload.dto.imaging.ImagingOrderAuthorizationRequestDTO request
+	) {
+		return ResponseEntity.ok(imagingOrderService.recordAuthorization(orderId, request));
+	}
+
 	@PostMapping("/orders/{orderId}/signature")
 	@PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
 	@Operation(summary = "Attach ordering provider signature/attestation")

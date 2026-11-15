@@ -422,6 +422,15 @@
                     <span class="chart-review__pill" [ngClass]="statusClass(i.status)">
                       {{ (i.status | enumLabel: 'imagingOrderStatus') || '—' }}
                     </span>
+                    <!-- Provisional rule 1 (2026-11-15): done without its pre-authorisation number. -->
+                    @if (i.authorizationPending) {
+                      <span
+                        class="chart-review__pill"
+                        [ngClass]="statusClass('PENDING')"
+                        data-testid="chart-review-imaging-preauth-pending"
+                        >{{ 'IMAGING.PREAUTH_PENDING.FLAG' | translate }}</span
+                      >
+                    }
                   </header>
                   <p class="chart-review__card-meta">
                     @if (i.orderedAt) {

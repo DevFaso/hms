@@ -193,4 +193,19 @@ describe('ChartReviewComponent — r53 imaging card', () => {
       expect(panel.querySelector('[data-testid="chart-review-imaging-laterality"]')).not.toBeNull();
     });
   });
+  describe('Provisional rule 1 (2026-11-15): the card says « Préautorisation en attente »', () => {
+    it('on a study done without its pre-authorisation number', () => {
+      const panel = setUp(imagingChart({ authorizationPending: true }));
+      expect(
+        panel.querySelector('[data-testid="chart-review-imaging-preauth-pending"]')!.textContent,
+      ).toContain('Préautorisation en attente');
+    });
+
+    it('and on no other', () => {
+      const panel = setUp(imagingChart({ authorizationPending: false }));
+      expect(
+        panel.querySelector('[data-testid="chart-review-imaging-preauth-pending"]'),
+      ).toBeNull();
+    });
+  });
 });

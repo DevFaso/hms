@@ -12,8 +12,8 @@ import java.util.Set;
 /**
  * QA D1925 (r53): the imaging order status writes the status endpoint
  * accepts. A status write jumped ORDERED straight to RESULTS_AVAILABLE with
- * no report, completed a study nobody had started, and started a study whose
- * pre-authorisation was required but had no number.
+ * no report, and completed a study nobody had started. (Starting a study
+ * whose pre-authorisation has no number is {@link ImagingPreAuthorisationPolicy}'s.)
  *
  * <ul>
  *   <li>RESULTS_AVAILABLE is reached only by signing a report
@@ -77,17 +77,5 @@ public final class ImagingOrderTransitions {
             throw new FieldBusinessException("status", "imaging.order.completeBeforeStart");
         }
         throw new FieldBusinessException("status", "imaging.order.invalidTransition");
-    }
-
-    /**
-     * A study whose pre-authorisation is required is started once its number
-     * is recorded (on the order, or in the same status write).
-     */
-    public static void requireAuthorisationToStart(ImagingOrderStatus to, Boolean requiresAuthorization,
-                                                   String authorizationNumber) {
-        if (to == ImagingOrderStatus.IN_PROGRESS && Boolean.TRUE.equals(requiresAuthorization)
-                && (authorizationNumber == null || authorizationNumber.isBlank())) {
-            throw new FieldBusinessException("authorizationNumber", "imaging.order.authorizationNumberRequired");
-        }
     }
 }

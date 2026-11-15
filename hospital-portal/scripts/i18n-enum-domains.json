@@ -41,6 +41,9 @@
   "imagingOrderPriority": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingOrderPriority.java"
   },
+  "imagingDuplicateOverrideReason": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingDuplicateOverrideReason.java"
+  },
   "admissionType": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/AdmissionType.java"
   },

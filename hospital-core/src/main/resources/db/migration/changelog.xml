@@ -3512,4 +3512,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V297-imaging-preauth-pending-and-duplicate-override" author="hms-team" runOnChange="false">
+        <sqlFile path="V297__imaging_preauth_pending_and_duplicate_override.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
