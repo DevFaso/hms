@@ -7244,6 +7244,7 @@
         "GENERAL": "General"
       },
       "AUDIT_ENTITY_TYPE": {
+        "SAFEGUARDING": "Revisión de vigilancia de protección infantil",
         "DELIVERY_RECORD": "Registro del parto",
         "ORDER_REVIEW_HOLD": "Retención para revisión de orden",
         "DEATH_DISPUTE": "Impugnación de fallecimiento",
@@ -13633,5 +13634,17 @@
     "VISIT_DATE": "Fecha de la visita",
     "AGE": "Sin firmar desde hace",
     "AGE_VALUE": "{{days}} d {{hours}} h"
+  },
+  "SAFEGUARDING": {
+    "TITLE": "Vigilancia de protección infantil — revisión requerida",
+    "BODY": "Paciente de {{age}} años ingresada en trabajo de parto (umbral provisional: menos de {{threshold}} años). Se requiere una revisión documentada por el clínico responsable o el equipo de protección infantil. La atención no se bloquea ni se retrasa; se ha solicitado una revisión obstétrica sénior.",
+    "CONFIDENTIAL": "Visible solo para el equipo asistencial y los administradores de este hospital. No avisar automáticamente a los familiares.",
+    "RAISED": "Abierta el {{date}}",
+    "PROVISIONAL": "Regla provisional, pendiente de aprobación por el responsable de obstetricia y el responsable de protección infantil.",
+    "NOTE_LABEL": "Revisión documentada",
+    "RECORD": "Registrar la revisión",
+    "RECORD_BY_PHYSICIAN": "La revisión la registra un médico o un cirujano de este hospital.",
+    "RECORDED": "Revisión registrada",
+    "RECORD_FAILED": "No se pudo registrar la revisión."
   }
 }

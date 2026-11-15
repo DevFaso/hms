@@ -192,6 +192,12 @@
       <app-voided-death-closures-banner [patientId]="p.id" />
     }
 
+    <!-- r53 (provisional rule 2026-11-14): the open child-protection vigilance review of a minor admitted in labour,
+         for the roles GET /safeguarding/patients/{id}/reviews admits (SAFEGUARDING_VIEW_ROLES) only. -->
+    @if (canSeeSafeguarding()) {
+      <app-safeguarding-banner [patientId]="p.id" />
+    }
+
     <nav class="patient-navigation" [attr.aria-label]="'PATIENTS.RECORD_SECTIONS' | translate">
       <div class="section-tabs">
         @for (section of sections; track section.key) {

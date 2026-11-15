@@ -17,6 +17,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DeathDisputeDialogComponent } from '../mortality/death-dispute-dialog.component';
 import { VoidedDeathClosuresBannerComponent } from '../mortality/voided-death-closures-banner.component';
+import { SafeguardingBannerComponent } from './safeguarding-banner/safeguarding-banner.component';
 import { OrderReviewPanelComponent } from './order-review-panel/order-review-panel.component';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -38,6 +39,7 @@ import {
   STORYBOARD_VIEW_ROLES,
   VITALS_VIEW_ROLES,
   VOIDED_CLOSURES_VIEW_ROLES,
+  SAFEGUARDING_VIEW_ROLES,
   canInvokeCds,
 } from './patient-chart/chart-access';
 import { AdvanceDirectivesTabComponent } from './advance-directives/advance-directives-tab.component';
@@ -107,6 +109,7 @@ type TabKey =
     FormsModule,
     DeathDisputeDialogComponent,
     VoidedDeathClosuresBannerComponent,
+    SafeguardingBannerComponent,
     OrderReviewPanelComponent,
     RouterLink,
     TranslateModule,
@@ -689,6 +692,11 @@ export class PatientDetailComponent implements OnInit {
   /** QA D1524: the voided-death banner, for the roles GET .../voided-closures admits. */
   canSeeVoidedClosures(): boolean {
     return this.roleContext.hasAnyActiveRole(VOIDED_CLOSURES_VIEW_ROLES);
+  }
+
+  /** r53: the child-protection vigilance banner, for the roles GET /safeguarding/patients/{id}/reviews admits. */
+  canSeeSafeguarding(): boolean {
+    return this.roleContext.hasAnyActiveRole(SAFEGUARDING_VIEW_ROLES);
   }
 
   /** QA D1524: the storyboard banner, for the roles GET /patients/{id}/storyboard admits. */

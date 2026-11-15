@@ -3505,4 +3505,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V296-safeguarding-reviews" author="hms-team" runOnChange="false">
+        <sqlFile path="V296__safeguarding_reviews.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

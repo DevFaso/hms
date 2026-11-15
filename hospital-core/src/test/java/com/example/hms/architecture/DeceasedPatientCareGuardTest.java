@@ -176,6 +176,7 @@ class DeceasedPatientCareGuardTest {
         Reception#declineWaitlistOffer,closeWaitlistEntry,updateEncounterStatus | closes; a closed visit refuses the desk's status write
         Reception#attestEligibility | billing and payments
         RefillApproval#reject,pause | refuses a refill
+        SafeguardingReview#record | r53: documents the review a past labour admission opened; never new care
         SlotInventory#generate,hold,release,block | the schedule, no patient
         StockOutRouting#partnerRespond,confirmPartnerDispense,partnerNoShow | a partner's outcome of a routing made before the death
         Transfer#requestTransfer,completeTransfer,cancelTransfer | a stay the death closed refuses it (TRANSFERABLE_STATUSES)

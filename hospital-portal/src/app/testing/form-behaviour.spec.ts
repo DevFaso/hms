@@ -80,6 +80,7 @@ const NOT_MOUNTED: Readonly<Record<string, string>> = {
  * on nothing.
  */
 const MIN_SCOPES_REACHED = 15;
+const SAFEGUARDING_FORM = 'patients/safeguarding-banner/safeguarding-banner.component';
 
 const STAFF_ROLES = [
   'ROLE_RECEPTIONIST',
@@ -180,7 +181,23 @@ function settle(
     if (pending.length === 0) break;
     for (const req of pending) {
       if (req.cancelled || req.request.method !== 'GET') continue;
-      if (req.request.responseType === 'json') req.flush(answer(rows));
+      if (/^\/safeguarding\/patients\/[^/]+\/reviews$/.test(req.request.url)) {
+        req.flush(
+          rows
+            ? [
+                {
+                  id: 'review-1',
+                  patientId: 'patient-1',
+                  status: 'OPEN',
+                  patientAgeYears: 10,
+                  ageThresholdYears: 13,
+                  provisionalRule: true,
+                  raisedAt: '2026-11-02T10:00:00',
+                },
+              ]
+            : [],
+        );
+      } else if (req.request.responseType === 'json') req.flush(answer(rows));
       else req.flush(new Blob([]));
     }
     fixture.detectChanges();
@@ -275,6 +292,7 @@ function driveComponent(file: string, type: Type<unknown>, rows: boolean, reach:
   translate.use('fr');
   const ctrl = TestBed.inject(HttpTestingController);
   const fixture = TestBed.createComponent(type);
+  if (file === SAFEGUARDING_FORM) fixture.componentRef.setInput('patientId', 'patient-1');
   document.body.appendChild(fixture.nativeElement);
   try {
     fixture.detectChanges();
@@ -406,6 +424,16 @@ describe('Form behaviour guard (QA round 29: empty submit, server fieldErrors)',
         .withContext(`${entry.file} mounts now: remove it from NOT_MOUNTED`)
         .toBeUndefined();
       expect(findings).withContext(entry.file).toEqual([]);
+      if (entry.file === SAFEGUARDING_FORM) {
+        const reach = reached.get(entry.file);
+        expect(reach?.scopes)
+          .withContext('the open safeguarding form is rendered')
+          .toBeGreaterThan(0);
+        expect(reach?.presses).withContext('its empty review is refused').toBeGreaterThan(0);
+        expect(reach?.controls)
+          .withContext('its note is reachable by server errors')
+          .toBeGreaterThan(0);
+      }
     }));
   }
 
