@@ -340,13 +340,17 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
 
     @Override
     @Transactional
-    public String sendRecoveryContactVerificationCode(UUID userId, UUID contactId) {
+    public String sendRecoveryContactVerificationCode(UUID userId, UUID contactId, String confirmedContactValue) {
         UserRecoveryContact contact = recoveryContactRepository.findById(contactId)
             .orElseThrow(() -> new ResourceNotFoundException("recoveryContact.notFound", contactId));
 
         if (!contact.getUser().getId().equals(userId)) {
             // Someone else's contact answers exactly as an unknown one.
             throw new ResourceNotFoundException("recoveryContact.notFound", contactId);
+        }
+
+        if (confirmedContactValue == null || confirmedContactValue.isBlank() || !confirmedContactValue.equals(contact.getContactValue())) {
+            throw new FieldBusinessException("confirmedContactValue", "users.recovery.confirmationRequired");
         }
 
         if (contact.isVerified()) {

@@ -1584,12 +1584,13 @@ public class AuthController {
 
     @PostMapping("/credentials/recovery/{contactId}/send-code")
     public ResponseEntity<java.util.Map<String, String>> sendRecoveryContactVerificationCode(
-            @PathVariable UUID contactId) {
+            @PathVariable UUID contactId,
+            @Valid @RequestBody com.example.hms.payload.dto.credential.RecoveryContactConfirmationRequest confirmation) {
         UUID userId = resolveCurrentUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        String contactType = userCredentialLifecycleService.sendRecoveryContactVerificationCode(userId, contactId);
+        String contactType = userCredentialLifecycleService.sendRecoveryContactVerificationCode(userId, contactId, confirmation.confirmedContactValue());
         return ResponseEntity.ok(java.util.Map.of("message", "Verification code sent", "contactType", contactType));
     }
 

@@ -242,10 +242,11 @@ export class ProfileService {
   /** POST /auth/credentials/recovery/:id/send-code — send verification code */
   sendRecoveryVerificationCode(
     contactId: string,
+    confirmedContactValue: string,
   ): Observable<{ message: string; contactType: string }> {
     return this.http.post<{ message: string; contactType: string }>(
       `/auth/credentials/recovery/${contactId}/send-code`,
-      {},
+      { confirmedContactValue },
     );
   }
 

@@ -475,8 +475,11 @@ class ObstetricAlertEscalationIT extends BaseIT {
      * lockAtLeastFor (5 s) after any run, this class's or the scheduler's, and
      * a run inside it is skipped silently, so wait it out first.
      */
-    private void sweep() {
-        java.util.concurrent.locks.LockSupport.parkNanos(6_000_000_000L);
+    private void sweep() throws InterruptedException {
+        // A single park may consume a leftover unpark permit or return spuriously,
+        // skipping the lock's minimum duration. Sleep waits for the intended
+        // interval and fails the test explicitly if the thread is interrupted.
+        java.util.concurrent.TimeUnit.SECONDS.sleep(6);
         scheduler.runSweep();
     }
 

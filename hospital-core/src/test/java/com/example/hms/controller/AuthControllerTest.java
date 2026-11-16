@@ -451,6 +451,36 @@ class AuthControllerTest {
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
+    @Test
+    void recoveryCodeRequiresAReadBackBodyBeforeCallingTheLifecycleService() throws Exception {
+        String route = "/auth/credentials/recovery/" + java.util.UUID.randomUUID() + "/send-code";
+        for (String body : java.util.List.of("{}", "{\"confirmedContactValue\":\"\"}", "{\"confirmedContactValue\":\"   \"}")) {
+            mockMvc.perform(post(route).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.confirmedContactValue").exists());
+        }
+        mockMvc.perform(post(route)).andExpect(status().isBadRequest());
+        org.mockito.Mockito.verifyNoInteractions(userCredentialLifecycleService);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"EMAIL", "PHONE"})
+    void recoveryCodePassesTheExplicitReadBackAndActorToTheServerGuard(String type) throws Exception {
+        java.util.UUID actorId = java.util.UUID.randomUUID();
+        java.util.UUID contactId = java.util.UUID.randomUUID();
+        var user = new com.example.hms.model.User();
+        user.setId(actorId);
+        authenticateAs("readback.test");
+        when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(any(), any(), any()))
+            .thenReturn(java.util.Optional.of(user));
+        String value = type.equals("PHONE") ? "+22670123456" : "backup@example.test";
+        when(userCredentialLifecycleService.sendRecoveryContactVerificationCode(actorId, contactId, value)).thenReturn(type);
+        mockMvc.perform(post("/auth/credentials/recovery/" + contactId + "/send-code")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"confirmedContactValue\":\"" + value + "\"}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.contactType").value(type));
+        verify(userCredentialLifecycleService).sendRecoveryContactVerificationCode(actorId, contactId, value);
+    }
+
     // =====================================================================
     // POST /auth/me/complete-setup  (D17: the forced first sign-in, one call)
     // =====================================================================
@@ -1366,7 +1396,7 @@ class AuthControllerTest {
                             .contentType(MediaType.APPLICATION_JSON).content("[]"),
                     org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/auth/credentials/mfa")
                             .contentType(MediaType.APPLICATION_JSON).content("[]"),
-                    post("/auth/credentials/recovery/" + java.util.UUID.randomUUID() + "/send-code"),
+                    post("/auth/credentials/recovery/" + java.util.UUID.randomUUID() + "/send-code").contentType(MediaType.APPLICATION_JSON).content("{\"confirmedContactValue\":\"backup@example.test\"}"),
                     post("/auth/verify-password").contentType(MediaType.APPLICATION_JSON)
                             .content("{\"username\":\"target\",\"password\":\"guess\"}"),
                     post("/auth/credentials/recovery/" + java.util.UUID.randomUUID() + "/verify")
