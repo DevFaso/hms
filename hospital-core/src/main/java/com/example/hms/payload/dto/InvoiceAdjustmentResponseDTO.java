@@ -26,7 +26,9 @@ public record InvoiceAdjustmentResponseDTO(
             row.getReason(),
             row.getInvoiceItem() != null && row.getInvoiceItem().getId() != null
                 ? row.getInvoiceItem().getId().toString() : null,
-            row.getInvoiceItem() != null ? row.getInvoiceItem().getItemDescription() : null,
+            // QA D1901: the line as its reader reads it on the invoice.
+            row.getInvoiceItem() != null ? com.example.hms.service.billing.BillingTextRenderer.render(row.getInvoiceItem().getTextCode(),
+                row.getInvoiceItem().getTextArgs(), row.getInvoiceItem().getItemDescription()) : null,
             row.getCreatedAt() != null ? row.getCreatedAt().toString() : null,
             row.getReversedAt() != null ? row.getReversedAt().toString() : null,
             row.getReversalReason());

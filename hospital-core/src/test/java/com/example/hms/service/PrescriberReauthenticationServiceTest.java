@@ -6,6 +6,7 @@ import com.example.hms.exception.MfaStepUpRefusedException;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.security.LoginAttemptService;
 import com.example.hms.security.LoginAttemptStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,7 +31,7 @@ import static org.mockito.Mockito.when;
  * Round 18: the prescriber's step-up re-authentication at a controlled-drug
  * signature. One call, one signature: the TOTP code (with the shared
  * lockout and replay protection) when an authenticator is enrolled, else the
- * password (with its own lockout); refused for an account whose password HMS
+ * password (counted in the account's sign-in bucket, D2001); refused for an account whose password HMS
  * does not hold; both outcomes audited, never the secret.
  */
 class PrescriberReauthenticationServiceTest {
@@ -42,7 +43,7 @@ class PrescriberReauthenticationServiceTest {
     private final AuditEventLogService audit = mock(AuditEventLogService.class);
 
     private final PrescriberReauthenticationService service = new PrescriberReauthenticationService(
-        mfaService, userRepository, passwordEncoder, attemptStore, audit);
+        mfaService, userRepository, passwordEncoder, new LoginAttemptService(attemptStore, userRepository), audit);
 
     private final UUID userId = UUID.randomUUID();
     private final UUID rxId = UUID.randomUUID();
@@ -112,7 +113,7 @@ class PrescriberReauthenticationServiceTest {
             service.requireForControlledSigning(userId, rxId, "right-password", null);
 
         assertThat(verified.method()).isEqualTo("PASSWORD");
-        verify(attemptStore).clear("rx-sign-password:" + userId);
+        verify(attemptStore).clear("user:" + userId);
         AuditEventRequestDTO row = lastAudit();
         assertThat(row.getStatus()).isEqualTo(AuditStatus.SUCCESS);
         assertThat(row.getEventDescription()).doesNotContain("right-password");
@@ -125,7 +126,7 @@ class PrescriberReauthenticationServiceTest {
         assertThatThrownBy(() -> service.requireForControlledSigning(userId, rxId, "wrong", null))
             .isInstanceOfSatisfying(MfaStepUpRefusedException.class,
                 ex -> assertThat(ex.getReason()).isEqualTo(MfaStepUpRefusedException.Reason.PASSWORD_INVALID));
-        verify(attemptStore).recordFailure(eq("rx-sign-password:" + userId), eq(5), anyLong(), anyLong());
+        verify(attemptStore).recordFailure(eq("user:" + userId), eq(5), anyLong(), anyLong());
         verify(attemptStore, never()).clear(any());
         assertThat(lastAudit().getStatus()).isEqualTo(AuditStatus.FAILURE);
     }

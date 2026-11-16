@@ -341,8 +341,14 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         copay.setStatus(InvoiceStatus.CANCELLED);
         // QA D1217: every cancellation says why, when and by whom - here the
         // server's reason: the copay was carried onto the visit invoice.
-        copay.setCancelReason(com.example.hms.utility.MessageUtil.resolveOrRaw("billing.invoice.copayCreditedReason",
-            target.getInvoiceNumber()));
+        // QA D1901: kept as its code and the invoice number, shown in each
+        // reader's language; cancelReason holds the French copy.
+        com.example.hms.service.billing.BillingText reason = com.example.hms.service.billing.BillingText.of(
+            "billing.invoice.copayCreditedReason",
+            com.example.hms.service.billing.BillingText.value(target.getInvoiceNumber()));
+        copay.setCancelReason(reason.french());
+        copay.setCancelReasonCode(reason.code());
+        copay.setCancelReasonArgs(reason.argsJson());
         copay.setCancelledAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
         copay.setCancelledBy(roleValidator.getCurrentUserId());
         copay.setCreditedToInvoice(target); // QA D428
@@ -509,7 +515,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         String unpriced = lines.stream()
             .filter(line -> nz(line.getTotalPrice()).signum() == 0)
-            .map(InvoiceItem::getItemDescription)
+            // QA D1901: each line named in the reader's language.
+            .map(line -> com.example.hms.service.billing.BillingTextRenderer.render(line.getTextCode(), line.getTextArgs(),
+                line.getItemDescription()))
             .collect(java.util.stream.Collectors.joining(", "));
         if (!unpriced.isEmpty()) {
             throw new com.example.hms.exception.FieldBusinessException("confirmUnpricedLines",
@@ -1012,8 +1020,13 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         invoice.setStatus(nextStatus);
         // D656: an issued invoice keeps its notes (checked unchanged above).
-        if (wasDraft) {
+        // QA D1901: the form echoes the notes in the reader's language; an
+        // echo keeps the server's code, anything else is the person's text.
+        if (wasDraft && !com.example.hms.service.billing.BillingTextRenderer.isShownText(dto.getNotes(),
+                invoice.getNotesCode(), invoice.getNotesArgs(), invoice.getNotes())) {
             invoice.setNotes(dto.getNotes());
+            invoice.setNotesCode(null);
+            invoice.setNotesArgs(null);
         }
 
         BillingInvoice saved = invoiceRepository.save(invoice);
@@ -1074,6 +1087,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             throw new com.example.hms.exception.FieldBusinessException("cancelReason", "billing.invoice.cancelReasonTooLong", String.valueOf(CANCEL_REASON_MAX));
         }
         invoice.setCancelReason(why.isEmpty() ? null : why);
+        // QA D1901: a reason a person typed has no code; it is shown as typed.
+        invoice.setCancelReasonCode(null);
+        invoice.setCancelReasonArgs(null);
         invoice.setCancelledAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
         invoice.setCancelledBy(roleValidator.getCurrentUserId());
     }
@@ -1123,7 +1139,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return false;
         }
         String stored = invoice.getNotes() == null ? "" : invoice.getNotes().trim();
-        return !dto.getNotes().trim().equals(stored);
+        if (dto.getNotes().trim().equals(stored)) {
+            return false;
+        }
+        // QA D1901: the echo of server notes shown in the reader's language.
+        return !com.example.hms.service.billing.BillingTextRenderer.isShownText(dto.getNotes(), invoice.getNotesCode(),
+            invoice.getNotesArgs(), invoice.getNotes());
     }
 
     private static boolean encounterChanged(BillingInvoice invoice, BillingInvoiceRequestDTO dto) {

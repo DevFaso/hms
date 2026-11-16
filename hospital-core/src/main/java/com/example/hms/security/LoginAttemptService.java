@@ -11,6 +11,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 
 /**
  * The login throttle: {@value #MAX_ATTEMPTS} failed logins within
@@ -62,13 +63,73 @@ public class LoginAttemptService {
         if (key == null) {
             return;
         }
-        int failures = store.recordFailure(key, MAX_ATTEMPTS, WINDOW_MS, LOCK_DURATION_MS);
+        logIfLocked(key, store.recordFailure(key, MAX_ATTEMPTS, WINDOW_MS, LOCK_DURATION_MS));
+    }
+
+    private static void logIfLocked(String key, int failures) {
         if (failures >= MAX_ATTEMPTS) {
             // The account id when there is one; never the typed name.
             log.warn("[LOGIN-THROTTLE] {} locked after {} failed attempts",
                 key.startsWith(USER_KEY_PREFIX) ? "Account " + key.substring(USER_KEY_PREFIX.length())
                     : "An unknown username", failures);
         }
+    }
+
+    /** The outcome of {@link #checkPassword}. */
+    public enum PasswordCheck {
+        /** The password is right; the account's failures and lock were cleared, as a sign-in does. */
+        ACCEPTED,
+        /** Wrong, and counted; the account is not locked yet. */
+        REJECTED,
+        /** Wrong, and this failure reached the limit: the account is locked from now. */
+        REJECTED_NOW_LOCKED,
+        /** Refused before the password was compared: the account is locked. */
+        LOCKED
+    }
+
+    /**
+     * D2001: every place that checks a signed-in user's own password (the lock
+     * screen, the current password of a change, the forced setup, the
+     * controlled-drug signature, the e-mail change) counts in the SAME bucket
+     * as {@code POST /auth/login} for that account, so guesses made anywhere
+     * add up, a lock made anywhere refuses everywhere, and a right password
+     * clears it the way a sign-in does. The key is the account's id, which is
+     * the key {@link #keyFor} gives the login for a name that names one account.
+     *
+     * <p>The attempt is counted BEFORE the password is compared (atomically in
+     * the store), so concurrent guesses cannot run past the limit; a right
+     * password clears the count. A {@code matcher} that throws (an inactive
+     * account, say) leaves the attempt counted, as the login does.
+     *
+     * @param matcher compares the typed password; true when it is right
+     */
+    public PasswordCheck checkPassword(UUID userId, BooleanSupplier matcher) {
+        java.util.Objects.requireNonNull(userId);
+        String key = USER_KEY_PREFIX + userId;
+        if (store.remainingLockMs(key) > 0) {
+            return PasswordCheck.LOCKED;
+        }
+        int failures = store.recordFailure(key, MAX_ATTEMPTS, WINDOW_MS, LOCK_DURATION_MS);
+        if (failures > MAX_ATTEMPTS) {
+            // A concurrent guess reached the limit first.
+            return PasswordCheck.LOCKED;
+        }
+        if (matcher.getAsBoolean()) {
+            store.clear(key);
+            return PasswordCheck.ACCEPTED;
+        }
+        logIfLocked(key, failures);
+        return failures >= MAX_ATTEMPTS ? PasswordCheck.REJECTED_NOW_LOCKED : PasswordCheck.REJECTED;
+    }
+
+    /** Milliseconds left on the account's lock, 0 when it is not locked. */
+    public long remainingAccountLockMs(UUID userId) {
+        return userId == null ? 0 : store.remainingLockMs(USER_KEY_PREFIX + userId);
+    }
+
+    /** Whole minutes left on the account's lock, at least 1: the figure the 423 message shows. */
+    public static long lockMinutes(long remainingMs) {
+        return Math.max(1, (remainingMs + 59_999) / 60_000);
     }
 
     /** Whether a login with this name is currently refused. */

@@ -68,6 +68,7 @@ class UsernameReminderServiceImplTest {
         void sendsSmsWhenIdentifierIsPhone() {
             String phoneIdentifier = "+1234567890";
             when(userRepository.findActiveByEmailOrPhone(phoneIdentifier)).thenReturn(Optional.of(user));
+            when(smsService.deliversRealSms()).thenReturn(true);
 
             when(messageSource.getMessage(org.mockito.ArgumentMatchers.eq("sms.username.reminder"), any(),
                     anyString(), org.mockito.ArgumentMatchers.eq(locale)))
@@ -78,6 +79,50 @@ class UsernameReminderServiceImplTest {
             // QA D1123 sibling: the text comes from the reader's bundle, not an English literal.
             verify(smsService).send("+1234567890", "e-Keneya: your username is johndoe");
             verify(emailService, never()).sendUsernameReminderEmail(anyString(), anyString(), any());
+        }
+
+        @Test
+        @DisplayName("D2000 class: the logging mock is not a transport; falls back to email, never calls send")
+        void fallsBackToEmailWhenOnlyTheMockTransportExists() {
+            String phoneIdentifier = "+1234567890";
+            when(userRepository.findActiveByEmailOrPhone(phoneIdentifier)).thenReturn(Optional.of(user));
+            when(smsService.deliversRealSms()).thenReturn(false);
+
+            service.sendReminder(phoneIdentifier, locale, requestIp);
+
+            verify(emailService).sendUsernameReminderEmail("john@example.com", "johndoe", locale);
+            verify(smsService, never()).send(anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("D2000: a known phone whose email fallback fails answers exactly like an unknown identifier")
+        void aFailedFallbackNeverTellsTheCallerTheAccountExists() {
+            String phoneIdentifier = "+22670202020";
+            when(userRepository.findActiveByEmailOrPhone(phoneIdentifier)).thenReturn(Optional.of(user));
+            when(userRepository.findActiveByEmailOrPhone("+22670000001")).thenReturn(Optional.empty());
+            when(smsService.deliversRealSms()).thenReturn(false);
+            org.mockito.Mockito.doThrow(new com.example.hms.exception.NotificationTransportUnavailableException(
+                    "Mail transport is not configured on this deployment"))
+                .when(emailService).sendUsernameReminderEmail(anyString(), anyString(), any());
+
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> service.sendReminder(phoneIdentifier, locale, requestIp));
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> service.sendReminder("+22670000001", locale, requestIp));
+
+            // No address on the account, a failing provider, a failing mail by email identifier: all silent too.
+            user.setEmail(null);
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> service.sendReminder(phoneIdentifier, locale, requestIp));
+            when(smsService.deliversRealSms()).thenReturn(true);
+            org.mockito.Mockito.doThrow(new IllegalStateException("sms.orange.authFailed"))
+                .when(smsService).send(any(), any());
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> service.sendReminder(phoneIdentifier, locale, requestIp));
+            user.setEmail("john@example.com");
+            when(userRepository.findActiveByEmailOrPhone("john@example.com")).thenReturn(Optional.of(user));
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> service.sendReminder("john@example.com", locale, requestIp));
         }
 
         @Test

@@ -1705,6 +1705,11 @@
       "FIRST_USER_BOOTSTRAP": "Primer usuario del sistema creado (superadministrador)",
       "ACCESS_TOKEN_REVOKED": "Token de acceso revocado al cerrar sesión (jti={{jti}})",
       "REFRESH_TOKEN_REVOKED": "Token de renovación revocado al cerrar sesión (jti={{jti}})",
+      "LOCK_SCREEN_UNLOCK_FAILED": "Error al desbloquear la pantalla: contraseña incorrecta",
+      "LOCK_SCREEN_LOCKED_NOW": "Demasiadas contraseñas incorrectas en la pantalla bloqueada: cuenta bloqueada, sesión cerrada",
+      "LOCK_SCREEN_REFUSED_LOCKED": "Desbloqueo de pantalla rechazado: la cuenta está bloqueada, sesión cerrada",
+      "ACCESS_TOKEN_REVOKED_LOCKOUT": "Token de acceso revocado por el bloqueo desde la pantalla bloqueada",
+      "REFRESH_TOKEN_REVOKED_LOCKOUT": "Token de actualización revocado por el bloqueo desde la pantalla bloqueada",
       "TOKEN_PAIR_ROTATED": "Tokens de sesión renovados (jti de renovación anterior={{jti}})",
       "REFRESH_REFUSED_IDLE": "Renovación de sesión rechazada: inactividad demasiado larga",
       "REFRESH_REFUSED_SECOND_FACTOR": "Renovación de sesión rechazada: falta el segundo factor del proveedor de identidad o ha caducado",
@@ -2068,6 +2073,7 @@
       "RESTORE": "restauración"
     },
     "OWN_EMAIL_REFUSAL": {
+      "THE_ACCOUNT_IS_LOCKED_AFTER_REPEATED_WRONG_PASSWORDS": "la cuenta está bloqueada tras varias contraseñas incorrectas",
       "NO_EMAIL_CHANGE_IS_WAITING_FOR_A_CODE": "ningún cambio de correo espera un código",
       "THE_CODE_DID_NOT_MATCH": "el código no coincide",
       "THE_CODE_HAS_EXPIRED": "el código ha caducado",
@@ -4110,6 +4116,7 @@
     "VERSION_ERROR": "No se pudo crear la nueva versión."
   },
   "LAB_RESULTS": {
+    "QUOTED_READ_BACK_VALUE": "«{{value}}»",
     "ALL_AGES": "Todas las edades",
     "CORRECTED": "Corregido",
     "CORRECTED_HINT": "Este resultado corrige un resultado validado anteriormente; el valor anterior se conserva en el expediente, marcado como sustituido.",
@@ -4451,6 +4458,7 @@
     "CREDENTIALS_REQUIRED": "Se requieren nombre de usuario y contraseña.",
     "TOKEN_MISSING": "Falta el token en la respuesta.",
     "LOGIN_FAILED": "Error al iniciar sesión. Inténtelo de nuevo.",
+    "LOCKED_FROM_LOCK_SCREEN": "Demasiadas contraseñas incorrectas: se ha cerrado su sesión y la cuenta está bloqueada temporalmente. Vuelva a intentarlo más tarde.",
     "ENTER_EMAIL": "Introduzca su dirección de correo electrónico.",
     "RESEND_ACTIVATION": "Reenviar el correo de activación",
     "RA_TITLE": "Activar su cuenta",
@@ -8066,6 +8074,8 @@
     "RECOVERY_REMOVED": "Contacto de recuperación eliminado.",
     "RECOVERY_REMOVE_FAILED": "Error al eliminar el contacto.",
     "RECOVERY_SAVE_FAILED": "Error al guardar el contacto de recuperación.",
+    "RECOVERY_PHONE_UNAVAILABLE": "Todavía no se pueden enviar SMS desde esta plataforma, por lo que no se puede verificar un número de teléfono. Use un correo electrónico.",
+    "RECOVERY_SAME_AS_SIGN_IN": "Un contacto de recuperación debe ser distinto del correo electrónico o del número de teléfono con el que inicia sesión.",
     "RECOVERY_VALUE_REQUIRED": "Introduzca un valor de contacto.",
     "RECOVERY_VERIFIED": "¡Contacto de recuperación verificado!",
     "REMOVE_PHOTO": "Eliminar foto",
@@ -13659,6 +13669,7 @@
     "WHAT_NOW_STOP": "El prescriptor revisó este conflicto alérgico y detuvo la orden. No la administre ni la dispense; contacte al prescriptor. Aún puede registrar la dosis como suspendida o rechazada."
   },
   "ALLERGY_REVIEW_STATE": {
+    "VALUE_SEPARATOR": ": ",
     "TITLE_AWAITING": "Pendiente de revisión por el prescriptor",
     "TITLE_CONTINUE": "Revisado por el prescriptor: continuar según el plan",
     "TITLE_STOP": "El prescriptor decidió detenerla: contacte al prescriptor",

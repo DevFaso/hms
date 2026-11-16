@@ -556,5 +556,9 @@
 
 <!-- Lock Screen — shown when idle timeout triggers -->
 @if (idle.locked()) {
-  <app-lock-screen (signedOut)="onLockScreenSignOut()" (switchedUser)="onSwitchUser()" />
+  <app-lock-screen
+    (signedOut)="onLockScreenSignOut()"
+    (switchedUser)="onSwitchUser()"
+    (lockedOut)="onLockScreenLockedOut()"
+  />
 }

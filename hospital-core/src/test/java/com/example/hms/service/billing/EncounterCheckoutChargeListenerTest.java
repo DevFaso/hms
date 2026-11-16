@@ -263,4 +263,55 @@ class EncounterCheckoutChargeListenerTest {
         assertThat(lines(draft)).extracting(InvoiceItem::getItemDescription).doesNotContain("Hospitalisation");
         verify(admissions, never()).findById(any());
     }
+
+    /**
+     * QA D1901: the draft's note and the lines the server words are stored as
+     * codes (French copy beside them) whatever the session's language, and
+     * each reader sees them in their own; a test's name is shown as written.
+     */
+    @Test
+    void theServerWordedTextIsStoredAsCodesAndShownPerReader_D1901() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+        try {
+            UUID admissionId = UUID.randomUUID();
+            encounter.setAdmissionId(admissionId);
+            com.example.hms.model.Admission stay = new com.example.hms.model.Admission();
+            stay.setHospital(encounter.getHospital());
+            stay.setAdmissionDateTime(LocalDateTime.of(2026, 10, 25, 22, 0));
+            stay.setActualDischargeDateTime(LocalDateTime.of(2026, 10, 27, 9, 0));
+            when(admissions.findById(admissionId)).thenReturn(Optional.of(stay));
+            com.example.hms.model.TransfusionRequest request = new com.example.hms.model.TransfusionRequest();
+            request.setId(UUID.randomUUID());
+            request.setProductType(com.example.hms.enums.BloodProductType.PLATELETS);
+            request.setUnitsRequested(1);
+            when(transfusions.findByEncounter_IdAndStatusIn(eq(encounter.getId()), any())).thenReturn(List.of(request));
+            when(units.findByRequest_IdOrderByUnitNumberAsc(request.getId())).thenReturn(List.of());
+            when(treatments.findByHospital_Id(hospitalId)).thenReturn(List.of());
+
+            BillingInvoice draft = listener.chargeVisit(event()).orElseThrow();
+
+            assertThat(draft.getNotes())
+                .isEqualTo("Visite ENC-20261029-9F86F7 clôturée : brouillon à vérifier, tarifer et émettre par la caisse.");
+            assertThat(draft.getNotesCode()).isEqualTo("billing.checkout.draftNote");
+            assertThat(draft.getNotesArgs()).isEqualTo("[{\"value\":\"ENC-20261029-9F86F7\"}]");
+            assertThat(lines(draft)).extracting(InvoiceItem::getItemDescription, InvoiceItem::getTextCode)
+                .containsExactlyInAnyOrder(
+                    org.assertj.core.groups.Tuple.tuple("Consultation", "billing.checkout.consultation"),
+                    org.assertj.core.groups.Tuple.tuple("Hospitalisation (journées)", "billing.checkout.bedDays"),
+                    org.assertj.core.groups.Tuple.tuple("Transfusion : plaquettes", "billing.checkout.transfusion"),
+                    org.assertj.core.groups.Tuple.tuple("TDR paludisme", null));
+
+            com.example.hms.mapper.InvoiceItemMapper mapper = new com.example.hms.mapper.InvoiceItemMapper();
+            assertThat(lines(draft)).extracting(line -> mapper.toInvoiceItemResponseDTO(line).getItemDescription())
+                .containsExactlyInAnyOrder("Consultation", "Hospital stay (days)", "Transfusion: platelets",
+                    "TDR paludisme");
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.forLanguageTag("es"));
+            assertThat(lines(draft)).extracting(line -> mapper.toInvoiceItemResponseDTO(line).getItemDescription())
+                .containsExactlyInAnyOrder("Consulta", "Hospitalización (días)", "Transfusión: plaquetas",
+                    "TDR paludisme");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
 }

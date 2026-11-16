@@ -1705,6 +1705,11 @@
       "FIRST_USER_BOOTSTRAP": "Premier utilisateur du système créé (super-administrateur)",
       "ACCESS_TOKEN_REVOKED": "Jeton d’accès révoqué à la déconnexion (jti={{jti}})",
       "REFRESH_TOKEN_REVOKED": "Jeton de renouvellement révoqué à la déconnexion (jti={{jti}})",
+      "LOCK_SCREEN_UNLOCK_FAILED": "Échec du déverrouillage de l'écran : mot de passe incorrect",
+      "LOCK_SCREEN_LOCKED_NOW": "Trop de mots de passe incorrects sur l'écran verrouillé : compte verrouillé, session fermée",
+      "LOCK_SCREEN_REFUSED_LOCKED": "Déverrouillage de l'écran refusé : le compte est verrouillé, session fermée",
+      "ACCESS_TOKEN_REVOKED_LOCKOUT": "Jeton d'accès révoqué au verrouillage depuis l'écran verrouillé",
+      "REFRESH_TOKEN_REVOKED_LOCKOUT": "Jeton de rafraîchissement révoqué au verrouillage depuis l'écran verrouillé",
       "TOKEN_PAIR_ROTATED": "Jetons de session renouvelés (ancien jti de renouvellement={{jti}})",
       "REFRESH_REFUSED_IDLE": "Renouvellement de session refusé : inactivité trop longue",
       "REFRESH_REFUSED_SECOND_FACTOR": "Renouvellement de session refusé : le second facteur du fournisseur d’identité est absent ou expiré",
@@ -2068,6 +2073,7 @@
       "RESTORE": "restauration"
     },
     "OWN_EMAIL_REFUSAL": {
+      "THE_ACCOUNT_IS_LOCKED_AFTER_REPEATED_WRONG_PASSWORDS": "le compte est verrouillé après plusieurs mots de passe incorrects",
       "NO_EMAIL_CHANGE_IS_WAITING_FOR_A_CODE": "aucun changement d’e-mail n’attend de code",
       "THE_CODE_DID_NOT_MATCH": "le code ne correspond pas",
       "THE_CODE_HAS_EXPIRED": "le code a expiré",
@@ -4110,6 +4116,7 @@
     "VERSION_ERROR": "La nouvelle version n'a pas pu être créée."
   },
   "LAB_RESULTS": {
+    "QUOTED_READ_BACK_VALUE": "« {{value}} »",
     "ALL_AGES": "Tous âges",
     "CORRECTED": "Corrigé",
     "CORRECTED_HINT": "Ce résultat corrige un résultat validé auparavant ; l’ancienne valeur reste au dossier, marquée remplacée.",
@@ -4451,6 +4458,7 @@
     "CREDENTIALS_REQUIRED": "Nom d'utilisateur et mot de passe requis.",
     "TOKEN_MISSING": "Jeton manquant dans la réponse.",
     "LOGIN_FAILED": "Échec de la connexion. Veuillez réessayer.",
+    "LOCKED_FROM_LOCK_SCREEN": "Trop de mots de passe incorrects : vous avez été déconnecté et le compte est temporairement verrouillé. Réessayez plus tard.",
     "ENTER_EMAIL": "Veuillez saisir votre adresse e-mail.",
     "RESEND_ACTIVATION": "Renvoyer l'e-mail d'activation",
     "RA_TITLE": "Activer votre compte",
@@ -8066,6 +8074,8 @@
     "RECOVERY_REMOVED": "Contact de récupération supprimé.",
     "RECOVERY_REMOVE_FAILED": "Échec de la suppression du contact.",
     "RECOVERY_SAVE_FAILED": "Échec de l'enregistrement du contact de récupération.",
+    "RECOVERY_PHONE_UNAVAILABLE": "Les SMS ne peuvent pas encore être envoyés depuis cette plateforme : un numéro de téléphone ne peut donc pas être vérifié. Utilisez une adresse e-mail.",
+    "RECOVERY_SAME_AS_SIGN_IN": "Un contact de récupération doit être différent de l’adresse e-mail ou du numéro de téléphone avec lequel vous vous connectez.",
     "RECOVERY_VALUE_REQUIRED": "Saisissez une valeur de contact.",
     "RECOVERY_VERIFIED": "Contact de récupération vérifié !",
     "REMOVE_PHOTO": "Supprimer la photo",
@@ -13659,6 +13669,7 @@
     "WHAT_NOW_STOP": "Le prescripteur a revu ce conflit allergique et arrêté la prescription. Ne pas administrer ni délivrer ; contactez le prescripteur. Vous pouvez toujours enregistrer la dose comme suspendue ou refusée."
   },
   "ALLERGY_REVIEW_STATE": {
+    "VALUE_SEPARATOR": " : ",
     "TITLE_AWAITING": "En attente de revue par le prescripteur",
     "TITLE_CONTINUE": "Revu par le prescripteur : poursuivre selon le plan",
     "TITLE_STOP": "Le prescripteur a décidé d’arrêter : contactez le prescripteur",

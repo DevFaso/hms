@@ -225,4 +225,38 @@ class InvoiceItemServiceImplTest {
         assertThat(zero.getRelatedService()).isSameAs(chest);
         verify(billingInvoiceService).recomputeAndPersistTotals(invoice.getId());
     }
+
+    /**
+     * QA D1901: pricing a checkout line in an English session echoes its
+     * English words; the line keeps its code and French copy. A description
+     * the cashier retyped is theirs, shown as typed, with no code.
+     */
+    @Test
+    void pricingAServerWordedLineKeepsItsCodeAndRetypingItDropsIt_D1901() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(Locale.ENGLISH);
+        try {
+            InvoiceItem stay = InvoiceItem.builder().itemDescription("Hospitalisation (journées)")
+                .textCode("billing.checkout.bedDays").quantity(2)
+                .unitPrice(BigDecimal.ZERO).totalPrice(BigDecimal.ZERO).itemCategory(ItemCategory.SERVICE)
+                .assignment(callerAssignment).build();
+            stay.setId(UUID.randomUUID());
+            stay.setBillingInvoice(invoice);
+            when(itemRepository.findById(stay.getId())).thenReturn(Optional.of(stay));
+
+            service.updateInvoiceItem(stay.getId(), InvoiceItemRequestDTO.builder().billingInvoiceId(invoice.getId())
+                .itemDescription("Hospital stay (days)").quantity(2).unitPrice(new BigDecimal("5000"))
+                .itemCategory(ItemCategory.SERVICE).build(), Locale.ENGLISH);
+            assertThat(stay.getTextCode()).isEqualTo("billing.checkout.bedDays");
+            assertThat(stay.getItemDescription()).isEqualTo("Hospitalisation (journées)");
+
+            service.updateInvoiceItem(stay.getId(), InvoiceItemRequestDTO.builder().billingInvoiceId(invoice.getId())
+                .itemDescription("Chambre individuelle").quantity(2).unitPrice(new BigDecimal("5000"))
+                .itemCategory(ItemCategory.SERVICE).build(), Locale.ENGLISH);
+            assertThat(stay.getTextCode()).isNull();
+            assertThat(stay.getItemDescription()).isEqualTo("Chambre individuelle");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
 }

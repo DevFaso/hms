@@ -1705,6 +1705,11 @@
       "FIRST_USER_BOOTSTRAP": "First system user created (super-admin)",
       "ACCESS_TOKEN_REVOKED": "Access token revoked at sign-out (jti={{jti}})",
       "REFRESH_TOKEN_REVOKED": "Refresh token revoked at sign-out (jti={{jti}})",
+      "LOCK_SCREEN_UNLOCK_FAILED": "Lock-screen unlock failed: wrong password",
+      "LOCK_SCREEN_LOCKED_NOW": "Too many wrong passwords on the lock screen: account locked, session ended",
+      "LOCK_SCREEN_REFUSED_LOCKED": "Lock-screen unlock refused: the account is locked, session ended",
+      "ACCESS_TOKEN_REVOKED_LOCKOUT": "Access token revoked at the lock-screen lockout",
+      "REFRESH_TOKEN_REVOKED_LOCKOUT": "Refresh token revoked at the lock-screen lockout",
       "TOKEN_PAIR_ROTATED": "Session tokens renewed (previous refresh jti={{jti}})",
       "REFRESH_REFUSED_IDLE": "Session renewal refused: idle for too long",
       "REFRESH_REFUSED_SECOND_FACTOR": "Session renewal refused: the sign-in provider’s second factor is missing or expired",
@@ -2068,6 +2073,7 @@
       "RESTORE": "restoration"
     },
     "OWN_EMAIL_REFUSAL": {
+      "THE_ACCOUNT_IS_LOCKED_AFTER_REPEATED_WRONG_PASSWORDS": "the account is locked after repeated wrong passwords",
       "NO_EMAIL_CHANGE_IS_WAITING_FOR_A_CODE": "no email change is waiting for a code",
       "THE_CODE_DID_NOT_MATCH": "the code did not match",
       "THE_CODE_HAS_EXPIRED": "the code has expired",
@@ -4110,6 +4116,7 @@
     "VERSION_ERROR": "The new version could not be created."
   },
   "LAB_RESULTS": {
+    "QUOTED_READ_BACK_VALUE": "“{{value}}”",
     "ALL_AGES": "All ages",
     "CORRECTED": "Corrected",
     "CORRECTED_HINT": "This result corrects a result released earlier; the earlier value stays on record, marked superseded.",
@@ -4451,6 +4458,7 @@
     "CREDENTIALS_REQUIRED": "Username and password required.",
     "TOKEN_MISSING": "Token missing in response.",
     "LOGIN_FAILED": "Login failed. Please try again.",
+    "LOCKED_FROM_LOCK_SCREEN": "Too many incorrect passwords: you have been signed out and the account is temporarily locked. Try again later.",
     "ENTER_EMAIL": "Please enter your email address.",
     "RESEND_ACTIVATION": "Resend activation e-mail",
     "RA_TITLE": "Activate your account",
@@ -8066,6 +8074,8 @@
     "RECOVERY_REMOVED": "Recovery contact removed.",
     "RECOVERY_REMOVE_FAILED": "Failed to remove contact.",
     "RECOVERY_SAVE_FAILED": "Failed to save recovery contact.",
+    "RECOVERY_PHONE_UNAVAILABLE": "Text messages cannot be sent from this platform yet, so a phone number cannot be verified. Use an email address.",
+    "RECOVERY_SAME_AS_SIGN_IN": "A recovery contact must be different from the email address or phone number you sign in with.",
     "RECOVERY_VALUE_REQUIRED": "Please enter a contact value.",
     "RECOVERY_VERIFIED": "Recovery contact verified!",
     "REMOVE_PHOTO": "Remove Photo",
@@ -13659,6 +13669,7 @@
     "WHAT_NOW_STOP": "The prescriber reviewed this allergy conflict and stopped the order. Do not give or dispense it; contact the prescriber. You can still record the dose as held or refused."
   },
   "ALLERGY_REVIEW_STATE": {
+    "VALUE_SEPARATOR": ": ",
     "TITLE_AWAITING": "Awaiting prescriber review",
     "TITLE_CONTINUE": "Prescriber reviewed: continue under the plan",
     "TITLE_STOP": "Prescriber decided to stop: contact the prescriber",

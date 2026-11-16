@@ -892,8 +892,15 @@
                       (ngModelChange)="newRecoveryType.set($event)"
                     >
                       <option value="EMAIL">{{ 'PROFILE.EMAIL' | translate }}</option>
-                      <option value="PHONE">{{ 'PROFILE.PHONE' | translate }}</option>
+                      @if (phoneRecoveryAvailable()) {
+                        <option value="PHONE">{{ 'PROFILE.PHONE' | translate }}</option>
+                      }
                     </select>
+                    @if (!phoneRecoveryAvailable()) {
+                      <span class="form-hint" id="recovery-phone-unavailable">{{
+                        'PROFILE.RECOVERY_PHONE_UNAVAILABLE' | translate
+                      }}</span>
+                    }
                   </div>
                   <div class="form-row">
                     <label class="form-label" for="recovery-value"
@@ -962,7 +969,13 @@
                             <span class="badge-unverified">{{
                               'PROFILE.UNVERIFIED' | translate
                             }}</span>
-                            @if (verifyingContactId() !== rc.id) {
+                            @if (rc.contactType === 'PHONE' && !phoneRecoveryAvailable()) {
+                              <!-- D2000: no SMS transport, so no code to promise; the reason is shown instead of Verify. -->
+                              {{ ' '
+                              }}<span class="form-hint" data-testid="recovery-phone-unverifiable">{{
+                                'PROFILE.RECOVERY_PHONE_UNAVAILABLE' | translate
+                              }}</span>
+                            } @else if (verifyingContactId() !== rc.id) {
                               <button
                                 class="btn-sm-primary"
                                 (click)="sendVerificationCode(rc)"
@@ -1036,6 +1049,24 @@
                               [disabled]="verificationSending()"
                             >
                               {{ 'PROFILE.RESEND_CODE' | translate }}
+                            </button>
+                          </div>
+                        </div>
+                      } @else if (verifyingContactId() === rc.id && verificationError()) {
+                        <!-- D2000: the FIRST send refused (429, 503, 400): say why and offer a way on. -->
+                        <div class="verification-form" data-testid="recovery-send-refused">
+                          <div class="form-error" role="alert">{{ verificationError() }}</div>
+                          <div class="form-actions">
+                            <button
+                              class="btn-secondary"
+                              data-testid="recovery-send-retry"
+                              (click)="sendVerificationCode(rc)"
+                              [disabled]="verificationSending()"
+                            >
+                              {{ 'PROFILE.RESEND_CODE' | translate }}
+                            </button>
+                            <button class="btn-link" (click)="cancelVerification()">
+                              {{ 'COMMON.CANCEL' | translate }}
                             </button>
                           </div>
                         </div>

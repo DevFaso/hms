@@ -172,8 +172,9 @@ export class AccountSetupComponent implements OnInit {
       this.error = this.translate.instant('SETUP.ROLE_NOT_CONFIRMED');
       return;
     }
-    // A 400 answer is written for the user, in their language.
-    if (http?.status === 400 && typeof body?.message === 'string') {
+    // A 400 answer is written for the user, in their language, and so is the
+    // 423 of an account locked after too many wrong passwords (D2001).
+    if ((http?.status === 400 || http?.status === 423) && typeof body?.message === 'string') {
       this.error = body.message;
       return;
     }

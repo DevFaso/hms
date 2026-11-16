@@ -668,6 +668,23 @@ public class AuthController {
             @RequestBody(required = false) java.util.Map<String, String> body,
             HttpServletRequest request,
             HttpServletResponse response) {
+        String bodyRefresh = body != null ? body.get("refreshToken") : null;
+        revokePresentedSession(request, response, bodyRefresh, "logout");
+        SecurityContextHolder.clearContext();
+        return ResponseEntity.ok(new MessageResponse("Logged out successfully."));
+    }
+
+    /**
+     * Ends the session the request presents: blacklists the bearer access
+     * token and every valid refresh token presented (the HttpOnly cookie and,
+     * for the apps, the body field), audits each revocation, and clears the
+     * refresh cookie. Shared by {@code POST /auth/logout} and the lock-screen
+     * lockout (D2001), so both close a session the same way.
+     *
+     * @param occasion what ended it, for the audit row ("logout", "lock-screen lockout")
+     */
+    private void revokePresentedSession(HttpServletRequest request, HttpServletResponse response,
+                                        String bodyRefresh, String occasion) {
         // Blacklist the current access token so it cannot be reused
         String bearerToken = request.getHeader("Authorization");
         String username = null;
@@ -679,11 +696,11 @@ public class AuthController {
                 username = jwtTokenProvider.getUsernameFromJWT(jwt);
                 if (jti != null) {
                     tokenBlacklistService.blacklist(jti, expMs);
-                    log.info("[LOGOUT] Blacklisted access token jti={}", jti);
+                    log.info("[LOGOUT] Blacklisted access token jti={} ({})", jti, occasion);
 
                     auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                             .eventType(AuditEventType.TOKEN_REVOKED)
-                            .eventDescription("Access token revoked on logout (jti=" + jti + ")")
+                            .eventDescription("Access token revoked on " + occasion + " (jti=" + jti + ")")
                             .ipAddress(request.getRemoteAddr())
                             .status(AuditStatus.SUCCESS)
                             .userName(username)
@@ -701,15 +718,12 @@ public class AuthController {
         // keeps the refresh cookie from login while it rotates the refresh
         // token it actually uses in the body, so the cookie can be stale.
         String cookieRefresh = refreshTokenCookieService.read(request);
-        String bodyRefresh = body != null ? body.get("refreshToken") : null;
-        revokeRefreshTokenOnLogout(cookieRefresh, username, request.getRemoteAddr());
+        revokeRefreshTokenOnLogout(cookieRefresh, username, request.getRemoteAddr(), occasion);
         if (bodyRefresh != null && !bodyRefresh.equals(cookieRefresh)) {
-            revokeRefreshTokenOnLogout(bodyRefresh, username, request.getRemoteAddr());
+            revokeRefreshTokenOnLogout(bodyRefresh, username, request.getRemoteAddr(), occasion);
         }
         // S-01: clear the HttpOnly refresh-token cookie
         refreshTokenCookieService.clear(response);
-        SecurityContextHolder.clearContext();
-        return ResponseEntity.ok(new MessageResponse("Logged out successfully."));
     }
 
     /**
@@ -723,7 +737,7 @@ public class AuthController {
      * alone, so logout cannot sign another person out. An expired or
      * unparseable refresh token needs no revocation and is ignored.
      */
-    private void revokeRefreshTokenOnLogout(String refreshToken, String bearerUsername, String ip) {
+    private void revokeRefreshTokenOnLogout(String refreshToken, String bearerUsername, String ip, String occasion) {
         if (refreshToken == null || refreshToken.isBlank()) {
             return;
         }
@@ -741,10 +755,10 @@ public class AuthController {
                 return;
             }
             tokenBlacklistService.blacklist(jti, jwtTokenProvider.getExpiration(refreshToken).getTime());
-            log.info("[LOGOUT] Blacklisted refresh token jti={}", jti);
+            log.info("[LOGOUT] Blacklisted refresh token jti={} ({})", jti, occasion);
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .eventType(AuditEventType.TOKEN_REVOKED)
-                    .eventDescription("Refresh token revoked on logout (jti=" + jti + ")")
+                    .eventDescription("Refresh token revoked on " + occasion + " (jti=" + jti + ")")
                     .ipAddress(ip)
                     .status(AuditStatus.SUCCESS)
                     .userName(subject)
@@ -1059,15 +1073,27 @@ public class AuthController {
      * Verify current user's password without issuing new tokens.
      * Used by the lock-screen to re-authenticate when the session is idle.
      * Requires a valid JWT (user is already logged in but screen is locked).
+     *
+     * <p>D2001: the guesses count in the account's sign-in bucket
+     * ({@link LoginAttemptService#checkPassword}), so the lock screen and the
+     * sign-in page add up to one limit. While the account is locked the answer
+     * is the sign-in's 423, and the session behind the lock screen is ended:
+     * its access and refresh tokens are revoked, as at logout. Someone at an
+     * unattended workstation gets the sign-in page's five guesses, not
+     * unlimited ones.
      */
     @WriteAudited(skip = true, reason = "emits LOGOUT / TOKEN_REFRESH itself, or is a check that mutates nothing")
     @PostMapping("/verify-password")
     @Operation(summary = "Verify password for screen unlock",
-               description = "Validates the current user's password. Returns 200 if correct, 401 if wrong. "
-                           + "Does NOT issue new tokens — the existing JWT remains valid.")
+               description = "Validates the current user's password. Returns 200 if correct, 401 if wrong, "
+                           + "423 when the account is locked after repeated wrong passwords (the session is then ended). "
+                           + "Does NOT issue new tokens - the existing JWT remains valid.")
     @ApiResponse(responseCode = "200", description = "Password verified")
     @ApiResponse(responseCode = "401", description = "Invalid password")
-    public ResponseEntity<Object> verifyPassword(@Valid @RequestBody LoginRequest request) {
+    @ApiResponse(responseCode = "423", description = "Account locked; the session's tokens were revoked")
+    public ResponseEntity<Object> verifyPassword(@Valid @RequestBody LoginRequest request,
+                                                 HttpServletRequest httpRequest,
+                                                 HttpServletResponse httpResponse) {
         String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
 
         // Security: only allow verifying the password for the currently authenticated user
@@ -1077,22 +1103,72 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new MessageResponse("Cannot verify password for a different user."));
         }
-
-        try {
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
-            log.info("🔒 [VERIFY-PWD] Password verified for user='{}'", currentUsername);
-            return ResponseEntity.ok(new MessageResponse("Password verified."));
-        } catch (BadCredentialsException ex) {
-            log.warn("🔒 [VERIFY-PWD] Wrong password for user='{}'", currentUsername);
+        var user = userRepository.findByUsername(currentUsername).orElse(null);
+        if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(MessageUtil.resolve("auth.verifyPassword.invalid")));
+        }
+
+        LoginAttemptService.PasswordCheck check;
+        try {
+            check = loginAttemptService.checkPassword(user.getId(),
+                    () -> passwordAccepted(currentUsername, request.getPassword()));
         } catch (DisabledException ex) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(MessageUtil.resolve("auth.account.disabled")));
         } finally {
             resetSecurityContextToAnonymous();
         }
+
+        if (check == LoginAttemptService.PasswordCheck.ACCEPTED) {
+            log.info("🔒 [VERIFY-PWD] Password verified for user='{}'", currentUsername);
+            return ResponseEntity.ok(new MessageResponse("Password verified."));
+        }
+        if (check != LoginAttemptService.PasswordCheck.LOCKED) {
+            auditLoginFailure(currentUsername, "Lock-screen unlock failed: bad credentials");
+        }
+        if (check == LoginAttemptService.PasswordCheck.REJECTED) {
+            log.warn("🔒 [VERIFY-PWD] Wrong password for user='{}'", currentUsername);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse(MessageUtil.resolve("auth.verifyPassword.invalid")));
+        }
+        log.warn("🔒 [VERIFY-PWD] Account locked for user='{}': ending the session", currentUsername);
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .eventType(AuditEventType.ACCOUNT_LOCKED)
+                .eventDescription(check == LoginAttemptService.PasswordCheck.LOCKED
+                        ? "Lock-screen unlock refused: account locked; session ended"
+                        : "Lock-screen unlock failed too many times: account locked; session ended")
+                .userId(user.getId())
+                .resourceId(user.getId().toString())
+                .userName(user.getUsername())
+                .ipAddress(httpRequest.getRemoteAddr())
+                .status(AuditStatus.FAILURE)
+                .build());
+        revokePresentedSession(httpRequest, httpResponse, null, "lock-screen lockout");
+        return lockedAnswer(user.getId());
+    }
+
+    /**
+     * Whether the account accepts this password, through the same
+     * AuthenticationManager the sign-in uses. Only ever called inside
+     * {@link LoginAttemptService#checkPassword}, which counts the attempt
+     * (PasswordChecksCountInLoginBucketGuardTest). An inactive account's
+     * {@link DisabledException} propagates, as at sign-in.
+     */
+    private boolean passwordAccepted(String username, String password) {
+        try {
+            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(username, password));
+            return true;
+        } catch (BadCredentialsException ex) {
+            return false;
+        }
+    }
+
+    /** The sign-in's 423 for a locked account, with the minutes left on its lock. */
+    private ResponseEntity<Object> lockedAnswer(UUID userId) {
+        long remainMin = LoginAttemptService.lockMinutes(loginAttemptService.remainingAccountLockMs(userId));
+        return ResponseEntity.status(423)
+                .body(new MessageResponse(MessageUtil.resolve("auth.login.locked", remainMin)));
     }
 
     /**
@@ -1120,17 +1196,23 @@ public class AuthController {
         }
         var user = userOpt.get();
 
-        // Verify the user knows their current credentials (prevents CSRF token theft)
+        // Verify the user knows their current credentials (prevents CSRF token theft).
+        // D2001: counted in the account's sign-in bucket, refused while it is locked.
+        LoginAttemptService.PasswordCheck check;
         try {
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(username, request.currentPassword()));
-        } catch (BadCredentialsException ex) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse(MessageUtil.resolve("auth.password.currentIncorrect")));
+            check = loginAttemptService.checkPassword(user.getId(),
+                    () -> passwordAccepted(username, request.currentPassword()));
         } finally {
             resetSecurityContextToAnonymous();
             // Restore the original authentication after verify sub-call
             SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+        if (check == LoginAttemptService.PasswordCheck.REJECTED) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse(MessageUtil.resolve("auth.password.currentIncorrect")));
+        }
+        if (check != LoginAttemptService.PasswordCheck.ACCEPTED) {
+            return lockedAnswer(user.getId());
         }
 
         if (request.newPassword() == null || request.newPassword().length() < 8) {
@@ -1280,16 +1362,22 @@ public class AuthController {
             return badSetup("account.setup.nothing");
         }
 
+        // D2001: counted in the account's sign-in bucket, refused while it is locked.
+        LoginAttemptService.PasswordCheck check;
         try {
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(username, request.currentPassword()));
-        } catch (BadCredentialsException ex) {
-            // 400, not 401: the session is fine, and the portal treats a 401
-            // as an expired session (refresh, then sign-out).
-            return badSetup("account.setup.password.current");
+            check = loginAttemptService.checkPassword(user.getId(),
+                    () -> passwordAccepted(username, request.currentPassword()));
         } finally {
             resetSecurityContextToAnonymous();
             SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+        if (check == LoginAttemptService.PasswordCheck.REJECTED) {
+            // 400, not 401: the session is fine, and the portal treats a 401
+            // as an expired session (refresh, then sign-out).
+            return badSetup("account.setup.password.current");
+        }
+        if (check != LoginAttemptService.PasswordCheck.ACCEPTED) {
+            return lockedAnswer(user.getId());
         }
 
         String newUsername = mustRename ? Objects.toString(request.newUsername(), "").trim() : null;

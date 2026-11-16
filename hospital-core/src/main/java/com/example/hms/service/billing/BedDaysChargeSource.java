@@ -4,8 +4,6 @@ import com.example.hms.enums.ItemCategory;
 import com.example.hms.model.Admission;
 import com.example.hms.model.Treatment;
 import com.example.hms.repository.AdmissionRepository;
-import com.example.hms.service.i18n.NotificationLocales;
-import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -28,6 +26,8 @@ public class BedDaysChargeSource implements VisitChargeSource {
 
     /** Words a hospital's priced-service name uses for a day of stay (EN/FR/ES, folded). */
     static final List<String> STAY_WORDS = List.of("hospitalisation", "hospitalization", "hospitalizacion");
+
+    static final String BED_DAYS_CODE = "billing.checkout.bedDays";
 
     private final AdmissionRepository admissionRepository;
 
@@ -57,8 +57,11 @@ public class BedDaysChargeSource implements VisitChargeSource {
         }
         int days = (int) Math.max(1, ChronoUnit.DAYS.between(in, out));
         Optional<Treatment> stay = visit.prices().naming(STAY_WORDS);
-        String description = stay.map(Treatment::getName)
-            .orElseGet(() -> MessageUtil.resolve(NotificationLocales.STAFF, "billing.checkout.bedDays"));
-        return List.of(VisitCharge.of(description, ItemCategory.SERVICE, days, stay));
+        // QA D1901: the hospital's own service name as written; else the
+        // server's words, shown in each reader's language.
+        if (stay.isPresent()) {
+            return List.of(VisitCharge.of(stay.get().getName(), ItemCategory.SERVICE, days, stay));
+        }
+        return List.of(VisitCharge.worded(BillingText.of(BED_DAYS_CODE), ItemCategory.SERVICE, days, stay));
     }
 }

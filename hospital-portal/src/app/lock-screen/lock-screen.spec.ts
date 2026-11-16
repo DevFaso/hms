@@ -167,6 +167,70 @@ describe('LockScreenComponent — unlock', () => {
     expect(component.error).toBe('LOCK.ERROR_SESSION_MISMATCH');
   });
 
+  // ── QA D2011: the lock screen takes the keyboard ────────────
+
+  it('focuses the password field when the lock screen opens', () => {
+    setUp({ tokenExpired: false });
+    const input = fixture.nativeElement.querySelector('#unlock-password') as HTMLInputElement;
+    expect(document.activeElement).toBe(input);
+    const card = fixture.nativeElement.querySelector('.lock-card') as HTMLElement;
+    expect(card.getAttribute('role')).toBe('dialog');
+    expect(card.getAttribute('aria-modal')).toBe('true');
+  });
+
+  it('keeps Tab inside the lock screen and Escape does not unlock', () => {
+    setUp({ tokenExpired: false });
+    const card = fixture.nativeElement.querySelector('.lock-card') as HTMLElement;
+    const signOut = fixture.nativeElement.querySelector('.btn-signout') as HTMLButtonElement;
+    const input = fixture.nativeElement.querySelector('#unlock-password') as HTMLInputElement;
+    signOut.focus();
+    card.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }),
+    );
+    expect(document.activeElement).toBe(input);
+
+    input.focus();
+    card.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }),
+    );
+    expect(document.activeElement).toBe(signOut);
+
+    card.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    expect(idle.unlock).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('.lock-card')).not.toBeNull();
+  });
+
+  // ── D2001: the account lockout ends the session ─────────────
+
+  it('signs out on 423 (account locked) instead of offering another guess', () => {
+    const lockedOut = jasmine.createSpy('lockedOut');
+    component.lockedOut.subscribe(lockedOut);
+    setUp({ tokenExpired: false });
+    component.unlock();
+    expectVerify().flush(
+      { message: 'Account is temporarily locked. Try again in 15 minutes.' },
+      { status: 423, statusText: 'Locked' },
+    );
+
+    expect(lockedOut).toHaveBeenCalledTimes(1);
+    expect(idle.unlock).toHaveBeenCalled();
+    expect(component.error).toBe('');
+    expect(component.password).toBe('');
+    expect(component.loading()).toBeFalse();
+  });
+
+  it('does not sign out on a plain wrong password (401)', () => {
+    const lockedOut = jasmine.createSpy('lockedOut');
+    component.lockedOut.subscribe(lockedOut);
+    setUp({ tokenExpired: false });
+    component.unlock();
+    expectVerify().flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    expect(lockedOut).not.toHaveBeenCalled();
+  });
+
   it('reports a retryable failure on a server error', () => {
     setUp({ tokenExpired: false });
     component.unlock();

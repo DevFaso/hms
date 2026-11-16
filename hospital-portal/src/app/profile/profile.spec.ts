@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { signal, WritableSignal } from '@angular/core';
@@ -10,6 +11,7 @@ import { OidcAuthService } from '../auth/oidc-auth.service';
 import { ToastService } from '../core/toast.service';
 import {
   AuditEvent,
+  CredentialHealth,
   EmailChangeResponse,
   ProfileService,
   UserProfile,
@@ -58,6 +60,8 @@ describe('ProfileComponent — editing the profile', () => {
       'changePassword',
       'requestPasswordReset',
       'requestPasswordResetByPhone',
+      'updateRecoveryContacts',
+      'sendRecoveryVerificationCode',
     ]);
     profiles.getUserProfile.and.returnValue(of(profile('old@example.test')));
     profiles.getCredentialHealth.and.returnValue(throwError(() => new Error('n/a')));
@@ -620,6 +624,131 @@ describe('ProfileComponent — editing the profile', () => {
     });
   });
 
+  describe('recovery contacts (D2000)', () => {
+    const health = (phoneRecoveryAvailable: boolean | undefined): CredentialHealth =>
+      ({
+        recoveryContacts: [
+          {
+            id: 'rc1',
+            contactType: 'PHONE',
+            contactValue: '+22676000000',
+            verified: false,
+            primaryContact: false,
+          },
+        ],
+        phoneRecoveryAvailable,
+      }) as CredentialHealth;
+    const typeOptions = (): string[] =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+          '#recovery-type option',
+        ),
+      ).map((o) => o.value);
+
+    beforeEach(() => {
+      component.user.set(profile('awa@example.test'));
+      component.switchTab('security');
+    });
+
+    it('offers PHONE only when the server can text the code', () => {
+      component.credentials.set(health(undefined));
+      component.openAddRecovery();
+      fixture.detectChanges();
+      expect(typeOptions()).toEqual(['EMAIL']);
+      expect(byId('recovery-phone-unavailable')).not.toBeNull();
+
+      component.credentials.set(health(true));
+      fixture.detectChanges();
+      expect(typeOptions()).toEqual(['EMAIL', 'PHONE']);
+      expect(byId('recovery-phone-unavailable')).toBeNull();
+    });
+
+    it('an existing phone contact cannot ask for a code that would never be texted', () => {
+      const host = fixture.nativeElement as HTMLElement;
+      component.credentials.set(health(false));
+      fixture.detectChanges();
+      // No SMS transport: no Verify to press, the reason is said in its place.
+      expect(host.querySelector('.recovery-badges .btn-sm-primary')).toBeNull();
+      expect(
+        host.querySelector('[data-testid="recovery-phone-unverifiable"]')?.textContent,
+      ).toContain('PROFILE.RECOVERY_PHONE_UNAVAILABLE');
+
+      component.credentials.set(health(true));
+      fixture.detectChanges();
+      profiles.sendRecoveryVerificationCode.and.returnValue(
+        of({ message: 'sent', contactType: 'PHONE' }),
+      );
+      host.querySelector<HTMLButtonElement>('.recovery-badges .btn-sm-primary')!.click();
+      expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledWith('rc1');
+      expect(host.querySelector('[data-testid="recovery-phone-unverifiable"]')).toBeNull();
+    });
+
+    it('a refused FIRST send (429, 503) says why and offers a retry and a cancel', () => {
+      const host = fixture.nativeElement as HTMLElement;
+      component.credentials.set(health(true));
+      fixture.detectChanges();
+      for (const [status, message] of [
+        [429, 'Un code vient d’être envoyé à ce contact.'],
+        [503, 'Les SMS ne peuvent pas encore être envoyés depuis cette plateforme.'],
+      ] as const) {
+        profiles.sendRecoveryVerificationCode.and.returnValue(
+          throwError(() => new HttpErrorResponse({ status, error: { message } })),
+        );
+        host.querySelector<HTMLButtonElement>('.recovery-badges .btn-sm-primary')!.click();
+        fixture.detectChanges();
+
+        const alert = host.querySelector('[data-testid="recovery-send-refused"] [role="alert"]');
+        expect(alert?.textContent).withContext(String(status)).toContain(message);
+        const retry = host.querySelector<HTMLButtonElement>('[data-testid="recovery-send-retry"]');
+        expect(retry).withContext(String(status)).not.toBeNull();
+
+        retry!.click();
+        fixture.detectChanges();
+        expect(
+          host.querySelector('[data-testid="recovery-send-refused"] [role="alert"]')?.textContent,
+        )
+          .withContext(`${status} retried`)
+          .toContain(message);
+
+        component.cancelVerification();
+        fixture.detectChanges();
+        expect(host.querySelector('[data-testid="recovery-send-refused"]')).toBeNull();
+      }
+      expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledTimes(4);
+    });
+
+    it('refuses the sign-in email or phone as a recovery contact, on the field', () => {
+      component.credentials.set(health(true));
+      component.openAddRecovery();
+      fixture.detectChanges();
+      for (const [type, value] of [
+        ['EMAIL', '  AWA@example.test '],
+        ['PHONE', '70 00 00 00'],
+        ['PHONE', '0022670000000'],
+      ] as const) {
+        component.newRecoveryType.set(type);
+        component.newRecoveryValue.set(value);
+        component.saveRecoveryContact();
+        expect(component.recoveryError())
+          .withContext(value)
+          .toBe('PROFILE.RECOVERY_SAME_AS_SIGN_IN');
+      }
+      expect(profiles.updateRecoveryContacts).not.toHaveBeenCalled();
+    });
+
+    it('accepts a different contact', () => {
+      profiles.updateRecoveryContacts.and.returnValue(of([]));
+      profiles.getCredentialHealth.and.returnValue(of(health(true)));
+      component.credentials.set(health(true));
+      component.openAddRecovery();
+      component.newRecoveryType.set('EMAIL');
+      component.newRecoveryValue.set('backup@example.test');
+      component.saveRecoveryContact();
+      expect(profiles.updateRecoveryContacts).toHaveBeenCalled();
+      expect(component.recoveryError()).toBe('');
+    });
+  });
+
   describe('self-service password change (D38)', () => {
     beforeEach(() => {
       component.switchTab('security');
@@ -673,6 +802,22 @@ describe('ProfileComponent — editing the profile', () => {
       component.changePassword();
 
       expect(toast.error).toHaveBeenCalledWith('PROFILE.PASSWORD_CURRENT_WRONG');
+      expect(component.changingPassword()).toBeFalse();
+    });
+
+    it('D2001: a 423 shows the server lockout sentence', () => {
+      profiles.changePassword.and.returnValue(
+        throwError(() => ({
+          status: 423,
+          error: { message: 'Compte temporairement verrouillé. Réessayez dans 15 minutes.' },
+        })),
+      );
+      fill('Bad-Pass-1', 'New-Pass-12', 'New-Pass-12');
+      component.changePassword();
+
+      expect(toast.error).toHaveBeenCalledWith(
+        'Compte temporairement verrouillé. Réessayez dans 15 minutes.',
+      );
       expect(component.changingPassword()).toBeFalse();
     });
 

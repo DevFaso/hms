@@ -96,6 +96,18 @@ public class BillingInvoice extends BaseEntity {
     @Column(name = "notes", length = 2048)
     private String notes;
 
+    /**
+     * QA D1901: when the server wrote {@link #notes} (a checked-out visit's
+     * draft, a birth's charge), its message code and arguments (V301), so
+     * each reader sees it in their own language; {@link #notes} keeps the
+     * French copy. Null for notes a person typed, which are shown as typed.
+     */
+    @Column(name = "notes_code", length = 120)
+    private String notesCode;
+
+    @Column(name = "notes_args", columnDefinition = "TEXT")
+    private String notesArgs;
+
     @OneToMany(mappedBy = "billingInvoice",
         fetch = FetchType.LAZY,
         cascade = CascadeType.ALL,
@@ -143,6 +155,16 @@ public class BillingInvoice extends BaseEntity {
      */
     @Column(name = "cancel_reason", length = 500)
     private String cancelReason;
+
+    /**
+     * QA D1901: the code and arguments of a reason the server wrote (a copay
+     * carried onto its visit invoice), V301; null for a reason a person typed.
+     */
+    @Column(name = "cancel_reason_code", length = 120)
+    private String cancelReasonCode;
+
+    @Column(name = "cancel_reason_args", columnDefinition = "TEXT")
+    private String cancelReasonArgs;
 
     @Column(name = "cancelled_at")
     private java.time.LocalDateTime cancelledAt;

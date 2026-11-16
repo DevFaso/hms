@@ -51,7 +51,7 @@ public class OwnEmailChangeController {
     @Operation(summary = "Request a change of your own email address",
         description = "Requires the current password. Sends a code to the new address; the email "
             + "changes only when POST /auth/me/change-email/confirm receives it. Five wrong "
-            + "passwords lock this endpoint (not sign-in) for 15 minutes; requests are limited "
+            + "passwords (counted with the sign-in's, D2001) lock the account for 15 minutes; requests are limited "
             + "per account and per address. An address that already has an account is answered "
             + "like any other (its holder is notified instead of sent a code). Not available to "
             + "a single sign-on session, whose email Keycloak manages.")

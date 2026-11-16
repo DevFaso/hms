@@ -68,8 +68,18 @@ class MedicationHistoryServiceImplTest {
     private Patient patient;
     private Hospital hospital;
 
+    private org.springframework.context.MessageSource previousMessages;
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreMessages() {
+        com.example.hms.utility.MessageUtil.setMessageSource(previousMessages);
+    }
+
     @BeforeEach
     void setUp() {
+        previousMessages = (org.springframework.context.MessageSource)
+            org.springframework.test.util.ReflectionTestUtils.getField(com.example.hms.utility.MessageUtil.class, "messageSource");
+        com.example.hms.utility.MessageUtil.setMessageSource(new com.example.hms.config.LocaleConfig().messageSource());
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         patient = new Patient(); patient.setId(patientId);
@@ -688,5 +698,81 @@ class MedicationHistoryServiceImplTest {
             });
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 2L)), anyString());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "en,Internal Prescription,Pharmacy Fill,3 days",
+        "fr,Prescription interne,Délivrance en pharmacie,3 jours",
+        "es,Prescripción interna,Dispensación en farmacia,3 días"
+    })
+    void timelineGeneratedTextUsesExplicitReaderLocale(String language, String prescriptionSource,
+                                                       String fillSource, String duration) {
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setMedicationName("Unmodified medication name");
+        rx.setCreatedAt(LocalDateTime.now());
+        rx.setDuration("30 days");
+        PharmacyFill generated = PharmacyFill.builder().patient(patient).hospital(hospital)
+            .medicationName("Other medication").fillDate(LocalDate.now()).daysSupply(3).build();
+        PharmacyFill authored = PharmacyFill.builder().patient(patient).hospital(hospital)
+            .medicationName("Third medication").fillDate(LocalDate.now()).daysSupply(3)
+            .sourceSystem("Internal Prescription").build();
+        generated.setId(UUID.randomUUID());
+        authored.setId(UUID.randomUUID());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(rx));
+        when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId)))
+            .thenReturn(List.of(generated, authored));
+        when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
+        var previousLocaleContext = org.springframework.context.i18n.LocaleContextHolder.getLocaleContext();
+        try {
+            // The explicit API locale wins over another request/thread locale.
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(Locale.GERMAN);
+            var result = service.getMedicationTimeline(patientId, hospitalId, null, null, Locale.forLanguageTag(language));
+            assertThat(result.getTimeline()).extracting(MedicationTimelineEntryDTO::getSource)
+                .containsExactly(prescriptionSource, fillSource, "Internal Prescription");
+            assertThat(result.getTimeline().get(0).getMedicationName()).isEqualTo("Unmodified medication name");
+            assertThat(result.getTimeline().get(0).getDuration()).isEqualTo("30 days");
+            assertThat(result.getTimeline().get(1).getDuration()).isEqualTo(duration);
+            assertThat(generated.getSourceSystem()).isNull();
+            assertThat(authored.getSourceSystem()).isEqualTo("Internal Prescription");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.setLocaleContext(previousLocaleContext);
+        }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "en,interaction,overlapping,Polypharmacy",
+        "fr,Interactions,chevauchement,Polymédication",
+        "es,Interacciones,superpuesto,Polimedicación"
+    })
+    void everyGeneratedWarningUsesReaderLocale(String language, String interaction, String overlap, String polypharmacy) {
+        List<String> warnings = org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,
+            "buildWarnings", 2, 4, true, 6, Locale.forLanguageTag(language));
+        assertThat(warnings).hasSize(3);
+        assertThat(warnings.get(0)).contains("2", interaction);
+        assertThat(warnings.get(1)).contains("4", overlap);
+        assertThat(warnings.get(2)).contains("6", polypharmacy);
+        assertThat(warnings).noneMatch(w -> w.contains("Missing translation") || w.contains("medication.timeline."));
+        List<String> none = org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,
+            "buildWarnings", 0, 0, false, 0, Locale.forLanguageTag(language));
+        assertThat(none).isEmpty();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "en,1 day,2 days", "fr,1 jour,2 jours", "es,1 día,2 días"
+    })
+    void generatedFillDurationUsesLocalizedSingularAndPlural(String language, String singular, String plural) {
+        PharmacyFill fill = PharmacyFill.builder().fillDate(LocalDate.of(2026, 11, 15)).daysSupply(1).build();
+        MedicationTimelineEntryDTO one = org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,
+            "fillToTimelineEntry", fill, Locale.forLanguageTag(language));
+        assertThat(one.getDuration()).isEqualTo(singular);
+        fill.setDaysSupply(2);
+        MedicationTimelineEntryDTO two = org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,
+            "fillToTimelineEntry", fill, Locale.forLanguageTag(language));
+        assertThat(two.getDuration()).isEqualTo(plural);
     }
 }

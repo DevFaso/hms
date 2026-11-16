@@ -2258,7 +2258,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                     appointmentDate, appointmentTime,
                     hospital.getEmail(), hospital.getPhoneNumber(), mailLocale);
 
-            log.info("Cancellation email sent to {} for appointment {}", patient.getEmail(), appointment.getId());
+            log.info("Cancellation email queued for {} for appointment {}", com.example.hms.utility.ActivationDeliveryTracker.maskEmail(patient.getEmail()),
+                appointment.getId());
         } catch (Exception e) {
             log.warn("Failed to send cancellation email for appointment {}: {}", appointment.getId(), e.getMessage());
         }
@@ -2284,7 +2285,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                     hospital.getEmail(), hospital.getPhoneNumber(),
                     rescheduleLink, cancelLink, mailLocale);
 
-            log.info("Reschedule email sent to {} for appointment {}", patient.getEmail(), appointment.getId());
+            log.info("Reschedule email queued for {} for appointment {}", com.example.hms.utility.ActivationDeliveryTracker.maskEmail(patient.getEmail()),
+                appointment.getId());
         } catch (Exception e) {
             log.warn("Failed to send reschedule email for appointment {}: {}", appointment.getId(), e.getMessage());
         }

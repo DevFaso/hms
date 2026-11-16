@@ -245,6 +245,28 @@ describe('AccountSetupComponent', () => {
     expect(c.done).toBeFalse();
   });
 
+  it('D2001: shows the server lockout sentence for a 423', () => {
+    profiles.completeSetup.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 423,
+            error: { message: 'Compte temporairement verrouillé. Réessayez dans 15 minutes.' },
+          }),
+      ),
+    );
+    const c = create(profile({ forcePasswordChange: true })).componentInstance;
+    fill(c, {
+      currentPassword: 'Wrong-1!',
+      newPassword: 'Brand-New-2!',
+      confirmPassword: 'Brand-New-2!',
+    });
+
+    c.submit();
+
+    expect(c.error).toBe('Compte temporairement verrouillé. Réessayez dans 15 minutes.');
+  });
+
   it('falls back to a translated generic error', () => {
     profiles.completeSetup.and.returnValue(
       throwError(() => new HttpErrorResponse({ status: 500, error: { message: 'boom' } })),

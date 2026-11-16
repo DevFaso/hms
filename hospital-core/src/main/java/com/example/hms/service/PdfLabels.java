@@ -67,6 +67,14 @@ final class PdfLabels {
         return messages.getMessage(key, null, code, locale);
     }
 
+    /**
+     * QA D1901: billing text in this document's language when the server wrote
+     * it (a code and its arguments), the stored text as typed otherwise.
+     */
+    String billingText(String code, String argsJson, String stored) {
+        return com.example.hms.service.billing.BillingTextRenderer.render(messages, locale, code, argsJson, stored);
+    }
+
     String fmt(LocalDateTime t) {
         return t == null ? "" : dateTime.format(t);
     }

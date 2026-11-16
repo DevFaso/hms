@@ -1,3 +1,6 @@
+import en from '../../../assets/i18n/en.json';
+import fr from '../../../assets/i18n/fr.json';
+import es from '../../../assets/i18n/es.json';
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
@@ -80,6 +83,54 @@ describe('LabResultsComponent', () => {
   });
 
   afterEach(() => httpMock.verify());
+
+  for (const [language, dictionary, years, months, days, quoted] of [
+    ['en', en, 'years', 'months', 'days', '“6,8”'],
+    ['fr', fr, 'ans', 'mois', 'jours', '« 6,8 »'],
+    ['es', es, 'años', 'meses', 'días', '«6,8»'],
+  ] as const) {
+    it(`D1881: labels every bounded age band in ${language}`, () => {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation(language, dictionary);
+      translate.use(language);
+      for (const ageUnit of ['YEARS', null, undefined, 'years']) {
+        expect(component.formatReferenceRangeAge({ ageMin: 2, ageMax: 5, ageUnit })).toBe(
+          `2–5 ${years}`,
+        );
+        expect(component.formatReferenceRangeAge({ ageMin: 18, ageUnit })).toBe(`18+ ${years}`);
+        expect(component.formatReferenceRangeAge({ ageMax: 5, ageUnit })).toBe(`0–5 ${years}`);
+      }
+      expect(component.formatReferenceRangeAge({ ageMin: 1, ageMax: 5, ageUnit: 'MONTHS' })).toBe(
+        `1–5 ${months}`,
+      );
+      expect(component.formatReferenceRangeAge({ ageMin: 0, ageMax: 7, ageUnit: 'DAYS' })).toBe(
+        `0–7 ${days}`,
+      );
+      expect(component.formatReferenceRangeAge({})).toBe(dictionary.LAB_RESULTS.ALL_AGES);
+    });
+
+    for (const stamped of [true, false]) {
+      it(`D1880: quotes the ${stamped ? 'recorded' : 'mismatched'} read-back in ${language}`, () => {
+        const translate = TestBed.inject(TranslateService);
+        translate.setTranslation(language, dictionary);
+        translate.use(language);
+        fixture.detectChanges();
+        flushInit();
+        component.selectedResult.set(
+          mockResult({
+            criticalReadBackValue: '6,8',
+            criticalReadBackAt: stamped ? '2026-11-14T18:07:00' : null,
+            criticalReadBackBy: 'Reader',
+          }) as never,
+        );
+        fixture.detectChanges();
+        const site = stamped ? 'read-back-evidence' : 'read-back-mismatch';
+        const value = fixture.nativeElement.querySelector(`[data-testid="${site}"] .field-value`);
+        expect(value.textContent).toContain(quoted);
+        expect(value.textContent).not.toContain('LAB_RESULTS.');
+      });
+    }
+  }
 
   it('renders evolution from the actual unwrapped detail response', () => {
     fixture.detectChanges();
