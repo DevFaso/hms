@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 
 import { ImpersonationService } from './impersonation.service';
 import { AuthService, LoginUserProfile, SessionBootstrapResponse } from '../auth/auth.service';
@@ -91,7 +91,7 @@ describe('ImpersonationService', () => {
     auth.setUserProfile.and.callFake((p: LoginUserProfile) => {
       storedProfile = p;
     });
-    auth.getRoles.and.callFake(() => storedProfile?.roles ?? []);
+    auth.getRoles.and.callFake(() => bootstrapForCurrentToken().roles);
     // E9 #55b: the hospital scope comes from GET /auth/session/bootstrap as
     // the CURRENT token's user; the stub answers with what that user's
     // token carries, which is what the live assignment table would say.
@@ -216,6 +216,30 @@ describe('ImpersonationService', () => {
 
     expect(service.active()?.impersonating).toBeFalse();
     expect(service.isActive()).toBeFalse();
+  });
+
+  it('D1973: a legacy profile snapshot cannot replace the restored token roles while bootstrap is pending', () => {
+    const bootstrap = new Subject<SessionBootstrapResponse>();
+    auth.sessionBootstrap.and.returnValue(bootstrap);
+    sessionStorage.setItem(ORIGINAL_TOKEN_KEY, fakeJwt({ roles: ['ROLE_SUPER_ADMIN'] }));
+    sessionStorage.setItem(ORIGINAL_REMEMBER_KEY, '1');
+    sessionStorage.setItem(
+      ORIGINAL_PROFILE_KEY,
+      JSON.stringify({
+        id: 'super-id',
+        username: 'synthetic.super',
+        email: 'synthetic@example.test',
+        roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'],
+        hospitalIds: ['h1'],
+        primaryHospitalId: 'h1',
+      }),
+    );
+    storedToken = fakeJwt({ roles: ['ROLE_NURSE'] });
+    service.stop().subscribe();
+    http.expectOne('/super-admin/impersonation/stop').flush({ impersonating: false });
+    expect(roleContext.setRoles).toHaveBeenCalledWith(['ROLE_SUPER_ADMIN']);
+    expect(roleContext.setRoles).not.toHaveBeenCalledWith(['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR']);
+    bootstrap.complete();
   });
 
   it('stop() preserves a session-only login by restoring with remember=false (closes #5)', () => {

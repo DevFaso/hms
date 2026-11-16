@@ -264,8 +264,7 @@ export class ImpersonationService {
       try {
         const profile = JSON.parse(snapshot) as LoginUserProfile;
         this.auth.setUserProfile(profile);
-        this.roleContext.setRoles(profile.roles ?? []);
-        this.sessionScope.applyScope(profile.hospitalIds ?? [], profile.primaryHospitalId ?? null);
+        this.sessionScope.applyStoredProfile();
       } catch {
         // Snapshot corrupt — the stored profile and the token's roles stand in
         this.sessionScope.applyStoredProfile();
