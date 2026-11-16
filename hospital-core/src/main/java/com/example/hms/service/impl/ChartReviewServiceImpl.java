@@ -840,7 +840,8 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .clinicalQuestion(o.getClinicalQuestion())
             .reportStatus(conclusion != null && conclusion.getReportStatus() != null
                 ? conclusion.getReportStatus().name() : null)
-            .reportImpression(conclusion != null ? truncatePreview(conclusion.getImpression()) : null)
+            // This shared DTO also feeds the clinical PDF. Only the UI may abridge its presentation.
+            .reportImpression(conclusion != null ? conclusion.getImpression() : null)
             .reports(shown.isEmpty() ? null : shown.stream().map(r -> toImagingReportEntry(r, shown)).toList())
             .authorizationPending(o.getAuthorizationPendingSince() != null)
             .build();
@@ -851,7 +852,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .id(r.getId())
             .reportStatus(shownKind(r, shown))
             .reportVersion(r.getReportVersion())
-            .impression(truncatePreview(r.getImpression()))
+            .impression(r.getImpression())
             .signedAt(r.getSignedAt())
             .signedByName(r.getSignedBy() != null ? r.getSignedBy().getFullName() : null)
             .createdAt(r.getCreatedAt())
