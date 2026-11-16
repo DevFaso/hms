@@ -23,9 +23,10 @@ import java.util.function.Predicate;
  *   <li>A version never starts in the past. "Today" is the hospital's business day (Africa/Ouagadougou, D-16).</li>
  *   <li>A version that has started (in force or ended) is never replaced: a new version must start after the
  *       latest started one.</li>
- *   <li>A version that has not started yet may be replaced, but only when the caller confirms it
- *       ({@code replaceScheduled}); it is then closed on the day before its own start (never in force) and stays in
- *       the history.</li>
+ *   <li>Only the version starting on exactly the same day as the new one is replaced, and only when the caller
+ *       confirms it ({@code replaceScheduled}); the question names that version. It is closed on the day before its
+ *       own start (never in force) and stays in the history. A version planned for a later day is never replaced:
+ *       the new version ends the day before it starts.</li>
  *   <li>The version in force before the new one is closed on the day before the new one starts.</li>
  * </ul>
  */
@@ -44,12 +45,14 @@ public final class PriceVersionRules {
     /**
      * What adding a version starting {@code from} does to the item's existing versions.
      *
-     * @param toReplace   live versions that have not started and start on or after {@code from}: each is closed on
-     *                    the day before its own start
+     * @param toReplace   the live version starting exactly on {@code from}, if any (named in the confirmation
+     *                    question): closed on the day before its own start
      * @param predecessor the live version that starts before {@code from}, closed on {@code from - 1}; empty for a
      *                    first price
+     * @param endsOn      the new version's last day: the day before the next live version planned after
+     *                    {@code from}, which is kept; null when none is planned
      */
-    public record Plan(List<PriceListPrice> toReplace, Optional<PriceListPrice> predecessor) {
+    public record Plan(List<PriceListPrice> toReplace, Optional<PriceListPrice> predecessor, LocalDate endsOn) {
     }
 
     /** Refuses a missing, decimal, negative or too large price, naming {@code unitPrice}. */
@@ -85,33 +88,35 @@ public final class PriceVersionRules {
     public static Plan plan(List<PriceListPrice> versions, LocalDate today, LocalDate from, boolean replaceScheduled,
                             Predicate<PriceListPrice> enteredToday) {
         List<PriceListPrice> live = versions.stream().filter(v -> !v.isReplaced()).toList();
-        List<PriceListPrice> conflicting = live.stream().filter(v -> !v.getEffectiveFrom().isBefore(from)).toList();
-        List<PriceListPrice> started = conflicting.stream()
-            .filter(v -> !v.getEffectiveFrom().isAfter(today))
-            .toList();
-        // A started version is never replaced, except a same-day correction: it starts today AND was entered
-        // today (provisional decision 2026-11-16); it is then replaced like a planned one, with confirmation.
-        Optional<PriceListPrice> applied = started.stream()
-            .filter(v -> v.getEffectiveFrom().isBefore(today) || !enteredToday.test(v))
-            .max(Comparator.comparing(PriceListPrice::getEffectiveFrom));
-        if (applied.isPresent()) {
-            throw new FieldBusinessException(FIELD_EFFECTIVE_FROM, "billing.priceList.versionStarted",
-                DisplayDates.date(applied.get().getEffectiveFrom()));
-        }
-        if (!started.isEmpty() && !replaceScheduled) {
-            throw new FieldBusinessException(FIELD_REPLACE_SCHEDULED, "billing.priceList.correctToday",
-                francs(started.get(0).getUnitPrice()));
-        }
-        if (!conflicting.isEmpty() && !replaceScheduled) {
-            PriceListPrice first = conflicting.stream()
-                .min(Comparator.comparing(PriceListPrice::getEffectiveFrom)).orElseThrow();
-            throw new FieldBusinessException(FIELD_REPLACE_SCHEDULED, "billing.priceList.scheduledExists",
-                francs(first.getUnitPrice()), DisplayDates.date(first.getEffectiveFrom()));
+        // At most one live version per start day (uq_price_list_price_item_from): the only one ever replaced.
+        Optional<PriceListPrice> sameStart = live.stream().filter(v -> v.getEffectiveFrom().equals(from)).findFirst();
+        if (sameStart.isPresent()) {
+            PriceListPrice named = sameStart.get();
+            boolean started = !named.getEffectiveFrom().isAfter(today);
+            // A started version is never replaced, except a same-day correction: it starts today AND was entered
+            // today (provisional decision 2026-11-16); it is then replaced like a planned one, with confirmation.
+            if (started && !enteredToday.test(named)) {
+                throw new FieldBusinessException(FIELD_EFFECTIVE_FROM, "billing.priceList.versionStarted",
+                    DisplayDates.date(named.getEffectiveFrom()));
+            }
+            if (!replaceScheduled) {
+                throw started
+                    ? new FieldBusinessException(FIELD_REPLACE_SCHEDULED, "billing.priceList.correctToday",
+                        francs(named.getUnitPrice()))
+                    : new FieldBusinessException(FIELD_REPLACE_SCHEDULED, "billing.priceList.scheduledExists",
+                        francs(named.getUnitPrice()), DisplayDates.date(named.getEffectiveFrom()));
+            }
         }
         Optional<PriceListPrice> predecessor = live.stream()
             .filter(v -> v.getEffectiveFrom().isBefore(from))
             .max(Comparator.comparing(PriceListPrice::getEffectiveFrom));
-        return new Plan(conflicting, predecessor);
+        LocalDate endsOn = live.stream()
+            .map(PriceListPrice::getEffectiveFrom)
+            .filter(start -> start.isAfter(from))
+            .min(Comparator.naturalOrder())
+            .map(next -> next.minusDays(1))
+            .orElse(null);
+        return new Plan(sameStart.map(List::of).orElse(List.of()), predecessor, endsOn);
     }
 
     /** Where a version stands on {@code today}. */

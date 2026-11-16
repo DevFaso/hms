@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS billing.price_list_items (
     CONSTRAINT pk_price_list_items           PRIMARY KEY (id),
     CONSTRAINT fk_price_list_item_hospital   FOREIGN KEY (hospital_id) REFERENCES hospital.hospitals (id),
     CONSTRAINT uq_price_list_item_code       UNIQUE (hospital_id, code),
+    -- Target of the versions' composite FK: a version always carries its item's hospital.
+    CONSTRAINT uq_price_list_item_id_hospital UNIQUE (id, hospital_id),
     CONSTRAINT ck_price_list_item_code       CHECK (code = upper(btrim(code)) AND length(code) > 0),
     CONSTRAINT ck_price_list_item_label      CHECK (length(btrim(label)) > 0),
     CONSTRAINT ck_price_list_item_category   CHECK (category IN ('CONSULTATION', 'LAB_TEST', 'IMAGING',
@@ -92,7 +94,8 @@ CREATE TABLE IF NOT EXISTS billing.price_list_prices (
 
     CONSTRAINT pk_price_list_prices          PRIMARY KEY (id),
     CONSTRAINT fk_price_list_price_hospital  FOREIGN KEY (hospital_id) REFERENCES hospital.hospitals (id),
-    CONSTRAINT fk_price_list_price_item      FOREIGN KEY (item_id) REFERENCES billing.price_list_items (id),
+    CONSTRAINT fk_price_list_price_item      FOREIGN KEY (item_id, hospital_id)
+        REFERENCES billing.price_list_items (id, hospital_id),
     CONSTRAINT ck_price_list_price_whole     CHECK (unit_price >= 0 AND unit_price = trunc(unit_price)),
     -- effective_to = effective_from - 1 marks a version replaced before it started.
     CONSTRAINT ck_price_list_price_range     CHECK (effective_to IS NULL OR effective_to >= effective_from - 1)

@@ -333,6 +333,7 @@ public class PriceListService {
             .item(item)
             .unitPrice(wholeFrancs(body.getUnitPrice()))
             .effectiveFrom(from)
+            .effectiveTo(plan.endsOn())
             .changeReason(reason)
             .createdBy(actor.userId())
             .build());

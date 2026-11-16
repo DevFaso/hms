@@ -156,12 +156,57 @@ class PriceVersionRulesTest {
     }
 
     @Test
-    void anEarlierStartReplacesTheLaterPlannedVersion() {
+    @DisplayName("an earlier start never replaces a later planned version: the new one ends the day before it")
+    void anEarlierStartKeepsTheLaterPlannedVersion() {
         PriceListPrice inForce = version("2000", TODAY.minusDays(10), TODAY.plusDays(15));
         PriceListPrice planned = version("2500", TODAY.plusDays(16), null);
-        PriceVersionRules.Plan plan = PriceVersionRules.plan(List.of(planned, inForce), TODAY, TODAY.plusDays(5), true, ENTERED_EARLIER);
-        assertThat(plan.toReplace()).containsExactly(planned);
+        PriceVersionRules.Plan plan = PriceVersionRules.plan(List.of(planned, inForce), TODAY, TODAY.plusDays(5), false, ENTERED_EARLIER);
+        assertThat(plan.toReplace()).isEmpty();
         assertThat(plan.predecessor()).contains(inForce);
+        assertThat(plan.endsOn()).isEqualTo(TODAY.plusDays(15));
+    }
+
+    @Test
+    @DisplayName("review 3b02ae1: with two planned versions only the one starting that day is replaced, and named")
+    void withTwoPlannedVersionsOnlyTheNamedOneIsReplaced() {
+        PriceListPrice inForce = version("2000", TODAY.minusDays(10), TODAY.plusDays(15));
+        PriceListPrice b = version("2500", TODAY.plusDays(16), TODAY.plusDays(29));
+        PriceListPrice c = version("3000", TODAY.plusDays(30), null);
+        List<PriceListPrice> versions = List.of(c, b, inForce);
+
+        // A new start between the two: nothing is replaced, no question, the new one ends before B.
+        PriceVersionRules.Plan between = PriceVersionRules.plan(versions, TODAY, TODAY.plusDays(5), true, ENTERED_EARLIER);
+        assertThat(between.toReplace()).isEmpty();
+        assertThat(between.predecessor()).contains(inForce);
+        assertThat(between.endsOn()).isEqualTo(TODAY.plusDays(15));
+
+        // On B's day: the question names B (2 500), never C; confirmed, only B is replaced and C is kept.
+        assertThatThrownBy(() -> PriceVersionRules.plan(versions, TODAY, TODAY.plusDays(16), false, ENTERED_EARLIER))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("replaceScheduled");
+                assertThat(e.getMessage()).contains("2 500 F CFA").doesNotContain("3 000");
+            });
+        PriceVersionRules.Plan onB = PriceVersionRules.plan(versions, TODAY, TODAY.plusDays(16), true, ENTERED_EARLIER);
+        assertThat(onB.toReplace()).containsExactly(b);
+        assertThat(onB.predecessor()).contains(inForce);
+        assertThat(onB.endsOn()).isEqualTo(TODAY.plusDays(29));
+    }
+
+    @Test
+    @DisplayName("review 3b02ae1: a same-day correction replaces only the version of the day, never a planned one")
+    void aSameDayCorrectionKeepsThePlannedVersion() {
+        PriceListPrice enteredToday = version("2000", TODAY, TODAY.plusDays(15));
+        PriceListPrice planned = version("2500", TODAY.plusDays(16), null);
+        List<PriceListPrice> versions = List.of(planned, enteredToday);
+
+        assertThatThrownBy(() -> PriceVersionRules.plan(versions, TODAY, TODAY, false, v -> v == enteredToday))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("replaceScheduled");
+                assertThat(e.getMessage()).contains("2 000 F CFA").doesNotContain("2 500");
+            });
+        PriceVersionRules.Plan plan = PriceVersionRules.plan(versions, TODAY, TODAY, true, v -> v == enteredToday);
+        assertThat(plan.toReplace()).containsExactly(enteredToday);
+        assertThat(plan.endsOn()).isEqualTo(TODAY.plusDays(15));
     }
 
     @Test

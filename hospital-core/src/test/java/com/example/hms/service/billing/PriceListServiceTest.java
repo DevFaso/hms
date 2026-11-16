@@ -282,6 +282,54 @@ class PriceListServiceTest {
     }
 
     @Test
+    @DisplayName("a deactivated item takes no edit")
+    void aDeactivatedItemTakesNoEdit() {
+        when(roles.canMaintainPriceList(ACTOR, HOSPITAL)).thenReturn(true);
+        PriceListItem item = withId(PriceListItem.builder().hospitalId(HOSPITAL).code("CS-GEN").active(false).build());
+        when(items.lockByIdAtHospital(item.getId(), HOSPITAL)).thenReturn(Optional.of(item));
+        assertThatThrownBy(() -> service.update(item.getId(), com.example.hms.payload.dto.billing.PriceListItemUpdateRequestDTO
+            .builder().label("Consultation").category(PriceListCategory.CONSULTATION).build()))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("désactivé");
+        verify(items, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("re-saving an item with its own link is not a collision")
+    void reSavingTheItemsOwnLinkSucceeds() {
+        when(roles.canMaintainPriceList(ACTOR, HOSPITAL)).thenReturn(true);
+        PriceListItem item = withId(PriceListItem.builder().hospitalId(HOSPITAL).code("CS-GEN").active(true)
+            .linkType(PriceListLinkType.SYSTEM).linkKey("CONSULTATION_DEFAULT").build());
+        when(items.lockByIdAtHospital(item.getId(), HOSPITAL)).thenReturn(Optional.of(item));
+        when(items.findActiveByLink(HOSPITAL, PriceListLinkType.SYSTEM, "CONSULTATION_DEFAULT")).thenReturn(List.of(item));
+        when(prices.findHistory(any(), any())).thenReturn(List.of());
+        var saved = service.update(item.getId(), com.example.hms.payload.dto.billing.PriceListItemUpdateRequestDTO.builder()
+            .label("Consultation générale").category(PriceListCategory.CONSULTATION)
+            .linkType(PriceListLinkType.SYSTEM).linkKey("CONSULTATION_DEFAULT").build());
+        assertThat(saved.getLabel()).isEqualTo("Consultation générale");
+        assertThat(saved.getLinkKey()).isEqualTo("CONSULTATION_DEFAULT");
+    }
+
+    @Test
+    @DisplayName("an edit that loses a race on the link is refused naming the link")
+    void anEditThatLosesTheLinkRaceNamesTheLink() {
+        when(roles.canMaintainPriceList(ACTOR, HOSPITAL)).thenReturn(true);
+        PriceListItem item = withId(PriceListItem.builder().hospitalId(HOSPITAL).code("HOSP-JOUR").active(true).build());
+        when(items.lockByIdAtHospital(item.getId(), HOSPITAL)).thenReturn(Optional.of(item));
+        when(items.findActiveByLink(any(), any(), any())).thenReturn(List.of());
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("x",
+                new RuntimeException("duplicate key value violates unique constraint \"uq_price_list_item_active_link\"")))
+            .when(items).saveAndFlush(any());
+        assertThatThrownBy(() -> service.update(item.getId(), com.example.hms.payload.dto.billing.PriceListItemUpdateRequestDTO
+            .builder().label("Journée").category(PriceListCategory.BED_DAY)
+            .linkType(PriceListLinkType.SYSTEM).linkKey("BED_DAY").build()))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("linkKey");
+                assertThat(e.getMessage()).contains("BED_DAY").contains("vient d");
+            });
+    }
+
+    @Test
     @DisplayName("the verified super-admin reads every hospital in global view")
     void theSuperAdminReadsInGlobalView() {
         when(roles.requireActiveHospitalId()).thenReturn(null);

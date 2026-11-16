@@ -346,6 +346,28 @@ class PriceListPostgresIT {
     }
 
     @Test
+    @DisplayName("review 3b02ae1: a price between two planned ones replaces neither; the new one ends before the next")
+    void aNewPriceBetweenTwoPlannedOnesKeepsBoth() {
+        PriceListItemDTO item = create("IMG-ECHO-ABD", PriceListCategory.IMAGING, "12500", null);
+        LocalDate b = TODAY.plusDays(16);
+        LocalDate c = TODAY.plusDays(30);
+        inTx(() -> service.addPrice(item.getId(), PriceListPriceRequestDTO.builder()
+            .unitPrice(new BigDecimal("13000")).effectiveFrom(b).changeReason("B").build()));
+        inTx(() -> service.addPrice(item.getId(), PriceListPriceRequestDTO.builder()
+            .unitPrice(new BigDecimal("14000")).effectiveFrom(c).changeReason("C").build()));
+        PriceListItemDTO after = inTx(() -> service.addPrice(item.getId(), PriceListPriceRequestDTO.builder()
+            .unitPrice(new BigDecimal("12800")).effectiveFrom(TODAY.plusDays(5)).changeReason("Entre les deux")
+            .replaceScheduled(true).build()));
+        assertThat(after.getHistory()).extracting(PriceListPriceDTO::getStatus).doesNotContain(PriceListPriceStatus.REPLACED);
+        assertThat(after.getHistory()).extracting(PriceListPriceDTO::getEffectiveFrom, PriceListPriceDTO::getEffectiveTo)
+            .containsExactly(
+                org.assertj.core.groups.Tuple.tuple(c, null),
+                org.assertj.core.groups.Tuple.tuple(b, c.minusDays(1)),
+                org.assertj.core.groups.Tuple.tuple(TODAY.plusDays(5), b.minusDays(1)),
+                org.assertj.core.groups.Tuple.tuple(TODAY, TODAY.plusDays(4)));
+    }
+
+    @Test
     @DisplayName("decision 2026-11-16: a price entered today is corrected the same day with a reason; history keeps it as replaced")
     void aSameDayEntryIsCorrectedAndKeptInTheHistory() {
         PriceListItemDTO item = createLive("LAB-GE", PriceListCategory.LAB_TEST, "1000", null);
@@ -403,6 +425,14 @@ class PriceListPostgresIT {
         assertThatThrownBy(() -> jdbc.update(version, UUID.randomUUID(), hospitalA, item, new BigDecimal("6000"),
             java.sql.Date.valueOf(TODAY.plusDays(30)), null))
             .as("two open-ended versions").isInstanceOf(DataIntegrityViolationException.class);
+        // Review 3b02ae1: a version's FK is (item_id, hospital_id) -> the item's (id, hospital_id), so a version
+        // can never carry another hospital than its item. (FK triggers are off for this seed, so the catalogue
+        // is read rather than the insert attempted.)
+        assertThat(jdbc.queryForObject("""
+            SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c
+            WHERE c.conname = 'fk_price_list_price_item'
+            """, String.class))
+            .isEqualTo("FOREIGN KEY (item_id, hospital_id) REFERENCES billing.price_list_items(id, hospital_id)");
         // A replaced version (never in force) may share its start with the one that replaced it.
         jdbc.update(version, UUID.randomUUID(), hospitalA, item, new BigDecimal("6000"),
             java.sql.Date.valueOf(TODAY), java.sql.Date.valueOf(TODAY.minusDays(1)));
@@ -419,6 +449,10 @@ class PriceListPostgresIT {
         assertThatThrownBy(() -> inTx(() -> service.get(itemA.getId()))).isInstanceOf(ResourceNotFoundException.class);
         assertThatThrownBy(() -> inTx(() -> service.addPrice(itemA.getId(), PriceListPriceRequestDTO.builder()
             .unitPrice(new BigDecimal("1")).changeReason("x").build()))).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> inTx(() -> service.update(itemA.getId(),
+            com.example.hms.payload.dto.billing.PriceListItemUpdateRequestDTO.builder()
+                .label("Repris par B").category(PriceListCategory.CONSULTATION).build())))
+            .isInstanceOf(ResourceNotFoundException.class);
         assertThatThrownBy(() -> inTx(() -> service.deactivate(itemA.getId(),
             new com.example.hms.payload.dto.billing.PriceListDeactivateRequestDTO("x"))))
             .isInstanceOf(ResourceNotFoundException.class);
