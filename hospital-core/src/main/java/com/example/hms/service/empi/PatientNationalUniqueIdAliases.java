@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class PatientNationalUniqueIdAliases {
+    private static final java.security.SecureRandom RANDOM = new java.security.SecureRandom();
     private final EmpiIdentityAliasRepository aliases;
     private final EmpiMasterIdentityRepository identities;
     private final com.example.hms.repository.empi.EmpiMergeEventRepository merges;
@@ -63,9 +64,8 @@ public class PatientNationalUniqueIdAliases {
     }
 
     private String issueEmpiNumber() {
-        var random = new java.security.SecureRandom();
         for (int attempt = 0; attempt < 25; attempt++) {
-            String candidate = String.format(java.util.Locale.ROOT, "EMP-%06d", random.nextInt(1_000_000));
+            String candidate = String.format(java.util.Locale.ROOT, "EMP-%06d", RANDOM.nextInt(1_000_000));
             if (!identities.existsByEmpiNumberIgnoreCase(candidate)) return candidate;
         }
         throw unavailable();
