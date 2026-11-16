@@ -532,6 +532,10 @@ public class SecurityConfig {
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/ws-ticket"),
                     PathPatternRequestMatcher.withDefaults().matcher("/me/push-devices/**"),
                     PathPatternRequestMatcher.withDefaults().matcher("/auth/password/**"),
+                    // Anonymous legacy recovery: like /auth/password/**, these use
+                    // a one-time reset token, never a cookie-authenticated session.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/request-reset"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/reset-password"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/resend-verification"),
                     // SockJS handshake & transport (xhr_send, xhr_streaming are POSTs
                     // that bypass Angular's HttpClient and therefore carry no XSRF token)
