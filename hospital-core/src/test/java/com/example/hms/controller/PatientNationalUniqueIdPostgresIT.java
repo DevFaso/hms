@@ -74,6 +74,7 @@ class PatientNationalUniqueIdPostgresIT extends BaseIT {
     @Autowired UserRoleHospitalAssignmentRepository assignments;
     @Autowired com.example.hms.repository.empi.EmpiIdentityAliasRepository aliases;
     @Autowired com.example.hms.service.PatientService patientService;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
     @MockitoSpyBean RequiredAuditEventLogPort audit;
     private Organization organization;
     private Hospital hospitalA;
@@ -365,6 +366,92 @@ class PatientNationalUniqueIdPostgresIT extends BaseIT {
             Integer.class, PatientNationalUniqueId.fingerprint(VALUE))).isEqualTo(1);
     }
 
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> staleDemographicWrites() {
+        return java.util.stream.Stream.of("PATCH", "PUT").flatMap(method ->
+            java.util.stream.Stream.of("111122223333", "")
+                .map(value -> org.junit.jupiter.params.provider.Arguments.of(method, value)));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("staleDemographicWrites")
+    void anOrdinaryDemographicWriteCannotUndoAConcurrentAuditedIdentityChange(String method, String nextValue) throws Exception {
+        save(patientA, VALUE, false, null).andExpect(status().isOk());
+        var loaded = new java.util.concurrent.CountDownLatch(1);
+        var resume = new java.util.concurrent.CountDownLatch(1);
+        var patch = new com.example.hms.payload.dto.PatientProfileUpdateRequestDTO();
+        patch.setFirstName("Updated");
+        var replacement = json.convertValue(registrationBody(patientA.getUser(), null),
+            com.example.hms.payload.dto.PatientRequestDTO.class);
+        replacement.setFirstName("Updated");
+        try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            var staleWrite = executor.submit(() -> {
+                authenticate(actor, hospitalA, "ROLE_RECEPTIONIST");
+                try {
+                    new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+                        Patient snapshot = patients.findByIdUnscoped(patientA.getId()).orElseThrow();
+                        assertThat(snapshot.getNationalUniqueId()).isEqualTo(VALUE);
+                        loaded.countDown();
+                        try {
+                            if (!resume.await(30, java.util.concurrent.TimeUnit.SECONDS)) throw new IllegalStateException("Timed out waiting for the concurrent IU save");
+                        } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException(interrupted);
+                        }
+                        if (method.equals("PATCH")) patientService.patchPatient(patientA.getId(), patch, hospitalA.getId(), java.util.Locale.FRENCH);
+                        else patientService.updatePatient(patientA.getId(), replacement, java.util.Locale.FRENCH);
+                    });
+                } finally {
+                    SecurityContextHolder.clearContext(); HospitalContextHolder.clear();
+                }
+            });
+            try {
+                assertThat(loaded.await(30, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                save(patientA, nextValue, false, null).andExpect(status().isOk());
+            } finally {
+                resume.countDown();
+            }
+            staleWrite.get(60, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        Patient actual = patients.findByIdUnscoped(patientA.getId()).orElseThrow();
+        assertThat(actual.getFirstName()).isEqualTo("Updated");
+        assertThat(actual.getNationalUniqueId()).isEqualTo(nextValue.isEmpty() ? null : nextValue);
+        assertThat(actual.getNationalUniqueIdHash()).isEqualTo(PatientNationalUniqueId.fingerprint(nextValue));
+        var privateAlias = aliases.findByNationalUniqueIdPatientId(patientA.getId());
+        if (nextValue.isEmpty()) assertThat(privateAlias).isEmpty();
+        else assertThat(privateAlias.orElseThrow().getAliasValue()).isEqualTo(actual.getNationalUniqueIdHash());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM support.audit_event_logs WHERE target_resource_id = ? AND event_description LIKE 'Patient identity:%'",
+            Integer.class, patientA.getId().toString())).isEqualTo(2);
+    }
+
+    @Test
+    void everyIdentityAuditCarriesTheAuthenticatedStaffAndHospitalAssignment() throws Exception {
+        save(patientA, VALUE, false, null).andExpect(status().isOk());
+        mvc.perform(post(ROOT + "/{id}/reveal", patientA.getId()).contextPath("/api").with(as(hospitalA, "ROLE_RECEPTIONIST")))
+            .andExpect(status().isOk());
+        save(patientA, "111122223333", false, null).andExpect(status().isOk());
+        save(patientA, "", false, null).andExpect(status().isOk());
+        var events = jdbc.queryForList("SELECT user_id, actor_type, assignment_id, hospital_id, event_description, details FROM support.audit_event_logs WHERE target_resource_id = ? AND event_description LIKE 'Patient identity:%'",
+            patientA.getId().toString());
+        assertThat(events).hasSize(4);
+        assertThat(events).extracting(event -> event.get("event_description")).containsExactlyInAnyOrder(
+            "Patient identity: CREATE", "Patient identity: SHOW_FULL", "Patient identity: UPDATE", "Patient identity: CLEAR");
+        for (var event : events) {
+            assertThat(event).containsEntry("user_id", actor.getId()).containsEntry("actor_type", "USER")
+                .containsEntry("hospital_id", hospitalA.getId());
+            assertThat(event.get("assignment_id")).isNotNull();
+        }
+        assertThat(events.toString()).doesNotContain(VALUE, "111122223333", PatientNationalUniqueId.fingerprint(VALUE));
+    }
+
+    @Test
+    void aDisclosureWithAnUnresolvableActorCannotFallBackToASystemAudit() throws Exception {
+        save(patientA, VALUE, false, null).andExpect(status().isOk());
+        User unknownActor = User.builder().username("unknown-iu-actor").passwordHash("synthetic").build();
+        unknownActor.setId(UUID.randomUUID());
+        mvc.perform(post(ROOT + "/{id}/reveal", patientA.getId()).contextPath("/api")
+            .with(as(unknownActor, hospitalA, "ROLE_RECEPTIONIST"))).andExpect(status().isForbidden());
+    }
+
     private org.springframework.test.web.servlet.ResultActions save(Patient patient, String value, boolean override, String reason) throws Exception {
         return save(patient, value, override, reason, hospitalA);
     }
@@ -396,17 +483,21 @@ class PatientNationalUniqueIdPostgresIT extends BaseIT {
         return as(actor, hospital, role);
     }
     private RequestPostProcessor as(User caller, Hospital hospital, String role) {
-        var authorities = List.of(new SimpleGrantedAuthority(role));
-        var principal = new CustomUserDetails(caller.getId(), caller.getUsername(), caller.getPasswordHash(), true, authorities);
-        var auth = new UsernamePasswordAuthenticationToken(principal, null, authorities);
         return request -> {
-            SecurityContextHolder.getContext().setAuthentication(auth);
-            HospitalContextHolder.setContext(HospitalContext.builder().principalUserId(caller.getId())
-                .principalUsername(caller.getUsername()).activeHospitalId(hospital.getId())
-                .activeOrganizationId(organization.getId()).permittedHospitalIds(Set.of(hospital.getId()))
-                .permittedOrganizationIds(Set.of(organization.getId())).build());
+            var auth = authenticate(caller, hospital, role);
             request.setUserPrincipal(auth);
             return authentication(auth).postProcessRequest(request);
         };
+    }
+    private org.springframework.security.core.Authentication authenticate(User caller, Hospital hospital, String role) {
+        var authorities = List.of(new SimpleGrantedAuthority(role));
+        var principal = new CustomUserDetails(caller.getId(), caller.getUsername(), caller.getPasswordHash(), true, authorities);
+        var auth = new UsernamePasswordAuthenticationToken(principal, null, authorities);
+        SecurityContextHolder.getContext().setAuthentication(auth);
+        HospitalContextHolder.setContext(HospitalContext.builder().principalUserId(caller.getId())
+            .principalUsername(caller.getUsername()).activeHospitalId(hospital.getId())
+            .activeOrganizationId(organization.getId()).permittedHospitalIds(Set.of(hospital.getId()))
+            .permittedOrganizationIds(Set.of(organization.getId())).build());
+        return auth;
     }
 }

@@ -30,6 +30,7 @@ import static org.mockito.Mockito.*;
 
 class PatientNationalUniqueIdServiceTest {
     private static final String VALUE = "000123456789";
+    private final UUID actorId = UUID.randomUUID();
     private final PatientRepository patients = mock(PatientRepository.class);
     private final RoleValidator roles = mock(RoleValidator.class);
     private final EntityManager em = mock(EntityManager.class);
@@ -45,8 +46,9 @@ class PatientNationalUniqueIdServiceTest {
     void setup() {
         priorKey = EncryptionKeyHolder.getKeyForTesting();
         EncryptionKeyHolder.setKeyForTesting(new SecretKeySpec(new byte[32], "AES"));
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("staff", null,
-            List.of(new SimpleGrantedAuthority("ROLE_RECEPTIONIST"))));
+        var authorities = List.of(new SimpleGrantedAuthority("ROLE_RECEPTIONIST"));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+            new CustomUserDetails(actorId, "staff", "synthetic", true, authorities), null, authorities));
         when(em.unwrap(Session.class)).thenReturn(session);
         when(session.doReturningWork(any())).thenReturn(false);
         when(auditProvider.getObject()).thenReturn(audit);

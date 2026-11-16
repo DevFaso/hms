@@ -133,7 +133,10 @@ public class PatientNationalUniqueIdService {
     }
 
     private void recordAudit(Patient patient, UUID hospitalId, String operation, String reason) {
+        UUID actorId = com.example.hms.security.PrincipalUserIds.of(SecurityContextHolder.getContext().getAuthentication())
+            .orElseThrow(() -> new AccessDeniedException("Access denied"));
         audit.getObject().logRequiredEvent(AuditEventRequestDTO.builder()
+            .userId(actorId)
             .eventType("SHOW_FULL".equals(operation) ? AuditEventType.PATIENT_ACCESS : AuditEventType.PATIENT_UPDATE)
             .status(AuditStatus.SUCCESS)
             .entityType("PATIENT").patientId(patient.getId()).resourceId(patient.getId().toString())

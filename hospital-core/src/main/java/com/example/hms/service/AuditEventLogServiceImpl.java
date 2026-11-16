@@ -66,7 +66,9 @@ public class AuditEventLogServiceImpl implements AuditEventLogService, RequiredA
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public AuditEventLogResponseDTO logRequiredEvent(AuditEventRequestDTO request) {
-        return doLogEvent(request);
+        User actor = resolveUser(request);
+        if (actor == null) throw new org.springframework.security.access.AccessDeniedException("Access denied");
+        return doLogEvent(request, actor);
     }
 
     @Override
@@ -218,7 +220,10 @@ public class AuditEventLogServiceImpl implements AuditEventLogService, RequiredA
      * Separated from {@link #logEvent} so the outer method can swallow exceptions.
      */
     private AuditEventLogResponseDTO doLogEvent(AuditEventRequestDTO requestDTO) {
-        User user = resolveUser(requestDTO);
+        return doLogEvent(requestDTO, resolveUser(requestDTO));
+    }
+
+    private AuditEventLogResponseDTO doLogEvent(AuditEventRequestDTO requestDTO, User user) {
         UserRoleHospitalAssignment assignment = resolveAssignment(requestDTO, user);
         ActorContext actor = resolveActorContext(requestDTO, user);
         String hospitalName = resolveHospitalName(requestDTO, assignment);

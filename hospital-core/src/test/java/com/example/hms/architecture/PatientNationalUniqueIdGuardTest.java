@@ -70,6 +70,10 @@ class PatientNationalUniqueIdGuardTest {
         String service = Files.readString(MAIN.resolve("service/PatientNationalUniqueIdService.java"));
         assertThat(service).contains("aliases.synchronize(patient)", "audit.getObject().logRequiredEvent(",
             "patients.isFindableByPatientSearch(id)", "PatientNationalUniqueId.auditReason(reason)");
+        assertThat(com.example.hms.model.Patient.class.isAnnotationPresent(org.hibernate.annotations.DynamicUpdate.class))
+            .as("unrelated patient writes must not persist stale copies of protected identity columns").isTrue();
+        String auditBoundary = methodBody(service, "private void recordAudit(");
+        assertThat(auditBoundary).contains("PrincipalUserIds.of(", ".userId(actorId)");
         String identityLoad = methodBody(service, "private Patient requirePatient(");
         assertThat(identityLoad).contains("roles.requireActiveHospitalId()", "patients.isFindableByPatientSearch(id)");
         assertThat(identityLoad.indexOf("patients.isFindableByPatientSearch(id)"))
