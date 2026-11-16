@@ -333,7 +333,7 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
       username: 'tchico1er',
       email: 'tchico1er@example.com',
       authSource: 'internal',
-      roles: ['ROLE_SUPER_ADMIN'], // upgraded from HOSPITAL_ADMIN in JWT
+      roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'], // account holds both; JWT selected HA
       superAdmin: true,
       hospitalAdmin: false,
       primaryHospitalId,

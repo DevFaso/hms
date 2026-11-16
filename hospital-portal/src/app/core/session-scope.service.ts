@@ -64,6 +64,17 @@ export class SessionScopeService {
     // bootstrap lists account assignments, not permission to change that choice.
     // SSO keeps its existing live-assignment hydration contract.
     const tokenRoles = this.auth.getRoles();
+    if (
+      bootstrap.authSource === 'internal' &&
+      tokenRoles.some((role) => !bootstrap.roles?.includes(role))
+    ) {
+      // A selected role was revoked. End this session rather than promoting
+      // another assignment or leaving JWT-based guard fallbacks authorized.
+      this.auth.logout();
+      this.roleContext.setRoles([]);
+      this.applyScope([], null);
+      return;
+    }
     const roles =
       bootstrap.authSource === 'internal' && tokenRoles.length
         ? tokenRoles

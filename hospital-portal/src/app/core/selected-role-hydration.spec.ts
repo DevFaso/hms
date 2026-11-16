@@ -42,7 +42,7 @@ describe('D1973: selected internal roles survive real session hydration', () => 
         username: 'synthetic.test',
         email: 'synthetic@example.test',
         authSource: 'internal',
-        roles: ['ROLE_SUPER_ADMIN'],
+        roles: [...new Set([role, 'ROLE_SUPER_ADMIN'])],
         superAdmin: true,
         hospitalAdmin: false,
         primaryHospitalId: 'hospital-a',
@@ -72,6 +72,46 @@ describe('D1973: selected internal roles survive real session hydration', () => 
         );
         expect(router.serializeUrl(forbidden as UrlTree)).toBe('/error/403');
       }
+    });
+  }
+
+  for (const liveRoles of [[], ['ROLE_DOCTOR']]) {
+    it(`ends a revoked selected-role session with live roles ${JSON.stringify(liveRoles)}`, () => {
+      TestBed.configureTestingModule({
+        providers: [provideHttpClient(withXhr()), provideHttpClientTesting(), provideRouter([])],
+      });
+      const auth = TestBed.inject(AuthService);
+      const context = TestBed.inject(RoleContextService);
+      const session = TestBed.inject(SessionScopeService);
+      const http = TestBed.inject(HttpTestingController);
+      const token = `e30.${btoa(JSON.stringify({ roles: ['ROLE_HOSPITAL_ADMIN'], exp: Math.floor(Date.now() / 1000) + 3600 }))}.signature`;
+      auth.setToken(token, false);
+      context.setRoles(auth.getRoles());
+      session.hydrate().subscribe();
+      http.expectOne('auth/session/bootstrap').flush({
+        userId: 'synthetic-user',
+        username: 'synthetic.test',
+        authSource: 'internal',
+        email: 'synthetic@example.test',
+        roles: liveRoles,
+        superAdmin: false,
+        hospitalAdmin: false,
+        permittedHospitalIds: ['hospital-a'],
+      } satisfies SessionBootstrapResponse);
+      const logout = http.expectOne((req) => req.url.endsWith('/api/auth/logout'));
+      expect(logout.request.headers.get('Authorization')).toBe(`Bearer ${token}`);
+      logout.flush({});
+      expect(auth.isAuthenticated()).toBeFalse();
+      expect(auth.getUserProfile()).toBeNull();
+      expect(context.activeRoles).toEqual([]);
+      expect(context.activeRole).toBeNull();
+      expect(context.globalView()).toBeFalse();
+      expect(context.effectiveHospitalIdForRequest()).toBeNull();
+      session.applyStoredProfile();
+      const forbidden = TestBed.runInInjectionContext(() =>
+        RoleGuard({ data: { roles: ['ROLE_HOSPITAL_ADMIN'] } } as never, {} as never),
+      );
+      expect(TestBed.inject(Router).serializeUrl(forbidden as UrlTree)).toBe('/error/403');
     });
   }
 });
