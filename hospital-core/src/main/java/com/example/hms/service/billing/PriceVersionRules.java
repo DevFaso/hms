@@ -11,7 +11,6 @@ import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -120,8 +119,7 @@ public final class PriceVersionRules {
     /** Whole francs grouped as the reader writes them ("2 500", "2,500"). */
     static String francs(BigDecimal amount) {
         NumberFormat format = NumberFormat.getIntegerInstance(
-            org.springframework.context.i18n.LocaleContextHolder.getLocale() != null
-                ? org.springframework.context.i18n.LocaleContextHolder.getLocale() : Locale.FRENCH);
+            org.springframework.context.i18n.LocaleContextHolder.getLocale());
         format.setGroupingUsed(true);
         return format.format(amount.setScale(0, RoundingMode.HALF_UP).longValueExact())
             .replace(' ', ' ').replace(' ', ' ');
