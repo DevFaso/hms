@@ -12,6 +12,12 @@
 
   <form class="form-card" (ngSubmit)="onSubmit()">
     <div class="form-grid">
+      <app-national-unique-id-editor
+        [scope]="form.hospitalId || null"
+        [serverError]="serverFieldErrors['nationalUniqueId']"
+        (updated)="onNationalUniqueIdUpdated($event)"
+        (ready)="nationalUniqueIdReady = $event"
+      />
       <div class="form-group">
         <label for="firstName">{{ 'PATIENTS.FIRST_NAME' | translate }} *</label>
         <input

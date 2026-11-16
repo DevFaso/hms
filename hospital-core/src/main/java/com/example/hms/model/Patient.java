@@ -46,7 +46,8 @@ import java.util.UUID;
     indexes = {
         @Index(name = "idx_patient_email", columnList = "email"),
         @Index(name = "idx_patient_phone_primary", columnList = "phone_number_primary"),
-        @Index(name = "idx_patient_user", columnList = "user_id")
+        @Index(name = "idx_patient_user", columnList = "user_id"),
+        @Index(name = "idx_patient_national_unique_id_hash", columnList = "national_unique_id_hash")
     }
 )
 @Getter @Setter
@@ -56,9 +57,19 @@ import java.util.UUID;
 @EntityListeners(TenantEntityListener.class)
 @ToString(exclude = {
     "user", "hospitalRegistrations", "appointments", "encounters",
-    "billingInvoices", "patientInsurances", "labOrders", "allergyEntries"
+    "billingInvoices", "patientInsurances", "labOrders", "allergyEntries",
+    "nationalUniqueId", "nationalUniqueIdHash"
 })
 public class Patient extends BaseEntity implements TenantScoped {
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "national_unique_id", columnDefinition = "TEXT")
+    private String nationalUniqueId;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name = "national_unique_id_hash", length = 64)
+    private String nationalUniqueIdHash;
 
     @NotBlank @Size(max = 100)
     @Column(name = "first_name", nullable = false, length = 100)

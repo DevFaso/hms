@@ -21,6 +21,7 @@ import java.util.UUID;
 public class PatientProfileDTO {
 
     private UUID id;
+    private String nationalUniqueIdMasked;
 
     // Demographics
     private String firstName;

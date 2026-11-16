@@ -42,7 +42,7 @@ import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class AuditEventLogServiceImpl implements AuditEventLogService {
+public class AuditEventLogServiceImpl implements AuditEventLogService, RequiredAuditEventLogPort {
 
     private final UserRepository userRepository;
     private final AuditEventLogRepository auditRepository;
@@ -61,6 +61,13 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
      * page for a single unlucky row.
      */
     private static final int REPLAY_FAILURE_LIMIT = 3;
+
+    /** Existing fail-open callers are unchanged; explicit IU operations require atomic auditing. */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AuditEventLogResponseDTO logRequiredEvent(AuditEventRequestDTO request) {
+        return doLogEvent(request);
+    }
 
     @Override
     @Transactional(readOnly = true)

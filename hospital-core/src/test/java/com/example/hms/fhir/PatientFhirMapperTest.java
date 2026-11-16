@@ -19,6 +19,15 @@ class PatientFhirMapperTest {
     private final PatientFhirMapper mapper = new PatientFhirMapper();
 
     @Test
+    void nationalUniqueIdAndItsFingerprintNeverLeaveInFhir() {
+        Patient patient = Patient.builder().firstName("Test").lastName("Identity")
+            .nationalUniqueId("000123456789").nationalUniqueIdHash("a".repeat(64)).build();
+        patient.setId(UUID.randomUUID());
+        String json = ca.uhn.fhir.context.FhirContext.forR4().newJsonParser().encodeResourceToString(mapper.toFhir(patient));
+        assertThat(json).doesNotContain("000123456789", "a".repeat(64), "nationalUniqueId", "NATIONAL_ID");
+    }
+
+    @Test
     void mapsCoreDemographicsAndContacts() {
         UUID id = UUID.randomUUID();
         Patient src = Patient.builder()

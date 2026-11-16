@@ -280,7 +280,9 @@ describe('MortalityComponent', () => {
     fixture.componentInstance.openRecord();
     await settle();
     const boxes = () => [
-      ...root.querySelectorAll<HTMLInputElement>('.modal-body input[type="checkbox"]'),
+      ...root.querySelectorAll<HTMLInputElement>(
+        '.modal-body .checkbox-field > input[type="checkbox"]',
+      ),
     ];
     expect(boxes().length).toBe(3);
     for (const index of [0, 1, 2]) {

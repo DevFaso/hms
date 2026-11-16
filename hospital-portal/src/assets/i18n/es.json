@@ -1958,7 +1958,8 @@
       "STILLBIRTH_CERTIFICATE_CONFLICT_DELIVERY": "El parto registra como nacido vivo a un bebé que un acta de defunción declara mortinato",
       "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradicción entre acta de mortinato y parto conciliada",
       "IMAGING_DUPLICATE_OVERRIDDEN": "Alerta de duplicado anulada («Solicitar de todos modos», motivo: {{reason}}): solicitud de imagen {{order}} realizada mientras existe la solicitud reciente {{earlier}} del mismo estudio",
-      "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Alerta de duplicado no anulada: solicitud de imagen {{order}} realizada mientras existe la solicitud reciente {{earlier}} del mismo estudio"
+      "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Alerta de duplicado no anulada: solicitud de imagen {{order}} realizada mientras existe la solicitud reciente {{earlier}} del mismo estudio",
+      "NATIONAL_IU_ACTION": "Identificador único del paciente: {{operation}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -2241,6 +2242,12 @@
       "PASSWORD_LOCKED": "demasiadas contraseñas erróneas",
       "SIGNING_IMPERSONATION": "sesión de soporte",
       "SIGNING_NOT_ENROLLED": "aplicación de autenticación necesaria para esta cuenta"
+    },
+    "NATIONAL_IU_ACTION": {
+      "CREATE": "añadido",
+      "UPDATE": "modificado",
+      "CLEAR": "borrado",
+      "SHOW_FULL": "mostrado completo"
     }
   },
   "BILLING": {
@@ -13819,5 +13826,20 @@
     "RECORD_BY_PHYSICIAN": "La revisión la registra un médico o un cirujano de este hospital.",
     "RECORDED": "Revisión registrada",
     "RECORD_FAILED": "No se pudo registrar la revisión."
+  },
+  "NATIONAL_IU": {
+    "LABEL": "Identificador único (IU)",
+    "HINT": "Opcional. Exactamente 12 dígitos; se aceptan espacios y guiones.",
+    "SHOW_FULL": "Mostrar el número completo (acceso auditado)",
+    "HIDE": "Ocultar el número",
+    "CLEAR": "Borrar el identificador",
+    "CHECKING": "Buscando un registro existente…",
+    "INVALID": "Introduzca exactamente 12 dígitos o deje el campo vacío.",
+    "UNAVAILABLE": "No se pudo comprobar o mostrar el identificador. Inténtelo de nuevo.",
+    "EXISTS_HERE": "Ya existe un paciente con este identificador. Abrir el registro.",
+    "EXISTS_ELSEWHERE": "Este identificador puede estar registrado en otro centro. Consúltelo con el paciente.",
+    "SAVE_ANYWAY": "Guardar de todos modos",
+    "REASON": "Motivo para guardar un identificador duplicado",
+    "SEARCH_EXACT": "Buscar por identificador único exacto (12 dígitos)"
   }
 }

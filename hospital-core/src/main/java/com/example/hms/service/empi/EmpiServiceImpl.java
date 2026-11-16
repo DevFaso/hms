@@ -255,7 +255,7 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
         EmpiMasterIdentity identity = masterIdentityRepository.findById(identityId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_IDENTITY_NOT_FOUND, identityId));
 
-        boolean removed = identity.getAliases().removeIf(alias -> aliasId.equals(alias.getId()));
+        boolean removed = identity.getAliases().removeIf(alias -> !alias.isNationalUniqueIdAlias() && aliasId.equals(alias.getId()));
         if (!removed) {
             throw new ResourceNotFoundException(MSG_ALIAS_NOT_FOUND, aliasId);
         }
@@ -480,6 +480,7 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
         for (EmpiIdentityAlias alias : aliasRepository.findByMasterIdentity_Id(secondary.getId())) {
             boolean duplicate = primaryAliases.stream().anyMatch(existing ->
                 existing.getAliasType() == alias.getAliasType()
+                    && java.util.Objects.equals(existing.getNationalUniqueIdPatientId(), alias.getNationalUniqueIdPatientId())
                     && existing.getAliasValue() != null
                     && existing.getAliasValue().equalsIgnoreCase(alias.getAliasValue()));
             if (duplicate) {

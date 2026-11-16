@@ -137,6 +137,7 @@ class DeceasedPatientCareGuardTest {
         Appointment#deleteAppointment | removes a visit
         Appointment#runReminderSweep | the sweep already skips the deceased
         Appointment#searchAppointments | a read over POST
+        PatientNationalUniqueId#check,search,reveal | X8 identity reads only, including after a death; ReadsOnlyPostGuardTest drives the filter and PatientNationalUniqueIdPostgresIT proves no death/identity mutation
         BirthPlan#updateBirthPlan,providerReview,deleteBirthPlan | an existing record, late documentation
         Consultation#acknowledgeConsultation,updateConsultation,completeConsultation,declineConsultation,cancelConsultation,assignConsultation,reassignConsultation | closes or documents a request made before the death
         Dispense#claimQueueRow,takeOverQueueRow,releaseQueueRow | the work queue: nothing leaves the pharmacy

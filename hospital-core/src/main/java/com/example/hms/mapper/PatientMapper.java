@@ -47,6 +47,17 @@ public class PatientMapper {
         return toPatientDTO(patient, null, true, true);
     }
 
+    /** Status flags have the same meaning on a minimal identity result and a full patient response. */
+    public static PatientResponseDTO.PatientResponseDTOBuilder withIdentityStatus(
+            PatientResponseDTO.PatientResponseDTOBuilder builder, Patient patient) {
+        return builder.active(patient.isActive())
+            .deceased(patient.isDeceased())
+            .deceasedAt(patient.getDeceasedAt())
+            .deathDisputed(com.example.hms.service.support.DeceasedPatientGuard.deathDisputedHere(patient))
+            .careBlockedByDeath(com.example.hms.service.support.DeceasedPatientGuard.careBlocked(patient))
+            .chartRestricted(patient.isChartRestricted());
+    }
+
     /**
      * Core mapper with flags allowing the caller to include
      * primary hospital and department lookup costs.
@@ -168,8 +179,9 @@ public class PatientMapper {
 
         // ---------- BUILD DTO (do not pass null to never-null outputs) ----------
 
-        return PatientResponseDTO.builder()
+        return withIdentityStatus(PatientResponseDTO.builder(), patient)
             .id(patient.getId())
+            .nationalUniqueIdMasked(com.example.hms.security.PatientNationalUniqueId.masked(patient.getNationalUniqueId()))
             .firstName(patient.getFirstName())
             .lastName(patient.getLastName())
             .middleName(patient.getMiddleName())
@@ -198,12 +210,6 @@ public class PatientMapper {
             .preferredPharmacy(patient.getPreferredPharmacy())
             .careTeamNotes(patient.getCareTeamNotes())
             .chronicConditions(parseChronicConditions(patient.getChronicConditions()))
-            .active(patient.isActive())
-            .deceased(patient.isDeceased())
-            .deceasedAt(patient.getDeceasedAt())
-            .deathDisputed(com.example.hms.service.support.DeceasedPatientGuard.deathDisputedHere(patient))
-            .careBlockedByDeath(com.example.hms.service.support.DeceasedPatientGuard.careBlocked(patient))
-            .chartRestricted(patient.isChartRestricted())
             .chartRestrictionReason(patient.getChartRestrictionReason())
             .chartRestrictedAt(patient.getChartRestrictedAt())
             .mrn(resolvedMrn)

@@ -14,7 +14,6 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -24,11 +23,12 @@ import lombok.Setter;
 import lombok.ToString;
 
 @Entity
+@org.hibernate.annotations.DynamicUpdate
 @Table(name = "identity_aliases", schema = "empi",
-    uniqueConstraints = @UniqueConstraint(name = "uq_empi_alias_value", columnNames = {"alias_type", "alias_value"}),
     indexes = {
         @Index(name = "idx_empi_alias_master", columnList = "master_identity_id"),
-        @Index(name = "idx_empi_alias_type", columnList = "alias_type")
+        @Index(name = "idx_empi_alias_type", columnList = "alias_type"),
+        @Index(name = "uq_empi_iu_alias_patient", columnList = "national_unique_id_patient_id", unique = true)
     }
 )
 @Getter
@@ -36,7 +36,7 @@ import lombok.ToString;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@ToString(exclude = "masterIdentity")
+@ToString(exclude = {"masterIdentity", "aliasValue", "nationalUniqueIdPatientId"})
 @EqualsAndHashCode(callSuper = true, exclude = "masterIdentity")
 public class EmpiIdentityAlias extends BaseEntity {
 
@@ -51,7 +51,19 @@ public class EmpiIdentityAlias extends BaseEntity {
     private EmpiAliasType aliasType;
 
     @Column(name = "alias_value", length = 255, nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String aliasValue;
+
+    /** Internal IU namespace and immutable owner; never supplied by a public alias request. */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name = "national_unique_id_patient_id")
+    private java.util.UUID nationalUniqueIdPatientId;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @jakarta.persistence.Transient
+    public boolean isNationalUniqueIdAlias() {
+        return nationalUniqueIdPatientId != null;
+    }
 
     @Column(name = "source_system", length = 100)
     private String sourceSystem;

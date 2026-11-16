@@ -179,6 +179,10 @@
                   <span class="info-value">{{ user()!.username }}</span>
                 </div>
                 <div class="info-item">
+                  @if (nationalUniqueIdMasked(); as maskedId) {
+                    <span class="info-label">{{ 'NATIONAL_IU.LABEL' | translate }}</span>
+                    <span>{{ maskedId }}</span>
+                  }
                   <span class="info-label">{{ 'PROFILE.EMAIL' | translate }}</span>
                   <span class="info-value">{{ user()!.email }}</span>
                 </div>

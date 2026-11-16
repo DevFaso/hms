@@ -24,6 +24,7 @@ import { patientSubline } from './patient-subline';
 import { rankPeopleByName } from '../person-search';
 import { birthDateQuery, isCompactDate } from '../patient-query';
 import { ListEscapeDirective } from '../a11y/list-escape.directive';
+import { normalizedNationalUniqueId } from '../../patients/national-unique-id';
 
 /** How many patients a search asks for, and how many the list shows (QA D1239). */
 const SEARCH_SIZE = 20;
@@ -74,6 +75,7 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
 
   readonly selectedPatient = signal<PatientResponse | null>(null);
   readonly query = signal('');
+  readonly nationalUniqueIdMode = signal(false);
   readonly suggestions = signal<PatientResponse[]>([]);
   readonly dropdownOpen = signal(false);
   readonly searchLoading = signal(false);
@@ -94,6 +96,16 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
         switchMap((q) => {
           this.searchLoading.set(true);
           this.noMatch.set(false);
+          if (this.nationalUniqueIdMode()) {
+            const canonical = normalizedNationalUniqueId(q);
+            const exact =
+              canonical?.length === 12
+                ? this.patientService
+                    .searchNationalUniqueId(canonical)
+                    .pipe(catchError(() => of([] as PatientResponse[])))
+                : of([] as PatientResponse[]);
+            return forkJoin([of([] as PatientResponse[]), exact]);
+          }
           // QA D1274: a birth date or an e-mail is searched by that field too.
           const scoped = searchPatientsByTerm(this.patientService, q, {
             hospitalId: this.hospitalId ?? undefined,
@@ -166,6 +178,15 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
       this.dropdownOpen.set(false);
       this.noMatch.set(false);
     }
+  }
+
+  setNationalUniqueIdMode(enabled: boolean): void {
+    this.nationalUniqueIdMode.set(enabled);
+    this.query.set('');
+    this.suggestions.set([]);
+    this.dropdownOpen.set(false);
+    this.noMatch.set(false);
+    this.search$.next('');
   }
 
   select(p: PatientResponse): void {

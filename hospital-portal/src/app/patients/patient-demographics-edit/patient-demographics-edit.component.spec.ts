@@ -80,6 +80,22 @@ describe('PatientDemographicsEditComponent (QA D926)', () => {
     expect(toast.success).toHaveBeenCalled();
   });
 
+  it('an IU-only correction waits for confirmation and does not clear other identity fields', () => {
+    const c = create().componentInstance;
+    patients.patchDemographics.and.returnValue(
+      of({ ...patient, nationalUniqueIdMasked: '•••• •••• 6789' }),
+    );
+    c.nationalUniqueIdChange = { nationalUniqueId: '000123456789' };
+    c.nationalUniqueIdReady = false;
+    c.submit();
+    expect(patients.patchDemographics).not.toHaveBeenCalled();
+    c.nationalUniqueIdReady = true;
+    c.submit();
+    expect(patients.patchDemographics).toHaveBeenCalledWith('p-1', {
+      nationalUniqueId: '000123456789',
+    });
+  });
+
   for (const change of [
     { dateOfBirth: '2999-01-01' },
     { dateOfBirth: '1800-01-01' },
