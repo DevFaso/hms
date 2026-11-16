@@ -7,11 +7,17 @@ import com.example.hms.payload.dto.AppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PortalBookAppointmentRequestDTO;
 import com.example.hms.repository.AppointmentRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.Set;
+import java.util.Arrays;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -114,6 +120,97 @@ class AppointmentBookingIdentityTest {
         assertThat(a.isBookingRequestDurable()).isTrue();
     }
 
+    @ParameterizedTest
+    @MethodSource("slotChanges")
+    void movingALegacyVisitReleasesTheOriginalIntentForBothBookingRoutes(Consumer<Appointment> move) {
+        var request = staffRequest();
+        var staffIdentity = staff(request);
+        var portalRequest = PortalBookAppointmentRequestDTO.builder().hospitalId(hospital)
+            .date(request.getAppointmentDate()).startTime(request.getStartTime()).build();
+        var portalIdentity = AppointmentBookingIdentity.portal(actor, patient, portalRequest);
+        for (var identity : List.of(staffIdentity, portalIdentity)) {
+            Appointment appointment = recorded(identity, AppointmentStatus.SCHEDULED);
+            move.accept(appointment);
+            assertThat(appointment.getBookingRequestKey()).isNull();
+            assertThat(appointment.getBookingRequestFingerprint()).isNull();
+            assertThat(identity.replay(repository)).isEmpty();
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("slotChanges")
+    void explicitIntentSurvivesScheduleEdits(Consumer<Appointment> move) {
+        var request = staffRequest();
+        request.setBookingRequestId(UUID.randomUUID());
+        var identity = staff(request);
+        Appointment appointment = recorded(identity, AppointmentStatus.SCHEDULED);
+        move.accept(appointment);
+        assertThat(identity.replay(repository)).contains(appointment);
+    }
+
+    @Test
+    void noteAndUnchangedScheduleEditsKeepLegacyRetryProtection() {
+        var identity = staff(staffRequest());
+        Appointment appointment = recorded(identity, AppointmentStatus.SCHEDULED);
+        appointment.setAppointmentDate(appointment.getAppointmentDate());
+        appointment.setStartTime(appointment.getStartTime());
+        appointment.setStaff(appointment.getStaff());
+        appointment.setDepartment(appointment.getDepartment());
+        appointment.setNotes("A clinical note edited after booking");
+        appointment.setStatus(AppointmentStatus.CONFIRMED);
+        assertThat(identity.replay(repository)).contains(appointment);
+    }
+
+    @Test
+    void reinstatingAClosedLegacyVisitCannotReclaimItsReleasedKey() {
+        var identity = staff(staffRequest());
+        Appointment appointment = recorded(identity, AppointmentStatus.SCHEDULED);
+        appointment.setStatus(AppointmentStatus.CANCELLED);
+        appointment.setStatus(AppointmentStatus.SCHEDULED);
+        assertThat(appointment.getBookingRequestKey()).isNull();
+        assertThat(identity.replay(repository)).isEmpty();
+    }
+
+    @Test
+    void reinstatementAlsoReleasesLegacyKeysLeftByAnOlderWriter() {
+        Appointment appointment = Appointment.builder().status(AppointmentStatus.CANCELLED)
+            .bookingRequestKey("legacy-key-from-before-release-fix")
+            .bookingRequestFingerprint("legacy-payload").bookingRequestDurable(false).build();
+        appointment.setStatus(AppointmentStatus.SCHEDULED);
+        assertThat(appointment.getBookingRequestKey()).isNull();
+        assertThat(appointment.getBookingRequestFingerprint()).isNull();
+    }
+
+    @Test
+    void everyBookingDtoFieldHasAnExplicitIdentityClassification() {
+        assertThat(instanceFields(AppointmentRequestDTO.class)).containsExactlyInAnyOrderElementsOf(Set.of(
+            // Hashed payload fields:
+            "appointmentDate", "startTime", "staffId", "staffEmail", "staffUsername", "departmentId",
+            "departmentName", "departmentCode", "recallId", "status", "reason", "notes", "statusReason", "overbookReason",
+            // Resolved to a canonical patient before hashing:
+            "patientId", "patientUsername", "patientEmail",
+            // Resolved to the key's hospital scope before hashing:
+            "hospitalId", "hospitalCode", "hospitalName",
+            // Operation identity, and deliberately ignored client fields:
+            "bookingRequestId", "id", "endTime"));
+        assertThat(instanceFields(PortalBookAppointmentRequestDTO.class)).containsExactlyInAnyOrderElementsOf(Set.of(
+            "bookingRequestId", "hospitalId", "departmentId", "staffId", "date", "startTime", "reason", "notes", "endTime"));
+    }
+
+    private static List<String> instanceFields(Class<?> type) {
+        return Arrays.stream(type.getDeclaredFields())
+            .filter(field -> !java.lang.reflect.Modifier.isStatic(field.getModifiers()))
+            .map(java.lang.reflect.Field::getName).toList();
+    }
+
+    private static Stream<Consumer<Appointment>> slotChanges() {
+        return Stream.of(a -> a.setAppointmentDate(a.getAppointmentDate().plusDays(3)),
+            a -> a.setStartTime(a.getStartTime().plusHours(1)),
+            a -> { var staff = new com.example.hms.model.Staff(); staff.setId(UUID.randomUUID()); a.setStaff(staff); },
+            a -> { var department = new com.example.hms.model.Department(); department.setId(UUID.randomUUID());
+                a.setDepartment(department); });
+    }
+
     private AppointmentBookingIdentity staff(AppointmentRequestDTO r) {
         return AppointmentBookingIdentity.staff(actor, patient, hospital, r);
     }
@@ -127,6 +224,8 @@ class AppointmentBookingIdentityTest {
         var site = new com.example.hms.model.Hospital();
         site.setId(hospital);
         a.setHospital(site);
+        a.setAppointmentDate(identity.date());
+        a.setStartTime(identity.startTime());
         identity.stamp(a);
         a.setStatus(status);
         when(repository.findAllByBookingRequestKey(identity.key())).thenReturn(List.of(a));

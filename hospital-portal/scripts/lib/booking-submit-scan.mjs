@@ -44,7 +44,9 @@ export function bookingSubmitViolations(source, filename = 'component.ts') {
               gate.end > current.pos ||
               !guardedSignals.some((signal) => before.includes(`this.${signal}.set(true)`)) ||
               !body.includes('bookingRequestId: this.bookingRequestId') ||
-              body.includes('crypto.randomUUID(')
+              body.includes('crypto.randomUUID(') ||
+              body.includes('createBookingRequestId(') ||
+              !node.getText(ast).includes('bookingRequestId = createBookingRequestId()')
             ) {
               violations.push(
                 `${filename}:${member.name.getText(ast)} must guard booking and retain its request ID`,

@@ -12,6 +12,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -25,6 +26,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -99,17 +101,20 @@ class AppointmentBookingConcurrencyPostgresIT {
 
     @Test
     void explicitIdentityRemainsUniqueAfterCancellationButLegacyCanBeRebooked() {
+        TransactionTemplate transaction = tx();
         for (String closed : List.of("CANCELLED", "NO_SHOW")) {
             String explicit = UUID.randomUUID().toString();
             tx().executeWithoutResult(status -> insert(explicit, true, "SCHEDULED"));
             close(explicit, closed);
-            assertThatThrownBy(() -> tx().executeWithoutResult(status -> insert(explicit, true, "SCHEDULED")))
+            Consumer<TransactionStatus> explicitRetry = status -> insert(explicit, true, "SCHEDULED");
+            assertThatThrownBy(() -> transaction.executeWithoutResult(explicitRetry))
                 .isInstanceOf(DataIntegrityViolationException.class);
             String legacy = UUID.randomUUID().toString();
             tx().executeWithoutResult(status -> insert(legacy, false, "SCHEDULED"));
             close(legacy, closed);
             tx().executeWithoutResult(status -> insert(legacy, false, "SCHEDULED"));
-            assertThatThrownBy(() -> tx().executeWithoutResult(status -> insert(legacy, false, "SCHEDULED")))
+            Consumer<TransactionStatus> legacyRetry = status -> insert(legacy, false, "SCHEDULED");
+            assertThatThrownBy(() -> transaction.executeWithoutResult(legacyRetry))
                 .isInstanceOf(DataIntegrityViolationException.class);
             assertThat(count(legacy)).isEqualTo(2);
         }
@@ -117,8 +122,12 @@ class AppointmentBookingConcurrencyPostgresIT {
 
     @Test
     void existingRowsWithoutRequestIdentityRemainUnchanged() {
+        String unchangedRows = "SELECT COUNT(*) FROM clinical.appointments WHERE booking_request_key IS NULL "
+            + "AND booking_request_fingerprint IS NULL AND booking_request_durable = false";
+        int before = jdbc.queryForObject(unchangedRows, Integer.class);
         tx().executeWithoutResult(status -> insert(null, false, "SCHEDULED"));
         tx().executeWithoutResult(status -> insert(null, false, "SCHEDULED"));
+        assertThat(jdbc.queryForObject(unchangedRows, Integer.class)).isEqualTo(before + 2);
     }
 
     private int count(String key) {

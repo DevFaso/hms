@@ -1,4 +1,5 @@
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { createBookingRequestId } from '../shared/booking-request-id';
 import { hasValue, missingRequiredMessage } from '../shared/required-fields';
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import {
@@ -537,7 +538,7 @@ export class AppointmentFormComponent implements OnInit {
   }
 
   // ── Submit ───────────────────────────────────────────────
-  private readonly bookingRequestId = crypto.randomUUID();
+  private readonly bookingRequestId = createBookingRequestId();
 
   submit(): void {
     if (this.saving()) return;
