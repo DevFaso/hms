@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { signal, WritableSignal } from '@angular/core';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { ProfileComponent } from './profile';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { MfaService } from '../auth/mfa.service';
@@ -62,6 +62,7 @@ describe('ProfileComponent — editing the profile', () => {
       'requestPasswordResetByPhone',
       'updateRecoveryContacts',
       'sendRecoveryVerificationCode',
+      'verifyRecoveryContact',
     ]);
     profiles.getUserProfile.and.returnValue(of(profile('old@example.test')));
     profiles.getCredentialHealth.and.returnValue(throwError(() => new Error('n/a')));
@@ -715,6 +716,48 @@ describe('ProfileComponent — editing the profile', () => {
         expect(host.querySelector('[data-testid="recovery-send-refused"]')).toBeNull();
       }
       expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledTimes(4);
+    });
+
+    for (const status of [429, 503]) {
+      it(`D2005: a refused resend (${status}) keeps the first code form and typed code usable`, () => {
+        const host = fixture.nativeElement as HTMLElement;
+        const contact = health(true).recoveryContacts[0];
+        component.credentials.set(health(true));
+        profiles.sendRecoveryVerificationCode.and.returnValue(
+          of({ message: 'sent', contactType: 'PHONE' }),
+        );
+        component.sendVerificationCode(contact);
+        fixture.detectChanges();
+        component.verificationCode.set('123456');
+        profiles.sendRecoveryVerificationCode.and.returnValue(
+          throwError(
+            () => new HttpErrorResponse({ status, error: { message: 'Veuillez patienter.' } }),
+          ),
+        );
+        component.sendVerificationCode(contact);
+        fixture.detectChanges();
+        expect(host.querySelector('#verification-code')).not.toBeNull();
+        expect(host.querySelector('[data-testid="recovery-send-refused"]')).toBeNull();
+        expect(host.textContent).toContain('Veuillez patienter.');
+        expect(component.verificationCode()).toBe('123456');
+        profiles.verifyRecoveryContact.and.returnValue(of({ ...contact, verified: true }));
+        profiles.getCredentialHealth.and.returnValue(of(health(true)));
+        component.submitVerificationCode();
+        expect(profiles.verifyRecoveryContact).toHaveBeenCalledWith('rc1', '123456');
+      });
+    }
+
+    it('does not dispatch a second recovery request while the first is pending', () => {
+      const pending = new Subject<{ message: string; contactType: string }>();
+      profiles.sendRecoveryVerificationCode.and.returnValue(pending);
+      const contact = health(true).recoveryContacts[0];
+      component.sendVerificationCode(contact);
+      component.sendVerificationCode(contact);
+      expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledTimes(1);
+      pending.next({ message: 'sent', contactType: 'PHONE' });
+      pending.complete();
+      expect(component.verificationSending()).toBeFalse();
+      expect(component.verificationCodeSent()).toBeTrue();
     });
 
     it('refuses the sign-in email or phone as a recovery contact, on the field', () => {

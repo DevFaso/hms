@@ -595,17 +595,20 @@ export class ProfileComponent implements OnInit {
   }
 
   sendVerificationCode(contact: RecoveryContact): void {
-    if (!contact.id) return;
+    if (!contact.id || this.verificationSending()) return;
+    if (this.verifyingContactId() !== contact.id) {
+      this.verificationCode.set('');
+      this.verificationCodeSent.set(false);
+    }
     this.verifyingContactId.set(contact.id);
-    this.verificationCode.set('');
     this.verificationError.set('');
     this.verificationSending.set(true);
-    this.verificationCodeSent.set(false);
 
     this.profileService.sendRecoveryVerificationCode(contact.id).subscribe({
       next: () => {
         this.verificationSending.set(false);
         this.verificationCodeSent.set(true);
+        this.verificationCode.set('');
         this.toast.success(
           this.translate.instant('PROFILE.VERIFICATION_CODE_SENT', {
             contact: contact.contactValue,
