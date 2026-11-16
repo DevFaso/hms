@@ -415,6 +415,21 @@ class OrangeSmsGatewayImplTest {
     }
 
     @Test
+    void senderNameDiagnosticNamesTheCharacterRuleInFrenchAndEnglishWithoutClaimingAValidLengthIsTheProblem() {
+        for (String name : List.of("e-Keneya", "ABCDEFGHIJKL", "éKeneya")) {
+            logs.list.clear();
+            assertThat(gateway(name, false).isConfigured()).isFalse();
+            assertThat(logs.list.stream().map(ILoggingEvent::getFormattedMessage)
+                .filter(line -> line.contains("ORANGE_SMS_SENDER_NAME")).toList()).singleElement()
+                .asString().contains("ASCII", "11 characters", "Hyphens and other symbols are not allowed",
+                    "11 caractères", "Les traits d’union et les autres symboles sont interdits")
+                .doesNotContain("it is", "8 characters", "e-Keneya", "éKeneya");
+        }
+        assertThat(tokenRequests).isEmpty();
+        assertThat(sendRequests).isEmpty();
+    }
+
+    @Test
     @DisplayName("without client credentials or with a malformed sender address the gateway is not configured")
     void unconfigured() {
         assertThat(gateway("", "", "tel:+2260000", "", false).isConfigured()).isFalse();
