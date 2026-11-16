@@ -96,10 +96,21 @@ describe('SessionScopeService', () => {
     expect(stored?.licenseNumber).toBe('BF-123');
   });
 
-  it('marks the super-admin global default from the live roles, not the token', () => {
+  it('does not promote an internal selected role when bootstrap lists super-admin account assignments', () => {
     auth.getRoles.and.returnValue(['ROLE_DOCTOR']);
     service.applyBootstrap(bootstrap({ roles: ['ROLE_SUPER_ADMIN'], superAdmin: true }));
 
+    expect(roleContext.activeRoles).toEqual(['ROLE_DOCTOR']);
+    expect(roleContext.activeRole).toBe('ROLE_DOCTOR');
+    expect(roleContext.globalView()).toBeFalse();
+    expect(roleContext.effectiveHospitalIdForRequest()).toBe(h1);
+  });
+
+  it('retains the live-role hydration contract for an SSO session', () => {
+    auth.getRoles.and.returnValue(['ROLE_DOCTOR']);
+    service.applyBootstrap(
+      bootstrap({ authSource: 'keycloak', roles: ['ROLE_SUPER_ADMIN'], superAdmin: true }),
+    );
     expect(roleContext.activeRoles).toEqual(['ROLE_SUPER_ADMIN']);
     expect(roleContext.globalView()).toBeTrue();
   });

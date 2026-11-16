@@ -209,9 +209,16 @@ export class RoleContextService {
 
   setRoles(roles: string[]): void {
     this._activeRoles.set(roles);
+    const active = this._activeRole();
     // Auto-set activeRole when exactly one role
     if (roles.length === 1) {
       this._activeRole.set(roles[0]);
+    } else if (active && !roles.includes(active)) {
+      this._activeRole.set(null);
+    }
+    if (!roles.includes('ROLE_SUPER_ADMIN')) {
+      this._globalView.set(false);
+      this._selectedHospitalId.set(null);
     }
   }
 

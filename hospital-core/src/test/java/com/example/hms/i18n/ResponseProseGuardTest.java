@@ -85,27 +85,9 @@ class ResponseProseGuardTest {
     }
 
     private static final String PRE_EXISTING = "pre-existing English response (class of QA D940/D977); key it with the next touch";
-    private static final String D921 = "QA D921 path: verifyEmail's bodies";
 
     /** Sites as they stand: {@code file::sentence}, how many times it is written, why it is tolerated. Shrink only. */
     private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow(
-        "controller/AuthController.java::Public self-registration is no longer available.", 1, PRE_EXISTING,
-        "controller/AuthController.java::Email verified successfully.", 1, D921,
-        "controller/AuthController.java::Email verification failed.", 1, D921 + " (EMAIL_VERIFICATION_FAILED constant)",
-        "controller/AuthController.java::Logged out successfully.", 1, PRE_EXISTING,
-        "controller/AuthController.java::Refresh token has already been used. Please log in again.", 1, PRE_EXISTING,
-        "controller/AuthController.java::Refresh token is required.", 1, PRE_EXISTING,
-        "controller/AuthController.java::Refresh token is invalid or has expired. Please log in again.", 4,
-            PRE_EXISTING + " (REFRESH_INVALID_MESSAGE constant)",
-        "controller/AuthController.java::This session was just refreshed by another tab or request. Retry with the latest token.", 1,
-            PRE_EXISTING + " (REFRESH_SUPERSEDED_MESSAGE constant)",
-        "controller/AuthController.java::User account not found or inactive.", 1, PRE_EXISTING,
-        "controller/AuthController.java::Active support-impersonation session — call /super-admin/impersonation/stop before refreshing.", 1, PRE_EXISTING,
-        "controller/AuthController.java::Session timed out due to inactivity. Please log in again.", 1, PRE_EXISTING,
-        "controller/AuthController.java::Cannot verify password for a different user.", 1, PRE_EXISTING,
-        "controller/AuthController.java::Password verified.", 1, PRE_EXISTING,
-        "controller/AuthController.java::Missing or invalid Authorization header", 1, PRE_EXISTING,
-        "controller/AuthController.java::Verification code sent", 1, PRE_EXISTING,
         "controller/BillingInvoiceController.java::Mail service unavailable", 1, PRE_EXISTING,
         "controller/FileUploadController.java::User not found", 5, PRE_EXISTING + " (USER_NOT_FOUND_MESSAGE constant)",
         "controller/FileUploadController.java::Failed to upload profile image", 1, PRE_EXISTING,
@@ -117,8 +99,7 @@ class ResponseProseGuardTest {
         "controller/FileUploadController.java::Failed to upload chat attachment", 1, PRE_EXISTING,
         "controller/InvoiceEmailController.java::Invalid email", 1, PRE_EXISTING,
         "controller/InvoiceEmailController.java::Invalid email address: ", 1, PRE_EXISTING + " (concatenated with the address)",
-        "controller/OrganizationController.java::Default security policies applied successfully", 1, PRE_EXISTING,
-        "controller/OwnEmailChangeController.java::Not authenticated.", 1, PRE_EXISTING);
+        "controller/OrganizationController.java::Default security policies applied successfully", 1, PRE_EXISTING);
 
     /** {@code file::sentence} → how many places write it (comments stripped). */
     static Map<String, Integer> sites(String file, String rawSource) {
@@ -162,6 +143,20 @@ class ResponseProseGuardTest {
             }
         }
         return out;
+    }
+
+    @Test
+    void authenticationControllersHaveNoLiteralResponseProse() throws IOException {
+        Map<String, Integer> found = new TreeMap<>();
+        try (Stream<Path> files = Files.walk(MAIN.resolve("controller"))) {
+            for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
+                String name = file.getFileName().toString();
+                if (name.contains("Auth") || name.contains("Mfa") || name.contains("PasswordReset") || name.contains("OwnEmailChange")) {
+                    found.putAll(sites(name, Files.readString(file, StandardCharsets.UTF_8)));
+                }
+            }
+        }
+        assertThat(found).as("D2008: every authentication response must resolve its request locale").isEmpty();
     }
 
     @Test
