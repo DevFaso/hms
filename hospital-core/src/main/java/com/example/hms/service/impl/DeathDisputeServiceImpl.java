@@ -136,8 +136,11 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
             throw new BusinessException("mortality.hospitalRequired");
         }
         requireDecider(roleValidator.getCurrentUserId(), hospitalId);
-        return disputeRepository.findOpenForReview(hospitalId).stream()
-            .map(dispute -> toDto(dispute, patientRepository.findByIdUnscoped(dispute.getPatientId()).orElse(null), hospitalId))
+        var rows = disputeRepository.findOpenForReview(hospitalId);
+        var names = actorNames.batch(rows.stream().flatMap(dispute ->
+            java.util.stream.Stream.of(dispute.getDisputedById(), dispute.getResolvedById())).toList());
+        return rows.stream()
+            .map(dispute -> toDto(dispute, patientRepository.findByIdUnscoped(dispute.getPatientId()).orElse(null), hospitalId, names))
             .toList();
     }
 
@@ -308,6 +311,11 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
     }
 
     private DeathDisputeResponseDTO toDto(DeathDispute dispute, Patient patient, UUID readerHospital) {
+        return toDto(dispute, patient, readerHospital, actorNames::display);
+    }
+
+    private DeathDisputeResponseDTO toDto(DeathDispute dispute, Patient patient, UUID readerHospital,
+            java.util.function.BiFunction<UUID, String, String> names) {
         UUID recordHospital = deathRecordRepository.findById(dispute.getDeathRecordId())
             .map(record -> record.getHospital().getId()).orElse(null);
         return DeathDisputeResponseDTO.builder()
@@ -318,10 +326,10 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
             .hospitalId(dispute.getHospitalId())
             .status(dispute.getStatus())
             .reason(dispute.getReason())
-            .disputedByName(actorNames.display(dispute.getDisputedById(), dispute.getDisputedByName()))
+            .disputedByName(names.apply(dispute.getDisputedById(), dispute.getDisputedByName()))
             .disputedAt(dispute.getDisputedAt())
             .resolutionReason(dispute.getResolutionReason())
-            .resolvedByName(actorNames.display(dispute.getResolvedById(), dispute.getResolvedByName()))
+            .resolvedByName(names.apply(dispute.getResolvedById(), dispute.getResolvedByName()))
             .resolvedAt(dispute.getResolvedAt())
             .deathRecordId(Objects.equals(recordHospital, readerHospital) ? dispute.getDeathRecordId() : null)
             .statusMessage(dispute.isOpen() ? MessageUtil.resolve(STATUS_KEY) : null)

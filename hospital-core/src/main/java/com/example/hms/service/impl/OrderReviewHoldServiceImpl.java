@@ -435,8 +435,10 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
             throw new AccessDeniedException("Only a clinician or pharmacist of this hospital can read the review list.");
         }
         patientChartAccess.require(patientId, hospital);
-        return holdRepository.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patientId, hospital).stream()
-            .map(this::toRow)
+        var rows = holdRepository.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patientId, hospital);
+        var names = actorNames.batch(rows.stream().map(OrderReviewHold::getDecidedById).toList());
+        return rows.stream()
+            .map(hold -> toRow(hold, names))
             .toList();
     }
 
@@ -657,6 +659,10 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     }
 
     private OrderReviewRowDTO toRow(OrderReviewHold hold) {
+        return toRow(hold, actorNames::display);
+    }
+
+    private OrderReviewRowDTO toRow(OrderReviewHold hold, java.util.function.BiFunction<UUID, String, String> names) {
         OrderReviewRowDTO.OrderReviewRowDTOBuilder row = OrderReviewRowDTO.builder()
             .id(hold.getId())
             .disputeId(hold.getDisputeId())
@@ -664,7 +670,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
             .orderId(hold.getOrderId())
             .orderVersion(hold.getOrderVersion())
             .status(hold.getStatus())
-            .decidedByName(actorNames.display(hold.getDecidedById(), hold.getDecidedByName()))
+            .decidedByName(names.apply(hold.getDecidedById(), hold.getDecidedByName()))
             .decidedAt(hold.getDecidedAt())
             .reason(hold.getReason())
             .replacementOrderId(hold.getReplacementOrderId());
