@@ -30,6 +30,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
@@ -88,6 +90,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
     private static final String ORIGINAL_HASH_PASSWORD = "Original-Pass-1";
 
     @Autowired private MockMvc mockMvc;
+    @Autowired private List<org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping> handlerMappings;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private JwtTokenProvider jwtTokenProvider;
     @Autowired private IdleSessionTracker idleSessionTracker;
@@ -618,13 +621,43 @@ class UserEndpointAuthorizationIT extends BaseIT {
         assertThat(total(fromB)).isEqualTo(3);
     }
 
-    @Test
-    @DisplayName("QA D919: a hospital admin asking for the deleted view gets an empty page, never the live list")
-    void deletedViewStaysSuperAdminOnly() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"/users", "/users/search"})
+    @DisplayName("QA D919: every deleted-directory entrypoint keeps role and flag semantics")
+    void deletedViewStaysSuperAdminOnly(String endpoint) throws Exception {
+        String sa = hms(superAdmin, "ROLE_SUPER_ADMIN");
         String admin = hms(adminA, "ROLE_HOSPITAL_ADMIN");
-        var deleted = page(get("/users").param("onlyDeleted", "true").param("size", "100"), admin);
-        assertThat(ids(deleted)).isEmpty();
-        assertThat(total(deleted)).isZero();
+        assertThat(status(delete("/users/" + nurseA.getId()), sa, null)).isEqualTo(200);
+        assertThat(status(delete("/users/" + doctorB.getId()), sa, null)).isEqualTo(200);
+        for (boolean includeDeleted : List.of(false, true)) {
+            var hidden = page(get(endpoint).param("onlyDeleted", "true")
+                .param("includeDeleted", Boolean.toString(includeDeleted)).param("size", "100"), admin);
+            assertThat(ids(hidden)).isEmpty();
+            assertThat(total(hidden)).isZero();
+            var deleted = page(get(endpoint).param("onlyDeleted", "true")
+                .param("includeDeleted", Boolean.toString(includeDeleted)).param("size", "100"), sa);
+            assertThat(ids(deleted)).contains(nurseA.getId(), doctorB.getId());
+            deleted.get("content").forEach(row -> assertThat(row.path("deleted").asBoolean()).isTrue());
+        }
+        var live = page(get(endpoint).param("includeDeleted", "true").param("size", "100"), admin);
+        assertThat(ids(live)).doesNotContain(nurseA.getId(), doctorB.getId());
+        live.get("content").forEach(row -> assertThat(row.path("deleted").asBoolean()).isFalse());
+
+        assertThat(status(patch("/users/" + nurseA.getId() + "/restore"), sa, null)).isEqualTo(204);
+        assertThat(userRepository.findById(nurseA.getId()).orElseThrow().isDeleted()).isFalse();
+        var afterRestore = page(get(endpoint).param("onlyDeleted", "true").param("includeDeleted", "true")
+            .param("size", "100"), sa);
+        assertThat(ids(afterRestore)).doesNotContain(nurseA.getId()).contains(doctorB.getId());
+    }
+
+    @Test
+    void everyOnlyDeletedMvcMappingIsIncludedInTheRoleMatrix() {
+        var actual = handlerMappings.stream().flatMap(mapping -> mapping.getHandlerMethods().entrySet().stream())
+            .filter(entry -> entry.getValue().getBeanType() == com.example.hms.controller.UserController.class)
+            .filter(entry -> java.util.Arrays.stream(entry.getValue().getMethod().getParameters())
+                .anyMatch(parameter -> parameter.getName().equals("onlyDeleted")))
+            .flatMap(entry -> entry.getKey().getPatternValues().stream()).collect(java.util.stream.Collectors.toSet());
+        assertThat(actual).containsExactlyInAnyOrder("/users", "/users/search");
     }
 
     @Test
@@ -656,6 +689,23 @@ class UserEndpointAuthorizationIT extends BaseIT {
         assertThat(status(get("/users/" + nurseA.getId()), admin, null)).isEqualTo(404);
         assertThat(status(put("/users/" + nurseA.getId()), admin, Map.of("firstName", "Renamed"))).isEqualTo(404);
         assertThat(status(delete("/users/" + nurseA.getId()), admin, null)).isEqualTo(404);
+
+        // A deleted identity at another hospital and a never-existing UUID must
+        // be indistinguishable from the deleted local identity, including prose.
+        assertThat(status(delete("/users/" + doctorB.getId()), sa, null)).isEqualTo(200);
+        String expected = null;
+        for (UUID target : List.of(nurseA.getId(), doctorB.getId(), UUID.randomUUID())) {
+            for (var method : List.of(org.springframework.http.HttpMethod.GET, org.springframework.http.HttpMethod.PUT,
+                    org.springframework.http.HttpMethod.DELETE)) {
+                var operation = org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request(method, "/users/" + target);
+                MvcResult refusal = perform(operation.header(HttpHeaders.ACCEPT_LANGUAGE, "en"), admin,
+                    method.equals(org.springframework.http.HttpMethod.PUT) ? Map.of("firstName", "Renamed") : null);
+                assertThat(refusal.getResponse().getStatus()).isEqualTo(404);
+                String prose = message(refusal).replace(target.toString(), "<id>");
+                if (expected == null) expected = prose;
+                else assertThat(prose).isEqualTo(expected);
+            }
+        }
 
         // The super-admin still gets the actionable answers.
         assertThat(status(put("/users/" + nurseA.getId()), sa, Map.of("firstName", "Renamed"))).isEqualTo(400);

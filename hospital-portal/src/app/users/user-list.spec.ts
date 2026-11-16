@@ -502,7 +502,12 @@ describe('UserListComponent — no archived hospital in the create picker (QA D8
  * and read "user not found". The list now offers no edit or delete on it.
  */
 describe('UserListComponent — no edit or delete on an account the caller may not manage (QA D914)', () => {
-  function render(superAdmin = false): { root: HTMLElement; users: jasmine.SpyObj<UserService> } {
+  function render(superAdmin = false): {
+    root: HTMLElement;
+    users: jasmine.SpyObj<UserService>;
+    fixture: ComponentFixture<UserListComponent>;
+    component: UserListComponent;
+  } {
     const page = { content: [], number: 0, totalPages: 1, totalElements: 0 };
     const users = jasmine.createSpyObj<UserService>('UserService', ['list', 'search']);
     users.list.and.returnValue(of(page) as never);
@@ -528,7 +533,12 @@ describe('UserListComponent — no edit or delete on an account the caller may n
     });
     const fixture = TestBed.createComponent(UserListComponent);
     fixture.detectChanges();
-    return { root: fixture.nativeElement as HTMLElement, users };
+    return {
+      root: fixture.nativeElement as HTMLElement,
+      users,
+      fixture,
+      component: fixture.componentInstance,
+    };
   }
 
   it('QA D919: a hospital admin is not offered the "Deleted" filter, nor asks for deleted rows', () => {
@@ -538,6 +548,39 @@ describe('UserListComponent — no edit or delete on an account the caller may n
     TestBed.resetTestingModule();
     expect(render(true).root.querySelector('.deleted-pill')).not.toBeNull();
   });
+
+  for (const superAdmin of [false, true]) {
+    it(`QA D919: delete copy promises restore only to a super-admin (${superAdmin})`, () => {
+      const { root, fixture, component } = render(superAdmin);
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('en', {
+        USERS: {
+          DELETE_WARNING: 'The account can be restored from the deleted list.',
+          DELETE_WARNING_NO_RESTORE: 'The account will be deactivated.',
+        },
+      });
+      translate.use('en');
+      component.confirmDelete({
+        id: 'local',
+        username: 'test-account',
+        email: 'test@example.test',
+        firstName: 'Test',
+        lastName: 'Account',
+        active: true,
+        deleted: false,
+        roleName: 'ROLE_NURSE',
+        profileType: 'STAFF',
+        roleCount: 1,
+        manageable: true,
+      });
+      fixture.detectChanges();
+      expect(root.querySelector('.delete-detail')?.textContent?.trim()).toBe(
+        superAdmin
+          ? 'The account can be restored from the deleted list.'
+          : 'The account will be deactivated.',
+      );
+    });
+  }
 
   function rowButtons(): { edit: number; del: number } {
     const page = {
