@@ -5,7 +5,7 @@ import { provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import fr from '../../../assets/i18n/fr.json';
-import { PriceListComponent, businessToday } from './price-list.component';
+import { PriceListComponent } from './price-list.component';
 import { PriceListItem, PriceListLinkOptions } from '../../services/price-list.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
@@ -225,7 +225,8 @@ describe('PriceListComponent (billing-money plan PR 2)', () => {
     const post = http.expectOne((r) => r.method === 'POST' && r.url === BASE);
     expect(post.request.body.code).toBe('CS-GEN');
     expect(post.request.body.category).toBe('CONSULTATION');
-    expect(post.request.body.effectiveFrom).toBe(businessToday());
+    // Untouched, the date is left to the server's business day (Africa/Ouagadougou).
+    expect(post.request.body.effectiveFrom).toBeNull();
     post.flush(
       fieldErrorsResponse({
         code: 'Le code CS-GEN existe déjà dans la grille tarifaire de l’établissement.',
@@ -314,6 +315,37 @@ describe('PriceListComponent (billing-money plan PR 2)', () => {
     http.expectOne((r) => r.method === 'GET' && r.url === BASE).flush([CS_GEN]);
     fixture.detectChanges();
     expect(el().querySelector('#pp-unit-price')).toBeNull();
+  });
+
+  it('a date the user picks is sent, and picking another resets the replacement question', async () => {
+    setup(['ROLE_ACCOUNTANT']);
+    openDetail();
+    el().querySelector<HTMLButtonElement>('[data-testid="price-list-add-price"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    type('pp-unit-price', '3000');
+    type('pp-change-reason', 'Correction de la convention');
+    type('pp-effective-from', '2027-01-01');
+    el().querySelector<HTMLButtonElement>('[data-testid="price-list-price-save"]')!.click();
+    const first = http.expectOne(`${BASE}/item-1/prices`);
+    expect(first.request.body.effectiveFrom).toBe('2027-01-01');
+    first.flush(fieldErrorsResponse({ replaceScheduled: 'Un prix est déjà prévu.' }).error, {
+      status: 400,
+      statusText: 'Bad Request',
+    });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    el().querySelector<HTMLInputElement>('#pp-replace-scheduled')!.click();
+    fixture.detectChanges();
+    type('pp-effective-from', '2027-02-01');
+    fixture.detectChanges();
+    expect(el().querySelector('[data-testid="price-list-replace-question"]')).toBeNull();
+    el().querySelector<HTMLButtonElement>('[data-testid="price-list-price-save"]')!.click();
+    const second = http.expectOne(`${BASE}/item-1/prices`);
+    expect(second.request.body.effectiveFrom).toBe('2027-02-01');
+    expect(second.request.body.replaceScheduled).toBeFalse();
+    second.flush(CS_GEN_DETAIL);
+    http.expectOne((r) => r.method === 'GET' && r.url === BASE).flush([CS_GEN]);
   });
 
   it('asks why before deactivating, sends nothing when cancelled, then sends the reason', () => {

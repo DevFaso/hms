@@ -1474,6 +1474,56 @@ describe('BillingComponent', () => {
     });
   });
 
+  describe('price list link (billing-money plan PR 2)', () => {
+    async function asOnly(role: string): Promise<ComponentFixture<BillingComponent>> {
+      TestBed.resetTestingModule();
+      const roleCtx = {
+        hasAnyActiveRole: (roles: string[]) => roles.includes(role),
+      } as unknown as RoleContextService;
+      const permissionSpy = jasmine.createSpyObj('PermissionService', ['hasAnyPermission']);
+      permissionSpy.hasAnyPermission.and.returnValue(false);
+      await TestBed.configureTestingModule({
+        imports: [BillingComponent, TranslateModule.forRoot()],
+        providers: [
+          provideHttpClient(withXhr()),
+          provideHttpClientTesting(),
+          provideRouter([]),
+          { provide: BillingService, useValue: billingSpy },
+          { provide: ToastService, useValue: toastSpy },
+          { provide: PermissionService, useValue: permissionSpy },
+          { provide: RoleContextService, useValue: roleCtx },
+        ],
+      }).compileComponents();
+      const f = TestBed.createComponent(BillingComponent);
+      f.detectChanges();
+      return f;
+    }
+
+    it('shows the price list button to every role its route admits', async () => {
+      for (const role of [
+        'ROLE_SUPER_ADMIN',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_ACCOUNTANT',
+        'ROLE_BILLING_SPECIALIST',
+        'ROLE_RECEPTIONIST',
+      ]) {
+        const f = await asOnly(role);
+        expect(f.componentInstance.canReadPriceList).withContext(role).toBeTrue();
+        expect((f.nativeElement as HTMLElement).querySelector('[data-testid="price-list-link"]'))
+          .withContext(role)
+          .not.toBeNull();
+      }
+    });
+
+    it('hides it from ROLE_ADMIN, which /billing admits but /billing/tarifs does not', async () => {
+      const f = await asOnly('ROLE_ADMIN');
+      expect(f.componentInstance.canReadPriceList).toBeFalse();
+      expect(
+        (f.nativeElement as HTMLElement).querySelector('[data-testid="price-list-link"]'),
+      ).toBeNull();
+    });
+  });
+
   describe('payments ledger (QA D140/D142)', () => {
     const pending = {
       id: 'p9',

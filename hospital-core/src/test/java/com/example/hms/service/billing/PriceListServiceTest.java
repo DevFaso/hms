@@ -254,9 +254,38 @@ class PriceListServiceTest {
     }
 
     @Test
+    @DisplayName("no hospital and not the verified super-admin: refused, never read across hospitals")
+    void aNullHospitalWithoutTheVerifiedSuperAdminIsRefused() {
+        when(roles.requireActiveHospitalId()).thenReturn(null);
+        when(scope.isVerifiedSuperAdmin()).thenReturn(false);
+        UUID anyItem = UUID.randomUUID();
+        assertThatThrownBy(() -> service.list(null, true)).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> service.get(anyItem)).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> service.linkOptions()).isInstanceOf(AccessDeniedException.class);
+        verifyNoInteractions(items, prices, labTests, treatments);
+    }
+
+    @Test
+    @DisplayName("a concurrent create that loses on the link is refused naming the link, not the code")
+    void aConcurrentLinkCollisionNamesTheLink() {
+        when(roles.canMaintainPriceList(ACTOR, HOSPITAL)).thenReturn(true);
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("x",
+            new RuntimeException("duplicate key value violates unique constraint \"uq_price_list_item_active_link\"")))
+            .when(items).saveAndFlush(any());
+        assertThatThrownBy(() -> service.create(consultation()))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> assertThat(e.getField()).isEqualTo("linkKey"));
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("x",
+            new RuntimeException("duplicate key value violates unique constraint \"uq_price_list_item_code\"")))
+            .when(items).saveAndFlush(any());
+        assertThatThrownBy(() -> service.create(consultation()))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> assertThat(e.getField()).isEqualTo("code"));
+    }
+
+    @Test
     @DisplayName("the verified super-admin reads every hospital in global view")
     void theSuperAdminReadsInGlobalView() {
         when(roles.requireActiveHospitalId()).thenReturn(null);
+        when(scope.isVerifiedSuperAdmin()).thenReturn(true);
         when(items.findAllByOrderByCodeAsc()).thenReturn(List.of());
         assertThat(service.list(null, false)).isEmpty();
         verify(items).findAllByOrderByCodeAsc();

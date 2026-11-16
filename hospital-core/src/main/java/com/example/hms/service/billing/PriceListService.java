@@ -254,6 +254,10 @@ public class PriceListService {
                 .build());
         } catch (DataIntegrityViolationException race) {
             // A concurrent create of the same code or link at this hospital won between the checks and the insert.
+            if (isActiveLinkCollision(race)) {
+                throw new FieldBusinessException(PriceListLinks.FIELD_LINK_KEY, "billing.priceList.linkTakenConcurrently",
+                    linkKey);
+            }
             throw new FieldBusinessException(FIELD_CODE, "billing.priceList.codeDuplicate", code);
         }
         auditAfterCommit(AuditEventType.PRICE_LIST_ITEM_CREATED, actor,
@@ -284,8 +288,9 @@ public class PriceListService {
         try {
             itemRepository.saveAndFlush(item);
         } catch (DataIntegrityViolationException race) {
-            throw new FieldBusinessException(PriceListLinks.FIELD_LINK_KEY, "billing.priceList.linkTaken",
-                linkKey, item.getCode());
+            // The transaction is aborted: the item that took the link cannot be read back.
+            throw new FieldBusinessException(PriceListLinks.FIELD_LINK_KEY, "billing.priceList.linkTakenConcurrently",
+                linkKey);
         }
         auditAfterCommit(AuditEventType.PRICE_LIST_ITEM_UPDATED, actor,
             "Price list item " + item.getId() + " updated", item.getId());
@@ -312,7 +317,8 @@ public class PriceListService {
         LocalDate today = today();
         LocalDate from = PriceVersionRules.startOf(body.getEffectiveFrom(), today);
         List<PriceListPrice> versions = priceRepository.findHistory(item.getId(), actor.hospitalId());
-        PriceVersionRules.Plan plan = PriceVersionRules.plan(versions, today, from, body.isReplaceScheduled());
+        PriceVersionRules.Plan plan = PriceVersionRules.plan(versions, today, from, body.isReplaceScheduled(),
+            version -> enteredOn(version, today));
 
         // Close first, then insert: the partial unique indexes (one live version per start, one open-ended
         // version per item) hold at every statement.
@@ -390,7 +396,16 @@ public class PriceListService {
      */
     UUID requireReader() {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId == null || actingScopeResolver.isVerifiedSuperAdmin()) {
+        boolean verifiedSuperAdmin = actingScopeResolver.isVerifiedSuperAdmin();
+        if (hospitalId == null) {
+            // Global view (every hospital) is the verified super-admin's alone; anything else that resolves no
+            // hospital is refused, never read across hospitals.
+            if (!verifiedSuperAdmin) {
+                throw new AccessDeniedException("Access denied");
+            }
+            return null;
+        }
+        if (verifiedSuperAdmin) {
             return hospitalId;
         }
         UUID userId = roleValidator.getCurrentUserId();
@@ -427,6 +442,13 @@ public class PriceListService {
         }
     }
 
+    /** The one-active-item-per-link index (V302), as opposed to the code's unique constraint. */
+    static boolean isActiveLinkCollision(DataIntegrityViolationException race) {
+        Throwable cause = org.springframework.core.NestedExceptionUtils.getMostSpecificCause(race);
+        String message = cause.getMessage();
+        return message != null && message.toLowerCase(java.util.Locale.ROOT).contains("uq_price_list_item_active_link");
+    }
+
     private static void requireLabelLength(String label) {
         if (label.length() > LABEL_MAX) {
             throw new FieldBusinessException(FIELD_LABEL, "billing.priceList.labelTooLong", LABEL_MAX);
@@ -447,6 +469,17 @@ public class PriceListService {
 
     private static BigDecimal wholeFrancs(BigDecimal amount) {
         return amount.setScale(2, java.math.RoundingMode.UNNECESSARY);
+    }
+
+    /**
+     * Owner/coordinator decision 2026-11-16 (provisional): a version entered today and in force since today is a
+     * same-day correction, not history already applied. No invoice line can reference a version until PR 3 (V303
+     * adds invoice_items.price_list_price_id); PR 3 must also refuse the correction once a posted line uses it.
+     */
+    private boolean enteredOn(PriceListPrice version, LocalDate today) {
+        return version.getCreatedAt() != null
+            && version.getCreatedAt().atZone(ZoneId.systemDefault()).withZoneSameInstant(businessZone).toLocalDate()
+                .equals(today);
     }
 
     LocalDate today() {

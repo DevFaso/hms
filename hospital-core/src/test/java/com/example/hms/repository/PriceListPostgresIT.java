@@ -123,6 +123,8 @@ class PriceListPostgresIT {
     private final ActingScopeResolver scope = mock(ActingScopeResolver.class);
     private final AuditEventLogService audit = mock(AuditEventLogService.class);
     private PriceListService service;
+    /** On the wall clock, as BaseEntity.createdAt is: for the "entered today" rule. */
+    private PriceListService liveService;
     private TransactionTemplate tx;
     private UUID hospitalA;
     private UUID hospitalB;
@@ -139,6 +141,8 @@ class PriceListPostgresIT {
         actor = UUID.randomUUID();
         service = new PriceListService(items, prices, new PriceListLinks(labTests, treatments), labTests, treatments,
             mock(UserRepository.class), roles, scope, audit, CLOCK, "Africa/Ouagadougou");
+        liveService = new PriceListService(items, prices, new PriceListLinks(labTests, treatments), labTests, treatments,
+            mock(UserRepository.class), roles, scope, audit, Clock.systemDefaultZone(), "Africa/Ouagadougou");
         tx = new TransactionTemplate(transactions);
         actAt(hospitalA);
         when(roles.getCurrentUserId()).thenReturn(actor);
@@ -182,6 +186,11 @@ class PriceListPostgresIT {
 
     private PriceListItemDTO create(String code, PriceListCategory category, String price, LocalDate from) {
         return inTx(() -> service.create(PriceListItemRequestDTO.builder()
+            .code(code).label(code).category(category).unitPrice(new BigDecimal(price)).effectiveFrom(from).build()));
+    }
+
+    private PriceListItemDTO createLive(String code, PriceListCategory category, String price, LocalDate from) {
+        return inTx(() -> liveService.create(PriceListItemRequestDTO.builder()
             .code(code).label(code).category(category).unitPrice(new BigDecimal(price)).effectiveFrom(from).build()));
     }
 
@@ -288,15 +297,15 @@ class PriceListPostgresIT {
     @Test
     @DisplayName("two concurrent new prices from today on one item: one wins, one is refused")
     void concurrentNewPricesAreSerialised() throws Exception {
-        PriceListItemDTO item = create("ACT-PANS-S", PriceListCategory.PROCEDURE, "1000", null);
+        PriceListItemDTO item = createLive("ACT-PANS-S", PriceListCategory.PROCEDURE, "1000", null);
         // The first price started two weeks ago (no endpoint can date one in the past: written as the history would be).
         jdbc.update("UPDATE billing.price_list_prices SET effective_from = ? WHERE item_id = ?",
-            java.sql.Date.valueOf(TODAY.minusDays(14)), item.getId());
+            java.sql.Date.valueOf(java.time.LocalDate.now().minusDays(14)), item.getId());
 
         List<Callable<PriceListItemDTO>> calls = List.of(
-            () -> service.addPrice(item.getId(), PriceListPriceRequestDTO.builder()
+            () -> liveService.addPrice(item.getId(), PriceListPriceRequestDTO.builder()
                 .unitPrice(new BigDecimal("1200")).changeReason("Caisse 1").build()),
-            () -> service.addPrice(item.getId(), PriceListPriceRequestDTO.builder()
+            () -> liveService.addPrice(item.getId(), PriceListPriceRequestDTO.builder()
                 .unitPrice(new BigDecimal("1300")).changeReason("Caisse 2").build()));
         int won = 0;
         int refused = 0;
@@ -306,7 +315,8 @@ class PriceListPostgresIT {
                 won++;
             } catch (ExecutionException e) {
                 assertThat(e.getCause()).isInstanceOf(FieldBusinessException.class);
-                assertThat(((FieldBusinessException) e.getCause()).getField()).isEqualTo("effectiveFrom");
+                // The loser sees a version entered today and in force today: a correction it did not confirm.
+                assertThat(((FieldBusinessException) e.getCause()).getField()).isEqualTo("replaceScheduled");
                 refused++;
             }
         }
@@ -333,6 +343,30 @@ class PriceListPostgresIT {
         start.countDown();
         pool.shutdown();
         return results;
+    }
+
+    @Test
+    @DisplayName("decision 2026-11-16: a price entered today is corrected the same day with a reason; history keeps it as replaced")
+    void aSameDayEntryIsCorrectedAndKeptInTheHistory() {
+        PriceListItemDTO item = createLive("LAB-GE", PriceListCategory.LAB_TEST, "1000", null);
+        assertThatThrownBy(() -> inTx(() -> liveService.addPrice(item.getId(), PriceListPriceRequestDTO.builder()
+            .unitPrice(new BigDecimal("1100")).changeReason("Erreur de saisie").build())))
+            .isInstanceOfSatisfying(FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("replaceScheduled"));
+
+        PriceListItemDTO corrected = inTx(() -> liveService.addPrice(item.getId(), PriceListPriceRequestDTO.builder()
+            .unitPrice(new BigDecimal("1100")).changeReason("Erreur de saisie").replaceScheduled(true).build()));
+        assertThat(corrected.getCurrentPrice().getUnitPrice()).isEqualByComparingTo("1100");
+        assertThat(corrected.getHistory()).extracting(PriceListPriceDTO::getStatus)
+            .containsExactlyInAnyOrder(PriceListPriceStatus.IN_FORCE, PriceListPriceStatus.REPLACED);
+
+        // Entered on an earlier day, the version in force is applied history and is never replaced.
+        jdbc.update("UPDATE billing.price_list_prices SET created_at = created_at - interval '2 days' "
+            + "WHERE item_id = ? AND effective_to IS NULL", corrected.getId());
+        assertThatThrownBy(() -> inTx(() -> liveService.addPrice(item.getId(), PriceListPriceRequestDTO.builder()
+            .unitPrice(new BigDecimal("1200")).changeReason("x").replaceScheduled(true).build())))
+            .isInstanceOfSatisfying(FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("effectiveFrom"));
     }
 
     // ───────────────────────── constraints ─────────────────────────

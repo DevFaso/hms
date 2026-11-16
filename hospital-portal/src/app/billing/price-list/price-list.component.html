@@ -475,7 +475,8 @@
               type="date"
               required
               [min]="today"
-              [(ngModel)]="itemForm.effectiveFrom"
+              [ngModel]="itemForm.effectiveFrom"
+              (ngModelChange)="itemDateChanged($event)"
             />
           </div>
           <div class="field">
@@ -572,7 +573,8 @@
             type="date"
             required
             [min]="today"
-            [(ngModel)]="priceForm.effectiveFrom"
+            [ngModel]="priceForm.effectiveFrom"
+            (ngModelChange)="priceDateChanged($event)"
           />
         </div>
         <div class="field">

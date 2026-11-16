@@ -12,6 +12,7 @@ import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 /**
  * Billing-money plan PR 2: the rules for a price and for a new price version, with no I/O, so each one is unit
@@ -78,17 +79,28 @@ public final class PriceVersionRules {
 
     /**
      * Plans a new version starting {@code from} (already checked by {@link #startOf}) against the item's
-     * {@code versions}, read under the item's lock.
+     * {@code versions}, read under the item's lock. {@code enteredToday} says whether a version was entered on
+     * the business day (a same-day correction may replace it).
      */
-    public static Plan plan(List<PriceListPrice> versions, LocalDate today, LocalDate from, boolean replaceScheduled) {
+    public static Plan plan(List<PriceListPrice> versions, LocalDate today, LocalDate from, boolean replaceScheduled,
+                            Predicate<PriceListPrice> enteredToday) {
         List<PriceListPrice> live = versions.stream().filter(v -> !v.isReplaced()).toList();
         List<PriceListPrice> conflicting = live.stream().filter(v -> !v.getEffectiveFrom().isBefore(from)).toList();
-        Optional<PriceListPrice> started = conflicting.stream()
+        List<PriceListPrice> started = conflicting.stream()
             .filter(v -> !v.getEffectiveFrom().isAfter(today))
+            .toList();
+        // A started version is never replaced, except a same-day correction: it starts today AND was entered
+        // today (provisional decision 2026-11-16); it is then replaced like a planned one, with confirmation.
+        Optional<PriceListPrice> applied = started.stream()
+            .filter(v -> v.getEffectiveFrom().isBefore(today) || !enteredToday.test(v))
             .max(Comparator.comparing(PriceListPrice::getEffectiveFrom));
-        if (started.isPresent()) {
+        if (applied.isPresent()) {
             throw new FieldBusinessException(FIELD_EFFECTIVE_FROM, "billing.priceList.versionStarted",
-                DisplayDates.date(started.get().getEffectiveFrom()));
+                DisplayDates.date(applied.get().getEffectiveFrom()));
+        }
+        if (!started.isEmpty() && !replaceScheduled) {
+            throw new FieldBusinessException(FIELD_REPLACE_SCHEDULED, "billing.priceList.correctToday",
+                francs(started.get(0).getUnitPrice()));
         }
         if (!conflicting.isEmpty() && !replaceScheduled) {
             PriceListPrice first = conflicting.stream()

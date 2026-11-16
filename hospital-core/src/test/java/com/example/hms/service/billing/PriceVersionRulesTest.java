@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PriceVersionRulesTest {
 
     private static final LocalDate TODAY = LocalDate.of(2026, 11, 15);
+    private static final java.util.function.Predicate<PriceListPrice> ENTERED_EARLIER = v -> false;
 
     @BeforeEach
     void french() {
@@ -90,7 +91,7 @@ class PriceVersionRulesTest {
 
     @Test
     void aFirstPriceHasNothingToClose() {
-        PriceVersionRules.Plan plan = PriceVersionRules.plan(List.of(), TODAY, TODAY, false);
+        PriceVersionRules.Plan plan = PriceVersionRules.plan(List.of(), TODAY, TODAY, false, ENTERED_EARLIER);
         assertThat(plan.toReplace()).isEmpty();
         assertThat(plan.predecessor()).isEmpty();
     }
@@ -98,17 +99,43 @@ class PriceVersionRulesTest {
     @Test
     void aFuturePriceClosesTheOneInForceTheDayBefore() {
         PriceListPrice inForce = version("2000", TODAY.minusDays(10), null);
-        PriceVersionRules.Plan plan = PriceVersionRules.plan(List.of(inForce), TODAY, TODAY.plusDays(16), false);
+        PriceVersionRules.Plan plan = PriceVersionRules.plan(List.of(inForce), TODAY, TODAY.plusDays(16), false, ENTERED_EARLIER);
         assertThat(plan.predecessor()).contains(inForce);
         assertThat(plan.toReplace()).isEmpty();
     }
 
     @Test
-    void aVersionThatStartedTodayIsNeverReplaced() {
+    void aVersionInForceSinceTodayButEnteredEarlierIsNeverReplaced() {
         PriceListPrice startedToday = version("2000", TODAY, null);
-        assertThatThrownBy(() -> PriceVersionRules.plan(List.of(startedToday), TODAY, TODAY, true))
+        assertThatThrownBy(() -> PriceVersionRules.plan(List.of(startedToday), TODAY, TODAY, true, ENTERED_EARLIER))
             .isInstanceOfSatisfying(FieldBusinessException.class,
                 e -> assertThat(e.getField()).isEqualTo("effectiveFrom"));
+    }
+
+    @Test
+    @DisplayName("decision 2026-11-16: a price entered today and in force since today is corrected only when confirmed")
+    void aSameDayEntryIsCorrectedOnlyWhenConfirmed() {
+        PriceListPrice previous = version("1500", TODAY.minusDays(30), TODAY.minusDays(1));
+        PriceListPrice enteredToday = version("2000", TODAY, null);
+        List<PriceListPrice> versions = List.of(enteredToday, previous);
+
+        assertThatThrownBy(() -> PriceVersionRules.plan(versions, TODAY, TODAY, false, v -> v == enteredToday))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("replaceScheduled");
+                assertThat(e.getMessage()).contains("2 000 F CFA");
+            });
+
+        PriceVersionRules.Plan plan = PriceVersionRules.plan(versions, TODAY, TODAY, true, v -> v == enteredToday);
+        assertThat(plan.toReplace()).containsExactly(enteredToday);
+        assertThat(plan.predecessor()).contains(previous);
+    }
+
+    @Test
+    void aVersionThatStartedBeforeTodayIsClosedNeverReplacedEvenIfEnteredToday() {
+        PriceListPrice started = version("2000", TODAY.minusDays(1), null);
+        PriceVersionRules.Plan plan = PriceVersionRules.plan(List.of(started), TODAY, TODAY, false, v -> true);
+        assertThat(plan.toReplace()).isEmpty();
+        assertThat(plan.predecessor()).contains(started);
     }
 
     @Test
@@ -117,13 +144,13 @@ class PriceVersionRulesTest {
         PriceListPrice planned = version("2500", TODAY.plusDays(16), null);
         List<PriceListPrice> versions = List.of(planned, inForce);
 
-        assertThatThrownBy(() -> PriceVersionRules.plan(versions, TODAY, TODAY.plusDays(16), false))
+        assertThatThrownBy(() -> PriceVersionRules.plan(versions, TODAY, TODAY.plusDays(16), false, ENTERED_EARLIER))
             .isInstanceOfSatisfying(FieldBusinessException.class, e -> {
                 assertThat(e.getField()).isEqualTo("replaceScheduled");
                 assertThat(e.getMessage()).contains("2 500 F CFA");
             });
 
-        PriceVersionRules.Plan plan = PriceVersionRules.plan(versions, TODAY, TODAY.plusDays(16), true);
+        PriceVersionRules.Plan plan = PriceVersionRules.plan(versions, TODAY, TODAY.plusDays(16), true, ENTERED_EARLIER);
         assertThat(plan.toReplace()).containsExactly(planned);
         assertThat(plan.predecessor()).contains(inForce);
     }
@@ -132,7 +159,7 @@ class PriceVersionRulesTest {
     void anEarlierStartReplacesTheLaterPlannedVersion() {
         PriceListPrice inForce = version("2000", TODAY.minusDays(10), TODAY.plusDays(15));
         PriceListPrice planned = version("2500", TODAY.plusDays(16), null);
-        PriceVersionRules.Plan plan = PriceVersionRules.plan(List.of(planned, inForce), TODAY, TODAY.plusDays(5), true);
+        PriceVersionRules.Plan plan = PriceVersionRules.plan(List.of(planned, inForce), TODAY, TODAY.plusDays(5), true, ENTERED_EARLIER);
         assertThat(plan.toReplace()).containsExactly(planned);
         assertThat(plan.predecessor()).contains(inForce);
     }
@@ -143,7 +170,7 @@ class PriceVersionRulesTest {
         PriceListPrice inForce = version("2000", TODAY.minusDays(10), null);
         assertThat(replaced.isReplaced()).isTrue();
         assertThat(replaced.coversDay(TODAY.plusDays(16))).isFalse();
-        PriceVersionRules.Plan plan = PriceVersionRules.plan(List.of(replaced, inForce), TODAY, TODAY.plusDays(16), false);
+        PriceVersionRules.Plan plan = PriceVersionRules.plan(List.of(replaced, inForce), TODAY, TODAY.plusDays(16), false, ENTERED_EARLIER);
         assertThat(plan.toReplace()).isEmpty();
         assertThat(plan.predecessor()).contains(inForce);
     }

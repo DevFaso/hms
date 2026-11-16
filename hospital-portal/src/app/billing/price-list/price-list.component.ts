@@ -74,12 +74,16 @@ interface ItemForm {
   modality: string;
   unitPrice: number | null;
   effectiveFrom: string;
+  /** False until the user picks a date: an untouched date is sent as null, so the server's business day applies. */
+  effectiveFromChanged: boolean;
   changeReason: string;
 }
 
 interface PriceForm {
   unitPrice: number | null;
   effectiveFrom: string;
+  /** False until the user picks a date: an untouched date is sent as null, so the server's business day applies. */
+  effectiveFromChanged: boolean;
   changeReason: string;
   replaceScheduled: boolean;
 }
@@ -157,7 +161,10 @@ export class PriceListComponent implements OnInit {
   readonly replaceQuestion = signal<string | null>(null);
   priceForm: PriceForm = PriceListComponent.blankPrice();
 
-  readonly today = businessToday();
+  /** Read on each change detection, never cached: a page left open past midnight moves to the new day. */
+  get today(): string {
+    return businessToday();
+  }
 
   ngOnInit(): void {
     this.load();
@@ -173,6 +180,7 @@ export class PriceListComponent implements OnInit {
       modality: '',
       unitPrice: null,
       effectiveFrom: businessToday(),
+      effectiveFromChanged: false,
       changeReason: '',
     };
   }
@@ -181,6 +189,7 @@ export class PriceListComponent implements OnInit {
     return {
       unitPrice: null,
       effectiveFrom: businessToday(),
+      effectiveFromChanged: false,
       changeReason: '',
       replaceScheduled: false,
     };
@@ -296,7 +305,7 @@ export class PriceListComponent implements OnInit {
             linkType: form.linkType,
             linkKey: this.linkKeyOf(form),
             unitPrice: form.unitPrice,
-            effectiveFrom: form.effectiveFrom || null,
+            effectiveFrom: (form.effectiveFromChanged && form.effectiveFrom) || null,
             changeReason: form.changeReason.trim() || null,
           })
         : this.api.update(this.selected()?.id ?? '', {
@@ -331,6 +340,23 @@ export class PriceListComponent implements OnInit {
     this.priceDialog.set(true);
   }
 
+  /** The item dialog's date was picked by the user: it is sent as chosen. */
+  itemDateChanged(value: string): void {
+    this.itemForm.effectiveFrom = value;
+    this.itemForm.effectiveFromChanged = true;
+  }
+
+  /**
+   * The new price's date was picked: it is sent as chosen, and a replacement question asked for another date
+   * no longer applies (the confirmation is reset and asked again if the new date needs it).
+   */
+  priceDateChanged(value: string): void {
+    this.priceForm.effectiveFrom = value;
+    this.priceForm.effectiveFromChanged = true;
+    this.priceForm.replaceScheduled = false;
+    this.replaceQuestion.set(null);
+  }
+
   closePriceDialog(): void {
     this.priceDialog.set(false);
     this.replaceQuestion.set(null);
@@ -344,7 +370,7 @@ export class PriceListComponent implements OnInit {
     this.api
       .addPrice(item.id, {
         unitPrice: form.unitPrice,
-        effectiveFrom: form.effectiveFrom || null,
+        effectiveFrom: (form.effectiveFromChanged && form.effectiveFrom) || null,
         changeReason: form.changeReason.trim(),
         replaceScheduled: form.replaceScheduled,
       })

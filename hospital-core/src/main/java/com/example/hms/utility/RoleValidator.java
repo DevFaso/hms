@@ -28,6 +28,10 @@ public class RoleValidator {
     private static final String SURGEON_ROLE = "SURGEON";
     private static final String NURSE_ROLE = "NURSE";
     private static final String MIDWIFE_ROLE = "MIDWIFE";
+    private static final String ACCOUNTANT_ROLE = "ACCOUNTANT";
+    private static final String BILLING_SPECIALIST_ROLE = "BILLING_SPECIALIST";
+    private static final String RECEPTIONIST_ROLE = "RECEPTIONIST";
+    private static final String CLAIMS_REVIEWER_ROLE = "CLAIMS_REVIEWER";
     private static final String ROLE_PREFIX = SecurityConstants.ROLE_PREFIX;
 
     /**
@@ -279,13 +283,13 @@ public class RoleValidator {
      * on their own (RoleExpansion grants the super-admin the hospital admin AUTHORITY, never an assignment).
      */
     public boolean canMaintainPriceList(UUID userId, UUID hospitalId) {
-        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, "ACCOUNTANT");
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE);
     }
 
     /** Billing-money plan PR 2 (plan section 3.8): who reads a hospital's price list there. */
     public boolean canReadPriceList(UUID userId, UUID hospitalId) {
-        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, "ACCOUNTANT", "BILLING_SPECIALIST",
-            "RECEPTIONIST", "CLAIMS_REVIEWER");
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE,
+            RECEPTIONIST_ROLE, CLAIMS_REVIEWER_ROLE);
     }
 
     public void validateRoleOrThrow(UUID userId, UUID hospitalId, String roleCode) {
