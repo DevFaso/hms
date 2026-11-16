@@ -112,6 +112,13 @@ class BpaCardLocalizationTest {
     }
 
     @Test
+    void theEnglishNews2CardDisplaysTheComparisonAsClinicalProse() {
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        CdsCard card = new NewsScoreProtocolRule(repo, text).evaluate(context(List.of(qaSet()))).get(0);
+        assertThat(card.detail()).contains("NEWS2 ≥ 5", "single parameter scoring 3").doesNotContain(">=");
+    }
+
+    @Test
     void theEnglishFallbackStillReadsWithoutABundle() {
         CdsCard card = new SepsisQsofaProtocolRule(repo).evaluate(context(List.of(qaSet()))).get(0);
         assertThat(card.summary()).isEqualTo("English name");
