@@ -12,6 +12,7 @@ import com.example.hms.payload.dto.NotificationDeliveryStatusDTO;
 import com.example.hms.repository.EmailChangeRequestRepository;
 import com.example.hms.repository.EmailChangeSendRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.security.LoginAttemptService;
 import com.example.hms.utility.ActivationDeliveryTracker;
 import com.example.hms.utility.EmailAddresses;
 import com.example.hms.utility.MessageUtil;
@@ -54,10 +55,13 @@ import java.util.UUID;
  * notice, rather than sending nothing, keeps the delivery report truthful and
  * identical: a mail went to that address either way. The attempt is audited.
  *
- * <p><b>Limits.</b> A wrong password counts on this row, never the login
- * throttle: {@value #MAX_PASSWORD_FAILURES} within {@value #PASSWORD_LOCK_MINUTES}
- * minutes lock THIS endpoint for {@value #PASSWORD_LOCK_MINUTES} minutes, so a
- * stolen session cannot lock the owner out of signing in. Requests that pass
+ * <p><b>Limits.</b> A wrong password counts on this row:
+ * {@value #MAX_PASSWORD_FAILURES} within {@value #PASSWORD_LOCK_MINUTES}
+ * minutes lock THIS endpoint for {@value #PASSWORD_LOCK_MINUTES} minutes. D2001:
+ * it ALSO counts in the account's sign-in bucket
+ * ({@link LoginAttemptService#checkPassword}), so guesses here add up with the
+ * sign-in, the lock screen and every other password check, and a locked
+ * account is refused here too. Requests that pass
  * the password are limited too, so the endpoint cannot be used to mail an
  * inbox in a loop: {@value #MAX_REQUESTS_PER_USER} per user, and
  * {@value #MAX_SENDS_PER_ADDRESS} mails per address by any accounts, each per
@@ -107,6 +111,7 @@ public class OwnEmailChangeService {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final AuditEventLogService auditEventLogService;
+    private final LoginAttemptService loginAttemptService;
 
     /**
      * Step 1: check the current password, the limits and the address, then
@@ -122,7 +127,13 @@ public class OwnEmailChangeService {
         if (state.getPasswordLockedUntil() != null && now.isBefore(state.getPasswordLockedUntil())) {
             throw refused(userId, "the endpoint is locked after repeated wrong passwords", "user.email.change.locked");
         }
-        if (!passwordMatches(user, currentPassword)) {
+        LoginAttemptService.PasswordCheck check = loginAttemptService.checkPassword(userId,
+            () -> currentPassword != null && !currentPassword.isBlank() && user.getPasswordHash() != null
+                && passwordEncoder.matches(currentPassword, user.getPasswordHash()));
+        if (check == LoginAttemptService.PasswordCheck.LOCKED) {
+            throw refused(userId, "the account is locked after repeated wrong passwords", "user.email.change.locked");
+        }
+        if (check != LoginAttemptService.PasswordCheck.ACCEPTED) {
             countPasswordFailure(state, now);
             throw refusedOn("currentPassword", userId, "the current password did not match", "user.email.change.password");
         }
@@ -275,12 +286,6 @@ public class OwnEmailChangeService {
             return requestRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalStateException("email change row missing after insert"));
         });
-    }
-
-    private boolean passwordMatches(User user, String currentPassword) {
-        return currentPassword != null && !currentPassword.isBlank()
-            && user.getPasswordHash() != null
-            && passwordEncoder.matches(currentPassword, user.getPasswordHash());
     }
 
     private void countPasswordFailure(EmailChangeRequest state, LocalDateTime now) {

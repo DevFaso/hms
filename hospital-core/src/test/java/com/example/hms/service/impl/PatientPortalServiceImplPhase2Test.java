@@ -1731,6 +1731,29 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
+        void retryOfAnyClinicianBookingReturnsOriginalWithoutSelectingAnotherClinician() {
+            stubSchedulingBasics();
+            var dto = PortalBookAppointmentRequestDTO.builder().hospitalId(hospitalId)
+                .departmentId(departmentId).date(BOOKING_DATE).startTime(LocalTime.of(10, 0))
+                .bookingRequestId(UUID.randomUUID()).build();
+            var identity = com.example.hms.service.support.AppointmentBookingIdentity.portal(userId, patientId, dto);
+            Appointment existing = new Appointment();
+            existing.setStatus(AppointmentStatus.SCHEDULED);
+            existing.setPatient(patient);
+            existing.setHospital(hospital);
+            identity.stamp(existing);
+            when(appointmentRepository.findAllByBookingRequestKey(identity.key())).thenReturn(List.of(existing));
+            AppointmentResponseDTO expected = new AppointmentResponseDTO();
+            when(appointmentMapper.toAppointmentResponseDTO(existing)).thenReturn(expected);
+
+            assertThat(service.scheduleMyAppointment(auth, dto, Locale.FRENCH)).isSameAs(expected);
+
+            verify(staffRepository, never()).findActiveProvidersByHospitalAndDepartment(any(), any());
+            verify(appointmentRepository, never()).save(any());
+            verify(slotPolicy, never()).takeSlot(any(), any());
+        }
+
+        @Test
         @DisplayName("should schedule appointment with explicit staff pick")
         void scheduleWithExplicitStaff_success() {
             stubSchedulingBasics();

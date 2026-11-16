@@ -982,6 +982,7 @@ export interface PreCheckInResponse {
 // ── Self-Scheduling Interfaces ─────────────────────────────────────
 
 export interface BookAppointmentRequest {
+  bookingRequestId?: string;
   hospitalId: string;
   departmentId: string;
   staffId?: string;

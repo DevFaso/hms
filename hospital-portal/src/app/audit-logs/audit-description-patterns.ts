@@ -192,6 +192,28 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Refresh token revoked on logout \(jti=([^)]*)\)$/,
     params: ['jti'],
   },
+  // D2001: the lock screen counts in the sign-in's attempt bucket and ends the
+  // session at the lockout. The jti is matched but never shown.
+  {
+    key: 'AUDIT.DESC.LOCK_SCREEN_UNLOCK_FAILED',
+    re: /^Lock-screen unlock failed: bad credentials$/,
+  },
+  {
+    key: 'AUDIT.DESC.LOCK_SCREEN_LOCKED_NOW',
+    re: /^Lock-screen unlock failed too many times: account locked; session ended$/,
+  },
+  {
+    key: 'AUDIT.DESC.LOCK_SCREEN_REFUSED_LOCKED',
+    re: /^Lock-screen unlock refused: account locked; session ended$/,
+  },
+  {
+    key: 'AUDIT.DESC.ACCESS_TOKEN_REVOKED_LOCKOUT',
+    re: /^Access token revoked on lock-screen lockout \(jti=[^)]*\)$/,
+  },
+  {
+    key: 'AUDIT.DESC.REFRESH_TOKEN_REVOKED_LOCKOUT',
+    re: /^Refresh token revoked on lock-screen lockout \(jti=[^)]*\)$/,
+  },
   {
     key: 'AUDIT.DESC.TOKEN_PAIR_ROTATED',
     re: /^Token pair rotated \(old refresh jti=([^)]*)\)$/,

@@ -159,6 +159,31 @@ class AppointmentBookingSlotRuleTest {
     }
 
     @Test
+    void retryReturnsTheOriginalSummaryWithoutBookingOrNotifyingAgain() {
+        AppointmentRequestDTO request = request(null);
+        request.setBookingRequestId(UUID.randomUUID());
+        var identity = com.example.hms.service.support.AppointmentBookingIdentity.staff(
+            desk.getId(), patient.getId(), hospital.getId(), request);
+        Appointment existing = new Appointment();
+        existing.setId(UUID.randomUUID());
+        existing.setPatient(patient);
+        existing.setStaff(staff);
+        existing.setHospital(hospital);
+        existing.setDepartment(department);
+        existing.setStatus(com.example.hms.enums.AppointmentStatus.SCHEDULED);
+        identity.stamp(existing);
+        when(appointmentRepository.findAllByBookingRequestKey(identity.key())).thenReturn(List.of(existing));
+
+        var result = service.createAppointment(request, Locale.FRENCH, "desk");
+
+        assertThat(result.getId()).isEqualTo(existing.getId());
+        verify(appointmentRepository, never()).save(any());
+        verify(webhookPublisher, never()).publish(any(), any(), any(), any());
+        verify(slotPolicy, never()).requireNoLiveHold(any(), any(), any());
+        verify(patientRegistrationGuard).requireRegisteredAt(patient.getId(), hospital.getId());
+    }
+
+    @Test
     @DisplayName("staff off the slots: the reason the rule returns is kept on the visit, and audited without its text")
     void theDesksReasonIsKeptAndAudited() {
         when(slotPolicy.overbookReasonOffSlot(staff.getId(), START, hospital.getId(), "Urgence signalée"))

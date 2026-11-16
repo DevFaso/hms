@@ -693,6 +693,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
 
         // Resolve staff — explicit pick or first available in department
+        var bookingIdentity = com.example.hms.service.support.AppointmentBookingIdentity.portal(
+            authUtils.resolveUserId(auth).orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER)), patientId, dto);
+        var replay = bookingIdentity.replay(appointmentRepository);
+        if (replay.isPresent()) {
+            return appointmentMapper.toAppointmentResponseDTO(replay.get());
+        }
+
         Staff staff;
         if (dto.getStaffId() != null) {
             staff = staffRepository.findByIdAndActiveTrue(dto.getStaffId())
@@ -711,6 +718,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             staff = clinicianWithPublishedSlot(available, dto);
         }
 
+        staffRepository.findLockedById(staff.getId());
         java.time.LocalDateTime requestedStart = java.time.LocalDateTime.of(dto.getDate(), dto.getStartTime());
         // QA D1093: a patient's own booking takes exactly one published, free
         // slot of the clinician, at this hospital and department. The time
@@ -763,7 +771,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         appointment.setCreatedBy(patientEntity.getUser());
         appointment.setAssignment(assignment);
 
+        bookingIdentity.stamp(appointment);
         Appointment saved = appointmentRepository.save(appointment);
+        appointmentRepository.flush();
         // QA D1093: the slot is taken, so nobody else is offered it.
         slotPolicy.takeSlot(slot, saved);
         // QA D985: a recall the patient answers by booking is scheduled.

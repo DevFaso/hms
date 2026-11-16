@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ActivatedRoute } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { MyAppointmentsComponent } from './my-appointments.component';
 import { PatientPortalService, PortalAppointment } from '../../services/patient-portal.service';
 
@@ -278,6 +278,26 @@ describe('MyAppointmentsComponent', () => {
   });
 
   describe('submitBooking', () => {
+    it('X2: suppresses double submit and post-success submit; retries keep the key', () => {
+      component.selectedHospitalId = 'h1';
+      component.selectedDepartmentId = 'd1';
+      component.selectedDate = '2026-12-01';
+      component.selectedTime = '09:00';
+      const pending = new Subject<PortalAppointment>();
+      portalService.bookAppointment.and.returnValue(pending);
+      component.submitBooking();
+      component.submitBooking();
+      expect(portalService.bookAppointment).toHaveBeenCalledTimes(1);
+      const key = portalService.bookAppointment.calls.first().args[0].bookingRequestId;
+      expect(key).toMatch(/^[a-f0-9-]{36}$/);
+      pending.error({ status: 503 });
+      portalService.bookAppointment.and.returnValue(of({} as PortalAppointment));
+      component.submitBooking();
+      expect(portalService.bookAppointment.calls.mostRecent().args[0].bookingRequestId).toBe(key);
+      component.submitBooking();
+      expect(portalService.bookAppointment).toHaveBeenCalledTimes(2);
+    });
+
     it('should set error when required fields are missing', () => {
       component.submitBooking();
       // No translations are loaded in TranslateModule.forRoot(); instant() returns the key.

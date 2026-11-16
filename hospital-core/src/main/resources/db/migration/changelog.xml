@@ -3558,6 +3558,12 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- X2 booking identities; V301-V319 are reserved for Claude. -->
+    <changeSet id="V320-appointment-booking-identity" author="hms-team" runOnChange="false">
+        <sqlFile path="V320__appointment_booking_identity.sql"
+                 relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
+    </changeSet>
+
     <!-- =================================================================
          V302 (billing-money plan PR 2, scorecard M1) - each hospital's price
          list: billing.price_list_items (the hospital's code, label as typed,

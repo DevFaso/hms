@@ -32,6 +32,20 @@ describe('AuditDescriptionService (QA D894)', () => {
     return service.describe({ eventDescription, entityType });
   };
 
+  it('localizes the email-change refusal when sign-in has locked the account', () => {
+    const description =
+      'Own email change refused: the account is locked after repeated wrong passwords';
+    expect(describeIn('en', description)).toBe(
+      'Email change refused: the account is locked after repeated wrong passwords',
+    );
+    expect(describeIn('fr', description)).toBe(
+      'Changement d’e-mail refusé : le compte est verrouillé après plusieurs mots de passe incorrects',
+    );
+    expect(describeIn('es', description)).toBe(
+      'Cambio de correo rechazado: la cuenta está bloqueada tras varias contraseñas incorrectas',
+    );
+  });
+
   it('reads the three descriptions from the report in French', () => {
     expect(describeIn('fr', 'Super-admin global-view request: GET /audit-logs')).toBe(
       'Requête du super-administrateur sur tous les hôpitaux : GET /audit-logs',
