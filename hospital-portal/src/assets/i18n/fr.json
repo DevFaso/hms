@@ -10437,6 +10437,8 @@
     }
   },
   "MED_TIMELINE": {
+    "SUPPLY_DAY": "{{count}} jour",
+    "SUPPLY_DAYS": "{{count}} jours",
     "TITLE": "Historique médicamenteux",
     "SUBTITLE": "Chronologie des ordonnances et délivrances avec contrôle des interactions",
     "PICK_PATIENT": "Choisissez un patient pour charger sa chronologie médicamenteuse.",

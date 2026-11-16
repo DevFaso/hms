@@ -15,6 +15,17 @@ const root = fileURLToPath(new URL('../../../', import.meta.url));
 const app = join(root, 'hospital-portal/src/app');
 
 test('X1 guard detects each bad class and accepts translated or authored text', () => {
+  assert.equal(templateDisplayProblems('({{ row.daysSupply }}d)').length, 1);
+  assert.equal(
+    templateDisplayProblems('@if (t.polypharmacyDetected) {} @for (w of t.warnings) {}').length,
+    1,
+  );
+  assert.deepEqual(
+    templateDisplayProblems(
+      "{{ 'MED_TIMELINE.SUPPLY_DAYS' | translate: { count: row.daysSupply } }}",
+    ),
+    [],
+  );
   assert.equal(templateDisplayProblems('“{{ row.value }}”').length, 1);
   assert.equal(templateDisplayProblems("“{{ 'LABEL' | translate }}”").length, 1);
   assert.equal(templateDisplayProblems("{{ 'COMMON.COLON' | translate }}{{ row.plan }}").length, 1);

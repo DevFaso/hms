@@ -10437,6 +10437,8 @@
     }
   },
   "MED_TIMELINE": {
+    "SUPPLY_DAY": "{{count}} day",
+    "SUPPLY_DAYS": "{{count}} days",
     "TITLE": "Medication History",
     "SUBTITLE": "Prescription and pharmacy-fill timeline with interaction checks",
     "PICK_PATIENT": "Pick a patient to load their medication timeline.",

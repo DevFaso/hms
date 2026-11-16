@@ -3,6 +3,12 @@ import ts from 'typescript';
 
 export function templateDisplayProblems(text) {
   const problems = [];
+  if (/\{\{[^}]*daysSupply[^}]*\}\}\s*(?:d\b|days?\b)/u.test(text)) {
+    problems.push('D2009: supply duration has a literal day unit');
+  }
+  if (/polypharmacyDetected/u.test(text) && /\.warnings\b/u.test(text)) {
+    problems.push('D2010: polypharmacy warning has both local and server presentation owners');
+  }
   if (/[“«]\s*\{\{/u.test(text)) {
     problems.push('D1880: quote/value punctuation must belong to a translation');
   }

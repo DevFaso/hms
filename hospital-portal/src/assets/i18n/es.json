@@ -10437,6 +10437,8 @@
     }
   },
   "MED_TIMELINE": {
+    "SUPPLY_DAY": "{{count}} día",
+    "SUPPLY_DAYS": "{{count}} días",
     "TITLE": "Historial de medicamentos",
     "SUBTITLE": "Cronología de recetas y dispensaciones con control de interacciones",
     "PICK_PATIENT": "Elija un paciente para cargar su cronología de medicamentos.",

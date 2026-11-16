@@ -91,15 +91,6 @@
       </div>
     </div>
 
-    @if (t.polypharmacyDetected) {
-      <div class="warning-banner">
-        <span class="material-symbols-outlined">warning</span>
-        {{ 'MED_TIMELINE.POLYPHARMACY' | translate }}
-        @if (t.concurrentMedicationsCount) {
-          ({{ t.concurrentMedicationsCount }} {{ 'MED_TIMELINE.CONCURRENT' | translate }})
-        }
-      </div>
-    }
     @for (warning of t.warnings ?? []; track warning) {
       <div class="warning-banner">
         <span class="material-symbols-outlined">info</span>
@@ -195,7 +186,14 @@
                   {{ e.startDate ? (e.startDate | serverTime | date: 'shortDate') : '—' }} —
                   {{ e.endDate ? (e.endDate | serverTime | date: 'shortDate') : '…' }}
                   @if (e.daysSupply) {
-                    <span class="muted">({{ e.daysSupply }}d)</span>
+                    <span class="muted"
+                      >({{
+                        (e.daysSupply === 1
+                          ? 'MED_TIMELINE.SUPPLY_DAY'
+                          : 'MED_TIMELINE.SUPPLY_DAYS'
+                        ) | translate: { count: e.daysSupply }
+                      }})</span
+                    >
                   }
                 </td>
                 <td>
@@ -294,7 +292,14 @@
                   <td>
                     {{ f.quantityDispensed ?? '—' }} {{ f.quantityUnit || '' }}
                     @if (f.daysSupply) {
-                      <span class="muted">({{ f.daysSupply }}d)</span>
+                      <span class="muted"
+                        >({{
+                          (f.daysSupply === 1
+                            ? 'MED_TIMELINE.SUPPLY_DAY'
+                            : 'MED_TIMELINE.SUPPLY_DAYS'
+                          ) | translate: { count: f.daysSupply }
+                        }})</span
+                      >
                     }
                   </td>
                   <td>{{ f.refillNumber ?? '—' }}</td>
