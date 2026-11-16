@@ -16,7 +16,9 @@ import java.util.UUID;
  * moment an amendment changes the timing.
  */
 @Component
+@lombok.RequiredArgsConstructor
 public class MortalityMapper {
+    private final com.example.hms.service.support.ClinicalActorNames actorNames;
 
     public DeathRecordResponseDTO toDto(DeathRecord deathRecord) {
         if (deathRecord == null) {
@@ -38,7 +40,7 @@ public class MortalityMapper {
             .diedAt(deathRecord.getDiedAt())
             .enteredInError(deathRecord.isEnteredInError())
             .enteredInErrorAt(deathRecord.getEnteredInErrorAt())
-            .enteredInErrorByName(deathRecord.getEnteredInErrorByName())
+            .enteredInErrorByName(actorNames.display(deathRecord.getEnteredInErrorById(), deathRecord.getEnteredInErrorByName()))
             .enteredInErrorReason(deathRecord.getEnteredInErrorReason())
             .placeOfDeath(deathRecord.getPlaceOfDeath())
             .mannerOfDeath(deathRecord.getMannerOfDeath())

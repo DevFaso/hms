@@ -71,6 +71,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class MortalityServiceImplTest {
+    private final com.example.hms.repository.UserRepository displayUsers = org.mockito.Mockito.mock(com.example.hms.repository.UserRepository.class);
 
     // QA D1232 (round 24): the refusals are message keys now; the assertions
     // read them in English through the real bundles (set up in setUp).
@@ -99,7 +100,8 @@ class MortalityServiceImplTest {
     @Mock private com.example.hms.repository.FetalDeathEventRepository fetalDeathEventRepository;
     @Mock private com.example.hms.repository.DeliveryNewbornRepository deliveryNewbornRepository;
     @Spy private Clock clock = Clock.systemDefaultZone();
-    @Spy private MortalityMapper mapper = new MortalityMapper();
+    @Spy private com.example.hms.service.support.ClinicalActorNames actorNames = new com.example.hms.service.support.ClinicalActorNames(displayUsers);
+    @Spy private MortalityMapper mapper = new MortalityMapper(actorNames);
 
     @InjectMocks private MortalityServiceImpl service;
 
@@ -341,6 +343,10 @@ class MortalityServiceImplTest {
 
     @Test
     void enteredInErrorKeepsTheRowMarkedAndReopensCare() {
+        var display = new com.example.hms.model.User();
+        display.setFirstName("Awa");
+        display.setLastName("Ouédraogo");
+        when(displayUsers.findById(callerUserId)).thenReturn(Optional.of(display));
         DeathRecord existing = recordedDeath();
         when(roleValidator.getCurrentUserId()).thenReturn(callerUserId);
 
@@ -351,6 +357,8 @@ class MortalityServiceImplTest {
         verify(patientRepository).save(patient);
         assertThat(existing.isEnteredInError()).isTrue();
         assertThat(existing.getEnteredInErrorById()).isEqualTo(callerUserId);
+        assertThat(existing.getEnteredInErrorByName()).isEqualTo("Awa Ouédraogo");
+        assertThat(result.getEnteredInErrorByName()).isEqualTo("Awa Ouédraogo");
         assertThat(existing.getEnteredInErrorReason()).isEqualTo("Wrong patient");
         assertThat(result.isEnteredInError()).isTrue();
         assertThat(result.getEnteredInErrorReason()).isEqualTo("Wrong patient");

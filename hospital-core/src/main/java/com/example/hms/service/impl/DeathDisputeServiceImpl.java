@@ -78,6 +78,7 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
     private final InBasketService inBasketService;
     private final AuditEventLogService auditEventLogService;
     private final com.example.hms.service.OrderReviewHoldService orderReview;
+    private final com.example.hms.service.support.ClinicalActorNames actorNames;
 
     @Override
     public DeathDisputeResponseDTO dispute(UUID patientId, DeathDisputeRequestDTO request) {
@@ -104,7 +105,7 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
             .patientId(patientId)
             .hospitalId(hospitalId)
             .disputedById(actorId)
-            .disputedByName(currentUsername())
+            .disputedByName(actorNames.display(actorId, currentUsername()))
             .disputedAt(now)
             .reason(request.getReason().trim())
             .assessedAlive(true)
@@ -159,7 +160,7 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
         if (!dispute.isOpen()) {
             throw new BusinessException("mortality.dispute.closed");
         }
-        close(dispute, DeathDisputeStatus.UPHELD, actorId, currentUsername(), reason, LocalDateTime.now(clock));
+        close(dispute, DeathDisputeStatus.UPHELD, actorId, actorNames.display(actorId, currentUsername()), reason, LocalDateTime.now(clock));
         orderReview.disputeClosed(dispute.getId());
         audit(dispute, scope != null ? scope : dispute.getHospitalId(), actorId, "Death upheld: dispute " + dispute.getId() + " closed by " + actorId
             + ", the block on care is back at hospital " + dispute.getHospitalId() + ". Reason: " + reason);
@@ -317,10 +318,10 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
             .hospitalId(dispute.getHospitalId())
             .status(dispute.getStatus())
             .reason(dispute.getReason())
-            .disputedByName(dispute.getDisputedByName())
+            .disputedByName(actorNames.display(dispute.getDisputedById(), dispute.getDisputedByName()))
             .disputedAt(dispute.getDisputedAt())
             .resolutionReason(dispute.getResolutionReason())
-            .resolvedByName(dispute.getResolvedByName())
+            .resolvedByName(actorNames.display(dispute.getResolvedById(), dispute.getResolvedByName()))
             .resolvedAt(dispute.getResolvedAt())
             .deathRecordId(Objects.equals(recordHospital, readerHospital) ? dispute.getDeathRecordId() : null)
             .statusMessage(dispute.isOpen() ? MessageUtil.resolve(STATUS_KEY) : null)

@@ -127,9 +127,9 @@ class OrderReviewHoldPostgresIT {
         review = new OrderReviewHoldServiceImpl(Clock.systemDefaultZone(), holds, prescriptions, requests, administrations,
             chartAccess, roles, mock(PrescriptionControlledResolver.class), mock(PrescriberReauthenticationService.class),
             mock(PrescriptionService.class), mock(TransfusionService.class), inBasket, audit,
-            afterCommit, records, disputes, mock(com.example.hms.repository.MedicationAdministrationRecordRepository.class));
+            afterCommit, records, disputes, mock(com.example.hms.repository.MedicationAdministrationRecordRepository.class), new com.example.hms.service.support.ClinicalActorNames(org.mockito.Mockito.mock(com.example.hms.repository.UserRepository.class)));
         disputeService = new DeathDisputeServiceImpl(Clock.systemDefaultZone(), disputes, records, patients, chartAccess, roles,
-            assignments, inBasket, audit, review);
+            assignments, inBasket, audit, review, new com.example.hms.service.support.ClinicalActorNames(org.mockito.Mockito.mock(com.example.hms.repository.UserRepository.class)));
         new OrderReviewHoldGuard(holds).afterPropertiesSet();
 
         SEEDED.forEach(table -> jdbc.execute("ALTER TABLE " + table + " DISABLE TRIGGER ALL"));

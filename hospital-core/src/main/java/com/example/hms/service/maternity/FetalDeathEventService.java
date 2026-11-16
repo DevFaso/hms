@@ -220,13 +220,13 @@ public class FetalDeathEventService {
             .gestationalAgeWeeks(event.getGestationalAgeWeeks())
             .noSignsOfLife(event.isNoSignsOfLife())
             .source(event.getSource())
-            .recordedByName(event.getRecordedBy() == null ? null : event.getRecordedBy().getUsername())
+            .recordedByName(com.example.hms.service.support.ClinicalActorNames.display(event.getRecordedBy(), null))
             .whoStillbirth(!event.isSuperseded() && result.whoStillbirth())
             .icdFetalDeath(!event.isSuperseded() && result.icdFetalDeath())
             .classificationIncomplete(!event.isSuperseded() && result.incomplete())
             .creationReason(event.getCreationReason())
             .supersededAt(event.getSupersededAt())
-            .supersededByName(event.getSupersededBy() == null ? null : event.getSupersededBy().getUsername())
+            .supersededByName(com.example.hms.service.support.ClinicalActorNames.display(event.getSupersededBy(), null))
             .supersedeReason(event.getSupersedeReason())
             .build();
     }
