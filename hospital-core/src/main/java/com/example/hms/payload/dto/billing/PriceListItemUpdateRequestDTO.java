@@ -2,6 +2,8 @@ package com.example.hms.payload.dto.billing;
 
 import com.example.hms.enums.PriceListCategory;
 import com.example.hms.enums.PriceListLinkType;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,10 +22,12 @@ import lombok.Setter;
 @Builder
 public class PriceListItemUpdateRequestDTO {
 
-    @Size(max = 255)
+    @NotBlank(message = "{billing.priceList.labelRequired}")
+    @Size(max = 255, message = "{billing.priceList.labelSize}")
     private String label;
+    @NotNull(message = "{billing.priceList.categoryRequired}")
     private PriceListCategory category;
     private PriceListLinkType linkType;
-    @Size(max = 255)
+    @Size(max = 255, message = "{billing.priceList.linkKeySize}")
     private String linkKey;
 }

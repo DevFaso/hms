@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.billing;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,6 +16,7 @@ import lombok.Setter;
 @Builder
 public class PriceListDeactivateRequestDTO {
 
-    @Size(max = 500)
+    @NotBlank(message = "{billing.priceList.deactivationReasonRequired}")
+    @Size(max = 500, message = "{billing.priceList.reasonSize}")
     private String reason;
 }
