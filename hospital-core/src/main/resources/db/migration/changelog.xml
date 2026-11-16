@@ -3564,4 +3564,20 @@
                  relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V302 (billing-money plan PR 2, scorecard M1) - each hospital's price
+         list: billing.price_list_items (the hospital's code, label as typed,
+         category, optional link a charge source matches in PR 3; one active
+         item per link) and billing.price_list_prices (effective-dated,
+         insert-only versions in whole francs; only effective_to is set by the
+         service when a newer version starts). Plain idempotent DDL, no DO
+         block. V301-V319 are reserved for the billing-money plan.
+         ================================================================= -->
+    <changeSet id="V302-billing-price-list" author="hms-team" runOnChange="false">
+        <sqlFile path="V302__billing_price_list.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

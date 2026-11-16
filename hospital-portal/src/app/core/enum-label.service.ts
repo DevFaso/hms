@@ -376,6 +376,37 @@ export class EnumLabelService implements OnDestroy {
       PLATELETS: 'Platelets',
       CRYOPRECIPITATE: 'Cryoprecipitate',
     },
+    /* Billing-money plan PR 2: the price list (fallbacks; the locales hold the labels). */
+    priceListCategory: {
+      CONSULTATION: 'Consultation',
+      LAB_TEST: 'Laboratory',
+      IMAGING: 'Imaging',
+      PROCEDURE: 'Procedure',
+      BED_DAY: 'Bed day',
+      TRANSFUSION: 'Transfusion',
+      DELIVERY: 'Delivery',
+      OTHER_SERVICE: 'Other (medicines, supplies, fees)',
+    },
+    priceListLinkType: {
+      SYSTEM: 'System',
+      LAB_TEST_DEFINITION: 'Lab test',
+      PROCEDURE_CODE: 'Procedure',
+      IMAGING_STUDY: 'Imaging study',
+      TRANSFUSION_PRODUCT: 'Blood product',
+      TREATMENT: 'Service',
+    },
+    priceListPriceStatus: {
+      SCHEDULED: 'Planned',
+      IN_FORCE: 'In force',
+      ENDED: 'Ended',
+      REPLACED: 'Replaced before it applied',
+    },
+    priceListSystemKey: {
+      CONSULTATION_DEFAULT: 'Default consultation',
+      BED_DAY: 'Bed day',
+      DELIVERY_VAGINAL: 'Vaginal delivery',
+      DELIVERY_CAESAREAN: 'Caesarean section',
+    },
     /* Acronym modalities (CT, MRI, PET, XRAY, DEXA) are mangled by the
      * Title-Case prettifier ("Ct", "Mri"), so they need explicit labels. */
     imagingModality: {

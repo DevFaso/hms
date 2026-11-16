@@ -112,6 +112,12 @@ public enum AuditEventType {
     PAYMENT_REJECTED,
     REFUND_ISSUED,
     CLAIM_SUBMITTED,
+    /** Billing-money plan PR 2: a price-list item created, edited or deactivated (ids only). */
+    PRICE_LIST_ITEM_CREATED,
+    PRICE_LIST_ITEM_UPDATED,
+    PRICE_LIST_ITEM_DEACTIVATED,
+    /** Billing-money plan PR 2: a new price version of an item (item id, version id, effective date). */
+    PRICE_VERSION_ADDED,
 
     // Pharmacy & inventory
     STOCK_RECEIPT,

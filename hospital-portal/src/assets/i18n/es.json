@@ -1656,6 +1656,10 @@
     "WRITE_DELETE": "Eliminación: {{entity}}",
     "WRITE_ENTITY_UNKNOWN": "registro",
     "DESC": {
+      "PRICE_LIST_ITEM_CREATED": "Artículo de la lista de precios {{item}} creado con el precio {{version}}",
+      "PRICE_LIST_ITEM_UPDATED": "Artículo de la lista de precios {{item}} modificado",
+      "PRICE_LIST_ITEM_DEACTIVATED": "Artículo de la lista de precios {{item}} desactivado, motivo registrado",
+      "PRICE_VERSION_ADDED": "Nuevo precio {{version}} para el artículo {{item}}, vigente el {{from}}",
       "NEWBORN_REGISTERED_FROM_DELIVERY": "Recién nacido registrado a partir de un parto",
       "NEWBORN_REGISTRATION_PENDING": "Registro del recién nacido pendiente tras un parto",
       "PARTNER_DISPENSE_OF_HELD_RX": "{{what}} confirmó la entrega de la receta {{rx}}, suspendida para revisión; la suspensión se mantiene. Una persona debe comprobarlo con el paciente y el socio.",
@@ -2439,7 +2443,63 @@
     "ADJUSTMENT_REVERSAL_NOTE": "El importe vuelve a lo que se adeuda. El dinero ya recibido, como el copago pagado en la admisión, sigue registrado.",
     "ADJUSTMENT_REVERSAL_FAILED": "No se pudo anular el ajuste.",
     "EMAIL_ADDRESS_INVALID": "Dirección de correo electrónico no válida: {{ addresses }}",
-    "LINE_QUANTITY_POSITIVE": "Ingrese una cantidad entera mayor que cero."
+    "LINE_QUANTITY_POSITIVE": "Ingrese una cantidad entera mayor que cero.",
+    "PRICE_LIST": {
+      "TITLE": "Lista de precios",
+      "SUBTITLE": "Los precios del hospital con su fecha de efecto. Un precio ya aplicado nunca cambia: se añade un precio nuevo.",
+      "BACK_TO_BILLING": "Volver a facturación",
+      "NEW_ITEM": "Nuevo artículo",
+      "EDIT": "Modificar el artículo",
+      "NEW_PRICE": "Nuevo precio",
+      "DEACTIVATE": "Desactivar",
+      "DEACTIVATE_CONFIRM": "¿Desactivar este artículo de la lista?",
+      "DEACTIVATE_NOTE": "El artículo ya no podrá facturarse ni recibir un precio nuevo. Su historial se conserva.",
+      "DEACTIVATED": "Artículo desactivado.",
+      "CATEGORY": "Categoría",
+      "ALL_CATEGORIES": "Todas las categorías",
+      "SEARCH": "Buscar (código o descripción)",
+      "SHOW_INACTIVE": "Mostrar los artículos desactivados",
+      "LOADING": "Cargando la lista…",
+      "LOAD_FAILED": "No se pudo cargar la lista de precios.",
+      "EMPTY": "Ningún artículo en la lista.",
+      "CODE": "Código",
+      "CODE_HINT": "El código de tarifa del hospital (p. ej. CS-GEN). No cambia una vez creado.",
+      "LABEL": "Descripción",
+      "LINK": "Vínculo",
+      "LINK_TO": "Vincular a",
+      "NOT_LINKED": "Sin vínculo (precio elegido en caja)",
+      "LINKED_LAB_TEST": "Prueba de laboratorio",
+      "LINKED_TREATMENT": "Servicio",
+      "LINKED_SYSTEM": "Elemento del sistema",
+      "LINKED_PRODUCT": "Producto sanguíneo",
+      "LINKED_MODALITY": "Modalidad de imagen",
+      "LINKED_STUDY": "Tipo de estudio de imagen",
+      "LINKED_STUDY_HINT": "Tal como figura en la solicitud (p. ej. radiographie thorax face).",
+      "LINKED_PROCEDURE": "Código del acto",
+      "UNIT_PRICE": "Precio unitario (F CFA)",
+      "EFFECTIVE_SINCE": "En vigor desde",
+      "EFFECTIVE_FROM": "Fecha de efecto",
+      "NEXT_PRICE": "Precio previsto",
+      "NEXT_PRICE_FROM": "{{amount}} a partir del {{date}}",
+      "NO_PRICE_TODAY": "Sin precio hoy",
+      "CURRENT_PRICE": "Precio en vigor: {{amount}}",
+      "STATE": "Estado",
+      "ACTIVE": "Activo",
+      "INACTIVE": "Desactivado",
+      "HISTORY": "Historial de precios",
+      "HISTORY_EMPTY": "Ningún precio registrado.",
+      "FROM": "Desde",
+      "TO": "Hasta",
+      "STATUS": "Estado",
+      "CHANGE_REASON": "Motivo del cambio",
+      "ADDED_BY": "Añadido por",
+      "NEW_PRICE_NOTE": "El precio actual se aplica hasta la víspera de la fecha de efecto. Las facturas ya emitidas no cambian.",
+      "REPLACE_SCHEDULED": "Sustituir el precio previsto",
+      "SAVED": "Artículo guardado.",
+      "PRICE_SAVED": "Nuevo precio guardado.",
+      "SAVE_FAILED": "No se pudo guardar.",
+      "DEACTIVATE_REASON": "Motivo de la desactivación"
+    }
   },
   "CHAT": {
     "ACCESS_DENIED": "No tiene permiso para acceder a la mensajería.",
@@ -4603,7 +4663,8 @@
     "PROVIDER_AUDIT": "Registro de auditoría",
     "DHIS2": "Exportación DHIS2",
     "ADT_INTAKE": "Ingresos ADT automáticos",
-    "UNSIGNED_NOTES": "Notas sin firmar"
+    "UNSIGNED_NOTES": "Notas sin firmar",
+    "PRICE_LIST": "Lista de precios"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerta crítica",
@@ -6915,7 +6976,11 @@
         "DELIVERY_BABY_OUTCOME_CORRECTED": "Resultado del bebé corregido",
         "STILLBIRTH_CERTIFICATE_CONFLICT": "Contradicción de acta de mortinato",
         "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradicción de acta de mortinato conciliada",
-        "IMAGING_ORDER_DUPLICATE_PLACED": "Solicitud de imagen duplicada realizada"
+        "IMAGING_ORDER_DUPLICATE_PLACED": "Solicitud de imagen duplicada realizada",
+        "PRICE_LIST_ITEM_CREATED": "Artículo de la lista creado",
+        "PRICE_LIST_ITEM_UPDATED": "Artículo de la lista modificado",
+        "PRICE_LIST_ITEM_DEACTIVATED": "Artículo de la lista desactivado",
+        "PRICE_VERSION_ADDED": "Nuevo precio añadido"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -7298,6 +7363,8 @@
         "GENERAL": "General"
       },
       "AUDIT_ENTITY_TYPE": {
+        "PRICE_LIST_ITEM": "Artículo de la lista de precios",
+        "BILLING": "Facturación",
         "SAFEGUARDING": "Revisión de vigilancia de protección infantil",
         "DELIVERY_RECORD": "Registro del parto",
         "ORDER_REVIEW_HOLD": "Retención para revisión de orden",
@@ -7582,6 +7649,36 @@
         "PRIOR_INADEQUATE_OR_UNAVAILABLE": "Estudio anterior inadecuado o no disponible",
         "DIFFERENT_REGION_OR_QUESTION": "Región o pregunta clínica diferente",
         "OTHER": "Otro"
+      },
+      "PRICE_LIST_CATEGORY": {
+        "CONSULTATION": "Consulta",
+        "LAB_TEST": "Laboratorio",
+        "IMAGING": "Imagen",
+        "PROCEDURE": "Acto",
+        "BED_DAY": "Día de hospitalización",
+        "TRANSFUSION": "Transfusión",
+        "DELIVERY": "Parto",
+        "OTHER_SERVICE": "Otro (medicamentos, consumibles, gastos)"
+      },
+      "PRICE_LIST_LINK_TYPE": {
+        "SYSTEM": "Sistema",
+        "LAB_TEST_DEFINITION": "Prueba de laboratorio",
+        "PROCEDURE_CODE": "Acto",
+        "IMAGING_STUDY": "Estudio de imagen",
+        "TRANSFUSION_PRODUCT": "Producto sanguíneo",
+        "TREATMENT": "Servicio"
+      },
+      "PRICE_LIST_PRICE_STATUS": {
+        "SCHEDULED": "Previsto",
+        "IN_FORCE": "En vigor",
+        "ENDED": "Finalizado",
+        "REPLACED": "Sustituido antes de aplicarse"
+      },
+      "PRICE_LIST_SYSTEM_KEY": {
+        "CONSULTATION_DEFAULT": "Consulta por defecto",
+        "BED_DAY": "Día de hospitalización",
+        "DELIVERY_VAGINAL": "Parto vaginal",
+        "DELIVERY_CAESAREAN": "Cesárea"
       }
     },
     "DOCUMENTS": {

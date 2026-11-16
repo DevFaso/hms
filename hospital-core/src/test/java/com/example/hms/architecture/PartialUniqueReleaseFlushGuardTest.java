@@ -85,7 +85,11 @@ class PartialUniqueReleaseFlushGuardTest {
         Map.entry("pharmacy_claims", "PharmacyClaim"),
         // V290: one active labour per patient; a transfer closes the source before it opens the next.
         Map.entry("labor_episodes", "LaborEpisode"),
-        Map.entry("smart_phrases", "SmartPhrase"));
+        Map.entry("smart_phrases", "SmartPhrase"),
+        // Billing-money plan PR 2 (V302): one active item per link (deactivating releases it) and one live
+        // price version per start / one open-ended version per item (closing effective_to releases it).
+        Map.entry("price_list_items", "PriceListItem"),
+        Map.entry("price_list_prices", "PriceListPrice"));
 
     /** Indexes whose rows no setter can release: the slot is the row's own key, not its state. */
     private static final Set<String> KEY_ONLY_ENTITIES =
@@ -97,7 +101,7 @@ class PartialUniqueReleaseFlushGuardTest {
         "CREATE\\s+UNIQUE\\s+INDEX[^;]*?\\bON\\s+(?:[a-z_]+\\.)?([a-z_]+)\\s*\\([^;]*?\\bWHERE\\b[^;]*?;",
         Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern RELEASE = Pattern.compile(
-        "\\.set(?:Superseded|Status|Active|IsActive|EndedAt|Current)\\(|[Rr]epository\\.delete(?:All)?\\(");
+        "\\.set(?:Superseded|Status|Active|IsActive|EndedAt|Current|EffectiveTo)\\(|[Rr]epository\\.delete(?:All)?\\(");
     private static final Pattern FLUSH = Pattern.compile("saveAndFlush\\(|\\.flush\\(\\)");
     /** A method's header: a modifier, a return type, a name, a parameter list and an opening brace. */
     private static final Pattern METHOD = Pattern.compile(

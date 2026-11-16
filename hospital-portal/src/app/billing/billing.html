@@ -5,6 +5,13 @@
       <p class="page-subtitle">{{ 'BILLING.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
+      <!-- Billing-money plan PR 2: the hospital's price list, for the roles its route admits -->
+      @if (canReadPriceList) {
+        <a class="btn-secondary" routerLink="/billing/tarifs" data-testid="price-list-link">
+          <span class="material-symbols-outlined" aria-hidden="true">sell</span>
+          {{ 'BILLING.PRICE_LIST.TITLE' | translate }}
+        </a>
+      }
       <!-- QA D1059: the cashier's daily cash closing -->
       @if (canRecordPayment) {
         <button

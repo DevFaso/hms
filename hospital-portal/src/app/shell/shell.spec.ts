@@ -485,6 +485,37 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
   // and the click landed on the 403 page — the nav item was permission-gated
   // while the route guard is role-gated, and the two vocabularies disagreed
   // for ten roles. The item now carries the guard's role list too.
+  // Billing-money plan PR 2: the claims reviewer holds 'View Billing' (PermissionService) and is on the
+  // /billing/tarifs guard, so the price list is in their navigation, while /billing (not on its guard) is not.
+  it('claims reviewer sees the price list but not the billing page', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_CLAIMS_REVIEWER',
+      roles: ['ROLE_CLAIMS_REVIEWER'],
+      wildcardPermission: false,
+      permissions: [
+        'View Dashboard',
+        'View Pharmacy Claims',
+        'Manage Pharmacy Claims',
+        'View Billing',
+        'View Billing Summary',
+        'View Notifications',
+      ],
+    });
+    const routes = items.map((i) => i.route);
+    expect(routes).toContain('/billing/tarifs');
+    expect(routes).not.toContain('/billing');
+  });
+
+  it('a doctor does not see the price list', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_DOCTOR',
+      roles: ['ROLE_DOCTOR'],
+      wildcardPermission: false,
+      permissions: ['View Dashboard', 'View Billing'],
+    });
+    expect(items.map((i) => i.route)).not.toContain('/billing/tarifs');
+  });
+
   it('accountant sees Billing but not Patients — nav mirrors the route guard', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_ACCOUNTANT',

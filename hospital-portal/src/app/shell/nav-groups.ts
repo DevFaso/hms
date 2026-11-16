@@ -133,6 +133,7 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
 
   // ── BILLING ──────────────────────────────────────────────────────────
   '/billing': 'BILLING',
+  '/billing/tarifs': 'BILLING',
 
   // ── INSIGHTS ─────────────────────────────────────────────────────────
   '/analytics': 'INSIGHTS',

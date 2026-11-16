@@ -434,6 +434,9 @@ class CancelVoidReasonGuardTest {
         // QA D1247 (round 25): "deactivate" is a withdrawal too; the guarantor's took an empty body.
         CLINICAL_HANDLERS.put("POST /patients/{patientId}/guarantors/{guarantorId}/deactivate",
             "GuarantorDeactivationRequestDTO.reason (@NotBlank) -> VALIDATED"); // QA D1267: its own body and wording
+        // Billing-money plan PR 2: retiring a price-list item keeps its history with who, when and why.
+        CLINICAL_HANDLERS.put("POST /billing/price-list/{id}/deactivate",
+            "PriceListDeactivateRequestDTO.reason -> service/billing/PriceListServiceTest#deactivatingNeedsAReason");
         CLINICAL_HANDLERS.put("POST /admissions/order-sets/{orderSetId}/deactivate",
             "NOT A CLINICAL RECORD: retires an order-set template; no patient's order changes");
         CLINICAL_HANDLERS.put("PUT /drug-interactions/{id}/deactivate",

@@ -296,6 +296,24 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'LaborController#recordArrivalWithoutHandover',
     roles: ['ROLE_MIDWIFE', 'ROLE_DOCTOR'],
   },
+  // Billing-money plan PR 2 (owner decision D-1): the price list is kept by the
+  // hospital admin and the accountant only (never the cashier or the super-admin).
+  priceListCreate: {
+    endpoint: 'PriceListController#create',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  priceListUpdate: {
+    endpoint: 'PriceListController#update',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  priceListAddPrice: {
+    endpoint: 'PriceListController#addPrice',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  priceListDeactivate: {
+    endpoint: 'PriceListController#deactivate',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
 } as const satisfies Record<string, ActionPermission>;
 
 /**

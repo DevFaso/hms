@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   BillingService,
@@ -104,6 +105,7 @@ export function lineQuantityMessageKey(qty: number | string | null | undefined):
     PatientPickerComponent,
     DialogA11yDirective,
     CashClosingComponent,
+    RouterLink,
   ],
   templateUrl: './billing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -146,6 +148,15 @@ export class BillingComponent implements OnInit {
     'ROLE_BILLING_SPECIALIST',
     'ROLE_ACCOUNTANT',
     'ROLE_RECEPTIONIST',
+  ]);
+  /** Billing-money plan PR 2: the /billing/tarifs RoleGuard's reader list (not ROLE_ADMIN). */
+  readonly canReadPriceList = this.roleContext.hasAnyActiveRole([
+    'ROLE_SUPER_ADMIN',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_ACCOUNTANT',
+    'ROLE_BILLING_SPECIALIST',
+    'ROLE_RECEPTIONIST',
+    'ROLE_CLAIMS_REVIEWER',
   ]);
   /** QA D974: the server lets these roles discount, waive or credit an issued invoice. */
   readonly canAdjust = this.roleContext.hasAnyActiveRole([
