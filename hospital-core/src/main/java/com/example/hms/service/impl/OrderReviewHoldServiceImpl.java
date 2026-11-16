@@ -108,6 +108,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     private final com.example.hms.repository.DeathRecordRepository deathRecords;
     private final com.example.hms.repository.DeathDisputeRepository disputes;
     private final com.example.hms.repository.MedicationAdministrationRecordRepository doses;
+    private final com.example.hms.service.support.ClinicalActorNames actorNames;
 
     @Override
     public void afterPropertiesSet() {
@@ -540,7 +541,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     private OrderReviewRowDTO decide(OrderReviewHold hold, OrderReviewStatus outcome, UUID actor, String reason, String what) {
         hold.setStatus(outcome);
         hold.setDecidedById(actor);
-        hold.setDecidedByName(currentUsername());
+        hold.setDecidedByName(actorNames.display(actor, currentUsername()));
         hold.setDecidedAt(LocalDateTime.now(clock));
         hold.setReason(reason);
         OrderReviewHold saved = holdRepository.save(hold);
@@ -663,7 +664,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
             .orderId(hold.getOrderId())
             .orderVersion(hold.getOrderVersion())
             .status(hold.getStatus())
-            .decidedByName(hold.getDecidedByName())
+            .decidedByName(actorNames.display(hold.getDecidedById(), hold.getDecidedByName()))
             .decidedAt(hold.getDecidedAt())
             .reason(hold.getReason())
             .replacementOrderId(hold.getReplacementOrderId());

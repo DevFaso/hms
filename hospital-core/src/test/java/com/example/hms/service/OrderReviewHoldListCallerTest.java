@@ -56,7 +56,7 @@ class OrderReviewHoldListCallerTest {
             mock(PrescriberReauthenticationService.class), mock(PrescriptionService.class), mock(TransfusionService.class),
             mock(InBasketService.class), mock(AuditEventLogService.class), mock(OrderReviewAfterCommit.class),
             mock(com.example.hms.repository.DeathRecordRepository.class), mock(com.example.hms.repository.DeathDisputeRepository.class),
-            mock(com.example.hms.repository.MedicationAdministrationRecordRepository.class));
+            mock(com.example.hms.repository.MedicationAdministrationRecordRepository.class), new com.example.hms.service.support.ClinicalActorNames(org.mockito.Mockito.mock(com.example.hms.repository.UserRepository.class)));
         when(holds.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(any(), any())).thenReturn(List.of());
     }
 

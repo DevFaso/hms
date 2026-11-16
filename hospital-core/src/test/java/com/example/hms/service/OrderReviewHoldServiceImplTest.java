@@ -60,6 +60,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class OrderReviewHoldServiceImplTest {
+    private final com.example.hms.repository.UserRepository displayUsers = org.mockito.Mockito.mock(com.example.hms.repository.UserRepository.class);
 
     @Mock private OrderReviewHoldRepository holds;
     @Mock private PrescriptionRepository prescriptions;
@@ -91,7 +92,7 @@ class OrderReviewHoldServiceImplTest {
         LocaleContextHolder.setLocale(Locale.ENGLISH);
         service = new OrderReviewHoldServiceImpl(Clock.fixed(Instant.parse("2026-11-07T10:00:00Z"), ZoneOffset.UTC),
             holds, prescriptions, requests, administrations, chartAccess, roles, controlled, reauthentication,
-            prescriptionService, transfusionService, inBasket, audit, afterCommit, deathRecords, disputes, doses);
+            prescriptionService, transfusionService, inBasket, audit, afterCommit, deathRecords, disputes, doses, new com.example.hms.service.support.ClinicalActorNames(displayUsers));
         when(disputes.findById(any())).thenAnswer(call -> Optional.of(DeathDispute.builder().build()));
         when(roles.requireActiveHospitalId()).thenReturn(hospital);
         when(roles.getCurrentUserId()).thenReturn(actor);
@@ -133,7 +134,13 @@ class OrderReviewHoldServiceImplTest {
     @Test
     @DisplayName("continue records prescriber, time, reason, order version and dispute, and audits them")
     void continues() {
+        var display = new com.example.hms.model.User();
+        display.setFirstName("Awa");
+        display.setLastName("Ouédraogo");
+        when(displayUsers.findById(actor)).thenReturn(Optional.of(display));
         var row = service.continueOrder(hold.getId(), reconfirm(4));
+        assertThat(row.getDecidedByName()).isEqualTo("Awa Ouédraogo");
+        assertThat(hold.getDecidedByName()).isEqualTo("Awa Ouédraogo");
 
         assertThat(hold.getStatus()).isEqualTo(OrderReviewStatus.CONTINUED);
         assertThat(hold.getDecidedById()).isEqualTo(actor);
@@ -385,6 +392,26 @@ class OrderReviewHoldServiceImplTest {
 
         assertThatThrownBy(() -> service.forPatient(patient)).isInstanceOf(ResourceNotFoundException.class);
         verify(holds, never()).findByPatientIdAndHospitalIdOrderByCreatedAtDesc(any(), any());
+    }
+
+    @Test
+    void historicalTreatmentDecisionsResolveTheActorByIdWithoutChangingTheStoredSnapshotOrReason() {
+        hold.setDecidedById(actor);
+        hold.setDecidedByName("historic.login");
+        hold.setStatus(OrderReviewStatus.CONTINUED);
+        hold.setReason("User-authored reason stays verbatim");
+        var display = new com.example.hms.model.User();
+        display.setFirstName("Awa");
+        display.setLastName("Ouédraogo");
+        when(displayUsers.findById(actor)).thenReturn(Optional.of(display));
+        when(roles.isClinicianOrPharmacist(actor, hospital)).thenReturn(true);
+        when(holds.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patient, hospital)).thenReturn(List.of(hold));
+        assertThat(service.forPatient(patient)).singleElement().satisfies(row -> {
+            assertThat(row.getDecidedByName()).isEqualTo("Awa Ouédraogo");
+            assertThat(row.getReason()).isEqualTo("User-authored reason stays verbatim");
+        });
+        assertThat(hold.getDecidedByName()).isEqualTo("historic.login");
+        verify(holds, never()).save(any());
     }
 
     @Test
