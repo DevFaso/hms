@@ -184,8 +184,10 @@ public class OrangeSmsGatewayImpl implements IkoddiGateway {
             valid = false;
         }
         if (!name.isEmpty() && !SENDER_NAME.matcher(name).matches()) {
-            LOG.error("Orange SMS disabled: ORANGE_SMS_SENDER_NAME must be at most 11 letters, digits or spaces "
-                + "(it is {} characters)", name.length());
+            LOG.error("Orange SMS disabled: ORANGE_SMS_SENDER_NAME accepts only ASCII letters (A-Z, a-z), digits "
+                + "and spaces, up to 11 characters. Hyphens and other symbols are not allowed. / "
+                + "SMS Orange désactivé : ORANGE_SMS_SENDER_NAME accepte uniquement les lettres ASCII (A-Z, a-z), "
+                + "les chiffres et les espaces, avec un maximum de 11 caractères. Les traits d’union et les autres symboles sont interdits.");
             valid = false;
         }
         this.senderValid = valid;
