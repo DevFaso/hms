@@ -171,6 +171,41 @@ describe('ImagingComponent — r53 imaging', () => {
   }
 
   describe('D1921: the duplicate warning before the order is sent', () => {
+    it('D1971: Escape asks visibly before discarding an Other note and keeps it until confirmed', fakeAsync(() => {
+      setUp(['ROLE_DOCTOR']);
+      imaging.checkDuplicates.and.returnValue(of([MATCH]));
+      fillNewOrder();
+      component.submitForm();
+      fixture.detectChanges();
+      tick(0);
+      (q('[data-testid="imaging-duplicate-reason-OTHER"]') as HTMLInputElement).click();
+      fixture.detectChanges();
+      const note = q('[data-testid="imaging-duplicate-note"]') as HTMLTextAreaElement;
+      note.focus();
+      note.value = 'Clinical reason typed by the doctor';
+      note.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      note.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      expect(q('[data-testid="inline-discard-ask"]')).not.toBeNull();
+      expect(component.overrideNote()).toBe('Clinical reason typed by the doctor');
+      expect(component.showModal()).toBeTrue();
+      (q('[data-testid="inline-keep"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(q('[data-testid="inline-discard-ask"]')).toBeNull();
+      expect(note.value).toBe('Clinical reason typed by the doctor');
+      note.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      (q('[data-testid="inline-discard"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      tick(0);
+      expect(q('[data-testid="imaging-duplicate-warning"]')).toBeNull();
+      expect(component.showModal()).toBeTrue();
+      expect(imaging.createOrder).not.toHaveBeenCalled();
+      fixture.destroy();
+      tick(0);
+    }));
+
     it('asks the scoped preview, shows the recent order, and sends nothing until "order anyway"', () => {
       setUp(['ROLE_DOCTOR']);
       imaging.checkDuplicates.and.returnValue(of([MATCH]));

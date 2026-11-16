@@ -897,6 +897,42 @@ export function subFormFindings(html, tokens = tags(html), componentSource = htm
   return out;
 }
 
+/** D1971: a dirty inline form must render the question its directive raises. */
+export function inlineDiscardFindings(html, tokens = tags(html)) {
+  const out = [];
+  tokens.forEach((tag, index) => {
+    if (tag.type !== 'open' || !tag.attrs.has('appInlineSubForm')) return;
+    const children = tokens.slice(index + 1, closeIndexOf(tokens, index));
+    const editable = children.some(
+      (child) =>
+        child.type === 'open' &&
+        child.name !== 'select' &&
+        isTextField(child) &&
+        !child.attrs.has('readonly') &&
+        !child.attrs.has('disabled'),
+    );
+    if (!editable) return;
+    const references = [...tag.attrs.entries()]
+      .filter(([name, value]) => name.startsWith('#') && value === 'inlineSubForm')
+      .map(([name]) => name.slice(1));
+    const rendered = children.some(
+      (child) =>
+        child.type === 'open' &&
+        child.name === 'app-inline-discard-ask' &&
+        references.includes((child.attrs.get('[form]') ?? '').trim()),
+    );
+    if (!rendered)
+      out.push({
+        line: tag.line,
+        rule: 'subform',
+        anchor: anchor(tag, innerHtml(html, tokens, index) ?? ''),
+        message:
+          'a text-editing appInlineSubForm without its own exported reference and bound app-inline-discard-ask',
+      });
+  });
+  return out;
+}
+
 /** An icon-font element: its text is a ligature name, never words to read. */
 const ICON_CLASS = /\bmaterial-(?:symbols|icons)\b/;
 

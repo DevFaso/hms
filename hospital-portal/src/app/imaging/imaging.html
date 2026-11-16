@@ -1491,6 +1491,7 @@
           role="alert"
           data-testid="imaging-duplicate-warning"
           appInlineSubForm
+          #duplicateWarningForm="inlineSubForm"
           (dismissed)="dismissDuplicateWarning()"
         >
           <p class="duplicate-warning-title">{{ 'IMAGING.DUPLICATE.TITLE' | translate }}</p>
@@ -1546,6 +1547,7 @@
               </p>
             }
           </fieldset>
+          <app-inline-discard-ask [form]="duplicateWarningForm" />
           <div class="duplicate-warning-actions">
             <button type="button" class="btn-secondary" (click)="dismissDuplicateWarning()">
               {{ 'IMAGING.DUPLICATE.BACK' | translate }}

@@ -22,7 +22,7 @@
  */
 import { resolve } from 'node:path';
 
-import { dialogFindings } from './lib/dialog-scan.mjs';
+import { dialogFindings, inlineDiscardFindings } from './lib/dialog-scan.mjs';
 import { dialogComponentSelectors } from './lib/component-sources.mjs';
 import { scanTemplates, PORTAL_DIR } from './lib/template-gate.mjs';
 import { runGate, isMain } from './lib/baseline.mjs';
@@ -33,7 +33,8 @@ export const gate = {
   findings: (ctx) => {
     const childDialogs = dialogComponentSelectors(ctx);
     return scanTemplates(
-      (html, componentSource) => dialogFindings(html, componentSource, childDialogs),
+      (html, componentSource) =>
+        dialogFindings(html, componentSource, childDialogs).concat(inlineDiscardFindings(html)),
       {},
       ctx,
     );

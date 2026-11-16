@@ -44,6 +44,7 @@ import {
 } from '../shared/refusal-reason';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { AuthorshipService } from '../shared/authorship.service';
 import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
 import { refuseFields } from '../shared/forms/invalid-fields';
@@ -197,6 +198,7 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
     EnumLabelPipe,
     PatientPickerComponent,
     InlineSubFormDirective,
+    InlineDiscardAskComponent,
   ],
   templateUrl: './imaging.html',
   changeDetection: ChangeDetectionStrategy.Eager,

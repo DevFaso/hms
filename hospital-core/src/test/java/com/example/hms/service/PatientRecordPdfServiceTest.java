@@ -113,6 +113,40 @@ class PatientRecordPdfServiceTest {
         }
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"en", "fr", "es"})
+    void exportedImagingHistoryKeepsRevisionIdentityAndLongConclusions(String language) throws Exception {
+        Locale locale = Locale.forLanguageTag(language);
+        LocaleContextHolder.setLocale(locale);
+        Patient patient = new Patient();
+        patient.setId(patientId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        when(storyboardService.getStoryboard(patientId, hospitalId)).thenReturn(storyboard());
+        var chart = chart();
+        var signed = LocalDateTime.of(2026, 11, 15, 10, 20);
+        chart.setImaging(List.of(ChartReviewDTO.ImagingEntryDTO.builder().modality("CT").reports(List.of(
+            ChartReviewDTO.ImagingReportEntryDTO.builder().reportStatus("FINAL").reportVersion(1)
+                .signedAt(signed).impression("Original conclusion").build(),
+            ChartReviewDTO.ImagingReportEntryDTO.builder().reportStatus("CORRECTED").reportVersion(2)
+                .signedAt(signed.plusHours(1)).impression("Unchanged clinical wording ".repeat(100) + "END-OF-CONCLUSION").build()
+        )).build()));
+        when(chartReviewService.getCompleteChartReview(patientId, hospitalId)).thenReturn(chart);
+        var bundles = com.example.hms.i18n.TestMessageSources.bundles();
+        var realLabels = new PatientRecordPdfService(patientRepository, registrationRepository,
+            storyboardService, chartReviewService, auditEventLogService, userRepository, bundles);
+        String text = textOf(realLabels.render(patientId));
+        assertThat(text).contains("Original conclusion", "v1", "v2", "END-OF-CONCLUSION",
+            PdfLabels.of(bundles, locale).fmt(signed), PdfLabels.of(bundles, locale).fmt(signed.plusHours(1)))
+            .doesNotContain("pdf.record.");
+        assertThat(text.indexOf("Original conclusion")).isLessThan(text.indexOf("END-OF-CONCLUSION"));
+        assertThat(text).contains(switch (language) {
+            case "fr" -> "Corrigé";
+            case "es" -> "Corregido";
+            default -> "Corrected";
+        });
+    }
+
     @Test
     void rendersIdentityStoryboardAndChartAndAuditsTheExportWithoutTheName() throws Exception {
         stubHappyPath();
@@ -275,7 +309,7 @@ class PatientRecordPdfServiceTest {
             .contains("pdf.record.encounter.none",
                 "DNR", "LIVING_WILL", "pdf.record.directive.from", "intubation",
                 "CT", "pdf.record.imaging.impression",
-                "pdf.record.imaging.impression Appendicite", "pdf.record.imaging.addendum Inchangé",
+                "pdf.record.imaging.identifiedImpression", "Appendicite", "pdf.record.imaging.identifiedAddendum", "Inchangé",
                 "Lumbar puncture", "pdf.record.procedure.consentObtained",
                 "Paracentesis", "pdf.record.procedure.consentNotRecorded",
                 // The count only; never the withheld rows themselves.
