@@ -79,6 +79,7 @@ class AuthControllerTest {
         previousMessageSource = (org.springframework.context.MessageSource)
             org.springframework.test.util.ReflectionTestUtils.getField(com.example.hms.utility.MessageUtil.class, "messageSource");
         com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        checkPasswordRunsTheComparison();
     }
     @Autowired private ObjectMapper objectMapper;
 
@@ -431,7 +432,6 @@ class AuthControllerTest {
      * controller's own answers (200, 401, 400) stay under test here. The real
      * bucket is under test in LockScreenLockoutIntegrationTest.
      */
-    @org.junit.jupiter.api.BeforeEach
     void checkPasswordRunsTheComparison() {
         when(loginAttemptService.checkPassword(any(), any())).thenAnswer(inv ->
                 ((java.util.function.BooleanSupplier) inv.getArgument(1)).getAsBoolean()
