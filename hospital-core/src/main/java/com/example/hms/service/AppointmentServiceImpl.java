@@ -562,9 +562,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         // slot, else the session template's slot length, else 30 minutes). An
         // end time in the request is ignored: a patient booked a clinician's
         // whole day through this endpoint.
-        if (request.getStartTime() == null || request.getAppointmentDate() == null) {
-            throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, "appointment.timeRange.invalid");
-        }
+        requireBookingStart(request);
         LocalTime endTime = slotPolicy.endFor(staff.getId(), request.getAppointmentDate(), request.getStartTime());
         LocalDateTime requestedStart = LocalDateTime.of(request.getAppointmentDate(), request.getStartTime());
         LocalDateTime requestedEnd = LocalDateTime.of(request.getAppointmentDate(), endTime);
@@ -655,6 +653,12 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         return bookingSummary(saved);
+    }
+
+    private static void requireBookingStart(AppointmentRequestDTO request) {
+        if (request.getStartTime() == null || request.getAppointmentDate() == null) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, "appointment.timeRange.invalid");
+        }
     }
 
     private AppointmentSummaryDTO bookingSummary(Appointment saved) {

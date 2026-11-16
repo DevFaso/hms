@@ -14,14 +14,17 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.Objects;
 
 /** Request identity, separate from clinical data. No raw patient text is persisted here. */
 public record AppointmentBookingIdentity(String key, String fingerprint, boolean explicit,
-                                         UUID patientId, UUID hospitalId) {
+                                         UUID patientId, UUID hospitalId, LocalDate date, LocalTime startTime) {
 
     public static AppointmentBookingIdentity staff(UUID actor, UUID patient, UUID hospital,
                                                    AppointmentRequestDTO r) {
-        return identity("staff", actor, patient, hospital, r.getBookingRequestId(),
+        return identity("staff", actor, patient, hospital, r.getBookingRequestId(), r.getAppointmentDate(), r.getStartTime(),
             hash(r.getAppointmentDate(), r.getStartTime(), r.getStaffId(), r.getStaffEmail(),
                 r.getStaffUsername(), r.getDepartmentId(), r.getDepartmentName(), r.getDepartmentCode(),
                 r.getRecallId(), r.getStatus(), r.getReason(), r.getNotes(),
@@ -29,19 +32,20 @@ public record AppointmentBookingIdentity(String key, String fingerprint, boolean
     }
 
     public static AppointmentBookingIdentity portal(UUID actor, UUID patient, PortalBookAppointmentRequestDTO r) {
-        return identity("portal", actor, patient, r.getHospitalId(), r.getBookingRequestId(),
+        return identity("portal", actor, patient, r.getHospitalId(), r.getBookingRequestId(), r.getDate(), r.getStartTime(),
             hash(r.getDepartmentId(), r.getStaffId(), r.getDate(), r.getStartTime(), r.getReason(), r.getNotes()));
     }
 
     private static AppointmentBookingIdentity identity(String route, UUID actor, UUID patient, UUID hospital,
-                                                        UUID requestId, String payload) {
+                                                        UUID requestId, LocalDate date, LocalTime startTime, String payload) {
         String fingerprint = hash(patient, payload);
         return new AppointmentBookingIdentity(hash(route, actor, hospital,
-            requestId == null ? fingerprint : requestId), fingerprint, requestId != null, patient, hospital);
+            requestId == null ? fingerprint : requestId), fingerprint, requestId != null, patient, hospital, date, startTime);
     }
 
     public Optional<Appointment> replay(AppointmentRepository repository) {
         return repository.findAllByBookingRequestKey(key).stream()
+            .filter(a -> key.equals(a.getBookingRequestKey()))
             .filter(a -> a.isBookingRequestDurable() || AppointmentStatus.holdsSlot(a.getStatus()))
             .findFirst()
             .map(a -> {
@@ -49,7 +53,9 @@ public record AppointmentBookingIdentity(String key, String fingerprint, boolean
                 // request must never disclose the transferred record or create a replacement.
                 if (!fingerprint.equals(a.getBookingRequestFingerprint())
                         || a.getPatient() == null || !patientId.equals(a.getPatient().getId())
-                        || a.getHospital() == null || !hospitalId.equals(a.getHospital().getId())) {
+                        || a.getHospital() == null || !hospitalId.equals(a.getHospital().getId())
+                        || (!explicit && (!Objects.equals(date, a.getAppointmentDate())
+                            || !Objects.equals(startTime, a.getStartTime())))) {
                     throw new FieldBusinessException("bookingRequestId", "appointment.booking.requestChanged");
                 }
                 return a;

@@ -21,6 +21,29 @@ class AppointmentSlotRulesGuardTest {
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
 
     @Test
+    void everyScheduleMutationReleasesLegacyIdentityAtTheEntityBoundary() throws IOException {
+        String entity = com.example.hms.testsupport.SourceScan.stripComments(read(MAIN.resolve("model/Appointment.java")));
+        for (String setter : List.of("setAppointmentDate", "setStartTime", "setStaff", "setDepartment", "setStatus")) {
+            int at = entity.indexOf("void " + setter + "(");
+            assertThat(at).as("Appointment.%s must protect every caller, including mapper and portal edits", setter)
+                .isNotNegative();
+            assertThat(enclosingMethod(entity, entity.indexOf('{', at) + 1))
+                .as("Appointment.%s releases legacy retry identity", setter)
+                .contains("releaseLegacyBookingIdentity()");
+        }
+        assertThat(entity).contains("if (!bookingRequestDurable)", "bookingRequestKey = null",
+            "bookingRequestFingerprint = null");
+        // All persistence writers are included, rather than just the two HTTP
+        // handlers: a bulk schedule update would bypass the setter boundary.
+        for (Path file : javaFiles()) {
+            String source = com.example.hms.testsupport.SourceScan.stripComments(read(file));
+            assertThat(source).as("%s must not bypass Appointment schedule setters", file)
+                .doesNotContain("UPDATE clinical.appointments SET appointment_date", "UPDATE clinical.appointments SET start_time",
+                    "update Appointment a set a.appointmentDate", "update Appointment a set a.startTime");
+        }
+    }
+
+    @Test
     void bookingIdentityUniquenessLivesInARegisteredMigration() throws IOException {
         Path migrations = Paths.get("src/main/resources/db/migration");
         String sql = Files.readString(migrations.resolve("V320__appointment_booking_identity.sql"));

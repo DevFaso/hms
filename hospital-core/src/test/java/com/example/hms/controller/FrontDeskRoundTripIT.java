@@ -95,7 +95,7 @@ class FrontDeskRoundTripIT extends BaseIT {
     private final AtomicInteger sequence = new AtomicInteger();
 
     @Autowired private ApplicationContext applicationContext;
-    @Autowired private MockMvc mockMvc;
+    @Autowired protected MockMvc mockMvc;
     @Autowired private OrganizationRepository organizationRepository;
     @Autowired private HospitalRepository hospitalRepository;
     @Autowired private DepartmentRepository departmentRepository;
@@ -105,7 +105,7 @@ class FrontDeskRoundTripIT extends BaseIT {
     @Autowired private StaffRepository staffRepository;
     @Autowired private PatientRepository patientRepository;
     @Autowired private PatientHospitalRegistrationRepository registrationRepository;
-    @Autowired private AppointmentRepository appointmentRepository;
+    @Autowired protected AppointmentRepository appointmentRepository;
     @Autowired private PatientInsuranceRepository insuranceRepository;
     @Autowired private PatientRecallRepository recallRepository;
     @Autowired private com.example.hms.repository.EncounterRepository encounterRepository;
@@ -117,7 +117,7 @@ class FrontDeskRoundTripIT extends BaseIT {
     private User receptionist;
     private Staff doctor;
     private UserRoleHospitalAssignment doctorAssignment;
-    private Patient aicha;
+    protected Patient aicha;
 
     @BeforeEach
     void setUp() {
@@ -172,6 +172,53 @@ class FrontDeskRoundTripIT extends BaseIT {
     }
 
     // ------------------------------------------------------------- appointments
+
+    @Test
+    void legacyBookingRescheduledThroughTheRealEndpointCanBookItsOriginalSlotAgain() throws Exception {
+        LocalDate originalDay = LocalDate.now().plusDays(10);
+        String originalBody = appointmentBody(aicha, originalDay, "09:00", "09:30", "Legacy booking");
+        UUID first = createBooking(originalBody);
+        assertThat(createBooking(originalBody)).isEqualTo(first);
+
+        mockMvc.perform(put(API + "/appointments/{id}", first).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(appointmentBody(aicha, originalDay.plusDays(3), "09:00", "09:30", "Moved visit"))
+                .with(asReceptionist()))
+            .andExpect(status().isOk());
+
+        Appointment moved = appointmentRepository.findById(first).orElseThrow();
+        assertThat(moved.getBookingRequestKey()).isNull();
+        assertThat(moved.getBookingRequestFingerprint()).isNull();
+        UUID replacement = createBooking(originalBody);
+        assertThat(replacement).isNotEqualTo(first);
+        assertThat(createBooking(originalBody)).isEqualTo(replacement);
+        assertThat(appointmentRepository.findById(replacement).orElseThrow().getAppointmentDate())
+            .isEqualTo(originalDay);
+        assertThat(appointmentRepository.findById(first).orElseThrow().getAppointmentDate())
+            .isEqualTo(originalDay.plusDays(3));
+    }
+
+    @Test
+    void explicitBookingRetryStillReturnsItsOriginalVisitAfterRescheduling() throws Exception {
+        LocalDate day = LocalDate.now().plusDays(10);
+        String body = appointmentBody(aicha, day, "09:00", "09:30", "Explicit booking")
+            .replace("\"patientId\"", "\"bookingRequestId\":\"" + UUID.randomUUID() + "\",\"patientId\"");
+        UUID first = createBooking(body);
+        mockMvc.perform(put(API + "/appointments/{id}", first).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(appointmentBody(aicha, day.plusDays(3), "09:00", "09:30", "Moved visit"))
+                .with(asReceptionist()))
+            .andExpect(status().isOk());
+        assertThat(createBooking(body)).isEqualTo(first);
+        assertThat(appointmentRepository.findById(first).orElseThrow().getBookingRequestKey()).isNotBlank();
+    }
+
+    protected UUID createBooking(String body) throws Exception {
+        String response = mockMvc.perform(post(API + "/appointments").contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON).content(body).with(asReceptionist()))
+            .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        return UUID.fromString(com.jayway.jsonpath.JsonPath.read(response, "$.id"));
+    }
 
     @Test
     @DisplayName("D923: a reschedule PUT stores the new date, time and notes, and a fresh read shows them")
@@ -895,7 +942,7 @@ class FrontDeskRoundTripIT extends BaseIT {
     // ------------------------------------------------------------------ helpers
 
     /** QA D1429: these visits are at times no slot is published for, so the desk says why. */
-    private String appointmentBody(Patient patient, LocalDate date, String start, String end, String notes) {
+    protected String appointmentBody(Patient patient, LocalDate date, String start, String end, String notes) {
         return appointmentBodyOnASlot(patient, date, start, end, notes)
             .replace("\"reason\"", "\"overbookReason\":\"Demande du médecin\",\"reason\"");
     }
@@ -969,7 +1016,7 @@ class FrontDeskRoundTripIT extends BaseIT {
         return as(receptionist, "ROLE_DOCTOR");
     }
 
-    private RequestPostProcessor asReceptionist() {
+    protected RequestPostProcessor asReceptionist() {
         return as(receptionist, ROLE_RECEPTIONIST);
     }
 

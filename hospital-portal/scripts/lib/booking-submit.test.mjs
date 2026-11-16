@@ -8,7 +8,7 @@ import { bookingSubmitViolations } from './booking-submit-scan.mjs';
 const fixture = (body, service = 'AppointmentService', call = 'create') => `
 class Example {
   private renamed = inject(${service});
-  private bookingRequestId = crypto.randomUUID();
+  private bookingRequestId = createBookingRequestId();
   submit() { ${body} this.renamed.${call}(payload); }
 }`;
 const guarded = `if (this.pending()) return;
@@ -32,6 +32,16 @@ test('booking guard rejects a fresh key on every retry and a guard after the req
   );
   assert.equal(
     bookingSubmitViolations(fixture('') + 'if (this.pending()) return;').violations.length,
+    1,
+  );
+  assert.equal(
+    bookingSubmitViolations(fixture(`${guarded} createBookingRequestId();`)).violations.length,
+    1,
+  );
+  assert.equal(
+    bookingSubmitViolations(
+      fixture(guarded).replace('= createBookingRequestId()', '= crypto.randomUUID()'),
+    ).violations.length,
     1,
   );
 });
