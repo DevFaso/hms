@@ -2456,7 +2456,7 @@
       "LOADING": "Chargement de la grille…",
       "LOAD_FAILED": "La grille tarifaire n’a pas pu être chargée.",
       "EMPTY": "Aucun article dans la grille.",
-      "CODE": "Code",
+      "CODE": "Code tarifaire",
       "CODE_HINT": "Le code tarifaire de l’établissement (ex. CS-GEN). Il ne change plus une fois créé.",
       "LABEL": "Libellé",
       "LINK": "Lien",
@@ -7610,12 +7610,12 @@
         "OTHER": "Autre"
       },
       "PRICE_LIST_CATEGORY": {
-        "CONSULTATION": "Consultation",
+        "CONSULTATION": "Consultations",
         "LAB_TEST": "Laboratoire",
         "IMAGING": "Imagerie",
         "PROCEDURE": "Acte",
         "BED_DAY": "Journée d’hospitalisation",
-        "TRANSFUSION": "Transfusion",
+        "TRANSFUSION": "Transfusions",
         "DELIVERY": "Accouchement",
         "OTHER_SERVICE": "Autre (médicaments, consommables, frais)"
       },
