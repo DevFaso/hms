@@ -236,7 +236,37 @@ class ImagingReportServiceImplTest {
             .reportStatus(ImagingReportStatus.FINAL)
             .build()))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("FINAL is reached only by signing");
+            .hasMessageContaining("A final report requires signing");
+    }
+
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> forbiddenAuthoringStatuses() {
+        return java.util.stream.Stream.of("en", "fr", "es").flatMap(language ->
+            java.util.stream.Stream.of(false, true).flatMap(update ->
+                java.util.stream.Stream.of(ImagingReportStatus.FINAL, ImagingReportStatus.CANCELLED, ImagingReportStatus.ERROR)
+                    .map(status -> org.junit.jupiter.params.provider.Arguments.of(language, update, status))));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("forbiddenAuthoringStatuses")
+    void authoringRefusalsAreLocalizedWithoutChangingTheStatus(String language, boolean update, ImagingReportStatus status) {
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.forLanguageTag(language));
+        ImagingReport existing = persistedReport();
+        var request = ImagingReportUpsertRequestDTO.builder().imagingOrderId(orderId)
+            .findings("User-authored text").reportStatus(status).build();
+        String expected = switch (language) {
+            case "fr" -> "Ce statut ne peut pas être défini pendant la rédaction";
+            case "es" -> "Este estado no se puede establecer al redactar";
+            default -> "This status cannot be set while authoring a report";
+        };
+        assertThatThrownBy(() -> {
+            if (update) imagingReportService.updateReport(reportId, request);
+            else imagingReportService.createReport(request);
+        }).isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+            assertThat(ex.getMessage()).startsWith(expected);
+            assertThat(ex.getFieldErrors()).containsEntry("reportStatus", ex.getMessage());
+        });
+        verify(imagingReportRepository, never()).save(any());
+        assertThat(existing.getReportStatus()).isEqualTo(ImagingReportStatus.PRELIMINARY);
     }
 
     @Test
