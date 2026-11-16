@@ -537,7 +537,10 @@ export class AppointmentFormComponent implements OnInit {
   }
 
   // ── Submit ───────────────────────────────────────────────
+  private readonly bookingRequestId = crypto.randomUUID();
+
   submit(): void {
+    if (this.saving()) return;
     // QA D1072: every missing field is marked and the first one focused.
     // QA D1256 class (round 27): the toast names every gap at once; it named
     // only the first (date, then patient, then clinician, one per press).
@@ -572,7 +575,10 @@ export class AppointmentFormComponent implements OnInit {
 
     this.saving.set(true);
 
-    const payload: AppointmentUpsertRequest = { ...this.form };
+    const payload: AppointmentUpsertRequest = {
+      ...this.form,
+      bookingRequestId: this.bookingRequestId,
+    };
     for (const key of Object.keys(payload) as (keyof AppointmentUpsertRequest)[]) {
       if (payload[key] === '' || payload[key] === undefined) {
         delete payload[key];

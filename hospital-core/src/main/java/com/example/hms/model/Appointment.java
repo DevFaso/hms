@@ -101,6 +101,16 @@ public class Appointment extends BaseEntity {
     @Column(name = "notes", length = 2048)
     private String notes;
 
+    @Column(name = "booking_request_key", length = 64)
+    private String bookingRequestKey;
+
+    @Column(name = "booking_request_fingerprint", length = 64)
+    private String bookingRequestFingerprint;
+
+    @Column(name = "booking_request_durable", nullable = false)
+    @org.hibernate.annotations.ColumnDefault("false")
+    private boolean bookingRequestDurable;
+
     /**
      * QA D1126 / D1132 (V255): why the visit was cancelled or marked a
      * no-show. Required on every staff move to CANCELLED or NO_SHOW; the

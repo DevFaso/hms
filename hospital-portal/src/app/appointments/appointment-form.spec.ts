@@ -3,7 +3,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { AppointmentFormComponent } from './appointment-form';
 import { AppointmentService } from '../services/appointment.service';
@@ -263,6 +263,25 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
     );
     component.submit();
     expect(component.form.recallId).toBe('11111111-2222-3333-4444-555555555555');
+  });
+
+  it('X2: double submit sends once and a retry retains the request identity', () => {
+    const component = create({ date: inDays(5), time: '08:20' });
+    const service = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+    const pending = new Subject<never>();
+    service.create.and.returnValue(pending);
+    component.form.patientId = 'p-1';
+    component.form.staffId = 's-1';
+    component.submit();
+    component.submit();
+    expect(service.create).toHaveBeenCalledTimes(1);
+    const key = service.create.calls.first().args[0].bookingRequestId;
+    expect(key).toMatch(/^[a-f0-9-]{36}$/);
+    pending.error({ status: 503 });
+    service.create.and.returnValue(throwError(() => ({ status: 503 })));
+    component.submit();
+    expect(service.create).toHaveBeenCalledTimes(2);
+    expect(service.create.calls.mostRecent().args[0].bookingRequestId).toBe(key);
   });
 
   it('QA D1060: the calendar duration is not turned into an end time, and none is sent', () => {

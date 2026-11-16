@@ -53,6 +53,8 @@ class PartialUniqueReleaseFlushGuardTest {
 
     /** Table of each partial unique index -> the entity that writes it. */
     private static final Map<String, String> ENTITY_OF_TABLE = Map.ofEntries(
+        // X2 (V320): cancelling a formerly-live legacy booking releases its request identity.
+        Map.entry("appointments", "Appointment"),
         Map.entry("death_records", "DeathRecord"),
         Map.entry("fetal_death_events", "FetalDeathEvent"),
         // r53: one open safeguarding review per patient and hospital; recording it releases the slot.
@@ -159,6 +161,27 @@ class PartialUniqueReleaseFlushGuardTest {
             """, sites, new ArrayList<>());
         assertThat(sites).containsOnlyKeys("probe.java#PatientBloodGroup");
         assertThat(sites.get("probe.java#PatientBloodGroup")).isOne();
+    }
+
+    @Test
+    void appointmentIdentityReleaseIsScannedAndRequiresAFlushBeforeReplacement() {
+        Map<String, Integer> sites = new TreeMap<>();
+        scan("appointment-probe.java", """
+            class P {
+                public void unflushed() {
+                    existing.setStatus(CANCELLED);
+                    repository.save(existing);
+                    repository.save(Appointment.builder().build());
+                }
+                public void flushed() {
+                    existing.setStatus(CANCELLED);
+                    repository.saveAndFlush(existing);
+                    repository.save(Appointment.builder().build());
+                }
+            }
+            """, sites, new ArrayList<>());
+        assertThat(sites).containsOnlyKeys("appointment-probe.java#Appointment");
+        assertThat(sites.get("appointment-probe.java#Appointment")).isOne();
     }
 
     private static void scan(String file, String source, Map<String, Integer> sites, List<String> where) {
