@@ -2,7 +2,9 @@ import { createBookingRequestId } from './booking-request-id';
 
 describe('booking request identity', () => {
   it('uses the browser UUID implementation when present', () => {
-    const source = { randomUUID: () => '12345678-1234-4234-8234-123456789012' } as unknown as Crypto;
+    const source = {
+      randomUUID: () => '12345678-1234-4234-8234-123456789012',
+    } as unknown as Crypto;
     expect(createBookingRequestId(source)).toBe('12345678-1234-4234-8234-123456789012');
   });
 
