@@ -43,7 +43,7 @@ public class PharmacySaleController {
     private final PharmacySaleService saleService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','HOSPITAL_ADMIN')")
     @Operation(summary = "Record a new OTC walk-in sale")
     public ResponseEntity<PharmacySaleResponseDTO> create(@Valid @RequestBody PharmacySaleRequestDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(saleService.createSale(dto));

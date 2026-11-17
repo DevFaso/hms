@@ -115,9 +115,17 @@ public class ActingScopeResolver {
         Set<String> roles = new LinkedHashSet<>();
         Map<UUID, UUID> hospitalOrganizations = new LinkedHashMap<>();
         Map<UUID, FacilityType> hospitalFacilityTypes = new LinkedHashMap<>();
+        Map<UUID, Set<String>> hospitalRoles = new LinkedHashMap<>();
+        Set<String> globalRoles = new LinkedHashSet<>();
         for (TenantRoleAssignment assignment : assignments == null ? List.<TenantRoleAssignment>of() : assignments) {
             if (assignment.active()) {
                 collect(assignment, hospitals, organizations, roles, hospitalOrganizations);
+                String role = roleCode(assignment);
+                if (role != null && assignment.hospitalId() != null) {
+                    hospitalRoles.computeIfAbsent(assignment.hospitalId(), id -> new LinkedHashSet<>()).add(role);
+                } else if (role != null) {
+                    globalRoles.add(role);
+                }
                 if (assignment.hospitalId() != null) {
                     // Never null at a facility (TenantRoleAssignment refuses it).
                     hospitalFacilityTypes.putIfAbsent(assignment.hospitalId(), assignment.facilityType());
@@ -135,6 +143,8 @@ public class ActingScopeResolver {
             // are not a read scope (Q6, option A).
             .permittedOrganizationIds(Collections.unmodifiableSet(organizations))
             .assignedRoles(Collections.unmodifiableSet(roles))
+            .hospitalRoles(Collections.unmodifiableMap(hospitalRoles))
+            .globalRoles(Collections.unmodifiableSet(globalRoles))
             .hospitalOrganizations(Collections.unmodifiableMap(hospitalOrganizations))
             .providerFacilityTypes(Collections.unmodifiableSet(providerTypes))
             .hospitalFacilityTypes(Collections.unmodifiableMap(hospitalFacilityTypes))

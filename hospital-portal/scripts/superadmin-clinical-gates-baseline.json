@@ -28,6 +28,10 @@
     "src/app/roi/roi.ts::super-admin-clinical-action::canDecide": {
       "count": 1,
       "why": "release of information, records office (RoiWorklistController)"
+    },
+    "src/app/transfusion/transfusion.ts::super-admin-clinical-action::canStock": {
+      "count": 1,
+      "why": "blood-bank stock receipt and disposal (TransfusionController#receiveUnit/#discardUnit, NOT_A_CLINICAL_ACT)"
     }
   }
 }

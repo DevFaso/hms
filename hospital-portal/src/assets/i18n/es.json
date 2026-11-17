@@ -1815,6 +1815,7 @@
       "EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE_STATED": "Entrega de urgencia — serológicamente incompatible, de la unidad {{unit}} para la solicitud {{request}}, O negativo declarado imposible de obtener a tiempo, existencias indicadas {{shown}}",
       "CROSS_HOSPITAL_READ": "Consulta de otro hospital por la relación asistencial: {{subject}}{{extra}}",
       "SUPPORT_SESSION_REFUSED": "Sesión de soporte rechazada: {{what}} (datos de inicio de sesión o de recuperación)",
+      "SUPPORT_SESSION_CLINICAL_REFUSED": "Sesión de soporte rechazada: un acto clínico ({{roles}}) durante una toma de control de la cuenta",
       "IMPERSONATION_STARTED": "Sesión de soporte iniciada como {{user}}. Motivo: {{reason}}",
       "IMPERSONATION_ENDED": "Sesión de soporte como {{user}} finalizada",
       "USER_ACTION_REFUSED": "Rechazo de {{action}} del usuario: el autor no puede administrar esta cuenta",

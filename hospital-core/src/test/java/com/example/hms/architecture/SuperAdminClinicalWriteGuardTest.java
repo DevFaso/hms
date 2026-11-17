@@ -110,7 +110,6 @@ class SuperAdminClinicalWriteGuardTest {
         Map.entry("StockTransactionController", "pharmacy stock"),
         Map.entry("TransfusionController#receiveUnit", "blood-bank stock receipt"),
         Map.entry("TransfusionController#discardUnit", "blood-bank stock disposal"),
-        Map.entry("PharmacySaleController", "pharmacy till"),
         Map.entry("PharmacyPaymentController", "pharmacy payment"),
         Map.entry("PharmacyClaimController", "insurance claim"),
         Map.entry("EligibilityController", "insurance coverage and prior authorisation"),
@@ -128,7 +127,11 @@ class SuperAdminClinicalWriteGuardTest {
         Map.entry("ReceptionController#updateEncounterStatus", "front-desk flow status"),
         Map.entry("ProviderAdminController", "staff administration"),
         Map.entry("UserController", "user administration"),
-        Map.entry("SuperAdminImpersonationController", "ends the super-admin's own impersonation"));
+        Map.entry("SuperAdminImpersonationController", "ends the super-admin's own impersonation"),
+        // QA D2120 review, owner decision: governance and data-fix acts the super-admin keeps.
+        Map.entry("LabResultController#deleteLabResult", "data fix: removes a result entered in error"),
+        Map.entry("DigitalSignatureController#revokeSignature", "governance: revokes a signature, records nothing clinical"),
+        Map.entry("SensitivityTaggingController#tagEncounter", "governance: privacy tag on an encounter"));
 
     @AfterEach
     void clear() {
@@ -213,6 +216,78 @@ class SuperAdminClinicalWriteGuardTest {
                 .as(method.getName() + ": a hospital admin, as before").isFalse();
         }
         assertThat(writes).as("enrol, status, visit").isEqualTo(3);
+    }
+
+    /**
+     * QA D2120 review: a clinical role counts at the hospital the request acts at. The context is
+     * the one the live assignments produce (ActingScopeResolver.liveContext), then pinned the way
+     * X-Hospital-Id pins it.
+     */
+    @Test
+    void aSuperAdminWhoIsADoctorAtAIsADoctorAtAOnly() {
+        java.util.UUID hospitalA = java.util.UUID.randomUUID();
+        java.util.UUID hospitalB = java.util.UUID.randomUUID();
+        HospitalContext live = com.example.hms.security.tenant.ActingScopeResolver.liveContext(
+            java.util.UUID.randomUUID(), "sa", List.of(
+                new com.example.hms.security.auth.TenantRoleAssignment(null, null, "SUPER_ADMIN", "Super", true, null),
+                new com.example.hms.security.auth.TenantRoleAssignment(hospitalA, null, "DOCTOR", "Doctor", true,
+                    com.example.hms.enums.FacilityType.HOSPITAL),
+                new com.example.hms.security.auth.TenantRoleAssignment(hospitalB, null, "HOSPITAL_ADMIN", "Admin", true,
+                    com.example.hms.enums.FacilityType.HOSPITAL)));
+        Authentication token = new Root(superAdminToken()).getAuthentication();
+        try {
+            HospitalContextHolder.setContext(live.actingAt(hospitalA));
+            assertThat(com.example.hms.security.ClinicalActor.holdsOwnRole(token, "DOCTOR")).as("at A").isTrue();
+            HospitalContextHolder.setContext(live.actingAt(hospitalB));
+            assertThat(com.example.hms.security.ClinicalActor.holdsOwnRole(token, "DOCTOR")).as("at B").isFalse();
+            assertThat(com.example.hms.security.ClinicalActor.holdsOwnRole(token, "HOSPITAL_ADMIN"))
+                .as("the role actually held at B").isTrue();
+            HospitalContextHolder.setContext(live);
+            assertThat(com.example.hms.security.ClinicalActor.holdsOwnRole(token, "DOCTOR")).as("in global view").isFalse();
+        } finally {
+            HospitalContextHolder.clear();
+        }
+    }
+
+    /** QA D2120 review: a support session acting as a clinician makes no clinical act, and the refusal is audited. */
+    @Test
+    void noClinicalActDuringASupportSession() {
+        List<String> audited = new java.util.ArrayList<>();
+        com.example.hms.security.ClinicalActor.setImpersonationAudit(audited::add);
+        Authentication doctor = new Root(Set.of("ROLE_DOCTOR")).getAuthentication();
+        try {
+            assertThat(com.example.hms.security.ClinicalActor.holdsOwnRole(doctor, "DOCTOR")).as("not impersonating").isTrue();
+            com.example.hms.security.context.ImpersonationContextHolder.set(
+                com.example.hms.security.context.ImpersonationContext.of(java.util.UUID.randomUUID(), "support"));
+            assertThat(com.example.hms.security.ClinicalActor.holdsOwnRole(doctor, "DOCTOR")).as("impersonating").isFalse();
+            assertThat(audited).as("one audit row per refused clinical act").containsExactly("DOCTOR");
+            assertThat(com.example.hms.security.ClinicalActor.holdsOwnRoleQuietly(doctor, "DOCTOR")).isFalse();
+            assertThat(audited).as("the quiet check writes no row").hasSize(1);
+        } finally {
+            com.example.hms.security.context.ImpersonationContextHolder.clear();
+            com.example.hms.security.ClinicalActor.setImpersonationAudit(null);
+        }
+    }
+
+    /**
+     * QA D2120 review: the patient's clinical fields travel in the demographics bodies (create, full
+     * update, PATCH), whose endpoints the desk and the admins reach. Every write path of
+     * PatientServiceImpl that applies one of those bodies decides with writesClinicalFields().
+     */
+    @Test
+    void thePatientClinicalFieldsAreWrittenByAClinicianOnly() throws java.io.IOException {
+        String src = SourceScan.stripComments(java.nio.file.Files.readString(
+            java.nio.file.Path.of("src/main/java/com/example/hms/service/PatientServiceImpl.java")));
+        for (String path : List.of("public PatientResponseDTO updatePatient(", "public PatientResponseDTO createPatientByStaff(",
+                "private void patchIdentity(", "private void patchCareFields(")) {
+            int start = src.indexOf(path);
+            assertThat(start).as(path).isPositive();
+            String body = src.substring(start, SourceScan.closingBrace(src, src.indexOf('{', start)) + 1);
+            assertThat(body).as(path + " decides who writes the clinical fields").contains("writesClinicalFields()");
+        }
+        int gate = src.indexOf("static boolean writesClinicalFields()");
+        assertThat(src.substring(gate, src.indexOf('}', gate)))
+            .contains("ClinicalActor.holdsOwnRoleQuietly(").contains("\"DOCTOR\", \"NURSE\", \"MIDWIFE\"");
     }
 
     /** The token a super-admin carries: SUPER_ADMIN plus every inherited role. */

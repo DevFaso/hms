@@ -564,6 +564,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['what'],
   },
   {
+    // QA D2120 review: ClinicalActorAuditRegistrar, a clinical act tried during a support session.
+    key: 'AUDIT.DESC.SUPPORT_SESSION_CLINICAL_REFUSED',
+    re: /^Support session refused: a clinical act \((.*)\) during impersonation$/,
+    params: ['roles'],
+  },
+  {
     key: 'AUDIT.DESC.IMPERSONATION_STARTED',
     re: /^Started impersonating (.+)\. Reason: (.*)$/,
     params: ['user', 'reason'],

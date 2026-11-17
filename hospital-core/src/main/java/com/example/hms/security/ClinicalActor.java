@@ -3,14 +3,19 @@ package com.example.hms.security;
 import com.example.hms.config.SecurityConstants;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.context.ImpersonationContextHolder;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * User decision 2026-11-14 (imaging access): a clinical act is done through a clinical role the
@@ -37,7 +42,27 @@ public final class ClinicalActor {
         SecurityConstants.ROLE_DOCTOR, SecurityConstants.ROLE_NURSE, SecurityConstants.ROLE_MIDWIFE,
         SecurityConstants.ROLE_RADIOLOGIST);
 
+    /**
+     * QA D2120 review: the request attribute a refused clinical gate leaves for the 403 handler,
+     * so the clinical sentence is used only when this gate is what refused. Its value is
+     * {@link #REFUSED_ROLE} or {@link #REFUSED_IMPERSONATION}.
+     */
+    public static final String REFUSAL_ATTRIBUTE = ClinicalActor.class.getName() + ".refused";
+    public static final String REFUSED_ROLE = "ROLE";
+    public static final String REFUSED_IMPERSONATION = "IMPERSONATION";
+
+    /**
+     * Writes the audit row of a clinical act refused during a support session; set once at start-up
+     * by {@code ClinicalActorAuditRegistrar}. Null in a test without a context: nothing is written.
+     */
+    private static volatile Consumer<String> impersonationAudit;
+
     private ClinicalActor() {
+    }
+
+    /** Called by the registrar bean at start-up (and by tests). */
+    public static void setImpersonationAudit(Consumer<String> audit) {
+        impersonationAudit = audit;
     }
 
     /**
@@ -45,6 +70,32 @@ public final class ClinicalActor {
      * own — not only because they are a super-admin.
      */
     public static boolean holdsOwnRole(Authentication authentication, String... roles) {
+        // QA D2120 review: a support session acting as a clinician never acts clinically for them.
+        if (ImpersonationContextHolder.isImpersonating()) {
+            markRefused(REFUSED_IMPERSONATION);
+            Consumer<String> audit = impersonationAudit;
+            if (audit != null) {
+                audit.accept(String.join(",", roles));
+            }
+            return false;
+        }
+        if (holdsOwnRoleQuietly(authentication, roles)) {
+            return true;
+        }
+        if (authorities(authentication).contains(SecurityConstants.ROLE_SUPER_ADMIN)) {
+            markRefused(REFUSED_ROLE);
+        }
+        return false;
+    }
+
+    /**
+     * {@link #holdsOwnRole} for a service deciding what a caller may write (QA D2120 review: a
+     * patient's clinical fields), with no refusal recorded: false during a support session.
+     */
+    public static boolean holdsOwnRoleQuietly(Authentication authentication, String... roles) {
+        if (ImpersonationContextHolder.isImpersonating()) {
+            return false;
+        }
         Set<String> own = ownRoles(authentication);
         for (String role : roles) {
             if (role != null && own.contains(role.startsWith("ROLE_") ? role : "ROLE_" + role)) {
@@ -52,6 +103,19 @@ public final class ClinicalActor {
             }
         }
         return false;
+    }
+
+    private static void markRefused(String reason) {
+        RequestAttributes request = RequestContextHolder.getRequestAttributes();
+        if (request != null) {
+            request.setAttribute(REFUSAL_ATTRIBUTE, reason, RequestAttributes.SCOPE_REQUEST);
+        }
+    }
+
+    /** Why the clinical gate refused this request, or null when it did not. */
+    public static String refusalOf(RequestAttributes request) {
+        Object reason = request == null ? null : request.getAttribute(REFUSAL_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST);
+        return reason instanceof String text ? text : null;
     }
 
     /**
@@ -72,10 +136,30 @@ public final class ClinicalActor {
             return Collections.emptySet();
         }
         Set<String> assigned = HospitalContextHolder.getContext()
-            .map(HospitalContext::getAssignedRoles)
+            .map(ClinicalActor::rolesWhereTheRequestActs)
             .orElse(Collections.emptySet());
         // verifiedSuperAdmin=false: reconcile then drops every role only the super-admin rule gave.
-        return RoleExpansion.reconcile(authorities, false, assigned == null ? Set.of() : assigned);
+        return RoleExpansion.reconcile(authorities, false, assigned);
+    }
+
+    /**
+     * QA D2120 review: the assignments that count are those at the hospital the request acts at
+     * (plus any bound to no hospital): a super-admin who is a doctor at A acts as a doctor at A
+     * only, never at B. A context built without per-hospital roles (an older producer, a test)
+     * falls back to every live assignment.
+     */
+    static Set<String> rolesWhereTheRequestActs(HospitalContext context) {
+        boolean perHospital = context.getHospitalRoles() != null && !context.getHospitalRoles().isEmpty();
+        boolean global = context.getGlobalRoles() != null && !context.getGlobalRoles().isEmpty();
+        if (!perHospital && !global) {
+            return context.getAssignedRoles() == null ? Set.of() : context.getAssignedRoles();
+        }
+        Set<String> roles = new LinkedHashSet<>(global ? context.getGlobalRoles() : Set.of());
+        java.util.UUID acting = com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOf(context);
+        if (acting != null && perHospital) {
+            roles.addAll(context.getHospitalRoles().getOrDefault(acting, Set.of()));
+        }
+        return roles;
     }
 
     private static List<String> authorities(Authentication authentication) {
