@@ -1974,7 +1974,8 @@
       "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradiction entre acte de mortinaissance et accouchement rapprochée",
       "IMAGING_DUPLICATE_OVERRIDDEN": "Alerte de doublon outrepassée (« Commander quand même », motif : {{reason}}) : demande d'imagerie {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
       "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Doublon possible, sans « Commander quand même » : demande d'imagerie {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
-      "NATIONAL_IU_ACTION": "Identifiant unique du patient : {{operation}}"
+      "NATIONAL_IU_ACTION": "Identifiant unique du patient : {{operation}}",
+      "REFUND_EVENT": "{{what}} : remboursement {{refund}} sur la facture {{invoice}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -2263,6 +2264,13 @@
       "UPDATE": "modifié",
       "CLEAR": "effacé",
       "SHOW_FULL": "affiché en entier"
+    },
+    "REFUND_EVENT": {
+      "REFUND_REQUESTED": "Remboursement demandé",
+      "REFUND_APPROVED": "Remboursement approuvé",
+      "REFUND_REJECTED": "Remboursement refusé",
+      "REFUND_PAID_OUT": "Remboursement remis au patient",
+      "REFUND_CANCELLED": "Remboursement annulé"
     }
   },
   "BILLING": {
@@ -2449,7 +2457,10 @@
       "SOURCES": {
         "BILLING": "Factures",
         "PHARMACY": "Pharmacie"
-      }
+      },
+      "REFUNDED": "Remboursements remis (sorties de caisse)",
+      "NET": "Solde attendu en caisse",
+      "REFUND_TAG": "remboursement"
     },
     "CANCEL_REASON": "Motif de l’annulation",
     "CANCEL_REASON_PLACEHOLDER": "Pourquoi cette facture émise est-elle annulée ? Le motif est conservé avec elle.",
@@ -2529,7 +2540,64 @@
       "PRICE_SAVED": "Nouveau prix enregistré.",
       "SAVE_FAILED": "L’enregistrement a échoué.",
       "DEACTIVATE_REASON": "Motif de la désactivation"
-    }
+    },
+    "REFUNDS": {
+      "TITLE": "Demandes de remboursement",
+      "REFUND": "Rembourser",
+      "REFUNDED_TOTAL": "Déjà remboursé au patient : {{amount}}",
+      "LOAD_FAILED": "Les remboursements n’ont pas pu être chargés.",
+      "EMPTY": "Aucun remboursement sur cette facture.",
+      "REQUESTED_ON": "Demandé le",
+      "AMOUNT": "Montant",
+      "METHOD": "Mode de remboursement",
+      "REASON": "Motif",
+      "BY": "par {{name}}",
+      "OPERATORS": {
+        "ORANGE_MONEY": "Orange Money",
+        "MOOV_MONEY": "Moov Money",
+        "AUTRE": "Autre opérateur"
+      },
+      "STATUSES": {
+        "REQUESTED": "Demandé, à approuver",
+        "APPROVED": "Approuvé, à remettre",
+        "REJECTED": "Refusé",
+        "PAID": "Remis au patient",
+        "CANCELLED": "Annulé"
+      },
+      "DECIDED_BY": "Décidé par {{name}}",
+      "PAID_ON": "Remis le {{date}} par {{name}}",
+      "OTHER_APPROVER": "Un autre responsable doit approuver : vous avez fait cette demande.",
+      "APPROVE": "Approuver",
+      "REJECT": "Refuser",
+      "HAND_OVER": "Remis au patient",
+      "CANCEL": "Annuler la demande",
+      "RECEIPT": "Reçu de remboursement",
+      "REQUEST_TITLE": "Rembourser le patient",
+      "OPERATOR": "Opérateur",
+      "OPERATOR_PICK": "Choisir l’opérateur",
+      "REFERENCE": "Référence de la transaction",
+      "APPROVAL_NOTE": "La demande doit être approuvée par un autre responsable (administrateur ou comptable), puis remise au patient à la caisse.",
+      "SUBMIT_REQUEST": "Demander le remboursement",
+      "REJECT_TITLE": "Refuser le remboursement de {{amount}}",
+      "CANCEL_TITLE": "Annuler la demande de remboursement de {{amount}}",
+      "AMOUNT_REQUIRED": "Indiquez le montant à rembourser (supérieur à 0).",
+      "OPERATOR_REQUIRED": "Choisissez l’opérateur de mobile money.",
+      "REFERENCE_REQUIRED": "Indiquez la référence de la transaction (mobile money ou virement).",
+      "REASON_REQUIRED": "Motif obligatoire : indiquez pourquoi l’argent est rendu au patient.",
+      "DECISION_REASON_REQUIRED": "Motif obligatoire.",
+      "REQUESTED_TOAST": "Demande de remboursement enregistrée : un autre responsable doit l’approuver.",
+      "APPROVED_TOAST": "Remboursement approuvé.",
+      "REJECTED_TOAST": "Remboursement refusé.",
+      "CANCELLED_TOAST": "Demande de remboursement annulée.",
+      "PAID_TOAST": "Remboursement remis au patient.",
+      "FAILED": "Le remboursement n’a pas pu être enregistré.",
+      "QUEUE_OPEN": "Remboursements à approuver",
+      "QUEUE_TITLE": "Remboursements à approuver ou à remettre",
+      "QUEUE_EMPTY": "Aucun remboursement en attente.",
+      "OPEN_INVOICE": "Ouvrir la facture",
+      "INVOICE": "Facture"
+    },
+    "NO_CARD_DATA": "Ne saisissez jamais de numéro de carte bancaire, de code CVV ou de code PIN : seulement la référence de la transaction (ticket du terminal, SMS de l’opérateur)."
   },
   "CHAT": {
     "ACCESS_DENIED": "Vous n'avez pas l'autorisation d'accéder à la messagerie.",
@@ -6113,7 +6181,8 @@
       "LEFT_TO_DECLARE": "Reste à déclarer",
       "AMOUNT_EXCEEDS_PENDING": "Vous pouvez déclarer au plus {{max}} : {{pending}} déjà déclarés sont en attente de confirmation.",
       "CREDITED_TO": "Imputé sur la facture {{number}}",
-      "FULLY_DECLARED": "Solde déclaré, en attente de confirmation par la caisse"
+      "FULLY_DECLARED": "Solde déclaré, en attente de confirmation par la caisse",
+      "REFUNDED": "Remboursé : {{amount}} le {{date}}"
     },
     "CARE_TEAM": {
       "TITLE": "Mon équipe soignante",
@@ -7009,7 +7078,12 @@
         "PRICE_VERSION_ADDED": "Nouveau prix ajouté",
         "INVOICE_LINE_PRICE_RESTORED": "Prix de la grille rétabli",
         "INVOICE_LINE_DELETED": "Ligne de facture supprimée",
-        "INVOICE_LINE_PRICE_OVERRIDDEN": "Prix de la grille modifié"
+        "INVOICE_LINE_PRICE_OVERRIDDEN": "Prix de la grille modifié",
+        "REFUND_REQUESTED": "Remboursement demandé",
+        "REFUND_APPROVED": "Remboursement approuvé",
+        "REFUND_REJECTED": "Remboursement refusé",
+        "REFUND_CANCELLED": "Remboursement annulé",
+        "PAYMENT_REVERSED": "Paiement contre-passé"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",

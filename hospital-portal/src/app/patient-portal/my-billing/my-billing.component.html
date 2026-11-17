@@ -246,6 +246,26 @@
                     }
                   </ul>
                 }
+                @if (d.refunds.length > 0) {
+                  <!-- Billing-money plan PR 8 (QA D1900): the money handed back to me. -->
+                  <ul class="detail-payments" data-testid="portal-refunds">
+                    @for (f of d.refunds; track f.id) {
+                      <li [attr.data-testid]="'refund-' + f.id">
+                        <span>{{
+                          'PORTAL.BILLING.REFUNDED'
+                            | translate
+                              : {
+                                  amount: (f.amount | cfa),
+                                  date: f.paidAt ? (f.paidAt | serverTime | date: 'mediumDate') : '—',
+                                }
+                        }}</span>
+                        @if (f.method) {
+                          <span>· {{ f.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}</span>
+                        }
+                      </li>
+                    }
+                  </ul>
+                }
                 <button
                   type="button"
                   class="detail-link"

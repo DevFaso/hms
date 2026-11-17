@@ -53,6 +53,31 @@ describe('CashClosingComponent (QA D1059)', () => {
     expect(el.querySelector('[data-testid="cash-closing-total"]')?.textContent).toContain('8');
   });
 
+  it('counts a refund handed back as money out, and shows what should be in the till (QA D1900)', () => {
+    const { el } = render({
+      ...closing,
+      byMethod: [
+        { source: 'BILLING', method: 'CASH', direction: 'IN', count: 1, amount: 2000 },
+        { source: 'BILLING', method: 'CASH', direction: 'OUT', count: 1, amount: 500 },
+      ],
+      entries: [
+        { id: 'p1', source: 'BILLING', amount: 2000, status: 'CONFIRMED', method: 'CASH', direction: 'IN' },
+        { id: 'r1', source: 'BILLING', amount: 500, status: 'PAID', method: 'CASH', direction: 'OUT' },
+      ],
+      receivedCount: 1,
+      receivedAmount: 2000,
+      reversedCount: 0,
+      reversedAmount: 0,
+      refundedCount: 1,
+      refundedAmount: 500,
+      netAmount: 1500,
+    });
+    expect(el.querySelectorAll('[data-testid="cash-closing-entries"] tr.money-out').length).toBe(1);
+    expect(el.querySelectorAll('[data-testid="cash-closing-totals"] tbody tr.money-out').length).toBe(1);
+    expect(el.querySelector('[data-testid="cash-closing-refunded"]')?.textContent).toContain('−');
+    expect(el.querySelector('[data-testid="cash-closing-net"]')?.textContent).toContain('1');
+  });
+
   it('says so when nothing was received', () => {
     const { el } = render({ ...closing, entries: [], byMethod: [], receivedCount: 0 });
     expect(el.querySelector('[data-testid="cash-closing-empty"]')).not.toBeNull();

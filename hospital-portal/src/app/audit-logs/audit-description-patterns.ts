@@ -1405,6 +1405,13 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { what: 'phrase:PAYMENT_EVENT' },
   },
   {
+    // Billing-money plan PR 8 (QA D1900): each step of a refund (ids only; the amount and reason stay on the row).
+    key: 'AUDIT.DESC.REFUND_EVENT',
+    re: /^(Refund requested|Refund approved|Refund rejected|Refund paid out|Refund cancelled): refund (\S+) on invoice (\S+)$/,
+    params: ['what', 'refund', 'invoice'],
+    localise: { what: 'phrase:REFUND_EVENT' },
+  },
+  {
     // Billing-money plan PR 2: the price list (ids only; the label, price and reason stay on the rows).
     key: 'AUDIT.DESC.PRICE_LIST_ITEM_CREATED',
     re: /^Price list item (\S+) created with price version (\S+)$/,

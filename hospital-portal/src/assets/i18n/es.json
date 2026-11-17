@@ -1974,7 +1974,8 @@
       "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradicción entre acta de mortinato y parto conciliada",
       "IMAGING_DUPLICATE_OVERRIDDEN": "Alerta de duplicado anulada («Solicitar de todos modos», motivo: {{reason}}): solicitud de imagen {{order}} realizada mientras existe la solicitud reciente {{earlier}} del mismo estudio",
       "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Alerta de duplicado no anulada: solicitud de imagen {{order}} realizada mientras existe la solicitud reciente {{earlier}} del mismo estudio",
-      "NATIONAL_IU_ACTION": "Identificador único del paciente: {{operation}}"
+      "NATIONAL_IU_ACTION": "Identificador único del paciente: {{operation}}",
+      "REFUND_EVENT": "{{what}}: refund {{refund}} on invoice {{invoice}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -2263,6 +2264,13 @@
       "UPDATE": "modificado",
       "CLEAR": "borrado",
       "SHOW_FULL": "mostrado completo"
+    },
+    "REFUND_EVENT": {
+      "REFUND_REQUESTED": "Refund requested",
+      "REFUND_APPROVED": "Refund approved",
+      "REFUND_REJECTED": "Refund rejected",
+      "REFUND_PAID_OUT": "Refund handed to the patient",
+      "REFUND_CANCELLED": "Refund cancelled"
     }
   },
   "BILLING": {
@@ -2449,7 +2457,10 @@
       "SOURCES": {
         "BILLING": "Facturas",
         "PHARMACY": "Farmacia"
-      }
+      },
+      "REFUNDED": "Refunds handed over (money out)",
+      "NET": "Expected in the till",
+      "REFUND_TAG": "refund"
     },
     "CANCEL_REASON": "Motivo de la anulación",
     "CANCEL_REASON_PLACEHOLDER": "¿Por qué se anula esta factura emitida? El motivo se conserva con ella.",
@@ -2529,7 +2540,64 @@
       "PRICE_SAVED": "Nuevo precio guardado.",
       "SAVE_FAILED": "No se pudo guardar.",
       "DEACTIVATE_REASON": "Motivo de la desactivación"
-    }
+    },
+    "REFUNDS": {
+      "TITLE": "Refund requests",
+      "REFUND": "Refund",
+      "REFUNDED_TOTAL": "Already refunded to the patient: {{amount}}",
+      "LOAD_FAILED": "The refunds could not be loaded.",
+      "EMPTY": "No refund on this invoice.",
+      "REQUESTED_ON": "Requested on",
+      "AMOUNT": "Amount",
+      "METHOD": "Refund method",
+      "REASON": "Reason",
+      "BY": "by {{name}}",
+      "OPERATORS": {
+        "ORANGE_MONEY": "Orange Money",
+        "MOOV_MONEY": "Moov Money",
+        "AUTRE": "Other operator"
+      },
+      "STATUSES": {
+        "REQUESTED": "Requested, to approve",
+        "APPROVED": "Approved, to hand over",
+        "REJECTED": "Rejected",
+        "PAID": "Handed to the patient",
+        "CANCELLED": "Cancelled"
+      },
+      "DECIDED_BY": "Decided by {{name}}",
+      "PAID_ON": "Handed over on {{date}} by {{name}}",
+      "OTHER_APPROVER": "Another manager must approve: you made this request.",
+      "APPROVE": "Approve",
+      "REJECT": "Reject",
+      "HAND_OVER": "Handed to the patient",
+      "CANCEL": "Cancel the request",
+      "RECEIPT": "Refund receipt",
+      "REQUEST_TITLE": "Refund the patient",
+      "OPERATOR": "Operator",
+      "OPERATOR_PICK": "Choose the operator",
+      "REFERENCE": "Transaction reference",
+      "APPROVAL_NOTE": "The request must be approved by another manager (administrator or accountant), then handed to the patient at the till.",
+      "SUBMIT_REQUEST": "Request the refund",
+      "REJECT_TITLE": "Reject the refund of {{amount}}",
+      "CANCEL_TITLE": "Cancel the refund request of {{amount}}",
+      "AMOUNT_REQUIRED": "Enter the amount to refund (more than 0).",
+      "OPERATOR_REQUIRED": "Choose the mobile money operator.",
+      "REFERENCE_REQUIRED": "Enter the transaction reference (mobile money or bank transfer).",
+      "REASON_REQUIRED": "Reason required: say why the money is given back to the patient.",
+      "DECISION_REASON_REQUIRED": "Reason required.",
+      "REQUESTED_TOAST": "Refund request recorded: another manager must approve it.",
+      "APPROVED_TOAST": "Refund approved.",
+      "REJECTED_TOAST": "Refund rejected.",
+      "CANCELLED_TOAST": "Refund request cancelled.",
+      "PAID_TOAST": "Refund handed to the patient.",
+      "FAILED": "The refund could not be recorded.",
+      "QUEUE_OPEN": "Refunds to approve",
+      "QUEUE_TITLE": "Refunds to approve or hand over",
+      "QUEUE_EMPTY": "No refund waiting.",
+      "OPEN_INVOICE": "Open the invoice",
+      "INVOICE": "Invoice"
+    },
+    "NO_CARD_DATA": "Never enter a card number, CVV or PIN: only the transaction reference (terminal slip, operator SMS)."
   },
   "CHAT": {
     "ACCESS_DENIED": "No tiene permiso para acceder a la mensajería.",
@@ -6113,7 +6181,8 @@
       "LEFT_TO_DECLARE": "Queda por declarar",
       "AMOUNT_EXCEEDS_PENDING": "Puede declarar como máximo {{max}}: {{pending}} ya declarados están pendientes de confirmación.",
       "CREDITED_TO": "Abonado en la factura {{number}}",
-      "FULLY_DECLARED": "Saldo declarado, pendiente de confirmación por la caja"
+      "FULLY_DECLARED": "Saldo declarado, pendiente de confirmación por la caja",
+      "REFUNDED": "Refunded: {{amount}} on {{date}}"
     },
     "CARE_TEAM": {
       "TITLE": "Mi equipo de atención",
@@ -7043,7 +7112,12 @@
         "PRICE_VERSION_ADDED": "Nuevo precio añadido",
         "INVOICE_LINE_PRICE_RESTORED": "Precio de la lista restablecido",
         "INVOICE_LINE_DELETED": "Línea de factura eliminada",
-        "INVOICE_LINE_PRICE_OVERRIDDEN": "Precio de la lista modificado"
+        "INVOICE_LINE_PRICE_OVERRIDDEN": "Precio de la lista modificado",
+        "REFUND_REQUESTED": "Refund requested",
+        "REFUND_APPROVED": "Refund approved",
+        "REFUND_REJECTED": "Refund rejected",
+        "REFUND_CANCELLED": "Refund cancelled",
+        "PAYMENT_REVERSED": "Payment reversed"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",

@@ -48,6 +48,8 @@ export interface BillingInvoiceResponse {
   balanceDue: number;
   /** QA D1466: paid above the total (a copay above the visit total), owed back to the patient. */
   refundDue?: number;
+  /** Billing-money plan PR 8 (QA D1900): what refunds already handed back to the patient. */
+  amountRefunded?: number;
   insuranceCoverageAmount: number;
   patientResponsibilityAmount: number;
   status: InvoiceStatus;
@@ -224,12 +226,22 @@ export interface BillingSummary {
   balance: number;
 }
 
+/** Billing-money plan PR 8: money received at the till (IN) or handed back on a refund (OUT). */
+export type CashDirection = 'IN' | 'OUT';
+
 /** QA D1059: one cashier's money received on one day (BillingInvoiceService.cashClosing). */
 export interface CashClosing {
   date: string;
   cashierId?: string;
   cashierName?: string | null;
-  byMethod: { source: 'BILLING' | 'PHARMACY'; method: string; count: number; amount: number }[];
+  byMethod: {
+    source: 'BILLING' | 'PHARMACY';
+    method: string;
+    /** Billing-money plan PR 8: absent on an older server, read as IN. */
+    direction?: CashDirection;
+    count: number;
+    amount: number;
+  }[];
   entries: {
     id: string;
     source: 'BILLING' | 'PHARMACY';
@@ -240,11 +252,64 @@ export interface CashClosing {
     reference?: string | null;
     amount: number;
     status: string;
+    direction?: CashDirection;
   }[];
   receivedCount: number;
   receivedAmount: number;
   reversedCount: number;
   reversedAmount: number;
+  /** Billing-money plan PR 8 (QA D1900): refunds handed back that day, and what should be in the till. */
+  refundedCount?: number;
+  refundedAmount?: number;
+  netAmount?: number;
+}
+
+/** Billing-money plan PR 8 (QA D1900): the life of a refund (InvoiceRefundStatus). */
+export type InvoiceRefundStatus = 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'PAID' | 'CANCELLED';
+
+/** How a refund is handed back: never an insurer's share. */
+export const REFUND_METHODS = ['CASH', 'MOBILE_MONEY', 'BANK_TRANSFER', 'CHECK', 'OTHER'] as const;
+export type RefundMethod = (typeof REFUND_METHODS)[number];
+
+/** The mobile-money operators (MobileMoneyOperator). */
+export const MOBILE_MONEY_OPERATORS = ['ORANGE_MONEY', 'MOOV_MONEY', 'AUTRE'] as const;
+export type MobileMoneyOperator = (typeof MOBILE_MONEY_OPERATORS)[number];
+
+/** Billing-money plan PR 8: one refund of an invoice, as billing staff see it (InvoiceRefundDTO). */
+export interface InvoiceRefund {
+  id: string;
+  invoiceId: string;
+  invoiceNumber?: string | null;
+  patientName?: string | null;
+  amount: number;
+  method: string;
+  mobileMoneyOperator?: string | null;
+  reference?: string | null;
+  reason: string;
+  status: InvoiceRefundStatus;
+  requestedBy?: string | null;
+  requestedByName?: string | null;
+  requestedAt?: string | null;
+  /** The reader asked for it, so cannot approve or reject it (owner decision D-3). */
+  requestedByMe?: boolean;
+  decidedByName?: string | null;
+  decidedAt?: string | null;
+  decisionReason?: string | null;
+  paidByName?: string | null;
+  paidAt?: string | null;
+  cancelledByName?: string | null;
+  cancelledAt?: string | null;
+  cancelReason?: string | null;
+}
+
+export interface InvoiceRefundRequest {
+  amount: number | null;
+  method: string;
+  mobileMoneyOperator?: string | null;
+  reference?: string | null;
+  reason: string;
+  /** The same key on a retried submit returns the refund already asked for. */
+  clientRequestId?: string;
 }
 
 export interface InvoicePage {
@@ -420,6 +485,59 @@ export class BillingService {
   /** QA D1009: each receipt has its own number ("…-R2"), carried in Content-Disposition. */
   getReceiptPdf(invoiceId: string, paymentId: string): Observable<HttpResponse<Blob>> {
     return this.http.get(`/billing-invoices/${invoiceId}/payments/${paymentId}/receipt`, {
+      responseType: 'blob',
+      observe: 'response',
+    });
+  }
+
+  /* ── Refunds (billing-money plan PR 8, QA D1900) ── */
+
+  listRefunds(invoiceId: string): Observable<InvoiceRefund[]> {
+    return this.http.get<InvoiceRefund[]>(`/billing-invoices/${invoiceId}/refunds`);
+  }
+
+  /** The hospital's refunds awaiting a decision (REQUESTED) or a hand-over (APPROVED). */
+  getRefundQueue(statuses: InvoiceRefundStatus[] = ['REQUESTED', 'APPROVED']): Observable<InvoiceRefund[]> {
+    let params = new HttpParams();
+    for (const status of statuses) params = params.append('status', status);
+    return this.http.get<InvoiceRefund[]>('/billing-invoices/refunds', { params });
+  }
+
+  requestRefund(invoiceId: string, req: InvoiceRefundRequest): Observable<InvoiceRefund> {
+    return this.http.post<InvoiceRefund>(`/billing-invoices/${invoiceId}/refunds`, req);
+  }
+
+  approveRefund(invoiceId: string, refundId: string): Observable<InvoiceRefund> {
+    return this.http.post<InvoiceRefund>(
+      `/billing-invoices/${invoiceId}/refunds/${refundId}/approve`,
+      {},
+    );
+  }
+
+  rejectRefund(invoiceId: string, refundId: string, reason: string): Observable<InvoiceRefund> {
+    return this.http.post<InvoiceRefund>(
+      `/billing-invoices/${invoiceId}/refunds/${refundId}/reject`,
+      { reason },
+    );
+  }
+
+  payRefund(invoiceId: string, refundId: string): Observable<InvoiceRefund> {
+    return this.http.post<InvoiceRefund>(
+      `/billing-invoices/${invoiceId}/refunds/${refundId}/pay`,
+      {},
+    );
+  }
+
+  cancelRefund(invoiceId: string, refundId: string, reason: string): Observable<InvoiceRefund> {
+    return this.http.post<InvoiceRefund>(
+      `/billing-invoices/${invoiceId}/refunds/${refundId}/cancel`,
+      { reason },
+    );
+  }
+
+  /** "Reçu de remboursement", named by the server ("…-RB1"). */
+  getRefundReceiptPdf(invoiceId: string, refundId: string): Observable<HttpResponse<Blob>> {
+    return this.http.get(`/billing-invoices/${invoiceId}/refunds/${refundId}/receipt`, {
       responseType: 'blob',
       observe: 'response',
     });

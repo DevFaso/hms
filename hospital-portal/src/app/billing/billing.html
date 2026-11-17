@@ -12,6 +12,19 @@
           {{ 'BILLING.PRICE_LIST.TITLE' | translate }}
         </a>
       }
+      <!-- Billing-money plan PR 8 (QA D1900): refunds to approve or to hand over -->
+      @if (canSeeRefundQueue) {
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="refund-queue-toggle"
+          [attr.aria-expanded]="showRefundQueue()"
+          (click)="showRefundQueue.set(!showRefundQueue())"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">currency_exchange</span>
+          {{ 'BILLING.REFUNDS.QUEUE_OPEN' | translate }}
+        </button>
+      }
       <!-- QA D1059: the cashier's daily cash closing -->
       @if (canRecordPayment) {
         <button
@@ -35,6 +48,9 @@
 
   @if (showCashClosing()) {
     <app-cash-closing />
+  }
+  @if (showRefundQueue()) {
+    <app-refund-queue (openInvoice)="openInvoiceById($event)" />
   }
 
   <div class="summary-cards">
@@ -959,6 +975,8 @@
               </table>
             }
           </div>
+          <!-- Billing-money plan PR 8 (QA D1900): money handed back, approved by another person -->
+          <app-invoice-refunds [invoice]="inv" (changed)="refundChanged(inv.id)" />
         </div>
       </div>
     </div>

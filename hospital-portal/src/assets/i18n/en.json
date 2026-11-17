@@ -1974,7 +1974,8 @@
       "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Stillbirth certificate conflict reconciled",
       "IMAGING_DUPLICATE_OVERRIDDEN": "Duplicate warning overridden (\"Order anyway\", reason: {{reason}}): imaging order {{order}} placed while recent order {{earlier}} of the same study exists",
       "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Duplicate warning not overridden: imaging order {{order}} placed while recent order {{earlier}} of the same study exists",
-      "NATIONAL_IU_ACTION": "Patient unique identifier: {{operation}}"
+      "NATIONAL_IU_ACTION": "Patient unique identifier: {{operation}}",
+      "REFUND_EVENT": "{{what}}: refund {{refund}} on invoice {{invoice}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -2263,6 +2264,13 @@
       "UPDATE": "updated",
       "CLEAR": "cleared",
       "SHOW_FULL": "shown in full"
+    },
+    "REFUND_EVENT": {
+      "REFUND_REQUESTED": "Refund requested",
+      "REFUND_APPROVED": "Refund approved",
+      "REFUND_REJECTED": "Refund rejected",
+      "REFUND_PAID_OUT": "Refund handed to the patient",
+      "REFUND_CANCELLED": "Refund cancelled"
     }
   },
   "BILLING": {
@@ -2449,7 +2457,10 @@
       "SOURCES": {
         "BILLING": "Invoices",
         "PHARMACY": "Pharmacy"
-      }
+      },
+      "REFUNDED": "Refunds handed over (money out)",
+      "NET": "Expected in the till",
+      "REFUND_TAG": "refund"
     },
     "CANCEL_REASON": "Reason for cancelling",
     "CANCEL_REASON_PLACEHOLDER": "Why is this issued invoice cancelled? The reason is kept with it.",
@@ -2529,7 +2540,64 @@
       "PRICE_SAVED": "New price saved.",
       "SAVE_FAILED": "Saving failed.",
       "DEACTIVATE_REASON": "Reason for deactivating"
-    }
+    },
+    "REFUNDS": {
+      "TITLE": "Refund requests",
+      "REFUND": "Refund",
+      "REFUNDED_TOTAL": "Already refunded to the patient: {{amount}}",
+      "LOAD_FAILED": "The refunds could not be loaded.",
+      "EMPTY": "No refund on this invoice.",
+      "REQUESTED_ON": "Requested on",
+      "AMOUNT": "Amount",
+      "METHOD": "Refund method",
+      "REASON": "Reason",
+      "BY": "by {{name}}",
+      "OPERATORS": {
+        "ORANGE_MONEY": "Orange Money",
+        "MOOV_MONEY": "Moov Money",
+        "AUTRE": "Other operator"
+      },
+      "STATUSES": {
+        "REQUESTED": "Requested, to approve",
+        "APPROVED": "Approved, to hand over",
+        "REJECTED": "Rejected",
+        "PAID": "Handed to the patient",
+        "CANCELLED": "Cancelled"
+      },
+      "DECIDED_BY": "Decided by {{name}}",
+      "PAID_ON": "Handed over on {{date}} by {{name}}",
+      "OTHER_APPROVER": "Another manager must approve: you made this request.",
+      "APPROVE": "Approve",
+      "REJECT": "Reject",
+      "HAND_OVER": "Handed to the patient",
+      "CANCEL": "Cancel the request",
+      "RECEIPT": "Refund receipt",
+      "REQUEST_TITLE": "Refund the patient",
+      "OPERATOR": "Operator",
+      "OPERATOR_PICK": "Choose the operator",
+      "REFERENCE": "Transaction reference",
+      "APPROVAL_NOTE": "The request must be approved by another manager (administrator or accountant), then handed to the patient at the till.",
+      "SUBMIT_REQUEST": "Request the refund",
+      "REJECT_TITLE": "Reject the refund of {{amount}}",
+      "CANCEL_TITLE": "Cancel the refund request of {{amount}}",
+      "AMOUNT_REQUIRED": "Enter the amount to refund (more than 0).",
+      "OPERATOR_REQUIRED": "Choose the mobile money operator.",
+      "REFERENCE_REQUIRED": "Enter the transaction reference (mobile money or bank transfer).",
+      "REASON_REQUIRED": "Reason required: say why the money is given back to the patient.",
+      "DECISION_REASON_REQUIRED": "Reason required.",
+      "REQUESTED_TOAST": "Refund request recorded: another manager must approve it.",
+      "APPROVED_TOAST": "Refund approved.",
+      "REJECTED_TOAST": "Refund rejected.",
+      "CANCELLED_TOAST": "Refund request cancelled.",
+      "PAID_TOAST": "Refund handed to the patient.",
+      "FAILED": "The refund could not be recorded.",
+      "QUEUE_OPEN": "Refunds to approve",
+      "QUEUE_TITLE": "Refunds to approve or hand over",
+      "QUEUE_EMPTY": "No refund waiting.",
+      "OPEN_INVOICE": "Open the invoice",
+      "INVOICE": "Invoice"
+    },
+    "NO_CARD_DATA": "Never enter a card number, CVV or PIN: only the transaction reference (terminal slip, operator SMS)."
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -6113,7 +6181,8 @@
       "LEFT_TO_DECLARE": "Left to declare",
       "AMOUNT_EXCEEDS_PENDING": "You can declare at most {{max}}: {{pending}} already declared is awaiting confirmation.",
       "CREDITED_TO": "Credited to invoice {{number}}",
-      "FULLY_DECLARED": "Balance declared, awaiting the cashier's confirmation"
+      "FULLY_DECLARED": "Balance declared, awaiting the cashier's confirmation",
+      "REFUNDED": "Refunded: {{amount}} on {{date}}"
     },
     "CARE_TEAM": {
       "TITLE": "My Care Team",
@@ -7043,7 +7112,12 @@
         "PRICE_VERSION_ADDED": "New price added",
         "INVOICE_LINE_PRICE_RESTORED": "Price-list price restored",
         "INVOICE_LINE_DELETED": "Invoice line deleted",
-        "INVOICE_LINE_PRICE_OVERRIDDEN": "Price-list price overridden"
+        "INVOICE_LINE_PRICE_OVERRIDDEN": "Price-list price overridden",
+        "REFUND_REQUESTED": "Refund requested",
+        "REFUND_APPROVED": "Refund approved",
+        "REFUND_REJECTED": "Refund rejected",
+        "REFUND_CANCELLED": "Refund cancelled",
+        "PAYMENT_REVERSED": "Payment reversed"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",

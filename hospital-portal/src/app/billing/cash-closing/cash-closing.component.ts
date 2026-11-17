@@ -79,12 +79,17 @@ function today(): string {
               </tr>
             </thead>
             <tbody>
-              @for (t of c.byMethod; track t.source + t.method) {
-                <tr>
+              @for (t of c.byMethod; track t.source + t.method + (t.direction ?? 'IN')) {
+                <tr [class.money-out]="isOut(t.direction)">
                   <td>{{ t.source | keyLabel: 'BILLING.CASH_CLOSING.SOURCES.' }}</td>
-                  <td>{{ t.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}</td>
+                  <td>
+                    {{ t.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}
+                    @if (isOut(t.direction)) {
+                      <span class="out-tag">{{ 'BILLING.CASH_CLOSING.REFUND_TAG' | translate }}</span>
+                    }
+                  </td>
                   <td class="numeric">{{ t.count }}</td>
-                  <td class="numeric">{{ t.amount | cfa }}</td>
+                  <td class="numeric">{{ isOut(t.direction) ? '−' : '' }}{{ t.amount | cfa }}</td>
                 </tr>
               }
             </tbody>
@@ -101,6 +106,19 @@ function today(): string {
                   <th scope="row" colspan="2">{{ 'BILLING.CASH_CLOSING.REVERSED' | translate }}</th>
                   <td class="numeric">{{ c.reversedCount }}</td>
                   <td class="numeric">{{ c.reversedAmount | cfa }}</td>
+                </tr>
+              }
+              <!-- Billing-money plan PR 8 (QA D1900): refunds handed back are money out of the till, today -->
+              @if ((c.refundedCount ?? 0) > 0) {
+                <tr class="money-out" data-testid="cash-closing-refunded">
+                  <th scope="row" colspan="2">{{ 'BILLING.CASH_CLOSING.REFUNDED' | translate }}</th>
+                  <td class="numeric">{{ c.refundedCount }}</td>
+                  <td class="numeric">−{{ c.refundedAmount ?? 0 | cfa }}</td>
+                </tr>
+                <tr>
+                  <th scope="row" colspan="2">{{ 'BILLING.CASH_CLOSING.NET' | translate }}</th>
+                  <td></td>
+                  <td class="numeric" data-testid="cash-closing-net">{{ c.netAmount ?? 0 | cfa }}</td>
                 </tr>
               }
             </tfoot>
@@ -123,14 +141,17 @@ function today(): string {
             </thead>
             <tbody>
               @for (e of c.entries; track e.id) {
-                <tr [class.reversed]="isReversed(e.status)">
+                <tr [class.reversed]="isReversed(e.status)" [class.money-out]="isOut(e.direction)">
                   <td>{{ e.receivedAt | serverTime | date: 'shortTime' }}</td>
                   <td>{{ e.document || '—' }}</td>
                   <td>{{ e.patientName || '—' }}</td>
                   <td>{{ e.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}</td>
                   <td>{{ e.reference || '—' }}</td>
                   <td class="numeric">
-                    {{ e.amount | cfa }}
+                    {{ isOut(e.direction) ? '−' : '' }}{{ e.amount | cfa }}
+                    @if (isOut(e.direction)) {
+                      <span class="out-tag">{{ 'BILLING.CASH_CLOSING.REFUND_TAG' | translate }}</span>
+                    }
                     @if (isReversed(e.status)) {
                       <span class="reversed-tag">{{
                         'BILLING.CASH_CLOSING.REVERSED_TAG' | translate
@@ -179,6 +200,13 @@ function today(): string {
         font-size: 0.75rem;
         text-decoration: none;
       }
+      tr.money-out td {
+        color: #9a3412;
+      }
+      .out-tag {
+        margin-left: 0.25rem;
+        font-size: 0.75rem;
+      }
       .data-table {
         width: 100%;
         margin-top: 0.75rem;
@@ -219,6 +247,11 @@ export class CashClosingComponent {
 
   isReversed(status: string): boolean {
     return status === 'REVERSED' || status === 'VOIDED';
+  }
+
+  /** Billing-money plan PR 8: money handed back on a refund (a line or a total going OUT of the till). */
+  isOut(direction: string | null | undefined): boolean {
+    return direction === 'OUT';
   }
 
   private load(): void {
