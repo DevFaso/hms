@@ -98,9 +98,12 @@ export class ResetPasswordComponent implements OnInit {
         },
         error: (err) => {
           this.loading = false;
-          // QA D2051: a refused link is a 400 whose message the server localized
-          // (and which asks for a new link); never the success state.
-          this.error = err?.error?.message || this.translate.instant('RESET.ERR_LINK_INVALID');
+          // Only a 400 confirms a refusal. A transport/server failure leaves the
+          // outcome unknown, including when the reset committed before a timeout.
+          this.error =
+            err?.status === 400
+              ? err?.error?.message || this.translate.instant('RESET.ERR_LINK_INVALID')
+              : this.translate.instant('RESET.ERR_UNAVAILABLE');
         },
       });
   }

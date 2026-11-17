@@ -8751,7 +8751,7 @@
     "ERR_MIN_LENGTH": "La contraseña debe tener al menos 8 caracteres.",
     "ERR_MISMATCH": "Las contraseñas no coinciden.",
     "ERR_REQUIRED": "Ambos campos son obligatorios.",
-    "ERR_TOKEN_MISSING": "Enlace de restablecimiento no válido o incompleto. Solicite un nuevo enlace.",
+    "ERR_UNAVAILABLE": "No pudimos confirmar si su contraseña se restableció. Inténtelo de nuevo.",
     "INVALID_MSG": "Este enlace de restablecimiento no es válido o ha caducado.",
     "INVALID_TITLE": "Enlace no válido",
     "MIN_CHARS": "Mínimo 8 caracteres",

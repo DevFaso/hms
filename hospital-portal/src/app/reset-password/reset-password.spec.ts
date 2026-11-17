@@ -68,7 +68,7 @@ describe('ResetPasswordComponent — a refused link is never shown as a reset (Q
     expect(text(fixture)).toContain('Demandez-en un nouveau');
   });
 
-  it('an answer with no message falls back to the translated link error', () => {
+  it('a 400 with no message falls back to the translated link error', () => {
     const fixture = open({ token: 'x' });
     const c = fixture.componentInstance;
     c.newPassword = 'Valid-Pass-2026';
@@ -76,11 +76,42 @@ describe('ResetPasswordComponent — a refused link is never shown as a reset (Q
     c.submit();
     httpMock
       .expectOne('/auth/password/confirm')
-      .flush(null, { status: 502, statusText: 'Bad Gateway' });
+      .flush(null, { status: 400, statusText: 'Bad Request' });
 
     expect(c.error).toBe('RESET.ERR_LINK_INVALID');
     expect(c.success).toBe('');
   });
+
+  for (const status of [0, 429, 500, 502, 503, 504]) {
+    it(`a ${status} leaves the outcome unknown and permits retry`, () => {
+      const fixture = open({ token: 'live' });
+      const c = fixture.componentInstance;
+      c.newPassword = 'Valid-Pass-2026';
+      c.confirmPassword = c.newPassword;
+      c.submit();
+      const req = httpMock.expectOne('/auth/password/confirm');
+      if (status === 0) {
+        req.error(new ProgressEvent('error'));
+      } else {
+        req.flush({ message: 'Gateway unavailable' }, { status, statusText: 'Unavailable' });
+      }
+      fixture.detectChanges();
+
+      expect(c.error).toBe('RESET.ERR_UNAVAILABLE');
+      expect(text(fixture)).toContain('RESET.ERR_UNAVAILABLE');
+      expect(text(fixture)).not.toContain('RESET.ERR_LINK_INVALID');
+      expect(c.success).toBe('');
+      expect(c.loading).toBeFalse();
+      expect(fixture.nativeElement.querySelector('form')).not.toBeNull();
+
+      c.submit();
+      expect(c.error).toBe('');
+      httpMock
+        .expectOne('/auth/password/confirm')
+        .flush(null, { status: 204, statusText: 'No Content' });
+      expect(c.success).toBe('RESET.SUCCESS_MSG');
+    });
+  }
 
   it('validation messages are translation keys, not English literals', () => {
     const fixture = open({ token: 'x' });

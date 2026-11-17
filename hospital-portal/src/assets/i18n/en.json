@@ -8751,7 +8751,7 @@
     "ERR_MIN_LENGTH": "Password must be at least 8 characters.",
     "ERR_MISMATCH": "Passwords do not match.",
     "ERR_REQUIRED": "Both fields are required.",
-    "ERR_TOKEN_MISSING": "Invalid or missing reset token. Please request a new password reset link.",
+    "ERR_UNAVAILABLE": "We could not confirm whether your password was reset. Please try again.",
     "INVALID_MSG": "This reset link is invalid or has expired.",
     "INVALID_TITLE": "Invalid Link",
     "MIN_CHARS": "Minimum 8 characters",

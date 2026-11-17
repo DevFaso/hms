@@ -8751,7 +8751,7 @@
     "ERR_MIN_LENGTH": "Le mot de passe doit contenir au moins 8 caractères.",
     "ERR_MISMATCH": "Les mots de passe ne correspondent pas.",
     "ERR_REQUIRED": "Les deux champs sont obligatoires.",
-    "ERR_TOKEN_MISSING": "Lien de réinitialisation invalide ou incomplet. Demandez un nouveau lien.",
+    "ERR_UNAVAILABLE": "Nous n'avons pas pu confirmer si votre mot de passe a été réinitialisé. Veuillez réessayer.",
     "INVALID_MSG": "Ce lien de réinitialisation est invalide ou a expiré.",
     "INVALID_TITLE": "Lien invalide",
     "MIN_CHARS": "8 caractères minimum",
