@@ -251,6 +251,14 @@ describe('RoiComponent', () => {
     expect(toast.success).toHaveBeenCalled();
   });
 
+  it('does not present a static selected-hospital placeholder as intake confirmation', () => {
+    fixture.detectChanges();
+    component.openIntake();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="intake-modal"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.hospital-context')).toBeNull();
+  });
+
   it('intake submits patient + purpose + scope', () => {
     fixture.detectChanges();
     component.openIntake();

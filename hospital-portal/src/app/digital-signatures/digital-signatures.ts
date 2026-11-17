@@ -52,6 +52,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 export class DigitalSignaturesComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private lookupRequest?: Subscription;
+  private listRequest?: Subscription;
   private readonly service = inject(DigitalSignatureService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
@@ -200,7 +201,7 @@ export class DigitalSignaturesComponent implements OnInit {
   }
 
   loadSignatures(): void {
-    if (this.loading()) return;
+    this.listRequest?.unsubscribe();
     this.loadError.set(false);
     this.loading.set(true);
     // Admins see the hospital-wide list; clinicians are limited to their own
@@ -216,7 +217,7 @@ export class DigitalSignaturesComponent implements OnInit {
       this.loading.set(false);
       return;
     }
-    call.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    this.listRequest = call.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (data) => {
         this.signatures.set(data ?? []);
         this.loading.set(false);

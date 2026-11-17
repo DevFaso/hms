@@ -170,6 +170,40 @@ describe('PatientTrackerComponent', () => {
     expect(trackerSpy.getTrackerBoard).toHaveBeenCalledWith('h2');
     expect(trackerWsSpy.connect).toHaveBeenCalledWith('h2');
   });
+  it('filters same-name providers by identity and resets longest-first ordering', () => {
+    const first = mockItem({
+      encounterId: 'first',
+      assignedProviderUserId: 'u1',
+      currentWaitMinutes: 5,
+    });
+    const second = mockItem({
+      encounterId: 'second',
+      assignedProviderUserId: 'u2',
+      currentWaitMinutes: 40,
+    });
+    trackerSpy.getTrackerBoard.and.returnValue(
+      of(mockBoard({ arrived: [first, second], inProgress: [] })),
+    );
+    fixture.detectChanges();
+    expect(component.providers().map((p) => p.id)).toEqual(['u1', 'u2']);
+    component.providerFilter.set('u1');
+    expect(component.getVisibleColumnItems('arrived').map((i) => i.encounterId)).toEqual(['first']);
+    component.providerFilter.set('');
+    component.longestFirst.set(true);
+    expect(component.getVisibleColumnItems('arrived').map((i) => i.encounterId)).toEqual([
+      'second',
+      'first',
+    ]);
+    component.clearFilters();
+    expect(component.providerFilter()).toBe('');
+    expect(component.longestFirst()).toBeFalse();
+    expect(component.getVisibleColumnItems('arrived').map((i) => i.encounterId)).toEqual([
+      'first',
+      'second',
+    ]);
+    fixture.destroy();
+  });
+
   it('filters patient cards locally without changing full-board totals', () => {
     fixture.detectChanges();
     component.searchTerm.set('jane');
