@@ -54,6 +54,19 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class GeneralReferralServiceImpl implements GeneralReferralService {
 
+    /**
+     * V312: the booking confirmation SMS, queued in the patient notification
+     * ledger once the booking commits. Setter-injected so unit tests that
+     * build this service by constructor keep compiling; null there.
+     */
+    private com.example.hms.service.notification.PatientNotificationLedger notificationLedger;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setNotificationLedger(com.example.hms.service.notification.PatientNotificationLedger notificationLedger) {
+        this.notificationLedger = notificationLedger;
+    }
+
+
 
     private final GeneralReferralRepository referralRepository;
     private final com.example.hms.repository.AppointmentRepository appointmentRepository;
@@ -317,7 +330,12 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
                 // QA D1073: the appointment names who booked it.
                 .createdBy(currentUserOrNull())
                 .build();
-            return appointmentRepository.save(appointment);
+            com.example.hms.model.Appointment saved = appointmentRepository.save(appointment);
+            // V312: the booking confirmation SMS (sent by the ledger, after commit).
+            if (notificationLedger != null) {
+                notificationLedger.confirmBooking(saved);
+            }
+            return saved;
         } catch (RuntimeException ex) {
             log.warn("Could not create an appointment for referral {}: {}",
                 referral.getId(), ex.getMessage());

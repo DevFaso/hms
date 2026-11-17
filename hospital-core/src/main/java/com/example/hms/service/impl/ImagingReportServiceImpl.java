@@ -104,6 +104,14 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     /** Provisional rule 1: the billing follow-up of a pending pre-authorisation; null in a hand-built unit test. */
     private com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp preAuthorisationFollowUp;
 
+    /** V312: the result-available SMS / email; null in a hand-built unit test. */
+    private com.example.hms.service.notification.PatientNotificationLedger notificationLedger;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setNotificationLedger(com.example.hms.service.notification.PatientNotificationLedger notificationLedger) {
+        this.notificationLedger = notificationLedger;
+    }
+
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setPreAuthorisationFollowUp(
             com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp preAuthorisationFollowUp) {
@@ -280,6 +288,16 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         // on a draft that was never separately saved still calls someone the
         // moment it is signed.
         criticalNotificationService.notifyIfCritical(saved);
+        // V312: the signature releases the read to the patient: tell them a
+        // result is available (SMS / email, after commit, once per order: an
+        // addendum signed later is not a second notice). Never its content.
+        ImagingOrder signedOrder = notificationLedger != null && saved != null ? saved.getImagingOrder() : null;
+        if (signedOrder != null && saved.isReleasedToPatient() && signedOrder.getPatient() != null
+            && hospital != null) {
+            notificationLedger.requestAfterCommit(
+                com.example.hms.enums.PatientNotificationEvent.IMAGING_RESULT_AVAILABLE,
+                hospital.getId(), signedOrder.getPatient().getId(), signedOrder.getId());
+        }
         return imagingReportMapper.toResponseDTO(saved);
     }
 
