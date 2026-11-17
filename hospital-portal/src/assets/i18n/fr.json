@@ -11125,6 +11125,7 @@
     "SOCIAL_EMPTY": "Saisissez au moins un élément (habitudes, profession, conditions de vie ou notes) avant d'enregistrer une nouvelle version."
   },
   "MATERNITY": {
+    "WORKLIST_COUNT_HELP": "Nombre dans la liste pour l’hôpital et la patiente sélectionnés. — indique un chargement ou un nombre indisponible. La recherche textuelle ne modifie pas ces nombres.",
     "NETWORK_HELP": "Sélectionnez un hôpital pour les antécédents, les orientations et les listes de soins maternels.",
     "FOREIGN_RECORDED_AT": "Enregistré à {{hospital}}, lecture seule ici",
     "GA": "Terme",

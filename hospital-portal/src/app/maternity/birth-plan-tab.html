@@ -5,6 +5,9 @@
   <div class="tabs">
     <button class="tab-btn" [class.active]="filter() === 'all'" (click)="setFilter('all')">
       {{ 'MATERNITY.WORKLIST_ALL' | translate }}
+      <span class="worklist-count" [title]="'MATERNITY.WORKLIST_COUNT_HELP' | translate">{{
+        counts.values()['all'] ?? '—'
+      }}</span>
     </button>
     @if (canSeePendingReview) {
       <button
@@ -13,6 +16,9 @@
         (click)="setFilter('pending-review')"
       >
         {{ 'BIRTH_PLAN.PENDING_REVIEW' | translate }}
+        <span class="worklist-count" [title]="'MATERNITY.WORKLIST_COUNT_HELP' | translate">{{
+          counts.values()['pending-review'] ?? '—'
+        }}</span>
       </button>
     }
     <button
@@ -21,6 +27,9 @@
       (click)="setFilter('reviewed')"
     >
       {{ 'BIRTH_PLAN.REVIEWED' | translate }}
+      <span class="worklist-count" [title]="'MATERNITY.WORKLIST_COUNT_HELP' | translate">{{
+        counts.values()['reviewed'] ?? '—'
+      }}</span>
     </button>
   </div>
   <div class="mode-picker">
