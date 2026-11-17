@@ -50,6 +50,8 @@ class ClinicalLabResultReadPathGuardTest {
 
     /** Paths that see every row, with the reason. */
     private static final Map<String, String> WORKFLOW_PATHS = Map.ofEntries(
+        Map.entry("com/example/hms/service/notification/PatientNotificationRenderer.java",
+            "V312: is any result of the order released, before a content-free notice; no values"),
         Map.entry("com/example/hms/repository/LabResultRepository.java", "the repository itself"),
         Map.entry("com/example/hms/repository/ImagingReportRepository.java", "javadoc reference only"),
         Map.entry("com/example/hms/bootstrap/DevSyntheticDataSeeder.java", "dev seeding, writes only"),

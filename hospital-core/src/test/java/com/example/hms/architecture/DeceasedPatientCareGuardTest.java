@@ -136,6 +136,7 @@ class DeceasedPatientCareGuardTest {
         AdvanceDirective#update,revoke | an existing document, late documentation
         Appointment#deleteAppointment | removes a visit
         Appointment#runReminderSweep | the sweep already skips the deceased
+        PatientNotificationDelivery#retry | requeues a notice about care given before; the sweep skips a deceased patient (PATIENT_DECEASED)
         Appointment#searchAppointments | a read over POST
         PatientNationalUniqueId#check,search,reveal | X8 identity reads only, including after a death; ReadsOnlyPostGuardTest drives the filter and PatientNationalUniqueIdPostgresIT proves no death/identity mutation
         BirthPlan#updateBirthPlan,providerReview,deleteBirthPlan | an existing record, late documentation

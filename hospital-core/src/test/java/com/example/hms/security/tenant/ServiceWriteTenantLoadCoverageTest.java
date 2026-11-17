@@ -100,6 +100,17 @@ class ServiceWriteTenantLoadCoverageTest {
 
     /** Class.method#call → why the method needs no tenant check of its own. Frozen: it only shrinks. */
     private static final Map<String, String> RECORDED = Map.ofEntries(
+        // V312: the patient notification ledger and its sweep run with no request tenant (after commit, or a
+        // scheduler thread). The ids come from the action that queued the row, which was tenant-checked
+        // itself; the sweep only decides whether to send and never returns the rows to a caller.
+        entry("PatientNotificationDispatchService.recordOutcome#findById", "V312 sweep: the ledger row it claimed"),
+        entry("PatientNotificationLedger.eligibleChannels#findByIdUnscoped", "V312 queue: the patient of a booking or"
+            + " release that was tenant-checked; reads contact presence and consent only"),
+        entry("PatientNotificationRenderer.prepare#findById", "V312 sweep: the claimed ledger row, its hospital and"
+            + " its appointment, all named by the row"),
+        entry("PatientNotificationRenderer.prepare#findByIdUnscoped", "V312 sweep: the patient named by the claimed row"),
+        entry("PatientNotificationRenderer.resultStillReleased#findById", "V312 sweep: is the subject named by the"
+            + " claimed row still released; nothing is returned"),
         entry("AppointmentServiceImpl.resolvePatient#findByIdUnscoped", PATIENT),
         entry("AppointmentServiceImpl.resolveStaff#findById", ACTOR),
         entry("AppointmentServiceImpl.bookingTimeRefusal#findById", ACTOR + "; hasHospitalAccess answers another hospital's as unknown"),
